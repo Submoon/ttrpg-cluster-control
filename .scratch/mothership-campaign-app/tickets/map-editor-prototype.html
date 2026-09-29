@@ -1,0 +1,1835 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jump Cluster editor — prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #e8dfcf;
+      --sheet: #f5f0e6;
+      --sheet-strong: #fffaf0;
+      --ink: #242a26;
+      --muted: #70746c;
+      --line: #d4cbbb;
+      --line-dark: #aaa18f;
+      --accent: #9e4c36;
+      --moss: #50685c;
+      --gold: #c8a867;
+      --serif: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --sans: "Trebuchet MS", "Segoe UI", sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 360px;
+      padding: 0 22px 108px;
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.24), transparent 44%),
+        repeating-linear-gradient(0deg, rgba(69,57,38,.025) 0 1px, transparent 1px 5px),
+        var(--paper);
+      font: 15px/1.45 var(--serif);
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button {
+      border: 1px solid var(--line-dark);
+      border-radius: 4px;
+      padding: 8px 11px;
+      color: var(--ink);
+      background: var(--sheet-strong);
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+    [role="button"]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line-dark);
+      border-radius: 3px;
+      padding: 8px 9px;
+      color: var(--ink);
+      background: #fffdf7;
+    }
+    input[aria-invalid="true"] { border-color: var(--accent); background: #fff3eb; }
+    textarea { min-height: 76px; resize: vertical; }
+    label { display: block; color: var(--muted); font: 11px/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+    label input, label textarea, label select { display: block; margin-top: 6px; text-transform: none; letter-spacing: normal; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { font-weight: 500; }
+    .app-shell { width: min(1540px, 100%); margin: 0 auto; }
+    .topbar {
+      min-height: 78px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid var(--line-dark);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 205px; }
+    .brand-stamp {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      color: var(--accent);
+      font: 11px var(--mono);
+    }
+    .brand-name { display: block; font-size: 17px; letter-spacing: .025em; }
+    .brand-note { display: block; margin-top: 2px; color: var(--muted); font: 9px var(--sans); letter-spacing: .15em; }
+    .top-scope { min-width: 130px; text-align: center; }
+    .top-scope small { display: block; color: var(--muted); font: 9px var(--sans); letter-spacing: .16em; text-transform: uppercase; }
+    .top-scope strong { font-size: 17px; font-weight: 500; }
+    .top-actions { display: flex; align-items: center; gap: 7px; }
+    .top-actions button { font: 12px var(--sans); }
+    .top-actions .primary { border-color: var(--ink); color: var(--sheet-strong); background: var(--ink); }
+    .top-actions .primary:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); }
+    .intro {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 2px 12px;
+    }
+    .intro p { margin: 0; color: var(--muted); font-size: 13px; }
+    .prototype-tag { color: var(--accent); font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+    .actionbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: rgba(255,250,240,.68);
+    }
+    .action-group { display: flex; align-items: center; gap: 5px; }
+    .actionbar button, .actionbar select { min-height: 34px; padding: 6px 9px; font: 11px var(--sans); }
+    .actionbar select { width: 126px; }
+    .actionbar .sep { width: 1px; height: 25px; margin: 0 2px; background: var(--line); }
+    .actionbar .view-tabs { margin-left: auto; }
+    .view-tabs button.active { border-color: var(--moss); color: var(--sheet-strong); background: var(--moss); }
+    .workspace-title { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+    .eyebrow { display: block; color: var(--accent); font: 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    .workspace-title h1 { margin: 3px 0 4px; font-size: clamp(22px, 2vw, 30px); }
+    .workspace-title p { margin: 0; color: var(--muted); font-size: 12px; }
+    .map-stamp { color: var(--muted); font: 10px var(--mono); text-align: right; }
+    .map-frame {
+      position: relative;
+      min-width: 0;
+      min-height: 470px;
+      overflow: hidden;
+      border: 1px solid var(--line-dark);
+      border-radius: 4px;
+      background: #f5f0e6;
+    }
+    .map-svg { display: block; width: 100%; height: 100%; min-height: 470px; }
+    .map-note {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      color: var(--muted);
+      font: 10px var(--mono);
+      border-top: 1px solid var(--line);
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--sheet);
+    }
+    .panel-kicker { margin: 0 0 10px; color: var(--muted); font: 10px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+    .scope-rail, .outline-rail, .inspector, .ledger-rail { padding: 15px; }
+    .scope-rail, .outline-rail, .inspector { overflow: auto; }
+    .section-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 17px 0 7px;
+      color: var(--muted);
+      font: 10px var(--sans);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .section-line:first-of-type { margin-top: 0; }
+    .section-line button { padding: 2px 7px; font-size: 14px; line-height: 1.1; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-align: left;
+      border-color: transparent;
+      background: transparent;
+      padding: 7px 8px;
+    }
+    .nav-row.active { border-color: var(--line); background: var(--sheet-strong); }
+    .nav-row small { display: block; color: var(--muted); font: 10px var(--mono); }
+    .node-seal {
+      width: 25px;
+      height: 25px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-dark);
+      border-radius: 50%;
+      color: var(--moss);
+      font: 9px var(--mono);
+    }
+    .route-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .route-row .nav-row { flex: 1; }
+    .route-swatch { width: 21px; border-top: 2px solid var(--moss); }
+    .route-swatch.unresolved { border-top-style: dashed; border-color: var(--accent); }
+    .empty-copy { color: var(--muted); font-size: 12px; }
+    .spatial-layout { display: grid; grid-template-columns: 218px minmax(420px, 1fr) 288px; gap: 11px; min-height: 690px; }
+    .scope-rail { align-self: stretch; }
+    .map-workspace { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 13px; }
+    .map-workspace .map-frame { flex: 1; min-height: 530px; }
+    .map-workspace .map-svg { min-height: 530px; }
+    .inspector { min-height: 690px; }
+    .inspector h2 { margin: 2px 0 4px; font-size: 22px; }
+    .inspector-intro { color: var(--muted); font-size: 12px; }
+    .type-chip {
+      display: inline-block;
+      margin: 4px 0 9px;
+      padding: 4px 6px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      color: var(--moss);
+      font: 9px var(--mono);
+      text-transform: uppercase;
+    }
+    .field-stack { display: grid; gap: 11px; margin-top: 15px; }
+    .record-facts { display: grid; gap: 7px; margin: 15px 0; padding: 11px 0; border-block: 1px solid var(--line); }
+    .record-fact { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+    .record-fact span:first-child { color: var(--muted); }
+    .hint-box { margin-top: 13px; padding: 10px; border-left: 2px solid var(--gold); color: var(--muted); background: #eee7d8; font-size: 11px; }
+    .status-line { min-height: 23px; color: var(--moss); font: 11px var(--mono); }
+    .outline-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); grid-template-rows: minmax(560px, 1fr) auto; gap: 11px; }
+    .outline-rail { grid-column: 1; grid-row: 1; max-height: 710px; }
+    .board-panel { grid-column: 2; grid-row: 1; min-width: 0; padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+    .board-panel .map-frame { flex: 1; min-height: 520px; }
+    .board-panel .map-svg { min-height: 520px; }
+    .property-dock { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 2fr); gap: 20px; padding: 15px 18px; }
+    .property-dock .field-stack { grid-template-columns: repeat(3, minmax(120px, 1fr)); margin-top: 0; }
+    .property-dock .wide-field { grid-column: span 2; }
+    .tree-level { margin-top: 4px; }
+    .tree-row { display: block; }
+    .tree-button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 7px;
+      border-color: transparent;
+      background: transparent;
+      text-align: left;
+      font-size: 12px;
+    }
+    .tree-button.active { border-color: var(--line); background: var(--sheet-strong); }
+    .tree-button.orbit { color: var(--moss); font: 10px var(--mono); }
+    .tree-mark { width: 18px; color: var(--accent); font: 9px var(--mono); text-align: center; }
+    .tree-indent { margin-left: 12px; padding-left: 7px; border-left: 1px solid var(--line); }
+    .ledger-layout { display: grid; grid-template-columns: minmax(0, 1fr) 205px; gap: 11px; }
+    .register-main { min-width: 0; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); grid-template-rows: minmax(510px, auto) auto; gap: 11px; }
+    .register-panel, .register-map, .record-panel { padding: 14px; }
+    .register-panel { min-width: 0; overflow: auto; }
+    .register-map { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    .register-map .map-frame { flex: 1; min-height: 450px; }
+    .register-map .map-svg { min-height: 450px; }
+    .register-panel h2 { margin: 0 0 3px; font-size: 22px; }
+    .register-panel > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+    .register-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .register-table th { padding: 7px 6px; color: var(--muted); border-bottom: 1px solid var(--line-dark); text-align: left; font: 9px var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+    .register-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .register-table tr.selected td { background: #eee6d7; }
+    .register-table .row-pick { padding: 0; border: 0; color: var(--ink); background: none; text-align: left; }
+    .register-table .row-pick:hover { color: var(--accent); }
+    .register-table .key-cell { color: var(--accent); font: 10px var(--mono); white-space: nowrap; }
+    .record-panel { grid-column: 1 / -1; }
+    .record-panel .field-stack { grid-template-columns: repeat(4, minmax(110px, 1fr)); }
+    .record-panel .wide-field { grid-column: span 2; }
+    .ledger-rail { display: flex; flex-direction: column; gap: 16px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; color: var(--muted); font-size: 11px; }
+    .legend-mark { width: 11px; height: 11px; flex: none; border: 1px solid var(--moss); border-radius: 50%; }
+    .legend-mark.route { height: 0; border: 0; border-top: 2px solid var(--moss); border-radius: 0; }
+    .legend-mark.hazard { border-color: var(--accent); border-radius: 0; transform: rotate(45deg); }
+    .state-monitor {
+      margin-top: 12px;
+      padding: 11px 13px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: rgba(245,240,230,.75);
+    }
+    .state-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .state-head strong { font-size: 12px; font-weight: 500; }
+    .state-head span { color: var(--muted); font: 10px var(--mono); }
+    .state-monitor summary { margin-top: 6px; color: var(--moss); cursor: pointer; font: 10px var(--mono); }
+    .state-monitor pre {
+      max-height: 310px;
+      overflow: auto;
+      margin: 10px 0 0;
+      padding: 11px;
+      color: #dce1d8;
+      background: #29332e;
+      font: 10px/1.45 var(--mono);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .switcher {
+      position: fixed;
+      z-index: 10;
+      left: 50%;
+      bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 7px 10px;
+      border: 1px solid #536058;
+      border-radius: 999px;
+      color: #f5f0e6;
+      background: #26322c;
+      box-shadow: 0 8px 24px rgba(27,33,29,.23);
+      transform: translateX(-50%);
+      font: 11px var(--sans);
+    }
+    .switcher button {
+      width: 29px;
+      height: 29px;
+      padding: 0;
+      border-color: #647168;
+      border-radius: 50%;
+      color: #fffaf0;
+      background: #34433a;
+      font: 17px/1 var(--sans);
+    }
+    .switcher button:hover { color: #fff; background: var(--accent); }
+    .switcher-label { min-width: 155px; text-align: center; }
+    .switcher-label strong { color: #e4c88f; font-weight: 600; }
+    .toast {
+      position: fixed;
+      z-index: 9;
+      right: 22px;
+      bottom: 22px;
+      max-width: min(400px, calc(100vw - 44px));
+      padding: 9px 13px;
+      border: 1px solid #637066;
+      border-radius: 4px;
+      color: #f5f0e6;
+      background: #26322c;
+      font: 11px var(--mono);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .toast.visible { opacity: 1; }
+
+    @media (max-width: 1150px) {
+      .spatial-layout { grid-template-columns: 190px minmax(380px, 1fr); }
+      .spatial-layout .inspector { grid-column: 1 / -1; min-height: 0; }
+      .outline-layout { grid-template-columns: 220px minmax(0, 1fr); }
+      .top-scope { display: none; }
+      .register-main { grid-template-columns: minmax(0, 1fr) minmax(300px, .85fr); }
+    }
+    @media (max-width: 780px) {
+      body { padding-inline: 10px; }
+      .topbar { align-items: flex-start; padding: 12px 0; }
+      .top-actions { flex-wrap: wrap; justify-content: flex-end; }
+      .top-actions button { padding: 6px 7px; font-size: 10px; }
+      .brand { min-width: 160px; }
+      .intro { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .actionbar .view-tabs { margin-left: 0; }
+      .spatial-layout, .outline-layout, .ledger-layout { display: flex; flex-direction: column; }
+      .scope-rail, .outline-rail, .inspector, .ledger-rail { min-height: 0; max-height: none; }
+      .map-workspace, .board-panel { min-height: 620px; }
+      .property-dock { grid-template-columns: 1fr; }
+      .property-dock .field-stack, .record-panel .field-stack { grid-template-columns: 1fr 1fr; }
+      .register-main { display: flex; flex-direction: column; }
+      .register-map { min-height: 500px; }
+      .record-panel .wide-field, .property-dock .wide-field { grid-column: auto; }
+      .switcher { bottom: 10px; }
+      .toast { right: 10px; bottom: 68px; }
+    }
+
+    /* Exported SVG copies these rules so the file stands alone outside the page. */
+    .map-bg { fill: #f5f0e6; }
+    .map-grid { fill: url(#map-grid); }
+    .map-title { fill: #28322d; font: 500 19px Georgia, serif; }
+    .map-caption, .map-coord, .node-meta, .object-key, .orbit-caption { fill: #69736a; font: 10px Consolas, monospace; }
+    .map-cross { stroke: #cfc6b5; stroke-width: 1; }
+    .route-line { fill: none; stroke: #536a5d; stroke-width: 2.4; }
+    .route-edge.unresolved .route-line { stroke: #9e4c36; stroke-dasharray: 8 7; }
+    .route-edge.is-selected .route-line { stroke: #9e4c36; stroke-width: 4; }
+    .route-label-bg { fill: #fffaf0; stroke: #aaa18f; }
+    .route-label { fill: #303a33; font: 10px Consolas, monospace; text-anchor: middle; }
+    .external-label { fill: #9e4c36; font: 9px Consolas, monospace; text-anchor: middle; }
+    .system-node { cursor: grab; touch-action: none; }
+    .system-node:active { cursor: grabbing; }
+    .system-node rect { fill: #eee7d9; stroke: #69766c; stroke-width: 1.5; }
+    .system-node:hover rect, .system-node:focus rect, .system-node.is-open rect { stroke: #9e4c36; stroke-width: 2.5; }
+    .system-node .node-name { fill: #28322d; font: 500 16px Georgia, serif; text-anchor: middle; }
+    .system-node .node-meta { text-anchor: middle; }
+    .node-core { fill: #536a5d; }
+    .orbit-ring { fill: none; stroke: #9b907d; stroke-width: 1.2; stroke-dasharray: 3 6; }
+    .orbit-ring.is-selected { stroke: #9e4c36; stroke-width: 2.5; }
+    .orbit-ring.drop-target { stroke: #9e4c36; stroke-width: 3; stroke-dasharray: 2 4; }
+    .orbit-hit { fill: none; stroke: transparent; stroke-width: 13; cursor: pointer; }
+    .orbit-caption { text-anchor: middle; }
+    .object-mark { cursor: grab; touch-action: none; }
+    .object-mark:active { cursor: grabbing; }
+    .object-mark:hover .object-core, .object-mark:focus .object-core, .object-mark.selected .object-core { stroke: #9e4c36; stroke-width: 3; }
+    .object-core { fill: #e1bf7b; stroke: #485e52; stroke-width: 1.6; }
+    .object-core.star { fill: #cfac68; stroke: #856934; }
+    .object-core.moon { fill: #d7d3c8; }
+    .object-core.station { fill: #6d8073; }
+    .object-core.hazard { fill: #b75c43; }
+    .object-core.jump { fill: #fffaf0; stroke: #9e4c36; stroke-width: 2; }
+    .object-label { fill: #28322d; font: 11px Georgia, serif; }
+    .object-key { font-size: 9px; }
+    .system-hazard-line { stroke: #9e4c36; stroke-width: 1.2; stroke-dasharray: 3 4; }
+    .empty-map { fill: #69736a; font: 14px Georgia, serif; text-anchor: middle; }
+    .empty-map-sub { fill: #8a8c82; font: 10px Consolas, monospace; text-anchor: middle; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <nav class="switcher" id="variant-switcher" aria-label="Prototype layout variants">
+    <button type="button" data-variant-step="-1" aria-label="Previous layout">&#8592;</button>
+    <span class="switcher-label" id="variant-label" aria-live="polite"></span>
+    <button type="button" data-variant-step="1" aria-label="Next layout">&#8594;</button>
+  </nav>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    "use strict";
+
+    const VARIANTS = {
+      A: "Chart table",
+      B: "Orbit tree",
+      C: "Survey ledger",
+      D: "Canvas + hierarchy"
+    };
+    const objectTypes = {
+      star: ["CelestialBody", "star", "STAR", "Star"],
+      planet: ["CelestialBody", "planet", "PL", "Planet"],
+      moon: ["CelestialBody", "moon", "MO", "Moon"],
+      asteroid: ["SmallBody/Field", "asteroid", "AST", "Asteroid"],
+      belt: ["SmallBody/Field", "belt", "BELT", "Belt"],
+      station: ["Installation", "station", "ST", "Station"],
+      base: ["Installation", "base", "BASE", "Base"],
+      colony: ["Installation", "colony", "COL", "Colony"],
+      vessel: ["Vessel", "vessel", "VES", "Vessel"],
+      derelict: ["Vessel", "derelict", "DER", "Derelict"],
+      jumpPoint: ["JumpPoint", "jump-point", "JP", "Jump Point"],
+      anomaly: ["Phenomenon", "anomaly", "AN", "Anomaly"],
+      nebula: ["Phenomenon", "nebula", "NEB", "Nebula"],
+      hazard: ["Phenomenon", "hazard", "HZ", "Hazard"],
+      other: ["Other", "other", "OTH", "Other"]
+    };
+
+    const system = (id, name, objects, orbits) => ({ id, name, objects, orbits });
+    const mapObject = (id, family, subtype, key, name, description, location, extra = {}) => ({
+      id, family, subtype, key, name, description, location, fields: {}, customValues: {}, ...extra
+    });
+    const initialCluster = {
+      id: "cluster-kestrel",
+      name: "Kestrel Reach",
+      systems: [
+        system("system-vesper", "Vesper", [
+          mapObject("obj-va", "CelestialBody", "star", "A", "Vesper A", "Amber primary. The chart is schematic, not to scale.", { kind: "system", x: .27, y: .55 }),
+          mapObject("obj-vb", "CelestialBody", "star", "B", "Vesper B", "Blue-white companion, plotted separately for clarity.", { kind: "system", x: .70, y: .55 }),
+          mapObject("obj-iria", "CelestialBody", "planet", "I", "Iria", "Chlorine cloud deck; surface reports conflict.", { kind: "orbit", orbitId: "orbit-va-1" }, { fields: { atmosphere: "Toxic" }, customValues: { intel: "Old beacon under the cloudline." } }),
+          mapObject("obj-nix", "CelestialBody", "moon", "I-a", "Nix", "Small moon with a buried relay.", { kind: "orbit", orbitId: "orbit-iria-1" }, { fields: { atmosphere: "Thin" } }),
+          mapObject("obj-dross", "CelestialBody", "planet", "II", "Dross", "Cold outer body.", { kind: "orbit", orbitId: "orbit-va-2" }, { fields: { atmosphere: "None" } }),
+          mapObject("obj-lumen", "Installation", "station", "B-1", "Lumen Array", "A listening post around the companion star.", { kind: "orbit", orbitId: "orbit-vb-1" }, { fields: { portClass: "Class II" } }),
+          mapObject("obj-glass", "Phenomenon", "hazard", "H-1", "Glass Wake", "A non-orbital hazard crossing the system.", { kind: "system", x: .49, y: .17 }),
+          mapObject("jp-v-1", "JumpPoint", "jump-point", "JP-01", "Vesper inbound", "Logical route endpoint; not a physical station.", { kind: "system", x: .91, y: .73 }),
+          mapObject("jp-v-2", "JumpPoint", "jump-point", "JP-02", "Vesper outbound", "Logical route endpoint; not a physical station.", { kind: "system", x: .90, y: .88 }),
+          mapObject("jp-v-3", "JumpPoint", "jump-point", "JP-03", "Uncharted approach", "Logical endpoint for the unresolved exit.", { kind: "system", x: .88, y: .18 })
+        ], [
+          { id: "orbit-va-1", hostId: "obj-va", order: 1 },
+          { id: "orbit-va-2", hostId: "obj-va", order: 2 },
+          { id: "orbit-iria-1", hostId: "obj-iria", order: 1 },
+          { id: "orbit-vb-1", hostId: "obj-vb", order: 1 }
+        ]),
+        system("system-harrow", "Harrow", [
+          mapObject("obj-h-star", "CelestialBody", "star", "A", "Harrow A", "Distant red primary.", { kind: "system", x: .5, y: .48 }),
+          mapObject("obj-h-planet", "CelestialBody", "planet", "I", "Bellwether", "A tidally locked colony world.", { kind: "orbit", orbitId: "orbit-h-1" }, { fields: { atmosphere: "Thin" } }),
+          mapObject("obj-h-colony", "Installation", "colony", "C-1", "Bellwether Colony", "A failing surface settlement.", { kind: "orbit", orbitId: "orbit-h-1" }),
+          mapObject("jp-h-1", "JumpPoint", "jump-point", "JP-01", "Harrow inbound", "Logical route endpoint.", { kind: "system", x: .09, y: .72 }),
+          mapObject("jp-h-2", "JumpPoint", "jump-point", "JP-02", "Harrow outbound", "Logical route endpoint.", { kind: "system", x: .92, y: .28 })
+        ], [
+          { id: "orbit-h-1", hostId: "obj-h-star", order: 1 }
+        ]),
+        system("system-mourn", "Mourn", [
+          mapObject("obj-m-star", "CelestialBody", "star", "A", "Mourn A", "Low-luminosity primary.", { kind: "system", x: .52, y: .5 }),
+          mapObject("obj-m-derelict", "Vessel", "derelict", "D-1", "The Quiet", "Unpowered vessel in a wide orbit.", { kind: "orbit", orbitId: "orbit-m-1" }),
+          mapObject("jp-m-1", "JumpPoint", "jump-point", "JP-01", "Mourn approach", "Logical route endpoint.", { kind: "system", x: .11, y: .25 })
+        ], [
+          { id: "orbit-m-1", hostId: "obj-m-star", order: 1 }
+        ])
+      ],
+      routes: [
+        { id: "route-1", name: "Jump-01", fromPointId: "jp-v-1", toPointId: "jp-h-1" },
+        { id: "route-2", name: "Jump-02", fromPointId: "jp-h-2", toPointId: "jp-m-1" },
+        { id: "route-3", name: "Jump-03", fromPointId: "jp-v-3", toPointId: null, unresolvedExit: "Uncharted exit" }
+      ]
+    };
+    const initialLayouts = {
+      "cluster-kestrel": {
+        "system-vesper": { x: 210, y: 260 },
+        "system-harrow": { x: 480, y: 150 },
+        "system-mourn": { x: 745, y: 290 }
+      }
+    };
+    const requestedVariant = new URLSearchParams(location.search).get("variant")?.toUpperCase();
+    const state = {
+      clusters: [initialCluster],
+      layouts: initialLayouts,
+      customFieldDefinitions: [{ id: "intel", name: "Warden's field note", type: "text" }],
+      activeClusterId: initialCluster.id,
+      selectedSystemId: "system-vesper",
+      selectedObjectId: null,
+      selectedOrbitId: null,
+      selectedRouteId: null,
+      view: "cluster",
+      variant: VARIANTS[requestedVariant] ? requestedVariant : "A",
+      objectType: "planet",
+      orbitAngles: {},
+      dragPreview: null,
+      notice: "Drag a system to arrange the cluster; select it to open its orbital map."
+    };
+    let generatedId = 0;
+    let toastTimer;
+    let dragging = null;
+    let lastDragged = null;
+
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[char]);
+    const currentCluster = () => state.clusters.find(item => item.id === state.activeClusterId);
+    const currentSystem = () => currentCluster()?.systems.find(item => item.id === state.selectedSystemId) || null;
+    const objectById = (system, id) => system?.objects.find(item => item.id === id) || null;
+    const makeId = prefix => `${prefix}-${++generatedId}`;
+    const systemCount = cluster => cluster.systems.length;
+    const routeCount = cluster => cluster.routes.length;
+    const objectCount = cluster => cluster.systems.reduce((total, item) => total + item.objects.length, 0);
+    const orbitCount = cluster => cluster.systems.reduce((total, item) => total + item.orbits.length, 0);
+    const activeLayout = cluster => state.layouts[cluster.id] || (state.layouts[cluster.id] = {});
+
+    function setNotice(message) {
+      state.notice = message;
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("visible"), 2400);
+    }
+
+    function updateVariantUrl(key) {
+      const url = new URL(location.href);
+      url.searchParams.set("variant", key);
+      history.replaceState(null, "", url);
+    }
+
+    function setVariant(key) {
+      const keys = Object.keys(VARIANTS);
+      const next = keys.includes(key) ? key : "A";
+      state.variant = next;
+      updateVariantUrl(next);
+      render();
+    }
+
+    function cycleVariant(step) {
+      const keys = Object.keys(VARIANTS);
+      const next = (keys.indexOf(state.variant) + step + keys.length) % keys.length;
+      setVariant(keys[next]);
+    }
+
+    function familyFor(type) {
+      return objectTypes[type] || objectTypes.other;
+    }
+
+    function nextKey(system, prefix) {
+      let index = 1;
+      let key = `${prefix}-${String(index).padStart(2, "0")}`;
+      while (system.objects.some(item => item.key === key)) {
+        index += 1;
+        key = `${prefix}-${String(index).padStart(2, "0")}`;
+      }
+      return key;
+    }
+
+    function addJumpPoint(system, name) {
+      const number = system.objects.filter(item => item.family === "JumpPoint").length + 1;
+      const object = mapObject(
+        makeId("jump-point"),
+        "JumpPoint",
+        "jump-point",
+        nextKey(system, "JP"),
+        name || `Jump Point ${number}`,
+        "Logical route endpoint; not a physical station.",
+        { kind: "system", x: .88, y: Math.min(.88, .22 + number * .11) }
+      );
+      system.objects.push(object);
+      return object;
+    }
+
+    function addCluster() {
+      const number = state.clusters.length + 1;
+      const cluster = { id: makeId("cluster"), name: `New cluster ${number}`, systems: [], routes: [] };
+      state.clusters.push(cluster);
+      state.layouts[cluster.id] = {};
+      state.activeClusterId = cluster.id;
+      state.selectedSystemId = null;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      state.view = "cluster";
+      setNotice(`Created ${cluster.name}. Add a system to begin the chart.`);
+      render();
+    }
+
+    function addSystem() {
+      const cluster = currentCluster();
+      const number = cluster.systems.length + 1;
+      const item = system(makeId("system"), `New system ${number}`, [], []);
+      cluster.systems.push(item);
+      const layout = activeLayout(cluster);
+      layout[item.id] = {
+        x: Math.min(180 + ((number - 1) % 3) * 250, 790),
+        y: Math.min(180 + Math.floor((number - 1) / 3) * 125, 430)
+      };
+      state.selectedSystemId = item.id;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      state.view = "cluster";
+      setNotice(`Created ${item.name} in ${cluster.name}. Select its node to open the system.`);
+      render();
+    }
+
+    function addRoute() {
+      const cluster = currentCluster();
+      if (!cluster.systems.length) return;
+      const fromSystem = cluster.systems.find(item => item.id === state.selectedSystemId) || cluster.systems[0];
+      const toSystem = cluster.systems.find(item => item.id !== fromSystem.id) || null;
+      const fromPoint = addJumpPoint(fromSystem, `${fromSystem.name} route endpoint`);
+      const toPoint = toSystem ? addJumpPoint(toSystem, `${toSystem.name} route endpoint`) : null;
+      const route = {
+        id: makeId("route"),
+        name: `Jump-${String(cluster.routes.length + 1).padStart(2, "0")}`,
+        fromPointId: fromPoint.id,
+        toPointId: toPoint?.id || null,
+        ...(toPoint ? {} : { unresolvedExit: "Uncharted exit" })
+      };
+      cluster.routes.push(route);
+      state.selectedRouteId = route.id;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      state.view = "cluster";
+      setNotice(toPoint ? `Added ${route.name} between ${fromSystem.name} and ${toSystem.name}.` : `Added ${route.name} with an unresolved external exit.`);
+      render();
+    }
+
+    function addObject() {
+      const activeSystem = currentSystem();
+      if (!activeSystem) return;
+      const select = document.querySelector("[data-role='object-type']");
+      const type = select?.value || state.objectType;
+      state.objectType = type;
+      const [family, subtype, prefix, label] = familyFor(type);
+      const orbit = activeSystem.orbits.find(item => item.id === state.selectedOrbitId);
+      const count = activeSystem.objects.filter(item => item.subtype === subtype).length + 1;
+      const location = orbit
+        ? { kind: "orbit", orbitId: orbit.id }
+        : { kind: "system", x: .44 + (activeSystem.objects.length % 4) * .045, y: .62 + (activeSystem.objects.length % 3) * .035 };
+      const extra = {};
+      if (subtype === "planet" || subtype === "moon") extra.fields = { atmosphere: "" };
+      if (family === "Installation") extra.fields = { portClass: "" };
+      if (family === "Other") extra.subtype = "other";
+      const item = mapObject(
+        makeId(subtype),
+        family,
+        extra.subtype || subtype,
+        nextKey(activeSystem, prefix),
+        `New ${label.toLowerCase()} ${count}`,
+        "",
+        location,
+        extra
+      );
+      activeSystem.objects.push(item);
+      state.selectedObjectId = item.id;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      setNotice(`Added ${item.name}${orbit ? ` to Orbit ${orbit.order}` : " at a schematic system position"}.`);
+      render();
+    }
+
+    function addOrbit() {
+      const activeSystem = currentSystem();
+      const host = objectById(activeSystem, state.selectedObjectId);
+      if (!activeSystem || !host) return;
+      const order = activeSystem.orbits.filter(item => item.hostId === host.id).length + 1;
+      const orbit = { id: makeId("orbit"), hostId: host.id, order };
+      activeSystem.orbits.push(orbit);
+      state.selectedOrbitId = orbit.id;
+      state.selectedObjectId = null;
+      state.selectedRouteId = null;
+      setNotice(`Added Orbit ${order} around ${host.name}. Add an object to place it there.`);
+      render();
+    }
+
+    function selectCluster(id) {
+      const cluster = state.clusters.find(item => item.id === id);
+      if (!cluster) return;
+      state.activeClusterId = id;
+      state.selectedSystemId = cluster.systems[0]?.id || null;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      state.view = "cluster";
+      setNotice(`Opened ${cluster.name}.`);
+      render();
+    }
+
+    function openSystem(id) {
+      const activeSystem = currentCluster().systems.find(item => item.id === id);
+      if (!activeSystem) return;
+      state.selectedSystemId = id;
+      state.selectedObjectId = activeSystem.objects.find(item => item.family !== "JumpPoint")?.id || null;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      state.view = "system";
+      setNotice(`Opened ${activeSystem.name}. Orbit rings show host-child structure, not scale.`);
+      render();
+    }
+
+    function showCluster() {
+      state.view = "cluster";
+      state.selectedRouteId = null;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      setNotice(`Viewing ${currentCluster().name}. Drag system nodes to arrange them.`);
+      render();
+    }
+
+    function showSystem() {
+      const active = currentSystem() || currentCluster().systems[0];
+      if (!active) {
+        setNotice("Add a system before opening the system map.");
+        return;
+      }
+      openSystem(active.id);
+    }
+
+    function selectObject(id) {
+      const active = currentSystem();
+      const item = objectById(active, id);
+      if (!item) return;
+      state.selectedObjectId = id;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      setNotice(`Selected ${item.key} / ${item.name}.`);
+      render();
+    }
+
+    function selectOrbit(id) {
+      const active = currentSystem();
+      const orbit = active?.orbits.find(item => item.id === id);
+      if (!orbit) return;
+      state.selectedOrbitId = id;
+      state.selectedObjectId = null;
+      state.selectedRouteId = null;
+      setNotice(`Selected Orbit ${orbit.order} around ${objectById(active, orbit.hostId)?.name || "unknown host"}.`);
+      render();
+    }
+
+    function selectRoute(id) {
+      const route = currentCluster().routes.find(item => item.id === id);
+      if (!route) return;
+      state.selectedRouteId = id;
+      state.selectedObjectId = null;
+      state.selectedOrbitId = null;
+      setNotice(`Selected ${route.name}.`);
+      render();
+    }
+
+    function pointSystem(pointId) {
+      if (!pointId) return null;
+      return currentCluster().systems.find(item => item.objects.some(object => object.id === pointId)) || null;
+    }
+
+    function pointObject(pointId) {
+      const owner = pointSystem(pointId);
+      return objectById(owner, pointId);
+    }
+
+    function routeGeometry(route, index) {
+      const fromSystem = pointSystem(route.fromPointId);
+      const start = activeLayout(currentCluster())[fromSystem?.id] || { x: 180, y: 280 };
+      const toSystem = pointSystem(route.toPointId);
+      let end;
+      if (toSystem) {
+        end = activeLayout(currentCluster())[toSystem.id] || { x: 760, y: 280 };
+      } else {
+        end = { x: 870, y: Math.min(460, Math.max(90, start.y + 145 + (index % 2) * 28)) };
+      }
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const ux = dx / length;
+      const uy = dy / length;
+      const radius = 80;
+      const x1 = start.x + ux * radius;
+      const y1 = start.y + uy * radius;
+      const x2 = toSystem ? end.x - ux * radius : end.x;
+      const y2 = toSystem ? end.y - uy * radius : end.y;
+      const bend = toSystem ? (index % 2 ? 32 : -32) : 18;
+      const cx = (x1 + x2) / 2 - uy * bend;
+      const cy = (y1 + y2) / 2 + ux * bend;
+      const lx = (x1 + 2 * cx + x2) / 4;
+      const ly = (y1 + 2 * cy + y2) / 4 - 8;
+      return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, x1, y1, x2, y2, lx, ly };
+    }
+
+    function renderRouteEdges(cluster) {
+      if (!cluster.routes.length) return "";
+      return cluster.routes.map((route, index) => {
+        const geometry = routeGeometry(route, index);
+        const unresolved = !route.toPointId;
+        const labelWidth = Math.max(78, route.name.length * 7 + 18);
+        return `<g class="route-edge${unresolved ? " unresolved" : ""}${state.selectedRouteId === route.id ? " is-selected" : ""}" data-route-id="${esc(route.id)}" role="button" tabindex="0" aria-label="${esc(route.name)}${unresolved ? ", unresolved exit" : ""}">
+          <path class="route-line" data-route-path="${esc(route.id)}" d="${geometry.d}"></path>
+          <rect class="route-label-bg" data-route-label-bg="${esc(route.id)}" x="${geometry.lx - labelWidth / 2}" y="${geometry.ly - 12}" width="${labelWidth}" height="21" rx="10"></rect>
+          <text class="route-label" data-route-label="${esc(route.id)}" x="${geometry.lx}" y="${geometry.ly + 2}">${esc(route.name)}</text>
+          ${unresolved ? `<circle cx="${geometry.x2}" cy="${geometry.y2}" r="7" fill="#f5f0e6" stroke="#9e4c36" stroke-width="2"></circle><text class="external-label" x="${geometry.x2}" y="${geometry.y2 + 22}">${esc(route.unresolvedExit || "Unresolved exit")}</text>` : ""}
+        </g>`;
+      }).join("");
+    }
+
+    function renderClusterMap(cluster) {
+      const layout = activeLayout(cluster);
+      const nodes = cluster.systems.map(item => {
+        const position = layout[item.id] || { x: 180, y: 260 };
+        const stars = item.objects.filter(object => object.subtype === "star").length;
+        const open = state.selectedSystemId === item.id;
+        return `<g class="system-node${open ? " is-open" : ""}" data-system-node="${esc(item.id)}" transform="translate(${position.x} ${position.y})" role="button" tabindex="0" aria-label="Open ${esc(item.name)} system map">
+          <rect x="-73" y="-39" width="146" height="78" rx="5"></rect>
+          <circle class="node-core" cx="-53" cy="-15" r="4"></circle>
+          <text class="node-name" data-system-name-for="${esc(item.id)}" x="0" y="-2">${esc(item.name)}</text>
+          <text class="node-meta" x="0" y="18">${stars} star${stars === 1 ? "" : "s"} / ${item.objects.length} objects</text>
+          <text class="node-meta" x="0" y="32">SELECT TO OPEN</text>
+        </g>`;
+      }).join("");
+      const empty = cluster.systems.length
+        ? ""
+        : `<text class="empty-map" x="480" y="247">No systems on this chart yet.</text><text class="empty-map-sub" x="480" y="270">Use + System to place the first node.</text>`;
+      return `<svg id="map-svg" class="map-svg" viewBox="0 0 960 560" role="group" aria-roledescription="interactive map" aria-label="${esc(cluster.name)} Jump Cluster map">
+        <defs><pattern id="map-grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" class="map-cross" fill="none"></path></pattern></defs>
+        <rect class="map-bg" x="0" y="0" width="960" height="560"></rect>
+        <rect class="map-grid" x="0" y="0" width="960" height="560"></rect>
+        <text class="map-title" x="28" y="34">${esc(cluster.name)}</text>
+        <text class="map-caption" x="28" y="53">JUMP CLUSTER / MANUALLY ARRANGED</text>
+        <text class="map-coord" x="928" y="34" text-anchor="end">CHART / ${String(cluster.systems.length).padStart(2, "0")} SYSTEMS</text>
+        ${renderRouteEdges(cluster)}
+        ${nodes}
+        ${empty}
+      </svg>`;
+    }
+
+    // ponytail: dragged orbital angles stay view-only; persist them only if V1 needs per-object orbit positions.
+    function objectPosition(activeSystem, item, cache = new Map()) {
+      if (cache.has(item.id)) return cache.get(item.id);
+      if (state.dragPreview?.systemId === activeSystem.id && state.dragPreview.objectId === item.id) {
+        const preview = { x: state.dragPreview.x, y: state.dragPreview.y };
+        cache.set(item.id, preview);
+        return preview;
+      }
+      if (item.location.kind === "system") {
+        const position = { x: 72 + item.location.x * 816, y: 66 + item.location.y * 430 };
+        cache.set(item.id, position);
+        return position;
+      }
+      const orbit = activeSystem.orbits.find(candidate => candidate.id === item.location.orbitId);
+      const host = objectById(activeSystem, orbit?.hostId);
+      if (!orbit || !host) return { x: 480, y: 285 };
+      const center = objectPosition(activeSystem, host, cache);
+      const siblings = activeSystem.objects.filter(candidate => candidate.location.kind === "orbit" && candidate.location.orbitId === orbit.id);
+      const slot = Math.max(0, siblings.findIndex(candidate => candidate.id === item.id));
+      const phase = host.subtype === "star"
+        ? (host.key === "A" ? -Math.PI / 3 : Math.PI / 3) + (orbit.order - 1) * Math.PI
+        : (orbit.order - 1) * Math.PI;
+      const savedAngle = state.orbitAngles[activeSystem.id]?.[item.id];
+      const angle = Number.isFinite(savedAngle) ? savedAngle : phase + slot / Math.max(1, siblings.length) * Math.PI * 2;
+      const radius = host.subtype === "star" ? 104 + (orbit.order - 1) * 62 : 34 + (orbit.order - 1) * 24;
+      const position = { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+      cache.set(item.id, position);
+      return position;
+    }
+
+    function orbitRadius(activeSystem, orbit) {
+      const host = objectById(activeSystem, orbit.hostId);
+      return host?.subtype === "star" ? 104 + (orbit.order - 1) * 62 : 34 + (orbit.order - 1) * 24;
+    }
+
+    function isDescendant(activeSystem, objectId, ancestorId) {
+      let cursor = objectById(activeSystem, objectId);
+      const seen = new Set();
+      while (cursor && !seen.has(cursor.id)) {
+        if (cursor.id === ancestorId) return true;
+        seen.add(cursor.id);
+        const parentOrbit = cursor.location.kind === "orbit"
+          ? activeSystem.orbits.find(item => item.id === cursor.location.orbitId)
+          : null;
+        cursor = objectById(activeSystem, parentOrbit?.hostId);
+      }
+      return false;
+    }
+
+    function canPlaceInOrbit(activeSystem, item, orbit) {
+      return !!orbit && !isDescendant(activeSystem, orbit.hostId, item.id);
+    }
+
+    function orbitUnderPoint(activeSystem, item, point) {
+      return activeSystem.orbits
+        .filter(orbit => canPlaceInOrbit(activeSystem, item, orbit))
+        .map(orbit => {
+          const host = objectById(activeSystem, orbit.hostId);
+          const center = host ? objectPosition(activeSystem, host, new Map()) : { x: 0, y: 0 };
+          const distance = Math.abs(Math.hypot(point.x - center.x, point.y - center.y) - orbitRadius(activeSystem, orbit));
+          return { orbit, center, distance };
+        })
+        .filter(candidate => candidate.distance <= 22)
+        .sort((left, right) => left.distance - right.distance)[0] || null;
+    }
+
+    function updateSystemMapGeometry(activeSystem) {
+      const cache = new Map();
+      activeSystem.orbits.forEach(orbit => {
+        const host = objectById(activeSystem, orbit.hostId);
+        const group = document.querySelector(`.orbit-group[data-orbit-id="${orbit.id}"]`);
+        if (!host || !group) return;
+        const center = objectPosition(activeSystem, host, cache);
+        const radius = orbitRadius(activeSystem, orbit);
+        const ring = group.querySelector(".orbit-ring");
+        const hit = group.querySelector(".orbit-hit");
+        const caption = group.querySelector(".orbit-caption");
+        for (const circle of [ring, hit]) {
+          if (!circle) continue;
+          circle.setAttribute("cx", center.x);
+          circle.setAttribute("cy", center.y);
+          circle.setAttribute("r", radius);
+        }
+        if (caption) {
+          caption.setAttribute("x", center.x + radius * .72);
+          caption.setAttribute("y", center.y - radius * .72);
+        }
+      });
+      activeSystem.objects.forEach(item => {
+        const mark = document.querySelector(`.object-mark[data-object-id="${item.id}"]`);
+        if (!mark) return;
+        const position = objectPosition(activeSystem, item, cache);
+        mark.setAttribute("transform", `translate(${position.x} ${position.y})`);
+      });
+    }
+
+    function moveObjectTo(itemId, placement) {
+      const activeSystem = currentSystem();
+      const item = objectById(activeSystem, itemId);
+      if (!activeSystem || !item) return;
+      const oldPosition = objectPosition(activeSystem, item, new Map());
+      if (placement === "system") {
+        item.location = {
+          kind: "system",
+          x: Math.min(.96, Math.max(.04, (oldPosition.x - 72) / 816)),
+          y: Math.min(.94, Math.max(.06, (oldPosition.y - 66) / 430))
+        };
+        delete state.orbitAngles[activeSystem.id]?.[item.id];
+        setNotice(`Moved ${item.name} to a system-level position.`);
+      } else {
+        const orbitId = placement.slice(6);
+        const orbit = activeSystem.orbits.find(candidate => candidate.id === orbitId);
+        if (!canPlaceInOrbit(activeSystem, item, orbit)) {
+          setNotice("That placement would create a circular host relationship.");
+          render();
+          return;
+        }
+        const host = objectById(activeSystem, orbit.hostId);
+        const center = objectPosition(activeSystem, host, new Map());
+        item.location = { kind: "orbit", orbitId: orbit.id };
+        state.orbitAngles[activeSystem.id] ||= {};
+        state.orbitAngles[activeSystem.id][item.id] = Math.atan2(oldPosition.y - center.y, oldPosition.x - center.x);
+        setNotice(`Moved ${item.name} to Orbit ${orbit.order} around ${host.name}.`);
+      }
+      state.selectedObjectId = item.id;
+      state.selectedOrbitId = null;
+      render();
+    }
+
+    function renderObjectMark(activeSystem, item, cache) {
+      const position = objectPosition(activeSystem, item, cache);
+      const selected = state.selectedObjectId === item.id;
+      const isStar = item.subtype === "star";
+      const isMoon = item.subtype === "moon";
+      const isStation = item.family === "Installation";
+      const isHazard = item.family === "Phenomenon";
+      const isJump = item.family === "JumpPoint";
+      const radius = isStar ? 14 : isJump ? 11 : 9;
+      const orbit = item.location.kind === "orbit" ? activeSystem.orbits.find(candidate => candidate.id === item.location.orbitId) : null;
+      const host = objectById(activeSystem, orbit?.hostId);
+      const hostPosition = host ? objectPosition(activeSystem, host, cache) : null;
+      let labelX = position.x > 790 ? -16 : 16;
+      let nameY = -3;
+      let keyY = 11;
+      let labelSide = position.x > 790 ? "end" : "start";
+      if (isStar) {
+        labelX = -19;
+        labelSide = "end";
+      } else if (orbit && hostPosition) {
+        const dx = position.x - hostPosition.x;
+        const dy = position.y - hostPosition.y;
+        if (Math.abs(dy) >= Math.abs(dx)) {
+          labelX = 0;
+          labelSide = "middle";
+          nameY = dy < 0 ? -19 : 25;
+          keyY = dy < 0 ? -6 : 38;
+        } else if (dx < 0) {
+          labelX = -16;
+          labelSide = "end";
+        } else {
+          labelX = 16;
+          labelSide = "start";
+        }
+      }
+      return `<g class="object-mark${selected ? " selected" : ""}" data-object-id="${esc(item.id)}" transform="translate(${position.x} ${position.y})" role="button" tabindex="0" aria-label="Select ${esc(item.key)} ${esc(item.name)}">
+        ${isHazard ? `<path class="system-hazard-line" d="M 0 14 L 0 29"></path><path class="object-core hazard" d="M 0 -12 L 12 0 0 12 -12 0 Z"></path>` : ""}
+        ${isJump ? `<circle class="object-core jump" r="${radius}"></circle><circle r="3" fill="#9e4c36"></circle>` : ""}
+        ${isStar ? `<circle r="22" fill="none" stroke="#c8a867" stroke-width="1" opacity=".72"></circle><circle class="object-core star" r="${radius}"></circle>` : ""}
+        ${isStation ? `<rect class="object-core station" x="-10" y="-8" width="20" height="16" rx="2"></rect>` : ""}
+        ${!isHazard && !isJump && !isStar && !isStation ? `<circle class="object-core${isMoon ? " moon" : ""}" r="${radius}"></circle>` : ""}
+        <text class="object-label" data-name-for="${esc(item.id)}" x="${labelX}" y="${nameY}" text-anchor="${labelSide}">${esc(item.name)}</text>
+        <text class="object-key" data-key-for="${esc(item.id)}" x="${labelX}" y="${keyY}" text-anchor="${labelSide}">${esc(item.key)} / ${esc(item.subtype)}</text>
+      </g>`;
+    }
+
+    function renderSystemMap(activeSystem) {
+      if (!activeSystem) {
+        return `<svg id="map-svg" class="map-svg" viewBox="0 0 960 560" role="group" aria-roledescription="interactive map" aria-label="Empty system map">
+          <defs><pattern id="map-grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" class="map-cross" fill="none"></path></pattern></defs>
+          <rect class="map-bg" width="960" height="560"></rect><rect class="map-grid" width="960" height="560"></rect>
+          <text class="empty-map" x="480" y="247">Open a system to begin its orbital chart.</text>
+          <text class="empty-map-sub" x="480" y="270">Systems, orbits and map objects remain in memory.</text>
+        </svg>`;
+      }
+      const cache = new Map();
+      const rings = activeSystem.orbits.map(orbit => {
+        const host = objectById(activeSystem, orbit.hostId);
+        if (!host) return "";
+        const center = objectPosition(activeSystem, host, cache);
+        const radius = orbitRadius(activeSystem, orbit);
+        const selected = state.selectedOrbitId === orbit.id;
+        return `<g class="orbit-group" data-orbit-id="${esc(orbit.id)}" role="button" tabindex="0" aria-label="Select Orbit ${orbit.order} around ${esc(host.name)}">
+          <circle class="orbit-ring${selected ? " is-selected" : ""}" cx="${center.x}" cy="${center.y}" r="${radius}"></circle>
+          <circle class="orbit-hit" cx="${center.x}" cy="${center.y}" r="${radius}"></circle>
+          ${radius >= 70 ? `<text class="orbit-caption" x="${center.x + radius * .72}" y="${center.y - radius * .72}">ORBIT ${orbit.order}</text>` : ""}
+        </g>`;
+      }).join("");
+      const marks = activeSystem.objects.map(item => renderObjectMark(activeSystem, item, cache)).join("");
+      const starCount = activeSystem.objects.filter(item => item.subtype === "star").length;
+      return `<svg id="map-svg" class="map-svg" viewBox="0 0 960 560" role="group" aria-roledescription="interactive map" aria-label="${esc(activeSystem.name)} schematic orbital map">
+        <defs><pattern id="map-grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" class="map-cross" fill="none"></path></pattern></defs>
+        <rect class="map-bg" x="0" y="0" width="960" height="560"></rect>
+        <rect class="map-grid" x="0" y="0" width="960" height="560"></rect>
+        <text class="map-title" x="28" y="34">${esc(activeSystem.name)}</text>
+        <text class="map-caption" x="28" y="53">SYSTEM / ${starCount} STAR${starCount === 1 ? "" : "S"} / SCHEMATIC, NOT TO SCALE</text>
+        <text class="map-coord" x="928" y="34" text-anchor="end">${activeSystem.objects.length} OBJECTS / ${activeSystem.orbits.length} ORBITS</text>
+        ${rings}
+        ${marks}
+        ${activeSystem.objects.length ? "" : `<text class="empty-map" x="480" y="250">Nothing charted here yet.</text><text class="empty-map-sub" x="480" y="273">Add a star, an orbiting body, or a system-level feature.</text>`}
+      </svg>`;
+    }
+
+    function renderMap() {
+      return state.view === "cluster" ? renderClusterMap(currentCluster()) : renderSystemMap(currentSystem());
+    }
+
+    function renderHeader() {
+      return `<header class="topbar">
+        <div class="brand">
+          <span class="brand-stamp">W/01</span>
+          <span><span class="brand-name">Warden's Atlas</span><span class="brand-note">LOCAL CARTOGRAPHY / PROTOTYPE</span></span>
+        </div>
+        <div class="top-scope"><small>Active Jump Cluster</small><strong>${esc(currentCluster().name)}</strong></div>
+        <div class="top-actions">
+          <button type="button" class="primary" data-action="add-cluster">New cluster</button>
+          <button type="button" data-action="export-svg">Export SVG</button>
+          <button type="button" data-action="export-png">Export PNG</button>
+        </div>
+      </header>`;
+    }
+
+    function renderTools() {
+      const activeSystem = currentSystem();
+      const canAddObject = state.view === "system" && !!activeSystem;
+      const canAddJump = state.view === "system" && !!activeSystem;
+      const canAddOrbit = canAddObject && !!objectById(activeSystem, state.selectedObjectId);
+      const canAddRoute = currentCluster().systems.length > 0;
+      return `<div class="actionbar" role="toolbar" aria-label="Map editing actions">
+        <div class="action-group">
+          <button type="button" class="tool-button" data-action="add-system">+ System</button>
+          <button type="button" class="tool-button" data-action="add-route" ${canAddRoute ? "" : "disabled"} title="Adds Jump Points and a route, or an unresolved exit if only one system exists.">+ Route</button>
+          <button type="button" class="tool-button" data-action="add-jump-point" ${canAddJump ? "" : "disabled"} title="Add a logical Jump Point to the open system.">+ Jump Point</button>
+          <button type="button" class="tool-button" data-action="add-orbit" ${canAddOrbit ? "" : "disabled"} title="Select an object first; an Orbit is hosted by that object.">+ Orbit</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="action-group">
+          <label class="sr-only" for="object-type">New object type</label>
+          <select id="object-type" data-role="object-type" aria-label="New object type">
+            ${Object.entries(objectTypes).map(([key, value]) => `<option value="${key}" ${state.objectType === key ? "selected" : ""}>${esc(value[3])}</option>`).join("")}
+          </select>
+          <button type="button" data-action="add-object" ${canAddObject ? "" : "disabled"}>+ Object</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="action-group view-tabs" aria-label="Map scope">
+          <button type="button" data-action="view-cluster" class="${state.view === "cluster" ? "active" : ""}">Cluster</button>
+          <button type="button" data-action="view-system" class="${state.view === "system" ? "active" : ""}" ${currentCluster().systems.length ? "" : "disabled"}>System</button>
+        </div>
+      </div>`;
+    }
+
+    function renderClusterPicker() {
+      return `<div class="nav-list">${state.clusters.map(cluster => `
+        <button type="button" class="nav-row${cluster.id === state.activeClusterId ? " active" : ""}" data-action="select-cluster" data-cluster-id="${esc(cluster.id)}">
+          <span class="node-seal">JC</span><span>${esc(cluster.name)}<small>${cluster.systems.length} systems / ${cluster.routes.length} routes</small></span>
+        </button>`).join("")}</div>`;
+    }
+
+    function renderSystemLinks(cluster = currentCluster()) {
+      if (!cluster.systems.length) return `<p class="empty-copy">No systems yet. Add the first node from the toolbar.</p>`;
+      return `<div class="nav-list">${cluster.systems.map(item => `
+        <button type="button" class="nav-row${state.selectedSystemId === item.id && state.view === "system" ? " active" : ""}" data-action="open-system" data-system-id="${esc(item.id)}">
+          <span class="node-seal">SY</span><span>${esc(item.name)}<small>${item.objects.filter(object => object.subtype === "star").length} stars / ${item.objects.length} objects</small></span>
+        </button>`).join("")}</div>`;
+    }
+
+    function renderRouteLinks(cluster = currentCluster()) {
+      if (!cluster.routes.length) return `<p class="empty-copy">No Jump Routes on this chart.</p>`;
+      return `<div class="nav-list">${cluster.routes.map(route => `
+        <div class="route-row">
+          <button type="button" class="nav-row${state.selectedRouteId === route.id ? " active" : ""}" data-action="select-route" data-route-id="${esc(route.id)}">
+            <span class="route-swatch${route.toPointId ? "" : " unresolved"}"></span><span>${esc(route.name)}<small>${route.toPointId ? "Jump Points linked" : "Unresolved exit"}</small></span>
+          </button>
+        </div>`).join("")}</div>`;
+    }
+
+    function renderAExplorer() {
+      return `<aside class="panel scope-rail">
+        <p class="panel-kicker">Chart index</p>
+        <div class="section-line"><span>Clusters</span></div>
+        ${renderClusterPicker()}
+        <div class="section-line"><span>Star systems</span><button type="button" data-action="add-system" aria-label="Add a system">+</button></div>
+        ${renderSystemLinks()}
+        <div class="section-line"><span>Jump Routes</span><button type="button" data-action="add-route" aria-label="Add a Jump Route" ${currentCluster().systems.length ? "" : "disabled"}>+</button></div>
+        ${renderRouteLinks()}
+      </aside>`;
+    }
+
+    function renderObjectTree(activeSystem) {
+      if (!activeSystem) return `<p class="empty-copy">Open or create a system to inspect its map hierarchy.</p>`;
+      if (!activeSystem.objects.length) return `<p class="empty-copy">No objects yet. Add a star or other map object.</p>`;
+      const childrenInOrbit = orbitId => activeSystem.objects.filter(item => item.location.kind === "orbit" && item.location.orbitId === orbitId);
+      function branch(item, depth = 0) {
+        const hostedOrbits = activeSystem.orbits.filter(orbit => orbit.hostId === item.id).sort((a, b) => a.order - b.order);
+        return `<div class="tree-row">
+          <button type="button" class="tree-button${state.selectedObjectId === item.id ? " active" : ""}" data-object-id="${esc(item.id)}" style="padding-left:${7 + depth * 9}px">
+            <span class="tree-mark">${esc(item.key)}</span><span>${esc(item.name)}</span>
+          </button>
+          ${hostedOrbits.map(orbit => `<div class="tree-indent">
+            <button type="button" class="tree-button orbit${state.selectedOrbitId === orbit.id ? " active" : ""}" data-orbit-id="${esc(orbit.id)}">Orbit ${orbit.order} / ${childrenInOrbit(orbit.id).length} object${childrenInOrbit(orbit.id).length === 1 ? "" : "s"}</button>
+            ${childrenInOrbit(orbit.id).map(child => branch(child, depth + 1)).join("")}
+          </div>`).join("")}
+        </div>`;
+      }
+      return activeSystem.objects.filter(item => item.location.kind === "system").map(item => branch(item)).join("");
+    }
+
+    function renderBExplorer() {
+      const active = currentSystem();
+      return `<aside class="panel outline-rail">
+        <p class="panel-kicker">${state.view === "cluster" ? "Cluster outline" : "System hierarchy"}</p>
+        <div class="section-line"><span>Active chart</span></div>
+        ${renderClusterPicker()}
+        ${state.view === "cluster" ? `
+          <div class="section-line"><span>Systems</span></div>${renderSystemLinks()}
+          <div class="section-line"><span>Routes</span></div>${renderRouteLinks()}
+        ` : `
+          <div class="section-line"><span>${esc(active?.name || "No system")}</span></div>
+          ${renderObjectTree(active)}
+          <div class="hint-box">Select an object, then add an Orbit. Orbits are unkeyed children hosted by map objects.</div>
+        `}
+      </aside>`;
+    }
+
+    function locationLabel(activeSystem, item) {
+      if (item.location.kind === "system") return `System-level / ${item.location.x.toFixed(2)}, ${item.location.y.toFixed(2)}`;
+      const orbit = activeSystem.orbits.find(candidate => candidate.id === item.location.orbitId);
+      const host = objectById(activeSystem, orbit?.hostId);
+      return `Orbit ${orbit?.order ?? "?"} / ${host?.name || "unknown host"}`;
+    }
+
+    function renderPlacementEditor(activeSystem, item) {
+      const selected = item.location.kind === "system" ? "system" : `orbit:${item.location.orbitId}`;
+      const options = activeSystem.orbits
+        .filter(orbit => canPlaceInOrbit(activeSystem, item, orbit))
+        .map(orbit => {
+          const host = objectById(activeSystem, orbit.hostId);
+          const value = `orbit:${orbit.id}`;
+          return `<option value="${esc(value)}" ${selected === value ? "selected" : ""}>Orbit ${orbit.order} around ${esc(host?.name || "unknown host")}</option>`;
+        }).join("");
+      return `<label>Placement<select name="object-placement-${esc(item.id)}" data-move-object="${esc(item.id)}">
+        <option value="system" ${selected === "system" ? "selected" : ""}>System-level position</option>
+        ${options ? `<optgroup label="Hosted Orbits">${options}</optgroup>` : ""}
+      </select></label>`;
+    }
+
+    function renderLedgerTable() {
+      const cluster = currentCluster();
+      if (state.view === "cluster") {
+        const systemRows = cluster.systems.map(item => `<tr class="${state.selectedSystemId === item.id ? "selected" : ""}">
+          <td><button type="button" class="row-pick" data-action="open-system" data-system-id="${esc(item.id)}">${esc(item.name)}</button></td>
+          <td>${item.objects.filter(object => object.subtype === "star").length} stars / ${item.objects.length} objects</td>
+          <td><button type="button" class="row-pick" data-action="open-system" data-system-id="${esc(item.id)}">Open map</button></td>
+        </tr>`).join("");
+        const routeRows = cluster.routes.map(route => {
+          const from = pointObject(route.fromPointId);
+          const to = pointObject(route.toPointId);
+          return `<tr class="${state.selectedRouteId === route.id ? "selected" : ""}">
+            <td><button type="button" class="row-pick" data-action="select-route" data-route-id="${esc(route.id)}">${esc(route.name)}</button></td>
+            <td>${esc(from?.name || "Missing Jump Point")} &rarr; ${esc(to?.name || route.unresolvedExit || "Unresolved exit")}</td>
+            <td>${route.toPointId ? "Connected" : "Unresolved"}</td>
+          </tr>`;
+        }).join("");
+        return `<table class="register-table"><thead><tr><th>Record</th><th>Topology</th><th>State</th></tr></thead><tbody>
+          ${systemRows || `<tr><td colspan="3" class="empty-copy">No systems on this chart.</td></tr>`}
+          ${routeRows}
+        </tbody></table>`;
+      }
+      const active = currentSystem();
+      if (!active) return `<p class="empty-copy">Create or open a system to see its catalogue.</p>`;
+      const objectRows = active.objects.map(item => `<tr class="${state.selectedObjectId === item.id ? "selected" : ""}">
+        <td class="key-cell">${esc(item.key)}</td>
+        <td><button type="button" class="row-pick" data-object-id="${esc(item.id)}">${esc(item.name)}</button></td>
+        <td>${esc(item.family)} / ${esc(item.subtype)}</td>
+        <td>${esc(locationLabel(active, item))}</td>
+      </tr>`).join("");
+      const orbitRows = active.orbits.map(orbit => `<tr class="${state.selectedOrbitId === orbit.id ? "selected" : ""}">
+        <td class="key-cell">--</td>
+        <td><button type="button" class="row-pick" data-orbit-id="${esc(orbit.id)}">Orbit ${orbit.order}</button></td>
+        <td>Orbit / placement</td>
+        <td>${esc(objectById(active, orbit.hostId)?.name || "Unknown host")}</td>
+      </tr>`).join("");
+      return `<table class="register-table"><thead><tr><th>Key</th><th>Object</th><th>Type</th><th>Placement</th></tr></thead><tbody>
+        ${objectRows || `<tr><td colspan="4" class="empty-copy">No objects in this system.</td></tr>`}
+        ${orbitRows}
+      </tbody></table>`;
+    }
+
+    function renderInspector() {
+      const activeSystem = currentSystem();
+      const activeCluster = currentCluster();
+      const selectedOrbit = activeSystem?.orbits.find(item => item.id === state.selectedOrbitId);
+      const selectedObject = objectById(activeSystem, state.selectedObjectId);
+      const selectedRoute = activeCluster.routes.find(item => item.id === state.selectedRouteId);
+      if (selectedRoute) {
+        const from = pointObject(selectedRoute.fromPointId);
+        const to = pointObject(selectedRoute.toPointId);
+        return `<div class="inspector-content">
+          <p class="panel-kicker">Jump Route / selected</p>
+          <span class="type-chip">Logical endpoints</span>
+          <label>Route name<input required name="route-name-${esc(selectedRoute.id)}" data-record="route" data-record-id="${esc(selectedRoute.id)}" data-field="name" value="${esc(selectedRoute.name)}"></label>
+          <div class="record-facts">
+            <div class="record-fact"><span>From Jump Point</span><strong>${esc(from?.key || "Missing")}</strong></div>
+            <div class="record-fact"><span>System</span><strong>${esc(pointSystem(selectedRoute.fromPointId)?.name || "Unknown")}</strong></div>
+            <div class="record-fact"><span>To</span><strong>${esc(to?.key || selectedRoute.unresolvedExit || "Unresolved")}</strong></div>
+            <div class="record-fact"><span>System</span><strong>${esc(pointSystem(selectedRoute.toPointId)?.name || "Not mapped")}</strong></div>
+          </div>
+          <p class="inspector-intro">A Jump Point is a logical endpoint. It is distinct from a physical Jump Station.</p>
+        </div>`;
+      }
+      if (selectedOrbit) {
+        const host = objectById(activeSystem, selectedOrbit.hostId);
+        const children = activeSystem.objects.filter(item => item.location.kind === "orbit" && item.location.orbitId === selectedOrbit.id);
+        return `<div class="inspector-content">
+          <p class="panel-kicker">System structure / selected</p>
+          <span class="type-chip">Unkeyed placement</span>
+          <h2>Orbit ${selectedOrbit.order}</h2>
+          <p class="inspector-intro">Orbits are schematic rings hosted by any map object.</p>
+          <div class="record-facts">
+            <div class="record-fact"><span>Host</span><strong>${esc(host?.name || "Unknown")}</strong></div>
+            <div class="record-fact"><span>Objects placed</span><strong>${children.length}</strong></div>
+          </div>
+          <p class="inspector-intro">${children.length ? children.map(item => esc(item.name)).join(", ") : "This Orbit is empty. Add an object to test its placement."}</p>
+        </div>`;
+      }
+      if (selectedObject) {
+        const isBody = selectedObject.subtype === "planet" || selectedObject.subtype === "moon";
+        const isInstallation = selectedObject.family === "Installation";
+        const customValue = selectedObject.customValues?.intel || "";
+        return `<div class="inspector-content">
+          <p class="panel-kicker">Map object / selected</p>
+          <span class="type-chip">${esc(selectedObject.family)} / ${esc(selectedObject.subtype)}</span>
+          <h2 data-record-heading="${esc(selectedObject.id)}">${esc(selectedObject.name)}</h2>
+          <p class="inspector-intro">${esc(locationLabel(activeSystem, selectedObject))}</p>
+          <div class="field-stack">
+            ${selectedObject.family === "Other" ? `<label>Type label<input name="object-type-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="subtype" value="${esc(selectedObject.subtype)}"></label>` : ""}
+            <label>Location key<input required name="object-key-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="key" value="${esc(selectedObject.key)}"></label>
+            <label>Name<input required name="object-name-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="name" value="${esc(selectedObject.name)}"></label>
+            ${renderPlacementEditor(activeSystem, selectedObject)}
+            <label class="wide-field">Description<textarea name="object-description-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="description">${esc(selectedObject.description)}</textarea></label>
+            ${isBody ? `<label>Atmosphere<select name="object-atmosphere-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="native:atmosphere">
+              ${[["", "Not recorded"], ["None", "None"], ["Thin", "Thin"], ["Breathable", "Breathable"], ["Toxic", "Toxic"], ["Exotic", "Exotic"]].map(([value, label]) => `<option value="${value}" ${selectedObject.fields?.atmosphere === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select></label>` : ""}
+            ${isInstallation ? `<label>Port class<select name="object-port-class-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="native:portClass">
+              ${[["", "Not recorded"], ["Class I", "Class I"], ["Class II", "Class II"], ["Class III", "Class III"], ["Class IV", "Class IV"]].map(([value, label]) => `<option value="${value}" ${selectedObject.fields?.portClass === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select></label>` : ""}
+            <label class="wide-field">Warden's field note<textarea name="object-custom-intel-${esc(selectedObject.id)}" data-record="object" data-record-id="${esc(selectedObject.id)}" data-field="custom:intel">${esc(customValue)}</textarea></label>
+          </div>
+          <div class="hint-box">${selectedObject.family === "JumpPoint" ? "Logical route endpoint; not a physical station." : "Keys are required and unique within this star system. Edits stay in memory."}</div>
+        </div>`;
+      }
+      return `<div class="inspector-content">
+        <p class="panel-kicker">${state.view === "cluster" ? "Jump Cluster" : "Star system"}</p>
+        <span class="type-chip">${state.view === "cluster" ? "Manually arranged network" : "Schematic orbital map"}</span>
+        <h2>${esc(state.view === "cluster" ? activeCluster.name : activeSystem?.name || "No system open")}</h2>
+        <p class="inspector-intro">${state.view === "cluster"
+          ? `${activeCluster.systems.length} systems and ${activeCluster.routes.length} Jump Routes. Select a route for its endpoints, or open a system.`
+          : "Select an object or orbit to inspect its host, placement, and editable fields."}</p>
+        <div class="record-facts">
+          <div class="record-fact"><span>Systems</span><strong>${activeCluster.systems.length}</strong></div>
+          <div class="record-fact"><span>Routes</span><strong>${activeCluster.routes.length}</strong></div>
+          ${activeSystem ? `<div class="record-fact"><span>Objects in system</span><strong>${activeSystem.objects.length}</strong></div>` : ""}
+        </div>
+        <p class="inspector-intro">${esc(state.notice)}</p>
+      </div>`;
+    }
+
+    function renderStatePanel() {
+      const cluster = currentCluster();
+      const active = currentSystem();
+      const snapshot = {
+        variant: state.variant,
+        view: state.view,
+        activeClusterId: state.activeClusterId,
+        selectedSystemId: state.selectedSystemId,
+        selectedObjectId: state.selectedObjectId,
+        selectedOrbitId: state.selectedOrbitId,
+        selectedRouteId: state.selectedRouteId,
+        clusterLayouts: state.layouts,
+        orbitAngles: state.orbitAngles,
+        dragPreview: state.dragPreview,
+        customFieldDefinitions: state.customFieldDefinitions,
+        clusters: state.clusters
+      };
+      const selection = state.selectedObjectId
+        ? objectById(active, state.selectedObjectId)?.name || "object selected"
+        : state.selectedOrbitId
+          ? "Orbit selected"
+          : state.selectedRouteId
+            ? cluster.routes.find(item => item.id === state.selectedRouteId)?.name || "route selected"
+            : "no record selected";
+      return `<section class="state-monitor" aria-label="Current prototype state">
+        <div class="state-head">
+          <strong>Working state / in memory</strong>
+          <span>${cluster.systems.length} systems / ${cluster.routes.length} routes / ${objectCount(cluster)} objects / ${orbitCount(cluster)} orbits / ${esc(selection)}</span>
+        </div>
+        <details><summary>Inspect the full model and temporary map layout</summary><pre>${esc(JSON.stringify(snapshot, null, 2))}</pre></details>
+      </section>`;
+    }
+
+    function mapHeading() {
+      if (state.view === "cluster") {
+        return `<div class="workspace-title"><div><span class="eyebrow">Jump Cluster / hand-plotted</span><h1>${esc(currentCluster().name)}</h1><p>Drag a system to arrange it. Select a node to open its local orbital map.</p></div><span class="map-stamp">${currentCluster().systems.length} SYSTEMS<br>${currentCluster().routes.length} ROUTES</span></div>`;
+      }
+      const active = currentSystem();
+      return `<div class="workspace-title"><div><span class="eyebrow">Star system / schematic</span><h1>${esc(active?.name || "No system open")}</h1><p>Orbit rings show parent-child structure. System-level objects keep their own schematic position.</p></div><span class="map-stamp">${active?.objects.filter(item => item.subtype === "star").length || 0} STARS<br>${active?.orbits.length || 0} ORBITS</span></div>`;
+    }
+
+    function renderVariantA() {
+      return `<div class="app-shell variant-a">
+        ${renderHeader()}
+        <div class="intro"><p>Drag systems to arrange the cluster; drag objects onto orbit rings to nest them, or onto open chart for a system-level position.</p><span class="prototype-tag">Prototype / no persistence</span></div>
+        ${renderTools()}
+        <div class="spatial-layout">
+          ${renderAExplorer()}
+          <main class="panel map-workspace">
+            ${mapHeading()}
+            <div class="map-frame">${renderMap()}</div>
+            <div class="map-note"><span>${esc(state.notice)}</span><span>${state.view === "cluster" ? "DRAG SYSTEMS / CLICK TO OPEN" : "DRAG OBJECTS / DROP ON RING TO NEST"}</span></div>
+          </main>
+          <aside class="panel inspector">${renderInspector()}</aside>
+        </div>
+        ${renderStatePanel()}
+      </div>`;
+    }
+
+    function renderVariantB() {
+      return `<div class="app-shell variant-b">
+        ${renderHeader()}
+        <div class="intro"><p>Start with the hierarchy or move systems and objects directly on the map; drop an object on an Orbit to nest it.</p><span class="prototype-tag">Outline-led editing</span></div>
+        ${renderTools()}
+        <div class="outline-layout">
+          ${renderBExplorer()}
+          <main class="panel board-panel">
+            ${mapHeading()}
+            <div class="map-frame">${renderMap()}</div>
+            <div class="map-note"><span>${esc(state.notice)}</span><span>${state.view === "cluster" ? "DRAG SYSTEMS / CLICK TO OPEN" : "DRAG OBJECTS / DROP ON RING TO NEST"}</span></div>
+          </main>
+          <section class="panel property-dock">
+            <div><p class="panel-kicker">Selected record / properties</p><p class="inspector-intro">Keep the hierarchy visible while editing keys, descriptions, and native fields.</p></div>
+            <div>${renderInspector()}</div>
+          </section>
+        </div>
+        ${renderStatePanel()}
+      </div>`;
+    }
+
+    function renderVariantC() {
+      return `<div class="app-shell variant-c">
+        ${renderHeader()}
+        <div class="intro"><p>Review topology and keys beside the map, or drag systems and objects; drop an object on a ring to nest it.</p><span class="prototype-tag">Register-led editing</span></div>
+        ${renderTools()}
+        <div class="ledger-layout">
+          <main class="register-main">
+            <section class="panel register-panel">
+              <p class="panel-kicker">${state.view === "cluster" ? "Jump Cluster register" : "System catalogue"}</p>
+              <h2>${esc(state.view === "cluster" ? currentCluster().name : currentSystem()?.name || "No system open")}</h2>
+              <p>${state.view === "cluster" ? "Select a system to open its map, or a route to inspect its Jump Point references." : "Select any row to edit its details. Orbit records are structural placements, not catalogue objects."}</p>
+              ${renderLedgerTable()}
+            </section>
+            <section class="panel register-map">
+              ${mapHeading()}
+              <div class="map-frame">${renderMap()}</div>
+              <div class="map-note"><span>${esc(state.notice)}</span><span>${state.view === "cluster" ? "DRAG SYSTEMS / CLICK TO OPEN" : "DRAG OBJECTS / DROP ON RING TO NEST"}</span></div>
+            </section>
+            <section class="panel record-panel">
+              <p class="panel-kicker">Record editor / inline workspace</p>
+              ${renderInspector()}
+            </section>
+          </main>
+          <aside class="panel ledger-rail">
+            <div><p class="panel-kicker">Chart index</p>${renderClusterPicker()}</div>
+            <div><p class="panel-kicker">Map key</p>
+              <div class="legend-row"><span class="legend-mark"></span><span>Star / celestial body</span></div>
+              <div class="legend-row"><span class="legend-mark route"></span><span>Jump Route</span></div>
+              <div class="legend-row"><span class="legend-mark hazard"></span><span>System-level hazard</span></div>
+              <div class="legend-row"><span class="route-swatch unresolved"></span><span>Unresolved exit</span></div>
+            </div>
+            <div class="hint-box">PNG and SVG export the current map view, not the register.</div>
+          </aside>
+        </div>
+        ${renderStatePanel()}
+      </div>`;
+    }
+
+    function renderVariantD() {
+      return `<div class="app-shell variant-d">
+        ${renderHeader()}
+        <div class="intro"><p>A's canvas-first layout with B's object and Orbit hierarchy beside the map.</p><span class="prototype-tag">Canvas + hierarchy</span></div>
+        ${renderTools()}
+        <div class="spatial-layout">
+          ${renderBExplorer()}
+          <main class="panel map-workspace">
+            ${mapHeading()}
+            <div class="map-frame">${renderMap()}</div>
+            <div class="map-note"><span>${esc(state.notice)}</span><span>${state.view === "cluster" ? "DRAG SYSTEMS / CLICK TO OPEN" : "DRAG OBJECTS / DROP ON RING TO NEST"}</span></div>
+          </main>
+          <aside class="panel inspector">${renderInspector()}</aside>
+        </div>
+        ${renderStatePanel()}
+      </div>`;
+    }
+
+    function refreshVariantLabel() {
+      document.getElementById("variant-label").innerHTML = `<strong>${state.variant}</strong> — ${esc(VARIANTS[state.variant] || VARIANTS.A)}`;
+    }
+
+    function render() {
+      const view = state.variant === "B" ? renderVariantB()
+        : state.variant === "C" ? renderVariantC()
+          : state.variant === "D" ? renderVariantD()
+            : renderVariantA();
+      document.getElementById("app").innerHTML = view;
+      refreshVariantLabel();
+    }
+
+    function findRecord(recordType, recordId) {
+      if (recordType === "route") return currentCluster().routes.find(item => item.id === recordId) || null;
+      return currentSystem()?.objects.find(item => item.id === recordId) || null;
+    }
+
+    function handleFieldInput(event) {
+      const input = event.target.closest("[data-record][data-field]");
+      if (!input) return;
+      const record = findRecord(input.dataset.record, input.dataset.recordId);
+      if (!record) return;
+      const field = input.dataset.field;
+      const value = input.value;
+      const requiredEmpty = input.required && !value.trim();
+      const duplicateKey = input.dataset.record === "object" && field === "key" && !requiredEmpty
+        && currentSystem().objects.some(item => item.id !== record.id && item.key === value.trim());
+      if (requiredEmpty || duplicateKey) {
+        input.setCustomValidity(duplicateKey ? "Keys must be unique within this star system." : `${field === "key" ? "A location key" : "A name"} is required.`);
+        input.setAttribute("aria-invalid", "true");
+        setNotice(duplicateKey ? "That key is already used in this system." : `${field === "key" ? "A location key" : "A name"} is required.`);
+        return;
+      }
+      input.setCustomValidity("");
+      input.removeAttribute("aria-invalid");
+      if (field.startsWith("native:")) {
+        const name = field.slice(7);
+        record.fields = { ...record.fields, [name]: value };
+      } else if (field.startsWith("custom:")) {
+        const name = field.slice(7);
+        record.customValues = { ...record.customValues, [name]: value };
+      } else {
+        record[field] = value;
+      }
+      if (input.dataset.record === "object") {
+        const name = document.querySelector(`[data-name-for="${record.id}"]`);
+        const key = document.querySelector(`[data-key-for="${record.id}"]`);
+        if (name && field === "name") name.textContent = value;
+        if (key && field === "key") key.textContent = `${value} / ${record.subtype}`;
+        const heading = document.querySelector(`[data-record-heading="${record.id}"]`);
+        if (heading && field === "name") heading.textContent = value;
+        if (field === "subtype") {
+          const chip = document.querySelector(".inspector-content .type-chip");
+          if (chip) chip.textContent = `${record.family} / ${value}`;
+        }
+      }
+      if (input.dataset.record === "route" && field === "name") {
+        const routeName = document.querySelector(`[data-route-label="${record.id}"]`);
+        const routeGroup = document.querySelector(`.route-edge[data-route-id="${record.id}"]`);
+        const routeBg = routeGroup?.querySelector(".route-label-bg");
+        if (routeName) routeName.textContent = value;
+        if (routeBg) {
+          const width = Math.max(78, value.length * 7 + 18);
+          const x = Number(routeName.getAttribute("x"));
+          routeBg.setAttribute("x", String(x - width / 2));
+          routeBg.setAttribute("width", String(width));
+        }
+      }
+      const monitor = document.querySelector(".state-monitor");
+      if (monitor) monitor.outerHTML = renderStatePanel();
+    }
+
+    function svgPoint(svg, event) {
+      const matrix = svg.getScreenCTM();
+      if (!matrix) return null;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(matrix.inverse());
+    }
+
+    function updateGraphEdges() {
+      const cluster = currentCluster();
+      cluster.routes.forEach((route, index) => {
+        const group = document.querySelector(`.route-edge[data-route-id="${route.id}"]`);
+        if (!group) return;
+        const geometry = routeGeometry(route, index);
+        const path = group.querySelector(".route-line");
+        const label = group.querySelector(".route-label");
+        const bg = group.querySelector(".route-label-bg");
+        if (path) path.setAttribute("d", geometry.d);
+        if (label) {
+          label.setAttribute("x", geometry.lx);
+          label.setAttribute("y", geometry.ly + 2);
+        }
+        if (bg) {
+          const width = Math.max(78, route.name.length * 7 + 18);
+          bg.setAttribute("x", geometry.lx - width / 2);
+          bg.setAttribute("y", geometry.ly - 12);
+          bg.setAttribute("width", String(width));
+        }
+        const exit = group.querySelector("circle");
+        const exitLabel = group.querySelector(".external-label");
+        if (exit) {
+          exit.setAttribute("cx", geometry.x2);
+          exit.setAttribute("cy", geometry.y2);
+        }
+        if (exitLabel) {
+          exitLabel.setAttribute("x", geometry.x2);
+          exitLabel.setAttribute("y", geometry.y2 + 22);
+        }
+      });
+    }
+
+    function beginMapDrag(event) {
+      if (event.button !== 0) return;
+      const systemNode = event.target.closest("[data-system-node]");
+      if (systemNode && state.view === "cluster") {
+        const svg = systemNode.ownerSVGElement;
+        const point = svgPoint(svg, event);
+        const id = systemNode.dataset.systemNode;
+        if (!point || !activeLayout(currentCluster())[id]) return;
+        dragging = { kind: "system", id, node: systemNode, svg, startX: point.x, startY: point.y, moved: false };
+        systemNode.setPointerCapture(event.pointerId);
+        return;
+      }
+      const objectNode = event.target.closest(".object-mark[data-object-id]");
+      if (!objectNode || state.view !== "system" || !currentSystem()) return;
+      const svg = objectNode.ownerSVGElement;
+      const point = svgPoint(svg, event);
+      if (!point) return;
+      dragging = {
+        kind: "object",
+        id: objectNode.dataset.objectId,
+        systemId: currentSystem().id,
+        node: objectNode,
+        svg,
+        startX: point.x,
+        startY: point.y,
+        moved: false
+      };
+      objectNode.setPointerCapture(event.pointerId);
+    }
+
+    function moveMapElement(event) {
+      if (!dragging) return;
+      const point = svgPoint(dragging.svg, event);
+      if (!point) return;
+      if (Math.hypot(point.x - dragging.startX, point.y - dragging.startY) > 5) dragging.moved = true;
+      if (!dragging.moved) return;
+      const x = Math.min(850, Math.max(105, point.x));
+      const y = Math.min(475, Math.max(75, point.y));
+      if (dragging.kind === "system") {
+        activeLayout(currentCluster())[dragging.id] = { x, y };
+        dragging.node.setAttribute("transform", `translate(${x} ${y})`);
+        updateGraphEdges();
+        return;
+      }
+      const activeSystem = currentSystem();
+      const item = objectById(activeSystem, dragging.id);
+      if (!item) return;
+      state.dragPreview = { systemId: activeSystem.id, objectId: item.id, x, y };
+      updateSystemMapGeometry(activeSystem);
+      document.querySelectorAll(".orbit-ring.drop-target").forEach(ring => ring.classList.remove("drop-target"));
+      const target = orbitUnderPoint(activeSystem, item, point);
+      if (target) {
+        document.querySelector(`.orbit-group[data-orbit-id="${target.orbit.id}"] .orbit-ring`)?.classList.add("drop-target");
+      }
+    }
+
+    function endMapDrag(event) {
+      if (!dragging) return;
+      const finished = dragging;
+      dragging = null;
+      if (!finished.moved) return;
+      lastDragged = { kind: finished.kind, id: finished.id, time: Date.now() };
+      if (finished.kind === "system") {
+        setNotice(`Repositioned ${currentCluster().systems.find(item => item.id === finished.id)?.name || "system"}.`);
+        const monitor = document.querySelector(".state-monitor");
+        if (monitor) monitor.outerHTML = renderStatePanel();
+        return;
+      }
+      const activeSystem = currentSystem();
+      const item = objectById(activeSystem, finished.id);
+      const point = svgPoint(finished.svg, event) || state.dragPreview;
+      state.dragPreview = null;
+      document.querySelectorAll(".orbit-ring.drop-target").forEach(ring => ring.classList.remove("drop-target"));
+      if (!activeSystem || !item || !point) return;
+      const target = orbitUnderPoint(activeSystem, item, point);
+      if (target) {
+        const host = objectById(activeSystem, target.orbit.hostId);
+        const center = objectPosition(activeSystem, host, new Map());
+        item.location = { kind: "orbit", orbitId: target.orbit.id };
+        state.orbitAngles[activeSystem.id] ||= {};
+        state.orbitAngles[activeSystem.id][item.id] = Math.atan2(point.y - center.y, point.x - center.x);
+        setNotice(`Moved ${item.name} to Orbit ${target.orbit.order} around ${host.name}.`);
+      } else {
+        item.location = {
+          kind: "system",
+          x: Math.min(.96, Math.max(.04, (point.x - 72) / 816)),
+          y: Math.min(.94, Math.max(.06, (point.y - 66) / 430))
+        };
+        delete state.orbitAngles[activeSystem.id]?.[item.id];
+        setNotice(`Moved ${item.name} to a system-level position.`);
+      }
+      state.selectedObjectId = item.id;
+      state.selectedOrbitId = null;
+      state.selectedRouteId = null;
+      render();
+    }
+
+    function download(data, filename, mime) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([data], { type: mime }));
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function exportMap(format) {
+      const source = document.getElementById("map-svg");
+      if (!source) return;
+      const svg = source.cloneNode(true);
+      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      svg.setAttribute("width", "1920");
+      svg.setAttribute("height", "1120");
+      const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      style.textContent = `
+        .map-bg{fill:#f5f0e6}.map-grid{fill:url(#map-grid)}.map-title{fill:#28322d;font:500 19px Georgia,serif}
+        .map-caption,.map-coord,.node-meta,.object-key,.orbit-caption{fill:#69736a;font:10px Consolas,monospace}
+        .map-cross{stroke:#cfc6b5;stroke-width:1}.route-line{fill:none;stroke:#536a5d;stroke-width:2.4}
+        .route-edge.unresolved .route-line{stroke:#9e4c36;stroke-dasharray:8 7}.route-edge.is-selected .route-line{stroke:#9e4c36;stroke-width:4}
+        .route-label-bg{fill:#fffaf0;stroke:#aaa18f}.route-label{fill:#303a33;font:10px Consolas,monospace;text-anchor:middle}
+        .external-label{fill:#9e4c36;font:9px Consolas,monospace;text-anchor:middle}
+        .system-node rect{fill:#eee7d9;stroke:#69766c;stroke-width:1.5}.system-node .node-name{fill:#28322d;font:500 16px Georgia,serif;text-anchor:middle}
+        .system-node .node-meta{text-anchor:middle}.node-core{fill:#536a5d}.orbit-ring{fill:none;stroke:#9b907d;stroke-width:1.2;stroke-dasharray:3 6}
+        .object-core{fill:#e1bf7b;stroke:#485e52;stroke-width:1.6}.object-core.star{fill:#cfac68;stroke:#856934}
+        .object-core.moon{fill:#d7d3c8}.object-core.station{fill:#6d8073}.object-core.hazard{fill:#b75c43}
+        .object-core.jump{fill:#fffaf0;stroke:#9e4c36;stroke-width:2}.object-label{fill:#28322d;font:11px Georgia,serif}
+        .system-hazard-line{stroke:#9e4c36;stroke-width:1.2;stroke-dasharray:3 4}.empty-map{fill:#69736a;font:14px Georgia,serif;text-anchor:middle}
+        .empty-map-sub{fill:#8a8c82;font:10px Consolas,monospace;text-anchor:middle}`;
+      svg.insertBefore(style, svg.firstChild);
+      const filenameBase = (state.view === "cluster" ? currentCluster().name : currentSystem()?.name || "system")
+        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const markup = new XMLSerializer().serializeToString(svg);
+      if (format === "svg") {
+        download(markup, `${filenameBase}-map.svg`, "image/svg+xml;charset=utf-8");
+        setNotice("Exported the current map as SVG.");
+        return;
+      }
+      const imageUrl = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml;charset=utf-8" }));
+      const image = new Image();
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1920;
+        canvas.height = 1120;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#f5f0e6";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const link = document.createElement("a");
+        link.download = `${filenameBase}-map.png`;
+        link.href = canvas.toDataURL("image/png");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(imageUrl);
+        setNotice("Exported the current map as PNG.");
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(imageUrl);
+        setNotice("PNG export failed in this browser. Try SVG export.");
+      };
+      image.src = imageUrl;
+    }
+
+    function handleClick(event) {
+      const variantButton = event.target.closest("[data-variant-step]");
+      if (variantButton) {
+        cycleVariant(Number(variantButton.dataset.variantStep));
+        return;
+      }
+      const systemNode = event.target.closest("[data-system-node]");
+      const mapObject = event.target.closest(".object-mark[data-object-id]");
+      if (lastDragged && event.detail > 0 && Date.now() - lastDragged.time < 500
+        && ((lastDragged.kind === "system" && systemNode?.dataset.systemNode === lastDragged.id)
+          || (lastDragged.kind === "object" && mapObject?.dataset.objectId === lastDragged.id))) {
+        lastDragged = null;
+        return;
+      }
+      if (systemNode) {
+        openSystem(systemNode.dataset.systemNode);
+        return;
+      }
+      const actionButton = event.target.closest("[data-action]");
+      if (actionButton) {
+        const action = actionButton.dataset.action;
+        if (action === "add-cluster") addCluster();
+        if (action === "add-system") addSystem();
+        if (action === "add-route") addRoute();
+        if (action === "add-jump-point") {
+          const active = currentSystem();
+          if (active) {
+            const item = addJumpPoint(active);
+            state.selectedObjectId = item.id;
+            state.selectedOrbitId = null;
+            setNotice(`Added ${item.name} as a logical endpoint in ${active.name}.`);
+            render();
+          }
+        }
+        if (action === "add-orbit") addOrbit();
+        if (action === "add-object") addObject();
+        if (action === "select-cluster") selectCluster(actionButton.dataset.clusterId);
+        if (action === "open-system") openSystem(actionButton.dataset.systemId);
+        if (action === "select-route") selectRoute(actionButton.dataset.routeId);
+        if (action === "view-cluster") showCluster();
+        if (action === "view-system") showSystem();
+        if (action === "export-svg") exportMap("svg");
+        if (action === "export-png") exportMap("png");
+        return;
+      }
+      const object = event.target.closest("[data-object-id]");
+      if (object) {
+        selectObject(object.dataset.objectId);
+        return;
+      }
+      const orbit = event.target.closest("[data-orbit-id]");
+      if (orbit) {
+        selectOrbit(orbit.dataset.orbitId);
+        return;
+      }
+      const route = event.target.closest("[data-route-id]");
+      if (route) selectRoute(route.dataset.routeId);
+    }
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("input", handleFieldInput);
+    document.addEventListener("change", event => {
+      if (event.target.matches("[data-role='object-type']")) state.objectType = event.target.value;
+      const placement = event.target.closest("[data-move-object]");
+      if (placement) {
+        moveObjectTo(placement.dataset.moveObject, placement.value);
+        return;
+      }
+      handleFieldInput(event);
+    });
+    document.addEventListener("pointerdown", beginMapDrag);
+    document.addEventListener("pointermove", moveMapElement);
+    document.addEventListener("pointerup", endMapDrag);
+    document.addEventListener("keydown", event => {
+      const target = event.target;
+      if (target.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        cycleVariant(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        cycleVariant(1);
+      } else if ((event.key === "Enter" || event.key === " ") && target.closest("[data-object-id], [data-orbit-id], [data-route-id], [data-system-node]")) {
+        event.preventDefault();
+        target.closest("[data-object-id], [data-orbit-id], [data-route-id], [data-system-node]")
+          .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
