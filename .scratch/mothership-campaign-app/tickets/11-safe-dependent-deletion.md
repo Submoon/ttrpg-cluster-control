@@ -2,7 +2,8 @@
 title: 11. Safely deleting dependent map entities
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -32,3 +33,7 @@ As a Warden, I can inspect the effects of deleting a map entity before confirmin
 
 - [Mothership Campaign App - V1 Specification](../spec.md)
 - [04. Choosing the V1 application and rendering architecture](04-application-architecture.md)
+
+## Resolution
+
+Deletion planning now previews dependent objects, nested Orbits, Jump Routes, and physical Station links before confirmation. Confirmed deletions clear broken references and stale layout entries, normalize remaining Orbit order, and cannot remove the last star system; canceling leaves the saved workspace unchanged.

@@ -2,7 +2,8 @@
 title: 12. Exporting clusters and systems as versioned JSON
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -34,3 +35,8 @@ As a Warden, I can export a complete Jump Cluster or a standalone star system as
 - [Mothership Campaign App - V1 Specification](../spec.md)
 - [01. Defining the V1 map data model and object catalogue](01-map-data-model.md)
 - [04. Choosing the V1 application and rendering architecture](04-application-architecture.md)
+
+## Resolution
+
+- Added versioned JSON exports for Jump Clusters and standalone systems. Cluster exports include routes and system-node positions; standalone exports include only local system content and orbital layout. Both preserve field settings and object layout while excluding temporary view state.
+- Validation passed: `npm run typecheck`, `npm test` (6 browser acceptance tests), and `npm run build`.

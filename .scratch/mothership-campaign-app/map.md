@@ -35,6 +35,8 @@ An implementation-ready functional and technical definition for a single-user, l
 - [08. Connecting Jump Points across a Jump Cluster](tickets/08-jump-cluster-routes.md): the cluster map supports multiple systems and Jump Routes between stable Jump Point IDs, with unresolved external exits and optional physical Station references.
 - [09. Adding native and reusable custom fields](tickets/09-object-fields.md): workspace-wide native options and typed custom fields save optional values on map objects, never Orbits.
 - [10. Navigating and arranging both map views](tickets/10-map-navigation.md): both D3/SVG maps support temporary pan/zoom with accessible fit controls and persisted manual layout, including Orbit resizing that preserves object angles without a fixed maximum.
+- [11. Safely deleting dependent map entities](tickets/11-safe-dependent-deletion.md): deletion previews identify cascaded objects, Orbits, routes, and cleared Station links; confirmation removes broken references and cancellation preserves the workspace.
+- [12. Exporting clusters and systems as versioned JSON](tickets/12-json-export.md): versioned cluster and standalone-system exports preserve maps, custom fields, and durable layout while excluding temporary view state.
 
 ## Implementation tickets
 

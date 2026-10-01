@@ -9,10 +9,13 @@ import {
   createJumpRoute,
   createOrbit,
   createSystemObject,
+  exportJumpCluster,
+  exportStarSystem,
   initialSystemPlacement,
   jumpPointsInCluster,
   minimumOrbitRadius,
   moveOrbit,
+  planMapEntityDeletion,
   renameLocalWorkspace,
   removeCustomFieldDefinition,
   updateCustomFieldOptions,
@@ -21,6 +24,7 @@ import {
   type CatalogueSubtype,
   type CustomFieldType,
   type LocalWorkspace,
+  type MapDeletionTarget,
   type ObjectPlacement,
   type Orbit,
   type Point,
@@ -103,6 +107,7 @@ const routeDraft = reactive<JumpRouteDraft>({
 })
 const formError = ref('')
 const editorError = ref('')
+const exportError = ref('')
 const fieldSettingsError = ref('')
 
 const selectedSystem = computed(() =>
@@ -134,6 +139,12 @@ const selectedRouteTo = computed(() =>
 const physicalStations = computed(() =>
   selectedSystem.value?.objects.filter(object => object.family === 'Installation' && object.subtype === 'station') ?? [],
 )
+const selectedOrbitDeleteLabel = computed(() => {
+  const orbit = selectedOrbit.value
+  if (!orbit) return 'Delete Orbit'
+  const hostName = selectedSystem.value?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
+  return `Delete Orbit ${orbit.order} around ${hostName}`
+})
 
 function syncObjectDraft(object: SystemObject | undefined): void {
   objectDraft.locationKey = object?.locationKey ?? ''
@@ -292,6 +303,61 @@ onMounted(hydrate)
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function downloadJsonFile(filename: string, value: unknown): void {
+  const json = JSON.stringify(value, null, 2)
+  if (json === undefined) {
+    throw new Error('Could not serialize the map as JSON.')
+  }
+
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+  const link = document.createElement('a')
+  try {
+    link.href = url
+    link.download = filename
+    document.body.append(link)
+    link.click()
+  } finally {
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+  }
+}
+
+function exportFileName(name: string, kind: 'jump-cluster' | 'star-system'): string {
+  const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim()
+  return `${safeName || 'map'}-${kind}.json`
+}
+
+function downloadClusterJson(): void {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+
+  try {
+    downloadJsonFile(
+      exportFileName(currentWorkspace.cluster.name, 'jump-cluster'),
+      exportJumpCluster(currentWorkspace),
+    )
+    exportError.value = ''
+  } catch (error) {
+    exportError.value = errorText(error)
+  }
+}
+
+function downloadSystemJson(): void {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  if (!currentWorkspace || !system) return
+
+  try {
+    downloadJsonFile(
+      exportFileName(system.name, 'star-system'),
+      exportStarSystem(currentWorkspace, system.id),
+    )
+    exportError.value = ''
+  } catch (error) {
+    exportError.value = errorText(error)
+  }
 }
 
 function workspaceWithSystem(currentWorkspace: LocalWorkspace, system: StarSystem): LocalWorkspace {
@@ -543,6 +609,51 @@ async function submitRoute(): Promise<void> {
   } catch (error) {
     editorError.value = errorText(error)
   }
+}
+
+async function deleteMapEntity(target: MapDeletionTarget): Promise<void> {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace || saveState.value === 'saving') return
+
+  try {
+    const plan = planMapEntityDeletion(currentWorkspace, target)
+    if (plan.affectedEntities.length && !window.confirm(
+      `Delete ${plan.entityLabel}?\n\nThis also removes or updates:\n${plan.affectedEntities.map(entity => `- ${entity}`).join('\n')}`,
+    )) {
+      return
+    }
+    editorError.value = ''
+    await commit(plan.workspace)
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+function deleteSystem(systemId: string): Promise<void> {
+  return deleteMapEntity({ kind: 'system', systemId })
+}
+
+function deleteSelectedObject(): Promise<void> {
+  const system = selectedSystem.value
+  const object = selectedObject.value
+  return system && object
+    ? deleteMapEntity({ kind: 'object', systemId: system.id, objectId: object.id })
+    : Promise.resolve()
+}
+
+function deleteSelectedOrbit(): Promise<void> {
+  const system = selectedSystem.value
+  const orbit = selectedOrbit.value
+  return system && orbit
+    ? deleteMapEntity({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
+    : Promise.resolve()
+}
+
+function deleteSelectedRoute(): Promise<void> {
+  const route = selectedRoute.value
+  return route
+    ? deleteMapEntity({ kind: 'route', routeId: route.id })
+    : Promise.resolve()
 }
 
 function showChartDetails(): void {
@@ -900,18 +1011,32 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
               <span class="subsection-label">STAR SYSTEMS</span>
               <p v-if="workspace.cluster.systems.length === 0" class="empty-copy my-[0.65rem]">No star systems yet.</p>
-              <button
+              <div
                 v-for="system in workspace.cluster.systems"
                 :key="system.id"
-                class="system-link flex min-h-[2.7rem] w-full cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-                type="button"
-                :aria-label="`Open ${system.name} system map`"
-                :aria-current="system.id === selectedSystemId ? 'page' : undefined"
-                @click="selectSystem(system.id)"
+                class="flex min-w-0 items-center gap-[0.25rem]"
               >
-                <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[#aab1a7]">SY</span>
-                <span>{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
-              </button>
+                <button
+                  class="system-link flex min-h-[2.7rem] min-w-0 flex-1 cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
+                  type="button"
+                  :aria-label="`Open ${system.name} system map`"
+                  :aria-current="system.id === selectedSystemId ? 'page' : undefined"
+                  @click="selectSystem(system.id)"
+                >
+                  <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[#aab1a7]">SY</span>
+                  <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
+                </button>
+                <button
+                  class="quiet-button min-h-[2.5rem] w-[2.5rem] shrink-0 justify-center px-0"
+                  type="button"
+                  :aria-label="`Delete ${system.name} system`"
+                  :title="workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
+                  :disabled="workspace.cluster.systems.length === 1 || saveState === 'saving'"
+                  @click="deleteSystem(system.id)"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
             </nav>
 
             <nav class="object-tree grid gap-[0.1rem] border-t border-[#ddd4c4] pt-[0.65rem]" aria-label="Jump Routes">
@@ -944,7 +1069,11 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <button class="tool-button" type="button" @click="beginRoute">
                 <span aria-hidden="true">+</span> Add Jump Route
               </button>
+              <button class="tool-button" type="button" @click="downloadClusterJson">
+                Export Jump Cluster JSON
+              </button>
             </div>
+            <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
             <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
               <ClientOnly>
                 <ClusterMap
@@ -988,6 +1117,16 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <p v-else class="inspector-intro mb-[1em]">
                 This route connects Jump Points by stable identity, independently of any physical Station.
               </p>
+              <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
+              <button
+                class="quiet-button mt-4"
+                type="button"
+                :aria-label="`Delete Jump Route ${selectedRoute.name}`"
+                :disabled="saveState === 'saving'"
+                @click="deleteSelectedRoute"
+              >
+                Delete route
+              </button>
             </template>
 
             <template v-else-if="routeFormOpen">
@@ -1260,6 +1399,9 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <button class="tool-button add-button" type="button" @click="addObject">
                 <span aria-hidden="true">+</span> Add object
               </button>
+              <button class="tool-button" type="button" @click="downloadSystemJson">
+                Export star system JSON
+              </button>
               <button
                 class="tool-button"
                 type="button"
@@ -1272,6 +1414,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 New objects go in Orbit {{ selectedOrbit.order }}
               </span>
             </div>
+            <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
             <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
               <ClientOnly>
                 <SystemMap
@@ -1498,6 +1641,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </label>
               </div>
               <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
+              <button
+                class="quiet-button mt-4"
+                type="button"
+                :aria-label="`Delete ${selectedObject.name}`"
+                :disabled="saveState === 'saving'"
+                @click="deleteSelectedObject"
+              >
+                Delete object
+              </button>
               <p class="inspector-footnote mt-4 mb-0 border-t border-[#ddd4c4] pt-3">Location keys are required and unique within this star system.</p>
             </template>
 
@@ -1534,6 +1686,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </div>
               <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
+              <button
+                class="quiet-button mt-4"
+                type="button"
+                :aria-label="selectedOrbitDeleteLabel"
+                :disabled="saveState === 'saving'"
+                @click="deleteSelectedOrbit"
+              >
+                Delete Orbit and contents
+              </button>
               <p class="inspector-footnote mt-4 mb-0 border-t border-[#ddd4c4] pt-3">Orbits are unkeyed, may remain empty, and can be nested below any map object.</p>
             </template>
 

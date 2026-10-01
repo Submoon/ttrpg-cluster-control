@@ -1,6 +1,32 @@
 import { expect, test } from '@playwright/test'
 
 type WorldPoint = { x: number; y: number }
+type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+type ExportedObject = {
+  id: string
+  name: string
+  customFieldValues?: Record<string, string | number | boolean>
+}
+type ExportedSystem = {
+  id: string
+  name: string
+  objects: ExportedObject[]
+  orbits: Array<{ id: string }>
+}
+type ExportedMap = {
+  format: string
+  version: number
+  type: 'cluster' | 'system'
+  cluster?: { systems: ExportedSystem[]; routes: unknown[] }
+  system?: ExportedSystem
+  objectFieldSettings: { customFields: Array<{ id: string; name: string; type: string }> }
+  layout: {
+    version: number
+    systemPositions?: Record<string, WorldPoint>
+    orbitRadii: Record<string, number>
+    objectAngles: Record<string, number>
+  }
+}
 
 async function dragToWorldPoint(
   page: import('@playwright/test').Page,
@@ -45,6 +71,7 @@ async function dragBy(
   source: import('@playwright/test').Locator,
   delta: WorldPoint,
 ): Promise<void> {
+  await source.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
 
@@ -71,6 +98,18 @@ async function orbitalAngle(map: import('@playwright/test').Locator): Promise<nu
       planetBounds.x + planetBounds.width / 2 - hostBounds.x - hostBounds.width / 2,
     )
   })
+}
+
+async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: buttonName }).click()
+  await downloadPromise
+  const json = await page.evaluate(async () => {
+    const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
+    if (!blob) throw new Error('Could not read the downloaded JSON file.')
+    return blob.text()
+  })
+  return JSON.parse(json) as ExportedMap
 }
 
 const catalogueSubtypes = [
@@ -273,7 +312,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await typePicker.selectOption('belt')
   await addObject.click()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ })).toBeVisible()
-  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await typePicker.selectOption('moon')
   await addObject.click()
@@ -504,4 +543,297 @@ test('the Warden can configure native and reusable custom object fields', async 
   const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
+})
+
+test('the Warden can review and safely confirm dependent map deletions', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await expect(page.getByRole('button', { name: 'Delete Vesper system' })).toBeDisabled()
+  await page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+    .getByRole('button', { name: 'Open Vesper system map' })
+    .click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const typePicker = page.getByLabel('Catalogue object type')
+  const addObject = page.getByRole('button', { name: 'Add object' })
+
+  await typePicker.selectOption('planet')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ }).click()
+  await typePicker.selectOption('jump-point')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Vesper Exit')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
+  await typePicker.selectOption('moon')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Nix')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
+  let orbitDeletionPreview = ''
+  page.once('dialog', async (dialog) => {
+    orbitDeletionPreview = dialog.message()
+    await dialog.dismiss()
+  })
+  await page.getByRole('button', { name: 'Delete Orbit 1 around Vesper Exit' }).click()
+  expect(orbitDeletionPreview).toContain('Nix')
+  await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await typePicker.selectOption('jump-point')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Harrow Entry')
+  await page.getByLabel('Name').press('Tab')
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+
+  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
+  await page.getByLabel('Route destination').selectOption('point')
+  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
+  await page.getByRole('button', { name: 'Create Jump Route' }).click()
+  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await page.getByLabel('Route name').fill('Jump-02')
+  await page.getByRole('button', { name: 'Create Jump Route' }).click()
+  await expect(clusterMap.getByRole('button', { name: /Jump-02/ })).toBeVisible()
+  await page.getByRole('navigation', { name: 'Jump Routes' })
+    .getByRole('button', { name: 'Select Jump-02 route' })
+    .click()
+  let directRouteDeletionRequested = false
+  const routeDeletionDialog = async (dialog: import('@playwright/test').Dialog) => {
+    directRouteDeletionRequested = true
+    await dialog.accept()
+  }
+  page.on('dialog', routeDeletionDialog)
+  await page.getByRole('button', { name: 'Delete Jump Route Jump-02' }).click()
+  await page.off('dialog', routeDeletionDialog)
+  expect(directRouteDeletionRequested).toBe(false)
+  await expect(clusterMap.getByRole('button', { name: /Jump-02/ })).toHaveCount(0)
+
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  let deletionPreview = ''
+  page.once('dialog', async (dialog) => {
+    deletionPreview = dialog.message()
+    await dialog.dismiss()
+  })
+  await page.getByRole('button', { name: 'Delete Iria' }).click()
+  expect(deletionPreview).toContain('Orbit 1 around Iria')
+  expect(deletionPreview).toContain('Vesper Exit')
+  expect(deletionPreview).toContain('Orbit 1 around Vesper Exit')
+  expect(deletionPreview).toContain('Nix')
+  expect(deletionPreview).toContain('Jump-01')
+  await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+
+  await page.reload()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await expect(restoredClusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+
+  await restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  page.once('dialog', async (dialog) => {
+    deletionPreview = dialog.message()
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: 'Delete Iria' }).click()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toHaveCount(0)
+  await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const updatedClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await expect(updatedClusterMap.getByRole('button', { name: /Jump-01/ })).toHaveCount(0)
+
+  await page.reload()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const reloadedClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await expect(reloadedClusterMap.getByRole('button', { name: /Jump-01/ })).toHaveCount(0)
+  await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
+  page.once('dialog', async (dialog) => {
+    deletionPreview = dialog.message()
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: 'Delete New System 2 system' }).click()
+  expect(deletionPreview).toContain('Harrow Entry')
+  await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toHaveCount(0)
+  await expect(reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
+
+  await reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await typePicker.selectOption('station')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Vesper Gate')
+  await page.getByLabel('Name').press('Tab')
+  await typePicker.selectOption('jump-point')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Vesper Arrival')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
+  const physicalStation = page.getByLabel('Physical Jump Station')
+  const stationId = await page.getByRole('option', { name: /Vesper Gate/ }).getAttribute('value')
+  expect(stationId).toBeTruthy()
+  await physicalStation.selectOption(stationId!)
+  await hierarchy.getByRole('button', { name: /Vesper Gate/ }).click()
+  page.once('dialog', async (dialog) => {
+    deletionPreview = dialog.message()
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: 'Delete Vesper Gate' }).click()
+  expect(deletionPreview).toContain('Vesper Arrival')
+  expect(deletionPreview).toContain('Vesper Gate')
+  await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Gate/ })).toHaveCount(0)
+  await hierarchy.getByRole('button', { name: /Select .*Vesper Arrival/ }).click()
+  await expect(physicalStation).toHaveValue('')
+
+  await page.reload()
+  await hierarchy.getByRole('button', { name: /Select .*Vesper Arrival/ }).click()
+  await expect(page.getByLabel('Physical Jump Station')).toHaveValue('')
+})
+
+test('the Warden can export a cluster and standalone system as versioned JSON', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const typePicker = page.getByLabel('Catalogue object type')
+  const addObject = page.getByRole('button', { name: 'Add object' })
+  await typePicker.selectOption('jump-point')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Vesper Exit')
+  await page.getByLabel('Name').press('Tab')
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await typePicker.selectOption('jump-point')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Harrow Entry')
+  await page.getByLabel('Name').press('Tab')
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+
+  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
+  await page.getByLabel('Route destination').selectOption('point')
+  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
+  await page.getByRole('button', { name: 'Create Jump Route' }).click()
+  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+
+  const secondSystem = clusterMap.getByRole('button', { name: 'Open New System 2 system map' })
+  await dragBy(page, secondSystem.locator('.cluster-system-card'), { x: 48, y: 24 })
+  await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
+  await panMap(page, clusterMap, { x: 24, y: 18 })
+  const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(clusterExport).toMatchObject({
+    format: 'mothership-campaign-map',
+    version: 1,
+    type: 'cluster',
+    layout: { version: 1 },
+  })
+  expect(clusterExport.cluster?.systems).toHaveLength(2)
+  expect(clusterExport.cluster?.routes).toHaveLength(1)
+  expect(Object.keys(clusterExport.layout.systemPositions ?? {}).sort())
+    .toEqual(clusterExport.cluster!.systems.map(system => system.id).sort())
+  expect(clusterExport.layout).not.toHaveProperty('zoom')
+  expect(clusterExport.layout).not.toHaveProperty('pan')
+  expect(clusterExport).not.toHaveProperty('selectedRouteId')
+  const exportedSecondSystem = clusterExport.cluster!.systems.find(system => system.name === 'New System 2')!
+  expect(clusterExport.layout.systemPositions?.[exportedSecondSystem.id].x).not.toBe(0.5)
+
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await page.getByText('Field definitions', { exact: true }).click()
+  await page.getByLabel('Custom field label').fill('Campaign notes')
+  await page.getByRole('button', { name: 'Add custom field' }).click()
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
+  await typePicker.selectOption('planet')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await page.getByLabel('Campaign notes').fill('A local secret.')
+  await page.getByLabel('Campaign notes').press('Tab')
+
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
+  await dragToWorldPoint(page, systemMap, systemMap.getByRole('button', { name: /Iria/ }).locator('.object-hit-target'), {
+    x: 480 + 112 * Math.SQRT1_2,
+    y: 280 - 112 * Math.SQRT1_2,
+  })
+  const orbitHandle = systemMap.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
+  await orbitHandle.press('End')
+  await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
+  await panMap(page, systemMap, { x: 24, y: 18 })
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const updatedClusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const clusterSystem = updatedClusterExport.cluster!.systems.find(system => system.name === 'Vesper')!
+  const planet = clusterSystem.objects.find(object => object.name === 'Iria')!
+  const orbit = clusterSystem.orbits[0]
+  const field = updatedClusterExport.objectFieldSettings.customFields.find(item => item.name === 'Campaign notes')!
+  expect(planet.customFieldValues?.[field.id]).toBe('A local secret.')
+  expect(updatedClusterExport.layout.orbitRadii[orbit.id]).toBe(512)
+  expect(Number.isFinite(updatedClusterExport.layout.objectAngles[planet.id])).toBe(true)
+  expect(updatedClusterExport.layout).not.toHaveProperty('zoom')
+  expect(updatedClusterExport.layout).not.toHaveProperty('pan')
+  expect(updatedClusterExport).not.toHaveProperty('selectedSystemId')
+  expect(updatedClusterExport).not.toHaveProperty('selectedObjectId')
+
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
+  await panMap(page, systemMap, { x: 24, y: 18 })
+  const systemExport = await downloadJson(page, 'Export star system JSON')
+  expect(systemExport).toMatchObject({
+    format: 'mothership-campaign-map',
+    version: 1,
+    type: 'system',
+    layout: { version: 1 },
+  })
+  expect(systemExport.cluster).toBeUndefined()
+  expect(systemExport).not.toHaveProperty('routes')
+  expect(systemExport.system?.name).toBe('Vesper')
+  expect(systemExport.system?.objects.map(object => object.name)).toContain('Vesper Exit')
+  expect(systemExport.system?.objects.map(object => object.name)).toContain('Iria')
+  expect(systemExport.system?.objects.map(object => object.name)).not.toContain('Harrow Entry')
+  expect(systemExport.layout.systemPositions).toBeUndefined()
+  expect(systemExport.layout.orbitRadii[orbit.id]).toBe(512)
+  expect(systemExport.layout.objectAngles[planet.id]).toBe(updatedClusterExport.layout.objectAngles[planet.id])
+  expect(systemExport.layout).not.toHaveProperty('zoom')
+  expect(systemExport.layout).not.toHaveProperty('pan')
+  expect(systemExport).not.toHaveProperty('selectedObjectId')
+  expect(systemExport.objectFieldSettings.customFields).toContainEqual(field)
+  expect(systemExport.system?.objects.find(object => object.name === 'Iria')?.customFieldValues?.[field.id])
+    .toBe('A local secret.')
 })
