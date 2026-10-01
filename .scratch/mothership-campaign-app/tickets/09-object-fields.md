@@ -2,7 +2,8 @@
 title: 09. Adding native and reusable custom fields
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -31,3 +32,10 @@ As a Warden, I can record common Mothership details on applicable map objects an
 
 - [Mothership Campaign App - V1 Specification](../spec.md)
 - [01. Defining the V1 map data model and object catalogue](01-map-data-model.md)
+
+## Resolution
+
+- Added workspace-wide, editable Atmosphere and Port class option lists, with optional values on planets/moons and Installation objects.
+- Added reusable custom-field definitions with optional per-object text, number, boolean, and single-select values; single-select options are editable. Orbits remain unfielded.
+- Existing local workspaces without field settings restore with defaults. Removing an assigned option is rejected; deleting a custom field requires confirmation and clears its values.
+- Validation passed: `npm run typecheck`, `npm test` (3 browser acceptance tests), and `npm run build`.

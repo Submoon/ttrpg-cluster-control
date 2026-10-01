@@ -33,6 +33,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [06. Building a star-system map with nested Orbits](tickets/06-star-system-map.md): the D3/SVG editor supports the full object catalogue, schematic placements and nested Orbits, with synchronized canvas, hierarchy, and inspector edits persisted to the local workspace.
 - [07. Adopting Tailwind CSS for the Nuxt interface](tickets/07-tailwind-css.md): Nuxt uses Tailwind utilities for layout, spacing, responsive behavior, and focus states while preserving the existing visual details.
 - [08. Connecting Jump Points across a Jump Cluster](tickets/08-jump-cluster-routes.md): the cluster map supports multiple systems and Jump Routes between stable Jump Point IDs, with unresolved external exits and optional physical Station references.
+- [09. Adding native and reusable custom fields](tickets/09-object-fields.md): workspace-wide native options and typed custom fields save optional values on map objects, never Orbits.
 
 ## Implementation tickets
 

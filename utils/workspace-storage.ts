@@ -1,4 +1,4 @@
-import { isLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { restoreLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 
 const databaseName = 'mothership-campaign'
 const storeName = 'workspace'
@@ -45,11 +45,12 @@ export async function loadWorkspace(): Promise<LocalWorkspace | null> {
     if (stored === undefined) {
       return null
     }
-    if (!isLocalWorkspace(stored)) {
+    const workspace = restoreLocalWorkspace(stored)
+    if (!workspace) {
       throw new Error('The saved workspace has an unsupported or damaged format.')
     }
 
-    return stored
+    return workspace
   } finally {
     database.close()
   }

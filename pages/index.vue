@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   addStarSystem,
+  addCustomFieldDefinition,
   canPlaceObjectInOrbit,
   catalogueTypes,
   createLocalWorkspace,
@@ -12,8 +13,12 @@ import {
   jumpPointsInCluster,
   moveOrbit,
   renameLocalWorkspace,
+  removeCustomFieldDefinition,
+  updateCustomFieldOptions,
+  updateNativeFieldOptions,
   updateSystemObject,
   type CatalogueSubtype,
+  type CustomFieldType,
   type LocalWorkspace,
   type ObjectPlacement,
   type Orbit,
@@ -34,6 +39,9 @@ interface SystemObjectDraft {
   placement: string
   x: string
   y: string
+  atmosphere: string
+  portClass: string
+  customFieldValues: Record<string, string>
   jumpStationId: string
 }
 interface JumpRouteDraft {
@@ -71,8 +79,19 @@ const objectDraft = reactive<SystemObjectDraft>({
   placement: 'system',
   x: '',
   y: '',
+  atmosphere: '',
+  portClass: '',
+  customFieldValues: {},
   jumpStationId: '',
 })
+const nativeFieldDrafts = reactive({
+  atmosphereOptions: '',
+  portClassOptions: '',
+})
+const customFieldOptionDrafts = reactive<Record<string, string>>({})
+const newCustomFieldName = ref('')
+const newCustomFieldType = ref<CustomFieldType>('text')
+const newCustomFieldOptions = ref('')
 const routeDraft = reactive<JumpRouteDraft>({
   name: '',
   fromPointId: '',
@@ -82,6 +101,7 @@ const routeDraft = reactive<JumpRouteDraft>({
 })
 const formError = ref('')
 const editorError = ref('')
+const fieldSettingsError = ref('')
 
 const selectedSystem = computed(() =>
   workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
@@ -123,10 +143,40 @@ function syncObjectDraft(object: SystemObject | undefined): void {
     : 'system'
   objectDraft.x = object?.placement.kind === 'system' ? String(object.placement.x) : ''
   objectDraft.y = object?.placement.kind === 'system' ? String(object.placement.y) : ''
+  objectDraft.atmosphere = object?.atmosphere ?? ''
+  objectDraft.portClass = object?.portClass ?? ''
+  objectDraft.customFieldValues = Object.fromEntries(
+    Object.entries(object?.customFieldValues ?? {}).map(([fieldId, value]) => [fieldId, String(value)]),
+  )
+  for (const field of workspace.value?.objectFieldSettings.customFields ?? []) {
+    objectDraft.customFieldValues[field.id] ??= ''
+  }
   objectDraft.jumpStationId = object?.jumpStationId ?? ''
 }
 
 watch(selectedObject, syncObjectDraft, { immediate: true })
+watch(() => workspace.value?.objectFieldSettings, settings => {
+  if (!settings) return
+
+  nativeFieldDrafts.atmosphereOptions = settings.atmosphereOptions.join('\n')
+  nativeFieldDrafts.portClassOptions = settings.portClassOptions.join('\n')
+  const fieldIds = new Set(settings.customFields.map(field => field.id))
+  for (const field of settings.customFields) {
+    if (field.type === 'single-select') {
+      customFieldOptionDrafts[field.id] = field.options.join('\n')
+    }
+    if (!(field.id in objectDraft.customFieldValues)) {
+      const value = selectedObject.value?.customFieldValues?.[field.id]
+      objectDraft.customFieldValues[field.id] = value === undefined ? '' : String(value)
+    }
+  }
+  for (const fieldId of Object.keys(customFieldOptionDrafts)) {
+    if (!fieldIds.has(fieldId)) delete customFieldOptionDrafts[fieldId]
+  }
+  for (const fieldId of Object.keys(objectDraft.customFieldValues)) {
+    if (!fieldIds.has(fieldId)) delete objectDraft.customFieldValues[fieldId]
+  }
+}, { immediate: true })
 watch(() => routeDraft.fromPointId, fromPointId => {
   const firstDestination = routeDestinationPoints.value[0]?.point.id ?? ''
   if (routeDraft.toPointId === fromPointId || !firstDestination) {
@@ -434,11 +484,12 @@ async function reorderSelectedOrbit(direction: -1 | 1): Promise<void> {
 async function saveObjectChanges(changes: SystemObjectChanges): Promise<void> {
   const system = selectedSystem.value
   const object = selectedObject.value
-  if (!system || !object) return
+  const objectFieldSettings = workspace.value?.objectFieldSettings
+  if (!system || !object || !objectFieldSettings) return
 
   let updatedSystem: StarSystem
   try {
-    updatedSystem = updateSystemObject(system, object.id, changes)
+    updatedSystem = updateSystemObject(system, object.id, changes, objectFieldSettings)
   } catch (error) {
     editorError.value = errorText(error)
     return
@@ -466,6 +517,119 @@ function saveObjectField(field: 'locationKey' | 'name' | 'description' | 'subtyp
 
 function saveJumpStation(): Promise<void> {
   return saveObjectChanges({ jumpStationId: objectDraft.jumpStationId || null })
+}
+
+function fieldOptionsFromText(value: string): string[] {
+  return value.split(/\r?\n/u).map(option => option.trim()).filter(Boolean)
+}
+
+async function saveNativeFieldOptions(): Promise<void> {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+
+  try {
+    const withAtmospheres = updateNativeFieldOptions(
+      currentWorkspace,
+      'atmosphere',
+      fieldOptionsFromText(nativeFieldDrafts.atmosphereOptions),
+    )
+    await commit(updateNativeFieldOptions(
+      withAtmospheres,
+      'portClass',
+      fieldOptionsFromText(nativeFieldDrafts.portClassOptions),
+    ))
+    fieldSettingsError.value = ''
+  } catch (error) {
+    fieldSettingsError.value = errorText(error)
+  }
+}
+
+async function createCustomField(): Promise<void> {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+
+  try {
+    await commit(addCustomFieldDefinition(
+      currentWorkspace,
+      newCustomFieldName.value,
+      newCustomFieldType.value,
+      fieldOptionsFromText(newCustomFieldOptions.value),
+    ))
+    newCustomFieldName.value = ''
+    newCustomFieldOptions.value = ''
+    fieldSettingsError.value = ''
+  } catch (error) {
+    fieldSettingsError.value = errorText(error)
+  }
+}
+
+async function saveCustomFieldOptions(fieldId: string): Promise<void> {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+
+  try {
+    await commit(updateCustomFieldOptions(
+      currentWorkspace,
+      fieldId,
+      fieldOptionsFromText(customFieldOptionDrafts[fieldId] ?? ''),
+    ))
+    fieldSettingsError.value = ''
+  } catch (error) {
+    fieldSettingsError.value = errorText(error)
+  }
+}
+
+async function deleteCustomField(fieldId: string): Promise<void> {
+  const currentWorkspace = workspace.value
+  const field = currentWorkspace?.objectFieldSettings.customFields.find(item => item.id === fieldId)
+  if (!currentWorkspace || !field || !window.confirm(
+    `Remove "${field.name}" and clear its values from all map objects?`,
+  )) {
+    return
+  }
+
+  try {
+    await commit(removeCustomFieldDefinition(currentWorkspace, fieldId))
+    fieldSettingsError.value = ''
+  } catch (error) {
+    fieldSettingsError.value = errorText(error)
+  }
+}
+
+function saveNativeObjectField(field: 'atmosphere' | 'portClass'): Promise<void> {
+  return field === 'atmosphere'
+    ? saveObjectChanges({ atmosphere: objectDraft.atmosphere || undefined })
+    : saveObjectChanges({ portClass: objectDraft.portClass || undefined })
+}
+
+async function saveCustomFieldValue(fieldId: string): Promise<void> {
+  const definition = workspace.value?.objectFieldSettings.customFields.find(field => field.id === fieldId)
+  if (!definition) return
+
+  const values = { ...(selectedObject.value?.customFieldValues ?? {}) }
+  const draftValue = objectDraft.customFieldValues[fieldId]
+  if (!draftValue) {
+    delete values[fieldId]
+  } else if (definition.type === 'number') {
+    const numberValue = Number(draftValue)
+    if (!Number.isFinite(numberValue)) {
+      editorError.value = `"${definition.name}" must be a finite number.`
+      return
+    }
+    values[fieldId] = numberValue
+  } else if (definition.type === 'boolean') {
+    if (draftValue !== 'true' && draftValue !== 'false') {
+      editorError.value = `Choose a true or false value for "${definition.name}".`
+      return
+    }
+    values[fieldId] = draftValue === 'true'
+  } else if (definition.type === 'single-select') {
+    values[fieldId] = draftValue
+  } else {
+    values[fieldId] = draftValue
+  }
+
+  await saveObjectChanges({ customFieldValues: Object.keys(values).length ? values : undefined })
 }
 
 function savePlacement(): Promise<void> {
@@ -889,6 +1053,83 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </template>
             </nav>
+            <details class="my-4 border-t border-[#ddd4c4] pt-3">
+              <summary class="cursor-pointer py-2 text-[0.68rem]">Field definitions</summary>
+              <form class="field-stack mt-3 grid gap-3" @submit.prevent="saveNativeFieldOptions">
+                <label for="atmosphere-choices">
+                  Atmosphere choices, one per line
+                  <textarea id="atmosphere-choices" v-model="nativeFieldDrafts.atmosphereOptions" rows="3" />
+                </label>
+                <label for="port-class-choices">
+                  Port class choices, one per line
+                  <textarea id="port-class-choices" v-model="nativeFieldDrafts.portClassOptions" rows="3" />
+                </label>
+                <button class="secondary-button min-h-[2.25rem] justify-center" type="submit" :disabled="saveState === 'saving'">
+                  Save native field options
+                </button>
+              </form>
+
+              <form class="field-stack mt-4 grid gap-3 border-t border-[#ddd4c4] pt-3" @submit.prevent="createCustomField">
+                <span class="section-kicker">NEW CUSTOM FIELD</span>
+                <label for="new-custom-field-name">
+                  Custom field label
+                  <input id="new-custom-field-name" v-model="newCustomFieldName" maxlength="80" required>
+                </label>
+                <label for="new-custom-field-type">
+                  Value type
+                  <select id="new-custom-field-type" v-model="newCustomFieldType">
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="boolean">Boolean</option>
+                    <option value="single-select">Single-select</option>
+                  </select>
+                </label>
+                <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
+                  New field choices, one per line
+                  <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
+                </label>
+                <button class="secondary-button min-h-[2.25rem] justify-center" type="submit" :disabled="saveState === 'saving'">
+                  Add custom field
+                </button>
+              </form>
+
+              <div v-if="workspace.objectFieldSettings.customFields.length" class="mt-4 grid gap-4 border-t border-[#ddd4c4] pt-3">
+                <div v-for="field in workspace.objectFieldSettings.customFields" :key="field.id" class="grid gap-2">
+                  <span class="tree-copy [overflow-wrap:anywhere]">
+                    {{ field.name }}
+                    <small class="mt-[0.18rem] block">{{ field.type }}</small>
+                  </span>
+                  <label v-if="field.type === 'single-select'" :for="`custom-field-options-${field.id}`">
+                    {{ field.name }} choices, one per line
+                    <textarea
+                      :id="`custom-field-options-${field.id}`"
+                      v-model="customFieldOptionDrafts[field.id]"
+                      rows="3"
+                    />
+                  </label>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-if="field.type === 'single-select'"
+                      class="secondary-button min-h-[2.25rem] justify-center"
+                      type="button"
+                      :disabled="saveState === 'saving'"
+                      @click="saveCustomFieldOptions(field.id)"
+                    >
+                      Save {{ field.name }} choices
+                    </button>
+                    <button
+                      class="quiet-button min-h-[2.25rem] justify-center"
+                      type="button"
+                      :disabled="saveState === 'saving'"
+                      @click="deleteCustomField(field.id)"
+                    >
+                      Delete {{ field.name }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p v-if="fieldSettingsError" class="feedback m-0 error-text" role="alert">{{ fieldSettingsError }}</p>
+            </details>
             <p class="hierarchy-note mt-4 mb-0 border-t border-[#ddd4c4] pt-[0.8rem]">Select an object, then add an Orbit to it. Empty Orbits are kept in the chart.</p>
           </aside>
 
@@ -1011,6 +1252,92 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 <p v-if="selectedObject.family === 'JumpPoint' && physicalStations.length === 0" class="empty-copy m-0">
                   Add a separate Station object from the catalogue to record its physical location.
                 </p>
+                <label v-if="selectedObject.family === 'CelestialBody' && (selectedObject.subtype === 'planet' || selectedObject.subtype === 'moon')" :for="`object-atmosphere-${selectedObject.id}`">
+                  Atmosphere
+                  <select
+                    :id="`object-atmosphere-${selectedObject.id}`"
+                    aria-label="Atmosphere"
+                    v-model="objectDraft.atmosphere"
+                    @change="saveNativeObjectField('atmosphere')"
+                  >
+                    <option value="">Not set</option>
+                    <option
+                      v-for="option in workspace.objectFieldSettings.atmosphereOptions"
+                      :key="option"
+                      :value="option"
+                    >
+                      {{ option }}
+                    </option>
+                  </select>
+                </label>
+                <label v-if="selectedObject.family === 'Installation'" :for="`object-port-class-${selectedObject.id}`">
+                  Port class
+                  <select
+                    :id="`object-port-class-${selectedObject.id}`"
+                    aria-label="Port class"
+                    v-model="objectDraft.portClass"
+                    @change="saveNativeObjectField('portClass')"
+                  >
+                    <option value="">Not set</option>
+                    <option
+                      v-for="option in workspace.objectFieldSettings.portClassOptions"
+                      :key="option"
+                      :value="option"
+                    >
+                      {{ option }}
+                    </option>
+                  </select>
+                </label>
+                <template v-for="field in workspace.objectFieldSettings.customFields" :key="field.id">
+                  <label v-if="field.type === 'text'" :for="`custom-field-value-${field.id}`">
+                    {{ field.name }}
+                    <textarea
+                      :id="`custom-field-value-${field.id}`"
+                      :aria-label="field.name"
+                      v-model="objectDraft.customFieldValues[field.id]"
+                      rows="3"
+                      @change="saveCustomFieldValue(field.id)"
+                    />
+                  </label>
+                  <label v-else-if="field.type === 'number'" :for="`custom-field-value-${field.id}`">
+                    {{ field.name }}
+                    <input
+                      :id="`custom-field-value-${field.id}`"
+                      :aria-label="field.name"
+                      v-model="objectDraft.customFieldValues[field.id]"
+                      type="number"
+                      step="any"
+                      @change="saveCustomFieldValue(field.id)"
+                    >
+                  </label>
+                  <label v-else-if="field.type === 'boolean'" :for="`custom-field-value-${field.id}`">
+                    {{ field.name }}
+                    <select
+                      :id="`custom-field-value-${field.id}`"
+                      :aria-label="field.name"
+                      v-model="objectDraft.customFieldValues[field.id]"
+                      @change="saveCustomFieldValue(field.id)"
+                    >
+                      <option value="">Not set</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  </label>
+                  <label v-else-if="field.type === 'single-select'" :for="`custom-field-value-${field.id}`">
+                    {{ field.name }}
+                    <select
+                      :id="`custom-field-value-${field.id}`"
+                      :aria-label="field.name"
+                      v-model="objectDraft.customFieldValues[field.id]"
+                      @change="saveCustomFieldValue(field.id)"
+                    >
+                      <option value="">Not set</option>
+                      <option v-for="option in field.options" :key="option" :value="option">
+                        {{ option }}
+                      </option>
+                    </select>
+                  </label>
+                </template>
                 <div v-if="selectedObject.placement.kind === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
                   <label :for="`object-x-${selectedObject.id}`">
                     Schematic X

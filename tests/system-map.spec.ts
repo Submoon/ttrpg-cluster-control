@@ -197,3 +197,102 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
   await expect(page.getByLabel('Physical Jump Station')).toHaveValue(stationId!)
 })
+
+test('the Warden can configure native and reusable custom object fields', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const typePicker = page.getByLabel('Catalogue object type')
+  const addObject = page.getByRole('button', { name: 'Add object' })
+
+  await typePicker.selectOption('planet')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+
+  await page.getByText('Field definitions', { exact: true }).click()
+  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
+  await page.getByLabel('Port class choices').fill('Class I\nClass II')
+  await page.getByRole('button', { name: 'Save native field options' }).click()
+  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Chlorine')
+  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin')
+  await page.getByRole('button', { name: 'Save native field options' }).click()
+  await expect(page.getByRole('alert')).toContainText('Cannot remove "Chlorine"')
+  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
+  await page.getByRole('button', { name: 'Save native field options' }).click()
+
+  const addCustomField = async (name: string, type: string, options?: string) => {
+    await page.getByLabel('Custom field label').fill(name)
+    await page.getByLabel('Value type').selectOption(type)
+    if (options !== undefined) {
+      await page.getByLabel('New field choices').fill(options)
+    }
+    await page.getByRole('button', { name: 'Add custom field' }).click()
+  }
+
+  await addCustomField('Campaign notes', 'text')
+  await page.getByLabel('Campaign notes').fill('Relay station under the ice.')
+  await page.getByLabel('Campaign notes').blur()
+
+  await addCustomField('Threat level', 'number')
+  await page.getByLabel('Threat level').fill('4')
+  await page.getByLabel('Threat level').blur()
+
+  await addCustomField('Hostile', 'boolean')
+  await page.getByLabel('Hostile').selectOption('true')
+
+  await addCustomField('Signal class', 'single-select', 'Amber\nBlue')
+  await page.getByLabel('Signal class choices').fill('Amber\nBlue\nRed')
+  await page.getByRole('button', { name: 'Save Signal class choices' }).click()
+  await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+
+  await typePicker.selectOption('station')
+  await addObject.click()
+  await expect(page.getByLabel('Port class', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('')
+  await page.getByLabel('Port class', { exact: true }).selectOption('Class II')
+
+  await typePicker.selectOption('moon')
+  await addObject.click()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toBeVisible()
+  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Thin')
+
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await typePicker.selectOption('planet')
+  await addObject.click()
+  await expect(page.getByLabel('Campaign notes')).toBeVisible()
+  await page.getByLabel('Campaign notes').fill('Reusable in the next system.')
+  await page.getByLabel('Campaign notes').blur()
+
+  await page.reload()
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Chlorine')
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Relay station under the ice.')
+  await expect(page.getByLabel('Threat level')).toHaveValue('4')
+  await expect(page.getByLabel('Hostile')).toHaveValue('true')
+  await expect(page.getByLabel('Signal class', { exact: true })).toHaveValue('Red')
+  await hierarchy.getByRole('button', { name: /New moon 1/ }).click()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Thin')
+  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await hierarchy.getByRole('button', { name: /New station/ }).click()
+  await expect(page.getByLabel('Port class', { exact: true })).toHaveValue('Class II')
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await restoredClusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
+})

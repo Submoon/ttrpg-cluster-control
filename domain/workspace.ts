@@ -24,6 +24,19 @@ export const catalogueTypes = [
 export type CatalogueSubtype = typeof catalogueTypes[number]['value']
 export type ObjectFamily = typeof catalogueTypes[number]['family']
 
+export type CustomFieldType = 'text' | 'number' | 'boolean' | 'single-select'
+export type CustomFieldValue = string | number | boolean
+
+export type CustomFieldDefinition =
+  | { id: string; name: string; type: 'text' | 'number' | 'boolean' }
+  | { id: string; name: string; type: 'single-select'; options: string[] }
+
+export interface ObjectFieldSettings {
+  atmosphereOptions: string[]
+  portClassOptions: string[]
+  customFields: CustomFieldDefinition[]
+}
+
 export type ObjectPlacement =
   | { kind: 'system'; x: number; y: number }
   | { kind: 'orbit'; orbitId: string }
@@ -36,6 +49,9 @@ export interface SystemObject {
   name: string
   description: string
   placement: ObjectPlacement
+  atmosphere?: string
+  portClass?: string
+  customFieldValues?: Record<string, CustomFieldValue>
   jumpStationId?: string | null
 }
 
@@ -79,6 +95,7 @@ export interface LocalWorkspace {
   layout: {
     systemPositions: Record<string, Point>
   }
+  objectFieldSettings: ObjectFieldSettings
 }
 
 export interface SystemObjectChanges {
@@ -87,10 +104,21 @@ export interface SystemObjectChanges {
   description?: string
   subtype?: string
   placement?: ObjectPlacement
+  atmosphere?: string
+  portClass?: string
+  customFieldValues?: Record<string, CustomFieldValue>
   jumpStationId?: string | null
 }
 
 const maxNameLength = 80
+
+export function defaultObjectFieldSettings(): ObjectFieldSettings {
+  return {
+    atmosphereOptions: ['Breathable', 'Unbreathable', 'Vacuum'],
+    portClassOptions: ['Class I', 'Class II', 'Class III'],
+    customFields: [],
+  }
+}
 
 function validText(value: string, label: string, maxLength?: number): string {
   const text = value.trim()
@@ -103,6 +131,18 @@ function validText(value: string, label: string, maxLength?: number): string {
 
 function validName(value: string, label: string): string {
   return validText(value, label, maxNameLength)
+}
+
+function validFieldOptions(options: string[], label: string): string[] {
+  if (!Array.isArray(options) || options.some(option => typeof option !== 'string')) {
+    throw new Error(`${label} must be a list of text values.`)
+  }
+
+  const normalized = options.map(option => validText(option, label, maxNameLength))
+  if (new Set(normalized.map(option => option.toLowerCase())).size !== normalized.length) {
+    throw new Error(`${label} must not contain duplicate options.`)
+  }
+  return normalized
 }
 
 function nextLocationKey(system: StarSystem, prefix: string): string {
@@ -162,6 +202,124 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
     },
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
+    },
+    objectFieldSettings: defaultObjectFieldSettings(),
+  }
+}
+
+export function updateNativeFieldOptions(
+  workspace: LocalWorkspace,
+  field: 'atmosphere' | 'portClass',
+  options: string[],
+): LocalWorkspace {
+  const normalized = validFieldOptions(options, `${field === 'atmosphere' ? 'Atmosphere' : 'Port class'} option`)
+  const property = field === 'atmosphere' ? 'atmosphereOptions' : 'portClassOptions'
+
+  for (const system of workspace.cluster.systems) {
+    for (const object of system.objects) {
+      const value = object[field]
+      if (value !== undefined && !normalized.includes(value)) {
+        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+      }
+    }
+  }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      [property]: normalized,
+    },
+  }
+}
+
+export function addCustomFieldDefinition(
+  workspace: LocalWorkspace,
+  name: string,
+  type: CustomFieldType,
+  options: string[] = [],
+): LocalWorkspace {
+  const fieldName = validName(name, 'Custom field name')
+  if (workspace.objectFieldSettings.customFields.some(field => field.name.toLowerCase() === fieldName.toLowerCase())) {
+    throw new Error(`A custom field named "${fieldName}" already exists.`)
+  }
+
+  const definition: CustomFieldDefinition = type === 'single-select'
+    ? {
+        id: crypto.randomUUID(),
+        name: fieldName,
+        type,
+        options: validFieldOptions(options, `${fieldName} option`),
+      }
+    : { id: crypto.randomUUID(), name: fieldName, type }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: [...workspace.objectFieldSettings.customFields, definition],
+    },
+  }
+}
+
+export function updateCustomFieldOptions(
+  workspace: LocalWorkspace,
+  fieldId: string,
+  options: string[],
+): LocalWorkspace {
+  const definition = workspace.objectFieldSettings.customFields.find(field => field.id === fieldId)
+  if (!definition) {
+    throw new Error('The selected custom field no longer exists.')
+  }
+  if (definition.type !== 'single-select') {
+    throw new Error('Only single-select custom fields have editable options.')
+  }
+
+  const normalized = validFieldOptions(options, `${definition.name} option`)
+  for (const system of workspace.cluster.systems) {
+    for (const object of system.objects) {
+      const value = object.customFieldValues?.[fieldId]
+      if (typeof value === 'string' && !normalized.includes(value)) {
+        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+      }
+    }
+  }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.map(field =>
+        field.id === fieldId && field.type === 'single-select'
+          ? { ...field, options: normalized }
+          : field,
+      ),
+    },
+  }
+}
+
+export function removeCustomFieldDefinition(workspace: LocalWorkspace, fieldId: string): LocalWorkspace {
+  if (!workspace.objectFieldSettings.customFields.some(field => field.id === fieldId)) {
+    throw new Error('The selected custom field no longer exists.')
+  }
+
+  return {
+    ...workspace,
+    cluster: {
+      ...workspace.cluster,
+      systems: workspace.cluster.systems.map(system => ({
+        ...system,
+        objects: system.objects.map(object => {
+          if (!object.customFieldValues || !(fieldId in object.customFieldValues)) return object
+          const customFieldValues = { ...object.customFieldValues }
+          delete customFieldValues[fieldId]
+          return { ...object, customFieldValues }
+        }),
+      })),
+    },
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.filter(field => field.id !== fieldId),
     },
   }
 }
@@ -322,10 +480,52 @@ export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbi
   return false
 }
 
+function objectFieldValidationError(object: SystemObject, settings: ObjectFieldSettings): string | null {
+  if (object.atmosphere !== undefined) {
+    if (
+      object.family !== 'CelestialBody'
+      || (object.subtype !== 'planet' && object.subtype !== 'moon')
+    ) {
+      return 'Atmosphere is only available for planets and moons.'
+    }
+    if (!settings.atmosphereOptions.includes(object.atmosphere)) {
+      return 'Choose an available Atmosphere option.'
+    }
+  }
+
+  if (object.portClass !== undefined) {
+    if (object.family !== 'Installation') {
+      return 'Port class is only available for Installation objects.'
+    }
+    if (!settings.portClassOptions.includes(object.portClass)) {
+      return 'Choose an available Port class option.'
+    }
+  }
+
+  for (const [fieldId, value] of Object.entries(object.customFieldValues ?? {})) {
+    const definition = settings.customFields.find(field => field.id === fieldId)
+    if (!definition) {
+      return 'A custom field value refers to a field that no longer exists.'
+    }
+    if (
+      (definition.type === 'text' && typeof value !== 'string')
+      || (definition.type === 'number' && (typeof value !== 'number' || !Number.isFinite(value)))
+      || (definition.type === 'boolean' && typeof value !== 'boolean')
+      || (definition.type === 'single-select'
+        && (typeof value !== 'string' || !definition.options.includes(value)))
+    ) {
+      return `"${definition.name}" has an invalid value.`
+    }
+  }
+
+  return null
+}
+
 export function updateSystemObject(
   system: StarSystem,
   objectId: string,
   changes: SystemObjectChanges,
+  objectFieldSettings: ObjectFieldSettings,
 ): StarSystem {
   const object = system.objects.find(candidate => candidate.id === objectId)
   if (!object) {
@@ -352,6 +552,10 @@ export function updateSystemObject(
 
   if (updated.family !== 'JumpPoint' && updated.jumpStationId !== undefined) {
     throw new Error('Only a Jump Point can reference a physical Jump Station.')
+  }
+  const fieldError = objectFieldValidationError(updated, objectFieldSettings)
+  if (fieldError) {
+    throw new Error(fieldError)
   }
   if (updated.jumpStationId !== undefined && updated.jumpStationId !== null) {
     const station = system.objects.find(candidate => candidate.id === updated.jumpStationId)
@@ -423,6 +627,61 @@ function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): valu
   return Array.isArray(value) && value.every(guard)
 }
 
+function isCustomFieldValue(value: unknown): value is CustomFieldValue {
+  return typeof value === 'string'
+    || typeof value === 'boolean'
+    || (typeof value === 'number' && Number.isFinite(value))
+}
+
+function isFieldOption(value: unknown): value is string {
+  return typeof value === 'string'
+    && !!value.trim()
+    && value === value.trim()
+    && value.length <= maxNameLength
+}
+
+function isFieldOptionList(value: unknown): value is string[] {
+  return isArrayOf(value, isFieldOption)
+    && new Set(value.map(option => option.toLowerCase())).size === value.length
+}
+
+function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition {
+  if (
+    !isRecord(value)
+    || typeof value.id !== 'string'
+    || !value.id
+    || typeof value.name !== 'string'
+    || !value.name.trim()
+    || value.name !== value.name.trim()
+    || value.name.length > maxNameLength
+  ) {
+    return false
+  }
+
+  if (value.type === 'single-select') {
+    return isFieldOptionList(value.options)
+  }
+  return (
+    (value.type === 'text' || value.type === 'number' || value.type === 'boolean')
+    && value.options === undefined
+  )
+}
+
+function isObjectFieldSettings(value: unknown): value is ObjectFieldSettings {
+  if (
+    !isRecord(value)
+    || !isFieldOptionList(value.atmosphereOptions)
+    || !isFieldOptionList(value.portClassOptions)
+    || !isArrayOf(value.customFields, isCustomFieldDefinition)
+  ) {
+    return false
+  }
+
+  const ids = new Set(value.customFields.map(field => field.id))
+  const names = new Set(value.customFields.map(field => field.name.toLowerCase()))
+  return ids.size === value.customFields.length && names.size === value.customFields.length
+}
+
 function isPoint(value: unknown): value is Point {
   return isRecord(value)
     && typeof value.x === 'number'
@@ -469,6 +728,17 @@ function isSystemObject(value: unknown): value is SystemObject {
   if (
     value.family !== 'JumpPoint'
     && value.jumpStationId !== undefined
+  ) {
+    return false
+  }
+  if (
+    (value.atmosphere !== undefined
+      && (typeof value.atmosphere !== 'string' || !value.atmosphere.trim()))
+    || (value.portClass !== undefined
+      && (typeof value.portClass !== 'string' || !value.portClass.trim()))
+    || (value.customFieldValues !== undefined
+      && (!isRecord(value.customFieldValues)
+        || !Object.values(value.customFieldValues).every(isCustomFieldValue)))
   ) {
     return false
   }
@@ -604,7 +874,11 @@ function isStarSystem(value: unknown): value is StarSystem {
   return isSystemStructureValid({ id: value.id, name, objects, orbits })
 }
 
-export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
+type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings'> & {
+  objectFieldSettings?: ObjectFieldSettings
+}
+
+function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id || !isRecord(value.cluster)) {
     return false
   }
@@ -625,6 +899,13 @@ export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
     || !isRecord(layout)
     || !isRecord(layout.systemPositions)
   ) {
+    return false
+  }
+
+  const objectFieldSettings = value.objectFieldSettings === undefined
+    ? defaultObjectFieldSettings()
+    : value.objectFieldSettings
+  if (!isObjectFieldSettings(objectFieldSettings)) {
     return false
   }
 
@@ -653,6 +934,13 @@ export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
     }
   }
 
+  for (const field of objectFieldSettings.customFields) {
+    if (entityIds.has(field.id)) {
+      return false
+    }
+    entityIds.add(field.id)
+  }
+
   const routeIds = new Set<string>()
   for (const route of cluster.routes) {
     if (
@@ -669,5 +957,23 @@ export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
 
   const positions = layout.systemPositions
   return Object.values(positions).every(isPoint)
-    && systems.every(system => isPoint(positions[system.id]))
+    && systems.every(system =>
+      isPoint(positions[system.id])
+      && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
+    )
+}
+
+export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
+  return isStoredLocalWorkspace(value) && value.objectFieldSettings !== undefined
+}
+
+export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
+  if (!isStoredLocalWorkspace(value)) {
+    return null
+  }
+
+  return {
+    ...value,
+    objectFieldSettings: value.objectFieldSettings ?? defaultObjectFieldSettings(),
+  }
 }
