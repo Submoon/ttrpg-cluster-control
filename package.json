@@ -1,0 +1,24 @@
+{
+  "name": "mothership-campaign-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/d3": "^7.4.3",
+    "nuxt": "^3.17.5",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.11"
+  },
+  "dependencies": {
+    "d3": "^7.9.0"
+  }
+}
