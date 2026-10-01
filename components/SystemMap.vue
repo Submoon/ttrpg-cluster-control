@@ -8,6 +8,7 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 
 const props = defineProps<{
   system: StarSystem
@@ -111,6 +112,12 @@ function zoomBy(factor: number): void {
   if (svgElement.value && zoomBehavior) {
     select(svgElement.value).call(zoomBehavior.scaleBy, factor)
   }
+}
+
+async function exportImage(format: MapImageFormat): Promise<Blob> {
+  const element = svgElement.value
+  if (!element) throw new Error('The star system map is not ready to export.')
+  return exportMapImage(element, format)
 }
 
 function fitMap(): void {
@@ -446,6 +453,8 @@ watch(() => props.orbitRadii, render, { deep: true })
 watch(() => props.objectAngles, render, { deep: true })
 watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
+
+defineExpose({ exportImage })
 </script>
 
 <template>

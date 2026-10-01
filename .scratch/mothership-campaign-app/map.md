@@ -38,6 +38,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [11. Safely deleting dependent map entities](tickets/11-safe-dependent-deletion.md): deletion previews identify cascaded objects, Orbits, routes, and cleared Station links; confirmation removes broken references and cancellation preserves the workspace.
 - [12. Exporting clusters and systems as versioned JSON](tickets/12-json-export.md): versioned cluster and standalone-system exports preserve maps, custom fields, and durable layout while excluding temporary view state.
 - [13. Importing JSON as a safe independent copy](tickets/13-json-import.md): validated, confirmed JSON imports create independent copies with remapped IDs and references while preserving existing campaign work.
+- [14. Exporting complete maps as PNG and SVG](tickets/14-image-export.md): both map views export their complete rendered SVG scene directly or rasterized through Canvas, independent of current pan and zoom.
 
 ## Implementation tickets
 

@@ -126,6 +126,73 @@ async function downloadJson(page: import('@playwright/test').Page, buttonName: s
   return JSON.parse(json) as ExportedMap
 }
 
+type DownloadedImage = {
+  type: string
+  size: number
+  text?: string
+  width?: number
+  height?: number
+  signature?: number[]
+}
+
+async function downloadImage(
+  page: import('@playwright/test').Page,
+  buttonName: string,
+  mimeType: 'image/svg+xml' | 'image/png',
+): Promise<DownloadedImage> {
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: buttonName }).click()
+  await downloadPromise
+  return page.evaluate(async (expectedType) => {
+    const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
+    const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
+    if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
+    const [blob] = blobs.splice(index, 1)
+
+    if (expectedType === 'image/svg+xml') {
+      return { type: blob.type, size: blob.size, text: await blob.text() }
+    }
+
+    const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
+    const dimensions = new DataView(bytes.buffer)
+    const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
+    if (intermediateSvg >= 0) blobs.splice(intermediateSvg, 1)
+    return {
+      type: blob.type,
+      size: blob.size,
+      signature: Array.from(bytes.slice(0, 8)),
+      width: dimensions.getUint32(16),
+      height: dimensions.getUint32(20),
+    }
+  }, mimeType)
+}
+
+async function inspectImageSvg(
+  page: import('@playwright/test').Page,
+  text: string,
+): Promise<{
+  viewBox: number[]
+  width: number
+  height: number
+  contentTransform: string | null
+  texts: string[]
+  titleStyle: string | null
+}> {
+  return page.evaluate((content) => {
+    const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement
+    const viewBox = svg.getAttribute('viewBox')
+    if (svg.localName !== 'svg' || !viewBox) throw new Error('The downloaded SVG is invalid.')
+    return {
+      viewBox: viewBox.split(/\s+/).map(Number),
+      width: Number(svg.getAttribute('width')?.replace('px', '')),
+      height: Number(svg.getAttribute('height')?.replace('px', '')),
+      contentTransform: svg.querySelector('.cluster-map-content, .system-map-content')?.getAttribute('transform') ?? null,
+      texts: Array.from(svg.querySelectorAll('text')).map(element => element.textContent?.trim() ?? ''),
+      titleStyle: svg.querySelector('.cluster-map-title, .map-title')?.getAttribute('style') ?? null,
+    }
+  }, text)
+}
+
 async function setJsonFile(
   input: import('@playwright/test').Locator,
   name: string,
@@ -782,6 +849,21 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await dragBy(page, secondSystem.locator('.cluster-system-card'), { x: 48, y: 24 })
   await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
   await panMap(page, clusterMap, { x: 24, y: 18 })
+  const clusterViewportTransform = await clusterMap.locator('.cluster-map-content').getAttribute('transform')
+  expect(clusterViewportTransform).not.toBe('translate(0,0) scale(1)')
+  const clusterSvg = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  expect(clusterSvg.text).toContain('Kestrel Reach')
+  const clusterSvgInfo = await inspectImageSvg(page, clusterSvg.text!)
+  expect(clusterSvgInfo.contentTransform).toBeNull()
+  expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
+  expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
+  expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-01']))
+  expect(clusterSvgInfo.titleStyle).toContain('fill:')
+  const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
+  expect(clusterPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+  expect(clusterPng.size).toBeGreaterThan(100)
+  expect(clusterPng.width).toBe(clusterSvgInfo.width)
+  expect(clusterPng.height).toBe(clusterSvgInfo.height)
   const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(clusterExport).toMatchObject({
     format: 'mothership-campaign-map',
@@ -842,6 +924,21 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
   await panMap(page, systemMap, { x: 24, y: 18 })
+  const systemViewportTransform = await systemMap.locator('.system-map-content').getAttribute('transform')
+  expect(systemViewportTransform).not.toBe('translate(0,0) scale(1)')
+  const systemSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  expect(systemSvg.text).toContain('Iria')
+  const systemSvgInfo = await inspectImageSvg(page, systemSvg.text!)
+  expect(systemSvgInfo.contentTransform).toBeNull()
+  expect(systemSvgInfo.viewBox[2]).toBeGreaterThan(960)
+  expect(systemSvgInfo.viewBox[3]).toBeGreaterThan(560)
+  expect(systemSvgInfo.texts).toContain('Iria')
+  expect(systemSvgInfo.titleStyle).toContain('fill:')
+  const systemPng = await downloadImage(page, 'Export star system PNG', 'image/png')
+  expect(systemPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+  expect(systemPng.size).toBeGreaterThan(100)
+  expect(systemPng.width).toBe(systemSvgInfo.width)
+  expect(systemPng.height).toBe(systemSvgInfo.height)
   const systemExport = await downloadJson(page, 'Export star system JSON')
   expect(systemExport).toMatchObject({
     format: 'mothership-campaign-map',

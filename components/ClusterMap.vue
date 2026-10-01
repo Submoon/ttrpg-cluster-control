@@ -8,6 +8,7 @@ import {
   type Point,
   type StarSystem,
 } from '../domain/workspace'
+import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 
 const props = defineProps<{
   cluster: JumpCluster
@@ -112,6 +113,12 @@ function zoomBy(factor: number): void {
   if (svgElement.value && zoomBehavior) {
     select(svgElement.value).call(zoomBehavior.scaleBy, factor)
   }
+}
+
+async function exportImage(format: MapImageFormat): Promise<Blob> {
+  const element = svgElement.value
+  if (!element) throw new Error('The Jump Cluster map is not ready to export.')
+  return exportMapImage(element, format)
 }
 
 function fitMap(): void {
@@ -352,6 +359,8 @@ watch(() => props.cluster, render, { deep: true })
 watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
+
+defineExpose({ exportImage })
 </script>
 
 <template>

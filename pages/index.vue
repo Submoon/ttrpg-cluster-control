@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   addStarSystem,
   addCustomFieldDefinition,
@@ -35,6 +35,7 @@ import {
   type SystemObjectChanges,
 } from '../domain/workspace'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
+import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
 
 type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
 type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject; childCount: number; depth: number }
@@ -110,6 +111,8 @@ const routeDraft = reactive<JumpRouteDraft>({
 const formError = ref('')
 const editorError = ref('')
 const exportError = ref('')
+const clusterMapRef = shallowRef<MapImageExporter | null>(null)
+const systemMapRef = shallowRef<MapImageExporter | null>(null)
 const fieldSettingsError = ref('')
 const importError = ref('')
 const jsonImportInput = ref<HTMLInputElement | null>(null)
@@ -309,13 +312,8 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function downloadJsonFile(filename: string, value: unknown): void {
-  const json = JSON.stringify(value, null, 2)
-  if (json === undefined) {
-    throw new Error('Could not serialize the map as JSON.')
-  }
-
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+function downloadFile(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   try {
     link.href = url
@@ -328,9 +326,21 @@ function downloadJsonFile(filename: string, value: unknown): void {
   }
 }
 
-function exportFileName(name: string, kind: 'jump-cluster' | 'star-system'): string {
+function downloadJsonFile(filename: string, value: unknown): void {
+  const json = JSON.stringify(value, null, 2)
+  if (json === undefined) {
+    throw new Error('Could not serialize the map as JSON.')
+  }
+  downloadFile(filename, new Blob([json], { type: 'application/json' }))
+}
+
+function exportFileName(
+  name: string,
+  kind: 'jump-cluster' | 'star-system',
+  extension = 'json',
+): string {
   const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim()
-  return `${safeName || 'map'}-${kind}.json`
+  return `${safeName || 'map'}-${kind}.${extension}`
 }
 
 function downloadClusterJson(): void {
@@ -358,6 +368,22 @@ function downloadSystemJson(): void {
       exportFileName(system.name, 'star-system'),
       exportStarSystem(currentWorkspace, system.id),
     )
+    exportError.value = ''
+  } catch (error) {
+    exportError.value = errorText(error)
+  }
+}
+
+async function downloadMapImage(
+  map: MapImageExporter | null,
+  name: string | undefined,
+  kind: 'jump-cluster' | 'star-system',
+  format: MapImageFormat,
+): Promise<void> {
+  if (!map || !name) return
+
+  try {
+    downloadFile(exportFileName(name, kind, format), await map.exportImage(format))
     exportError.value = ''
   } catch (error) {
     exportError.value = errorText(error)
@@ -1149,6 +1175,22 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <button class="tool-button" type="button" @click="downloadClusterJson">
                 Export Jump Cluster JSON
               </button>
+              <button
+                class="tool-button"
+                type="button"
+                :disabled="!clusterMapRef"
+                @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'png')"
+              >
+                Export Jump Cluster PNG
+              </button>
+              <button
+                class="tool-button"
+                type="button"
+                :disabled="!clusterMapRef"
+                @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'svg')"
+              >
+                Export Jump Cluster SVG
+              </button>
               <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
                 Import JSON copy
               </button>
@@ -1157,6 +1199,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
               <ClientOnly>
                 <ClusterMap
+                  ref="clusterMapRef"
                   :cluster="workspace.cluster"
                   :system-positions="workspace.layout.systemPositions"
                   :selected-system-id="selectedSystemId"
@@ -1482,6 +1525,22 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <button class="tool-button" type="button" @click="downloadSystemJson">
                 Export star system JSON
               </button>
+              <button
+                class="tool-button"
+                type="button"
+                :disabled="!systemMapRef"
+                @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'png')"
+              >
+                Export star system PNG
+              </button>
+              <button
+                class="tool-button"
+                type="button"
+                :disabled="!systemMapRef"
+                @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'svg')"
+              >
+                Export star system SVG
+              </button>
               <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
                 Import JSON copy
               </button>
@@ -1501,6 +1560,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
               <ClientOnly>
                 <SystemMap
+                  ref="systemMapRef"
                   :system="selectedSystem"
                   :orbit-radii="workspace.layout.orbitRadii"
                   :object-angles="workspace.layout.objectAngles"
