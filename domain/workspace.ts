@@ -94,6 +94,8 @@ export interface LocalWorkspace {
   cluster: JumpCluster
   layout: {
     systemPositions: Record<string, Point>
+    orbitRadii: Record<string, number>
+    objectAngles: Record<string, number>
   }
   objectFieldSettings: ObjectFieldSettings
 }
@@ -202,6 +204,8 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
     },
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
+      orbitRadii: {},
+      objectAngles: {},
     },
     objectFieldSettings: defaultObjectFieldSettings(),
   }
@@ -454,6 +458,24 @@ export function createOrbit(system: StarSystem, hostId: string): Orbit {
     .filter(orbit => orbit.hostId === hostId)
     .reduce((highest, orbit) => Math.max(highest, orbit.order), 0) + 1
   return { id: crypto.randomUUID(), hostId, order }
+}
+
+function orbitHost(system: StarSystem, orbit: Orbit): SystemObject {
+  const host = system.objects.find(object => object.id === orbit.hostId)
+  if (!host) {
+    throw new Error(`Orbit "${orbit.id}" has no host object.`)
+  }
+  return host
+}
+
+export function defaultOrbitRadius(system: StarSystem, orbit: Orbit): number {
+  return orbitHost(system, orbit).subtype === 'star'
+    ? 112 + (orbit.order - 1) * 58
+    : 46 + (orbit.order - 1) * 28
+}
+
+export function minimumOrbitRadius(system: StarSystem, orbit: Orbit): number {
+  return Math.ceil((orbitHost(system, orbit).subtype === 'star' ? 23 : 14) + 16)
 }
 
 export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbitId: string): boolean {
@@ -874,8 +896,12 @@ function isStarSystem(value: unknown): value is StarSystem {
   return isSystemStructureValid({ id: value.id, name, objects, orbits })
 }
 
-type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings'> & {
+type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
+  & Partial<Pick<LocalWorkspace['layout'], 'orbitRadii' | 'objectAngles'>>
+
+type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout'> & {
   objectFieldSettings?: ObjectFieldSettings
+  layout: StoredWorkspaceLayout
 }
 
 function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
@@ -898,6 +924,8 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     || !isArrayOf(cluster.routes, isJumpRoute)
     || !isRecord(layout)
     || !isRecord(layout.systemPositions)
+    || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
+    || (layout.objectAngles !== undefined && !isRecord(layout.objectAngles))
   ) {
     return false
   }
@@ -956,7 +984,26 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   }
 
   const positions = layout.systemPositions
+  const orbitRadii = isRecord(layout.orbitRadii) ? layout.orbitRadii : {}
+  const objectAngles = layout.objectAngles ?? {}
+  const orbits = systems.flatMap(system =>
+    system.orbits.map(orbit => ({ orbit, system })),
+  )
+  const orbitObjects = new Set(systems.flatMap(system =>
+    system.objects
+      .filter(object => object.placement.kind === 'orbit')
+      .map(object => object.id),
+  ))
   return Object.values(positions).every(isPoint)
+    && Object.entries(orbitRadii).every(([orbitId, radius]) => {
+      const entry = orbits.find(candidate => candidate.orbit.id === orbitId)
+      return typeof radius === 'number'
+        && Number.isFinite(radius)
+        && entry !== undefined
+        && radius >= minimumOrbitRadius(entry.system, entry.orbit)
+    })
+    && Object.values(objectAngles).every(value => typeof value === 'number' && Number.isFinite(value))
+    && Object.keys(objectAngles).every(objectId => orbitObjects.has(objectId))
     && systems.every(system =>
       isPoint(positions[system.id])
       && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
@@ -974,6 +1021,11 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
 
   return {
     ...value,
+    layout: {
+      ...value.layout,
+      orbitRadii: value.layout.orbitRadii ?? {},
+      objectAngles: value.layout.objectAngles ?? {},
+    },
     objectFieldSettings: value.objectFieldSettings ?? defaultObjectFieldSettings(),
   }
 }

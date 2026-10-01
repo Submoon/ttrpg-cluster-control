@@ -2,7 +2,8 @@
 title: 10. Navigating and arranging both map views
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -34,3 +35,7 @@ As a Warden, I can arrange systems and map objects by hand, inspect dense or bro
 - [Mothership Campaign App - V1 Specification](../spec.md)
 - [03. Prototyping the Jump Cluster and system-map editor](03-map-editor-prototype.md)
 - [04. Choosing the V1 application and rendering architecture](04-application-architecture.md)
+
+## Resolution
+
+Both D3/SVG map views support pan, pointer-centered zoom, fit controls, and manual arrangement with persisted layout. Orbit resizing preserves object angles, has host-clearance minimums and no fixed maximum; zoom and pan remain temporary. Accessible controls are keyboard operable.

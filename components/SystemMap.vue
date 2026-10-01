@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { select } from 'd3'
-import type { Orbit, Point, StarSystem, SystemObject } from '../domain/workspace'
+import { drag, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
+import {
+  defaultOrbitRadius,
+  minimumOrbitRadius,
+  type Orbit,
+  type Point,
+  type StarSystem,
+  type SystemObject,
+} from '../domain/workspace'
 
 const props = defineProps<{
   system: StarSystem
+  orbitRadii: Record<string, number>
+  objectAngles: Record<string, number>
   selectedObjectId: string | null
   selectedOrbitId: string | null
 }>()
@@ -11,9 +20,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-object': [id: string]
   'select-orbit': [id: string]
+  'move-object': [id: string, position: Point]
+  'rotate-object': [id: string, angle: number]
+  'resize-orbit': [id: string, radius: number]
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const zoomLevel = ref(100)
+let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 
 function orbitHost(system: StarSystem, orbit: Orbit): SystemObject {
   const host = system.objects.find(object => object.id === orbit.hostId)
@@ -24,10 +38,7 @@ function orbitHost(system: StarSystem, orbit: Orbit): SystemObject {
 }
 
 function orbitRadius(system: StarSystem, orbit: Orbit): number {
-  const starHost = orbitHost(system, orbit).subtype === 'star'
-  return starHost
-    ? 112 + (orbit.order - 1) * 58
-    : 46 + (orbit.order - 1) * 28
+  return props.orbitRadii[orbit.id] ?? defaultOrbitRadius(system, orbit)
 }
 
 function objectPositions(system: StarSystem): Map<string, Point> {
@@ -70,7 +81,8 @@ function objectPositions(system: StarSystem): Map<string, Point> {
       const center = locate(host)
       const siblings = childrenByOrbit.get(orbit.id) ?? []
       const index = siblings.findIndex(candidate => candidate.id === object.id)
-      const angle = -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
+      const angle = props.objectAngles[object.id]
+        ?? -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
       const radius = orbitRadius(system, orbit)
       point = {
         x: center.x + Math.cos(angle) * radius,
@@ -95,6 +107,40 @@ function requiredPosition(positions: Map<string, Point>, objectId: string): Poin
   return position
 }
 
+function zoomBy(factor: number): void {
+  if (svgElement.value && zoomBehavior) {
+    select(svgElement.value).call(zoomBehavior.scaleBy, factor)
+  }
+}
+
+function fitMap(): void {
+  const element = svgElement.value
+  if (!element || !zoomBehavior) return
+
+  const bounds = ['.system-map-items', '.system-orbits', '.orbit-resize-handles']
+    .map(selector => element.querySelector<SVGGElement>(selector)?.getBBox())
+    .filter((box): box is DOMRect => box !== undefined && (box.width > 0 || box.height > 0))
+  if (!bounds.length) {
+    select(element).call(zoomBehavior.transform, zoomIdentity)
+    return
+  }
+
+  const left = Math.min(...bounds.map(box => box.x))
+  const top = Math.min(...bounds.map(box => box.y))
+  const right = Math.max(...bounds.map(box => box.x + box.width))
+  const bottom = Math.max(...bounds.map(box => box.y + box.height))
+  const width = right - left
+  const height = bottom - top
+  const scale = Math.max(0.25, Math.min(
+    4,
+    (960 - 80) / width,
+    (560 - 80) / height,
+  ))
+  const x = (960 - width * scale) / 2 - left * scale
+  const y = (560 - height * scale) / 2 - top * scale
+  select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
+}
+
 function render(): void {
   const element = svgElement.value
   if (!element) return
@@ -102,9 +148,13 @@ function render(): void {
   const system = props.system
   const positions = objectPositions(system)
   const svg = select(element)
+  const currentTransform = zoomTransform(element)
+  const focusedOrbitId = element.querySelector<SVGCircleElement>('.orbit-resize-handle:focus')
+    ?.getAttribute('data-orbit-id')
   svg.selectAll('*').remove()
 
-  const grid = svg.append('defs')
+  const content = svg.append('g').attr('class', 'system-map-content')
+  const grid = content.append('defs')
     .append('pattern')
     .attr('id', 'system-map-grid')
     .attr('width', 28)
@@ -114,39 +164,39 @@ function render(): void {
     .attr('d', 'M 28 0 L 0 0 0 28')
     .attr('class', 'map-grid-line')
 
-  svg.append('rect')
+  content.append('rect')
     .attr('class', 'map-background')
     .attr('width', 960)
     .attr('height', 560)
-  svg.append('rect')
+  content.append('rect')
     .attr('class', 'map-grid')
     .attr('width', 960)
     .attr('height', 560)
 
   const stars = system.objects.filter(object => object.subtype === 'star').length
-  svg.append('text')
+  content.append('text')
     .attr('class', 'map-title')
     .attr('x', 32)
     .attr('y', 36)
     .text(system.name)
-  svg.append('text')
+  content.append('text')
     .attr('class', 'map-caption')
     .attr('x', 32)
     .attr('y', 56)
     .text(`SYSTEM / ${stars} STAR${stars === 1 ? '' : 'S'} / SCHEMATIC, NOT TO SCALE`)
-  svg.append('text')
+  content.append('text')
     .attr('class', 'map-count')
     .attr('x', 928)
     .attr('y', 36)
     .attr('text-anchor', 'end')
     .text(`${system.objects.length} OBJECTS / ${system.orbits.length} ORBITS`)
 
-  const orbitMarks = svg.selectAll<SVGGElement, Orbit>('g.orbit-mark')
+  const orbitMarks = content.append('g').attr('class', 'system-orbits')
+    .selectAll<SVGGElement, Orbit>('g.orbit-mark')
     .data(system.orbits.slice().sort((left, right) => left.order - right.order))
     .join('g')
     .attr('class', orbit => `orbit-mark${props.selectedOrbitId === orbit.id ? ' is-selected' : ''}`)
-    .attr('role', 'button')
-    .attr('tabindex', 0)
+    .attr('role', 'group')
     .attr('aria-label', orbit => `Orbit ${orbit.order} around ${orbitHost(system, orbit).name}`)
 
   orbitMarks.append('circle')
@@ -154,11 +204,14 @@ function render(): void {
     .attr('cx', orbit => requiredPosition(positions, orbit.hostId).x)
     .attr('cy', orbit => requiredPosition(positions, orbit.hostId).y)
     .attr('r', orbit => orbitRadius(system, orbit))
-  orbitMarks.append('circle')
+  const orbitSelectors = orbitMarks.append('circle')
     .attr('class', 'orbit-hit-target')
     .attr('cx', orbit => requiredPosition(positions, orbit.hostId).x)
     .attr('cy', orbit => requiredPosition(positions, orbit.hostId).y)
     .attr('r', orbit => orbitRadius(system, orbit))
+    .attr('role', 'button')
+    .attr('tabindex', 0)
+    .attr('aria-label', orbit => `Select Orbit ${orbit.order} around ${orbitHost(system, orbit).name}`)
   orbitMarks.append('text')
     .attr('class', 'orbit-label')
     .attr('x', orbit => requiredPosition(positions, orbit.hostId).x)
@@ -166,7 +219,7 @@ function render(): void {
       return requiredPosition(positions, orbit.hostId).y - orbitRadius(system, orbit) * 0.72
     })
     .text(orbit => `ORBIT ${orbit.order}`)
-  orbitMarks
+  orbitSelectors
     .on('click', (event, orbit) => {
       event.stopPropagation()
       emit('select-orbit', orbit.id)
@@ -178,7 +231,8 @@ function render(): void {
       }
     })
 
-  const objectMarks = svg.selectAll<SVGGElement, SystemObject>('g.system-object')
+  const items = content.append('g').attr('class', 'system-map-items')
+  const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
     .attr('class', object => `system-object${props.selectedObjectId === object.id ? ' is-selected' : ''}`)
@@ -242,9 +296,14 @@ function render(): void {
       .attr('y', 46)
       .text(object.name)
   })
+  const movedObjects = new WeakSet<SVGGElement>()
   objectMarks
     .on('click', (event, object) => {
       event.stopPropagation()
+      if (movedObjects.has(event.currentTarget as SVGGElement)) {
+        movedObjects.delete(event.currentTarget as SVGGElement)
+        return
+      }
       emit('select-object', object.id)
     })
     .on('keydown', (event, object) => {
@@ -253,36 +312,190 @@ function render(): void {
         emit('select-object', object.id)
       }
     })
+  const objectDrag = drag<SVGGElement, SystemObject>()
+    .container(() => content.node()!)
+    .subject((_event, object) => requiredPosition(positions, object.id))
+    .on('start', function () {
+      movedObjects.delete(this)
+      select(this).classed('is-dragging', true)
+    })
+    .on('drag', function (event) {
+      if (event.dx || event.dy) movedObjects.add(this)
+      select(this).attr('transform', `translate(${event.x} ${event.y})`)
+    })
+    .on('end', function (event, object) {
+      select(this).classed('is-dragging', false)
+      if (!movedObjects.has(this)) return
+      setTimeout(() => movedObjects.delete(this), 0)
+
+      if (object.placement.kind === 'orbit') {
+        const { orbitId } = object.placement
+        const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+        if (!orbit) throw new Error(`Object "${object.id}" references a missing Orbit.`)
+        const host = requiredPosition(positions, orbit.hostId)
+        emit('rotate-object', object.id, Math.atan2(event.y - host.y, event.x - host.x))
+        return
+      }
+
+      emit('move-object', object.id, {
+        x: Math.max(0, Math.min(1, (event.x - 64) / 832)),
+        y: Math.max(0, Math.min(1, (event.y - 72) / 416)),
+      })
+    })
+  objectMarks.call(objectDrag)
 
   if (system.objects.length === 0) {
-    svg.append('text')
+    items.append('text')
       .attr('class', 'map-empty')
       .attr('x', 480)
       .attr('y', 268)
       .attr('text-anchor', 'middle')
       .text('No locations charted yet.')
   }
+
+  const resizeHandles = content.append('g')
+    .attr('class', 'orbit-resize-handles')
+    .selectAll<SVGCircleElement, Orbit>('circle.orbit-resize-handle')
+    .data(system.orbits)
+    .join('circle')
+    .attr('class', 'orbit-resize-handle')
+    .attr('data-orbit-id', orbit => orbit.id)
+    .attr('cx', orbit => requiredPosition(positions, orbit.hostId).x + orbitRadius(system, orbit))
+    .attr('cy', orbit => requiredPosition(positions, orbit.hostId).y)
+    .attr('r', 7)
+    .attr('role', 'slider')
+    .attr('tabindex', 0)
+    .attr('aria-label', orbit => `Resize Orbit ${orbit.order} around ${orbitHost(system, orbit).name}`)
+    .attr('aria-valuemin', orbit => minimumOrbitRadius(system, orbit))
+    .attr('aria-valuemax', orbit => orbitRadius(system, orbit) + 400)
+    .attr('aria-valuenow', orbit => Math.round(orbitRadius(system, orbit)))
+    .attr('aria-valuetext', orbit => `${Math.round(orbitRadius(system, orbit))} map units`)
+    .on('keydown', (event, orbit) => {
+      const currentRadius = orbitRadius(system, orbit)
+      const step = event.shiftKey ? 10 : 1
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+        event.preventDefault()
+        emit('resize-orbit', orbit.id, Math.max(minimumOrbitRadius(system, orbit), currentRadius - step))
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        emit('resize-orbit', orbit.id, currentRadius + step)
+      } else if (event.key === 'Home') {
+        event.preventDefault()
+        emit('resize-orbit', orbit.id, minimumOrbitRadius(system, orbit))
+      } else if (event.key === 'End') {
+        event.preventDefault()
+        emit('resize-orbit', orbit.id, currentRadius + 400)
+      }
+    })
+
+  resizeHandles.call(
+    drag<SVGCircleElement, Orbit>()
+      .container(() => content.node()!)
+      .on('drag', function (event, orbit) {
+        const host = requiredPosition(positions, orbit.hostId)
+        const radius = Math.max(
+          minimumOrbitRadius(system, orbit),
+          Math.round(Math.hypot(event.x - host.x, event.y - host.y)),
+        )
+        select(this)
+          .attr('cx', host.x + radius)
+          .attr('cy', host.y)
+          .attr('aria-valuenow', radius)
+          .attr('aria-valuemax', radius + 400)
+          .attr('aria-valuetext', `${radius} map units`)
+      })
+      .on('end', (event, orbit) => {
+        const host = requiredPosition(positions, orbit.hostId)
+        const radius = Math.max(
+          minimumOrbitRadius(system, orbit),
+          Math.round(Math.hypot(event.x - host.x, event.y - host.y)),
+        )
+        emit('resize-orbit', orbit.id, radius)
+      }),
+  )
+
+  zoomBehavior = zoom<SVGSVGElement, unknown>()
+    .extent([[0, 0], [960, 560]])
+    .scaleExtent([0.25, 4])
+    .filter((event) => {
+      const target = event.target
+      const isMapMark = target instanceof Element
+        && target.closest('.system-object, .orbit-hit-target, .orbit-resize-handle')
+      const touchPinch = event.type.startsWith('touch')
+        && 'touches' in event
+        && event.touches.length > 1
+      return (!isMapMark || event.type === 'wheel' || touchPinch)
+        && (!event.ctrlKey || event.type === 'wheel')
+        && !('button' in event && event.button)
+    })
+    .on('zoom', (event) => {
+      content.attr('transform', event.transform.toString())
+      zoomLevel.value = Math.round(event.transform.k * 100)
+    })
+  svg.call(zoomBehavior)
+  content.attr('transform', currentTransform.toString())
+  zoomLevel.value = Math.round(currentTransform.k * 100)
+  if (focusedOrbitId) {
+    resizeHandles.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
+  }
 }
 
 onMounted(render)
 watch(() => props.system, render, { deep: true })
+watch(() => props.orbitRadii, render, { deep: true })
+watch(() => props.objectAngles, render, { deep: true })
 watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
 </script>
 
 <template>
-  <svg
-    ref="svgElement"
-    class="system-map-svg block h-full min-h-[31rem] w-full"
-    viewBox="0 0 960 560"
-    role="group"
-    :aria-label="`${system.name} star system map`"
-  />
+  <div class="map-view flex h-full min-h-[31rem] min-w-0 flex-1 flex-col">
+    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[#d5cbbb] bg-[#f4eee2] px-2 py-1" role="toolbar" aria-label="Map navigation">
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= 25" @click="zoomBy(1 / 1.2)">−</button>
+      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
+      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= 400" @click="zoomBy(1.2)">+</button>
+      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
+    </div>
+    <svg
+      ref="svgElement"
+      class="system-map-svg block h-full min-h-0 w-full flex-1"
+      viewBox="0 0 960 560"
+      role="group"
+      :aria-label="`${system.name} star system map`"
+    />
+  </div>
 </template>
 
 <style>
 .system-map-svg {
   background: #f4eee2;
+}
+
+.map-navigation button {
+  min-width: 2rem;
+  border: 1px solid #bdb3a0;
+  border-radius: 2px;
+  background: #fffaf0;
+  color: #29332d;
+  font: 12px Consolas, monospace;
+  line-height: 1.5rem;
+}
+
+.map-navigation button:focus-visible {
+  outline: 2px solid #a45138;
+  outline-offset: 1px;
+}
+
+.map-navigation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.map-navigation output {
+  min-width: 3.5rem;
+  color: #29332d;
+  font: 11px Consolas, monospace;
+  text-align: center;
 }
 
 .map-background {
@@ -324,29 +537,32 @@ watch(() => props.selectedOrbitId, render)
   stroke: #aa9b83;
   stroke-width: 2;
   stroke-dasharray: 3 6;
-  pointer-events: stroke;
-}
-
-.orbit-hit-target {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 16;
   pointer-events: none;
 }
 
-.orbit-mark {
-  cursor: pointer;
-  pointer-events: all;
+.orbit-hit-target {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 16;
+  pointer-events: stroke;
 }
 
-.orbit-mark:hover .orbit-ring,
-.orbit-mark:focus .orbit-ring,
+.orbit-mark {
+  pointer-events: none;
+}
+
+.orbit-hit-target {
+  cursor: pointer;
+}
+
+.orbit-mark:has(.orbit-hit-target:hover, .orbit-hit-target:focus) .orbit-ring,
 .orbit-mark.is-selected .orbit-ring {
   stroke: #a45138;
   stroke-width: 2.4;
 }
 
-.orbit-mark:focus,
+.orbit-hit-target:focus,
+.orbit-resize-handle:focus,
 .system-object:focus {
   outline: none;
 }
@@ -361,6 +577,23 @@ watch(() => props.selectedOrbitId, render)
 .system-object {
   cursor: pointer;
   pointer-events: all;
+}
+
+.system-object.is-dragging {
+  cursor: grabbing;
+}
+
+.orbit-resize-handle {
+  fill: #fffaf0;
+  stroke: #a45138;
+  stroke-width: 2;
+  cursor: ew-resize;
+}
+
+.orbit-resize-handle:hover,
+.orbit-resize-handle:focus {
+  fill: #d4b26f;
+  stroke-width: 3;
 }
 
 .object-hit-target {

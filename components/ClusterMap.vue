@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { select } from 'd3'
+import { drag, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -19,9 +19,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   'open-system': [id: string]
   'select-route': [id: string]
+  'move-system': [id: string, position: Point]
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const zoomLevel = ref(100)
+let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 
 interface RouteGeometry {
   path: string
@@ -105,17 +108,46 @@ function routeLabel(route: JumpRoute, jumpPoints: Map<string, JumpPointReference
   return `Select ${route.name} route from ${origin} to ${route.unresolvedExit}, unresolved exit`
 }
 
+function zoomBy(factor: number): void {
+  if (svgElement.value && zoomBehavior) {
+    select(svgElement.value).call(zoomBehavior.scaleBy, factor)
+  }
+}
+
+function fitMap(): void {
+  const element = svgElement.value
+  const features = element?.querySelector<SVGGElement>('.cluster-map-items')
+  if (!element || !features || !zoomBehavior) return
+
+  const bounds = features.getBBox()
+  if (!bounds.width || !bounds.height) {
+    select(element).call(zoomBehavior.transform, zoomIdentity)
+    return
+  }
+
+  const scale = Math.max(0.25, Math.min(
+    4,
+    (960 - 80) / bounds.width,
+    (560 - 80) / bounds.height,
+  ))
+  const x = (960 - bounds.width * scale) / 2 - bounds.x * scale
+  const y = (560 - bounds.height * scale) / 2 - bounds.y * scale
+  select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
+}
+
 function render(): void {
   const element = svgElement.value
   if (!element) return
 
   const svg = select(element)
+  const currentTransform = zoomTransform(element)
   const jumpPoints = new Map(
     jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]),
   )
   svg.selectAll('*').remove()
 
-  const grid = svg.append('defs')
+  const content = svg.append('g').attr('class', 'cluster-map-content')
+  const grid = content.append('defs')
     .append('pattern')
     .attr('id', 'cluster-map-grid')
     .attr('width', 28)
@@ -125,33 +157,34 @@ function render(): void {
     .attr('d', 'M 28 0 L 0 0 0 28')
     .attr('class', 'cluster-map-grid-line')
 
-  svg.append('rect')
+  content.append('rect')
     .attr('class', 'cluster-map-background')
     .attr('width', 960)
     .attr('height', 560)
-  svg.append('rect')
+  content.append('rect')
     .attr('class', 'cluster-map-grid')
     .attr('width', 960)
     .attr('height', 560)
 
-  svg.append('text')
+  content.append('text')
     .attr('class', 'cluster-map-title')
     .attr('x', 32)
     .attr('y', 36)
     .text(props.cluster.name)
-  svg.append('text')
+  content.append('text')
     .attr('class', 'cluster-map-caption')
     .attr('x', 32)
     .attr('y', 56)
     .text('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
-  svg.append('text')
+  content.append('text')
     .attr('class', 'cluster-map-count')
     .attr('x', 928)
     .attr('y', 36)
     .attr('text-anchor', 'end')
     .text(`${props.cluster.systems.length} SYSTEMS / ${props.cluster.routes.length} ROUTES`)
 
-  const routeMarks = svg.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
+  const items = content.append('g').attr('class', 'cluster-map-items')
+  const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
     .join('g')
     .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
@@ -206,7 +239,7 @@ function render(): void {
       }
     })
 
-  const systemMarks = svg.selectAll<SVGGElement, StarSystem>('g.cluster-system-node')
+  const systemMarks = items.selectAll<SVGGElement, StarSystem>('g.cluster-system-node')
     .data(props.cluster.systems)
     .join('g')
     .attr('class', system => `cluster-system-node${props.selectedSystemId === system.id ? ' is-selected' : ''}`)
@@ -243,9 +276,14 @@ function render(): void {
       const stars = system.objects.filter(object => object.subtype === 'star').length
       return `${stars} STAR${stars === 1 ? '' : 'S'} / ${system.objects.length} OBJECTS`
     })
+  const movedSystems = new WeakSet<SVGGElement>()
   systemMarks
     .on('click', (event, system) => {
       event.stopPropagation()
+      if (movedSystems.has(event.currentTarget as SVGGElement)) {
+        movedSystems.delete(event.currentTarget as SVGGElement)
+        return
+      }
       emit('open-system', system.id)
     })
     .on('keydown', (event, system) => {
@@ -255,14 +293,58 @@ function render(): void {
       }
     })
 
+  const systemDrag = drag<SVGGElement, StarSystem>()
+    .container(() => content.node()!)
+    .subject((_event, system) => systemPosition(system.id))
+    .on('start', function () {
+      movedSystems.delete(this)
+      select(this).classed('is-dragging', true)
+    })
+    .on('drag', function (event) {
+      if (event.dx || event.dy) movedSystems.add(this)
+      select(this).attr('transform', `translate(${event.x} ${event.y})`)
+    })
+    .on('end', function (event, system) {
+      select(this).classed('is-dragging', false)
+      if (!movedSystems.has(this)) return
+      setTimeout(() => movedSystems.delete(this), 0)
+      emit('move-system', system.id, {
+        x: Math.max(0, Math.min(1, (event.x - 112) / 736)),
+        y: Math.max(0, Math.min(1, (event.y - 96) / 368)),
+      })
+    })
+  systemMarks.call(systemDrag)
+
   if (props.cluster.systems.length === 0) {
-    svg.append('text')
+    items.append('text')
       .attr('class', 'cluster-map-empty')
       .attr('x', 480)
       .attr('y', 268)
       .attr('text-anchor', 'middle')
       .text('No systems on this chart yet.')
   }
+
+  zoomBehavior = zoom<SVGSVGElement, unknown>()
+    .extent([[0, 0], [960, 560]])
+    .scaleExtent([0.25, 4])
+    .filter((event) => {
+      const target = event.target
+      const isMapMark = target instanceof Element
+        && target.closest('.cluster-system-node, .cluster-route')
+      const touchPinch = event.type.startsWith('touch')
+        && 'touches' in event
+        && event.touches.length > 1
+      return (!isMapMark || event.type === 'wheel' || touchPinch)
+        && (!event.ctrlKey || event.type === 'wheel')
+        && !('button' in event && event.button)
+    })
+    .on('zoom', (event) => {
+      content.attr('transform', event.transform.toString())
+      zoomLevel.value = Math.round(event.transform.k * 100)
+    })
+  svg.call(zoomBehavior)
+  content.attr('transform', currentTransform.toString())
+  zoomLevel.value = Math.round(currentTransform.k * 100)
 }
 
 onMounted(render)
@@ -273,18 +355,53 @@ watch(() => props.selectedRouteId, render)
 </script>
 
 <template>
-  <svg
-    ref="svgElement"
-    class="cluster-map-svg block h-full min-h-[31rem] w-full"
-    viewBox="0 0 960 560"
-    role="group"
-    :aria-label="`${cluster.name} Jump Cluster map`"
-  />
+  <div class="map-view flex h-full min-h-[31rem] min-w-0 flex-1 flex-col">
+    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[#d5cbbb] bg-[#f4eee2] px-2 py-1" role="toolbar" aria-label="Map navigation">
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= 25" @click="zoomBy(1 / 1.2)">−</button>
+      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
+      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= 400" @click="zoomBy(1.2)">+</button>
+      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
+    </div>
+    <svg
+      ref="svgElement"
+      class="cluster-map-svg block h-full min-h-0 w-full flex-1"
+      viewBox="0 0 960 560"
+      role="group"
+      :aria-label="`${cluster.name} Jump Cluster map`"
+    />
+  </div>
 </template>
 
 <style>
 .cluster-map-svg {
   background: #f4eee2;
+}
+
+.map-navigation button {
+  min-width: 2rem;
+  border: 1px solid #bdb3a0;
+  border-radius: 2px;
+  background: #fffaf0;
+  color: #29332d;
+  font: 12px Consolas, monospace;
+  line-height: 1.5rem;
+}
+
+.map-navigation button:focus-visible {
+  outline: 2px solid #a45138;
+  outline-offset: 1px;
+}
+
+.map-navigation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.map-navigation output {
+  min-width: 3.5rem;
+  color: #29332d;
+  font: 11px Consolas, monospace;
+  text-align: center;
 }
 
 .cluster-map-background {
@@ -378,6 +495,10 @@ watch(() => props.selectedRouteId, render)
 .cluster-system-node {
   cursor: pointer;
   pointer-events: all;
+}
+
+.cluster-system-node.is-dragging {
+  cursor: grabbing;
 }
 
 .cluster-system-card {

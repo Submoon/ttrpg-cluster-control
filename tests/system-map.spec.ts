@@ -1,5 +1,78 @@
 import { expect, test } from '@playwright/test'
 
+type WorldPoint = { x: number; y: number }
+
+async function dragToWorldPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  source: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<void> {
+  const sourceBox = await source.boundingBox()
+  if (!sourceBox) throw new Error('Could not find the map element to drag.')
+
+  const destination = await map.evaluate((element, target) => {
+    const transform = (element as SVGSVGElement).getScreenCTM()
+    if (!transform) throw new Error('The map SVG is not attached to the document.')
+    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, point)
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(destination.x, destination.y, { steps: 6 })
+  await page.mouse.up()
+}
+
+async function panMap(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  delta: WorldPoint,
+): Promise<void> {
+  await map.scrollIntoViewIfNeeded()
+  const start = await map.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    return { x: bounds.left + 12, y: bounds.bottom - 12 }
+  })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + delta.x, start.y + delta.y, { steps: 6 })
+  await page.mouse.up()
+}
+
+async function dragBy(
+  page: import('@playwright/test').Page,
+  source: import('@playwright/test').Locator,
+  delta: WorldPoint,
+): Promise<void> {
+  const sourceBox = await source.boundingBox()
+  if (!sourceBox) throw new Error('Could not find the map element to drag.')
+
+  const x = sourceBox.x + sourceBox.width / 2
+  const y = sourceBox.y + sourceBox.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + delta.x, y + delta.y, { steps: 6 })
+  await page.mouse.up()
+}
+
+async function orbitalAngle(map: import('@playwright/test').Locator): Promise<number> {
+  return map.evaluate((element) => {
+    const host = element.querySelector<SVGCircleElement>('.system-object .star-core')
+    const planet = [...element.querySelectorAll<SVGGElement>('.system-object')]
+      .find(object => object.getAttribute('aria-label')?.includes('Iria'))
+      ?.querySelector<SVGCircleElement>('.object-core')
+    if (!host || !planet) throw new Error('Could not locate the star and orbiting object.')
+
+    const hostBounds = host.getBoundingClientRect()
+    const planetBounds = planet.getBoundingClientRect()
+    return Math.atan2(
+      planetBounds.y + planetBounds.height / 2 - hostBounds.y - hostBounds.height / 2,
+      planetBounds.x + planetBounds.width / 2 - hostBounds.x - hostBounds.width / 2,
+    )
+  })
+}
+
 const catalogueSubtypes = [
   'star',
   'planet',
@@ -17,6 +90,142 @@ const catalogueSubtypes = [
   'hazard',
   'other',
 ] as const
+
+test('the Warden can navigate and arrange both maps', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const clusterNavigation = page.getByRole('toolbar', { name: 'Map navigation' })
+  const clusterZoom = clusterNavigation.getByLabel('Zoom level')
+  await expect(clusterZoom).toHaveText('100%')
+  await clusterNavigation.getByRole('button', { name: 'Zoom in' }).click()
+  await expect(clusterZoom).toHaveText('120%')
+
+  const clusterBounds = await clusterMap.boundingBox()
+  if (!clusterBounds) throw new Error('The Jump Cluster map is not visible.')
+  await page.mouse.move(
+    clusterBounds.x + clusterBounds.width / 2,
+    clusterBounds.y + clusterBounds.height / 2,
+  )
+  await page.mouse.wheel(0, -150)
+  await expect.poll(async () => Number((await clusterZoom.textContent())?.replace('%', '')))
+    .toBeGreaterThan(120)
+  await page.mouse.wheel(0, -5000)
+  await expect(clusterZoom).toHaveText('400%')
+  await page.mouse.wheel(0, 5000)
+  await expect(clusterZoom).toHaveText('25%')
+  await clusterNavigation.getByRole('button', { name: 'Fit map' }).click()
+  await expect(clusterZoom).toHaveText('400%')
+
+  const clusterContent = clusterMap.locator('.cluster-map-content')
+  const beforePan = await clusterContent.getAttribute('transform')
+  await panMap(page, clusterMap, { x: 36, y: 24 })
+  await expect(clusterContent).not.toHaveAttribute('transform', beforePan!)
+
+  const systemNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  const nodeBeforeDrag = await systemNode.getAttribute('transform')
+  await dragBy(page, systemNode.locator('.cluster-system-card'), { x: 48, y: 24 })
+  await expect(systemNode).not.toHaveAttribute('transform', nodeBeforeDrag!)
+  const nodeAfterDrag = await systemNode.getAttribute('transform')
+  await expect(page.getByText('Saved on this device')).toBeVisible()
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const restoredNode = restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  await expect(restoredNode).toHaveAttribute('transform', nodeAfterDrag!)
+  await expect(page.getByLabel('Zoom level')).toHaveText('100%')
+  await restoredNode.click()
+
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  const typePicker = page.getByLabel('Catalogue object type')
+  const addObject = page.getByRole('button', { name: 'Add object' })
+  await typePicker.selectOption('planet')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+
+  const planet = map.getByRole('button', { name: /Iria/ })
+  await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), {
+    x: 480 + 112 * Math.SQRT1_2,
+    y: 280 - 112 * Math.SQRT1_2,
+  })
+  const angleBeforeResize = await orbitalAngle(map)
+  const orbitRadius = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
+  await dragToWorldPoint(page, map, orbitRadius, { x: 633, y: 280 })
+  await expect(orbitRadius).toHaveAttribute('aria-valuenow', '152')
+  expect(Math.abs(await orbitalAngle(map) - angleBeforeResize)).toBeLessThan(0.02)
+
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  const largeOrbitRadius = map.getByRole('slider', { name: 'Resize Orbit 2 around Primary Star' })
+  await largeOrbitRadius.press('End')
+  await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '570')
+  await page.keyboard.press('ArrowRight')
+  await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '571')
+
+  await typePicker.selectOption('hazard')
+  await addObject.click()
+  await page.getByLabel('Name').fill('Glass Wake')
+  await page.getByLabel('Name').press('Tab')
+  const hazard = map.getByRole('button', { name: /Glass Wake/ })
+  await dragToWorldPoint(page, map, hazard.locator('.object-hit-target'), { x: 230, y: 180 })
+  const hazardTransform = await hazard.getAttribute('transform')
+  await expect(page.getByText('Saved on this device')).toBeVisible()
+
+  const systemNavigation = page.getByRole('toolbar', { name: 'Map navigation' })
+  const systemZoom = systemNavigation.getByLabel('Zoom level')
+  await expect(systemZoom).toHaveText('100%')
+  await systemNavigation.getByRole('button', { name: 'Zoom in' }).click()
+  await expect(systemZoom).toHaveText('120%')
+  const systemBounds = await map.boundingBox()
+  if (!systemBounds) throw new Error('The star system map is not visible.')
+  await page.mouse.move(
+    systemBounds.x + systemBounds.width / 2,
+    systemBounds.y + systemBounds.height / 2,
+  )
+  await page.mouse.wheel(0, -150)
+  await expect.poll(async () => Number((await systemZoom.textContent())?.replace('%', '')))
+    .toBeGreaterThan(120)
+  await page.mouse.wheel(0, -5000)
+  await expect(systemZoom).toHaveText('400%')
+  await page.mouse.wheel(0, 5000)
+  await expect(systemZoom).toHaveText('25%')
+  await systemNavigation.getByRole('button', { name: 'Fit map' }).click()
+  await expect(systemZoom).not.toHaveText('100%')
+  const fittedMapBounds = await map.boundingBox()
+  const fittedOrbitBounds = await map.getByRole('group', { name: 'Orbit 2 around Primary Star' })
+    .locator('.orbit-ring').boundingBox()
+  if (!fittedMapBounds || !fittedOrbitBounds) throw new Error('The fitted Orbit is not visible.')
+  expect(fittedOrbitBounds.x).toBeGreaterThanOrEqual(fittedMapBounds.x)
+  expect(fittedOrbitBounds.x + fittedOrbitBounds.width)
+    .toBeLessThanOrEqual(fittedMapBounds.x + fittedMapBounds.width)
+  expect(fittedOrbitBounds.y).toBeGreaterThanOrEqual(fittedMapBounds.y)
+  expect(fittedOrbitBounds.y + fittedOrbitBounds.height)
+    .toBeLessThanOrEqual(fittedMapBounds.y + fittedMapBounds.height)
+  const systemContent = map.locator('.system-map-content')
+  const systemBeforePan = await systemContent.getAttribute('transform')
+  await panMap(page, map, { x: 24, y: 18 })
+  await expect(systemContent).not.toHaveAttribute('transform', systemBeforePan!)
+
+  await page.reload()
+  const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
+  await expect(restoredMap.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' }))
+    .toHaveAttribute('aria-valuenow', '152')
+  await expect(restoredMap.getByRole('slider', { name: 'Resize Orbit 2 around Primary Star' }))
+    .toHaveAttribute('aria-valuenow', '571')
+  await expect(page.getByLabel('Zoom level')).toHaveText('100%')
+  await expect(restoredMap.getByRole('button', { name: /Glass Wake/ }))
+    .toHaveAttribute('transform', hazardTransform!)
+  expect(Math.abs(await orbitalAngle(restoredMap) - angleBeforeResize)).toBeLessThan(0.02)
+})
 
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
   await page.goto('/')

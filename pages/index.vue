@@ -11,6 +11,7 @@ import {
   createSystemObject,
   initialSystemPlacement,
   jumpPointsInCluster,
+  minimumOrbitRadius,
   moveOrbit,
   renameLocalWorkspace,
   removeCustomFieldDefinition,
@@ -22,6 +23,7 @@ import {
   type LocalWorkspace,
   type ObjectPlacement,
   type Orbit,
+  type Point,
   type StarSystem,
   type SystemObject,
   type SystemObjectChanges,
@@ -293,13 +295,28 @@ function errorText(error: unknown): string {
 }
 
 function workspaceWithSystem(currentWorkspace: LocalWorkspace, system: StarSystem): LocalWorkspace {
+  const systems = currentWorkspace.cluster.systems.map(candidate =>
+    candidate.id === system.id ? system : candidate,
+  )
+  const orbitIds = new Set(systems.flatMap(candidate => candidate.orbits.map(orbit => orbit.id)))
+  const orbitalObjectIds = new Set(systems.flatMap(candidate =>
+    candidate.objects
+      .filter(object => object.placement.kind === 'orbit')
+      .map(object => object.id),
+  ))
+
   return {
     ...currentWorkspace,
     cluster: {
       ...currentWorkspace.cluster,
-      systems: currentWorkspace.cluster.systems.map(candidate =>
-        candidate.id === system.id ? system : candidate,
-      ),
+      systems,
+    },
+    layout: {
+      ...currentWorkspace.layout,
+      orbitRadii: Object.fromEntries(Object.entries(currentWorkspace.layout.orbitRadii)
+        .filter(([orbitId]) => orbitIds.has(orbitId))),
+      objectAngles: Object.fromEntries(Object.entries(currentWorkspace.layout.objectAngles)
+        .filter(([objectId]) => orbitalObjectIds.has(objectId))),
     },
   }
 }
@@ -310,6 +327,104 @@ async function saveSystem(system: StarSystem): Promise<void> {
     throw new Error('Create a local workspace before editing a star system.')
   }
   await commit(workspaceWithSystem(currentWorkspace, system))
+}
+
+async function moveSystem(systemId: string, position: Point): Promise<void> {
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace?.cluster.systems.some(system => system.id === systemId)) return
+
+  try {
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+      throw new Error('A map position must contain finite coordinates.')
+    }
+    await commit({
+      ...currentWorkspace,
+      layout: {
+        ...currentWorkspace.layout,
+        systemPositions: {
+          ...currentWorkspace.layout.systemPositions,
+          [systemId]: {
+            x: Math.max(0, Math.min(1, position.x)),
+            y: Math.max(0, Math.min(1, position.y)),
+          },
+        },
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function moveMapObject(objectId: string, position: Point): Promise<void> {
+  const system = selectedSystem.value
+  const object = system?.objects.find(candidate => candidate.id === objectId)
+  const objectFieldSettings = workspace.value?.objectFieldSettings
+  if (!system || !object || !objectFieldSettings) return
+
+  try {
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+      throw new Error('A map position must contain finite coordinates.')
+    }
+    const updatedSystem = updateSystemObject(system, object.id, {
+      placement: {
+        kind: 'system',
+        x: Math.max(0, Math.min(1, position.x)),
+        y: Math.max(0, Math.min(1, position.y)),
+      },
+    }, objectFieldSettings)
+    await saveSystem(updatedSystem)
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function rotateMapObject(objectId: string, angle: number): Promise<void> {
+  const currentWorkspace = workspace.value
+  const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
+  if (!currentWorkspace || object?.placement.kind !== 'orbit') return
+
+  try {
+    if (!Number.isFinite(angle)) throw new Error('An orbital angle must be finite.')
+    await commit({
+      ...currentWorkspace,
+      layout: {
+        ...currentWorkspace.layout,
+        objectAngles: {
+          ...currentWorkspace.layout.objectAngles,
+          [objectId]: angle,
+        },
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function resizeMapOrbit(orbitId: string, radius: number): Promise<void> {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+  if (!currentWorkspace || !system || !orbit) return
+
+  try {
+    if (!Number.isFinite(radius)) throw new Error('An Orbit radius must be finite.')
+    await commit({
+      ...currentWorkspace,
+      layout: {
+        ...currentWorkspace.layout,
+        orbitRadii: {
+          ...currentWorkspace.layout.orbitRadii,
+          [orbitId]: Math.max(minimumOrbitRadius(system, orbit), Math.round(radius)),
+        },
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
 }
 
 async function submitNames(): Promise<void> {
@@ -839,6 +954,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   :selected-route-id="selectedRouteId"
                   @open-system="selectSystem"
                   @select-route="selectRoute"
+                  @move-system="moveSystem"
                 />
                 <template #fallback>
                   <div class="map-fallback grid min-h-[31rem] w-full place-items-center max-[760px]:min-h-96" role="status">Preparing the Jump Cluster chart...</div>
@@ -1160,10 +1276,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <ClientOnly>
                 <SystemMap
                   :system="selectedSystem"
+                  :orbit-radii="workspace.layout.orbitRadii"
+                  :object-angles="workspace.layout.objectAngles"
                   :selected-object-id="selectedObjectId"
                   :selected-orbit-id="selectedOrbitId"
                   @select-object="selectObject"
                   @select-orbit="selectOrbit"
+                  @move-object="moveMapObject"
+                  @rotate-object="rotateMapObject"
+                  @resize-orbit="resizeMapOrbit"
                 />
                 <template #fallback>
                   <div class="map-fallback grid min-h-[31rem] w-full place-items-center max-[760px]:min-h-96" role="status">Preparing the orbital chart...</div>
