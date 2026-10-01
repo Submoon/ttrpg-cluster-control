@@ -5,21 +5,35 @@ type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
 type ExportedObject = {
   id: string
   name: string
+  family: string
+  subtype: string
+  locationKey: string
+  placement: { kind: 'system'; x: number; y: number } | { kind: 'orbit'; orbitId: string }
+  jumpStationId?: string | null
   customFieldValues?: Record<string, string | number | boolean>
 }
 type ExportedSystem = {
   id: string
   name: string
   objects: ExportedObject[]
-  orbits: Array<{ id: string }>
+  orbits: Array<{ id: string; hostId: string; order: number }>
+}
+type ExportedRoute = {
+  id: string
+  name: string
+  fromPointId: string
+  toPointId: string | null
+  unresolvedExit?: string
 }
 type ExportedMap = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { systems: ExportedSystem[]; routes: unknown[] }
+  cluster?: { id: string; name: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
   system?: ExportedSystem
-  objectFieldSettings: { customFields: Array<{ id: string; name: string; type: string }> }
+  objectFieldSettings: {
+    customFields: Array<{ id: string; name: string; type: string; options?: string[] }>
+  }
   layout: {
     version: number
     systemPositions?: Record<string, WorldPoint>
@@ -110,6 +124,20 @@ async function downloadJson(page: import('@playwright/test').Page, buttonName: s
     return blob.text()
   })
   return JSON.parse(json) as ExportedMap
+}
+
+async function setJsonFile(
+  input: import('@playwright/test').Locator,
+  name: string,
+  content: string,
+): Promise<void> {
+  await input.evaluate((element, file) => {
+    const input = element as HTMLInputElement
+    const transfer = new DataTransfer()
+    transfer.items.add(new File([file.content], file.name, { type: 'application/json' }))
+    input.files = transfer.files
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  }, { name, content })
 }
 
 const catalogueSubtypes = [
@@ -836,4 +864,243 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemExport.objectFieldSettings.customFields).toContainEqual(field)
   expect(systemExport.system?.objects.find(object => object.name === 'Iria')?.customFieldValues?.[field.id])
     .toBe('A local secret.')
+})
+
+test('the Warden can validate and import an independent JSON copy', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+
+  const importFile = page.getByLabel('JSON map file')
+  await setJsonFile(importFile, 'invalid.json', '{')
+  await expect(page.getByRole('alert').last()).toContainText('valid JSON')
+  const systemList = page.getByRole('navigation', { name: 'Star systems' })
+  await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
+
+  const incoming = {
+    format: 'mothership-campaign-map',
+    version: 1,
+    type: 'cluster',
+    cluster: {
+      id: 'incoming-cluster',
+      name: 'Imported Reach',
+      systems: [
+        {
+          id: 'incoming-alpha',
+          name: 'Vesper',
+          objects: [
+            {
+              id: 'incoming-star',
+              family: 'CelestialBody',
+              subtype: 'star',
+              locationKey: 'A',
+              name: 'Primary Star',
+              description: '',
+              placement: { kind: 'system', x: 0.5, y: 0.5 },
+            },
+            {
+              id: 'incoming-station',
+              family: 'Installation',
+              subtype: 'station',
+              locationKey: 'ST.1',
+              name: 'Relay Station',
+              description: '',
+              placement: { kind: 'system', x: 0.6, y: 0.5 },
+            },
+            {
+              id: 'incoming-point-alpha',
+              family: 'JumpPoint',
+              subtype: 'jump-point',
+              locationKey: 'JP.1',
+              name: 'Alpha Gate',
+              description: '',
+              placement: { kind: 'system', x: 0.7, y: 0.5 },
+              jumpStationId: 'incoming-station',
+            },
+            {
+              id: 'incoming-planet',
+              family: 'CelestialBody',
+              subtype: 'planet',
+              locationKey: 'PL.1',
+              name: 'Iria',
+              description: '',
+              placement: { kind: 'orbit', orbitId: 'incoming-orbit' },
+              customFieldValues: { 'incoming-field': 'The key is hidden.' },
+            },
+          ],
+          orbits: [{ id: 'incoming-orbit', hostId: 'incoming-star', order: 1 }],
+        },
+        {
+          id: 'incoming-beta',
+          name: 'Far Vesper',
+          objects: [
+            {
+              id: 'incoming-point-beta',
+              family: 'JumpPoint',
+              subtype: 'jump-point',
+              locationKey: 'JP.1',
+              name: 'Beta Gate',
+              description: '',
+              placement: { kind: 'system', x: 0.5, y: 0.5 },
+            },
+          ],
+          orbits: [],
+        },
+      ],
+      routes: [
+        {
+          id: 'incoming-route',
+          name: 'Known route',
+          fromPointId: 'incoming-point-alpha',
+          toPointId: 'incoming-point-beta',
+        },
+        {
+          id: 'incoming-exit',
+          name: 'Unknown route',
+          fromPointId: 'incoming-point-beta',
+          toPointId: null,
+          unresolvedExit: 'Uncharted exit',
+        },
+      ],
+    },
+    objectFieldSettings: {
+      atmosphereOptions: ['Breathable', 'Unbreathable', 'Vacuum'],
+      portClassOptions: ['Class I', 'Class II', 'Class III'],
+      customFields: [{ id: 'incoming-field', name: 'Campaign notes', type: 'text' }],
+    },
+    layout: {
+      version: 1,
+      systemPositions: {
+        'incoming-alpha': { x: 0.25, y: 0.75 },
+        'incoming-beta': { x: 0.8, y: 0.3 },
+      },
+      orbitRadii: { 'incoming-orbit': 100 },
+      objectAngles: { 'incoming-planet': 1.2 },
+    },
+  }
+  const invalidLayout = {
+    ...incoming,
+    layout: {
+      ...incoming.layout,
+      systemPositions: {
+        ...incoming.layout.systemPositions,
+        'missing-system': { x: 0.5, y: 0.5 },
+      },
+    },
+  }
+  await setJsonFile(importFile, 'invalid-layout.json', JSON.stringify(invalidLayout))
+  await expect(page.getByRole('alert').last()).toContainText('valid version 1')
+  await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
+
+  const previewPromise = page.waitForEvent('dialog')
+  await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
+  const canceledPreview = await previewPromise
+  const previewText = canceledPreview.message()
+  expect(previewText).toContain('Star systems: 2')
+  expect(previewText).toContain('Map objects: 5')
+  expect(previewText).toContain('Orbits: 1')
+  expect(previewText).toContain('Jump Routes: 2')
+  expect(previewText).toContain('Custom fields: 1')
+  expect(previewText).toContain('Possible existing matches by name or location key')
+  expect(previewText).toContain('Primary Star')
+  expect(previewText).toContain('same name')
+  await canceledPreview.dismiss()
+  await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
+
+  const acceptedPreview = page.waitForEvent('dialog')
+  await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
+  await (await acceptedPreview).accept()
+  const alphaNode = systemList.getByRole('button', { name: 'Open Vesper system map' }).last()
+  const betaNode = systemList.getByRole('button', { name: 'Open Far Vesper system map' })
+  await expect(alphaNode).toBeVisible()
+  await expect(betaNode).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Jump Routes' }).getByRole('button', { name: /Known route/ })).toBeVisible()
+  await betaNode.click()
+  await expect(page.getByRole('heading', { name: 'Far Vesper', level: 1 })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const firstImport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const importedAlpha = firstImport.cluster!.systems.find(system =>
+    system.name === 'Vesper' && system.objects.some(object => object.name === 'Iria'),
+  )!
+  const importedBeta = firstImport.cluster!.systems.find(system => system.name === 'Far Vesper')!
+  const importedPlanet = importedAlpha.objects.find(object => object.name === 'Iria')!
+  const importedOrbit = importedAlpha.orbits[0]
+  const importedStation = importedAlpha.objects.find(object => object.name === 'Relay Station')!
+  const importedPoint = importedAlpha.objects.find(object => object.name === 'Alpha Gate')!
+  const importedBetaPoint = importedBeta.objects.find(object => object.name === 'Beta Gate')!
+  const importedField = firstImport.objectFieldSettings.customFields.find(field => field.name === 'Campaign notes')!
+  expect(importedAlpha.id).not.toBe('incoming-alpha')
+  expect(importedBeta.id).not.toBe('incoming-beta')
+  expect(importedPlanet.id).not.toBe('incoming-planet')
+  expect(importedPoint.jumpStationId).toBe(importedStation.id)
+  expect(importedPlanet.customFieldValues).toEqual({ [importedField.id]: 'The key is hidden.' })
+  expect(importedField.id).not.toBe('incoming-field')
+  expect(firstImport.cluster!.routes.find(route => route.name === 'Known route')).toMatchObject({
+    fromPointId: importedPoint.id,
+    toPointId: importedBetaPoint.id,
+  })
+  expect(firstImport.cluster!.routes.find(route => route.name === 'Unknown route')).toMatchObject({
+    fromPointId: importedBetaPoint.id,
+    toPointId: null,
+    unresolvedExit: 'Uncharted exit',
+  })
+  expect(firstImport.layout.systemPositions?.[importedAlpha.id]).toEqual({ x: 0.25, y: 0.75 })
+  expect(firstImport.layout.orbitRadii[importedOrbit.id]).toBe(100)
+  expect(firstImport.layout.objectAngles[importedPlanet.id]).toBe(1.2)
+
+  const duplicatePreviewPromise = page.waitForEvent('dialog')
+  await setJsonFile(importFile, 'duplicate.json', JSON.stringify(firstImport))
+  const duplicatePreview = await duplicatePreviewPromise
+  expect(duplicatePreview.message()).toContain('Original-ID collisions')
+  expect(duplicatePreview.message()).toContain('Primary Star')
+  await duplicatePreview.accept()
+  await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(4)
+  await expect(systemList.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(2)
+})
+
+test('the Warden can import a standalone system without adding cluster routes', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const exportedSystem = await downloadJson(page, 'Export star system JSON')
+  const input = page.getByLabel('JSON map file')
+  const previewPromise = page.waitForEvent('dialog')
+  await setJsonFile(input, 'system-copy.json', JSON.stringify(exportedSystem))
+  const preview = await previewPromise
+  expect(preview.message()).toContain('Star systems: 1')
+  expect(preview.message()).toContain('Jump Routes: 0')
+  expect(preview.message()).toContain('Primary Star')
+  await preview.accept()
+
+  const systems = page.getByRole('navigation', { name: 'Star systems' })
+  await expect(systems.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(2)
+  const exportedCluster = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(exportedCluster.cluster?.systems).toHaveLength(2)
+  expect(exportedCluster.cluster?.routes).toHaveLength(0)
+  expect(exportedCluster.cluster?.systems[0].id).not.toBe(exportedCluster.cluster?.systems[1].id)
+  expect(exportedCluster.cluster?.systems[0].objects[0].id)
+    .not.toBe(exportedCluster.cluster?.systems[1].objects[0].id)
 })

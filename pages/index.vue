@@ -16,10 +16,12 @@ import {
   minimumOrbitRadius,
   moveOrbit,
   planMapEntityDeletion,
+  prepareJsonImport,
   renameLocalWorkspace,
   removeCustomFieldDefinition,
   updateCustomFieldOptions,
   updateNativeFieldOptions,
+  type JsonImportSummary,
   updateSystemObject,
   type CatalogueSubtype,
   type CustomFieldType,
@@ -109,6 +111,8 @@ const formError = ref('')
 const editorError = ref('')
 const exportError = ref('')
 const fieldSettingsError = ref('')
+const importError = ref('')
+const jsonImportInput = ref<HTMLInputElement | null>(null)
 
 const selectedSystem = computed(() =>
   workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
@@ -357,6 +361,69 @@ function downloadSystemJson(): void {
     exportError.value = ''
   } catch (error) {
     exportError.value = errorText(error)
+  }
+}
+
+function openJsonImportPicker(): void {
+  jsonImportInput.value?.click()
+}
+
+function importPreview(summary: JsonImportSummary): string {
+  const collisionLines = summary.idCollisions.length
+    ? summary.idCollisions.map(collision =>
+        `- ${collision.entity} "${collision.name}" [${collision.id}]`,
+      )
+    : ['- None']
+  const matchLines = summary.possibleMatches.length
+    ? summary.possibleMatches.map(match =>
+        `- ${match.entity} "${match.name}" in "${match.existingSystem}" (${match.reason})`,
+      )
+    : ['- None']
+  return [
+    `Import this ${summary.type === 'cluster' ? 'Jump Cluster' : 'star system'} as an independent copy?`,
+    '',
+    `Star systems: ${summary.systems}`,
+    `Map objects: ${summary.objects}`,
+    `Orbits: ${summary.orbits}`,
+    `Jump Routes: ${summary.routes}`,
+    `Custom fields: ${summary.customFields}`,
+    '',
+    `Original-ID collisions (${summary.idCollisions.length}):`,
+    ...collisionLines,
+    '',
+    `Possible existing matches by name or location key (${summary.possibleMatches.length}):`,
+    ...matchLines,
+    '',
+    'Nothing will be merged. Imported map entities will receive new IDs.',
+  ].join('\n')
+}
+
+async function importJsonFile(event: Event): Promise<void> {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement)) return
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !workspace.value) return
+
+  importError.value = ''
+  try {
+    let content: unknown
+    try {
+      content = JSON.parse(await file.text())
+    } catch (error) {
+      throw new Error(`The selected file is not valid JSON: ${errorText(error)}`)
+    }
+    const prepared = prepareJsonImport(workspace.value, content)
+    if (!window.confirm(importPreview(prepared.summary))) return
+
+    await commit(prepared.workspace)
+    selectedSystemId.value = prepared.addedSystemIds[0] ?? selectedSystemId.value
+    selectedObjectId.value = null
+    selectedOrbitId.value = null
+    selectedRouteId.value = null
+    activeView.value = 'cluster'
+  } catch (error) {
+    importError.value = errorText(error)
   }
 }
 
@@ -921,7 +988,17 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
       </div>
     </header>
 
-    <main class="main-content mx-auto flex w-full max-w-[1500px] flex-1 self-center pb-10 pt-[clamp(2rem,4vw,3.5rem)]">
+    <main class="main-content mx-auto flex w-full max-w-[1500px] flex-1 flex-col self-center pb-10 pt-[clamp(2rem,4vw,3.5rem)]">
+      <input
+        v-if="workspace"
+        ref="jsonImportInput"
+        class="sr-only"
+        type="file"
+        accept=".json,application/json"
+        aria-label="JSON map file"
+        @change="importJsonFile"
+      >
+      <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
       <section v-if="hydrationState === 'loading'" class="message-panel max-w-[44rem] p-[clamp(1.5rem,4vw,3rem)]" role="status" aria-live="polite">
         <span class="section-kicker">LOCAL ARCHIVE</span>
         <h1 class="my-4 text-[clamp(2.2rem,5vw,3.7rem)]">Opening this browser's workspace...</h1>
@@ -1071,6 +1148,9 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               </button>
               <button class="tool-button" type="button" @click="downloadClusterJson">
                 Export Jump Cluster JSON
+              </button>
+              <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
+                Import JSON copy
               </button>
             </div>
             <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
@@ -1401,6 +1481,9 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               </button>
               <button class="tool-button" type="button" @click="downloadSystemJson">
                 Export star system JSON
+              </button>
+              <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
+                Import JSON copy
               </button>
               <button
                 class="tool-button"

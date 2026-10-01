@@ -2,7 +2,8 @@
 title: 13. Importing JSON as a safe independent copy
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -34,3 +35,8 @@ As a Warden, I can preview a cluster or standalone-system JSON file and import i
 - [02. Defining safe JSON import behavior](02-safe-import-behavior.md)
 - [01. Defining the V1 map data model and object catalogue](01-map-data-model.md)
 - [04. Choosing the V1 application and rendering architecture](04-application-architecture.md)
+
+## Resolution
+
+- Added validated, confirmed JSON imports for Jump Clusters and standalone systems as independent copies, remapping entity IDs, internal references, layout entries, and custom-field values without merging existing work.
+- Validation passed: `npm run typecheck`, `npm test` (8 browser acceptance tests), and `npm run build`.
