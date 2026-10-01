@@ -11,7 +11,7 @@ A schematic network of known star systems and the Jump Routes between them.
 A local map containing one or more stars, Orbits, and notable locations.
 
 **Jump Point**:
-A logical endpoint for a Jump Route, distinct from a physical Jump Station.
+A logical endpoint for a Jump Route, distinct from an optional physical Station installation that it may reference.
 _Avoid_: Jump Station (when referring to a logical endpoint)
 
 **Jump Route**:

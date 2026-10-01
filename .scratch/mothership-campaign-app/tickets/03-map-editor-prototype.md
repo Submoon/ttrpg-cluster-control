@@ -1,5 +1,5 @@
 ---
-title: Prototyping the Jump Cluster and system-map editor
+title: 03. Prototyping the Jump Cluster and system-map editor
 label: wayfinder:prototype
 type: prototype
 status: closed
@@ -21,4 +21,4 @@ Drag systems to arrange the cluster; drag objects onto an Orbit to change their 
 
 ## Resolution
 
-V1 uses the map-first canvas with a hierarchical object/Orbit navigator and a right-side inspector (variant D). The register-first C layout was not selected. The map view must support zoom; exact controls and limits remain open.
+V1 uses the map-first canvas with a hierarchical object/Orbit navigator and a right-side inspector (variant D). The register-first C layout was not selected. Both map views use the zoom controls and bounds specified in [04. Choosing the V1 application and rendering architecture](04-application-architecture.md).

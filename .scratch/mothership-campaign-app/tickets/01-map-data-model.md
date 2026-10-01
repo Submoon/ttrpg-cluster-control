@@ -1,5 +1,5 @@
 ---
-title: Defining the V1 map data model and object catalogue
+title: 01. Defining the V1 map data model and object catalogue
 label: wayfinder:grilling
 type: grilling
 status: closed
