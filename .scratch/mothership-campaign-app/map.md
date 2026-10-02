@@ -64,6 +64,7 @@ Implement in dependency order; each ticket also lists its blockers.
 | 19 | [19. Clarifying the Chart Details action](tickets/19-chart-details-state.md) | None |
 | 20 | [20. Including the system name in system-map image exports](tickets/20-system-name-in-image-exports.md) | None |
 | 21 | [21. Expanding the system-map grid and layout bounds](tickets/21-expanding-system-map-grid.md) | None |
+| 22 | [22. Supporting Jump levels and destinations](tickets/22-jump-levels-and-destinations.md) | None |
 
 ## Out of scope
 
