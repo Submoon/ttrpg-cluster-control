@@ -19,7 +19,7 @@ As a Warden, I can inspect the effects of deleting a map entity before confirmin
 ## Acceptance criteria
 
 - Before cascading a deletion, the app identifies the dependent entities that will be removed.
-- A deletion with dependents requires explicit confirmation before any affected data is changed.
+- Deleting any map entity requires explicit confirmation; when dependents are affected, the confirmation lists them before any data is changed.
 - Canceling the confirmation leaves the map and all dependent data unchanged.
 - Confirming the cascade removes the selected entity and its dependents without leaving broken references.
 
@@ -36,4 +36,4 @@ As a Warden, I can inspect the effects of deleting a map entity before confirmin
 
 ## Resolution
 
-Deletion planning now previews dependent objects, nested Orbits, Jump Routes, and physical Station links before confirmation. Confirmed deletions clear broken references and stale layout entries, normalize remaining Orbit order, and cannot remove the last star system; canceling leaves the saved workspace unchanged.
+Every map-entity deletion now requires confirmation. When dependents are affected, the confirmation previews dependent objects, nested Orbits, Jump Routes, and physical Station links. Confirmed deletions clear broken references and stale layout entries, normalize remaining Orbit order, and cannot remove the last star system; canceling leaves the saved workspace unchanged.

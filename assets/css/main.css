@@ -1,5 +1,48 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: dark;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --app-bg: #0b1113;
+  --panel-bg: #121c1e;
+  --panel-raised: #192629;
+  --control-bg: #152225;
+  --control-hover: #202f32;
+  --line-soft: #293a3d;
+  --line: #394c4f;
+  --line-strong: #56696b;
+  --text-primary: #e8eee7;
+  --text-secondary: #c0cbc4;
+  --text-muted: #9caaa2;
+  --text-quiet: #8c9a92;
+  --accent: #efa16f;
+  --accent-hover: #ffb27c;
+  --accent-ink: #29190f;
+  --accent-soft: rgba(239, 161, 111, 0.12);
+  --focus: #ffc087;
+  --status-good: #a9c88f;
+  --error: #ffa295;
+  --error-bg: #341f20;
+  --error-border: #a65d5d;
+  --add-bg: #436a55;
+  --add-bg-hover: #4f785f;
+  --map-bg: #0c1719;
+  --map-card: #142225;
+  --map-grid-line: #25383b;
+  --map-text: #e8eee7;
+  --map-muted: #a8b7af;
+  --map-route: #86ad96;
+  --map-orbit: #7f9294;
+  --map-unresolved: #f09b73;
+  --map-label-bg: #182629;
+  --map-label-border: #607477;
+  --map-selected: #ffc087;
+  --map-star-halo: #d8b067;
+  --map-installation: #81b19a;
+}
+
 @layer base {
   body {
     @apply min-h-screen min-w-[320px];
@@ -11,17 +54,28 @@
   select:focus-visible,
   textarea:focus-visible,
   summary:focus-visible {
-    @apply outline-2 outline-[#a45138] outline-offset-[3px];
+    @apply outline-2 outline-[var(--focus)] outline-offset-[3px];
   }
 
   button:disabled {
-    @apply cursor-not-allowed opacity-[0.48];
+    @apply cursor-not-allowed opacity-[0.58];
   }
 
   input,
   select,
   textarea {
-    @apply w-full min-h-[2.75rem] rounded-[2px] border border-[#bdb3a0] bg-[#fffdf7] px-[0.7rem] py-[0.65rem] text-[0.85rem] text-[#29332d] tracking-normal normal-case;
+    @apply w-full min-h-[2.75rem] rounded-[2px] border border-[var(--line)] bg-[var(--control-bg)] px-[0.7rem] py-[0.65rem] text-[0.85rem] text-[var(--text-primary)] tracking-normal normal-case;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-quiet);
+    opacity: 1;
+  }
+
+  option {
+    color: var(--text-primary);
+    background: var(--control-bg);
   }
 
   label input,
@@ -40,7 +94,7 @@
   .secondary-button,
   .quiet-button,
   .tool-button {
-    @apply min-h-[2.65rem] cursor-pointer rounded-[2px] border border-[#8f9a8e];
+    @apply min-h-[2.65rem] cursor-pointer rounded-[2px] border border-[var(--line-strong)];
   }
 
   .primary-button,

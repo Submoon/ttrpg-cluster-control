@@ -20,7 +20,7 @@ As a Warden, I can arrange systems and map objects by hand, inspect dense or bro
 
 - Jump Cluster and system maps support independently dragging system nodes and map objects; dragging empty background pans the map.
 - Wheel, trackpad, and pinch zoom is centered on the pointer, and visible zoom-in, zoom-out, and fit controls work in both map views.
-- Zoom is limited to 25–400%; the visible controls provide an alternative to gesture-based zoom.
+- Zoom is limited to 25–1600%, with unbounded panning; the visible controls provide an alternative to gesture-based zoom.
 - Resizing an Orbit moves its objects along the ring while preserving stored angles; the minimum radius leaves clearance around its host and there is no fixed maximum.
 - Map elements are keyboard-focusable and have accessible names.
 

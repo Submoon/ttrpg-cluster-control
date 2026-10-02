@@ -162,17 +162,21 @@ async function dragBy(
 
 async function orbitalAngle(map: import('@playwright/test').Locator): Promise<number> {
   return map.evaluate((element) => {
-    const host = element.querySelector<SVGCircleElement>('.system-object .star-core')
-    const planet = [...element.querySelectorAll<SVGGElement>('.system-object')]
-      .find(object => object.getAttribute('aria-label')?.includes('Iria'))
-      ?.querySelector<SVGCircleElement>('.object-core')
+    const objects = [...element.querySelectorAll<SVGGElement>('.system-object')]
+    const host = objects.find(object => object.getAttribute('aria-label')?.includes('Primary Star'))
+    const planet = objects.find(object => object.getAttribute('aria-label')?.includes('Iria'))
     if (!host || !planet) throw new Error('Could not locate the star and orbiting object.')
 
-    const hostBounds = host.getBoundingClientRect()
-    const planetBounds = planet.getBoundingClientRect()
+    const center = (object: SVGGElement) => {
+      const transform = object.getScreenCTM()
+      if (!transform) throw new Error('An orbital object is not attached to the map.')
+      return new DOMPoint(0, 0).matrixTransform(transform)
+    }
+    const hostCenter = center(host)
+    const planetCenter = center(planet)
     return Math.atan2(
-      planetBounds.y + planetBounds.height / 2 - hostBounds.y - hostBounds.height / 2,
-      planetBounds.x + planetBounds.width / 2 - hostBounds.x - hostBounds.width / 2,
+      planetCenter.y - hostCenter.y,
+      planetCenter.x - hostCenter.x,
     )
   })
 }
@@ -240,11 +244,17 @@ async function inspectImageSvg(
   contentTransform: string | null
   texts: string[]
   titleStyle: string | null
+  backgroundFill: string | null
+  glyphFill: string | null
+  textFills: string[]
+  markColors: string[]
 }> {
   return page.evaluate((content) => {
     const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement
     const viewBox = svg.getAttribute('viewBox')
     if (svg.localName !== 'svg' || !viewBox) throw new Error('The downloaded SVG is invalid.')
+    const fill = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('fill') ?? null
+    const stroke = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('stroke') ?? null
     return {
       viewBox: viewBox.split(/\s+/).map(Number),
       width: Number(svg.getAttribute('width')?.replace('px', '')),
@@ -252,8 +262,53 @@ async function inspectImageSvg(
       contentTransform: svg.querySelector('.cluster-map-content, .system-map-content')?.getAttribute('transform') ?? null,
       texts: Array.from(svg.querySelectorAll('text')).map(element => element.textContent?.trim() ?? ''),
       titleStyle: svg.querySelector('.cluster-map-title, .map-title')?.getAttribute('style') ?? null,
+      backgroundFill: fill('.cluster-map-background, .map-background'),
+      glyphFill: fill('.system-object-glyph'),
+      textFills: Array.from(svg.querySelectorAll<SVGElement>('text'), element => element.style.getPropertyValue('fill'))
+        .filter(Boolean),
+      markColors: [
+        fill('.system-object-glyph'),
+        fill('.cluster-exit-mark'),
+        fill('.cluster-system-seal'),
+        stroke('.cluster-route-line'),
+        stroke('.orbit-ring'),
+        stroke('.cluster-system-card'),
+      ].filter((color): color is string => Boolean(color) && color !== 'none' && color !== 'transparent'),
     }
   }, text)
+}
+
+function relativeLuminance(color: string): number {
+  const channels = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
+  if (!channels) throw new Error(`Expected an opaque RGB color, received "${color}".`)
+  const [red, green, blue] = channels.slice(1).map(channel => Number(channel) / 255)
+  const linearize = (channel: number) => channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4
+  return 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue)
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLuminance = relativeLuminance(foreground)
+  const backgroundLuminance = relativeLuminance(background)
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05)
+    / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+}
+
+function expectReadableExport(info: {
+  backgroundFill: string | null
+  textFills: string[]
+  markColors: string[]
+}): void {
+  if (!info.backgroundFill) throw new Error('The downloaded map has no background fill.')
+  expect(info.textFills.length).toBeGreaterThan(0)
+  expect(info.markColors.length).toBeGreaterThan(0)
+  for (const fill of info.textFills) {
+    expect(contrastRatio(fill, info.backgroundFill)).toBeGreaterThanOrEqual(4.5)
+  }
+  for (const color of info.markColors) {
+    expect(contrastRatio(color, info.backgroundFill)).toBeGreaterThanOrEqual(3)
+  }
 }
 
 async function inspectExportedSvg(
@@ -305,17 +360,572 @@ const catalogueSubtypes = [
   'other',
 ] as const
 
+const objectPaletteCategoryBySubtype: Record<typeof catalogueSubtypes[number], string> = {
+  star: 'Celestial bodies',
+  planet: 'Celestial bodies',
+  moon: 'Celestial bodies',
+  asteroid: 'Small bodies and fields',
+  belt: 'Small bodies and fields',
+  station: 'Installations',
+  base: 'Installations',
+  colony: 'Installations',
+  vessel: 'Vessels',
+  derelict: 'Vessels',
+  'jump-point': 'Jump Points',
+  anomaly: 'Phenomena',
+  nebula: 'Phenomena',
+  hazard: 'Phenomena',
+  other: 'Other',
+}
+
+async function selectCatalogueObjectButton(
+  page: import('@playwright/test').Page,
+  subtype: typeof catalogueSubtypes[number],
+): Promise<import('@playwright/test').Locator> {
+  const label = subtype.split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  const category = objectPaletteCategoryBySubtype[subtype]
+  await palette.getByRole('group', { name: 'Object categories' })
+    .getByRole('button', { name: category, exact: true })
+    .click()
+  return palette.getByRole('group', { name: category })
+    .getByRole('button', { name: `Add ${label}` })
+}
+
 async function addCatalogueObject(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
 ): Promise<void> {
-  const label = subtype.split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-  await page.getByRole('region', { name: 'Object palette' })
-    .getByRole('button', { name: `Add ${label}` })
-    .click()
+  await (await selectCatalogueObjectButton(page, subtype)).click()
 }
+
+test('the dark map-first workspace stays usable at narrow viewport widths', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const hierarchyPanel = page.getByRole('complementary', { name: 'Jump Cluster contents' })
+  const inspectorPanel = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const desktopLayout = await page.evaluate(() => {
+    const grid = document.querySelector<HTMLElement>('.editor-grid')
+    const map = grid?.querySelector<HTMLElement>('.map-frame')
+    const hierarchy = grid?.querySelector<HTMLElement>('.hierarchy-panel')
+    const inspector = grid?.querySelector<HTMLElement>('.inspector-panel')
+    if (!grid || !map || !hierarchy || !inspector) throw new Error('The map workspace layout is incomplete.')
+    return {
+      colorScheme: getComputedStyle(document.documentElement).colorScheme,
+      mapWidth: map.getBoundingClientRect().width,
+      hierarchyWidth: hierarchy.getBoundingClientRect().width,
+      inspectorWidth: inspector.getBoundingClientRect().width,
+      mapTop: map.getBoundingClientRect().top,
+      gridHeight: grid.getBoundingClientRect().height,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    }
+  })
+  expect(desktopLayout.colorScheme).toBe('dark')
+  expect(desktopLayout.mapWidth).toBeGreaterThan(desktopLayout.viewportWidth * 0.9)
+  expect(desktopLayout.mapWidth).toBeGreaterThan(desktopLayout.hierarchyWidth * 2)
+  expect(desktopLayout.inspectorWidth).toBeGreaterThan(0)
+  expect(desktopLayout.gridHeight).toBeGreaterThanOrEqual(desktopLayout.viewportHeight * 0.75)
+  await expect(hierarchyPanel).toBeVisible()
+  await expect(inspectorPanel).toBeVisible()
+  await expect(page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Fit map' }))
+    .toBeVisible()
+
+  const collapseHierarchy = page.getByRole('button', { name: 'Collapse hierarchy panel' })
+  await expect(collapseHierarchy.locator('span')).toHaveText('‹')
+  await collapseHierarchy.click()
+  await expect(hierarchyPanel).toBeHidden()
+  const reopenHierarchy = page.getByRole('button', { name: 'Show hierarchy panel' })
+  await expect(reopenHierarchy).toBeVisible()
+  const hierarchyTabBounds = await reopenHierarchy.boundingBox()
+  if (!hierarchyTabBounds) throw new Error('The hierarchy panel reopen tab is not visible.')
+  expect(hierarchyTabBounds.x).toBe(0)
+  expect(hierarchyTabBounds.height).toBeGreaterThan(hierarchyTabBounds.width)
+  await reopenHierarchy.click()
+  await expect(hierarchyPanel).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const mobileLayout = await page.evaluate(() => {
+    const grid = document.querySelector<HTMLElement>('.editor-grid')
+    const map = grid?.querySelector<HTMLElement>('.map-frame')
+    const hierarchy = grid?.querySelector<HTMLElement>('.hierarchy-panel')
+    if (!map || !hierarchy) throw new Error('The map workspace layout is incomplete.')
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      mapTop: map.getBoundingClientRect().top,
+      hierarchyTop: hierarchy.getBoundingClientRect().top,
+    }
+  })
+  expect(mobileLayout.documentWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth)
+  expect(mobileLayout.mapTop).toBeLessThan(mobileLayout.hierarchyTop)
+  await expect(inspectorPanel).toBeHidden()
+  await expect(clusterMap).toBeVisible()
+  await expect(page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Fit map' }))
+    .toBeVisible()
+  const inspectorTabBounds = await page.getByRole('button', { name: 'Show inspector panel' }).boundingBox()
+  if (!inspectorTabBounds) throw new Error('The inspector panel reopen tab is not visible.')
+  expect(inspectorTabBounds.x + inspectorTabBounds.width).toBe(mobileLayout.viewportWidth)
+  expect(inspectorTabBounds.height).toBeGreaterThan(inspectorTabBounds.width)
+
+  await page.getByRole('button', { name: 'Show inspector panel' }).click()
+  await expect(inspectorPanel).toBeVisible()
+  await expect(hierarchyPanel).toBeHidden()
+  await page.getByRole('button', { name: 'Show hierarchy panel' }).click()
+  await expect(hierarchyPanel).toBeVisible()
+  await expect(inspectorPanel).toBeHidden()
+})
+
+test('the system map can zoom well beyond 400 percent', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const navigation = page.getByRole('toolbar', { name: 'Map navigation' })
+  const zoomIn = navigation.getByRole('button', { name: 'Zoom in' })
+  for (let step = 0; step < 25 && !(await zoomIn.isDisabled()); step += 1) {
+    await zoomIn.click()
+  }
+  await expect(navigation.getByLabel('Zoom level')).toHaveText('1600%')
+})
+
+test('the object palette stays aligned with the system summary and adapts to narrow viewports', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  const toolbar = page.getByRole('toolbar', { name: 'System map editing' })
+  const clusterMapButton = page.getByRole('button', { name: 'Cluster map' })
+  const layout = await page.evaluate(() => {
+    const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+    const toolbar = document.querySelector<HTMLElement>('[aria-label="System map editing"]')
+    const buttons = Array.from(document.querySelectorAll<HTMLElement>('button'))
+    const clusterMapButton = buttons.find(button => button.textContent?.trim() === 'Cluster map')
+    const chartDetailsButton = buttons.find(button => button.textContent?.trim() === 'Chart details')
+    const mapCanvas = document.querySelector<HTMLElement>('.system-map-canvas')
+    const hierarchy = document.querySelector<HTMLElement>('#workspace-hierarchy-panel')
+    const inspector = document.querySelector<HTMLElement>('#workspace-inspector-panel')
+    const mapSvg = document.querySelector<SVGSVGElement>('.system-map-canvas .system-map-svg')
+    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const tools = document.querySelector<HTMLElement>('.system-map-tools')
+    if (
+      !palette || !toolbar || !clusterMapButton || !mapCanvas || !hierarchy || !inspector
+      || !mapSvg || !summary || !tools
+    ) {
+      throw new Error('The map editing controls are incomplete.')
+    }
+    const background = getComputedStyle(clusterMapButton).backgroundColor
+    const exportBar = toolbar.getBoundingClientRect()
+    const paletteBounds = palette.getBoundingClientRect()
+    const mapBounds = mapCanvas.getBoundingClientRect()
+    const hierarchyBounds = hierarchy.getBoundingClientRect()
+    const inspectorBounds = inspector.getBoundingClientRect()
+    const summaryBounds = summary.getBoundingClientRect()
+    const toolsBounds = tools.getBoundingClientRect()
+    const objectButtons = Array.from(
+      palette.querySelectorAll<HTMLElement>('.object-palette-items .object-palette-button'),
+    )
+    return {
+      paletteFloatsAboveMap: palette.closest('.map-tools') !== null,
+      addOrbitGroupedWithPalette: palette.contains(document.querySelector('[aria-label="Add orbit"]')),
+      exportBarWidth: exportBar.width,
+      viewportWidth: window.innerWidth,
+      paletteCenteredInTools: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2
+          - toolsBounds.left - toolsBounds.width / 2,
+      ) <= 1,
+      sameTopRow: Math.abs(summaryBounds.top - toolsBounds.top) <= 1,
+      allObjectButtonsFit: objectButtons.length > 0 && objectButtons.every((button) => {
+        const bounds = button.getBoundingClientRect()
+        return bounds.left >= paletteBounds.left
+          && bounds.right <= paletteBounds.right
+          && bounds.top >= paletteBounds.top
+          && bounds.bottom <= paletteBounds.bottom
+      }),
+      objectButtonCount: objectButtons.length,
+      toolbarClearsPanels: toolsBounds.bottom <= hierarchyBounds.top
+        && toolsBounds.bottom <= inspectorBounds.top,
+      clusterButtonIsOpaque: background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent',
+      clusterButtonInHierarchy: Boolean(clusterMapButton?.closest('#workspace-hierarchy-panel')),
+      clusterButtonBesideChartDetails: Boolean(
+        clusterMapButton && chartDetailsButton && clusterMapButton.parentElement === chartDetailsButton.parentElement,
+      ),
+      mapFillsCanvas: mapSvg.getBoundingClientRect().height / mapBounds.height >= 0.92,
+    }
+  })
+  expect({
+    paletteFloatsAboveMap: layout.paletteFloatsAboveMap,
+    addOrbitGroupedWithPalette: layout.addOrbitGroupedWithPalette,
+    exportBarIsCompact: layout.exportBarWidth <= layout.viewportWidth * 0.45,
+    paletteCenteredInTools: layout.paletteCenteredInTools,
+    sameTopRow: layout.sameTopRow,
+    allObjectButtonsFit: layout.allObjectButtonsFit,
+    activeCategoryOnly: layout.objectButtonCount === 3,
+    toolbarClearsPanels: layout.toolbarClearsPanels,
+    clusterButtonIsOpaque: layout.clusterButtonIsOpaque,
+    clusterButtonInHierarchy: layout.clusterButtonInHierarchy,
+    clusterButtonBesideChartDetails: layout.clusterButtonBesideChartDetails,
+    mapFillsCanvas: layout.mapFillsCanvas,
+  }).toEqual({
+    paletteFloatsAboveMap: true,
+    addOrbitGroupedWithPalette: true,
+    exportBarIsCompact: true,
+    paletteCenteredInTools: true,
+    sameTopRow: true,
+    allObjectButtonsFit: true,
+    activeCategoryOnly: true,
+    toolbarClearsPanels: true,
+    clusterButtonIsOpaque: true,
+    clusterButtonInHierarchy: true,
+    clusterButtonBesideChartDetails: true,
+    mapFillsCanvas: true,
+  })
+  await expect(palette).toBeVisible()
+  await expect(toolbar).toBeVisible()
+  await expect(clusterMapButton).toBeVisible()
+
+  await page.setViewportSize({ width: 479, height: 720 })
+  const narrowLayout = await page.evaluate(() => {
+    const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const tools = document.querySelector<HTMLElement>('.system-map-tools')
+    const hierarchy = document.querySelector<HTMLElement>('.system-map-editor-grid .hierarchy-panel')
+    const panelToggles = Array.from(
+      document.querySelectorAll<HTMLElement>('.system-map-editor-grid .panel-reopen'),
+    )
+    if (!palette || !summary || !tools || !hierarchy) {
+      throw new Error('The map palette, summary, or hierarchy panel is unavailable.')
+    }
+
+    const paletteBounds = palette.getBoundingClientRect()
+    const summaryBounds = summary.getBoundingClientRect()
+    const toolsBounds = tools.getBoundingClientRect()
+    const hierarchyBounds = hierarchy.getBoundingClientRect()
+    const buttons = Array.from(
+      palette.querySelectorAll<HTMLElement>('.object-palette-items .object-palette-button'),
+    )
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      objectButtonCount: buttons.length,
+      centered: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
+      ) <= 1,
+      belowSummary: paletteBounds.top >= summaryBounds.bottom + 4,
+      toolbarClearsHierarchy: toolsBounds.bottom <= hierarchyBounds.top,
+      toolbarClearsPanelToggles: panelToggles.every((toggle) => {
+        const bounds = toggle.getBoundingClientRect()
+        return toolsBounds.right <= bounds.left || toolsBounds.left >= bounds.right
+          || toolsBounds.bottom <= bounds.top || toolsBounds.top >= bounds.bottom
+      }),
+      allButtonsFit: buttons.length > 0 && buttons.every((button) => {
+        const bounds = button.getBoundingClientRect()
+        return bounds.left >= paletteBounds.left
+          && bounds.right <= paletteBounds.right
+          && bounds.top >= paletteBounds.top
+          && bounds.bottom <= paletteBounds.bottom
+      }),
+    }
+  })
+  expect(narrowLayout.documentWidth).toBeLessThanOrEqual(narrowLayout.viewportWidth)
+  expect(narrowLayout.centered).toBe(true)
+  expect(narrowLayout.belowSummary).toBe(true)
+  expect(narrowLayout.toolbarClearsHierarchy).toBe(true)
+  expect(narrowLayout.toolbarClearsPanelToggles).toBe(true)
+  expect(narrowLayout.objectButtonCount).toBe(3)
+  expect(narrowLayout.allButtonsFit).toBe(true)
+
+  await page.setViewportSize({ width: 479, height: 252 })
+  const compactLayout = await page.evaluate(() => {
+    const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const navigation = document.querySelector<HTMLElement>('.map-navigation')
+    const panelToggles = Array.from(
+      document.querySelectorAll<HTMLElement>('.system-map-editor-grid .panel-reopen'),
+    )
+    if (!palette || !summary || !navigation) {
+      throw new Error('The map palette, summary, or navigation is unavailable.')
+    }
+
+    const paletteBounds = palette.getBoundingClientRect()
+    const summaryBounds = summary.getBoundingClientRect()
+    const navigationBounds = navigation.getBoundingClientRect()
+    const actions = Array.from(palette.querySelectorAll<HTMLElement>('.object-palette-button'))
+    const overlaps = (first: DOMRect, second: DOMRect) =>
+      first.left < second.right && first.right > second.left
+        && first.top < second.bottom && first.bottom > second.top
+
+    return {
+      paletteCentered: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
+      ) <= 1,
+      paletteBelowSummary: paletteBounds.top >= summaryBounds.bottom + 4,
+      paletteWithinViewport: paletteBounds.top >= 0 && paletteBounds.bottom <= window.innerHeight,
+      allActionsVisible: actions.length > 0 && actions.every((action) => {
+        const bounds = action.getBoundingClientRect()
+        return bounds.top >= 0 && bounds.bottom <= window.innerHeight
+      }),
+      allActionsReachable: actions.length > 0 && actions.every((action) => {
+        const bounds = action.getBoundingClientRect()
+        const target = document.elementFromPoint(
+          bounds.left + bounds.width / 2,
+          bounds.top + bounds.height / 2,
+        )
+        return target === action || action.contains(target)
+      }),
+      navigationClearsPalette: !overlaps(navigationBounds, paletteBounds),
+      panelsClearTools: panelToggles.every((toggle) => {
+        const bounds = toggle.getBoundingClientRect()
+        return !overlaps(bounds, paletteBounds) && !overlaps(bounds, navigationBounds)
+      }),
+    }
+  })
+  expect(compactLayout).toEqual({
+    paletteCentered: true,
+    paletteBelowSummary: true,
+    paletteWithinViewport: true,
+    allActionsVisible: true,
+    allActionsReachable: true,
+    navigationClearsPalette: true,
+    panelsClearTools: true,
+  })
+})
+
+test('object category tabs reveal one group beside the title or below it when space runs out', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  const categories = palette.getByRole('group', { name: 'Object categories' })
+  const tabs = categories.getByRole('button')
+  const activeItems = palette.locator('.object-palette-items')
+  await expect(tabs).toHaveCount(7)
+  await expect(tabs.nth(0)).toHaveAttribute('aria-pressed', 'true')
+  await expect(activeItems).toHaveAttribute('aria-label', 'Celestial bodies')
+  await expect(activeItems.getByRole('button')).toHaveCount(3)
+  await expect(palette.getByRole('button', { name: 'Add orbit' })).toBeVisible()
+
+  const desktopLayout = await page.evaluate(() => {
+    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const tools = document.querySelector<HTMLElement>('.system-map-tools')
+    const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+    if (!summary || !tools || !palette) throw new Error('The system heading or object palette is missing.')
+    const summaryBounds = summary.getBoundingClientRect()
+    const toolsBounds = tools.getBoundingClientRect()
+    const paletteBounds = palette.getBoundingClientRect()
+    return {
+      sameTopRow: Math.abs(summaryBounds.top - toolsBounds.top) <= 1,
+      besideSummary: toolsBounds.left >= summaryBounds.right,
+      paletteCenteredInTools: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2
+          - toolsBounds.left - toolsBounds.width / 2,
+      ) <= 1,
+    }
+  })
+  expect(desktopLayout).toEqual({
+    sameTopRow: true,
+    besideSummary: true,
+    paletteCenteredInTools: true,
+  })
+
+  await page.setViewportSize({ width: 479, height: 720 })
+  const narrowLayout = await page.evaluate(() => {
+    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const tools = document.querySelector<HTMLElement>('.system-map-tools')
+    if (!summary || !tools) throw new Error('The system heading or object palette is missing.')
+    return {
+      toolsBelowSummary: tools.getBoundingClientRect().top
+        >= summary.getBoundingClientRect().bottom + 4,
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+    }
+  })
+  expect(narrowLayout).toEqual({
+    toolsBelowSummary: true,
+    noHorizontalOverflow: true,
+  })
+
+  await categories.getByRole('button', { name: 'Small bodies and fields' }).click()
+  await expect(categories.getByRole('button', { name: 'Small bodies and fields' }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(activeItems).toHaveAttribute('aria-label', 'Small bodies and fields')
+  await expect(activeItems.getByRole('button')).toHaveCount(2)
+  await expect(palette.getByRole('button', { name: 'Add Asteroid' })).toBeVisible()
+  await expect(palette.getByRole('button', { name: 'Add Star' })).toHaveCount(0)
+
+  await page.setViewportSize({ width: 479, height: 252 })
+  const compactLayout = await palette.locator('button').evaluateAll(buttons =>
+    buttons.every((button) => {
+      const bounds = button.getBoundingClientRect()
+      return bounds.top >= 0 && bounds.bottom <= window.innerHeight
+        && bounds.left >= 0 && bounds.right <= window.innerWidth
+    }),
+  )
+  expect(compactLayout).toBe(true)
+})
+
+test('cluster creation actions share a floating palette separate from export controls', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+
+  const groups = await page.evaluate(() => {
+    const palette = document.querySelector<HTMLElement>('[aria-label="Cluster editing palette"]')
+    const toolbar = document.querySelector<HTMLElement>('[aria-label="Jump Cluster export and import"]')
+    return {
+      addSystemInPalette: Boolean(palette?.querySelector('[aria-label="Add star system"]')),
+      addRouteInPalette: Boolean(palette?.querySelector('[aria-label="Add Jump Route"]')),
+      addSystemInExportToolbar: Boolean(toolbar?.querySelector('[aria-label="Add star system"]')),
+      addRouteInExportToolbar: Boolean(toolbar?.querySelector('[aria-label="Add Jump Route"]')),
+    }
+  })
+
+  expect(groups).toEqual({
+    addSystemInPalette: true,
+    addRouteInPalette: true,
+    addSystemInExportToolbar: false,
+    addRouteInExportToolbar: false,
+  })
+})
+
+test('the system map fills the canvas and its summary floats above the scene', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const layout = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLElement>('.system-map-canvas')
+    const map = canvas?.querySelector<SVGSVGElement>('.system-map-svg')
+    const stats = document.querySelector<HTMLElement>('.editor-heading [aria-label="Current system contents"]')
+    if (!canvas || !map || !stats) throw new Error('The system-map canvas and summary are incomplete.')
+
+    const canvasBounds = canvas.getBoundingClientRect()
+    const mapBounds = map.getBoundingClientRect()
+    const mapText = Array.from(map.querySelectorAll('text'), element => element.textContent?.trim() ?? '')
+    return {
+      mapHeightRatio: mapBounds.height / canvasBounds.height,
+      floatingStatsVisible: getComputedStyle(stats).display !== 'none' && stats.getBoundingClientRect().width > 0,
+      floatingSystemName: document.querySelector('.editor-heading h1')?.textContent?.trim(),
+      floatingStats: Array.from(stats.querySelectorAll('strong'), counter =>
+        counter.parentElement?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      ),
+      floatingStatsOutsideSvg: !map.contains(stats),
+      systemNameInSvg: mapText.includes('Vesper'),
+      objectSummaryInSvg: mapText.some(text => text.includes('OBJECTS') && text.includes('ORBITS')),
+    }
+  })
+
+  expect(layout.mapHeightRatio, JSON.stringify(layout)).toBeGreaterThanOrEqual(0.92)
+  expect(layout.floatingStatsVisible).toBe(true)
+  expect(layout.floatingSystemName).toBe('Vesper')
+  expect(layout.floatingStats).toEqual(['1 STARS', '1 OBJECTS', '0 ORBITS'])
+  expect(layout.floatingStatsOutsideSvg).toBe(true)
+  expect(layout.systemNameInSvg).toBe(false)
+  expect(layout.objectSummaryInSvg).toBe(false)
+})
+
+test('side panels animate and Delete removes the selected object', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.locator('#workspace-hierarchy-panel')
+  const inspector = page.locator('#workspace-inspector-panel')
+  const expectPanelTransition = async (panel: import('@playwright/test').Locator, buttonName: string) => {
+    await panel.evaluate(element => {
+      const track = (event: Event) => {
+        if (event.target !== element) return
+        element.setAttribute('data-transition-started', 'true')
+        element.removeEventListener('transitionrun', track)
+      }
+      element.removeAttribute('data-transition-started')
+      element.addEventListener('transitionrun', track)
+    })
+    await page.getByRole('button', { name: buttonName }).click()
+    await expect(panel).toHaveAttribute('data-transition-started', 'true')
+  }
+
+  await expectPanelTransition(hierarchy, 'Collapse hierarchy panel')
+  await expect(hierarchy).toBeHidden()
+  await expectPanelTransition(hierarchy, 'Show hierarchy panel')
+  await expect(hierarchy).toBeVisible()
+
+  await expectPanelTransition(inspector, 'Collapse inspector panel')
+  await expect(inspector).toBeHidden()
+  await expectPanelTransition(inspector, 'Show inspector panel')
+  await expect(inspector).toBeVisible()
+
+  const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })
+  await primaryStar.click()
+  const nameInput = page.getByLabel('Name')
+  await nameInput.focus()
+  await page.keyboard.press('Delete')
+  await expect(primaryStar).toBeVisible()
+  await primaryStar.click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await primaryStar.click()
+  page.once('dialog', async dialog => dialog.accept())
+  await page.keyboard.press('Delete')
+  await expect(primaryStar).toBeHidden()
+})
+
+test('map object glyphs match the Add object palette', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const mapObjects = map.locator('.system-object')
+
+  for (const subtype of catalogueSubtypes) {
+    const button = await selectCatalogueObjectButton(page, subtype)
+    const menuMark = (await button.locator('.object-mark').textContent())?.trim()
+    const objectCount = await mapObjects.count()
+    await button.click()
+    await expect(mapObjects).toHaveCount(objectCount + 1)
+    await expect(mapObjects.nth(objectCount).locator('.system-object-glyph')).toHaveText(menuMark!)
+  }
+})
+
+test('deleting a map object without dependents still asks for confirmation', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })
+  await primaryStar.click()
+  let confirmation = ''
+  page.once('dialog', async dialog => {
+    confirmation = dialog.message()
+    await dialog.dismiss()
+  })
+  await page.getByRole('button', { name: 'Delete Primary Star' }).click()
+
+  expect(confirmation).toMatch(/^Delete Primary Star/)
+  await expect(primaryStar).toBeVisible()
+})
 
 test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await page.goto('/')
@@ -341,11 +951,12 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await expect.poll(async () => Number((await clusterZoom.textContent())?.replace('%', '')))
     .toBeGreaterThan(120)
   await page.mouse.wheel(0, -5000)
-  await expect(clusterZoom).toHaveText('400%')
+  await expect(clusterZoom).toHaveText('1600%')
   await page.mouse.wheel(0, 5000)
   await expect(clusterZoom).toHaveText('25%')
   await clusterNavigation.getByRole('button', { name: 'Fit map' }).click()
-  await expect(clusterZoom).toHaveText('400%')
+  await expect.poll(async () => Number((await clusterZoom.textContent())?.replace('%', '')))
+    .toBeGreaterThan(400)
 
   const clusterContent = clusterMap.locator('.cluster-map-content')
   const beforePan = await clusterContent.getAttribute('transform')
@@ -417,7 +1028,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await expect.poll(async () => Number((await systemZoom.textContent())?.replace('%', '')))
     .toBeGreaterThan(120)
   await page.mouse.wheel(0, -5000)
-  await expect(systemZoom).toHaveText('400%')
+  await expect(systemZoom).toHaveText('1600%')
   await page.mouse.wheel(0, 5000)
   await expect(systemZoom).toHaveText('25%')
   await systemNavigation.getByRole('button', { name: 'Fit map' }).click()
@@ -590,10 +1201,29 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  await expect(palette).toBeVisible()
+  expect(await palette.evaluate(element => element.closest('.system-map-tools') !== null)).toBe(true)
+  const toolbar = page.getByRole('toolbar', { name: 'System map editing' })
+  const toolbarBefore = await toolbar.evaluate(element => {
+    const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
+    const buttonsFit = Array.from(element.querySelectorAll('button')).every(button => {
+      const bounds = button.getBoundingClientRect()
+      return bounds.left >= 0 && bounds.right <= window.innerWidth
+    })
+    return {
+      top: element.getBoundingClientRect().top,
+      exportTop: exportButton?.getBoundingClientRect().top ?? null,
+      buttonsFit,
+    }
+  })
+  expect(toolbarBefore.exportTop).not.toBeNull()
+  expect(toolbarBefore.buttonsFit).toBe(true)
+
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  const palette = page.getByRole('region', { name: 'Object palette' })
   const addPlanet = palette.getByRole('button', { name: 'Add Planet' })
+  await expect(addPlanet.locator('.object-mark')).toHaveText('◉')
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   await dragHtmlElementToWorldPoint(page, addPlanet, map, { x: 592, y: 280 })
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ }))
@@ -603,10 +1233,26 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   await addPlanet.press('Enter')
   const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
   await expect(systemPlanet).toBeVisible()
+  await expect(systemPlanet.locator('.object-mark')).toHaveText('◉')
   await dragToWorldPoint(page, map, map.getByRole('button', { name: /New planet 2/ })
     .locator('.object-hit-target'), { x: 592, y: 280 })
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
     .toBeVisible()
+  const toolbarAfter = await toolbar.evaluate(element => {
+    const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
+    const buttonsFit = Array.from(element.querySelectorAll('button')).every(button => {
+      const bounds = button.getBoundingClientRect()
+      return bounds.left >= 0 && bounds.right <= window.innerWidth
+    })
+    return {
+      top: element.getBoundingClientRect().top,
+      exportTop: exportButton?.getBoundingClientRect().top ?? null,
+      buttonsFit,
+    }
+  })
+  expect(toolbarAfter.top).toBe(toolbarBefore.top)
+  expect(toolbarAfter.exportTop).toBe(toolbarBefore.exportTop)
+  expect(toolbarAfter.buttonsFit).toBe(true)
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const system = exported.system
@@ -614,9 +1260,10 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   const orbitId = system.orbits[0].id
   const planets = system.objects.filter(object => object.subtype === 'planet')
   expect(planets).toHaveLength(2)
-  expect(planets.every(object =>
-    object.placement.kind === 'orbit' && object.placement.orbitId === orbitId,
-  )).toBe(true)
+  expect(planets.map(object => object.placement)).toEqual([
+    { kind: 'orbit', orbitId },
+    { kind: 'orbit', orbitId },
+  ])
 })
 
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
@@ -631,8 +1278,10 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   const palette = page.getByRole('region', { name: 'Object palette' })
 
   await expect(map).toBeVisible()
-  await expect(palette.getByRole('button')).toHaveCount(catalogueSubtypes.length)
-  await expect(palette.getByRole('group', { name: 'Celestial bodies' })).toBeVisible()
+  await expect(palette.getByRole('group', { name: 'Object categories' }).getByRole('button'))
+    .toHaveCount(7)
+  await expect(palette.getByRole('group', { name: 'Celestial bodies' }).getByRole('button'))
+    .toHaveCount(3)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
@@ -947,14 +1596,17 @@ test('the Warden can review and safely confirm dependent map deletions', async (
     .getByRole('button', { name: 'Select Jump-02 route' })
     .click()
   let directRouteDeletionRequested = false
+  let directRouteDeletionPreview = ''
   const routeDeletionDialog = async (dialog: import('@playwright/test').Dialog) => {
     directRouteDeletionRequested = true
+    directRouteDeletionPreview = dialog.message()
     await dialog.accept()
   }
   page.on('dialog', routeDeletionDialog)
   await page.getByRole('button', { name: 'Delete Jump Route Jump-02' }).click()
   await page.off('dialog', routeDeletionDialog)
-  expect(directRouteDeletionRequested).toBe(false)
+  expect(directRouteDeletionRequested).toBe(true)
+  expect(directRouteDeletionPreview).toContain('Jump-02')
   await expect(clusterMap.getByRole('button', { name: /Jump-02/ })).toHaveCount(0)
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
@@ -1090,6 +1742,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
   expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-01']))
   expect(clusterSvgInfo.titleStyle).toContain('fill:')
+  expectReadableExport(clusterSvgInfo)
   const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
   expect(clusterPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(clusterPng.size).toBeGreaterThan(100)
@@ -1163,7 +1816,9 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemSvgInfo.viewBox[2]).toBeGreaterThan(960)
   expect(systemSvgInfo.viewBox[3]).toBeGreaterThan(560)
   expect(systemSvgInfo.texts).toContain('Iria')
-  expect(systemSvgInfo.titleStyle).toContain('fill:')
+  expect(systemSvgInfo.titleStyle).toBeNull()
+  expect(systemSvgInfo.glyphFill).toBeTruthy()
+  expectReadableExport(systemSvgInfo)
   const systemPng = await downloadImage(page, 'Export star system PNG', 'image/png')
   expect(systemPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(systemPng.size).toBeGreaterThan(100)

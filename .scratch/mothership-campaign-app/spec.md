@@ -46,7 +46,7 @@ The domain model remains independent of the web framework and renderer. V1 does 
 24. As a Warden, I want to define reusable custom fields for my local app and give objects optional text, number, boolean, or single-select values, so that I can track campaign-specific details without changing the map structure.
 25. As a Warden, I want system nodes and map objects to be independently draggable, so that I can arrange cluster and system maps by hand.
 26. As a Warden, I want to pan and zoom either map with pointer-centered wheel, trackpad, or pinch gestures and visible zoom controls, so that I can inspect both dense and broad maps.
-27. As a Warden, I want visible zoom-in, zoom-out, and fit controls with a defined 25-400% range, so that map navigation is available without relying on gestures.
+27. As a Warden, I want visible zoom-in, zoom-out, and fit controls with a defined 25-1600% range, so that map navigation is available without relying on gestures.
 28. As a Warden, I want to resize an Orbit while keeping its orbiting objects at their stored angles, so that I can improve readability without changing their relative arrangement.
 29. As a Warden, I want the minimum Orbit radius to leave clearance around its host and have no arbitrary fixed maximum, so that the layout remains usable at different scales.
 30. As a Warden, I want map elements to be keyboard-focusable and have accessible names, so that I can identify and operate them without relying only on visual presentation.
@@ -88,7 +88,7 @@ The domain model remains independent of the web framework and renderer. V1 does 
 
 - The editor uses a map-first canvas, a hierarchical object/Orbit navigator, and a right-side inspector.
 - Nuxt owns the application shell and controls; a client-only D3 map component owns its SVG subtree. Both the Jump Cluster and system views use this D3/SVG approach. Do not add a force simulation or a second map renderer.
-- Both views support pointer-centered wheel/trackpad/pinch zoom, panning by dragging the empty background, and visible zoom-in, zoom-out, and fit controls. Zoom is limited to 25–400%.
+- Both views support pointer-centered wheel/trackpad/pinch zoom, panning by dragging the empty background, and visible zoom-in, zoom-out, and fit controls. Zoom is limited to 25–1600%, with unbounded panning.
 - System nodes and map objects remain separately draggable. Changing an Orbit radius moves its objects along the ring while preserving their stored angles. The radius has a host-clearance minimum and no fixed maximum.
 - SVG map elements are keyboard-focusable and have accessible names; visible controls provide an alternative to gesture-based zoom.
 - Deleting an entity with dependents requires an explicit confirmation that identifies the affected entities. Canceling leaves all data unchanged.

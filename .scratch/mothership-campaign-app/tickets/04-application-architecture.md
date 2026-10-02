@@ -25,7 +25,7 @@ Keep the map domain model independent of Nuxt and D3. Future campaign features c
 
 D3 owns the SVG subtree in a client-only map component; Vue/Nuxt owns the surrounding application and controls. This avoids Vue and D3 updating the same DOM. Use the same D3/SVG approach for both manually arranged views; a force simulation or a second graph-rendering library is unnecessary.
 
-Both views use pointer-centered wheel/trackpad/pinch zoom, pan by dragging the empty background, visible +/-/Fit controls, and a 25-400% zoom range. System nodes and map objects remain separately draggable. Keep SVG elements keyboard-focusable with accessible names, and expose zoom through the visible controls as well as gestures.
+Both views use pointer-centered wheel/trackpad/pinch zoom, pan by dragging the empty background, visible +/-/Fit controls, and a 25-1600% zoom range with unbounded panning. System nodes and map objects remain separately draggable. Keep SVG elements keyboard-focusable with accessible names, and expose zoom through the visible controls as well as gestures.
 
 Orbit radius is display layout, not a physical measurement. Its minimum must leave clearance around the host; there is no fixed maximum. Changing a radius moves orbiting objects along the ring while preserving their stored angles. If deletion has dependents, show the affected entities and require explicit confirmation before cascading; cancellation changes nothing.
 

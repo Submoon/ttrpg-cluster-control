@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   addStarSystem,
   addCustomFieldDefinition,
@@ -36,6 +36,7 @@ import {
 } from '../domain/workspace'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
+import { catalogueMarks, objectMark } from '../utils/catalogue-marks'
 
 type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
 type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject; childCount: number; depth: number }
@@ -79,6 +80,9 @@ const selectedObjectId = ref<string | null>(null)
 const selectedOrbitId = ref<string | null>(null)
 const selectedRouteId = ref<string | null>(null)
 const routeFormOpen = ref(false)
+const hierarchyPanelOpen = ref(true)
+const inspectorPanelOpen = ref(true)
+const isCompactViewport = ref(false)
 const objectDraft = reactive<SystemObjectDraft>({
   locationKey: '',
   name: '',
@@ -113,6 +117,23 @@ const exportError = ref('')
 const clusterMapRef = shallowRef<MapImageExporter | null>(null)
 const systemMapRef = shallowRef<MapImageExporter | null>(null)
 const fieldSettingsError = ref('')
+
+function updateViewportMode(): void {
+  isCompactViewport.value = window.matchMedia('(max-width: 760px)').matches
+  if (isCompactViewport.value && hierarchyPanelOpen.value && inspectorPanelOpen.value) {
+    inspectorPanelOpen.value = false
+  }
+}
+
+function toggleHierarchyPanel(): void {
+  if (!hierarchyPanelOpen.value && isCompactViewport.value) inspectorPanelOpen.value = false
+  hierarchyPanelOpen.value = !hierarchyPanelOpen.value
+}
+
+function toggleInspectorPanel(): void {
+  if (!inspectorPanelOpen.value && isCompactViewport.value) hierarchyPanelOpen.value = false
+  inspectorPanelOpen.value = !inspectorPanelOpen.value
+}
 const importError = ref('')
 const jsonImportInput = ref<HTMLInputElement | null>(null)
 const objectPaletteGroups = [
@@ -127,7 +148,10 @@ const objectPaletteGroups = [
   ...group,
   types: catalogueTypes.filter(type => type.family === group.family),
 }))
-
+const activeObjectPaletteFamily = ref(objectPaletteGroups[0]!.family)
+const activeObjectPaletteGroup = computed(() =>
+  objectPaletteGroups.find(group => group.family === activeObjectPaletteFamily.value)!,
+)
 const selectedSystem = computed(() =>
   workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
 )
@@ -317,6 +341,15 @@ watch(() => selectedSystem.value?.name, value => {
   if (value !== undefined) systemName.value = value
 }, { immediate: true })
 
+onMounted(() => {
+  updateViewportMode()
+  window.addEventListener('resize', updateViewportMode, { passive: true })
+  window.addEventListener('keydown', handleDeleteShortcut)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', updateViewportMode)
+  window.removeEventListener('keydown', handleDeleteShortcut)
+})
 onMounted(hydrate)
 
 function errorText(error: unknown): string {
@@ -753,9 +786,10 @@ async function deleteMapEntity(target: MapDeletionTarget): Promise<void> {
 
   try {
     const plan = planMapEntityDeletion(currentWorkspace, target)
-    if (plan.affectedEntities.length && !window.confirm(
-      `Delete ${plan.entityLabel}?\n\nThis also removes or updates:\n${plan.affectedEntities.map(entity => `- ${entity}`).join('\n')}`,
-    )) {
+    const confirmation = plan.affectedEntities.length
+      ? `Delete ${plan.entityLabel}?\n\nThis also removes or updates:\n${plan.affectedEntities.map(entity => `- ${entity}`).join('\n')}`
+      : `Delete ${plan.entityLabel}?`
+    if (!window.confirm(confirmation)) {
       return
     }
     editorError.value = ''
@@ -790,6 +824,35 @@ function deleteSelectedRoute(): Promise<void> {
   return route
     ? deleteMapEntity({ kind: 'route', routeId: route.id })
     : Promise.resolve()
+}
+
+function handleDeleteShortcut(event: KeyboardEvent): void {
+  const target = event.target
+  if (
+    event.key !== 'Delete'
+    || event.repeat
+    || event.defaultPrevented
+    || event.altKey
+    || event.ctrlKey
+    || event.metaKey
+    || (target instanceof HTMLElement && (
+      target.isContentEditable
+      || target.closest('input, textarea, select, [contenteditable="true"]')
+    ))
+    || saveState.value === 'saving'
+  ) return
+
+  const removeSelected = activeView.value === 'cluster'
+    ? selectedRoute.value ? deleteSelectedRoute : undefined
+    : selectedObject.value
+      ? deleteSelectedObject
+      : selectedOrbit.value
+        ? deleteSelectedOrbit
+        : undefined
+  if (!removeSelected) return
+
+  event.preventDefault()
+  void removeSelected()
 }
 
 function showChartDetails(): void {
@@ -1090,10 +1153,13 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 </script>
 
 <template>
-  <div class="app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3">
-    <header class="topbar flex min-h-20 items-center justify-between gap-4 border-b border-[#bdb3a0] max-[760px]:min-h-[4.5rem]">
+  <div
+    class="app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3"
+    :class="{ 'map-workspace-shell': workspace && (activeView === 'cluster' || selectedSystem) }"
+  >
+    <header class="topbar flex min-h-20 items-center justify-between gap-4 border-b border-[var(--line-soft)] max-[760px]:min-h-[4.5rem]">
       <a class="wordmark inline-flex items-center gap-3 text-inherit no-underline" href="/" aria-label="Mothership Campaign Cartography home">
-        <span class="wordmark-symbol grid size-[2.15rem] place-items-center rounded-full border border-[#a45138]" aria-hidden="true">M</span>
+        <span class="wordmark-symbol grid size-[2.15rem] place-items-center rounded-full border border-[var(--accent)]" aria-hidden="true">M</span>
         <span>
           <strong class="block">MOTHERSHIP</strong>
           <small class="mt-[0.22rem] block">CAMPAIGN CARTOGRAPHY</small>
@@ -1103,13 +1169,13 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
         <small>ACTIVE JUMP CLUSTER</small>
         <strong>{{ workspace.cluster.name }}</strong>
       </div>
-      <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[#54675b]">
-        <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[#82956f]" aria-hidden="true"></span>
+      <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
+        <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
         LOCAL ONLY
       </div>
     </header>
 
-    <main class="main-content mx-auto flex w-full max-w-[1500px] flex-1 flex-col self-center pb-10 pt-[clamp(2rem,4vw,3.5rem)]">
+    <main class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <input
         v-if="workspace"
         ref="jsonImportInput"
@@ -1176,14 +1242,14 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             </button>
           </fieldset>
           <p class="save-feedback text-[0.72rem]" :class="{ 'error-text': saveState === 'error' }">
-            <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[#82956f]" aria-hidden="true"></span>
+            <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
             {{ saveState === 'error' ? `Not saved. ${saveError ?? ''}` : 'Your archive remains on this device.' }}
           </p>
         </form>
       </section>
 
       <section v-else-if="workspace && activeView === 'cluster'" class="editor">
-        <header class="editor-heading mb-[1.2rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
+        <header class="editor-heading map-workspace-summary mb-[0.85rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
           <div>
             <span class="section-kicker">JUMP CLUSTER / KNOWN NETWORK</span>
             <h1 class="mt-[0.45rem] mb-[0.4rem] text-[clamp(2.1rem,4vw,3.2rem)] tracking-[-0.04em]">{{ workspace.cluster.name }}</h1>
@@ -1196,14 +1262,42 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           </div>
         </header>
 
-        <div class="editor-grid grid min-h-[690px] grid-cols-[minmax(14rem,0.75fr)_minmax(0,2.15fr)_minmax(17rem,0.95fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(13rem,0.75fr)_minmax(0,2fr)] max-[760px]:flex max-[760px]:flex-col">
-          <aside class="panel hierarchy-panel min-w-0 overflow-auto p-4 max-[760px]:order-1" aria-label="Jump Cluster contents">
+        <div class="editor-grid grid min-h-[min(78vh,56rem)] grid-cols-[minmax(13rem,0.72fr)_minmax(0,3fr)_minmax(15rem,0.85fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(12rem,0.72fr)_minmax(0,3fr)] max-[760px]:flex max-[760px]:flex-col">
+          <button
+            v-if="!hierarchyPanelOpen"
+            class="panel-reopen panel-reopen-left"
+            type="button"
+            aria-label="Show hierarchy panel"
+            aria-controls="workspace-hierarchy-panel"
+            aria-expanded="false"
+            @click="toggleHierarchyPanel"
+          >
+            <span class="panel-reopen-icon" aria-hidden="true">›</span>
+            <span class="panel-reopen-label">Hierarchy</span>
+          </button>
+          <Transition name="hierarchy-panel">
+            <aside
+              v-show="hierarchyPanelOpen"
+              id="workspace-hierarchy-panel"
+              class="panel workspace-side-panel hierarchy-panel min-w-0 overflow-auto p-4"
+              aria-label="Jump Cluster contents"
+            >
             <div class="panel-heading flex items-center justify-between gap-[0.8rem]">
               <div>
                 <span class="section-kicker">LOCAL ARCHIVE</span>
                 <h2 class="mt-[0.28rem] mb-0 text-2xl">Cluster</h2>
               </div>
               <span class="tree-count whitespace-nowrap">{{ workspace.cluster.systems.length }} systems</span>
+              <button
+                class="quiet-button panel-toggle-button"
+                type="button"
+                aria-label="Collapse hierarchy panel"
+                aria-controls="workspace-hierarchy-panel"
+                aria-expanded="true"
+                @click="toggleHierarchyPanel"
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
             </div>
 
             <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -1221,7 +1315,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   :aria-current="system.id === selectedSystemId ? 'page' : undefined"
                   @click="selectSystem(system.id)"
                 >
-                  <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[#aab1a7]">SY</span>
+                  <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
                   <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
                 </button>
                 <button
@@ -1237,7 +1331,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               </div>
             </nav>
 
-            <nav class="object-tree grid gap-[0.1rem] border-t border-[#ddd4c4] pt-[0.65rem]" aria-label="Jump Routes">
+            <nav class="object-tree grid gap-[0.1rem] border-t border-[var(--line-soft)] pt-[0.65rem]" aria-label="Jump Routes">
               <span class="subsection-label">JUMP ROUTES</span>
               <p v-if="workspace.cluster.routes.length === 0" class="empty-copy my-[0.65rem]">No Jump Routes on this chart.</p>
               <button
@@ -1250,48 +1344,64 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 :aria-current="route.id === selectedRouteId ? 'true' : undefined"
                 @click="selectRoute(route.id)"
               >
-                <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[#8c977f]" aria-hidden="true">R</span>
+                <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">R</span>
                 <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
                   {{ route.name }}
                   <small class="mt-[0.18rem] block">{{ route.toPointId ? 'Jump Points linked' : route.unresolvedExit }}</small>
                 </span>
               </button>
             </nav>
-          </aside>
+            </aside>
+          </Transition>
 
           <section class="panel map-panel flex min-w-0 flex-col p-[0.7rem]" aria-label="Jump Cluster map workspace">
-            <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="Jump Cluster editing">
-              <button class="tool-button add-button" type="button" @click="createSystem">
-                <span aria-hidden="true">+</span> Add star system
-              </button>
-              <button class="tool-button" type="button" @click="beginRoute">
-                <span aria-hidden="true">+</span> Add Jump Route
-              </button>
-              <button class="tool-button" type="button" @click="downloadClusterJson">
-                Export Jump Cluster JSON
-              </button>
-              <button
-                class="tool-button"
-                type="button"
-                :disabled="!clusterMapRef"
-                @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'png')"
-              >
-                Export Jump Cluster PNG
-              </button>
-              <button
-                class="tool-button"
-                type="button"
-                :disabled="!clusterMapRef"
-                @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'svg')"
-              >
-                Export Jump Cluster SVG
-              </button>
-              <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
-                Import JSON copy
-              </button>
+            <div class="map-tools cluster-map-tools">
+              <section class="object-palette cluster-edit-palette" role="region" aria-label="Cluster editing palette">
+                <div class="object-palette-heading">
+                  <span class="section-kicker">ADD TO CLUSTER</span>
+                </div>
+                <div class="object-palette-controls">
+                  <button class="object-palette-button" type="button" aria-label="Add star system" @click="createSystem">
+                    <span aria-hidden="true">+</span> Add system
+                  </button>
+                  <button class="object-palette-button" type="button" aria-label="Add Jump Route" @click="beginRoute">
+                    <span aria-hidden="true">+</span> Add Jump Route
+                  </button>
+                </div>
+              </section>
+              <div class="map-tools-actions">
+                <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="Jump Cluster export and import">
+                <button class="tool-button" type="button" aria-label="Export Jump Cluster JSON" title="Export Jump Cluster JSON" @click="downloadClusterJson">
+                  JSON
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export Jump Cluster PNG"
+                  title="Export Jump Cluster PNG"
+                  :disabled="!clusterMapRef"
+                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'png')"
+                >
+                  PNG
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export Jump Cluster SVG"
+                  title="Export Jump Cluster SVG"
+                  :disabled="!clusterMapRef"
+                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'svg')"
+                >
+                  SVG
+                </button>
+                <button class="tool-button" type="button" aria-label="Import JSON copy" title="Import JSON copy" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
+                  Import JSON
+                </button>
+                </div>
+                <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
+              </div>
             </div>
-            <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
-            <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
+            <div class="map-frame workspace-canvas flex min-h-0 min-w-0 overflow-hidden bg-[var(--map-bg)]">
               <ClientOnly>
                 <ClusterMap
                   ref="clusterMapRef"
@@ -1314,12 +1424,40 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             </p>
           </section>
 
-          <aside class="panel inspector-panel min-w-0 overflow-auto p-4 max-[1200px]:col-span-full max-[760px]:order-2" aria-label="Jump Route inspector">
+          <button
+            v-if="!inspectorPanelOpen"
+            class="panel-reopen panel-reopen-right"
+            type="button"
+            aria-label="Show inspector panel"
+            aria-controls="workspace-inspector-panel"
+            aria-expanded="false"
+            @click="toggleInspectorPanel"
+          >
+            <span class="panel-reopen-icon" aria-hidden="true">‹</span>
+            <span class="panel-reopen-label">Inspector</span>
+          </button>
+          <Transition name="inspector-panel">
+            <aside
+              v-show="inspectorPanelOpen"
+              id="workspace-inspector-panel"
+              class="panel workspace-side-panel inspector-panel min-w-0 overflow-auto p-4"
+              aria-label="Jump Route inspector"
+            >
+            <button
+              class="quiet-button panel-close-button"
+              type="button"
+              aria-label="Collapse inspector panel"
+              aria-controls="workspace-inspector-panel"
+              aria-expanded="true"
+              @click="toggleInspectorPanel"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
             <template v-if="selectedRoute">
               <span class="section-kicker">JUMP ROUTE / SELECTED</span>
-              <span class="type-chip mt-[0.65rem] inline-block border border-[#d2c8b7] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+              <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
               <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ selectedRoute.name }}</h2>
-              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[#ddd4c4] py-[0.8rem]">
+              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>From Jump Point</span>
                 <strong>{{ selectedRouteFrom?.point.name ?? 'Missing Jump Point' }}</strong>
                 <span>Origin system</span>
@@ -1412,7 +1550,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <p class="inspector-intro mb-[1em]">
                 Choose a route to inspect its logical Jump Point endpoints, or open a system to edit its local map.
               </p>
-              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[#ddd4c4] py-[0.8rem]">
+              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Star systems</span>
                 <strong>{{ workspace.cluster.systems.length }}</strong>
                 <span>Jump Routes</span>
@@ -1422,40 +1560,156 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               </div>
               <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
             </template>
-          </aside>
+            </aside>
+          </Transition>
         </div>
       </section>
 
       <section v-else-if="selectedSystem" class="editor">
-        <header class="editor-heading mb-[1.2rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
-          <div>
-            <span class="section-kicker">STAR SYSTEM / SCHEMATIC</span>
-            <h1 class="mt-[0.45rem] mb-[0.4rem] text-[clamp(2.1rem,4vw,3.2rem)] tracking-[-0.04em]">{{ selectedSystem.name }}</h1>
-            <p class="m-0">Plot known places by hand. Orbit rings describe hierarchy, never scale.</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-4">
-            <button class="secondary-button" type="button" @click="showClusterMap">Cluster map</button>
+        <div class="system-map-header">
+          <header class="editor-heading map-workspace-summary mb-[0.85rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
+            <div>
+              <span class="section-kicker">STAR SYSTEM / SCHEMATIC</span>
+              <h1 class="mt-[0.45rem] mb-[0.4rem] text-[clamp(2.1rem,4vw,3.2rem)] tracking-[-0.04em]">{{ selectedSystem.name }}</h1>
+              <p class="m-0">Plot known places by hand. Orbit rings describe hierarchy, never scale.</p>
+            </div>
             <div class="chart-stats flex flex-none gap-5 pb-[0.35rem] max-[760px]:gap-[0.9rem]" aria-label="Current system contents">
               <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.objects.filter(object => object.subtype === 'star').length }}</strong> STARS</span>
               <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.objects.length }}</strong> OBJECTS</span>
               <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.orbits.length }}</strong> ORBITS</span>
             </div>
+          </header>
+          <div class="map-tools system-map-tools">
+            <section class="object-palette" role="region" aria-label="Object palette">
+              <div class="object-palette-heading flex items-center justify-between gap-2">
+                <span class="section-kicker">ADD OBJECT</span>
+                <span class="object-palette-hint">Choose a category, then add or drag an object.</span>
+              </div>
+              <div class="object-palette-categories" role="group" aria-label="Object categories">
+                <button
+                  v-for="group in objectPaletteGroups"
+                  :key="group.family"
+                  class="object-palette-category-button"
+                  type="button"
+                  :aria-pressed="activeObjectPaletteFamily === group.family"
+                  :title="`Show ${group.label} objects`"
+                  @click="activeObjectPaletteFamily = group.family"
+                >
+                  {{ group.label }}
+                </button>
+              </div>
+              <div class="object-palette-controls">
+                <div class="object-palette-items" role="group" :aria-label="activeObjectPaletteGroup.label">
+                  <button
+                    v-for="type in activeObjectPaletteGroup.types"
+                    :key="type.value"
+                    class="object-palette-button"
+                    type="button"
+                    draggable="true"
+                    :disabled="saveState === 'saving'"
+                    :aria-label="`Add ${type.label}`"
+                    :title="`Drag ${type.label} onto the map, or activate to add it`"
+                    @dragstart="startObjectDrag($event, type.value)"
+                    @click="addObject(type.value)"
+                  >
+                    <span class="object-mark" aria-hidden="true">{{ catalogueMarks[type.value] }}</span>
+                    <span>{{ type.label }}</span>
+                  </button>
+                </div>
+                <button
+                  class="object-palette-button object-palette-orbit"
+                  type="button"
+                  aria-label="Add orbit"
+                  :disabled="!selectedObject || saveState === 'saving'"
+                  @click="addOrbit"
+                >
+                  <span aria-hidden="true">+</span> Add Orbit
+                </button>
+              </div>
+            </section>
+            <div class="map-tools-actions">
+              <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="System map editing">
+                <button class="tool-button" type="button" aria-label="Export star system JSON" title="Export star system JSON" @click="downloadSystemJson">
+                  JSON
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export star system PNG"
+                  title="Export star system PNG"
+                  :disabled="!systemMapRef"
+                  @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'png')"
+                >
+                  PNG
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export star system SVG"
+                  title="Export star system SVG"
+                  :disabled="!systemMapRef"
+                  @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'svg')"
+                >
+                  SVG
+                </button>
+                <button class="tool-button" type="button" aria-label="Import JSON copy" title="Import JSON copy" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
+                  Import JSON
+                </button>
+              </div>
+              <span v-if="selectedOrbit" class="placement-hint">
+                New objects go in Orbit {{ selectedOrbit.order }}
+              </span>
+              <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
+            </div>
           </div>
-        </header>
+        </div>
 
-        <div class="editor-grid grid min-h-[690px] grid-cols-[minmax(14rem,0.75fr)_minmax(0,2.15fr)_minmax(17rem,0.95fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(13rem,0.75fr)_minmax(0,2fr)] max-[760px]:flex max-[760px]:flex-col">
-          <aside class="panel hierarchy-panel min-w-0 overflow-auto p-4 max-[760px]:order-1" aria-label="System hierarchy">
-            <div class="panel-heading flex items-center justify-between gap-[0.8rem]">
+        <div class="editor-grid system-map-editor-grid grid min-h-[min(78vh,56rem)] grid-cols-[minmax(13rem,0.72fr)_minmax(0,3fr)_minmax(15rem,0.85fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(12rem,0.72fr)_minmax(0,3fr)] max-[760px]:flex max-[760px]:flex-col">
+          <button
+            v-if="!hierarchyPanelOpen"
+            class="panel-reopen panel-reopen-left"
+            type="button"
+            aria-label="Show hierarchy panel"
+            aria-controls="workspace-hierarchy-panel"
+            aria-expanded="false"
+            @click="toggleHierarchyPanel"
+          >
+            <span class="panel-reopen-icon" aria-hidden="true">›</span>
+            <span class="panel-reopen-label">Hierarchy</span>
+          </button>
+          <Transition name="hierarchy-panel">
+            <aside
+              v-show="hierarchyPanelOpen"
+              id="workspace-hierarchy-panel"
+              class="panel workspace-side-panel hierarchy-panel min-w-0 overflow-auto p-4"
+              aria-label="System hierarchy"
+            >
+            <div class="panel-heading grid grid-cols-[1fr_auto] items-center gap-2">
               <div>
                 <span class="section-kicker">LOCAL ARCHIVE</span>
                 <h2 class="mt-[0.28rem] mb-0 text-2xl">Hierarchy</h2>
               </div>
-              <button class="quiet-button" type="button" @click="showChartDetails">
-                Chart details
+              <button
+                class="quiet-button panel-toggle-button"
+                type="button"
+                aria-label="Collapse hierarchy panel"
+                aria-controls="workspace-hierarchy-panel"
+                aria-expanded="true"
+                @click="toggleHierarchyPanel"
+              >
+                <span aria-hidden="true">‹</span>
               </button>
+              <div class="col-span-2 flex flex-wrap items-center gap-2">
+                <button class="quiet-button" type="button" @click="showChartDetails">
+                  Chart details
+                </button>
+                <button class="quiet-button cluster-map-nav-button" type="button" aria-label="Cluster map" @click="showClusterMap">
+                  Cluster map
+                </button>
+              </div>
             </div>
 
-            <details class="chart-names my-4 border-y border-[#ddd4c4]">
+            <details class="chart-names my-4 border-y border-[var(--line-soft)]">
               <summary class="cursor-pointer py-[0.7rem]">Chart names</summary>
               <form class="name-form grid gap-2 pb-[0.9rem]" @submit.prevent="submitNames">
                 <label for="edit-cluster-name">Jump Cluster</label>
@@ -1480,12 +1734,12 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 :aria-current="system.id === selectedSystemId ? 'page' : undefined"
                 @click="selectSystem(system.id)"
               >
-                <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[#aab1a7]">SY</span>
+                <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
                 <span>{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
               </button>
             </nav>
 
-            <div class="tree-heading flex justify-between gap-[0.4rem] border-t border-[#ddd4c4] pt-[0.65rem] pb-[0.45rem]">
+            <div class="tree-heading flex justify-between gap-[0.4rem] border-t border-[var(--line-soft)] pt-[0.65rem] pb-[0.45rem]">
               <span class="subsection-label">OBJECTS / ORBITS</span>
               <span class="tree-count whitespace-nowrap">{{ hierarchyRows.length }} records</span>
             </div>
@@ -1503,6 +1757,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   @click="selectObject(row.object.id)"
                 >
                   <span class="key-tag">{{ row.object.locationKey }}</span>
+                  <span class="object-mark" aria-hidden="true">{{ objectMark(row.object) }}</span>
                   <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
                     {{ row.object.name }}
                     <small class="mt-[0.18rem] block">{{ row.object.family }} / {{ row.object.subtype }}</small>
@@ -1518,7 +1773,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   :aria-current="row.orbit.id === selectedOrbitId ? 'true' : undefined"
                   @click="selectOrbit(row.orbit.id)"
                 >
-                  <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[#8c977f]" aria-hidden="true">○</span>
+                  <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
                   <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
                     Orbit {{ row.orbit.order }}
                     <small class="mt-[0.18rem] block">{{ row.host.name }} / {{ row.childCount }} object{{ row.childCount === 1 ? '' : 's' }}</small>
@@ -1526,7 +1781,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </template>
             </nav>
-            <details class="my-4 border-t border-[#ddd4c4] pt-3">
+            <details class="my-4 border-t border-[var(--line-soft)] pt-3">
               <summary class="cursor-pointer py-2 text-[0.68rem]">Field definitions</summary>
               <form class="field-stack mt-3 grid gap-3" @submit.prevent="saveNativeFieldOptions">
                 <label for="atmosphere-choices">
@@ -1542,7 +1797,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </form>
 
-              <form class="field-stack mt-4 grid gap-3 border-t border-[#ddd4c4] pt-3" @submit.prevent="createCustomField">
+              <form class="field-stack mt-4 grid gap-3 border-t border-[var(--line-soft)] pt-3" @submit.prevent="createCustomField">
                 <span class="section-kicker">NEW CUSTOM FIELD</span>
                 <label for="new-custom-field-name">
                   Custom field label
@@ -1566,7 +1821,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </form>
 
-              <div v-if="workspace.objectFieldSettings.customFields.length" class="mt-4 grid gap-4 border-t border-[#ddd4c4] pt-3">
+              <div v-if="workspace.objectFieldSettings.customFields.length" class="mt-4 grid gap-4 border-t border-[var(--line-soft)] pt-3">
                 <div v-for="field in workspace.objectFieldSettings.customFields" :key="field.id" class="grid gap-2">
                   <span class="tree-copy [overflow-wrap:anywhere]">
                     {{ field.name }}
@@ -1603,75 +1858,12 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               </div>
               <p v-if="fieldSettingsError" class="feedback m-0 error-text" role="alert">{{ fieldSettingsError }}</p>
             </details>
-            <p class="hierarchy-note mt-4 mb-0 border-t border-[#ddd4c4] pt-[0.8rem]">Select an object, then add an Orbit to it. Empty Orbits are kept in the chart.</p>
-          </aside>
+            <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Select an object, then add an Orbit from the map toolbar. Empty Orbits stay on the chart.</p>
+              </aside>
+            </Transition>
 
-          <section class="panel map-panel flex min-w-0 flex-col p-[0.7rem]" aria-label="System map workspace">
-            <section
-              class="object-palette mb-[0.55rem] flex flex-wrap items-end gap-x-[0.55rem] gap-y-[0.4rem] border-b border-[#ddd4c4] pb-[0.55rem]"
-              role="region"
-              aria-label="Object palette"
-            >
-              <fieldset
-                v-for="group in objectPaletteGroups"
-                :key="group.family"
-                class="object-palette-group flex flex-wrap items-center gap-1"
-              >
-                <legend>{{ group.label }}</legend>
-                <button
-                  v-for="type in group.types"
-                  :key="type.value"
-                  class="object-palette-button"
-                  type="button"
-                  draggable="true"
-                  :disabled="saveState === 'saving'"
-                  :aria-label="`Add ${type.label}`"
-                  :title="`Drag ${type.label} onto the map, or activate to add it`"
-                  @dragstart="startObjectDrag($event, type.value)"
-                  @click="addObject(type.value)"
-                >
-                  {{ type.label }}
-                </button>
-              </fieldset>
-              <span class="object-palette-hint">Drag a type onto the map, or select it to add.</span>
-            </section>
-            <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="System map editing">
-              <button class="tool-button" type="button" @click="downloadSystemJson">
-                Export star system JSON
-              </button>
-              <button
-                class="tool-button"
-                type="button"
-                :disabled="!systemMapRef"
-                @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'png')"
-              >
-                Export star system PNG
-              </button>
-              <button
-                class="tool-button"
-                type="button"
-                :disabled="!systemMapRef"
-                @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'svg')"
-              >
-                Export star system SVG
-              </button>
-              <button class="tool-button" type="button" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
-                Import JSON copy
-              </button>
-              <button
-                class="tool-button"
-                type="button"
-                :disabled="!selectedObject"
-                @click="addOrbit"
-              >
-                <span aria-hidden="true">+</span> Add orbit
-              </button>
-              <span v-if="selectedOrbit" class="placement-hint ml-auto">
-                New objects go in Orbit {{ selectedOrbit.order }}
-              </span>
-            </div>
-            <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
-            <div class="map-frame flex min-h-[31rem] min-w-0 flex-1 overflow-hidden border border-[#bdb3a0] bg-[#f4eee2] max-[760px]:min-h-96">
+            <section class="panel map-panel flex min-w-0 flex-col p-[0.7rem]" aria-label="System map workspace">
+              <div class="map-frame workspace-canvas system-map-canvas flex min-h-0 min-w-0 overflow-hidden bg-[var(--map-bg)]">
               <ClientOnly>
                 <SystemMap
                   ref="systemMapRef"
@@ -1698,11 +1890,42 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             </p>
           </section>
 
-          <aside class="panel inspector-panel min-w-0 overflow-auto p-4 max-[1200px]:col-span-full max-[760px]:order-2" aria-label="Object inspector">
+          <button
+            v-if="!inspectorPanelOpen"
+            class="panel-reopen panel-reopen-right"
+            type="button"
+            aria-label="Show inspector panel"
+            aria-controls="workspace-inspector-panel"
+            aria-expanded="false"
+            @click="toggleInspectorPanel"
+          >
+            <span class="panel-reopen-icon" aria-hidden="true">‹</span>
+            <span class="panel-reopen-label">Inspector</span>
+          </button>
+          <Transition name="inspector-panel">
+            <aside
+              v-show="inspectorPanelOpen"
+              id="workspace-inspector-panel"
+              class="panel workspace-side-panel inspector-panel min-w-0 overflow-auto p-4"
+              aria-label="Object inspector"
+            >
+            <button
+              class="quiet-button panel-close-button"
+              type="button"
+              aria-label="Collapse inspector panel"
+              aria-controls="workspace-inspector-panel"
+              aria-expanded="true"
+              @click="toggleInspectorPanel"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
             <template v-if="selectedObject">
               <span class="section-kicker">MAP OBJECT / SELECTED</span>
-              <span class="type-chip mt-[0.65rem] inline-block border border-[#d2c8b7] px-[0.4rem] py-[0.27rem]">{{ selectedObject.family }} / {{ selectedObject.subtype }}</span>
-              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ selectedObject.name }}</h2>
+              <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">{{ selectedObject.family }} / {{ selectedObject.subtype }}</span>
+              <h2 class="object-title mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
+                <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
+                <span>{{ selectedObject.name }}</span>
+              </h2>
               <p class="inspector-intro mb-[1em]">
                 A stable map record. Edit its keyed description without leaving the current chart.
               </p>
@@ -1908,18 +2131,18 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               >
                 Delete object
               </button>
-              <p class="inspector-footnote mt-4 mb-0 border-t border-[#ddd4c4] pt-3">Location keys are required and unique within this star system.</p>
+              <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Location keys are required and unique within this star system.</p>
             </template>
 
             <template v-else-if="selectedOrbit">
               <span class="section-kicker">SYSTEM STRUCTURE / SELECTED</span>
-              <span class="type-chip mt-[0.65rem] inline-block border border-[#d2c8b7] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
+              <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
               <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ selectedOrbit?.order }}</h2>
               <p class="inspector-intro mb-[1em]">
                 Hosted by {{ selectedSystem.objects.find(object => object.id === selectedOrbit?.hostId)?.name }}.
                 Orbit rings show structure, not measured distance.
               </p>
-              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[#ddd4c4] py-[0.8rem]">
+              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Objects placed</span>
                 <strong>{{ selectedSystem.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === selectedOrbit?.id).length }}</strong>
               </div>
@@ -1953,7 +2176,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               >
                 Delete Orbit and contents
               </button>
-              <p class="inspector-footnote mt-4 mb-0 border-t border-[#ddd4c4] pt-3">Orbits are unkeyed, may remain empty, and can be nested below any map object.</p>
+              <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Orbits are unkeyed, may remain empty, and can be nested below any map object.</p>
             </template>
 
             <template v-else>
@@ -1972,19 +2195,20 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   Save chart names
                 </button>
               </form>
-              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[#ddd4c4] py-[0.8rem]">
+              <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Map objects</span>
                 <strong>{{ selectedSystem.objects.length }}</strong>
                 <span>Nested Orbits</span>
                 <strong>{{ selectedSystem.orbits.length }}</strong>
               </div>
             </template>
-          </aside>
+            </aside>
+          </Transition>
         </div>
       </section>
     </main>
 
-    <footer class="footer flex min-h-14 items-center justify-between gap-4 border-t border-[#bdb3a0] border-b-0 text-[#70786e] text-[0.52rem] tracking-[0.12em] uppercase max-[760px]:gap-2 max-[760px]:text-[0.43rem]">
+    <footer class="footer flex min-h-14 items-center justify-between gap-4 border-t border-[var(--line-soft)] border-b-0 text-[var(--text-quiet)] text-[0.52rem] tracking-[0.12em] uppercase max-[760px]:gap-2 max-[760px]:text-[0.43rem]">
       <span>WARDEN'S FIELD DESK</span>
       <span
         class="save-feedback p-0 text-[0.65rem] normal-case"
@@ -1992,7 +2216,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
         :role="saveState === 'error' ? 'alert' : 'status'"
         :aria-live="saveState === 'error' ? 'assertive' : 'polite'"
       >
-        <span class="inline-block size-[0.4rem] shrink-0 rounded-full bg-[#82956f]" aria-hidden="true"></span>
+        <span class="inline-block size-[0.4rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
         {{ saveMessage }}
       </span>
       <span>LOCAL STORAGE / NO ACCOUNT</span>
@@ -2001,20 +2225,13 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 </template>
 
 <style>
-:root {
-  color-scheme: light;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-  background: #e7dfd0;
-  color: #29332d;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-}
-
 body {
+  color: var(--text-primary);
   background:
-    radial-gradient(ellipse at 74% 15%, rgba(255, 255, 255, 0.45), transparent 36rem),
-    repeating-linear-gradient(0deg, rgba(70, 57, 38, 0.025) 0 1px, transparent 1px 5px),
-    #e7dfd0;
+    radial-gradient(ellipse at 74% 15%, rgba(78, 129, 115, 0.18), transparent 38rem),
+    radial-gradient(circle at 1px 1px, rgba(186, 208, 199, 0.07) 0.65px, transparent 0.9px),
+    var(--app-bg);
+  background-size: auto, 40px 40px, auto;
 }
 
 button,
@@ -2026,7 +2243,7 @@ textarea {
 }
 
 .wordmark-symbol {
-  color: #a45138;
+  color: var(--accent);
   font-family: Georgia, serif;
   font-size: 1.1rem;
 }
@@ -2037,7 +2254,7 @@ textarea {
 }
 
 .wordmark small {
-  color: #70786e;
+  color: var(--text-muted);
   font-size: 0.55rem;
   letter-spacing: 0.13em;
 }
@@ -2055,7 +2272,7 @@ textarea {
 }
 
 .cluster-stamp small {
-  color: #7b8176;
+  color: var(--text-muted);
 }
 
 .cluster-stamp strong {
@@ -2065,7 +2282,7 @@ textarea {
 }
 
 .section-kicker {
-  color: #a45138;
+  color: var(--accent);
 }
 
 h1,
@@ -2076,7 +2293,7 @@ h2 {
 
 .intro p,
 .message-panel > p {
-  color: #657067;
+  color: var(--text-secondary);
   font-size: 0.95rem;
   line-height: 1.75;
 }
@@ -2084,19 +2301,19 @@ h2 {
 .panel,
 .setup-panel,
 .message-panel {
-  border: 1px solid #c9c0b0;
-  background: rgba(249, 245, 236, 0.88);
-  box-shadow: 0 1.2rem 3.6rem rgba(51, 48, 39, 0.08);
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  box-shadow: 0 1.2rem 3.6rem rgba(0, 0, 0, 0.24);
 }
 
 .step-marker,
 .tree-count {
-  color: #7b8176;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 label {
-  color: #697168;
+  color: var(--text-secondary);
   font-size: 0.67rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2105,14 +2322,14 @@ label {
 input:hover,
 select:hover,
 textarea:hover {
-  border-color: #8d968b;
+  border-color: var(--line-strong);
 }
 
 input[aria-invalid="true"],
 select[aria-invalid="true"],
 textarea[aria-invalid="true"] {
-  border-color: #a45138;
-  background: #fff3eb;
+  border-color: var(--error-border);
+  background: var(--error-bg);
 }
 
 .primary-button,
@@ -2123,39 +2340,40 @@ textarea[aria-invalid="true"] {
 }
 
 .primary-button {
-  border-color: #29332d;
-  background: #29332d;
-  color: #faf5eb;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .primary-button:hover:not(:disabled) {
-  border-color: #a45138;
-  background: #a45138;
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .secondary-button,
 .quiet-button {
   background: transparent;
-  color: #43584b;
+  color: var(--text-secondary);
 }
 
 .secondary-button:hover:not(:disabled),
 .quiet-button:hover:not(:disabled) {
-  border-color: #a45138;
-  color: #a45138;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
 }
 
 .save-feedback {
-  color: #637064;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
 .saved-text {
-  color: #526b53;
+  color: var(--status-good);
 }
 
 .error-text {
-  color: #9c4932;
+  color: var(--error);
 }
 
 .feedback {
@@ -2164,40 +2382,41 @@ textarea[aria-invalid="true"] {
 }
 
 .error-panel {
-  border-color: #c78d78;
+  border-color: var(--error-border);
+  background: linear-gradient(135deg, rgba(166, 93, 93, 0.14), var(--panel-bg) 52%);
 }
 
 .editor-heading p {
-  color: #657067;
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 
 .chart-stats {
-  color: #71786f;
+  color: var(--text-muted);
 }
 
 .chart-stats strong {
-  color: #29332d;
+  color: var(--text-primary);
   font-family: Georgia, serif;
   font-size: 1.15rem;
   font-weight: 400;
 }
 
 .chart-names summary {
-  color: #43584b;
+  color: var(--text-secondary);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .subsection-label {
-  color: #797f75;
+  color: var(--text-muted);
   font-size: 0.56rem;
 }
 
 .system-link,
 .tree-row {
-  color: #29332d;
+  color: var(--text-secondary);
 }
 
 .system-link {
@@ -2206,24 +2425,25 @@ textarea[aria-invalid="true"] {
 
 .system-link:hover,
 .tree-row:hover {
-  border-color: #d2c8b7;
-  background: #fffaf0;
+  border-color: var(--line);
+  background: var(--panel-raised);
 }
 
 .system-link.active,
 .tree-row.active {
-  border-color: #c8bca9;
-  background: #fffaf0;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 .system-seal {
-  color: #526c5d;
+  color: var(--status-good);
   font: 0.55rem Consolas, monospace;
 }
 
 .system-link small,
 .tree-copy small {
-  color: #778075;
+  color: var(--text-muted);
   font: 0.58rem Consolas, monospace;
 }
 
@@ -2236,11 +2456,12 @@ textarea[aria-invalid="true"] {
 }
 
 .key-tag {
+  color: var(--map-muted);
   font: 0.58rem Consolas, monospace;
 }
 
 .orbit-row {
-  color: #43584b;
+  color: var(--text-secondary);
 }
 
 .hierarchy-panel .orbit-mark {
@@ -2249,74 +2470,126 @@ textarea[aria-invalid="true"] {
 
 .empty-copy,
 .hierarchy-note {
-  color: #788075;
+  color: var(--text-muted);
   font-size: 0.68rem;
   line-height: 1.55;
 }
 
 .tool-button {
-  background: #fffaf0;
-  color: #40594a;
+  background: var(--control-bg);
+  color: var(--text-secondary);
   font-size: 0.67rem;
 }
 
 .tool-button span {
-  color: #a45138;
+  color: var(--accent);
   font-size: 1.05rem;
 }
 
 .tool-button:hover:not(:disabled) {
-  border-color: #a45138;
-  color: #a45138;
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--accent-hover);
 }
 
 .add-button {
-  border-color: #8c9a8a;
-  background: #526a5a;
-  color: #fffaf0;
+  border-color: var(--status-good);
+  background: var(--add-bg);
+  color: var(--text-primary);
 }
 
 .add-button span {
-  color: #f0d69b;
+  color: var(--accent-hover);
 }
 
 .add-button:hover:not(:disabled) {
-  border-color: #a45138;
-  background: #a45138;
-  color: #fffaf0;
+  border-color: var(--status-good);
+  background: var(--add-bg-hover);
+  color: var(--text-primary);
 }
 
-.object-palette-group {
+.object-mark {
+  display: inline-grid;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--accent);
+  font: 0.9rem/1 "Segoe UI Symbol", Georgia, serif;
+}
+
+.object-mark-large {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 1.2rem;
+}
+
+.object-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.object-title > span:last-child {
   min-width: 0;
-  margin: 0;
-  border: 1px solid #ddd4c4;
-  padding: 0.22rem;
 }
 
-.object-palette-group legend {
-  padding: 0 0.2rem;
-  color: #788075;
-  font: 0.52rem Consolas, monospace;
+.object-palette {
+  display: grid;
+  gap: 0.35rem;
+  margin-block: 0.8rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.45rem;
+  background: rgba(10, 17, 19, 0.42);
 }
 
 .object-palette-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   min-height: 1.8rem;
-  border: 1px solid #d2c8b7;
+  border: 1px solid var(--line);
   border-radius: 2px;
-  background: #fffaf0;
-  color: #40594a;
+  background: var(--control-bg);
+  color: var(--text-secondary);
   cursor: grab;
   font-size: 0.62rem;
   padding: 0.25rem 0.42rem;
 }
 
+.object-palette-category-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: rgba(10, 17, 19, 0.42);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 0.55rem Consolas, monospace;
+  padding: 0.22rem 0.4rem;
+}
+
+.object-palette-category-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
 .object-palette-button:hover:not(:disabled) {
-  border-color: #a45138;
-  color: #a45138;
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--accent-hover);
 }
 
 .object-palette-button:focus-visible {
-  outline: 2px solid #a45138;
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.object-palette-category-button:focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -2326,38 +2599,38 @@ textarea[aria-invalid="true"] {
 
 .object-palette-button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.58;
 }
 
-.object-palette-hint {
-  color: #70786f;
+.object-palette-hint,
+.placement-hint {
+  color: var(--text-muted);
   font: 0.55rem Consolas, monospace;
 }
 
 .placement-hint {
-  color: #70786f;
-  font: 0.58rem Consolas, monospace;
+  font-size: 0.58rem;
 }
 
 .map-fallback {
-  color: #69746a;
+  color: var(--map-muted);
   font: 0.8rem Georgia, serif;
 }
 
 .map-note {
-  color: #737a70;
+  color: var(--text-muted);
   font: 0.56rem Consolas, monospace;
 }
 
 .type-chip {
-  color: #526c5d;
+  color: var(--status-good);
   font: 0.55rem Consolas, monospace;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .inspector-intro {
-  color: #727a70;
+  color: var(--text-secondary);
   font-size: 0.7rem;
   line-height: 1.55;
 }
@@ -2367,7 +2640,7 @@ textarea[aria-invalid="true"] {
 }
 
 .orbit-facts span {
-  color: #6e786e;
+  color: var(--text-muted);
 }
 
 .orbit-facts strong {
@@ -2377,9 +2650,693 @@ textarea[aria-invalid="true"] {
 }
 
 .inspector-footnote {
-  color: #788075;
+  color: var(--text-muted);
   font-size: 0.66rem;
   line-height: 1.55;
 }
 
+.map-workspace-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-inline: 0;
+}
+
+.map-workspace-shell .topbar,
+.map-workspace-shell > .footer {
+  padding-inline: clamp(1rem, 3.5vw, 3.5rem);
+}
+
+.map-workspace-shell .main-content {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin-inline: 0;
+  padding: 0;
+}
+
+.map-workspace-shell .editor {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.map-workspace-shell .system-map-header {
+  position: absolute;
+  z-index: 4;
+  top: 0.55rem;
+  right: 0.75rem;
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.map-workspace-shell .editor-heading {
+  position: absolute;
+  z-index: 3;
+  top: 0.55rem;
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  width: fit-content;
+  max-width: min(38rem, calc(100vw - 1.5rem));
+  margin: 0;
+  align-items: center;
+  gap: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.5rem 0.7rem;
+  background: rgba(18, 28, 30, 0.96);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.map-workspace-shell .system-map-header .editor-heading {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  max-width: min(38rem, 100%);
+  flex: 0 1 auto;
+}
+
+.map-workspace-shell .map-workspace-summary > div:first-child {
+  min-width: 0;
+}
+
+.map-workspace-shell .editor-heading h1 {
+  margin-block: 0.25rem;
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.map-workspace-shell .editor-heading p {
+  display: none;
+}
+
+.map-workspace-shell .editor-heading .chart-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  padding: 0;
+}
+
+.map-workspace-shell .editor-grid {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+.map-workspace-shell .map-panel {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-workspace-shell .workspace-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  min-height: 0;
+  border: 0;
+}
+
+.map-workspace-shell .map-tools {
+  position: absolute;
+  z-index: 4;
+  top: 0.55rem;
+  right: 0.75rem;
+  display: grid;
+  width: min(56rem, 54%);
+  justify-items: end;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+
+.map-workspace-shell .map-tools > * {
+  max-width: 100%;
+  pointer-events: auto;
+}
+
+.map-workspace-shell .map-tools .map-toolbar {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(18, 28, 30, 0.94);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.map-workspace-shell .map-tools .map-toolbar {
+  justify-content: flex-end;
+  padding: 0.4rem;
+}
+
+.map-workspace-shell .system-map-header .system-map-tools {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  width: auto;
+  min-width: min(100%, 32rem);
+  max-width: none;
+  flex: 1 1 40rem;
+  transform: none;
+  justify-items: stretch;
+  gap: 0.35rem;
+}
+
+.map-workspace-shell .system-map-tools .object-palette {
+  display: grid;
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: center;
+  gap: 0.35rem;
+  margin: 0;
+  border-color: var(--line);
+  padding: 0.4rem;
+  background: rgba(18, 28, 30, 0.96);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.map-workspace-shell .system-map-tools .object-palette {
+  pointer-events: none;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-button {
+  pointer-events: auto;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-category-button {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-category-button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.map-workspace-shell .object-palette-heading {
+  min-width: 0;
+}
+
+.map-workspace-shell .object-palette-hint {
+  white-space: nowrap;
+}
+
+.map-workspace-shell .object-palette-categories {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.map-workspace-shell .object-palette-controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.map-workspace-shell .object-palette-items {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.map-workspace-shell .cluster-map-tools {
+  top: 4.25rem;
+  right: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  width: auto;
+  max-width: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.map-workspace-shell .cluster-edit-palette {
+  width: fit-content;
+  max-width: min(28rem, calc(100vw - 2rem));
+  flex: 0 1 auto;
+  gap: 0.35rem;
+  margin: 0;
+  border-color: var(--line);
+  padding: 0.4rem;
+  background: rgba(18, 28, 30, 0.96);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.map-workspace-shell .object-palette-orbit {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  margin-bottom: 0.22rem;
+  white-space: nowrap;
+}
+
+.map-workspace-shell .map-tools-actions {
+  display: grid;
+  width: fit-content;
+  max-width: min(24rem, 40vw);
+  flex: 0 0 auto;
+  justify-self: end;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.map-workspace-shell .map-tools .map-toolbar .tool-button {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.map-workspace-shell .map-tools .placement-hint {
+  justify-self: end;
+  padding: 0.15rem 0.3rem;
+}
+
+.map-workspace-shell .map-tools .feedback {
+  justify-self: end;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--error-border);
+  background: var(--error-bg);
+}
+
+.map-workspace-shell .workspace-side-panel {
+  position: absolute;
+  z-index: 5;
+  top: 10rem;
+  bottom: 0.75rem;
+  width: clamp(15rem, 22vw, 21rem);
+  border: 1px solid rgba(86, 105, 107, 0.82);
+  border-radius: 3px;
+  background: rgba(18, 28, 30, 0.96);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+}
+
+.map-workspace-shell .system-map-editor-grid .workspace-side-panel {
+  top: 18.25rem;
+}
+
+.hierarchy-panel-enter-active,
+.hierarchy-panel-leave-active,
+.inspector-panel-enter-active,
+.inspector-panel-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.hierarchy-panel-enter-from,
+.hierarchy-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-0.75rem);
+}
+
+.inspector-panel-enter-from,
+.inspector-panel-leave-to {
+  opacity: 0;
+  transform: translateX(0.75rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hierarchy-panel-enter-active,
+  .hierarchy-panel-leave-active,
+  .inspector-panel-enter-active,
+  .inspector-panel-leave-active {
+    transition-duration: 0.01ms;
+  }
+}
+
+.map-workspace-shell .hierarchy-panel {
+  left: 0.75rem;
+}
+
+.map-workspace-shell .inspector-panel {
+  right: 0.75rem;
+}
+
+.map-workspace-shell .panel-toggle-button {
+  display: grid;
+  min-width: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-workspace-shell .cluster-map-nav-button {
+  background: var(--control-bg);
+}
+
+.map-workspace-shell .panel-close-button {
+  position: absolute;
+  z-index: 1;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  min-width: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-workspace-shell .panel-reopen {
+  position: absolute;
+  z-index: 6;
+  top: 50%;
+  display: flex;
+  width: 2.35rem;
+  min-height: 7rem;
+  transform: translateY(-50%);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line-strong);
+  background: rgba(18, 28, 30, 0.96);
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0.7rem 1.8rem rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.map-workspace-shell .panel-reopen-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.map-workspace-shell .panel-reopen-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 0.56rem;
+  line-height: 1;
+}
+
+.map-workspace-shell .panel-reopen:hover {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+  color: var(--accent-hover);
+}
+
+.map-workspace-shell .panel-reopen-left {
+  left: 0;
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+}
+
+.map-workspace-shell .panel-reopen-right {
+  right: 0;
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.map-workspace-shell .map-note {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .map-workspace-shell .topbar,
+  .map-workspace-shell > .footer {
+    padding-inline: 0.75rem;
+  }
+
+  .map-workspace-shell .editor-heading {
+    top: 0.45rem;
+    left: 0.5rem;
+    max-width: calc(100vw - 1rem);
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .map-workspace-shell .system-map-header {
+    top: 0.45rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    gap: 0.45rem;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading {
+    max-width: calc(100vw - 1rem);
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .map-workspace-shell .editor-heading h1 {
+    max-width: 60vw;
+    font-size: 1.35rem;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading h1 {
+    max-width: 60vw;
+    font-size: 1.35rem;
+  }
+
+  .map-workspace-shell .map-tools {
+    top: 4.15rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    justify-items: stretch;
+  }
+
+  .map-workspace-shell .system-map-header .system-map-tools {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+    gap: 0.35rem;
+  }
+
+  .map-workspace-shell .system-map-tools .object-palette {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .map-workspace-shell .object-palette-hint {
+    display: none;
+  }
+
+  .map-workspace-shell .system-map-tools .map-tools-actions {
+    width: fit-content;
+    max-width: 100%;
+    justify-self: end;
+  }
+
+  .map-workspace-shell .cluster-map-tools {
+    top: 4.15rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .map-workspace-shell .cluster-edit-palette {
+    max-width: calc(100vw - 1rem);
+  }
+
+  .map-workspace-shell .cluster-map-tools .map-tools-actions {
+    width: fit-content;
+    max-width: 100%;
+    align-self: flex-end;
+  }
+
+  .map-workspace-shell .system-map-tools .map-toolbar {
+    width: fit-content;
+    max-width: 100%;
+    justify-content: flex-end;
+  }
+
+  .map-workspace-shell .map-tools:not(.system-map-tools) .map-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .map-workspace-shell .workspace-side-panel {
+    top: 14rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .workspace-side-panel {
+    top: 25rem;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen {
+    top: auto;
+    bottom: 2rem;
+    transform: none;
+  }
+
+  .map-workspace-shell .map-navigation {
+    bottom: 0.5rem;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 320px) {
+  .map-workspace-shell .topbar {
+    min-height: 3.25rem;
+  }
+
+  .map-workspace-shell .wordmark {
+    gap: 0.45rem;
+  }
+
+  .map-workspace-shell .wordmark-symbol {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .map-workspace-shell .local-badge {
+    display: none;
+  }
+
+  .map-workspace-shell .wordmark small,
+  .map-workspace-shell .system-map-header .editor-heading .section-kicker,
+  .map-workspace-shell .system-map-tools .object-palette-heading {
+    display: none;
+  }
+
+  .map-workspace-shell .system-map-header {
+    top: 0.25rem;
+    gap: 0.5rem;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading {
+    max-width: 14rem;
+    gap: 0.35rem;
+    padding: 0.3rem 0.45rem;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading h1 {
+    max-width: 8rem;
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.1;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading .chart-stats {
+    gap: 0.2rem;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading .chart-stats > span {
+    font-size: 0.42rem;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .map-workspace-shell .system-map-header .editor-heading .chart-stats strong {
+    display: inline;
+    margin: 0;
+    font-size: 0.7rem;
+    line-height: 1;
+  }
+
+  .map-workspace-shell .system-map-header .system-map-tools {
+    min-width: 0;
+    flex-basis: 100%;
+    gap: 0.2rem;
+  }
+
+  .map-workspace-shell .system-map-tools .object-palette {
+    gap: 0.2rem;
+    padding: 0.25rem;
+  }
+
+  .map-workspace-shell .object-palette-categories {
+    gap: 0.15rem;
+  }
+
+  .map-workspace-shell .system-map-tools .object-palette-button,
+  .map-workspace-shell .system-map-tools .object-palette-category-button {
+    min-height: 1.5rem;
+    gap: 0.15rem;
+    padding: 0.12rem 0.25rem;
+    font-size: 0.55rem;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .object-palette-orbit {
+    margin-bottom: 0;
+  }
+
+  .map-workspace-shell .map-navigation {
+    top: 0.25rem;
+    right: 2.75rem;
+    bottom: auto;
+    left: auto;
+    transform: none;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen {
+    position: fixed;
+    top: 0.5rem;
+    bottom: auto;
+    width: auto;
+    min-height: 1.6rem;
+    transform: none;
+    flex-direction: row;
+    gap: 0.25rem;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen-icon {
+    font-size: 0.8rem;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen-label {
+    writing-mode: horizontal-tb;
+    font-size: 0.45rem;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen-left {
+    right: 5.5rem;
+    left: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+  }
+
+  .map-workspace-shell .system-map-editor-grid .panel-reopen-right {
+    right: 0.5rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+  }
+}
 </style>

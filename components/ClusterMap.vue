@@ -9,6 +9,7 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
+import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
 
 const props = defineProps<{
   cluster: JumpCluster
@@ -135,8 +136,8 @@ function fitMap(): void {
     return
   }
 
-  const scale = Math.max(0.25, Math.min(
-    4,
+  const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(
+    MAP_ZOOM_MAX_SCALE,
     (960 - 80) / bounds.width,
     (560 - 80) / bounds.height,
   ))
@@ -362,7 +363,7 @@ function render(): void {
 
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent([[0, 0], [960, 560]])
-    .scaleExtent([0.25, 4])
+    .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
     .filter((event) => {
       const target = event.target
       const isMapMark = target instanceof Element
@@ -393,11 +394,11 @@ defineExpose({ exportImage })
 </script>
 
 <template>
-  <div class="map-view flex h-full min-h-[31rem] min-w-0 flex-1 flex-col">
-    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[#d5cbbb] bg-[#f4eee2] px-2 py-1" role="toolbar" aria-label="Map navigation">
-      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= 25" @click="zoomBy(1 / 1.2)">−</button>
+  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
-      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= 400" @click="zoomBy(1.2)">+</button>
+      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
       <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
     </div>
     <svg
@@ -411,39 +412,56 @@ defineExpose({ exportImage })
 </template>
 
 <style>
+.map-view {
+  position: relative;
+}
+
 .cluster-map-svg {
-  background: #f4eee2;
+  background: var(--map-bg);
+}
+
+.map-navigation {
+  position: absolute;
+  z-index: 2;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(18, 28, 30, 0.94);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(12px);
 }
 
 .map-navigation button {
   min-width: 2rem;
-  border: 1px solid #bdb3a0;
+  border: 1px solid var(--line);
   border-radius: 2px;
-  background: #fffaf0;
-  color: #29332d;
+  background: var(--control-bg);
+  color: var(--text-primary);
   font: 12px Consolas, monospace;
   line-height: 1.5rem;
 }
 
 .map-navigation button:focus-visible {
-  outline: 2px solid #a45138;
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
 .map-navigation button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.58;
 }
 
 .map-navigation output {
   min-width: 3.5rem;
-  color: #29332d;
+  color: var(--text-primary);
   font: 11px Consolas, monospace;
   text-align: center;
 }
 
 .cluster-map-background {
-  fill: #f4eee2;
+  fill: var(--map-bg);
   pointer-events: none;
 }
 
@@ -454,18 +472,18 @@ defineExpose({ exportImage })
 
 .cluster-map-grid-line {
   fill: none;
-  stroke: #e1d7c6;
+  stroke: var(--map-grid-line);
   stroke-width: 1;
 }
 
 .cluster-map-title {
-  fill: #29332d;
+  fill: var(--map-text);
   font: 500 20px Georgia, serif;
 }
 
 .cluster-map-caption,
 .cluster-map-count {
-  fill: #69746a;
+  fill: var(--map-muted);
   font: 10px Consolas, monospace;
   letter-spacing: 0.08em;
 }
@@ -483,18 +501,18 @@ defineExpose({ exportImage })
 
 .cluster-route-line {
   fill: none;
-  stroke: #536a5d;
+  stroke: var(--map-route);
   stroke-width: 2.4;
 }
 
 .cluster-route.is-unresolved .cluster-route-line {
-  stroke: #9e4c36;
+  stroke: var(--map-unresolved);
   stroke-dasharray: 8 7;
 }
 
 .cluster-route.is-selected .cluster-route-line,
 .cluster-route:focus .cluster-route-line {
-  stroke: #a45138;
+  stroke: var(--map-selected);
   stroke-width: 3.5;
 }
 
@@ -504,14 +522,14 @@ defineExpose({ exportImage })
 }
 
 .cluster-route-label-bg {
-  fill: #fffaf0;
-  stroke: #aaa18f;
+  fill: var(--map-label-bg);
+  stroke: var(--map-label-border);
   pointer-events: none;
 }
 
 .cluster-route-label,
 .cluster-exit-label {
-  fill: #303a33;
+  fill: var(--map-text);
   font: 10px Consolas, monospace;
   pointer-events: none;
 }
@@ -521,13 +539,13 @@ defineExpose({ exportImage })
 }
 
 .cluster-exit-mark {
-  fill: #f5f0e6;
-  stroke: #9e4c36;
+  fill: var(--map-card);
+  stroke: var(--map-unresolved);
   stroke-width: 2;
 }
 
 .cluster-exit-label {
-  fill: #9e4c36;
+  fill: var(--map-unresolved);
 }
 
 .cluster-system-node {
@@ -540,38 +558,38 @@ defineExpose({ exportImage })
 }
 
 .cluster-system-card {
-  fill: #fffaf0;
-  stroke: #8f9a8e;
+  fill: var(--map-card);
+  stroke: var(--map-label-border);
   stroke-width: 1.5;
 }
 
 .cluster-system-node:hover .cluster-system-card,
 .cluster-system-node:focus .cluster-system-card,
 .cluster-system-node.is-selected .cluster-system-card {
-  stroke: #a45138;
+  stroke: var(--map-selected);
   stroke-width: 2.5;
 }
 
 .cluster-system-seal {
-  fill: #526a5a;
+  fill: var(--map-installation);
 }
 
 .cluster-system-name {
-  fill: #29332d;
+  fill: var(--map-text);
   font: 14px Georgia, serif;
   text-anchor: middle;
   pointer-events: none;
 }
 
 .cluster-system-meta {
-  fill: #69746a;
+  fill: var(--map-muted);
   font: 9px Consolas, monospace;
   text-anchor: middle;
   pointer-events: none;
 }
 
 .cluster-map-empty {
-  fill: #69746a;
+  fill: var(--map-muted);
   font: 16px Georgia, serif;
 }
 </style>
