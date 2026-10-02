@@ -65,6 +65,7 @@ Implement in dependency order; each ticket also lists its blockers.
 | 20 | [20. Including the system name in system-map image exports](tickets/20-system-name-in-image-exports.md) | None |
 | 21 | [21. Expanding the system-map grid and layout bounds](tickets/21-expanding-system-map-grid.md) | None |
 | 22 | [22. Supporting Jump levels and destinations](tickets/22-jump-levels-and-destinations.md) | None |
+| 23 | [23. Improving text readability in Add Object and Map Files](tickets/23-map-actions-typography.md) | None |
 
 ## Out of scope
 
