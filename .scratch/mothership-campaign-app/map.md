@@ -39,6 +39,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [12. Exporting clusters and systems as versioned JSON](tickets/12-json-export.md): versioned cluster and standalone-system exports preserve maps, custom fields, and durable layout while excluding temporary view state.
 - [13. Importing JSON as a safe independent copy](tickets/13-json-import.md): validated, confirmed JSON imports create independent copies with remapped IDs and references while preserving existing campaign work.
 - [14. Exporting complete maps as PNG and SVG](tickets/14-image-export.md): both map views export their complete rendered SVG scene directly or rasterized through Canvas, independent of current pan and zoom.
+- [15. Verifying the V1 workflow in one browser acceptance test](tickets/15-browser-acceptance.md): one end-to-end browser path verifies persistence, safe import/deletion, and complete map exports.
 
 ## Implementation tickets
 

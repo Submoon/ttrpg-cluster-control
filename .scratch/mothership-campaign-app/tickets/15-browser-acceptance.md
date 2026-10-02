@@ -2,7 +2,8 @@
 title: 15. Verifying the V1 workflow in one browser acceptance test
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -35,6 +36,12 @@ As a Warden, I can rely on one browser-level acceptance path to verify that the 
 - [12. Exporting clusters and systems as versioned JSON](12-json-export.md)
 - [13. Importing JSON as a safe independent copy](13-json-import.md)
 - [14. Exporting complete maps as PNG and SVG](14-image-export.md)
+
+## Resolution
+
+- Added one end-to-end Playwright acceptance path for workspace creation and editing, reload persistence, accessible map navigation, dependent deletion cancellation and confirmation, safe import preview/copy/remapping, preservation of existing entities, and full cluster/system JSON, PNG, and SVG exports.
+- The existing cluster-export drag now targets the accessible system control instead of a transient SVG child.
+- Validation passed: `npm run typecheck` and `npm test` (9 browser acceptance tests).
 
 ## Source specs
 
