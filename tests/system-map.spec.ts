@@ -181,16 +181,30 @@ async function orbitalAngle(map: import('@playwright/test').Locator): Promise<nu
   })
 }
 
+async function setHeaderMapActionsOpen(
+  page: import('@playwright/test').Page,
+  open: boolean,
+): Promise<void> {
+  const toggle = page.locator('.header-map-actions-toggle')
+  const isOpen = await toggle.getAttribute('aria-expanded') === 'true'
+  if (isOpen !== open) await toggle.click()
+}
+
 async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: buttonName }).click()
-  await downloadPromise
-  const json = await page.evaluate(async () => {
-    const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
-    if (!blob) throw new Error('Could not read the downloaded JSON file.')
-    return blob.text()
-  })
-  return JSON.parse(json) as ExportedMap
+  await setHeaderMapActionsOpen(page, true)
+  try {
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: buttonName }).click()
+    await downloadPromise
+    const json = await page.evaluate(async () => {
+      const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
+      if (!blob) throw new Error('Could not read the downloaded JSON file.')
+      return blob.text()
+    })
+    return JSON.parse(json) as ExportedMap
+  } finally {
+    await setHeaderMapActionsOpen(page, false)
+  }
 }
 
 type DownloadedImage = {
@@ -207,31 +221,36 @@ async function downloadImage(
   buttonName: string,
   mimeType: 'image/svg+xml' | 'image/png',
 ): Promise<DownloadedImage> {
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: buttonName }).click()
-  await downloadPromise
-  return page.evaluate(async (expectedType) => {
-    const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
-    const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
-    if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-    const [blob] = blobs.splice(index, 1)
+  await setHeaderMapActionsOpen(page, true)
+  try {
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: buttonName }).click()
+    await downloadPromise
+    return page.evaluate(async (expectedType) => {
+      const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
+      const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
+      if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
+      const [blob] = blobs.splice(index, 1)
 
-    if (expectedType === 'image/svg+xml') {
-      return { type: blob.type, size: blob.size, text: await blob.text() }
-    }
+      if (expectedType === 'image/svg+xml') {
+        return { type: blob.type, size: blob.size, text: await blob.text() }
+      }
 
-    const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
-    const dimensions = new DataView(bytes.buffer)
-    const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
-    if (intermediateSvg >= 0) blobs.splice(intermediateSvg, 1)
-    return {
-      type: blob.type,
-      size: blob.size,
-      signature: Array.from(bytes.slice(0, 8)),
-      width: dimensions.getUint32(16),
-      height: dimensions.getUint32(20),
-    }
-  }, mimeType)
+      const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
+      const dimensions = new DataView(bytes.buffer)
+      const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
+      if (intermediateSvg >= 0) blobs.splice(intermediateSvg, 1)
+      return {
+        type: blob.type,
+        size: blob.size,
+        signature: Array.from(bytes.slice(0, 8)),
+        width: dimensions.getUint32(16),
+        height: dimensions.getUint32(20),
+      }
+    }, mimeType)
+  } finally {
+    await setHeaderMapActionsOpen(page, false)
+  }
 }
 
 async function inspectImageSvg(
@@ -506,11 +525,9 @@ test('the object palette stays aligned with the system summary and adapts to nar
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const palette = page.getByRole('region', { name: 'Object palette' })
-  const toolbar = page.getByRole('toolbar', { name: 'System map editing' })
   const clusterMapButton = page.getByRole('button', { name: 'Cluster map' })
   const layout = await page.evaluate(() => {
     const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
-    const toolbar = document.querySelector<HTMLElement>('[aria-label="System map editing"]')
     const buttons = Array.from(document.querySelectorAll<HTMLElement>('button'))
     const clusterMapButton = buttons.find(button => button.textContent?.trim() === 'Cluster map')
     const chartDetailsButton = buttons.find(button => button.textContent?.trim() === 'Chart details')
@@ -520,14 +537,10 @@ test('the object palette stays aligned with the system summary and adapts to nar
     const mapSvg = document.querySelector<SVGSVGElement>('.system-map-canvas .system-map-svg')
     const summary = document.querySelector<HTMLElement>('.editor-heading')
     const tools = document.querySelector<HTMLElement>('.system-map-tools')
-    if (
-      !palette || !toolbar || !clusterMapButton || !mapCanvas || !hierarchy || !inspector
-      || !mapSvg || !summary || !tools
-    ) {
+    if (!palette || !clusterMapButton || !mapCanvas || !hierarchy || !inspector || !mapSvg || !summary || !tools) {
       throw new Error('The map editing controls are incomplete.')
     }
     const background = getComputedStyle(clusterMapButton).backgroundColor
-    const exportBar = toolbar.getBoundingClientRect()
     const paletteBounds = palette.getBoundingClientRect()
     const mapBounds = mapCanvas.getBoundingClientRect()
     const hierarchyBounds = hierarchy.getBoundingClientRect()
@@ -540,8 +553,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
     return {
       paletteFloatsAboveMap: palette.closest('.map-tools') !== null,
       addOrbitGroupedWithPalette: palette.contains(document.querySelector('[aria-label="Add orbit"]')),
-      exportBarWidth: exportBar.width,
-      viewportWidth: window.innerWidth,
+      noMapToolbar: tools.querySelector('.map-toolbar') === null,
       paletteCenteredInTools: Math.abs(
         paletteBounds.left + paletteBounds.width / 2
           - toolsBounds.left - toolsBounds.width / 2,
@@ -555,7 +567,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
           && bounds.bottom <= paletteBounds.bottom
       }),
       objectButtonCount: objectButtons.length,
-      toolbarClearsPanels: toolsBounds.bottom <= hierarchyBounds.top
+      toolsClearPanels: toolsBounds.bottom <= hierarchyBounds.top
         && toolsBounds.bottom <= inspectorBounds.top,
       clusterButtonIsOpaque: background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent',
       clusterButtonInHierarchy: Boolean(clusterMapButton?.closest('#workspace-hierarchy-panel')),
@@ -568,12 +580,12 @@ test('the object palette stays aligned with the system summary and adapts to nar
   expect({
     paletteFloatsAboveMap: layout.paletteFloatsAboveMap,
     addOrbitGroupedWithPalette: layout.addOrbitGroupedWithPalette,
-    exportBarIsCompact: layout.exportBarWidth <= layout.viewportWidth * 0.45,
+    noMapToolbar: layout.noMapToolbar,
     paletteCenteredInTools: layout.paletteCenteredInTools,
     sameTopRow: layout.sameTopRow,
     allObjectButtonsFit: layout.allObjectButtonsFit,
     activeCategoryOnly: layout.objectButtonCount === 3,
-    toolbarClearsPanels: layout.toolbarClearsPanels,
+    toolsClearPanels: layout.toolsClearPanels,
     clusterButtonIsOpaque: layout.clusterButtonIsOpaque,
     clusterButtonInHierarchy: layout.clusterButtonInHierarchy,
     clusterButtonBesideChartDetails: layout.clusterButtonBesideChartDetails,
@@ -581,19 +593,19 @@ test('the object palette stays aligned with the system summary and adapts to nar
   }).toEqual({
     paletteFloatsAboveMap: true,
     addOrbitGroupedWithPalette: true,
-    exportBarIsCompact: true,
+    noMapToolbar: true,
     paletteCenteredInTools: true,
     sameTopRow: true,
     allObjectButtonsFit: true,
     activeCategoryOnly: true,
-    toolbarClearsPanels: true,
+    toolsClearPanels: true,
     clusterButtonIsOpaque: true,
     clusterButtonInHierarchy: true,
     clusterButtonBesideChartDetails: true,
     mapFillsCanvas: true,
   })
   await expect(palette).toBeVisible()
-  await expect(toolbar).toBeVisible()
+  await expect(page.locator('.header-map-actions-toggle')).toBeVisible()
   await expect(clusterMapButton).toBeVisible()
 
   await page.setViewportSize({ width: 479, height: 720 })
@@ -778,30 +790,70 @@ test('object category tabs reveal one group beside the title or below it when sp
   expect(compactLayout).toBe(true)
 })
 
-test('cluster creation actions share a floating palette separate from export controls', async ({ page }) => {
+test('cluster creation actions stay in their palette and header file actions follow the active map', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
-  const groups = await page.evaluate(() => {
-    const palette = document.querySelector<HTMLElement>('[aria-label="Cluster editing palette"]')
-    const toolbar = document.querySelector<HTMLElement>('[aria-label="Jump Cluster export and import"]')
+  const fileActionsMenu = page.locator('.header-map-actions')
+  const fileActionsToggle = fileActionsMenu.locator('.header-map-actions-toggle')
+  await expect(fileActionsToggle).toHaveAttribute(
+    'aria-label',
+    'Open map file actions for Jump Cluster Kestrel Reach',
+  )
+  await fileActionsToggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(fileActionsToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(fileActionsToggle).toHaveAttribute(
+    'aria-label',
+    'Close map file actions for Jump Cluster Kestrel Reach',
+  )
+  const clusterActions = page.getByRole('group', {
+    name: 'Map file actions for Jump Cluster Kestrel Reach',
+  })
+  await expect(clusterActions.getByRole('button', { name: 'Export Jump Cluster JSON' })).toBeVisible()
+  await expect(clusterActions.getByRole('button', { name: 'Import JSON copy' })).toBeVisible()
+  await expect(clusterActions)
+    .toContainText('Import JSON creates a separate copy in the current Jump Cluster: Kestrel Reach.')
+  await expect(page.locator('.cluster-map-tools .map-toolbar')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(fileActionsToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(fileActionsToggle).toBeFocused()
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  await expect(fileActionsToggle).toHaveAttribute(
+    'aria-label',
+    'Open map file actions for star system Vesper',
+  )
+  await setHeaderMapActionsOpen(page, true)
+  const systemActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
+  await expect(systemActions.getByRole('button', { name: 'Export star system JSON' })).toBeVisible()
+  await expect(systemActions.getByRole('button', { name: 'Export star system PNG' })).toBeVisible()
+  await expect(systemActions.getByRole('button', { name: 'Import JSON copy' })).toBeVisible()
+  await expect(page.locator('.system-map-tools .map-toolbar')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 320, height: 720 })
+  const narrowLayout = await systemActions.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    const buttons = Array.from(element.querySelectorAll('button'))
     return {
-      addSystemInPalette: Boolean(palette?.querySelector('[aria-label="Add star system"]')),
-      addRouteInPalette: Boolean(palette?.querySelector('[aria-label="Add Jump Route"]')),
-      addSystemInExportToolbar: Boolean(toolbar?.querySelector('[aria-label="Add star system"]')),
-      addRouteInExportToolbar: Boolean(toolbar?.querySelector('[aria-label="Add Jump Route"]')),
+      panelWithinViewport: bounds.left >= 0 && bounds.right <= window.innerWidth,
+      buttonsFit: buttons.every((button) => {
+        const buttonBounds = button.getBoundingClientRect()
+        return buttonBounds.left >= bounds.left && buttonBounds.right <= bounds.right
+      }),
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
     }
   })
-
-  expect(groups).toEqual({
-    addSystemInPalette: true,
-    addRouteInPalette: true,
-    addSystemInExportToolbar: false,
-    addRouteInExportToolbar: false,
+  expect(narrowLayout).toEqual({
+    panelWithinViewport: true,
+    buttonsFit: true,
+    noHorizontalOverflow: true,
   })
+  await setHeaderMapActionsOpen(page, false)
 })
 
 test('the system map fills the canvas and its summary floats above the scene', async ({ page }) => {
@@ -1204,8 +1256,9 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   const palette = page.getByRole('region', { name: 'Object palette' })
   await expect(palette).toBeVisible()
   expect(await palette.evaluate(element => element.closest('.system-map-tools') !== null)).toBe(true)
-  const toolbar = page.getByRole('toolbar', { name: 'System map editing' })
-  const toolbarBefore = await toolbar.evaluate(element => {
+  await setHeaderMapActionsOpen(page, true)
+  const fileActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
+  const fileActionsBefore = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
     const buttonsFit = Array.from(element.querySelectorAll('button')).every(button => {
       const bounds = button.getBoundingClientRect()
@@ -1217,8 +1270,9 @@ test('the object palette adds objects by drag or keyboard and drops planets into
       buttonsFit,
     }
   })
-  expect(toolbarBefore.exportTop).not.toBeNull()
-  expect(toolbarBefore.buttonsFit).toBe(true)
+  expect(fileActionsBefore.exportTop).not.toBeNull()
+  expect(fileActionsBefore.buttonsFit).toBe(true)
+  await setHeaderMapActionsOpen(page, false)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
@@ -1238,7 +1292,8 @@ test('the object palette adds objects by drag or keyboard and drops planets into
     .locator('.object-hit-target'), { x: 592, y: 280 })
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
     .toBeVisible()
-  const toolbarAfter = await toolbar.evaluate(element => {
+  await setHeaderMapActionsOpen(page, true)
+  const fileActionsAfter = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
     const buttonsFit = Array.from(element.querySelectorAll('button')).every(button => {
       const bounds = button.getBoundingClientRect()
@@ -1250,9 +1305,10 @@ test('the object palette adds objects by drag or keyboard and drops planets into
       buttonsFit,
     }
   })
-  expect(toolbarAfter.top).toBe(toolbarBefore.top)
-  expect(toolbarAfter.exportTop).toBe(toolbarBefore.exportTop)
-  expect(toolbarAfter.buttonsFit).toBe(true)
+  expect(fileActionsAfter.top).toBe(fileActionsBefore.top)
+  expect(fileActionsAfter.exportTop).toBe(fileActionsBefore.exportTop)
+  expect(fileActionsAfter.buttonsFit).toBe(true)
+  await setHeaderMapActionsOpen(page, false)
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const system = exported.system
@@ -1726,10 +1782,12 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+  const createdRoute = clusterMap.getByRole('button', { name: /Jump-01/ })
+  await expect(createdRoute).toBeVisible()
+  await expect(createdRoute).toHaveClass(/is-selected/)
 
   const secondSystem = clusterMap.getByRole('button', { name: 'Open New System 2 system map' })
-  await dragBy(page, secondSystem, { x: 48, y: 24 })
+  await dragBy(page, secondSystem.locator('.cluster-system-card'), { x: 48, y: 24 })
   await page.getByRole('toolbar', { name: 'Map navigation' }).getByRole('button', { name: 'Zoom in' }).click()
   await panMap(page, clusterMap, { x: 24, y: 18 })
   const clusterViewportTransform = await clusterMap.locator('.cluster-map-content').getAttribute('transform')
@@ -1865,7 +1923,12 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
   const importFile = page.getByLabel('JSON map file')
+  await setHeaderMapActionsOpen(page, true)
+  const invalidFileChooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Import JSON copy' }).click()
+  expect((await invalidFileChooser).isMultiple()).toBe(false)
   await setJsonFile(importFile, 'invalid.json', '{')
+  await setHeaderMapActionsOpen(page, false)
   await expect(page.getByRole('alert').last()).toContainText('valid JSON')
   const systemList = page.getByRole('navigation', { name: 'Star systems' })
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)

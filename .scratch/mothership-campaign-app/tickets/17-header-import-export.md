@@ -2,7 +2,8 @@
 title: 17. Moving map import and export actions into the header
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -22,6 +23,12 @@ As a Warden, I can find map import and export actions in the application header,
 ## Blocked by
 
 - None.
+
+## Resolution
+
+Moved Jump Cluster and star-system JSON/image exports and JSON import into the responsive application header, with export actions scoped to the active map and duplicate map-toolbar actions removed. The existing import flow still validates, previews, confirms, and adds JSON as an independent copy to the current Jump Cluster. The header disclosure is keyboard accessible and closes on Escape with focus restored.
+
+- Validation passed: `npm run typecheck` and `npm test` (22 browser tests).
 
 ## Source specs
 

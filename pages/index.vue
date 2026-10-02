@@ -114,6 +114,8 @@ const routeDraft = reactive<JumpRouteDraft>({
 const formError = ref('')
 const editorError = ref('')
 const exportError = ref('')
+const headerMapActionsOpen = ref(false)
+const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
 const clusterMapRef = shallowRef<MapImageExporter | null>(null)
 const systemMapRef = shallowRef<MapImageExporter | null>(null)
 const fieldSettingsError = ref('')
@@ -154,6 +156,10 @@ const activeObjectPaletteGroup = computed(() =>
 )
 const selectedSystem = computed(() =>
   workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
+)
+const mapFileScope = computed(() => activeView.value === 'cluster'
+  ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
+  : `star system ${selectedSystem.value?.name ?? ''}`,
 )
 const selectedObject = computed(() =>
   selectedSystem.value?.objects.find(object => object.id === selectedObjectId.value),
@@ -436,6 +442,11 @@ async function downloadMapImage(
 
 function openJsonImportPicker(): void {
   jsonImportInput.value?.click()
+}
+
+function closeHeaderMapActions(): void {
+  headerMapActionsOpen.value = false
+  headerMapActionsToggle.value?.focus()
 }
 
 function importPreview(summary: JsonImportSummary): string {
@@ -1169,7 +1180,118 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
         <small>ACTIVE JUMP CLUSTER</small>
         <strong>{{ workspace.cluster.name }}</strong>
       </div>
-      <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
+      <div v-if="workspace" class="topbar-actions flex shrink-0 items-center gap-2">
+        <div class="header-map-actions" @keydown.esc.stop.prevent="closeHeaderMapActions">
+          <button
+            ref="headerMapActionsToggle"
+            class="header-map-actions-toggle"
+            type="button"
+            aria-controls="header-map-actions-panel"
+            :aria-expanded="headerMapActionsOpen"
+            :aria-label="`${headerMapActionsOpen ? 'Close' : 'Open'} map file actions for ${mapFileScope}`"
+            :title="`Map file actions for ${mapFileScope}`"
+            @click="headerMapActionsOpen = !headerMapActionsOpen"
+          >
+            <span>MAP FILES</span>
+            <small>{{ activeView === 'cluster' ? 'CLUSTER' : 'SYSTEM' }}</small>
+            <span class="header-map-actions-indicator" aria-hidden="true">
+              {{ headerMapActionsOpen ? '-' : '+' }}
+            </span>
+          </button>
+          <div
+            v-show="headerMapActionsOpen"
+            id="header-map-actions-panel"
+            class="header-map-actions-panel"
+            role="group"
+            :aria-label="`Map file actions for ${mapFileScope}`"
+          >
+            <p class="header-map-actions-heading">EXPORT / {{ mapFileScope }}</p>
+            <div class="header-map-actions-exports">
+              <template v-if="activeView === 'cluster'">
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export Jump Cluster JSON"
+                  title="Export Jump Cluster JSON"
+                  @click="downloadClusterJson"
+                >
+                  JSON
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export Jump Cluster PNG"
+                  title="Export Jump Cluster PNG"
+                  :disabled="!clusterMapRef"
+                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'png')"
+                >
+                  PNG
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export Jump Cluster SVG"
+                  title="Export Jump Cluster SVG"
+                  :disabled="!clusterMapRef"
+                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'svg')"
+                >
+                  SVG
+                </button>
+              </template>
+              <template v-else-if="selectedSystem">
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export star system JSON"
+                  title="Export star system JSON"
+                  @click="downloadSystemJson"
+                >
+                  JSON
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export star system PNG"
+                  title="Export star system PNG"
+                  :disabled="!systemMapRef"
+                  @click="downloadMapImage(systemMapRef, selectedSystem.name, 'star-system', 'png')"
+                >
+                  PNG
+                </button>
+                <button
+                  class="tool-button"
+                  type="button"
+                  aria-label="Export star system SVG"
+                  title="Export star system SVG"
+                  :disabled="!systemMapRef"
+                  @click="downloadMapImage(systemMapRef, selectedSystem.name, 'star-system', 'svg')"
+                >
+                  SVG
+                </button>
+              </template>
+            </div>
+            <p class="header-map-actions-note">
+              Import JSON creates a separate copy in the current Jump Cluster: {{ workspace.cluster.name }}.
+            </p>
+            <button
+              class="tool-button header-map-actions-import"
+              type="button"
+              aria-label="Import JSON copy"
+              title="Import JSON copy"
+              :disabled="saveState === 'saving'"
+              @click="openJsonImportPicker"
+            >
+              Import JSON
+            </button>
+            <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
+          </div>
+        </div>
+        <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
+          <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
+          LOCAL ONLY
+        </div>
+      </div>
+      <div v-else class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
         <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
         LOCAL ONLY
       </div>
@@ -1369,37 +1491,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   </button>
                 </div>
               </section>
-              <div class="map-tools-actions">
-                <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="Jump Cluster export and import">
-                <button class="tool-button" type="button" aria-label="Export Jump Cluster JSON" title="Export Jump Cluster JSON" @click="downloadClusterJson">
-                  JSON
-                </button>
-                <button
-                  class="tool-button"
-                  type="button"
-                  aria-label="Export Jump Cluster PNG"
-                  title="Export Jump Cluster PNG"
-                  :disabled="!clusterMapRef"
-                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'png')"
-                >
-                  PNG
-                </button>
-                <button
-                  class="tool-button"
-                  type="button"
-                  aria-label="Export Jump Cluster SVG"
-                  title="Export Jump Cluster SVG"
-                  :disabled="!clusterMapRef"
-                  @click="downloadMapImage(clusterMapRef, workspace.cluster.name, 'jump-cluster', 'svg')"
-                >
-                  SVG
-                </button>
-                <button class="tool-button" type="button" aria-label="Import JSON copy" title="Import JSON copy" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
-                  Import JSON
-                </button>
-                </div>
-                <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
-              </div>
             </div>
             <div class="map-frame workspace-canvas flex min-h-0 min-w-0 overflow-hidden bg-[var(--map-bg)]">
               <ClientOnly>
@@ -1626,41 +1717,10 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   <span aria-hidden="true">+</span> Add Orbit
                 </button>
               </div>
-            </section>
-            <div class="map-tools-actions">
-              <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="System map editing">
-                <button class="tool-button" type="button" aria-label="Export star system JSON" title="Export star system JSON" @click="downloadSystemJson">
-                  JSON
-                </button>
-                <button
-                  class="tool-button"
-                  type="button"
-                  aria-label="Export star system PNG"
-                  title="Export star system PNG"
-                  :disabled="!systemMapRef"
-                  @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'png')"
-                >
-                  PNG
-                </button>
-                <button
-                  class="tool-button"
-                  type="button"
-                  aria-label="Export star system SVG"
-                  title="Export star system SVG"
-                  :disabled="!systemMapRef"
-                  @click="downloadMapImage(systemMapRef, selectedSystem?.name, 'star-system', 'svg')"
-                >
-                  SVG
-                </button>
-                <button class="tool-button" type="button" aria-label="Import JSON copy" title="Import JSON copy" :disabled="saveState === 'saving'" @click="openJsonImportPicker">
-                  Import JSON
-                </button>
-              </div>
               <span v-if="selectedOrbit" class="placement-hint">
                 New objects go in Orbit {{ selectedOrbit.order }}
               </span>
-              <p v-if="exportError" class="feedback m-0 error-text" role="alert">{{ exportError }}</p>
-            </div>
+            </section>
           </div>
         </div>
 
@@ -2666,6 +2726,101 @@ textarea[aria-invalid="true"] {
   padding-inline: clamp(1rem, 3.5vw, 3.5rem);
 }
 
+.map-workspace-shell .topbar {
+  position: relative;
+  z-index: 6;
+}
+
+.map-workspace-shell .header-map-actions {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.map-workspace-shell .header-map-actions-toggle {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.4rem 0.5rem;
+  background: rgba(18, 28, 30, 0.96);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 0.55rem Consolas, monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.map-workspace-shell .header-map-actions-indicator {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.map-workspace-shell .header-map-actions-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.map-workspace-shell .header-map-actions-panel {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  display: grid;
+  width: min(22rem, calc(100vw - 2rem));
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.7rem;
+  background: rgba(18, 28, 30, 0.98);
+  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.map-workspace-shell .header-map-actions-heading {
+  margin: 0;
+  color: var(--text-muted);
+  font: 0.56rem Consolas, monospace;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.map-workspace-shell .header-map-actions-exports {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.map-workspace-shell .header-map-actions-exports .tool-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  overflow-wrap: anywhere;
+  padding-inline: 0.35rem;
+  white-space: normal;
+}
+
+.map-workspace-shell .header-map-actions-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.map-workspace-shell .header-map-actions-import {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.map-workspace-shell .header-map-actions-panel .feedback {
+  margin: 0;
+  border: 1px solid var(--error-border);
+  padding: 0.45rem 0.6rem;
+  background: var(--error-bg);
+}
+
 .map-workspace-shell .main-content {
   width: 100%;
   max-width: none;
@@ -2793,23 +2948,6 @@ textarea[aria-invalid="true"] {
   pointer-events: auto;
 }
 
-.map-workspace-shell .map-tools .map-toolbar {
-  box-sizing: border-box;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: rgba(18, 28, 30, 0.94);
-  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(12px);
-}
-
-.map-workspace-shell .map-tools .map-toolbar {
-  justify-content: flex-end;
-  padding: 0.4rem;
-}
-
 .map-workspace-shell .system-map-header .system-map-tools {
   position: relative;
   top: auto;
@@ -2924,34 +3062,9 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
-.map-workspace-shell .map-tools-actions {
-  display: grid;
-  width: fit-content;
-  max-width: min(24rem, 40vw);
-  flex: 0 0 auto;
-  justify-self: end;
-  justify-items: end;
-  gap: 0.35rem;
-}
-
-.map-workspace-shell .map-tools .map-toolbar .tool-button {
-  min-width: 0;
-  max-width: 100%;
-  flex: 0 1 auto;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
 .map-workspace-shell .map-tools .placement-hint {
   justify-self: end;
   padding: 0.15rem 0.3rem;
-}
-
-.map-workspace-shell .map-tools .feedback {
-  justify-self: end;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--error-border);
-  background: var(--error-bg);
 }
 
 .map-workspace-shell .workspace-side-panel {
@@ -3152,12 +3265,6 @@ textarea[aria-invalid="true"] {
     display: none;
   }
 
-  .map-workspace-shell .system-map-tools .map-tools-actions {
-    width: fit-content;
-    max-width: 100%;
-    justify-self: end;
-  }
-
   .map-workspace-shell .cluster-map-tools {
     top: 4.15rem;
     right: 0.5rem;
@@ -3169,23 +3276,6 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .cluster-edit-palette {
     max-width: calc(100vw - 1rem);
-  }
-
-  .map-workspace-shell .cluster-map-tools .map-tools-actions {
-    width: fit-content;
-    max-width: 100%;
-    align-self: flex-end;
-  }
-
-  .map-workspace-shell .system-map-tools .map-toolbar {
-    width: fit-content;
-    max-width: 100%;
-    justify-content: flex-end;
-  }
-
-  .map-workspace-shell .map-tools:not(.system-map-tools) .map-toolbar {
-    width: 100%;
-    justify-content: flex-start;
   }
 
   .map-workspace-shell .workspace-side-panel {
@@ -3208,6 +3298,26 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .map-navigation {
     bottom: 0.5rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .map-workspace-shell .topbar {
+    gap: 0.5rem;
+  }
+
+  .map-workspace-shell .wordmark {
+    gap: 0.45rem;
+  }
+
+  .map-workspace-shell .wordmark-symbol {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .map-workspace-shell .wordmark small,
+  .map-workspace-shell .local-badge {
+    display: none;
   }
 }
 
