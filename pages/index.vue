@@ -73,7 +73,6 @@ const {
 
 const clusterName = ref('New Jump Cluster')
 const systemName = ref('First System')
-const newObjectType = ref<CatalogueSubtype>('planet')
 const activeView = ref<'cluster' | 'system'>('system')
 const selectedSystemId = ref<string | null>(null)
 const selectedObjectId = ref<string | null>(null)
@@ -116,6 +115,18 @@ const systemMapRef = shallowRef<MapImageExporter | null>(null)
 const fieldSettingsError = ref('')
 const importError = ref('')
 const jsonImportInput = ref<HTMLInputElement | null>(null)
+const objectPaletteGroups = [
+  { family: 'CelestialBody', label: 'Celestial bodies' },
+  { family: 'SmallBody/Field', label: 'Small bodies and fields' },
+  { family: 'Installation', label: 'Installations' },
+  { family: 'Vessel', label: 'Vessels' },
+  { family: 'JumpPoint', label: 'Jump Points' },
+  { family: 'Phenomenon', label: 'Phenomena' },
+  { family: 'Other', label: 'Other' },
+].map(group => ({
+  ...group,
+  types: catalogueTypes.filter(type => type.family === group.family),
+}))
 
 const selectedSystem = computed(() =>
   workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
@@ -539,6 +550,38 @@ async function moveMapObject(objectId: string, position: Point): Promise<void> {
   }
 }
 
+async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  const object = system?.objects.find(candidate => candidate.id === objectId)
+  const objectFieldSettings = currentWorkspace?.objectFieldSettings
+  if (!currentWorkspace || !system || !object || !objectFieldSettings) return
+
+  try {
+    if (!Number.isFinite(angle)) throw new Error('An orbital angle must be finite.')
+    if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
+      throw new Error('Choose a valid Orbit for this object.')
+    }
+    const updatedSystem = updateSystemObject(system, object.id, {
+      placement: { kind: 'orbit', orbitId },
+    }, objectFieldSettings)
+    const nextWorkspace = workspaceWithSystem(currentWorkspace, updatedSystem)
+    await commit({
+      ...nextWorkspace,
+      layout: {
+        ...nextWorkspace.layout,
+        objectAngles: {
+          ...nextWorkspace.layout.objectAngles,
+          [objectId]: angle,
+        },
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
 async function rotateMapObject(objectId: string, angle: number): Promise<void> {
   const currentWorkspace = workspace.value
   const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
@@ -756,19 +799,71 @@ function showChartDetails(): void {
   editorError.value = ''
 }
 
-async function addObject(): Promise<void> {
+async function addObject(
+  subtype: CatalogueSubtype,
+  dropPoint?: Point,
+  dropOrbitId?: string | null,
+  dropAngle?: number | null,
+): Promise<void> {
   const system = selectedSystem.value
-  if (!system) return
+  const currentWorkspace = workspace.value
+  if (!system || !currentWorkspace) return
 
   try {
-    const object = createSystemObject(system, newObjectType.value, selectedOrbitId.value ?? undefined)
+    const orbitId = dropPoint
+      ? dropOrbitId ?? undefined
+      : selectedOrbitId.value ?? undefined
+    let object = createSystemObject(system, subtype, orbitId)
+    if (dropPoint && !orbitId) {
+      if (!Number.isFinite(dropPoint.x) || !Number.isFinite(dropPoint.y)) {
+        throw new Error('The dropped map position must contain finite coordinates.')
+      }
+      object = {
+        ...object,
+        placement: {
+          kind: 'system',
+          x: Math.max(0, Math.min(1, (dropPoint.x - 64) / 832)),
+          y: Math.max(0, Math.min(1, (dropPoint.y - 72) / 416)),
+        },
+      }
+    }
+
+    let nextWorkspace = workspaceWithSystem(currentWorkspace, {
+      ...system,
+      objects: [...system.objects, object],
+    })
+    if (dropPoint && orbitId && dropAngle !== null && dropAngle !== undefined) {
+      if (!Number.isFinite(dropAngle)) {
+        throw new Error('An orbital angle must be finite.')
+      }
+      nextWorkspace = {
+        ...nextWorkspace,
+        layout: {
+          ...nextWorkspace.layout,
+          objectAngles: {
+            ...nextWorkspace.layout.objectAngles,
+            [object.id]: dropAngle,
+          },
+        },
+      }
+    }
+
     selectedObjectId.value = object.id
     selectedOrbitId.value = null
     editorError.value = ''
-    await saveSystem({ ...system, objects: [...system.objects, object] })
+    await commit(nextWorkspace)
   } catch (error) {
     editorError.value = errorText(error)
   }
+}
+
+function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
+  const dataTransfer = event.dataTransfer
+  if (!dataTransfer) return
+
+  dataTransfer.effectAllowed = 'copy'
+  dataTransfer.setData('application/x-mothership-map-object', subtype)
+  dataTransfer.setData('text/plain', subtype)
 }
 
 async function addOrbit(): Promise<void> {
@@ -1512,16 +1607,35 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           </aside>
 
           <section class="panel map-panel flex min-w-0 flex-col p-[0.7rem]" aria-label="System map workspace">
-            <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="System map editing">
-              <label class="sr-only" for="catalogue-object-type">Catalogue object type</label>
-              <select class="w-auto min-w-[8rem] min-h-[2.3rem] px-[0.6rem] pr-[1.8rem] py-[0.45rem] text-[0.68rem]" id="catalogue-object-type" v-model="newObjectType" aria-label="Catalogue object type">
-                <option v-for="type in catalogueTypes" :key="type.value" :value="type.value">
+            <section
+              class="object-palette mb-[0.55rem] flex flex-wrap items-end gap-x-[0.55rem] gap-y-[0.4rem] border-b border-[#ddd4c4] pb-[0.55rem]"
+              role="region"
+              aria-label="Object palette"
+            >
+              <fieldset
+                v-for="group in objectPaletteGroups"
+                :key="group.family"
+                class="object-palette-group flex flex-wrap items-center gap-1"
+              >
+                <legend>{{ group.label }}</legend>
+                <button
+                  v-for="type in group.types"
+                  :key="type.value"
+                  class="object-palette-button"
+                  type="button"
+                  draggable="true"
+                  :disabled="saveState === 'saving'"
+                  :aria-label="`Add ${type.label}`"
+                  :title="`Drag ${type.label} onto the map, or activate to add it`"
+                  @dragstart="startObjectDrag($event, type.value)"
+                  @click="addObject(type.value)"
+                >
                   {{ type.label }}
-                </option>
-              </select>
-              <button class="tool-button add-button" type="button" @click="addObject">
-                <span aria-hidden="true">+</span> Add object
-              </button>
+                </button>
+              </fieldset>
+              <span class="object-palette-hint">Drag a type onto the map, or select it to add.</span>
+            </section>
+            <div class="map-toolbar flex flex-wrap items-center gap-[0.45rem] pt-[0.1rem] pb-[0.65rem]" role="toolbar" aria-label="System map editing">
               <button class="tool-button" type="button" @click="downloadSystemJson">
                 Export star system JSON
               </button>
@@ -1571,15 +1685,16 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   @move-object="moveMapObject"
                   @rotate-object="rotateMapObject"
                   @resize-orbit="resizeMapOrbit"
+                  @place-object-in-orbit="placeMapObjectInOrbit"
+                  @drop-object="addObject"
                 />
                 <template #fallback>
                   <div class="map-fallback grid min-h-[31rem] w-full place-items-center max-[760px]:min-h-96" role="status">Preparing the orbital chart...</div>
                 </template>
               </ClientOnly>
             </div>
-            <p class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-              <span>SCHEMATIC / NOT TO SCALE</span>
-              <span>Select a mark or Orbit to inspect it.</span>
+            <p class="map-note mb-[1em] px-[0.2rem] pt-[0.55rem] pb-[0.1rem]">
+              Select a mark or Orbit to inspect it.
             </p>
           </section>
 
@@ -2171,6 +2286,54 @@ textarea[aria-invalid="true"] {
   color: #fffaf0;
 }
 
+.object-palette-group {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #ddd4c4;
+  padding: 0.22rem;
+}
+
+.object-palette-group legend {
+  padding: 0 0.2rem;
+  color: #788075;
+  font: 0.52rem Consolas, monospace;
+}
+
+.object-palette-button {
+  min-height: 1.8rem;
+  border: 1px solid #d2c8b7;
+  border-radius: 2px;
+  background: #fffaf0;
+  color: #40594a;
+  cursor: grab;
+  font-size: 0.62rem;
+  padding: 0.25rem 0.42rem;
+}
+
+.object-palette-button:hover:not(:disabled) {
+  border-color: #a45138;
+  color: #a45138;
+}
+
+.object-palette-button:focus-visible {
+  outline: 2px solid #a45138;
+  outline-offset: 1px;
+}
+
+.object-palette-button:active {
+  cursor: grabbing;
+}
+
+.object-palette-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.object-palette-hint {
+  color: #70786f;
+  font: 0.55rem Consolas, monospace;
+}
+
 .placement-hint {
   color: #70786f;
   font: 0.58rem Consolas, monospace;
@@ -2184,10 +2347,6 @@ textarea[aria-invalid="true"] {
 .map-note {
   color: #737a70;
   font: 0.56rem Consolas, monospace;
-}
-
-.map-note span:first-child {
-  color: #a45138;
 }
 
 .type-chip {

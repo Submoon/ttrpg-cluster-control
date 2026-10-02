@@ -34,7 +34,9 @@ interface RouteGeometry {
   exitPoint?: Point
 }
 
-function systemPosition(systemId: string): Point {
+function systemPosition(systemId: string, overrides?: ReadonlyMap<string, Point>): Point {
+  const override = overrides?.get(systemId)
+  if (override) return override
   const position = props.systemPositions[systemId]
   if (!position) {
     throw new Error(`No cluster-map position exists for star system "${systemId}".`)
@@ -58,9 +60,10 @@ function routeGeometry(
   route: JumpRoute,
   index: number,
   jumpPoints: Map<string, JumpPointReference>,
+  positionOverrides?: ReadonlyMap<string, Point>,
 ): RouteGeometry {
   const from = requiredJumpPoint(jumpPoints, route.fromPointId)
-  const start = systemPosition(from.system.id)
+  const start = systemPosition(from.system.id, positionOverrides)
   const to = route.toPointId === null
     ? undefined
     : requiredJumpPoint(jumpPoints, route.toPointId)
@@ -77,7 +80,7 @@ function routeGeometry(
   const exitPoint = to
     ? undefined
     : { x: 860, y: Math.min(500, Math.max(88, start.y + 128 + (index % 3) * 24)) }
-  const end = to ? systemPosition(to.system.id) : exitPoint!
+  const end = to ? systemPosition(to.system.id, positionOverrides) : exitPoint!
   const dx = end.x - start.x
   const dy = end.y - start.y
   const length = Math.max(1, Math.hypot(dx, dy))
@@ -148,6 +151,7 @@ function render(): void {
 
   const svg = select(element)
   const currentTransform = zoomTransform(element)
+  const liveSystemPositions = new Map<string, Point>()
   const jumpPoints = new Map(
     jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]),
   )
@@ -234,6 +238,29 @@ function render(): void {
         .text(route.unresolvedExit)
     }
   })
+  function updateRouteGeometry(): void {
+    routeMarks.each(function (route, index) {
+      const geometry = routeGeometry(route, index, jumpPoints, liveSystemPositions)
+      const mark = select(this)
+      const labelWidth = Math.max(78, route.name.length * 7 + 18)
+      mark.select('.cluster-route-line').attr('d', geometry.path)
+      mark.select('.cluster-route-label-bg')
+        .attr('x', geometry.labelX - labelWidth / 2)
+        .attr('y', geometry.labelY - 12)
+      mark.select('.cluster-route-label')
+        .attr('x', geometry.labelX)
+        .attr('y', geometry.labelY + 2)
+
+      if (route.toPointId === null && geometry.exitPoint) {
+        mark.select('.cluster-exit-mark')
+          .attr('cx', geometry.exitPoint.x)
+          .attr('cy', geometry.exitPoint.y)
+        mark.select('.cluster-exit-label')
+          .attr('x', geometry.exitPoint.x - 10)
+          .attr('y', geometry.exitPoint.y + 24)
+      }
+    })
+  }
   routeMarks
     .on('click', (event, route) => {
       event.stopPropagation()
@@ -307,9 +334,11 @@ function render(): void {
       movedSystems.delete(this)
       select(this).classed('is-dragging', true)
     })
-    .on('drag', function (event) {
+    .on('drag', function (event, system) {
       if (event.dx || event.dy) movedSystems.add(this)
       select(this).attr('transform', `translate(${event.x} ${event.y})`)
+      liveSystemPositions.set(system.id, { x: event.x, y: event.y })
+      updateRouteGeometry()
     })
     .on('end', function (event, system) {
       select(this).classed('is-dragging', false)

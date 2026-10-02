@@ -48,6 +48,16 @@ async function dragToWorldPoint(
   source: import('@playwright/test').Locator,
   point: WorldPoint,
 ): Promise<void> {
+  await beginDragToWorldPoint(page, map, source, point)
+  await page.mouse.up()
+}
+
+async function beginDragToWorldPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  source: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<void> {
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
 
@@ -61,6 +71,59 @@ async function dragToWorldPoint(
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(destination.x, destination.y, { steps: 6 })
+}
+
+async function dragHtmlElementToWorldPoint(
+  page: import('@playwright/test').Page,
+  source: import('@playwright/test').Locator,
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<void> {
+  await source.scrollIntoViewIfNeeded()
+  await map.scrollIntoViewIfNeeded()
+  const sourceBounds = await source.boundingBox()
+  const bounds = await map.boundingBox()
+  if (!sourceBounds || !bounds) throw new Error('Could not find the map or palette object to drag.')
+
+  const destination = await map.evaluate((element, target) => {
+    const transform = (element as SVGSVGElement).getScreenCTM()
+    if (!transform) throw new Error('The map SVG is not attached to the document.')
+    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
+    return { x: screenPoint.x - target.boundsX, y: screenPoint.y - target.boundsY }
+  }, { x: point.x, y: point.y, boundsX: bounds.x, boundsY: bounds.y })
+  await page.mouse.move(
+    sourceBounds.x + sourceBounds.width / 2,
+    sourceBounds.y + sourceBounds.height / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move(bounds.x + destination.x, bounds.y + destination.y, { steps: 12 })
+  await page.mouse.up()
+}
+
+async function dragOrbitToWorldPoint(
+  page: import('@playwright/test').Page,
+  orbit: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<void> {
+  await orbit.scrollIntoViewIfNeeded()
+  const coordinates = await orbit.evaluate((element, target) => {
+    const circle = element as SVGCircleElement
+    const matrix = circle.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit is not attached to the map.')
+    const start = new DOMPoint(
+      Number(circle.getAttribute('cx')) + Number(circle.getAttribute('r')),
+      Number(circle.getAttribute('cy')),
+    ).matrixTransform(matrix)
+    const end = new DOMPoint(target.x, target.y).matrixTransform(matrix)
+    return {
+      start: { x: start.x, y: start.y },
+      end: { x: end.x, y: end.y },
+    }
+  }, point)
+
+  await page.mouse.move(coordinates.start.x, coordinates.start.y)
+  await page.mouse.down()
+  await page.mouse.move(coordinates.end.x, coordinates.end.y, { steps: 6 })
   await page.mouse.up()
 }
 
@@ -242,6 +305,18 @@ const catalogueSubtypes = [
   'other',
 ] as const
 
+async function addCatalogueObject(
+  page: import('@playwright/test').Page,
+  subtype: typeof catalogueSubtypes[number],
+): Promise<void> {
+  const label = subtype.split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+  await page.getByRole('region', { name: 'Object palette' })
+    .getByRole('button', { name: `Add ${label}` })
+    .click()
+}
+
 test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -296,21 +371,18 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
 
-  const planet = map.getByRole('button', { name: /Iria/ })
+  const planet = map.getByRole('button', { name: /Select PL-01, Iria/ })
   await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), {
     x: 480 + 112 * Math.SQRT1_2,
     y: 280 - 112 * Math.SQRT1_2,
   })
   const angleBeforeResize = await orbitalAngle(map)
   const orbitRadius = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
-  await dragToWorldPoint(page, map, orbitRadius, { x: 633, y: 280 })
+  await dragOrbitToWorldPoint(page, orbitRadius, { x: 633, y: 280 })
   await expect(orbitRadius).toHaveAttribute('aria-valuenow', '152')
   expect(Math.abs(await orbitalAngle(map) - angleBeforeResize)).toBeLessThan(0.02)
 
@@ -322,8 +394,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await page.keyboard.press('ArrowRight')
   await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '571')
 
-  await typePicker.selectOption('hazard')
-  await addObject.click()
+  await addCatalogueObject(page, 'hazard')
   await page.getByLabel('Name').fill('Glass Wake')
   await page.getByLabel('Name').press('Tab')
   const hazard = map.getByRole('button', { name: /Glass Wake/ })
@@ -378,6 +449,176 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   expect(Math.abs(await orbitalAngle(restoredMap) - angleBeforeResize)).toBeLessThan(0.02)
 })
 
+test('the Jump Route line follows a system while it is being dragged', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  await addCatalogueObject(page, 'jump-point')
+  await page.getByLabel('Name').fill('Departure')
+  await page.getByLabel('Name').press('Tab')
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await addCatalogueObject(page, 'jump-point')
+  await page.getByLabel('Name').fill('Arrival')
+  await page.getByLabel('Name').press('Tab')
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByLabel('From Jump Point').selectOption({ label: 'Departure (Vesper)' })
+  await page.getByLabel('Route destination').selectOption('point')
+  await page.getByLabel('To Jump Point').selectOption({ label: 'Arrival (New System 2)' })
+  await page.getByRole('button', { name: 'Create Jump Route' }).click()
+
+  const routeMark = clusterMap.getByRole('button', { name: /Jump-01/ })
+  const routeLine = routeMark.locator('.cluster-route-line')
+  const routeBefore = await routeLine.getAttribute('d')
+  const sourceNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  const nodeBefore = await sourceNode.getAttribute('transform')
+  const source = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+    .locator('.cluster-system-card')
+  const sourceBox = await source.boundingBox()
+  if (!routeBefore || !nodeBefore || !sourceBox) throw new Error('Could not locate the route or its source system.')
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 100, sourceBox.y + sourceBox.height / 2 + 30, { steps: 4 })
+  await expect.poll(async () => sourceNode.getAttribute('transform'))
+    .not.toBe(nodeBefore)
+  await expect.poll(async () => routeLine.getAttribute('d'))
+    .not.toBe(routeBefore)
+  await page.mouse.up()
+})
+
+test('the Orbit ring itself resizes and the system caption stays concise', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await addCatalogueObject(page, 'planet')
+
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  await expect(map.locator('.map-caption')).toHaveCount(0)
+  const resizeKnobs = map.locator('.orbit-resize-handle')
+  await expect(resizeKnobs).toHaveCount(0)
+
+  const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
+  const orbitRing = orbit.locator('.orbit-ring')
+  const orbitTarget = orbit.locator('.orbit-hit-target')
+  await orbitTarget.scrollIntoViewIfNeeded()
+  await expect(orbitTarget).toHaveAttribute('role', 'slider')
+  const radiusBefore = Number(await orbitRing.getAttribute('r'))
+  const planet = map.getByRole('button', { name: /New planet 1/ })
+  const planetBefore = await planet.getAttribute('transform')
+  const points = await orbitTarget.evaluate((element) => {
+    const circle = element as SVGCircleElement
+    const matrix = circle.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit is not attached to the map.')
+    const start = new DOMPoint(
+      Number(circle.getAttribute('cx')) + Number(circle.getAttribute('r')),
+      Number(circle.getAttribute('cy')),
+    ).matrixTransform(matrix)
+    const end = new DOMPoint(
+      Number(circle.getAttribute('cx')) + Number(circle.getAttribute('r')) + 48,
+      Number(circle.getAttribute('cy')),
+    ).matrixTransform(matrix)
+    return { start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } }
+  })
+
+  await page.mouse.move(points.start.x, points.start.y)
+  await page.mouse.down()
+  await page.mouse.move(points.end.x, points.end.y, { steps: 4 })
+  await expect.poll(async () => Number(await orbitRing.getAttribute('r')))
+    .toBeGreaterThan(radiusBefore)
+  await expect.poll(async () => planet.getAttribute('transform'))
+    .not.toBe(planetBefore)
+  await page.mouse.up()
+})
+
+test('an object drag keeps its hosted Orbit with it before release', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await addCatalogueObject(page, 'planet')
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await addCatalogueObject(page, 'moon')
+
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const planet = map.getByRole('button', { name: /Select PL-01, Iria/ })
+  const innerOrbit = map.getByRole('group', { name: 'Orbit 1 around Iria' }).locator('.orbit-ring')
+  const orbitCenterBefore = await innerOrbit.getAttribute('cx')
+  const planetBefore = await planet.getAttribute('transform')
+  await beginDragToWorldPoint(page, map, planet.locator('.object-hit-target'), { x: 545, y: 185 })
+  await expect(planet).toHaveClass(/is-dragging/)
+  await expect.poll(async () => planet.getAttribute('transform'))
+    .not.toBe(planetBefore)
+  await expect.poll(async () => innerOrbit.getAttribute('cx'))
+    .not.toBe(orbitCenterBefore)
+  await page.mouse.up()
+})
+
+test('the object palette adds objects by drag or keyboard and drops planets into Orbits', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  const addPlanet = palette.getByRole('button', { name: 'Add Planet' })
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  await dragHtmlElementToWorldPoint(page, addPlanet, map, { x: 592, y: 280 })
+  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ }))
+    .toBeVisible()
+
+  await hierarchy.getByRole('button', { name: 'Chart details' }).click()
+  await addPlanet.press('Enter')
+  const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
+  await expect(systemPlanet).toBeVisible()
+  await dragToWorldPoint(page, map, map.getByRole('button', { name: /New planet 2/ })
+    .locator('.object-hit-target'), { x: 592, y: 280 })
+  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
+    .toBeVisible()
+
+  const exported = await downloadJson(page, 'Export star system JSON')
+  const system = exported.system
+  if (!system) throw new Error('The exported file does not contain a star system.')
+  const orbitId = system.orbits[0].id
+  const planets = system.objects.filter(object => object.subtype === 'planet')
+  expect(planets).toHaveLength(2)
+  expect(planets.every(object =>
+    object.placement.kind === 'orbit' && object.placement.orbitId === orbitId,
+  )).toBe(true)
+})
+
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -387,11 +628,11 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
+  const palette = page.getByRole('region', { name: 'Object palette' })
 
   await expect(map).toBeVisible()
-  await expect(typePicker.locator('option')).toHaveCount(catalogueSubtypes.length)
+  await expect(palette.getByRole('button')).toHaveCount(catalogueSubtypes.length)
+  await expect(palette.getByRole('group', { name: 'Celestial bodies' })).toBeVisible()
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
@@ -401,8 +642,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await page.getByRole('button', { name: 'Move orbit up' }).click()
   await expect(inspector.getByRole('heading', { name: 'Orbit 1' })).toBeVisible()
 
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
   await page.getByLabel('Description').fill('A chlorine cloud deck.')
@@ -421,13 +661,11 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
-  await typePicker.selectOption('belt')
-  await addObject.click()
+  await addCatalogueObject(page, 'belt')
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ })).toBeVisible()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  await typePicker.selectOption('moon')
-  await addObject.click()
+  await addCatalogueObject(page, 'moon')
   await page.getByLabel('Name').fill('Nix')
   await expect(page.getByLabel('Name')).toHaveValue('Nix')
   await page.getByLabel('Name').press('Tab')
@@ -457,8 +695,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   ] as const)
 
   for (const subtype of catalogueSubtypes) {
-    await typePicker.selectOption(subtype)
-    await addObject.click()
+    await addCatalogueObject(page, subtype)
     await expect(inspector.getByRole('heading', { name: generatedNames.get(subtype)! })).toBeVisible()
   }
 
@@ -490,17 +727,13 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
 
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Vesper Exit')
   await page.getByLabel('Name').press('Tab')
 
-  await typePicker.selectOption('station')
-  await addObject.click()
+  await addCatalogueObject(page, 'station')
   await page.getByLabel('Name').fill('Vesper Gate')
   await page.getByLabel('Name').press('Tab')
 
@@ -517,8 +750,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Harrow Entry')
   await page.getByLabel('Name').press('Tab')
   await page.getByRole('button', { name: 'Cluster map' }).click()
@@ -565,11 +797,8 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
 
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
 
@@ -609,15 +838,13 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.getByRole('button', { name: 'Save Signal class choices' }).click()
   await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
 
-  await typePicker.selectOption('station')
-  await addObject.click()
+  await addCatalogueObject(page, 'station')
   await expect(page.getByLabel('Port class', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Campaign notes')).toHaveValue('')
   await page.getByLabel('Port class', { exact: true }).selectOption('Class II')
 
-  await typePicker.selectOption('moon')
-  await addObject.click()
+  await addCatalogueObject(page, 'moon')
   await expect(page.getByLabel('Atmosphere', { exact: true })).toBeVisible()
   await page.getByLabel('Atmosphere', { exact: true }).selectOption('Thin')
 
@@ -630,8 +857,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await expect(page.getByLabel('Campaign notes')).toBeVisible()
   await page.getByLabel('Campaign notes').fill('Reusable in the next system.')
   await page.getByLabel('Campaign notes').blur()
@@ -670,25 +896,20 @@ test('the Warden can review and safely confirm dependent map deletions', async (
     .click()
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
 
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Vesper Exit')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
-  await typePicker.selectOption('moon')
-  await addObject.click()
+  await addCatalogueObject(page, 'moon')
   await page.getByLabel('Name').fill('Nix')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
@@ -705,8 +926,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Harrow Entry')
   await page.getByLabel('Name').press('Tab')
   await page.getByRole('button', { name: 'Cluster map' }).click()
@@ -791,12 +1011,10 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
 
   await reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  await typePicker.selectOption('station')
-  await addObject.click()
+  await addCatalogueObject(page, 'station')
   await page.getByLabel('Name').fill('Vesper Gate')
   await page.getByLabel('Name').press('Tab')
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Vesper Arrival')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
@@ -837,10 +1055,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Vesper Exit')
   await page.getByLabel('Name').press('Tab')
 
@@ -848,8 +1063,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Harrow Entry')
   await page.getByLabel('Name').press('Tab')
   await page.getByRole('button', { name: 'Cluster map' }).click()
@@ -905,8 +1119,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
@@ -1238,8 +1451,6 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   const systemName = 'Vesper Prime'
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  const typePicker = page.getByLabel('Catalogue object type')
-  const addObject = page.getByRole('button', { name: 'Add object' })
   await page.getByRole('button', { name: 'Chart details' }).click()
   await inspector.getByLabel('Jump Cluster').fill(clusterName)
   await inspector.getByLabel('Star system').fill(systemName)
@@ -1250,21 +1461,18 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  await typePicker.selectOption('planet')
-  await addObject.click()
+  await addCatalogueObject(page, 'planet')
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
   await page.getByLabel('Warden notes').fill('Existing campaign record.')
   await page.getByLabel('Warden notes').press('Tab')
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  await typePicker.selectOption('moon')
-  await addObject.click()
+  await addCatalogueObject(page, 'moon')
   await page.getByLabel('Name').fill('Nix')
   await page.getByLabel('Name').press('Tab')
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Vesper Departure')
   await page.getByLabel('Name').press('Tab')
 
@@ -1275,8 +1483,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await page.getByRole('button', { name: 'Chart details' }).click()
   await inspector.getByLabel('Star system').fill('Harrow')
   await inspector.getByRole('button', { name: 'Save chart names' }).click()
-  await typePicker.selectOption('jump-point')
-  await addObject.click()
+  await addCatalogueObject(page, 'jump-point')
   await page.getByLabel('Name').fill('Harrow Arrival')
   await page.getByLabel('Name').press('Tab')
   await page.getByRole('button', { name: 'Cluster map' }).click()
