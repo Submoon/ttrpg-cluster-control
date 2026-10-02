@@ -58,6 +58,10 @@ Implement in dependency order; each ticket also lists its blockers.
 | 13 | [13. Importing JSON as a safe independent copy](tickets/13-json-import.md) | [12. Exporting clusters and systems as versioned JSON](tickets/12-json-export.md) |
 | 14 | [14. Exporting complete maps as PNG and SVG](tickets/14-image-export.md) | [08. Connecting Jump Points across a Jump Cluster](tickets/08-jump-cluster-routes.md); [10. Navigating and arranging both map views](tickets/10-map-navigation.md) |
 | 15 | [15. Verifying the V1 workflow in one browser acceptance test](tickets/15-browser-acceptance.md) | Tickets 05–14 |
+| 16 | [16. Making the workspace darker and more map-first](tickets/16-map-first-visual-refresh.md) | None |
+| 17 | [17. Moving map import and export actions into the header](tickets/17-header-import-export.md) | None |
+| 18 | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) | None |
+| 19 | [19. Clarifying the Chart Details action](tickets/19-chart-details-state.md) | None |
 
 ## Out of scope
 
