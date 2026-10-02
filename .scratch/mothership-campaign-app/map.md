@@ -62,6 +62,8 @@ Implement in dependency order; each ticket also lists its blockers.
 | 17 | [17. Moving map import and export actions into the header](tickets/17-header-import-export.md) | None |
 | 18 | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) | None |
 | 19 | [19. Clarifying the Chart Details action](tickets/19-chart-details-state.md) | None |
+| 20 | [20. Including the system name in system-map image exports](tickets/20-system-name-in-image-exports.md) | None |
+| 21 | [21. Expanding the system-map grid and layout bounds](tickets/21-expanding-system-map-grid.md) | None |
 
 ## Out of scope
 
