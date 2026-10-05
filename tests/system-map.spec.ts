@@ -517,7 +517,7 @@ test('the system map can zoom well beyond 400 percent', async ({ page }) => {
   await expect(navigation.getByLabel('Zoom level')).toHaveText('1600%')
 })
 
-test('the object palette stays aligned with the system summary and adapts to narrow viewports', async ({ page }) => {
+test('the object palette clears the header summary and adapts to narrow viewports', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -535,7 +535,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
     const hierarchy = document.querySelector<HTMLElement>('#workspace-hierarchy-panel')
     const inspector = document.querySelector<HTMLElement>('#workspace-inspector-panel')
     const mapSvg = document.querySelector<SVGSVGElement>('.system-map-canvas .system-map-svg')
-    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
     const tools = document.querySelector<HTMLElement>('.system-map-tools')
     if (!palette || !clusterMapButton || !mapCanvas || !hierarchy || !inspector || !mapSvg || !summary || !tools) {
       throw new Error('The map editing controls are incomplete.')
@@ -554,11 +554,11 @@ test('the object palette stays aligned with the system summary and adapts to nar
       paletteFloatsAboveMap: palette.closest('.map-tools') !== null,
       addOrbitGroupedWithPalette: palette.contains(document.querySelector('[aria-label="Add orbit"]')),
       noMapToolbar: tools.querySelector('.map-toolbar') === null,
-      paletteCenteredInTools: Math.abs(
-        paletteBounds.left + paletteBounds.width / 2
-          - toolsBounds.left - toolsBounds.width / 2,
+      paletteCenteredInViewport: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
       ) <= 1,
-      sameTopRow: Math.abs(summaryBounds.top - toolsBounds.top) <= 1,
+      paletteBelowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
+      noFloatingSummary: document.querySelector('.editor-heading') === null,
       allObjectButtonsFit: objectButtons.length > 0 && objectButtons.every((button) => {
         const bounds = button.getBoundingClientRect()
         return bounds.left >= paletteBounds.left
@@ -581,8 +581,9 @@ test('the object palette stays aligned with the system summary and adapts to nar
     paletteFloatsAboveMap: layout.paletteFloatsAboveMap,
     addOrbitGroupedWithPalette: layout.addOrbitGroupedWithPalette,
     noMapToolbar: layout.noMapToolbar,
-    paletteCenteredInTools: layout.paletteCenteredInTools,
-    sameTopRow: layout.sameTopRow,
+    paletteCenteredInViewport: layout.paletteCenteredInViewport,
+    paletteBelowHeader: layout.paletteBelowHeader,
+    noFloatingSummary: layout.noFloatingSummary,
     allObjectButtonsFit: layout.allObjectButtonsFit,
     activeCategoryOnly: layout.objectButtonCount === 3,
     toolsClearPanels: layout.toolsClearPanels,
@@ -594,8 +595,9 @@ test('the object palette stays aligned with the system summary and adapts to nar
     paletteFloatsAboveMap: true,
     addOrbitGroupedWithPalette: true,
     noMapToolbar: true,
-    paletteCenteredInTools: true,
-    sameTopRow: true,
+    paletteCenteredInViewport: true,
+    paletteBelowHeader: true,
+    noFloatingSummary: true,
     allObjectButtonsFit: true,
     activeCategoryOnly: true,
     toolsClearPanels: true,
@@ -611,7 +613,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
   await page.setViewportSize({ width: 479, height: 720 })
   const narrowLayout = await page.evaluate(() => {
     const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
-    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
     const tools = document.querySelector<HTMLElement>('.system-map-tools')
     const hierarchy = document.querySelector<HTMLElement>('.system-map-editor-grid .hierarchy-panel')
     const panelToggles = Array.from(
@@ -632,10 +634,11 @@ test('the object palette stays aligned with the system summary and adapts to nar
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
       objectButtonCount: buttons.length,
+      headerWithinViewport: summaryBounds.left >= 0 && summaryBounds.right <= window.innerWidth,
       centered: Math.abs(
         paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
       ) <= 1,
-      belowSummary: paletteBounds.top >= summaryBounds.bottom + 4,
+      belowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
       toolbarClearsHierarchy: toolsBounds.bottom <= hierarchyBounds.top,
       toolbarClearsPanelToggles: panelToggles.every((toggle) => {
         const bounds = toggle.getBoundingClientRect()
@@ -652,8 +655,9 @@ test('the object palette stays aligned with the system summary and adapts to nar
     }
   })
   expect(narrowLayout.documentWidth).toBeLessThanOrEqual(narrowLayout.viewportWidth)
+  expect(narrowLayout.headerWithinViewport).toBe(true)
   expect(narrowLayout.centered).toBe(true)
-  expect(narrowLayout.belowSummary).toBe(true)
+  expect(narrowLayout.belowHeader).toBe(true)
   expect(narrowLayout.toolbarClearsHierarchy).toBe(true)
   expect(narrowLayout.toolbarClearsPanelToggles).toBe(true)
   expect(narrowLayout.objectButtonCount).toBe(3)
@@ -662,7 +666,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
   await page.setViewportSize({ width: 479, height: 252 })
   const compactLayout = await page.evaluate(() => {
     const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
-    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
     const navigation = document.querySelector<HTMLElement>('.map-navigation')
     const panelToggles = Array.from(
       document.querySelectorAll<HTMLElement>('.system-map-editor-grid .panel-reopen'),
@@ -683,7 +687,8 @@ test('the object palette stays aligned with the system summary and adapts to nar
       paletteCentered: Math.abs(
         paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
       ) <= 1,
-      paletteBelowSummary: paletteBounds.top >= summaryBounds.bottom + 4,
+      paletteBelowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
+      headerWithinViewport: summaryBounds.left >= 0 && summaryBounds.right <= window.innerWidth,
       paletteWithinViewport: paletteBounds.top >= 0 && paletteBounds.bottom <= window.innerHeight,
       allActionsVisible: actions.length > 0 && actions.every((action) => {
         const bounds = action.getBoundingClientRect()
@@ -706,7 +711,8 @@ test('the object palette stays aligned with the system summary and adapts to nar
   })
   expect(compactLayout).toEqual({
     paletteCentered: true,
-    paletteBelowSummary: true,
+    paletteBelowHeader: true,
+    headerWithinViewport: true,
     paletteWithinViewport: true,
     allActionsVisible: true,
     allActionsReachable: true,
@@ -715,7 +721,7 @@ test('the object palette stays aligned with the system summary and adapts to nar
   })
 })
 
-test('object category tabs reveal one group beside the title or below it when space runs out', async ({ page }) => {
+test('object category tabs reveal one group and fit on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -726,6 +732,7 @@ test('object category tabs reveal one group beside the title or below it when sp
   const categories = palette.getByRole('group', { name: 'Object categories' })
   const tabs = categories.getByRole('button')
   const activeItems = palette.locator('.object-palette-items')
+  await expect(page.locator('.editor-heading')).toHaveCount(0)
   await expect(tabs).toHaveCount(7)
   await expect(tabs.nth(0)).toHaveAttribute('aria-pressed', 'true')
   await expect(activeItems).toHaveAttribute('aria-label', 'Celestial bodies')
@@ -733,41 +740,36 @@ test('object category tabs reveal one group beside the title or below it when sp
   await expect(palette.getByRole('button', { name: 'Add orbit' })).toBeVisible()
 
   const desktopLayout = await page.evaluate(() => {
-    const summary = document.querySelector<HTMLElement>('.editor-heading')
-    const tools = document.querySelector<HTMLElement>('.system-map-tools')
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
     const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
-    if (!summary || !tools || !palette) throw new Error('The system heading or object palette is missing.')
+    if (!summary || !palette) throw new Error('The header summary or object palette is missing.')
     const summaryBounds = summary.getBoundingClientRect()
-    const toolsBounds = tools.getBoundingClientRect()
     const paletteBounds = palette.getBoundingClientRect()
     return {
-      sameTopRow: Math.abs(summaryBounds.top - toolsBounds.top) <= 1,
-      besideSummary: toolsBounds.left >= summaryBounds.right,
-      paletteCenteredInTools: Math.abs(
-        paletteBounds.left + paletteBounds.width / 2
-          - toolsBounds.left - toolsBounds.width / 2,
+      paletteBelowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
+      paletteCenteredInViewport: Math.abs(
+        paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2,
       ) <= 1,
     }
   })
   expect(desktopLayout).toEqual({
-    sameTopRow: true,
-    besideSummary: true,
-    paletteCenteredInTools: true,
+    paletteBelowHeader: true,
+    paletteCenteredInViewport: true,
   })
 
   await page.setViewportSize({ width: 479, height: 720 })
   const narrowLayout = await page.evaluate(() => {
-    const summary = document.querySelector<HTMLElement>('.editor-heading')
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
     const tools = document.querySelector<HTMLElement>('.system-map-tools')
-    if (!summary || !tools) throw new Error('The system heading or object palette is missing.')
+    if (!summary || !tools) throw new Error('The header summary or object palette is missing.')
     return {
-      toolsBelowSummary: tools.getBoundingClientRect().top
+      toolsBelowHeader: tools.getBoundingClientRect().top
         >= summary.getBoundingClientRect().bottom + 4,
       noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
     }
   })
   expect(narrowLayout).toEqual({
-    toolsBelowSummary: true,
+    toolsBelowHeader: true,
     noHorizontalOverflow: true,
   })
 
@@ -780,25 +782,114 @@ test('object category tabs reveal one group beside the title or below it when sp
   await expect(palette.getByRole('button', { name: 'Add Star' })).toHaveCount(0)
 
   await page.setViewportSize({ width: 479, height: 252 })
-  const compactLayout = await palette.locator('button').evaluateAll(buttons =>
-    buttons.every((button) => {
-      const bounds = button.getBoundingClientRect()
-      return bounds.top >= 0 && bounds.bottom <= window.innerHeight
-        && bounds.left >= 0 && bounds.right <= window.innerWidth
-    }),
-  )
-  expect(compactLayout).toBe(true)
+  const compactLayout = await page.evaluate(() => {
+    const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+    const categories = palette?.querySelector<HTMLElement>('.object-palette-categories')
+    if (!palette || !categories) throw new Error('The object palette categories are missing.')
+
+    const categoryBounds = categories.getBoundingClientRect()
+    const actions = Array.from(palette.querySelectorAll<HTMLElement>('.object-palette-button'))
+    const categoryButtons = Array.from(categories.querySelectorAll<HTMLButtonElement>('button'))
+    return {
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      categoriesWithinViewport: categoryBounds.left >= 0 && categoryBounds.right <= window.innerWidth,
+      categoriesCanScroll: categories.scrollWidth > categories.clientWidth,
+      categoryButtonsFocusable: categoryButtons.length === 7
+        && categoryButtons.every(button => button.tabIndex >= 0),
+      actionsFit: actions.length > 0 && actions.every((action) => {
+        const bounds = action.getBoundingClientRect()
+        return bounds.top >= 0 && bounds.bottom <= window.innerHeight
+          && bounds.left >= 0 && bounds.right <= window.innerWidth
+      }),
+    }
+  })
+  expect(compactLayout).toEqual({
+    noHorizontalOverflow: true,
+    categoriesWithinViewport: true,
+    categoriesCanScroll: true,
+    categoryButtonsFocusable: true,
+    actionsFit: true,
+  })
+
+  const finalCategory = categories.getByRole('button', { name: 'Other' })
+  await finalCategory.focus()
+  expect(await finalCategory.evaluate((button) => {
+    const categories = button.closest<HTMLElement>('.object-palette-categories')
+    if (!categories) return false
+    const categoryBounds = categories.getBoundingClientRect()
+    const buttonBounds = button.getBoundingClientRect()
+    return buttonBounds.left >= categoryBounds.left && buttonBounds.right <= categoryBounds.right
+  })).toBe(true)
 })
 
 test('cluster creation actions stay in their palette and header file actions follow the active map', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
+  const clusterSummary = page.getByRole('group', { name: 'Active Jump Cluster summary' })
+  const clusterContents = page.getByRole('group', { name: 'Current Jump Cluster contents' })
+  const systemSummary = page.getByRole('group', { name: 'Active Star System summary' })
+  await expect(clusterSummary).toBeVisible()
+  await expect(clusterSummary).toContainText('Kestrel Reach')
+  await expect(clusterContents).toContainText('1 SYSTEMS')
+  await expect(clusterContents).toContainText('0 ROUTES')
+  await expect(clusterContents).toContainText('0 JUMP POINTS')
+  await expect(systemSummary).toBeVisible()
+  await expect(systemSummary).toContainText('Vesper')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kestrel Reach')
+  await expect(page.locator(
+    '.cluster-map-header .editor-heading, .cluster-map-header [aria-label="Current Jump Cluster contents"]',
+  )).toHaveCount(0)
+
   const fileActionsMenu = page.locator('.header-map-actions')
   const fileActionsToggle = fileActionsMenu.locator('.header-map-actions-toggle')
+  const clusterPaletteLayout = await page.evaluate(() => {
+    const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
+    const palette = document.querySelector<HTMLElement>('.cluster-edit-palette')
+    const map = document.querySelector<SVGSVGElement>('.cluster-map-svg')
+    if (!summary || !palette || !map) throw new Error('The header summary, palette, or map is missing.')
+    const summaryBounds = summary.getBoundingClientRect()
+    const paletteBounds = palette.getBoundingClientRect()
+    return {
+      centered: Math.abs(paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2) <= 1,
+      paletteBelowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
+      noFloatingSummary: document.querySelector('.editor-heading') === null,
+      mapText: Array.from(map.querySelectorAll('text'), text => text.textContent?.trim() ?? ''),
+    }
+  })
+  expect(clusterPaletteLayout.centered).toBe(true)
+  expect(clusterPaletteLayout.paletteBelowHeader).toBe(true)
+  expect(clusterPaletteLayout.noFloatingSummary).toBe(true)
+  expect(clusterPaletteLayout.mapText).not.toContain('Kestrel Reach')
+  expect(clusterPaletteLayout.mapText).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+  expect(clusterPaletteLayout.mapText.some(text => /\d+\s*SYSTEMS\s*\/\s*\d+\s*ROUTES/i.test(text))).toBe(false)
+
+  for (const width of [1024, 479]) {
+    await page.setViewportSize({ width, height: 720 })
+    const narrowClusterPalette = await page.evaluate(() => {
+      const summary = document.querySelector<HTMLElement>('.workspace-header-summary')
+      const palette = document.querySelector<HTMLElement>('.cluster-edit-palette')
+      if (!summary || !palette) throw new Error('The header summary or palette is missing.')
+      const summaryBounds = summary.getBoundingClientRect()
+      const paletteBounds = palette.getBoundingClientRect()
+      return {
+        centered: Math.abs(paletteBounds.left + paletteBounds.width / 2 - window.innerWidth / 2) <= 1,
+        belowHeader: paletteBounds.top >= summaryBounds.bottom + 4,
+        noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      }
+    })
+    expect(narrowClusterPalette, `layout at ${width}px`).toEqual({
+      centered: true,
+      belowHeader: true,
+      noHorizontalOverflow: true,
+    })
+  }
+  await page.setViewportSize({ width: 1440, height: 960 })
+
   await expect(fileActionsToggle).toHaveAttribute(
     'aria-label',
     'Open map file actions for Jump Cluster Kestrel Reach',
@@ -856,42 +947,120 @@ test('cluster creation actions stay in their palette and header file actions fol
   await setHeaderMapActionsOpen(page, false)
 })
 
-test('the system map fills the canvas and its summary floats above the scene', async ({ page }) => {
+test('cluster and system summaries stay in the header, outside the map scene', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
+  const clusterSummary = page.getByRole('group', { name: 'Active Jump Cluster summary' })
+  const clusterContents = page.getByRole('group', { name: 'Current Jump Cluster contents' })
+  const systemSummary = page.getByRole('group', { name: 'Active Star System summary' })
+  const systemContents = page.getByRole('group', { name: 'Current system contents' })
+  await expect(clusterSummary).toBeVisible()
+  await expect(clusterSummary).toContainText('Kestrel Reach')
+  await expect(clusterContents).toContainText('1 SYSTEMS')
+  await expect(clusterContents).toContainText('0 ROUTES')
+  await expect(clusterContents).toContainText('0 JUMP POINTS')
+  await expect(systemSummary).toBeVisible()
+  await expect(systemSummary).toContainText('Vesper')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Vesper')
+  await expect(page.locator(
+    '.system-map-header .editor-heading, .system-map-header [aria-label="Current system contents"]',
+  )).toHaveCount(0)
+  await expect(systemContents).toContainText('1 STARS')
+  await expect(systemContents).toContainText('1 OBJECTS')
+  await expect(systemContents).toContainText('0 ORBITS')
+
   const layout = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>('.workspace-header-summary')
+    const topbar = document.querySelector<HTMLElement>('.topbar')
     const canvas = document.querySelector<HTMLElement>('.system-map-canvas')
     const map = canvas?.querySelector<SVGSVGElement>('.system-map-svg')
-    const stats = document.querySelector<HTMLElement>('.editor-heading [aria-label="Current system contents"]')
-    if (!canvas || !map || !stats) throw new Error('The system-map canvas and summary are incomplete.')
+    const clusterStats = document.querySelector<HTMLElement>('[aria-label="Current Jump Cluster contents"]')
+    const systemStats = document.querySelector<HTMLElement>('[aria-label="Current system contents"]')
+    if (!header || !topbar || !canvas || !map || !clusterStats || !systemStats) {
+      throw new Error('The system-map canvas and header summaries are incomplete.')
+    }
 
     const canvasBounds = canvas.getBoundingClientRect()
     const mapBounds = map.getBoundingClientRect()
     const mapText = Array.from(map.querySelectorAll('text'), element => element.textContent?.trim() ?? '')
     return {
       mapHeightRatio: mapBounds.height / canvasBounds.height,
-      floatingStatsVisible: getComputedStyle(stats).display !== 'none' && stats.getBoundingClientRect().width > 0,
-      floatingSystemName: document.querySelector('.editor-heading h1')?.textContent?.trim(),
-      floatingStats: Array.from(stats.querySelectorAll('strong'), counter =>
+      summariesInHeader: topbar.contains(header)
+        && header.contains(clusterStats)
+        && header.contains(systemStats),
+      summaryStatsOutsideMap: !map.contains(clusterStats) && !map.contains(systemStats),
+      summaryStatsVisible: [clusterStats, systemStats].every(stats =>
+        getComputedStyle(stats).display !== 'none' && stats.getBoundingClientRect().width > 0,
+      ),
+      clusterStats: Array.from(clusterStats.querySelectorAll('strong'), counter =>
         counter.parentElement?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
       ),
-      floatingStatsOutsideSvg: !map.contains(stats),
+      systemStats: Array.from(systemStats.querySelectorAll('strong'), counter =>
+        counter.parentElement?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      ),
+      floatingSummaryCount: document.querySelectorAll('.editor-heading').length,
       systemNameInSvg: mapText.includes('Vesper'),
       objectSummaryInSvg: mapText.some(text => text.includes('OBJECTS') && text.includes('ORBITS')),
     }
   })
 
   expect(layout.mapHeightRatio, JSON.stringify(layout)).toBeGreaterThanOrEqual(0.92)
-  expect(layout.floatingStatsVisible).toBe(true)
-  expect(layout.floatingSystemName).toBe('Vesper')
-  expect(layout.floatingStats).toEqual(['1 STARS', '1 OBJECTS', '0 ORBITS'])
-  expect(layout.floatingStatsOutsideSvg).toBe(true)
+  expect(layout.summariesInHeader).toBe(true)
+  expect(layout.summaryStatsOutsideMap).toBe(true)
+  expect(layout.summaryStatsVisible).toBe(true)
+  expect(layout.clusterStats).toEqual(['1 SYSTEMS', '0 ROUTES', '0 JUMP POINTS'])
+  expect(layout.systemStats).toEqual(['1 STARS', '1 OBJECTS', '0 ORBITS'])
+  expect(layout.floatingSummaryCount).toBe(0)
   expect(layout.systemNameInSvg).toBe(false)
   expect(layout.objectSummaryInSvg).toBe(false)
+
+  await page.getByRole('button', { name: 'Add Star', exact: true }).click()
+  await expect(systemContents).toContainText('2 STARS')
+  await expect(systemContents).toContainText('2 OBJECTS')
+
+  for (const width of [1024, 479]) {
+    await page.setViewportSize({ width, height: 720 })
+    const responsiveLayout = await page.evaluate(() => {
+      const header = document.querySelector<HTMLElement>('.workspace-header-summary')
+      const cluster = document.querySelector<HTMLElement>('.cluster-stamp')
+      const system = document.querySelector<HTMLElement>('.system-stamp')
+      const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
+      if (!header || !cluster || !system || !palette) {
+        throw new Error('The header summaries or object palette are unavailable.')
+      }
+
+      const headerBounds = header.getBoundingClientRect()
+      const clusterBounds = cluster.getBoundingClientRect()
+      const systemBounds = system.getBoundingClientRect()
+      const paletteBounds = palette.getBoundingClientRect()
+      const overlaps = (first: DOMRect, second: DOMRect) =>
+        first.left < second.right && first.right > second.left
+          && first.top < second.bottom && first.bottom > second.top
+      return {
+        noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+        headerWithinViewport: headerBounds.left >= 0 && headerBounds.right <= window.innerWidth,
+        summariesVisible: clusterBounds.width > 0 && systemBounds.width > 0,
+        summariesWithinViewport: clusterBounds.left >= 0
+          && clusterBounds.right <= window.innerWidth
+          && systemBounds.left >= 0
+          && systemBounds.right <= window.innerWidth,
+        summariesDoNotOverlap: !overlaps(clusterBounds, systemBounds),
+        paletteBelowHeader: paletteBounds.top >= headerBounds.bottom + 4,
+      }
+    })
+    expect(responsiveLayout, `header layout at ${width}px`).toEqual({
+      noHorizontalOverflow: true,
+      headerWithinViewport: true,
+      summariesVisible: true,
+      summariesWithinViewport: true,
+      summariesDoNotOverlap: true,
+      paletteBelowHeader: true,
+    })
+  }
 })
 
 test('side panels animate and Delete removes the selected object', async ({ page }) => {
@@ -1785,6 +1954,10 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const createdRoute = clusterMap.getByRole('button', { name: /Jump-01/ })
   await expect(createdRoute).toBeVisible()
   await expect(createdRoute).toHaveClass(/is-selected/)
+  const clusterMapText = await clusterMap.locator('text').allTextContents()
+  expect(clusterMapText).not.toContain('Kestrel Reach')
+  expect(clusterMapText).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+  expect(clusterMapText).not.toContain('2 SYSTEMS / 1 ROUTES')
 
   const secondSystem = clusterMap.getByRole('button', { name: 'Open New System 2 system map' })
   await dragBy(page, secondSystem.locator('.cluster-system-card'), { x: 48, y: 24 })
@@ -1799,7 +1972,10 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
   expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
   expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-01']))
-  expect(clusterSvgInfo.titleStyle).toContain('fill:')
+  expect(clusterSvgInfo.texts).not.toContain('Kestrel Reach')
+  expect(clusterSvgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+  expect(clusterSvgInfo.texts).not.toContain('2 SYSTEMS / 1 ROUTES')
+  expect(clusterSvgInfo.titleStyle).toBeNull()
   expectReadableExport(clusterSvgInfo)
   const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
   expect(clusterPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])

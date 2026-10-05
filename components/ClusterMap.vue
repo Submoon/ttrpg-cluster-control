@@ -178,23 +178,6 @@ function render(): void {
     .attr('width', 960)
     .attr('height', 560)
 
-  content.append('text')
-    .attr('class', 'cluster-map-title')
-    .attr('x', 32)
-    .attr('y', 36)
-    .text(props.cluster.name)
-  content.append('text')
-    .attr('class', 'cluster-map-caption')
-    .attr('x', 32)
-    .attr('y', 56)
-    .text('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
-  content.append('text')
-    .attr('class', 'cluster-map-count')
-    .attr('x', 928)
-    .attr('y', 36)
-    .attr('text-anchor', 'end')
-    .text(`${props.cluster.systems.length} SYSTEMS / ${props.cluster.routes.length} ROUTES`)
-
   const items = content.append('g').attr('class', 'cluster-map-items')
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
@@ -474,24 +457,6 @@ defineExpose({ exportImage })
   fill: none;
   stroke: var(--map-grid-line);
   stroke-width: 1;
-}
-
-.cluster-map-title {
-  fill: var(--map-text);
-  font: 500 20px Georgia, serif;
-}
-
-.cluster-map-caption,
-.cluster-map-count {
-  fill: var(--map-muted);
-  font: 10px Consolas, monospace;
-  letter-spacing: 0.08em;
-}
-
-.cluster-map-title,
-.cluster-map-caption,
-.cluster-map-count {
-  pointer-events: none;
 }
 
 .cluster-route {

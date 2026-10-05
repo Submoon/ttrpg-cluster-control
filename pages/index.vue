@@ -1176,9 +1176,39 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           <small class="mt-[0.22rem] block">CAMPAIGN CARTOGRAPHY</small>
         </span>
       </a>
-      <div v-if="workspace" class="cluster-stamp grid gap-[0.2rem] text-center max-[760px]:hidden">
-        <small>ACTIVE JUMP CLUSTER</small>
-        <strong>{{ workspace.cluster.name }}</strong>
+      <div v-if="workspace" class="workspace-header-summary">
+        <div class="cluster-stamp" role="group" aria-label="Active Jump Cluster summary">
+          <small>ACTIVE JUMP CLUSTER</small>
+          <h1
+            v-if="activeView === 'cluster' || !selectedSystem"
+            class="workspace-summary-name"
+          >
+            {{ workspace.cluster.name }}
+          </h1>
+          <strong v-else class="workspace-summary-name">{{ workspace.cluster.name }}</strong>
+          <div class="chart-stats header-summary-stats" role="group" aria-label="Current Jump Cluster contents">
+            <span><strong>{{ workspace.cluster.systems.length }}</strong> SYSTEMS</span>
+            <span><strong>{{ workspace.cluster.routes.length }}</strong> ROUTES</span>
+            <span><strong>{{ jumpPoints.length }}</strong> JUMP POINTS</span>
+          </div>
+        </div>
+        <div
+          v-if="selectedSystem"
+          class="system-stamp"
+          role="group"
+          aria-label="Active Star System summary"
+        >
+          <small>ACTIVE STAR SYSTEM</small>
+          <h1 v-if="activeView === 'system'" class="workspace-summary-name">
+            {{ selectedSystem.name }}
+          </h1>
+          <strong v-else class="workspace-summary-name">{{ selectedSystem.name }}</strong>
+          <div class="chart-stats header-summary-stats" role="group" aria-label="Current system contents">
+            <span><strong>{{ selectedSystem.objects.filter(object => object.subtype === 'star').length }}</strong> STARS</span>
+            <span><strong>{{ selectedSystem.objects.length }}</strong> OBJECTS</span>
+            <span><strong>{{ selectedSystem.orbits.length }}</strong> ORBITS</span>
+          </div>
+        </div>
       </div>
       <div v-if="workspace" class="topbar-actions flex shrink-0 items-center gap-2">
         <div class="header-map-actions" @keydown.esc.stop.prevent="closeHeaderMapActions">
@@ -1371,18 +1401,23 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
       </section>
 
       <section v-else-if="workspace && activeView === 'cluster'" class="editor">
-        <header class="editor-heading map-workspace-summary mb-[0.85rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
-          <div>
-            <span class="section-kicker">JUMP CLUSTER / KNOWN NETWORK</span>
-            <h1 class="mt-[0.45rem] mb-[0.4rem] text-[clamp(2.1rem,4vw,3.2rem)] tracking-[-0.04em]">{{ workspace.cluster.name }}</h1>
-            <p class="m-0">Connect logical Jump Points. Uncharted exits stay outside the known cluster.</p>
+        <div class="cluster-map-header">
+          <div class="map-tools cluster-map-tools">
+            <section class="object-palette cluster-edit-palette" role="region" aria-label="Cluster editing palette">
+              <div class="object-palette-heading">
+                <span class="section-kicker">ADD TO CLUSTER</span>
+              </div>
+              <div class="object-palette-controls">
+                <button class="object-palette-button" type="button" aria-label="Add star system" @click="createSystem">
+                  <span aria-hidden="true">+</span> Add system
+                </button>
+                <button class="object-palette-button" type="button" aria-label="Add Jump Route" @click="beginRoute">
+                  <span aria-hidden="true">+</span> Add Jump Route
+                </button>
+              </div>
+            </section>
           </div>
-          <div class="chart-stats flex flex-none gap-5 pb-[0.35rem] max-[760px]:gap-[0.9rem]" aria-label="Current Jump Cluster contents">
-            <span><strong class="mb-[0.2rem] block text-center">{{ workspace.cluster.systems.length }}</strong> SYSTEMS</span>
-            <span><strong class="mb-[0.2rem] block text-center">{{ workspace.cluster.routes.length }}</strong> ROUTES</span>
-            <span><strong class="mb-[0.2rem] block text-center">{{ jumpPoints.length }}</strong> JUMP POINTS</span>
-          </div>
-        </header>
+        </div>
 
         <div class="editor-grid grid min-h-[min(78vh,56rem)] grid-cols-[minmax(13rem,0.72fr)_minmax(0,3fr)_minmax(15rem,0.85fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(12rem,0.72fr)_minmax(0,3fr)] max-[760px]:flex max-[760px]:flex-col">
           <button
@@ -1477,21 +1512,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           </Transition>
 
           <section class="panel map-panel flex min-w-0 flex-col p-[0.7rem]" aria-label="Jump Cluster map workspace">
-            <div class="map-tools cluster-map-tools">
-              <section class="object-palette cluster-edit-palette" role="region" aria-label="Cluster editing palette">
-                <div class="object-palette-heading">
-                  <span class="section-kicker">ADD TO CLUSTER</span>
-                </div>
-                <div class="object-palette-controls">
-                  <button class="object-palette-button" type="button" aria-label="Add star system" @click="createSystem">
-                    <span aria-hidden="true">+</span> Add system
-                  </button>
-                  <button class="object-palette-button" type="button" aria-label="Add Jump Route" @click="beginRoute">
-                    <span aria-hidden="true">+</span> Add Jump Route
-                  </button>
-                </div>
-              </section>
-            </div>
             <div class="map-frame workspace-canvas flex min-h-0 min-w-0 overflow-hidden bg-[var(--map-bg)]">
               <ClientOnly>
                 <ClusterMap
@@ -1658,18 +1678,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 
       <section v-else-if="selectedSystem" class="editor">
         <div class="system-map-header">
-          <header class="editor-heading map-workspace-summary mb-[0.85rem] flex items-end justify-between gap-4 max-[760px]:items-start max-[760px]:flex-col">
-            <div>
-              <span class="section-kicker">STAR SYSTEM / SCHEMATIC</span>
-              <h1 class="mt-[0.45rem] mb-[0.4rem] text-[clamp(2.1rem,4vw,3.2rem)] tracking-[-0.04em]">{{ selectedSystem.name }}</h1>
-              <p class="m-0">Plot known places by hand. Orbit rings describe hierarchy, never scale.</p>
-            </div>
-            <div class="chart-stats flex flex-none gap-5 pb-[0.35rem] max-[760px]:gap-[0.9rem]" aria-label="Current system contents">
-              <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.objects.filter(object => object.subtype === 'star').length }}</strong> STARS</span>
-              <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.objects.length }}</strong> OBJECTS</span>
-              <span><strong class="mb-[0.2rem] block text-center">{{ selectedSystem.orbits.length }}</strong> ORBITS</span>
-            </div>
-          </header>
           <div class="map-tools system-map-tools">
             <section class="object-palette" role="region" aria-label="Object palette">
               <div class="object-palette-heading flex items-center justify-between gap-2">
@@ -2320,6 +2328,7 @@ textarea {
 }
 
 .cluster-stamp small,
+.system-stamp small,
 .local-badge,
 .section-kicker,
 .step-marker,
@@ -2331,11 +2340,13 @@ textarea {
   text-transform: uppercase;
 }
 
-.cluster-stamp small {
+.cluster-stamp small,
+.system-stamp small {
   color: var(--text-muted);
 }
 
-.cluster-stamp strong {
+.cluster-stamp strong,
+.system-stamp strong {
   font-family: Georgia, serif;
   font-size: 1rem;
   font-weight: 500;
@@ -2444,11 +2455,6 @@ textarea[aria-invalid="true"] {
 .error-panel {
   border-color: var(--error-border);
   background: linear-gradient(135deg, rgba(166, 93, 93, 0.14), var(--panel-bg) 52%);
-}
-
-.editor-heading p {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
 }
 
 .chart-stats {
@@ -2729,6 +2735,61 @@ textarea[aria-invalid="true"] {
 .map-workspace-shell .topbar {
   position: relative;
   z-index: 6;
+  flex-wrap: wrap;
+}
+
+.map-workspace-shell .workspace-header-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.75rem, 2vw, 1.75rem);
+}
+
+.map-workspace-shell .cluster-stamp,
+.map-workspace-shell .system-stamp {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 12rem;
+  justify-items: center;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.map-workspace-shell .workspace-summary-name {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.map-workspace-shell .header-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.7rem;
+  padding: 0;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+}
+
+.map-workspace-shell .header-summary-stats > span {
+  white-space: nowrap;
+}
+
+.map-workspace-shell .header-summary-stats strong {
+  display: inline;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1;
+  vertical-align: baseline;
 }
 
 .map-workspace-shell .header-map-actions {
@@ -2842,63 +2903,26 @@ textarea[aria-invalid="true"] {
   position: absolute;
   z-index: 4;
   top: 0.55rem;
-  right: 0.75rem;
+  right: clamp(0.75rem, 2vw, 1.5rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
   gap: 0.6rem;
   pointer-events: none;
 }
 
-.map-workspace-shell .editor-heading {
+.map-workspace-shell .cluster-map-header {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   top: 0.55rem;
+  right: clamp(0.75rem, 2vw, 1.5rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
-  width: fit-content;
-  max-width: min(38rem, calc(100vw - 1.5rem));
-  margin: 0;
-  align-items: center;
-  gap: 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0.5rem 0.7rem;
-  background: rgba(18, 28, 30, 0.96);
-  box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(12px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
   pointer-events: none;
-}
-
-.map-workspace-shell .system-map-header .editor-heading {
-  position: relative;
-  top: auto;
-  left: auto;
-  z-index: auto;
-  max-width: min(38rem, 100%);
-  flex: 0 1 auto;
-}
-
-.map-workspace-shell .map-workspace-summary > div:first-child {
-  min-width: 0;
-}
-
-.map-workspace-shell .editor-heading h1 {
-  margin-block: 0.25rem;
-  font-size: clamp(1.4rem, 2vw, 2rem);
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-
-.map-workspace-shell .editor-heading p {
-  display: none;
-}
-
-.map-workspace-shell .editor-heading .chart-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-  padding: 0;
 }
 
 .map-workspace-shell .editor-grid {
@@ -2953,12 +2977,34 @@ textarea[aria-invalid="true"] {
   top: auto;
   right: auto;
   left: auto;
-  width: auto;
-  min-width: min(100%, 32rem);
-  max-width: none;
-  flex: 1 1 40rem;
+  grid-column: 2;
+  grid-row: 1;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  justify-self: center;
+  flex: none;
   transform: none;
-  justify-items: stretch;
+  justify-items: center;
+  gap: 0.35rem;
+}
+
+.map-workspace-shell .cluster-map-header .cluster-map-tools {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-self: center;
+  justify-content: center;
+  flex: none;
+  transform: none;
   gap: 0.35rem;
 }
 
@@ -3028,18 +3074,6 @@ textarea[aria-invalid="true"] {
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
-}
-
-.map-workspace-shell .cluster-map-tools {
-  top: 4.25rem;
-  right: 0.75rem;
-  left: 0.75rem;
-  display: flex;
-  width: auto;
-  max-width: none;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
 }
 
 .map-workspace-shell .cluster-edit-palette {
@@ -3204,18 +3238,49 @@ textarea[aria-invalid="true"] {
   display: none;
 }
 
+@media (max-width: 1100px) {
+  .map-workspace-shell .workspace-header-summary {
+    order: 3;
+    flex: 1 0 100%;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 0.4rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .map-workspace-shell .system-map-header,
+  .map-workspace-shell .cluster-map-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .map-workspace-shell .system-map-header .system-map-tools {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 auto;
+    justify-items: center;
+  }
+
+  .map-workspace-shell .cluster-map-header .cluster-map-tools {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 auto;
+  }
+}
+
 @media (max-width: 760px) {
   .map-workspace-shell .topbar,
   .map-workspace-shell > .footer {
     padding-inline: 0.75rem;
   }
 
-  .map-workspace-shell .editor-heading {
-    top: 0.45rem;
-    left: 0.5rem;
-    max-width: calc(100vw - 1rem);
-    align-items: center;
-    flex-direction: row;
+  .map-workspace-shell .workspace-header-summary {
+    gap: 0.4rem 0.7rem;
   }
 
   .map-workspace-shell .system-map-header {
@@ -3225,20 +3290,15 @@ textarea[aria-invalid="true"] {
     gap: 0.45rem;
   }
 
-  .map-workspace-shell .system-map-header .editor-heading {
-    max-width: calc(100vw - 1rem);
-    align-items: center;
-    flex-direction: row;
+  .map-workspace-shell .cluster-map-header {
+    top: 0.45rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    gap: 0.45rem;
   }
 
-  .map-workspace-shell .editor-heading h1 {
-    max-width: 60vw;
-    font-size: 1.35rem;
-  }
-
-  .map-workspace-shell .system-map-header .editor-heading h1 {
-    max-width: 60vw;
-    font-size: 1.35rem;
+  .map-workspace-shell .workspace-summary-name {
+    font-size: 0.88rem;
   }
 
   .map-workspace-shell .map-tools {
@@ -3263,15 +3323,6 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .object-palette-hint {
     display: none;
-  }
-
-  .map-workspace-shell .cluster-map-tools {
-    top: 4.15rem;
-    right: 0.5rem;
-    left: 0.5rem;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.35rem;
   }
 
   .map-workspace-shell .cluster-edit-palette {
@@ -3340,44 +3391,42 @@ textarea[aria-invalid="true"] {
   }
 
   .map-workspace-shell .wordmark small,
-  .map-workspace-shell .system-map-header .editor-heading .section-kicker,
   .map-workspace-shell .system-map-tools .object-palette-heading {
     display: none;
   }
 
-  .map-workspace-shell .system-map-header {
+  .map-workspace-shell .system-map-header,
+  .map-workspace-shell .cluster-map-header {
     top: 0.25rem;
     gap: 0.5rem;
   }
 
-  .map-workspace-shell .system-map-header .editor-heading {
-    max-width: 14rem;
-    gap: 0.35rem;
-    padding: 0.3rem 0.45rem;
+  .map-workspace-shell .workspace-header-summary {
+    gap: 0.15rem 0.5rem;
   }
 
-  .map-workspace-shell .system-map-header .editor-heading h1 {
-    max-width: 8rem;
-    margin: 0;
-    font-size: 1rem;
-    line-height: 1.1;
+  .map-workspace-shell .cluster-stamp,
+  .map-workspace-shell .system-stamp {
+    gap: 0.05rem;
   }
 
-  .map-workspace-shell .system-map-header .editor-heading .chart-stats {
-    gap: 0.2rem;
-  }
-
-  .map-workspace-shell .system-map-header .editor-heading .chart-stats > span {
+  .map-workspace-shell .cluster-stamp small,
+  .map-workspace-shell .system-stamp small {
     font-size: 0.42rem;
     letter-spacing: 0.03em;
-    white-space: nowrap;
   }
 
-  .map-workspace-shell .system-map-header .editor-heading .chart-stats strong {
-    display: inline;
-    margin: 0;
-    font-size: 0.7rem;
-    line-height: 1;
+  .map-workspace-shell .workspace-summary-name {
+    font-size: 0.75rem;
+  }
+
+  .map-workspace-shell .header-summary-stats {
+    gap: 0.1rem 0.3rem;
+    font-size: 0.4rem;
+  }
+
+  .map-workspace-shell .header-summary-stats strong {
+    font-size: 0.62rem;
   }
 
   .map-workspace-shell .system-map-header .system-map-tools {
@@ -3386,18 +3435,33 @@ textarea[aria-invalid="true"] {
     gap: 0.2rem;
   }
 
-  .map-workspace-shell .system-map-tools .object-palette {
+  .map-workspace-shell .cluster-map-header .cluster-map-tools {
+    min-width: 0;
+    flex-basis: 100%;
     gap: 0.2rem;
-    padding: 0.25rem;
+  }
+
+  .map-workspace-shell .system-map-tools .object-palette {
+    gap: 0.15rem;
+    padding: 0.15rem;
   }
 
   .map-workspace-shell .object-palette-categories {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
     gap: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .map-workspace-shell .object-palette-category-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .map-workspace-shell .system-map-tools .object-palette-button,
   .map-workspace-shell .system-map-tools .object-palette-category-button {
-    min-height: 1.5rem;
+    min-height: 1.25rem;
     gap: 0.15rem;
     padding: 0.12rem 0.25rem;
     font-size: 0.55rem;
@@ -3408,11 +3472,11 @@ textarea[aria-invalid="true"] {
   }
 
   .map-workspace-shell .map-navigation {
-    top: 0.25rem;
-    right: 2.75rem;
-    bottom: auto;
-    left: auto;
-    transform: none;
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .map-workspace-shell .system-map-editor-grid .panel-reopen {
