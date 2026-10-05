@@ -1,12 +1,12 @@
 ---
-title: 21. Expanding the system-map grid and layout bounds
+title: 22. Expanding the system-map grid and layout bounds
 label: wayfinder:implement
 type: implement
 status: open
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
-# 21. Expanding the system-map grid and layout bounds
+# 22. Expanding the system-map grid and layout bounds
 
 ## What to build
 

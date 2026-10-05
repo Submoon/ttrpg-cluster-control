@@ -2,7 +2,8 @@
 title: 18. Prototyping field-definition management
 label: wayfinder:prototype
 type: prototype
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -16,6 +17,10 @@ How should a Warden manage native and reusable custom field definitions without 
 
 Prototype a focused field-management view reachable from the map editor. Compare a dedicated page with a focused panel or dialog, and demonstrate listing, adding, editing, and removing field definitions and their options.
 
+The executable, development-only prototype is in [`pages/prototype/field-definitions.vue`](../../../pages/prototype/field-definitions.vue). Run `npm run dev` and open `/prototype/field-definitions` for the Quick Dialog by default; use `?variant=A` or `?variant=B` to compare the dedicated page and side panel. All changes use sample data and reset on reload.
+
+**Preferred direction: C — Quick dialog (user preference).** Keep field management close to the map while separating reusable-definition edits from object-value editing. Preserve the existing-value preview and explicit confirmation for changes that could affect saved values.
+
 ## Acceptance criteria
 
 - The prototype makes definition management distinct from editing an individual object's field values.
@@ -26,6 +31,10 @@ Prototype a focused field-management view reachable from the map editor. Compare
 ## Blocked by
 
 - None.
+
+## Resolution
+
+The user selected solution C, the Quick Dialog, because it keeps reusable field-definition management close to the map while separating it from object-value editing. The selected design retains previews of affected existing values and explicit confirmation for changes that could alter them. Product implementation is tracked in [19. Implementing field-definition management with a Quick Dialog](19-field-definition-management.md).
 
 ## Source specs
 

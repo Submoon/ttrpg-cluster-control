@@ -1,12 +1,12 @@
 ---
-title: 20. Including the system name in system-map image exports
+title: 21. Including the system name in system-map image exports
 label: wayfinder:implement
 type: implement
 status: open
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
-# 20. Including the system name in system-map image exports
+# 21. Including the system name in system-map image exports
 
 ## What to build
 

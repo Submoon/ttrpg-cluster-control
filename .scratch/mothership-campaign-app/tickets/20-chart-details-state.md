@@ -1,12 +1,12 @@
 ---
-title: 19. Clarifying the Chart Details action
+title: 20. Clarifying the Chart Details action
 label: wayfinder:implement
 type: implement
 status: open
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
-# 19. Clarifying the Chart Details action
+# 20. Clarifying the Chart Details action
 
 ## What to build
 

@@ -1,12 +1,12 @@
 ---
-title: 23. Improving text readability in Add Object and Map Files
+title: 24. Improving text readability in Add Object and Map Files
 label: wayfinder:implement
 type: implement
 status: open
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
-# 23. Improving text readability in Add Object and Map Files
+# 24. Improving text readability in Add Object and Map Files
 
 ## What to build
 

@@ -42,6 +42,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [15. Verifying the V1 workflow in one browser acceptance test](tickets/15-browser-acceptance.md): one end-to-end browser path verifies persistence, safe import/deletion, and complete map exports.
 - [16. Making the workspace darker and more map-first](tickets/16-map-first-visual-refresh.md): full-canvas maps show Jump Cluster and active-system details in the shared application header, with 25–1600% zoom, animated edge panels, and a responsive object palette below the header; compact category buttons reveal one object group at a time and scroll horizontally when needed. Keyboard deletion and separate compact export controls remain supported.
 - [17. Moving map import and export actions into the header](tickets/17-header-import-export.md): a responsive, keyboard-accessible header exposes exports for the active Jump Cluster or star system and the existing safe JSON-copy import into the current cluster.
+- [18. Prototyping field-definition management](tickets/18-field-definition-management.md): the user selected the Quick Dialog to manage reusable definitions next to the map, preview affected existing values, and confirm potentially destructive changes; product implementation is tracked in [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md).
 
 ## Implementation tickets
 
@@ -61,11 +62,13 @@ Implement in dependency order; each ticket also lists its blockers.
 | 14 | [14. Exporting complete maps as PNG and SVG](tickets/14-image-export.md) | [08. Connecting Jump Points across a Jump Cluster](tickets/08-jump-cluster-routes.md); [10. Navigating and arranging both map views](tickets/10-map-navigation.md) |
 | 15 | [15. Verifying the V1 workflow in one browser acceptance test](tickets/15-browser-acceptance.md) | Tickets 05–14 |
 | 18 | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) | None |
-| 19 | [19. Clarifying the Chart Details action](tickets/19-chart-details-state.md) | None |
-| 20 | [20. Including the system name in system-map image exports](tickets/20-system-name-in-image-exports.md) | None |
-| 21 | [21. Expanding the system-map grid and layout bounds](tickets/21-expanding-system-map-grid.md) | None |
-| 22 | [22. Supporting Jump levels and destinations](tickets/22-jump-levels-and-destinations.md) | None |
-| 23 | [23. Improving text readability in Add Object and Map Files](tickets/23-map-actions-typography.md) | None |
+| 19 | [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md) | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) |
+| 20 | [20. Clarifying the Chart Details action](tickets/20-chart-details-state.md) | None |
+| 21 | [21. Including the system name in system-map image exports](tickets/21-system-name-in-image-exports.md) | None |
+| 22 | [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md) | None |
+| 23 | [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md) | None |
+| 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |
+| 25 | [25. Supporting elliptical and centerless Orbits](tickets/25-special-orbits.md) | None |
 
 ## Out of scope
 
