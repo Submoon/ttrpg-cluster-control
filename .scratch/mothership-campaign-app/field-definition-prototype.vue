@@ -429,7 +429,7 @@ onUnmounted(() => {
         <span class="active-system"><i /> Vesper system</span>
       </div>
 
-      <span class="prototype-stamp"><i /> Prototype · sample data · no saves</span>
+      <span class="prototype-stamp"><i /> Reference prototype · sample data · no saves</span>
     </header>
 
     <main class="work-area">

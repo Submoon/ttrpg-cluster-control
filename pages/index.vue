@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   addStarSystem,
   addCustomFieldDefinition,
@@ -18,9 +18,11 @@ import {
   planMapEntityDeletion,
   prepareJsonImport,
   renameLocalWorkspace,
+  renameCustomFieldDefinition,
   removeCustomFieldDefinition,
   updateCustomFieldOptions,
   updateNativeFieldOptions,
+  type CustomFieldValue,
   type JsonImportSummary,
   updateSystemObject,
   type CatalogueSubtype,
@@ -61,6 +63,44 @@ interface JumpRouteDraft {
   toPointId: string
   unresolvedExit: string
 }
+type NativeFieldId = 'native:atmosphere' | 'native:port-class'
+type FieldDefinitionSummary =
+  | {
+      id: NativeFieldId
+      name: 'Atmosphere' | 'Port class'
+      kind: 'native'
+      nativeField: 'atmosphere' | 'portClass'
+      type: 'single-select'
+      options: string[]
+    }
+  | {
+      id: string
+      name: string
+      kind: 'custom'
+      type: CustomFieldType
+      options: string[]
+    }
+interface FieldValueAssignment {
+  objectId: string
+  objectName: string
+  systemName: string
+  value: CustomFieldValue
+}
+type PendingFieldDefinitionChange =
+  | {
+      kind: 'save'
+      fieldId: string
+      fieldName: string
+      name: string
+      options: string[]
+      affectedAssignments: FieldValueAssignment[]
+    }
+  | {
+      kind: 'remove'
+      fieldId: string
+      fieldName: string
+      affectedAssignments: FieldValueAssignment[]
+    }
 
 const {
   workspace,
@@ -96,14 +136,18 @@ const objectDraft = reactive<SystemObjectDraft>({
   customFieldValues: {},
   jumpStationId: '',
 })
-const nativeFieldDrafts = reactive({
-  atmosphereOptions: '',
-  portClassOptions: '',
-})
-const customFieldOptionDrafts = reactive<Record<string, string>>({})
 const newCustomFieldName = ref('')
 const newCustomFieldType = ref<CustomFieldType>('text')
 const newCustomFieldOptions = ref('')
+const newCustomFieldFormOpen = ref(false)
+const fieldDefinitionDialogOpen = ref(false)
+const fieldDefinitionsDialog = ref<HTMLDialogElement | null>(null)
+const fieldDefinitionsTrigger = ref<HTMLButtonElement | null>(null)
+const selectedFieldDefinitionId = ref<NativeFieldId | string>('native:atmosphere')
+const fieldDefinitionNameDraft = ref('')
+const fieldDefinitionOptionsDraft = ref('')
+const fieldDefinitionError = ref('')
+const pendingFieldDefinitionChange = ref<PendingFieldDefinitionChange | null>(null)
 const routeDraft = reactive<JumpRouteDraft>({
   name: '',
   fromPointId: '',
@@ -118,7 +162,6 @@ const headerMapActionsOpen = ref(false)
 const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
 const clusterMapRef = shallowRef<MapImageExporter | null>(null)
 const systemMapRef = shallowRef<MapImageExporter | null>(null)
-const fieldSettingsError = ref('')
 
 function updateViewportMode(): void {
   isCompactViewport.value = window.matchMedia('(max-width: 760px)').matches
@@ -193,6 +236,133 @@ const selectedOrbitDeleteLabel = computed(() => {
   const hostName = selectedSystem.value?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
   return `Delete Orbit ${orbit.order} around ${hostName}`
 })
+function fieldDefinitionsFor(currentWorkspace: LocalWorkspace): FieldDefinitionSummary[] {
+  return [
+    {
+      id: 'native:atmosphere',
+      name: 'Atmosphere',
+      kind: 'native',
+      nativeField: 'atmosphere',
+      type: 'single-select',
+      options: currentWorkspace.objectFieldSettings.atmosphereOptions,
+    },
+    {
+      id: 'native:port-class',
+      name: 'Port class',
+      kind: 'native',
+      nativeField: 'portClass',
+      type: 'single-select',
+      options: currentWorkspace.objectFieldSettings.portClassOptions,
+    },
+    ...currentWorkspace.objectFieldSettings.customFields.map((field): FieldDefinitionSummary => ({
+      id: field.id,
+      name: field.name,
+      kind: 'custom',
+      type: field.type,
+      options: field.type === 'single-select' ? field.options : [],
+    })),
+  ]
+}
+const fieldDefinitions = computed(() =>
+  workspace.value ? fieldDefinitionsFor(workspace.value) : [],
+)
+const nativeFieldDefinitions = computed(() =>
+  fieldDefinitions.value.filter(field => field.kind === 'native'),
+)
+const customFieldDefinitions = computed(() =>
+  fieldDefinitions.value.filter(field => field.kind === 'custom'),
+)
+const selectedFieldDefinition = computed(() =>
+  fieldDefinitions.value.find(field => field.id === selectedFieldDefinitionId.value),
+)
+function fieldValueAssignments(
+  currentWorkspace: LocalWorkspace,
+  definition: FieldDefinitionSummary,
+): FieldValueAssignment[] {
+  const assignments: FieldValueAssignment[] = []
+  for (const system of currentWorkspace.cluster.systems) {
+    for (const object of system.objects) {
+      const value = definition.kind === 'native'
+        ? object[definition.nativeField]
+        : object.customFieldValues?.[definition.id]
+      if (value === undefined || value === '') continue
+      assignments.push({
+        objectId: object.id,
+        objectName: object.name,
+        systemName: system.name,
+        value,
+      })
+    }
+  }
+  return assignments
+}
+const selectedFieldAssignments = computed(() => {
+  const currentWorkspace = workspace.value
+  const definition = selectedFieldDefinition.value
+  return currentWorkspace && definition ? fieldValueAssignments(currentWorkspace, definition) : []
+})
+function fieldOptionsFromText(value: string): string[] {
+  return value.split(/\r?\n/u).map(option => option.trim()).filter(Boolean)
+}
+const affectedFieldAssignments = computed(() => {
+  const definition = selectedFieldDefinition.value
+  if (!definition || definition.type !== 'single-select') return []
+  const options = fieldOptionsFromText(fieldDefinitionOptionsDraft.value)
+  return selectedFieldAssignments.value.filter(assignment =>
+    typeof assignment.value === 'string' && !options.includes(assignment.value),
+  )
+})
+
+function selectFieldDefinition(fieldId: string): void {
+  const definition = fieldDefinitions.value.find(field => field.id === fieldId)
+  if (!definition) return
+
+  selectedFieldDefinitionId.value = fieldId
+  fieldDefinitionNameDraft.value = definition.kind === 'custom' ? definition.name : ''
+  fieldDefinitionOptionsDraft.value = definition.type === 'single-select'
+    ? definition.options.join('\n')
+    : ''
+  fieldDefinitionError.value = ''
+  pendingFieldDefinitionChange.value = null
+}
+
+async function openFieldDefinitions(): Promise<void> {
+  if (!workspace.value || fieldDefinitionDialogOpen.value) return
+
+  newCustomFieldFormOpen.value = false
+  newCustomFieldName.value = ''
+  newCustomFieldType.value = 'text'
+  newCustomFieldOptions.value = ''
+  selectFieldDefinition('native:atmosphere')
+  fieldDefinitionDialogOpen.value = true
+  await nextTick()
+
+  const dialog = fieldDefinitionsDialog.value
+  if (!dialog) throw new Error('The field definitions dialog did not render.')
+  dialog.showModal()
+}
+
+function closeFieldDefinitions(): void {
+  const dialog = fieldDefinitionsDialog.value
+  if (dialog?.open) dialog.close()
+  fieldDefinitionDialogOpen.value = false
+  pendingFieldDefinitionChange.value = null
+  newCustomFieldFormOpen.value = false
+  nextTick(() => fieldDefinitionsTrigger.value?.focus())
+}
+
+function cancelFieldDefinitionDialog(event: Event): void {
+  event.preventDefault()
+  closeFieldDefinitions()
+}
+
+function openNewCustomFieldForm(): void {
+  newCustomFieldName.value = ''
+  newCustomFieldType.value = 'text'
+  newCustomFieldOptions.value = ''
+  newCustomFieldFormOpen.value = true
+  fieldDefinitionError.value = ''
+}
 
 function syncObjectDraft(object: SystemObject | undefined): void {
   objectDraft.locationKey = object?.locationKey ?? ''
@@ -219,20 +389,12 @@ watch(selectedObject, syncObjectDraft, { immediate: true })
 watch(() => workspace.value?.objectFieldSettings, settings => {
   if (!settings) return
 
-  nativeFieldDrafts.atmosphereOptions = settings.atmosphereOptions.join('\n')
-  nativeFieldDrafts.portClassOptions = settings.portClassOptions.join('\n')
   const fieldIds = new Set(settings.customFields.map(field => field.id))
   for (const field of settings.customFields) {
-    if (field.type === 'single-select') {
-      customFieldOptionDrafts[field.id] = field.options.join('\n')
-    }
     if (!(field.id in objectDraft.customFieldValues)) {
       const value = selectedObject.value?.customFieldValues?.[field.id]
       objectDraft.customFieldValues[field.id] = value === undefined ? '' : String(value)
     }
-  }
-  for (const fieldId of Object.keys(customFieldOptionDrafts)) {
-    if (!fieldIds.has(fieldId)) delete customFieldOptionDrafts[fieldId]
   }
   for (const fieldId of Object.keys(objectDraft.customFieldValues)) {
     if (!fieldIds.has(fieldId)) delete objectDraft.customFieldValues[fieldId]
@@ -1007,80 +1169,143 @@ function saveJumpStation(): Promise<void> {
   return saveObjectChanges({ jumpStationId: objectDraft.jumpStationId || null })
 }
 
-function fieldOptionsFromText(value: string): string[] {
-  return value.split(/\r?\n/u).map(option => option.trim()).filter(Boolean)
-}
-
-async function saveNativeFieldOptions(): Promise<void> {
-  const currentWorkspace = workspace.value
-  if (!currentWorkspace) return
-
-  try {
-    const withAtmospheres = updateNativeFieldOptions(
-      currentWorkspace,
-      'atmosphere',
-      fieldOptionsFromText(nativeFieldDrafts.atmosphereOptions),
-    )
-    await commit(updateNativeFieldOptions(
-      withAtmospheres,
-      'portClass',
-      fieldOptionsFromText(nativeFieldDrafts.portClassOptions),
-    ))
-    fieldSettingsError.value = ''
-  } catch (error) {
-    fieldSettingsError.value = errorText(error)
-  }
-}
-
 async function createCustomField(): Promise<void> {
   const currentWorkspace = workspace.value
   if (!currentWorkspace) return
 
   try {
-    await commit(addCustomFieldDefinition(
+    const updatedWorkspace = addCustomFieldDefinition(
       currentWorkspace,
       newCustomFieldName.value,
       newCustomFieldType.value,
       fieldOptionsFromText(newCustomFieldOptions.value),
-    ))
+    )
+    const addedField = updatedWorkspace.objectFieldSettings.customFields[
+      updatedWorkspace.objectFieldSettings.customFields.length - 1
+    ]
+    if (!addedField) throw new Error('The custom field was not added.')
+    await commit(updatedWorkspace)
     newCustomFieldName.value = ''
+    newCustomFieldType.value = 'text'
     newCustomFieldOptions.value = ''
-    fieldSettingsError.value = ''
+    newCustomFieldFormOpen.value = false
+    selectFieldDefinition(addedField.id)
   } catch (error) {
-    fieldSettingsError.value = errorText(error)
+    fieldDefinitionError.value = errorText(error)
   }
 }
 
-async function saveCustomFieldOptions(fieldId: string): Promise<void> {
+function sameFieldOptions(first: string[], second: string[]): boolean {
+  return first.length === second.length && first.every((option, index) => option === second[index])
+}
+
+function applyFieldDefinitionUpdate(
+  currentWorkspace: LocalWorkspace,
+  fieldId: string,
+  name: string,
+  options: string[],
+  clearInvalidValues: boolean,
+): LocalWorkspace {
+  const definition = fieldDefinitionsFor(currentWorkspace).find(field => field.id === fieldId)
+  if (!definition) throw new Error('The selected field definition no longer exists.')
+
+  let updatedWorkspace = currentWorkspace
+  if (definition.kind === 'custom' && name !== definition.name) {
+    updatedWorkspace = renameCustomFieldDefinition(updatedWorkspace, definition.id, name)
+  }
+  if (definition.type === 'single-select' && !sameFieldOptions(definition.options, options)) {
+    updatedWorkspace = definition.kind === 'native'
+      ? updateNativeFieldOptions(updatedWorkspace, definition.nativeField, options, clearInvalidValues)
+      : updateCustomFieldOptions(updatedWorkspace, definition.id, options, clearInvalidValues)
+  }
+  return updatedWorkspace
+}
+
+async function saveFieldDefinitionChanges(): Promise<void> {
   const currentWorkspace = workspace.value
-  if (!currentWorkspace) return
+  const definition = selectedFieldDefinition.value
+  if (!currentWorkspace || !definition) return
+
+  const name = definition.kind === 'custom' ? fieldDefinitionNameDraft.value.trim() : definition.name
+  const options = definition.type === 'single-select'
+    ? fieldOptionsFromText(fieldDefinitionOptionsDraft.value)
+    : definition.options
+  const nameChanged = definition.kind === 'custom' && name !== definition.name
+  const optionsChanged = definition.type === 'single-select' && !sameFieldOptions(definition.options, options)
+  if (!nameChanged && !optionsChanged) return
 
   try {
-    await commit(updateCustomFieldOptions(
+    const updatedWorkspace = applyFieldDefinitionUpdate(
       currentWorkspace,
-      fieldId,
-      fieldOptionsFromText(customFieldOptionDrafts[fieldId] ?? ''),
-    ))
-    fieldSettingsError.value = ''
+      definition.id,
+      name,
+      options,
+      true,
+    )
+    const affectedAssignments = definition.type === 'single-select'
+      ? fieldValueAssignments(currentWorkspace, definition).filter(assignment =>
+          typeof assignment.value === 'string' && !options.includes(assignment.value),
+        )
+      : []
+    if (affectedAssignments.length) {
+      pendingFieldDefinitionChange.value = {
+        kind: 'save',
+        fieldId: definition.id,
+        fieldName: definition.name,
+        name,
+        options,
+        affectedAssignments,
+      }
+      fieldDefinitionError.value = ''
+      return
+    }
+
+    await commit(updatedWorkspace)
+    selectFieldDefinition(definition.id)
   } catch (error) {
-    fieldSettingsError.value = errorText(error)
+    fieldDefinitionError.value = errorText(error)
   }
 }
 
-async function deleteCustomField(fieldId: string): Promise<void> {
+function requestFieldDefinitionRemoval(): void {
   const currentWorkspace = workspace.value
-  const field = currentWorkspace?.objectFieldSettings.customFields.find(item => item.id === fieldId)
-  if (!currentWorkspace || !field || !window.confirm(
-    `Remove "${field.name}" and clear its values from all map objects?`,
-  )) {
-    return
+  const definition = selectedFieldDefinition.value
+  if (!currentWorkspace || !definition || definition.kind !== 'custom') return
+
+  pendingFieldDefinitionChange.value = {
+    kind: 'remove',
+    fieldId: definition.id,
+    fieldName: definition.name,
+    affectedAssignments: fieldValueAssignments(currentWorkspace, definition),
   }
+  fieldDefinitionError.value = ''
+}
+
+function cancelFieldDefinitionChange(): void {
+  pendingFieldDefinitionChange.value = null
+  fieldDefinitionError.value = ''
+}
+
+async function confirmFieldDefinitionChange(): Promise<void> {
+  const currentWorkspace = workspace.value
+  const pendingChange = pendingFieldDefinitionChange.value
+  if (!currentWorkspace || !pendingChange) return
 
   try {
-    await commit(removeCustomFieldDefinition(currentWorkspace, fieldId))
-    fieldSettingsError.value = ''
+    const updatedWorkspace = pendingChange.kind === 'remove'
+      ? removeCustomFieldDefinition(currentWorkspace, pendingChange.fieldId)
+      : applyFieldDefinitionUpdate(
+          currentWorkspace,
+          pendingChange.fieldId,
+          pendingChange.name,
+          pendingChange.options,
+          true,
+        )
+    await commit(updatedWorkspace)
+    pendingFieldDefinitionChange.value = null
+    selectFieldDefinition(pendingChange.kind === 'remove' ? 'native:atmosphere' : pendingChange.fieldId)
   } catch (error) {
-    fieldSettingsError.value = errorText(error)
+    fieldDefinitionError.value = errorText(error)
   }
 }
 
@@ -1211,6 +1436,20 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
         </div>
       </div>
       <div v-if="workspace" class="topbar-actions flex shrink-0 items-center gap-2">
+        <button
+          ref="fieldDefinitionsTrigger"
+          class="field-definitions-trigger"
+          type="button"
+          aria-haspopup="dialog"
+          aria-controls="field-definitions-dialog"
+          :aria-expanded="fieldDefinitionDialogOpen"
+          aria-label="Open field definitions"
+          title="Manage native and custom field definitions"
+          @click="openFieldDefinitions"
+        >
+          <span>FIELD DEFINITIONS</span>
+          <small>MAP DATA</small>
+        </button>
         <div class="header-map-actions" @keydown.esc.stop.prevent="closeHeaderMapActions">
           <button
             ref="headerMapActionsToggle"
@@ -1849,83 +2088,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </template>
             </nav>
-            <details class="my-4 border-t border-[var(--line-soft)] pt-3">
-              <summary class="cursor-pointer py-2 text-[0.68rem]">Field definitions</summary>
-              <form class="field-stack mt-3 grid gap-3" @submit.prevent="saveNativeFieldOptions">
-                <label for="atmosphere-choices">
-                  Atmosphere choices, one per line
-                  <textarea id="atmosphere-choices" v-model="nativeFieldDrafts.atmosphereOptions" rows="3" />
-                </label>
-                <label for="port-class-choices">
-                  Port class choices, one per line
-                  <textarea id="port-class-choices" v-model="nativeFieldDrafts.portClassOptions" rows="3" />
-                </label>
-                <button class="secondary-button min-h-[2.25rem] justify-center" type="submit" :disabled="saveState === 'saving'">
-                  Save native field options
-                </button>
-              </form>
-
-              <form class="field-stack mt-4 grid gap-3 border-t border-[var(--line-soft)] pt-3" @submit.prevent="createCustomField">
-                <span class="section-kicker">NEW CUSTOM FIELD</span>
-                <label for="new-custom-field-name">
-                  Custom field label
-                  <input id="new-custom-field-name" v-model="newCustomFieldName" maxlength="80" required>
-                </label>
-                <label for="new-custom-field-type">
-                  Value type
-                  <select id="new-custom-field-type" v-model="newCustomFieldType">
-                    <option value="text">Text</option>
-                    <option value="number">Number</option>
-                    <option value="boolean">Boolean</option>
-                    <option value="single-select">Single-select</option>
-                  </select>
-                </label>
-                <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
-                  New field choices, one per line
-                  <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
-                </label>
-                <button class="secondary-button min-h-[2.25rem] justify-center" type="submit" :disabled="saveState === 'saving'">
-                  Add custom field
-                </button>
-              </form>
-
-              <div v-if="workspace.objectFieldSettings.customFields.length" class="mt-4 grid gap-4 border-t border-[var(--line-soft)] pt-3">
-                <div v-for="field in workspace.objectFieldSettings.customFields" :key="field.id" class="grid gap-2">
-                  <span class="tree-copy [overflow-wrap:anywhere]">
-                    {{ field.name }}
-                    <small class="mt-[0.18rem] block">{{ field.type }}</small>
-                  </span>
-                  <label v-if="field.type === 'single-select'" :for="`custom-field-options-${field.id}`">
-                    {{ field.name }} choices, one per line
-                    <textarea
-                      :id="`custom-field-options-${field.id}`"
-                      v-model="customFieldOptionDrafts[field.id]"
-                      rows="3"
-                    />
-                  </label>
-                  <div class="flex flex-wrap gap-2">
-                    <button
-                      v-if="field.type === 'single-select'"
-                      class="secondary-button min-h-[2.25rem] justify-center"
-                      type="button"
-                      :disabled="saveState === 'saving'"
-                      @click="saveCustomFieldOptions(field.id)"
-                    >
-                      Save {{ field.name }} choices
-                    </button>
-                    <button
-                      class="quiet-button min-h-[2.25rem] justify-center"
-                      type="button"
-                      :disabled="saveState === 'saving'"
-                      @click="deleteCustomField(field.id)"
-                    >
-                      Delete {{ field.name }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <p v-if="fieldSettingsError" class="feedback m-0 error-text" role="alert">{{ fieldSettingsError }}</p>
-            </details>
             <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Select an object, then add an Orbit from the map toolbar. Empty Orbits stay on the chart.</p>
               </aside>
             </Transition>
@@ -2276,6 +2438,269 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
       </section>
     </main>
 
+    <Teleport to="body">
+      <dialog
+        v-if="fieldDefinitionDialogOpen"
+        id="field-definitions-dialog"
+        ref="fieldDefinitionsDialog"
+        class="field-definitions-dialog"
+        aria-labelledby="field-definitions-title"
+        aria-modal="true"
+        @cancel="cancelFieldDefinitionDialog"
+        @click.self="closeFieldDefinitions"
+      >
+        <div class="field-definitions-content">
+          <header class="field-definitions-header">
+            <div>
+              <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
+              <h2 id="field-definitions-title">Field definitions</h2>
+              <p>Manage values available across this map without changing the active system or selection.</p>
+            </div>
+            <button
+              class="quiet-button field-definitions-close"
+              type="button"
+              aria-label="Close field definitions"
+              autofocus
+              @click="closeFieldDefinitions"
+            >
+              Close
+            </button>
+          </header>
+
+          <div class="field-definitions-layout">
+            <nav class="field-definition-list" aria-label="Field definitions">
+              <section>
+                <h3>Native fields</h3>
+                <button
+                  v-for="field in nativeFieldDefinitions"
+                  :key="field.id"
+                  class="field-definition-choice"
+                  type="button"
+                  :aria-pressed="selectedFieldDefinitionId === field.id"
+                  :class="{ active: selectedFieldDefinitionId === field.id }"
+                  @click="selectFieldDefinition(field.id)"
+                >
+                  <span>{{ field.name }}</span>
+                  <small>Native / {{ field.type }}</small>
+                </button>
+              </section>
+              <section>
+                <div class="field-definition-list-heading">
+                  <h3>Custom fields</h3>
+                  <button
+                    class="quiet-button field-definition-add"
+                    type="button"
+                    @click="openNewCustomFieldForm"
+                  >
+                    New custom field
+                  </button>
+                </div>
+                <button
+                  v-for="field in customFieldDefinitions"
+                  :key="field.id"
+                  class="field-definition-choice"
+                  type="button"
+                  :aria-pressed="selectedFieldDefinitionId === field.id"
+                  :class="{ active: selectedFieldDefinitionId === field.id }"
+                  @click="selectFieldDefinition(field.id)"
+                >
+                  <span>{{ field.name }}</span>
+                  <small>Custom / {{ field.type }}</small>
+                </button>
+                <p v-if="!customFieldDefinitions.length" class="empty-copy">
+                  No custom fields are defined yet.
+                </p>
+              </section>
+            </nav>
+
+            <section
+              v-if="selectedFieldDefinition"
+              class="field-definition-editor"
+              aria-label="Field definition editor"
+            >
+              <header class="field-definition-editor-heading">
+                <div>
+                  <span class="section-kicker">{{ selectedFieldDefinition.kind }} field / {{ selectedFieldDefinition.type }}</span>
+                  <h3>{{ selectedFieldDefinition.name }}</h3>
+                </div>
+                <span class="field-definition-value-count">{{ selectedFieldAssignments.length }} saved values</span>
+              </header>
+
+              <label v-if="selectedFieldDefinition.kind === 'custom'" for="field-definition-name">
+                Custom field name
+                <input
+                  id="field-definition-name"
+                  v-model="fieldDefinitionNameDraft"
+                  aria-label="Custom field name"
+                  maxlength="80"
+                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                >
+              </label>
+
+              <label
+                v-if="selectedFieldDefinition.type === 'single-select'"
+                for="field-definition-options"
+              >
+                {{ selectedFieldDefinition.name }} choices
+                <textarea
+                  id="field-definition-options"
+                  v-model="fieldDefinitionOptionsDraft"
+                  :aria-label="`${selectedFieldDefinition.name} choices`"
+                  rows="4"
+                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                />
+              </label>
+
+              <section class="field-definition-values" role="region" aria-label="Existing field values">
+                <div class="field-definition-section-heading">
+                  <h4>Existing field values</h4>
+                  <span>{{ selectedFieldAssignments.length }}</span>
+                </div>
+                <p v-if="!selectedFieldAssignments.length" class="empty-copy">
+                  No values are assigned to this field.
+                </p>
+                <ul v-else>
+                  <li v-for="assignment in selectedFieldAssignments" :key="assignment.objectId">
+                    <span>{{ assignment.objectName }}</span>
+                    <small>{{ assignment.systemName }}</small>
+                    <strong>{{ assignment.value }}</strong>
+                  </li>
+                </ul>
+              </section>
+
+              <section
+                v-if="affectedFieldAssignments.length"
+                class="field-definition-values field-definition-affected"
+                role="region"
+                aria-label="Affected values preview"
+              >
+                <div class="field-definition-section-heading">
+                  <h4>Values that will be cleared</h4>
+                  <span>{{ affectedFieldAssignments.length }}</span>
+                </div>
+                <ul>
+                  <li v-for="assignment in affectedFieldAssignments" :key="assignment.objectId">
+                    <span>{{ assignment.objectName }}</span>
+                    <small>{{ assignment.systemName }}</small>
+                    <strong>{{ assignment.value }}</strong>
+                  </li>
+                </ul>
+              </section>
+
+              <div class="field-definition-actions">
+                <button
+                  class="primary-button"
+                  type="button"
+                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                  @click="saveFieldDefinitionChanges"
+                >
+                  Save changes
+                </button>
+                <button
+                  v-if="selectedFieldDefinition.kind === 'custom'"
+                  class="quiet-button"
+                  type="button"
+                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                  @click="requestFieldDefinitionRemoval"
+                >
+                  Delete field definition
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <p v-if="fieldDefinitionError" class="feedback field-definition-error" role="alert">
+            {{ fieldDefinitionError }}
+          </p>
+
+          <form
+            v-if="newCustomFieldFormOpen"
+            class="field-definition-create-form"
+            @submit.prevent="createCustomField"
+          >
+            <div class="field-definition-section-heading">
+              <div>
+                <span class="section-kicker">NEW REUSABLE FIELD</span>
+                <h3>Add custom field</h3>
+              </div>
+              <button
+                class="quiet-button"
+                type="button"
+                @click="newCustomFieldFormOpen = false"
+              >
+                Cancel
+              </button>
+            </div>
+            <label for="new-custom-field-name">
+              Custom field label
+              <input
+                id="new-custom-field-name"
+                v-model="newCustomFieldName"
+                maxlength="80"
+                required
+                autofocus
+              >
+            </label>
+            <label for="new-custom-field-type">
+              Value type
+              <select id="new-custom-field-type" v-model="newCustomFieldType">
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="single-select">Single-select</option>
+              </select>
+            </label>
+            <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
+              New field choices
+              <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
+            </label>
+            <div class="field-definition-actions">
+              <button class="primary-button" type="submit" :disabled="saveState === 'saving'">
+                Add custom field
+              </button>
+            </div>
+          </form>
+
+          <section
+            v-if="pendingFieldDefinitionChange"
+            class="field-definition-confirmation"
+            role="region"
+            aria-label="Field change confirmation"
+          >
+            <span class="section-kicker">CONFIRM DATA CHANGE</span>
+            <h3>
+              {{ pendingFieldDefinitionChange.kind === 'remove'
+                ? `Delete ${pendingFieldDefinitionChange.fieldName}?`
+                : `Remove saved values from ${pendingFieldDefinitionChange.fieldName}?` }}
+            </h3>
+            <p>
+              The following saved values will be cleared. The change will not be applied unless you confirm.
+            </p>
+            <ul v-if="pendingFieldDefinitionChange.affectedAssignments.length">
+              <li
+                v-for="assignment in pendingFieldDefinitionChange.affectedAssignments"
+                :key="assignment.objectId"
+              >
+                <span>{{ assignment.objectName }} / {{ assignment.systemName }}</span>
+                <strong>{{ assignment.value }}</strong>
+              </li>
+            </ul>
+            <p v-else class="empty-copy">This definition has no saved object values.</p>
+            <div class="field-definition-actions">
+              <button class="quiet-button" type="button" @click="cancelFieldDefinitionChange">
+                Cancel field changes
+              </button>
+              <button class="primary-button" type="button" @click="confirmFieldDefinitionChange">
+                {{ pendingFieldDefinitionChange.kind === 'remove'
+                  ? 'Delete field and clear values'
+                  : 'Remove options and clear affected values' }}
+              </button>
+            </div>
+          </section>
+        </div>
+      </dialog>
+    </Teleport>
+
     <footer class="footer flex min-h-14 items-center justify-between gap-4 border-t border-[var(--line-soft)] border-b-0 text-[var(--text-quiet)] text-[0.52rem] tracking-[0.12em] uppercase max-[760px]:gap-2 max-[760px]:text-[0.43rem]">
       <span>WARDEN'S FIELD DESK</span>
       <span
@@ -2300,6 +2725,359 @@ body {
     radial-gradient(circle at 1px 1px, rgba(186, 208, 199, 0.07) 0.65px, transparent 0.9px),
     var(--app-bg);
   background-size: auto, 40px 40px, auto;
+}
+
+.field-definitions-trigger {
+  display: grid;
+  min-height: 2.45rem;
+  gap: 0.12rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.34rem 0.55rem;
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.field-definitions-trigger:hover {
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--accent-hover);
+}
+
+.field-definitions-trigger span {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.field-definitions-trigger small {
+  color: var(--accent);
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+}
+
+.field-definitions-dialog {
+  width: min(60rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  box-shadow: 0 1.8rem 5rem rgba(0, 0, 0, 0.55);
+}
+
+.field-definitions-dialog::backdrop {
+  background: rgba(4, 9, 11, 0.76);
+  backdrop-filter: blur(4px);
+}
+
+.field-definitions-content {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.field-definitions-header,
+.field-definition-editor-heading,
+.field-definition-section-heading,
+.field-definition-list-heading,
+.field-definition-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.field-definitions-header {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 1rem;
+}
+
+.field-definitions-header h2,
+.field-definition-editor-heading h3,
+.field-definition-section-heading h4,
+.field-definition-create-form h3,
+.field-definition-confirmation h3 {
+  margin: 0.4rem 0 0;
+  font-family: Georgia, serif;
+  font-weight: 500;
+}
+
+.field-definitions-header h2 {
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+}
+
+.field-definitions-header p,
+.field-definition-confirmation > p {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.field-definitions-close {
+  flex: 0 0 auto;
+}
+
+.field-definitions-layout {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 1.5fr);
+  min-height: 19rem;
+  border: 1px solid var(--line-soft);
+  background: var(--panel-raised);
+}
+
+.field-definition-list {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  border-right: 1px solid var(--line-soft);
+  padding: 0.9rem;
+}
+
+.field-definition-list h3 {
+  margin: 0 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.field-definition-list-heading {
+  margin-bottom: 0.45rem;
+}
+
+.field-definition-list-heading h3 {
+  margin: 0;
+}
+
+.field-definition-add {
+  min-height: 1.8rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.62rem;
+}
+
+.field-definition-choice {
+  display: grid;
+  width: 100%;
+  gap: 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.field-definition-choice:hover,
+.field-definition-choice.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.field-definition-choice small {
+  color: var(--text-muted);
+  font: 0.58rem Consolas, monospace;
+}
+
+.field-definition-list .empty-copy {
+  margin: 0;
+}
+
+.field-definition-editor {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.field-definition-editor-heading {
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 0.75rem;
+}
+
+.field-definition-editor-heading h3 {
+  overflow-wrap: anywhere;
+  font-size: 1.35rem;
+}
+
+.field-definition-value-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font: 0.58rem Consolas, monospace;
+  text-align: right;
+}
+
+.field-definition-editor > label,
+.field-definition-create-form > label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.field-definition-editor input,
+.field-definition-editor textarea,
+.field-definition-create-form input,
+.field-definition-create-form select,
+.field-definition-create-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.55rem 0.65rem;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.field-definition-editor input:focus,
+.field-definition-editor textarea:focus,
+.field-definition-create-form input:focus,
+.field-definition-create-form select:focus,
+.field-definition-create-form textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.field-definition-values,
+.field-definition-create-form,
+.field-definition-confirmation {
+  border: 1px solid var(--line-soft);
+  padding: 0.8rem;
+  background: var(--panel-bg);
+}
+
+.field-definition-section-heading h4 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field-definition-section-heading > span {
+  color: var(--text-muted);
+  font: 0.58rem Consolas, monospace;
+}
+
+.field-definition-values ul,
+.field-definition-confirmation ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field-definition-values li,
+.field-definition-confirmation li {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) minmax(5rem, 1fr) minmax(4rem, auto);
+  gap: 0.6rem;
+  align-items: center;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.field-definition-values li small {
+  color: var(--text-muted);
+  font: 0.58rem Consolas, monospace;
+}
+
+.field-definition-values li strong,
+.field-definition-confirmation li strong {
+  color: var(--accent-hover);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.field-definition-values .empty-copy {
+  margin: 0.55rem 0 0;
+}
+
+.field-definition-affected,
+.field-definition-confirmation {
+  border-color: var(--error-border);
+  background: linear-gradient(135deg, rgba(166, 93, 93, 0.12), var(--panel-bg) 58%);
+}
+
+.field-definition-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.field-definition-error {
+  margin: 0;
+}
+
+.field-definition-create-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.field-definition-create-form .section-kicker {
+  display: block;
+}
+
+.field-definition-confirmation {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.field-definition-confirmation h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.field-definition-confirmation .empty-copy {
+  margin: 0.5rem 0 0;
+}
+
+@media (max-width: 760px) {
+  .field-definitions-dialog {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .field-definitions-content {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .field-definitions-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .field-definition-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .field-definition-list > section:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .field-definition-editor {
+    padding: 0.75rem;
+  }
+
+  .field-definition-values li,
+  .field-definition-confirmation li {
+    grid-template-columns: minmax(4rem, 0.8fr) minmax(4rem, 1fr) minmax(3rem, auto);
+    gap: 0.35rem;
+  }
 }
 
 button,
@@ -3277,6 +4055,10 @@ textarea[aria-invalid="true"] {
   .map-workspace-shell .topbar,
   .map-workspace-shell > .footer {
     padding-inline: 0.75rem;
+  }
+
+  .map-workspace-shell .topbar-actions {
+    margin-left: auto;
   }
 
   .map-workspace-shell .workspace-header-summary {

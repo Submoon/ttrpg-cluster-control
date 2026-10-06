@@ -2,7 +2,8 @@
 title: 19. Implementing field-definition management with a Quick Dialog
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -26,11 +27,18 @@ As a Warden, I can manage native and reusable custom field definitions from the 
 
 - [18. Prototyping field-definition management](18-field-definition-management.md)
 
+## Resolution
+
+- Added a map-bound Quick Dialog for native and reusable custom field definitions, with custom-field creation, renaming, removal, and editable single-select options.
+- Changes that clear assigned values show affected objects and require explicit confirmation; canceling preserves saved data.
+- Workspace restore and versioned JSON preserve definitions and values. The prototype source is outside Nuxt's routed `pages/` tree, and its former route returns 404.
+- Validation passed: `npm run typecheck` and `npm test` (24 Playwright tests).
+
 ## Source specs
 
 - [Mothership Campaign App - V1 Specification](../spec.md)
 - [18. Prototyping field-definition management](18-field-definition-management.md)
-- [Quick Dialog prototype](../../../pages/prototype/field-definitions.vue)
+- [Quick Dialog prototype source](../field-definition-prototype.vue)
 - [09. Adding native and reusable custom fields](09-object-fields.md)
 - [12. Exporting clusters and systems as versioned JSON](12-json-export.md)
 - [13. Importing JSON as a safe independent copy](13-json-import.md)

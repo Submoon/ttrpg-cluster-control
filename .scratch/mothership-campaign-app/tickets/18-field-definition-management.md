@@ -17,7 +17,7 @@ How should a Warden manage native and reusable custom field definitions without 
 
 Prototype a focused field-management view reachable from the map editor. Compare a dedicated page with a focused panel or dialog, and demonstrate listing, adding, editing, and removing field definitions and their options.
 
-The executable, development-only prototype is in [`pages/prototype/field-definitions.vue`](../../../pages/prototype/field-definitions.vue). Run `npm run dev` and open `/prototype/field-definitions` for the Quick Dialog by default; use `?variant=A` or `?variant=B` to compare the dedicated page and side panel. All changes use sample data and reset on reload.
+The development-only prototype source is retained in [`field-definition-prototype.vue`](../field-definition-prototype.vue) for reference. Its `/prototype/field-definitions` route was retired when the Quick Dialog was implemented in ticket 19. The prototype used sample data that reset on reload.
 
 **Preferred direction: C — Quick dialog (user preference).** Keep field management close to the map while separating reusable-definition edits from object-value editing. Preserve the existing-value preview and explicit confirmation for changes that could affect saved values.
 

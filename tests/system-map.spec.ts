@@ -32,6 +32,8 @@ type ExportedMap = {
   cluster?: { id: string; name: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
   system?: ExportedSystem
   objectFieldSettings: {
+    atmosphereOptions: string[]
+    portClassOptions: string[]
     customFields: Array<{ id: string; name: string; type: string; options?: string[] }>
   }
   layout: {
@@ -205,6 +207,30 @@ async function downloadJson(page: import('@playwright/test').Page, buttonName: s
   } finally {
     await setHeaderMapActionsOpen(page, false)
   }
+}
+
+async function openFieldDefinitionDialog(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  await page.getByRole('button', { name: 'Open field definitions' }).click()
+  return page.getByRole('dialog', { name: 'Field definitions' })
+}
+
+async function addCustomFieldThroughDialog(
+  page: import('@playwright/test').Page,
+  name: string,
+  type: string,
+  options?: string,
+): Promise<void> {
+  const dialog = await openFieldDefinitionDialog(page)
+  await dialog.getByRole('button', { name: 'New custom field' }).click()
+  await dialog.getByLabel('Custom field label').fill(name)
+  await dialog.getByLabel('Value type').selectOption(type)
+  if (options !== undefined) {
+    await dialog.getByLabel('New field choices').fill(options)
+  }
+  await dialog.getByRole('button', { name: 'Add custom field', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Close field definitions' }).click()
 }
 
 type DownloadedImage = {
@@ -1676,40 +1702,33 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.getByLabel('Name').fill('Iria')
   await page.getByLabel('Name').press('Tab')
 
-  await page.getByText('Field definitions', { exact: true }).click()
-  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
-  await page.getByLabel('Port class choices').fill('Class I\nClass II')
-  await page.getByRole('button', { name: 'Save native field options' }).click()
+  const fieldDialog = await openFieldDefinitionDialog(page)
+  await fieldDialog.getByRole('button', { name: /Atmosphere/ }).click()
+  await fieldDialog.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
+  await fieldDialog.getByRole('button', { name: 'Save changes' }).click()
+  await fieldDialog.getByRole('button', { name: /Port class/ }).click()
+  await fieldDialog.getByLabel('Port class choices').fill('Class I\nClass II')
+  await fieldDialog.getByRole('button', { name: 'Save changes' }).click()
+  await fieldDialog.getByRole('button', { name: 'Close field definitions' }).click()
   await page.getByLabel('Atmosphere', { exact: true }).selectOption('Chlorine')
-  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin')
-  await page.getByRole('button', { name: 'Save native field options' }).click()
-  await expect(page.getByRole('alert')).toContainText('Cannot remove "Chlorine"')
-  await page.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
-  await page.getByRole('button', { name: 'Save native field options' }).click()
 
-  const addCustomField = async (name: string, type: string, options?: string) => {
-    await page.getByLabel('Custom field label').fill(name)
-    await page.getByLabel('Value type').selectOption(type)
-    if (options !== undefined) {
-      await page.getByLabel('New field choices').fill(options)
-    }
-    await page.getByRole('button', { name: 'Add custom field' }).click()
-  }
-
-  await addCustomField('Campaign notes', 'text')
+  await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
   await page.getByLabel('Campaign notes').fill('Relay station under the ice.')
   await page.getByLabel('Campaign notes').blur()
 
-  await addCustomField('Threat level', 'number')
+  await addCustomFieldThroughDialog(page, 'Threat level', 'number')
   await page.getByLabel('Threat level').fill('4')
   await page.getByLabel('Threat level').blur()
 
-  await addCustomField('Hostile', 'boolean')
+  await addCustomFieldThroughDialog(page, 'Hostile', 'boolean')
   await page.getByLabel('Hostile').selectOption('true')
 
-  await addCustomField('Signal class', 'single-select', 'Amber\nBlue')
-  await page.getByLabel('Signal class choices').fill('Amber\nBlue\nRed')
-  await page.getByRole('button', { name: 'Save Signal class choices' }).click()
+  await addCustomFieldThroughDialog(page, 'Signal class', 'single-select', 'Amber\nBlue')
+  const signalClassDialog = await openFieldDefinitionDialog(page)
+  await signalClassDialog.getByRole('button', { name: /Signal class/ }).click()
+  await signalClassDialog.getByLabel('Signal class choices').fill('Amber\nBlue\nRed')
+  await signalClassDialog.getByRole('button', { name: 'Save changes' }).click()
+  await signalClassDialog.getByRole('button', { name: 'Close field definitions' }).click()
   await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
 
   await addCatalogueObject(page, 'station')
@@ -1755,6 +1774,130 @@ test('the Warden can configure native and reusable custom object fields', async 
   const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
+})
+
+test('field definition management previews destructive changes in a map-bound dialog', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await addCatalogueObject(page, 'planet')
+  await page.getByLabel('Name').fill('Iria')
+  await page.getByLabel('Name').press('Tab')
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Breathable')
+
+  const openButton = page.getByRole('button', { name: 'Open field definitions' })
+  const dialog = await openFieldDefinitionDialog(page)
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(openButton).toBeFocused()
+  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
+  await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toHaveAttribute('aria-current', 'true')
+
+  const nativeDialog = await openFieldDefinitionDialog(page)
+  await expect(nativeDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Iria')
+  await expect(nativeDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Breathable')
+  await nativeDialog.getByLabel('Atmosphere choices').fill('Thin\nVacuum')
+  await expect(nativeDialog.getByRole('region', { name: 'Affected values preview' })).toContainText('Breathable')
+  await nativeDialog.getByRole('button', { name: 'Save changes' }).click()
+  const nativeConfirmation = nativeDialog.getByRole('region', { name: 'Field change confirmation' })
+  await expect(nativeConfirmation).toContainText('Iria')
+  await expect(nativeConfirmation).toContainText('Breathable')
+  await nativeDialog.getByRole('button', { name: 'Cancel field changes' }).click()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Breathable')
+  await nativeDialog.getByLabel('Atmosphere choices').fill('Thin\nVacuum')
+  await nativeDialog.getByRole('button', { name: 'Save changes' }).click()
+  await nativeDialog.getByRole('button', { name: 'Remove options and clear affected values' }).click()
+  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('')
+  await nativeDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  const fieldDialog = await openFieldDefinitionDialog(page)
+  await fieldDialog.getByRole('button', { name: 'New custom field' }).click()
+  await fieldDialog.getByLabel('Custom field label').fill('Signal class')
+  await fieldDialog.getByLabel('Value type').selectOption('single-select')
+  await fieldDialog.getByLabel('New field choices').fill('Amber\nRed')
+  await fieldDialog.getByRole('button', { name: 'Add custom field', exact: true }).click()
+  await fieldDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+  const editDialog = await openFieldDefinitionDialog(page)
+  await editDialog.getByRole('button', { name: /Signal class/ }).click()
+  await expect(editDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Iria')
+  await expect(editDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Red')
+  await editDialog.getByLabel('Custom field name').fill('Signal designation')
+  await editDialog.getByLabel('Signal class choices').fill('Amber')
+  await expect(editDialog.getByRole('region', { name: 'Affected values preview' })).toContainText('Iria')
+  await expect(editDialog.getByRole('region', { name: 'Affected values preview' })).toContainText('Red')
+  await editDialog.getByRole('button', { name: 'Save changes' }).click()
+  const confirmation = editDialog.getByRole('region', { name: 'Field change confirmation' })
+  await expect(confirmation).toContainText('Iria')
+  await expect(confirmation).toContainText('Red')
+  await editDialog.getByRole('button', { name: 'Cancel field changes' }).click()
+  await expect(page.getByLabel('Signal class', { exact: true })).toHaveValue('Red')
+  await expect(editDialog.getByRole('button', { name: /Signal class/ })).toBeVisible()
+
+  await editDialog.getByLabel('Custom field name').fill('Signal designation')
+  await editDialog.getByLabel('Signal class choices').fill('Amber')
+  await editDialog.getByRole('button', { name: 'Save changes' }).click()
+  await expect(confirmation).toContainText('Red')
+  await editDialog.getByRole('button', { name: 'Remove options and clear affected values' }).click()
+  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('')
+  await expect(editDialog.getByRole('button', { name: /Signal designation/ })).toBeVisible()
+  await expect(editDialog.getByLabel('Signal designation choices')).toHaveValue('Amber')
+  await editDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await page.getByLabel('Signal designation', { exact: true }).selectOption('Amber')
+  const updatedExport = await downloadJson(page, 'Export star system JSON')
+  expect(updatedExport.objectFieldSettings.customFields).toContainEqual(
+    expect.objectContaining({
+      name: 'Signal designation',
+      type: 'single-select',
+      options: ['Amber'],
+    }),
+  )
+  const exportedIria = updatedExport.system!.objects.find(object => object.name === 'Iria')!
+  expect(exportedIria.customFieldValues).toMatchObject({
+    [updatedExport.objectFieldSettings.customFields.find(field => field.name === 'Signal designation')!.id]: 'Amber',
+  })
+
+  await page.reload()
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('Amber')
+  const deleteDialog = await openFieldDefinitionDialog(page)
+  await deleteDialog.getByRole('button', { name: /Signal designation/ }).click()
+  await expect(deleteDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Amber')
+  await deleteDialog.getByRole('button', { name: 'Delete field definition' }).click()
+  const deleteConfirmation = deleteDialog.getByRole('region', { name: 'Field change confirmation' })
+  await expect(deleteConfirmation).toContainText('Iria')
+  await expect(deleteConfirmation).toContainText('Amber')
+  await deleteDialog.getByRole('button', { name: 'Cancel field changes' }).click()
+  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('Amber')
+  await deleteDialog.getByRole('button', { name: 'Delete field definition' }).click()
+  await deleteDialog.getByRole('button', { name: 'Delete field and clear values' }).click()
+  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveCount(0)
+  await deleteDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await page.reload()
+  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveCount(0)
+})
+
+test('the retired field-definition prototype route is unavailable', async ({ page }) => {
+  const response = await page.goto('/prototype/field-definitions')
+  expect(response?.status()).toBe(404)
 })
 
 test('the Warden can review and safely confirm dependent map deletions', async ({ page }) => {
@@ -2000,9 +2143,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterExport.layout.systemPositions?.[exportedSecondSystem.id].x).not.toBe(0.5)
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  await page.getByText('Field definitions', { exact: true }).click()
-  await page.getByLabel('Custom field label').fill('Campaign notes')
-  await page.getByRole('button', { name: 'Add custom field' }).click()
+  await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
@@ -2349,9 +2490,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await inspector.getByLabel('Jump Cluster').fill(clusterName)
   await inspector.getByLabel('Star system').fill(systemName)
   await inspector.getByRole('button', { name: 'Save chart names' }).click()
-  await page.getByText('Field definitions', { exact: true }).click()
-  await page.getByLabel('Custom field label').fill('Warden notes')
-  await page.getByRole('button', { name: 'Add custom field' }).click()
+  await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()

@@ -268,21 +268,40 @@ export function updateNativeFieldOptions(
   workspace: LocalWorkspace,
   field: 'atmosphere' | 'portClass',
   options: string[],
+  clearInvalidValues = false,
 ): LocalWorkspace {
   const normalized = validFieldOptions(options, `${field === 'atmosphere' ? 'Atmosphere' : 'Port class'} option`)
   const property = field === 'atmosphere' ? 'atmosphereOptions' : 'portClassOptions'
+  let hasInvalidValues = false
 
   for (const system of workspace.cluster.systems) {
     for (const object of system.objects) {
       const value = object[field]
       if (value !== undefined && !normalized.includes(value)) {
-        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+        hasInvalidValues = true
+        if (!clearInvalidValues) {
+          throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+        }
       }
     }
   }
 
+  const systems = hasInvalidValues
+    ? workspace.cluster.systems.map(system => ({
+        ...system,
+        objects: system.objects.map(object => {
+          const value = object[field]
+          if (value === undefined || normalized.includes(value)) return object
+          const updatedObject = { ...object }
+          delete updatedObject[field]
+          return updatedObject
+        }),
+      }))
+    : workspace.cluster.systems
+
   return {
     ...workspace,
+    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       [property]: normalized,
@@ -319,10 +338,39 @@ export function addCustomFieldDefinition(
   }
 }
 
+export function renameCustomFieldDefinition(
+  workspace: LocalWorkspace,
+  fieldId: string,
+  name: string,
+): LocalWorkspace {
+  const definition = workspace.objectFieldSettings.customFields.find(field => field.id === fieldId)
+  if (!definition) {
+    throw new Error('The selected custom field no longer exists.')
+  }
+
+  const fieldName = validName(name, 'Custom field name')
+  if (workspace.objectFieldSettings.customFields.some(field =>
+    field.id !== fieldId && field.name.toLowerCase() === fieldName.toLowerCase(),
+  )) {
+    throw new Error(`A custom field named "${fieldName}" already exists.`)
+  }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.map(field =>
+        field.id === fieldId ? { ...field, name: fieldName } : field,
+      ),
+    },
+  }
+}
+
 export function updateCustomFieldOptions(
   workspace: LocalWorkspace,
   fieldId: string,
   options: string[],
+  clearInvalidValues = false,
 ): LocalWorkspace {
   const definition = workspace.objectFieldSettings.customFields.find(field => field.id === fieldId)
   if (!definition) {
@@ -333,17 +381,35 @@ export function updateCustomFieldOptions(
   }
 
   const normalized = validFieldOptions(options, `${definition.name} option`)
+  let hasInvalidValues = false
   for (const system of workspace.cluster.systems) {
     for (const object of system.objects) {
       const value = object.customFieldValues?.[fieldId]
       if (typeof value === 'string' && !normalized.includes(value)) {
-        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+        hasInvalidValues = true
+        if (!clearInvalidValues) {
+          throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
+        }
       }
     }
   }
 
+  const systems = hasInvalidValues
+    ? workspace.cluster.systems.map(system => ({
+        ...system,
+        objects: system.objects.map(object => {
+          const value = object.customFieldValues?.[fieldId]
+          if (typeof value !== 'string' || normalized.includes(value)) return object
+          const customFieldValues = { ...object.customFieldValues }
+          delete customFieldValues[fieldId]
+          return { ...object, customFieldValues }
+        }),
+      }))
+    : workspace.cluster.systems
+
   return {
     ...workspace,
+    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: workspace.objectFieldSettings.customFields.map(field =>

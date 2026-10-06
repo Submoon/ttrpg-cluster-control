@@ -18,7 +18,7 @@ Ouvre ensuite l’adresse locale affichée par Nuxt dans le terminal.
 1. Crée un workspace local en donnant un nom au Jump Cluster et à son premier système.
 2. Depuis la carte du Cluster, ajoute d’autres systèmes. Ouvre un système et utilise la palette d’objets, regroupée par type : glisse un type sur la carte ou active son bouton au clavier. Déposer un objet sur un anneau le place dans cette Orbit.
 3. Ajoute des Jump Points dans les systèmes, puis crée des Jump Routes depuis la carte du Cluster en choisissant leurs points de départ et d’arrivée.
-4. Sélectionne un système, objet, Orbit ou route pour modifier ses détails. Les définitions de champs natifs et personnalisés se trouvent dans les détails du système.
+4. Sélectionne un système, objet, Orbit ou route pour modifier ses détails. Ouvre **Field Definitions** dans l’en-tête pour gérer les définitions de champs partagés; leurs valeurs restent attachées aux objets.
 5. Utilise les contrôles de navigation pour zoomer ou ajuster la carte. Déplace les systèmes et objets pour organiser la disposition; glisse un anneau pour en modifier le rayon.
 6. Les actions de suppression affichent les éléments dépendants concernés avant confirmation.
 
