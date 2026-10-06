@@ -2,7 +2,8 @@
 title: 21. Including the system name in system-map image exports
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -28,3 +29,7 @@ As a Warden, I can identify a system-map PNG or SVG by its system name, even whe
 
 - [Mothership Campaign App - V1 Specification](../map.md)
 - [14. Exporting complete maps as PNG and SVG](14-image-export.md)
+
+## Resolution
+
+Star-system PNG and SVG exports now include the current system name in a reserved title band above the map scene. The title uses the map text color, and the export bounds expand to fit names up to the existing 80-character limit. PNG still rasterizes the same titled SVG scene. The in-app map and Jump Cluster exports remain unchanged; browser acceptance coverage verifies title placement, contrast, bounds, and updates after renaming.

@@ -45,6 +45,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [18. Prototyping field-definition management](tickets/18-field-definition-management.md): the user selected the Quick Dialog to manage reusable definitions next to the map, preview affected existing values, and confirm potentially destructive changes; product implementation is tracked in [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md).
 - [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md): the active map now manages native and reusable field definitions through a Quick Dialog, with previews and explicit confirmation before clearing assigned values; workspace persistence and JSON export are preserved, and the prototype route is retired.
 - [20. Clarifying the Chart Details action](tickets/20-chart-details-state.md): both inspectors expose a keyboard-accessible Chart Details toggle with synchronized `aria-pressed` and active styling; it returns from object, Orbit, or route selection to chart-level details and is hidden while a route draft is open.
+- [21. Including the system name in system-map image exports](tickets/21-system-name-in-image-exports.md): star-system PNG/SVG exports include the current system name in a readable, bounds-fitting title band while leaving the in-app map and Jump Cluster exports unchanged.
 
 ## Implementation tickets
 
@@ -66,7 +67,6 @@ Implement in dependency order; each ticket also lists its blockers.
 | 18 | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) | None |
 | 19 | [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md) | [18. Prototyping field-definition management](tickets/18-field-definition-management.md) |
 | 20 | [20. Clarifying the Chart Details action](tickets/20-chart-details-state.md) | None |
-| 21 | [21. Including the system name in system-map image exports](tickets/21-system-name-in-image-exports.md) | None |
 | 22 | [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md) | None |
 | 23 | [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md) | None |
 | 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |

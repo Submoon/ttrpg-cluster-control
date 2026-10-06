@@ -6,6 +6,8 @@ export interface MapImageExporter {
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
 const viewBoxPadding = 24
+const exportTitleBandHeight = 48
+const exportTitleFontSize = 20
 const styleProperties = [
   'alignment-baseline',
   'color',
@@ -33,7 +35,7 @@ const styleProperties = [
   'visibility',
 ] as const
 
-function createExportSvg(source: SVGSVGElement): { blob: Blob; width: number; height: number } {
+function createExportSvg(source: SVGSVGElement, title?: string): { blob: Blob; width: number; height: number } {
   const sourceContent = source.querySelector<SVGGElement>('.cluster-map-content, .system-map-content')
   if (!sourceContent) throw new Error('The map scene is not ready to export.')
 
@@ -46,9 +48,28 @@ function createExportSvg(source: SVGSVGElement): { blob: Blob; width: number; he
     throw new Error('The map scene has no exportable content.')
   }
 
+  const exportTitle = title?.trim()
+  const titleBandHeight = exportTitle ? exportTitleBandHeight : 0
+  const titleStyleSource = exportTitle
+    ? source.querySelector<SVGTextElement>('.object-name, .map-empty')
+    : null
+  const titleStyle = titleStyleSource ? getComputedStyle(titleStyleSource) : null
+  const titleFill = titleStyle?.fill ?? getComputedStyle(source).color
+  const titleFontFamily = titleStyle?.fontFamily || 'Georgia, serif'
+  let titleWidth = 0
+  if (exportTitle) {
+    const context = document.createElement('canvas').getContext('2d')
+    if (!context) throw new Error('Could not create a Canvas context to measure the system title.')
+    context.font = `600 ${exportTitleFontSize}px ${titleFontFamily}`
+    titleWidth = context.measureText(exportTitle).width
+  }
+
   const left = Math.floor(bounds.x - viewBoxPadding)
-  const top = Math.floor(bounds.y - viewBoxPadding)
-  const right = Math.ceil(bounds.x + bounds.width + viewBoxPadding)
+  const top = Math.floor(bounds.y - viewBoxPadding - titleBandHeight)
+  const right = Math.ceil(Math.max(
+    bounds.x + bounds.width + viewBoxPadding,
+    exportTitle ? left + viewBoxPadding + titleWidth + viewBoxPadding : 0,
+  ))
   const bottom = Math.ceil(bounds.y + bounds.height + viewBoxPadding)
   const width = right - left
   const height = bottom - top
@@ -70,13 +91,30 @@ function createExportSvg(source: SVGSVGElement): { blob: Blob; width: number; he
     }
   }
 
+  if (exportTitle) {
+    const titleElement = copy.ownerDocument.createElementNS(svgNamespace, 'text')
+    titleElement.setAttribute('class', 'system-map-export-title')
+    titleElement.setAttribute('x', String(left + viewBoxPadding))
+    titleElement.setAttribute('y', String(top + viewBoxPadding + exportTitleFontSize))
+    titleElement.textContent = exportTitle
+    titleElement.style.setProperty('fill', titleFill)
+    titleElement.style.setProperty('font-family', titleFontFamily)
+    titleElement.style.setProperty('font-size', `${exportTitleFontSize}px`)
+    titleElement.style.setProperty('font-weight', '600')
+    titleElement.style.setProperty('pointer-events', 'none')
+    copy.append(titleElement)
+  }
+
   for (const surface of content.querySelectorAll<SVGRectElement>(
     '.cluster-map-background, .cluster-map-grid, .map-background, .map-grid',
   )) {
     surface.setAttribute('x', String(left))
-    surface.setAttribute('y', String(top))
+    const surfaceTop = exportTitle && surface.classList.contains('map-grid')
+      ? top + titleBandHeight
+      : top
+    surface.setAttribute('y', String(surfaceTop))
     surface.setAttribute('width', String(width))
-    surface.setAttribute('height', String(height))
+    surface.setAttribute('height', String(bottom - surfaceTop))
   }
 
   copy.setAttribute('xmlns', svgNamespace)
@@ -116,7 +154,11 @@ async function rasterizeSvg(svg: Blob, width: number, height: number): Promise<B
   }
 }
 
-export async function exportMapImage(source: SVGSVGElement, format: MapImageFormat): Promise<Blob> {
-  const { blob, width, height } = createExportSvg(source)
+export async function exportMapImage(
+  source: SVGSVGElement,
+  format: MapImageFormat,
+  title?: string,
+): Promise<Blob> {
+  const { blob, width, height } = createExportSvg(source, title)
   return format === 'svg' ? blob : rasterizeSvg(blob, width, height)
 }

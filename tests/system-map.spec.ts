@@ -237,6 +237,7 @@ type DownloadedImage = {
   type: string
   size: number
   text?: string
+  sourceSvgText?: string
   width?: number
   height?: number
   signature?: number[]
@@ -265,10 +266,11 @@ async function downloadImage(
       const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
       const dimensions = new DataView(bytes.buffer)
       const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
-      if (intermediateSvg >= 0) blobs.splice(intermediateSvg, 1)
+      const sourceSvg = intermediateSvg >= 0 ? blobs.splice(intermediateSvg, 1)[0] : undefined
       return {
         type: blob.type,
         size: blob.size,
+        sourceSvgText: sourceSvg ? await sourceSvg.text() : undefined,
         signature: Array.from(bytes.slice(0, 8)),
         width: dimensions.getUint32(16),
         height: dimensions.getUint32(20),
@@ -288,6 +290,14 @@ async function inspectImageSvg(
   height: number
   contentTransform: string | null
   texts: string[]
+  systemTitle: {
+    text: string
+    x: number
+    y: number
+    width: number
+    fontSize: number
+    fill: string
+  } | null
   titleStyle: string | null
   backgroundFill: string | null
   glyphFill: string | null
@@ -300,12 +310,31 @@ async function inspectImageSvg(
     if (svg.localName !== 'svg' || !viewBox) throw new Error('The downloaded SVG is invalid.')
     const fill = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('fill') ?? null
     const stroke = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('stroke') ?? null
+    const title = svg.querySelector<SVGTextElement>('.system-map-export-title')
+    const systemTitle = title
+      ? (() => {
+          const text = title.textContent?.trim() ?? ''
+          const fontSize = Number(title.style.fontSize.replace('px', ''))
+          const context = document.createElement('canvas').getContext('2d')
+          if (!context) throw new Error('Could not measure the exported system title.')
+          context.font = `${title.style.fontWeight} ${fontSize}px ${title.style.fontFamily}`
+          return {
+            text,
+            x: Number(title.getAttribute('x')),
+            y: Number(title.getAttribute('y')),
+            width: context.measureText(text).width,
+            fontSize,
+            fill: title.style.getPropertyValue('fill'),
+          }
+        })()
+      : null
     return {
       viewBox: viewBox.split(/\s+/).map(Number),
       width: Number(svg.getAttribute('width')?.replace('px', '')),
       height: Number(svg.getAttribute('height')?.replace('px', '')),
       contentTransform: svg.querySelector('.cluster-map-content, .system-map-content')?.getAttribute('transform') ?? null,
       texts: Array.from(svg.querySelectorAll('text')).map(element => element.textContent?.trim() ?? ''),
+      systemTitle,
       titleStyle: svg.querySelector('.cluster-map-title, .map-title')?.getAttribute('style') ?? null,
       backgroundFill: fill('.cluster-map-background, .map-background'),
       glyphFill: fill('.system-object-glyph'),
@@ -2179,6 +2208,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterSvgInfo.texts).not.toContain('Kestrel Reach')
   expect(clusterSvgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
   expect(clusterSvgInfo.texts).not.toContain('2 SYSTEMS / 1 ROUTES')
+  expect(clusterSvgInfo.systemTitle).toBeNull()
   expect(clusterSvgInfo.titleStyle).toBeNull()
   expectReadableExport(clusterSvgInfo)
   const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
@@ -2245,6 +2275,8 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await panMap(page, systemMap, { x: 24, y: 18 })
   const systemViewportTransform = await systemMap.locator('.system-map-content').getAttribute('transform')
   expect(systemViewportTransform).not.toBe('translate(0,0) scale(1)')
+  const systemSceneTop = await systemMap.locator('.system-map-content')
+    .evaluate(element => (element as SVGGraphicsElement).getBBox().y)
   const systemSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
   expect(systemSvg.text).toContain('Iria')
   const systemSvgInfo = await inspectImageSvg(page, systemSvg.text!)
@@ -2252,6 +2284,14 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemSvgInfo.viewBox[2]).toBeGreaterThan(960)
   expect(systemSvgInfo.viewBox[3]).toBeGreaterThan(560)
   expect(systemSvgInfo.texts).toContain('Iria')
+  const systemTitle = systemSvgInfo.systemTitle
+  if (!systemTitle) throw new Error('The exported star system SVG is missing its title.')
+  expect(systemTitle.text).toBe('Vesper')
+  expect(systemTitle.x).toBeGreaterThan(systemSvgInfo.viewBox[0])
+  expect(systemTitle.x + systemTitle.width)
+    .toBeLessThanOrEqual(systemSvgInfo.viewBox[0] + systemSvgInfo.viewBox[2] - 24)
+  expect(systemTitle.y - systemTitle.fontSize / 2).toBeGreaterThan(systemSvgInfo.viewBox[1])
+  expect(systemTitle.y + systemTitle.fontSize / 2).toBeLessThan(systemSceneTop)
   expect(systemSvgInfo.titleStyle).toBeNull()
   expect(systemSvgInfo.glyphFill).toBeTruthy()
   expectReadableExport(systemSvgInfo)
@@ -2260,6 +2300,9 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemPng.size).toBeGreaterThan(100)
   expect(systemPng.width).toBe(systemSvgInfo.width)
   expect(systemPng.height).toBe(systemSvgInfo.height)
+  if (!systemPng.sourceSvgText) throw new Error('The star system PNG has no source SVG.')
+  const systemPngInfo = await inspectImageSvg(page, systemPng.sourceSvgText)
+  expect(systemPngInfo.systemTitle?.text).toBe('Vesper')
   const systemExport = await downloadJson(page, 'Export star system JSON')
   expect(systemExport).toMatchObject({
     format: 'mothership-campaign-map',
@@ -2282,6 +2325,26 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemExport.objectFieldSettings.customFields).toContainEqual(field)
   expect(systemExport.system?.objects.find(object => object.name === 'Iria')?.customFieldValues?.[field.id])
     .toBe('A local secret.')
+
+  const renamedSystemName = 'W'.repeat(80)
+  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
+  await page.getByRole('button', { name: 'Chart details' }).click()
+  await inspector.getByLabel('Star system').fill(renamedSystemName)
+  await inspector.getByRole('button', { name: 'Save chart names' }).click()
+  await expect(page.getByRole('group', { name: `${renamedSystemName} star system map` })).toBeVisible()
+  const renamedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const renamedSvgInfo = await inspectImageSvg(page, renamedSvg.text!)
+  const renamedTitle = renamedSvgInfo.systemTitle
+  if (!renamedTitle) throw new Error('The renamed star system SVG is missing its title.')
+  expect(renamedTitle.text).toBe(renamedSystemName)
+  expect(renamedSvgInfo.width).toBeGreaterThan(systemSvgInfo.width)
+  expect(renamedTitle.x + renamedTitle.width)
+    .toBeLessThanOrEqual(renamedSvgInfo.viewBox[0] + renamedSvgInfo.viewBox[2] - 24)
+  expectReadableExport(renamedSvgInfo)
+  const renamedPng = await downloadImage(page, 'Export star system PNG', 'image/png')
+  if (!renamedPng.sourceSvgText) throw new Error('The renamed star system PNG has no source SVG.')
+  const renamedPngInfo = await inspectImageSvg(page, renamedPng.sourceSvgText)
+  expect(renamedPngInfo.systemTitle?.text).toBe(renamedSystemName)
 })
 
 test('the Warden can validate and import an independent JSON copy', async ({ page }) => {

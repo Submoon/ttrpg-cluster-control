@@ -185,7 +185,7 @@ function zoomBy(factor: number): void {
 async function exportImage(format: MapImageFormat): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The star system map is not ready to export.')
-  return exportMapImage(element, format)
+  return exportMapImage(element, format, props.system.name)
 }
 
 function fitMap(): void {
