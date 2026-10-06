@@ -2774,6 +2774,7 @@ body {
   width: min(60rem, calc(100vw - 2rem));
   max-width: none;
   max-height: calc(100dvh - 2rem);
+  margin: auto;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 4px;

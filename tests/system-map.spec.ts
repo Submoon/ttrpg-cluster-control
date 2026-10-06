@@ -1979,6 +1979,31 @@ test('the Warden can configure native and reusable custom object fields', async 
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
 })
 
+test('field definitions dialog stays centered on desktop and narrow viewports', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  for (const viewport of [{ width: 1440, height: 960 }, { width: 390, height: 720 }]) {
+    await page.setViewportSize(viewport)
+    const dialog = await openFieldDefinitionDialog(page)
+    const bounds = await dialog.evaluate(element => {
+      const { x, y, width, height } = element.getBoundingClientRect()
+      return { x, y, width, height, viewportWidth: innerWidth, viewportHeight: innerHeight }
+    })
+
+    const size = `${viewport.width}x${viewport.height}`
+    expect.soft(Math.abs(bounds.x + bounds.width / 2 - bounds.viewportWidth / 2), size).toBeLessThanOrEqual(1)
+    expect.soft(Math.abs(bounds.y + bounds.height / 2 - bounds.viewportHeight / 2), size).toBeLessThanOrEqual(1)
+    expect.soft(bounds.x, size).toBeGreaterThanOrEqual(0)
+    expect.soft(bounds.y, size).toBeGreaterThanOrEqual(0)
+    expect.soft(bounds.x + bounds.width, size).toBeLessThanOrEqual(bounds.viewportWidth)
+    expect.soft(bounds.y + bounds.height, size).toBeLessThanOrEqual(bounds.viewportHeight)
+    await dialog.getByRole('button', { name: 'Close field definitions' }).click()
+  }
+})
+
 test('field definition management previews destructive changes in a map-bound dialog', async ({ page }) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
