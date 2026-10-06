@@ -213,6 +213,9 @@ const selectedOrbit = computed(() =>
 const selectedRoute = computed(() =>
   workspace.value?.cluster.routes.find(route => route.id === selectedRouteId.value),
 )
+const chartDetailsActive = computed(() =>
+  !selectedObject.value && !selectedOrbit.value && !selectedRoute.value && !routeFormOpen.value,
+)
 const jumpPoints = computed(() =>
   workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [],
 )
@@ -1803,6 +1806,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             >
               <span aria-hidden="true">›</span>
             </button>
+            <button
+              v-if="!routeFormOpen"
+              class="quiet-button chart-details-control mb-4"
+              type="button"
+              :aria-pressed="chartDetailsActive"
+              @click="showChartDetails"
+            >
+              Chart details
+            </button>
             <template v-if="selectedRoute">
               <span class="section-kicker">JUMP ROUTE / SELECTED</span>
               <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
@@ -2007,9 +2019,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 <span aria-hidden="true">‹</span>
               </button>
               <div class="col-span-2 flex flex-wrap items-center gap-2">
-                <button class="quiet-button" type="button" @click="showChartDetails">
-                  Chart details
-                </button>
                 <button class="quiet-button cluster-map-nav-button" type="button" aria-label="Cluster map" @click="showClusterMap">
                   Cluster map
                 </button>
@@ -2148,6 +2157,14 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               @click="toggleInspectorPanel"
             >
               <span aria-hidden="true">›</span>
+            </button>
+            <button
+              class="quiet-button chart-details-control mb-4"
+              type="button"
+              :aria-pressed="chartDetailsActive"
+              @click="showChartDetails"
+            >
+              Chart details
             </button>
             <template v-if="selectedObject">
               <span class="section-kicker">MAP OBJECT / SELECTED</span>
@@ -3207,6 +3224,12 @@ textarea[aria-invalid="true"] {
 
 .secondary-button:hover:not(:disabled),
 .quiet-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.chart-details-control[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-hover);

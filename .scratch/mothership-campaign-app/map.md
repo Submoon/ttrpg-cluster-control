@@ -44,6 +44,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [17. Moving map import and export actions into the header](tickets/17-header-import-export.md): a responsive, keyboard-accessible header exposes exports for the active Jump Cluster or star system and the existing safe JSON-copy import into the current cluster.
 - [18. Prototyping field-definition management](tickets/18-field-definition-management.md): the user selected the Quick Dialog to manage reusable definitions next to the map, preview affected existing values, and confirm potentially destructive changes; product implementation is tracked in [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md).
 - [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md): the active map now manages native and reusable field definitions through a Quick Dialog, with previews and explicit confirmation before clearing assigned values; workspace persistence and JSON export are preserved, and the prototype route is retired.
+- [20. Clarifying the Chart Details action](tickets/20-chart-details-state.md): both inspectors expose a keyboard-accessible Chart Details toggle with synchronized `aria-pressed` and active styling; it returns from object, Orbit, or route selection to chart-level details and is hidden while a route draft is open.
 
 ## Implementation tickets
 

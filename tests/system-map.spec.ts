@@ -597,8 +597,8 @@ test('the object palette clears the header summary and adapts to narrow viewport
         && toolsBounds.bottom <= inspectorBounds.top,
       clusterButtonIsOpaque: background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent',
       clusterButtonInHierarchy: Boolean(clusterMapButton?.closest('#workspace-hierarchy-panel')),
-      clusterButtonBesideChartDetails: Boolean(
-        clusterMapButton && chartDetailsButton && clusterMapButton.parentElement === chartDetailsButton.parentElement,
+      chartDetailsButtonInInspector: Boolean(
+        chartDetailsButton?.closest('#workspace-inspector-panel'),
       ),
       mapFillsCanvas: mapSvg.getBoundingClientRect().height / mapBounds.height >= 0.92,
     }
@@ -615,7 +615,7 @@ test('the object palette clears the header summary and adapts to narrow viewport
     toolsClearPanels: layout.toolsClearPanels,
     clusterButtonIsOpaque: layout.clusterButtonIsOpaque,
     clusterButtonInHierarchy: layout.clusterButtonInHierarchy,
-    clusterButtonBesideChartDetails: layout.clusterButtonBesideChartDetails,
+    chartDetailsButtonInInspector: layout.chartDetailsButtonInInspector,
     mapFillsCanvas: layout.mapFillsCanvas,
   }).toEqual({
     paletteFloatsAboveMap: true,
@@ -629,7 +629,7 @@ test('the object palette clears the header summary and adapts to narrow viewport
     toolsClearPanels: true,
     clusterButtonIsOpaque: true,
     clusterButtonInHierarchy: true,
-    clusterButtonBesideChartDetails: true,
+    chartDetailsButtonInInspector: true,
     mapFillsCanvas: true,
   })
   await expect(palette).toBeVisible()
@@ -808,6 +808,9 @@ test('object category tabs reveal one group and fit on narrow screens', async ({
   await expect(palette.getByRole('button', { name: 'Add Star' })).toHaveCount(0)
 
   await page.setViewportSize({ width: 479, height: 252 })
+  await expect.poll(() => page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  )).toBe(true)
   const compactLayout = await page.evaluate(() => {
     const palette = document.querySelector<HTMLElement>('[aria-label="Object palette"]')
     const categories = palette?.querySelector<HTMLElement>('.object-palette-categories')
@@ -1478,7 +1481,8 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ }))
     .toBeVisible()
 
-  await hierarchy.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('complementary', { name: 'Object inspector' })
+    .getByRole('button', { name: 'Chart details' }).click()
   await addPlanet.press('Enter')
   const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
   await expect(systemPlanet).toBeVisible()
@@ -1688,6 +1692,63 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
   await expect(page.getByLabel('Physical Jump Station')).toHaveValue(stationId!)
+})
+
+test('Chart details is an active, keyboard-accessible inspector view', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const chartDetails = page.getByRole('button', { name: 'Chart details' })
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const systemInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
+  await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
+  await page.mouse.move(0, 0)
+  const activeAppearance = await chartDetails.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return `${style.borderColor} ${style.backgroundColor}`
+  })
+
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await expect(systemInspector.getByText('MAP OBJECT / SELECTED')).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
+  await page.mouse.move(0, 0)
+  const selectedAppearance = await chartDetails.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return `${style.borderColor} ${style.backgroundColor}`
+  })
+  expect(activeAppearance).not.toBe(selectedAppearance)
+  await chartDetails.press('Enter')
+  await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
+
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await expect(systemInspector.getByText('SYSTEM STRUCTURE / SELECTED')).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
+  await chartDetails.press('Enter')
+  await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
+
+  await addCatalogueObject(page, 'jump-point')
+  await page.getByLabel('Name').fill('Vesper Exit')
+  await page.getByLabel('Name').press('Tab')
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await expect(page.getByRole('button', { name: 'Chart details' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Create Jump Route' }).click()
+  const route = clusterMap.getByRole('button', { name: /Jump-01.*Vesper Exit/ })
+  await expect(route).toBeVisible()
+  await route.click()
+  await expect(routeInspector.getByText('JUMP ROUTE / SELECTED')).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
+  await chartDetails.press('Enter')
+  await expect(routeInspector.getByText('CLUSTER DETAILS')).toBeVisible()
+  await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('the Warden can configure native and reusable custom object fields', async ({ page }) => {
