@@ -2,7 +2,8 @@
 title: 22. Expanding the system-map grid and layout bounds
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -30,3 +31,9 @@ As a Warden, I can lay out a system across a much larger grid, so that adding se
 - [06. Building a star-system map with nested Orbits](06-star-system-map.md)
 - [10. Navigating and arranging both map views](10-map-navigation.md)
 - [14. Exporting complete maps as PNG and SVG](14-image-export.md)
+
+## Resolution
+
+System-level placements accept any finite coordinates, and the system-map background and grid expand to cover objects and Orbits. Existing coordinates retain their mapping; Fit and image exports include expanded content. Jump Cluster system positions remain bounded.
+
+- Validation passed: `npm run typecheck`, `npm test` (26 tests), and `npm run build`.

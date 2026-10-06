@@ -46,6 +46,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [19. Implementing field-definition management with a Quick Dialog](tickets/19-field-definition-management.md): the active map now manages native and reusable field definitions through a Quick Dialog, with previews and explicit confirmation before clearing assigned values; workspace persistence and JSON export are preserved, and the prototype route is retired.
 - [20. Clarifying the Chart Details action](tickets/20-chart-details-state.md): both inspectors expose a keyboard-accessible Chart Details toggle with synchronized `aria-pressed` and active styling; it returns from object, Orbit, or route selection to chart-level details and is hidden while a route draft is open.
 - [21. Including the system name in system-map image exports](tickets/21-system-name-in-image-exports.md): star-system PNG/SVG exports include the current system name in a readable, bounds-fitting title band while leaving the in-app map and Jump Cluster exports unchanged.
+- [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md): system objects and Orbits can extend beyond the former 960x560 scene; the background and grid grow with the layout, Fit and exports include the expanded content, and existing saved positions remain unchanged.
 
 ## Implementation tickets
 

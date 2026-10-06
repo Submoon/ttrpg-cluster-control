@@ -748,8 +748,8 @@ async function moveMapObject(objectId: string, position: Point): Promise<void> {
     const updatedSystem = updateSystemObject(system, object.id, {
       placement: {
         kind: 'system',
-        x: Math.max(0, Math.min(1, position.x)),
-        y: Math.max(0, Math.min(1, position.y)),
+        x: position.x,
+        y: position.y,
       },
     }, objectFieldSettings)
     await saveSystem(updatedSystem)
@@ -1061,8 +1061,8 @@ async function addObject(
         ...object,
         placement: {
           kind: 'system',
-          x: Math.max(0, Math.min(1, (dropPoint.x - 64) / 832)),
-          y: Math.max(0, Math.min(1, (dropPoint.y - 72) / 416)),
+          x: (dropPoint.x - 64) / 832,
+          y: (dropPoint.y - 72) / 416,
         },
       }
     }
@@ -2336,8 +2336,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     <input
                       :id="`object-x-${selectedObject.id}`"
                       type="number"
-                      min="0"
-                      max="1"
                       step="0.01"
                       v-model="objectDraft.x"
                       required
@@ -2349,8 +2347,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     <input
                       :id="`object-y-${selectedObject.id}`"
                       type="number"
-                      min="0"
-                      max="1"
                       step="0.01"
                       v-model="objectDraft.y"
                       required

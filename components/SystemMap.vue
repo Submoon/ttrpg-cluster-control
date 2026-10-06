@@ -15,6 +15,8 @@ import { objectMark } from '../utils/catalogue-marks'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
 
+const mapSurfacePadding = 160
+
 const props = defineProps<{
   system: StarSystem
   orbitRadii: Record<string, number>
@@ -245,14 +247,8 @@ function render(): void {
     .attr('d', 'M 28 0 L 0 0 0 28')
     .attr('class', 'map-grid-line')
 
-  content.append('rect')
-    .attr('class', 'map-background')
-    .attr('width', 960)
-    .attr('height', 560)
-  content.append('rect')
-    .attr('class', 'map-grid')
-    .attr('width', 960)
-    .attr('height', 560)
+  const mapBackground = content.append('rect').attr('class', 'map-background')
+  const mapGrid = content.append('rect').attr('class', 'map-grid')
 
   const orbitMarks = content.append('g').attr('class', 'system-orbits')
     .selectAll<SVGGElement, Orbit>('g.orbit-mark')
@@ -361,6 +357,29 @@ function render(): void {
       .text(objectMark(object))
   })
 
+  function updateMapSurface(): void {
+    const bounds = [items.node()?.getBBox(), orbitMarks.node()?.getBBox()]
+      .filter((box): box is DOMRect => box !== undefined && (box.width > 0 || box.height > 0))
+    const left = Math.floor(Math.min(0, ...bounds.map(box => box.x - mapSurfacePadding)))
+    const top = Math.floor(Math.min(0, ...bounds.map(box => box.y - mapSurfacePadding)))
+    const right = Math.ceil(Math.max(
+      960,
+      ...bounds.map(box => box.x + box.width + mapSurfacePadding),
+    ))
+    const bottom = Math.ceil(Math.max(
+      560,
+      ...bounds.map(box => box.y + box.height + mapSurfacePadding),
+    ))
+
+    for (const surface of [mapBackground, mapGrid]) {
+      surface
+        .attr('x', left)
+        .attr('y', top)
+        .attr('width', right - left)
+        .attr('height', bottom - top)
+    }
+  }
+
   function updateLiveGeometry(): void {
     const positions = currentPositions()
     objectMarks.attr('transform', object => {
@@ -381,6 +400,7 @@ function render(): void {
     orbitMarks.select<SVGTextElement>('.orbit-label')
       .attr('x', orbit => requiredPosition(positions, orbit.hostId).x)
       .attr('y', orbit => requiredPosition(positions, orbit.hostId).y - orbitRadius(system, orbit, liveOrbitRadii) * 0.72)
+    updateMapSurface()
   }
 
   const movedObjects = new WeakSet<SVGGElement>()
@@ -443,8 +463,8 @@ function render(): void {
         emit('place-object-in-orbit', object.id, targetOrbit.id, Math.atan2(event.y - host.y, event.x - host.x))
       } else {
         emit('move-object', object.id, {
-          x: Math.max(0, Math.min(1, (event.x - 64) / 832)),
-          y: Math.max(0, Math.min(1, (event.y - 72) / 416)),
+          x: (event.x - 64) / 832,
+          y: (event.y - 72) / 416,
         })
       }
     })
@@ -458,6 +478,7 @@ function render(): void {
       .attr('text-anchor', 'middle')
       .text('No locations charted yet.')
   }
+  updateMapSurface()
 
   const resizedOrbits = new WeakSet<SVGCircleElement>()
   orbitSelectors.call(

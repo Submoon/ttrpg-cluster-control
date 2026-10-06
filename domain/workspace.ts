@@ -916,8 +916,8 @@ export function updateSystemObject(
   }
 
   if (updated.placement.kind === 'system') {
-    if (!isUnitNumber(updated.placement.x) || !isUnitNumber(updated.placement.y)) {
-      throw new Error('Schematic X and Y must be between 0 and 1.')
+    if (!Number.isFinite(updated.placement.x) || !Number.isFinite(updated.placement.y)) {
+      throw new Error('Schematic X and Y must be finite numbers.')
     }
   } else if (!canPlaceObjectInOrbit(system, objectId, updated.placement.orbitId)) {
     throw new Error('That placement would create a circular Orbit relationship.')
@@ -1025,10 +1025,6 @@ function isPoint(value: unknown): value is Point {
     && Number.isFinite(value.y)
 }
 
-function isUnitNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
-}
-
 function isObjectFamily(value: unknown): value is ObjectFamily {
   return value === 'CelestialBody'
     || value === 'SmallBody/Field'
@@ -1093,7 +1089,7 @@ function isSystemObject(value: unknown): value is SystemObject {
   }
 
   return value.placement.kind === 'system'
-    ? isUnitNumber(value.placement.x) && isUnitNumber(value.placement.y)
+    ? isPoint(value.placement)
     : value.placement.kind === 'orbit'
       && typeof value.placement.orbitId === 'string'
       && value.placement.orbitId.length > 0
