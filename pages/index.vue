@@ -20,10 +20,12 @@ import {
   renameLocalWorkspace,
   renameCustomFieldDefinition,
   removeCustomFieldDefinition,
+  updateJumpRoute,
   updateCustomFieldOptions,
   updateNativeFieldOptions,
   type CustomFieldValue,
   type JsonImportSummary,
+  type JumpRoute,
   updateSystemObject,
   type CatalogueSubtype,
   type CustomFieldType,
@@ -57,7 +59,7 @@ interface SystemObjectDraft {
   jumpStationId: string
 }
 interface JumpRouteDraft {
-  name: string
+  jumpLevel: string
   fromPointId: string
   destination: 'point' | 'external'
   toPointId: string
@@ -119,6 +121,11 @@ const selectedSystemId = ref<string | null>(null)
 const selectedObjectId = ref<string | null>(null)
 const selectedOrbitId = ref<string | null>(null)
 const selectedRouteId = ref<string | null>(null)
+const objectEditSnapshot = shallowRef<SystemObject | null>(null)
+const editingRouteId = ref<string | null>(null)
+const orbitEditing = ref(false)
+const orbitOrderDraft = ref('')
+const chartNamesEditing = ref(false)
 const routeFormOpen = ref(false)
 const hierarchyPanelOpen = ref(true)
 const inspectorPanelOpen = ref(true)
@@ -148,8 +155,9 @@ const fieldDefinitionNameDraft = ref('')
 const fieldDefinitionOptionsDraft = ref('')
 const fieldDefinitionError = ref('')
 const pendingFieldDefinitionChange = ref<PendingFieldDefinitionChange | null>(null)
+const fieldDefinitionEditing = ref(false)
 const routeDraft = reactive<JumpRouteDraft>({
-  name: '',
+  jumpLevel: '1',
   fromPointId: '',
   destination: 'external',
   toPointId: '',
@@ -213,6 +221,9 @@ const selectedOrbit = computed(() =>
 const selectedRoute = computed(() =>
   workspace.value?.cluster.routes.find(route => route.id === selectedRouteId.value),
 )
+const objectEditing = computed(() =>
+  objectEditSnapshot.value?.id === selectedObject.value?.id && !!selectedObject.value,
+)
 const chartDetailsActive = computed(() =>
   !selectedObject.value && !selectedOrbit.value && !selectedRoute.value && !routeFormOpen.value,
 )
@@ -222,14 +233,24 @@ const jumpPoints = computed(() =>
 const routeDestinationPoints = computed(() =>
   jumpPoints.value.filter(({ point }) => point.id !== routeDraft.fromPointId),
 )
-const selectedRouteFrom = computed(() =>
-  jumpPoints.value.find(({ point }) => point.id === selectedRoute.value?.fromPointId),
+const routeDraftDestination = computed(() =>
+  routeDestinationPoints.value.find(({ point }) => point.id === routeDraft.toPointId),
 )
-const selectedRouteTo = computed(() =>
-  selectedRoute.value?.toPointId
-    ? jumpPoints.value.find(({ point }) => point.id === selectedRoute.value?.toPointId)
-    : undefined,
-)
+function routeEndpointSummary(route: JumpRoute): string {
+  const origin = jumpPoints.value.find(({ point }) => point.id === route.fromPointId)
+  let destination: string
+  if (route.toPointId === null) {
+    destination = `Unknown destination: ${route.unresolvedExit}`
+  } else {
+    const reference = jumpPoints.value.find(({ point }) => point.id === route.toPointId)
+    destination = reference
+      ? `${reference.point.name} (${reference.system.name})`
+      : 'Missing Jump Point'
+  }
+
+  const originName = origin ? `${origin.point.name} (${origin.system.name})` : 'Missing Jump Point'
+  return `${originName} -> ${destination}`
+}
 const physicalStations = computed(() =>
   selectedSystem.value?.objects.filter(object => object.family === 'Installation' && object.subtype === 'station') ?? [],
 )
@@ -319,18 +340,27 @@ const affectedFieldAssignments = computed(() => {
 function selectFieldDefinition(fieldId: string): void {
   const definition = fieldDefinitions.value.find(field => field.id === fieldId)
   if (!definition) return
+  if (fieldDefinitionEditing.value) {
+    if (fieldId === selectedFieldDefinitionId.value) return
+    if (!window.confirm('Discard unsaved field definition edits?')) return
+  }
 
   selectedFieldDefinitionId.value = fieldId
-  fieldDefinitionNameDraft.value = definition.kind === 'custom' ? definition.name : ''
-  fieldDefinitionOptionsDraft.value = definition.type === 'single-select'
-    ? definition.options.join('\n')
-    : ''
+  fieldDefinitionEditing.value = false
+  syncFieldDefinitionDraft(definition)
   fieldDefinitionError.value = ''
   pendingFieldDefinitionChange.value = null
 }
 
+function syncFieldDefinitionDraft(definition: FieldDefinitionSummary): void {
+  fieldDefinitionNameDraft.value = definition.kind === 'custom' ? definition.name : ''
+  fieldDefinitionOptionsDraft.value = definition.type === 'single-select'
+    ? definition.options.join('\n')
+    : ''
+}
+
 async function openFieldDefinitions(): Promise<void> {
-  if (!workspace.value || fieldDefinitionDialogOpen.value) return
+  if (!workspace.value || fieldDefinitionDialogOpen.value || !confirmDiscardInspectorEdits()) return
 
   newCustomFieldFormOpen.value = false
   newCustomFieldName.value = ''
@@ -346,10 +376,12 @@ async function openFieldDefinitions(): Promise<void> {
 }
 
 function closeFieldDefinitions(): void {
+  if (fieldDefinitionEditing.value && !window.confirm('Discard unsaved field definition edits?')) return
   const dialog = fieldDefinitionsDialog.value
   if (dialog?.open) dialog.close()
   fieldDefinitionDialogOpen.value = false
   pendingFieldDefinitionChange.value = null
+  fieldDefinitionEditing.value = false
   newCustomFieldFormOpen.value = false
   nextTick(() => fieldDefinitionsTrigger.value?.focus())
 }
@@ -360,10 +392,28 @@ function cancelFieldDefinitionDialog(event: Event): void {
 }
 
 function openNewCustomFieldForm(): void {
+  if (fieldDefinitionEditing.value) {
+    if (!window.confirm('Discard unsaved field definition edits?')) return
+    cancelFieldDefinitionEdit()
+  }
   newCustomFieldName.value = ''
   newCustomFieldType.value = 'text'
   newCustomFieldOptions.value = ''
   newCustomFieldFormOpen.value = true
+  fieldDefinitionError.value = ''
+}
+
+function beginFieldDefinitionEdit(): void {
+  if (!selectedFieldDefinition.value) return
+  fieldDefinitionEditing.value = true
+  fieldDefinitionError.value = ''
+}
+
+function cancelFieldDefinitionEdit(): void {
+  pendingFieldDefinitionChange.value = null
+  fieldDefinitionEditing.value = false
+  const definition = selectedFieldDefinition.value
+  if (definition) syncFieldDefinitionDraft(definition)
   fieldDefinitionError.value = ''
 }
 
@@ -388,7 +438,25 @@ function syncObjectDraft(object: SystemObject | undefined): void {
   objectDraft.jumpStationId = object?.jumpStationId ?? ''
 }
 
-watch(selectedObject, syncObjectDraft, { immediate: true })
+function beginObjectEdit(): void {
+  const object = selectedObject.value
+  if (!object || !confirmDiscardInspectorEdits()) return
+
+  syncObjectDraft(object)
+  objectEditSnapshot.value = object
+  editorError.value = ''
+}
+
+function cancelObjectEdit(): void {
+  objectEditSnapshot.value = null
+  syncObjectDraft(selectedObject.value)
+  editorError.value = ''
+}
+
+watch(selectedObject, object => {
+  if (objectEditSnapshot.value?.id !== object?.id) objectEditSnapshot.value = null
+  if (!objectEditing.value) syncObjectDraft(object)
+}, { immediate: true })
 watch(() => workspace.value?.objectFieldSettings, settings => {
   if (!settings) return
 
@@ -649,7 +717,7 @@ async function importJsonFile(event: Event): Promise<void> {
   if (!(input instanceof HTMLInputElement)) return
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !workspace.value) return
+  if (!file || !workspace.value || !confirmDiscardInspectorEdits()) return
 
   importError.value = ''
   try {
@@ -736,6 +804,7 @@ async function moveSystem(systemId: string, position: Point): Promise<void> {
 }
 
 async function moveMapObject(objectId: string, position: Point): Promise<void> {
+  if (objectEditSnapshot.value?.id === objectId) return
   const system = selectedSystem.value
   const object = system?.objects.find(candidate => candidate.id === objectId)
   const objectFieldSettings = workspace.value?.objectFieldSettings
@@ -760,6 +829,7 @@ async function moveMapObject(objectId: string, position: Point): Promise<void> {
 }
 
 async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
+  if (objectEditSnapshot.value?.id === objectId) return
   const currentWorkspace = workspace.value
   const system = selectedSystem.value
   const object = system?.objects.find(candidate => candidate.id === objectId)
@@ -792,6 +862,7 @@ async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: n
 }
 
 async function rotateMapObject(objectId: string, angle: number): Promise<void> {
+  if (objectEditSnapshot.value?.id === objectId) return
   const currentWorkspace = workspace.value
   const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
   if (!currentWorkspace || object?.placement.kind !== 'orbit') return
@@ -851,14 +922,49 @@ async function submitNames(): Promise<void> {
         )
       : createLocalWorkspace(clusterName.value, systemName.value)
     await commit(nextWorkspace)
+    chartNamesEditing.value = false
   } catch (error) {
     formError.value = errorText(error)
   }
 }
 
+function beginChartNamesEdit(): void {
+  if (!workspace.value || !selectedSystem.value || !confirmDiscardInspectorEdits()) return
+  clusterName.value = workspace.value.cluster.name
+  systemName.value = selectedSystem.value.name
+  chartNamesEditing.value = true
+  formError.value = ''
+}
+
+function cancelChartNamesEdit(): void {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  if (currentWorkspace && system) {
+    clusterName.value = currentWorkspace.cluster.name
+    systemName.value = system.name
+  }
+  chartNamesEditing.value = false
+  formError.value = ''
+}
+
+function confirmDiscardInspectorEdits(): boolean {
+  const hasOpenEdit = objectEditing.value
+    || routeFormOpen.value
+    || orbitEditing.value
+    || chartNamesEditing.value
+  if (!hasOpenEdit) return true
+  if (!window.confirm('Discard unsaved edits?')) return false
+
+  cancelObjectEdit()
+  if (routeFormOpen.value) cancelRouteForm()
+  cancelOrbitEdit()
+  cancelChartNamesEdit()
+  return true
+}
+
 async function createSystem(): Promise<void> {
   const currentWorkspace = workspace.value
-  if (!currentWorkspace) return
+  if (!currentWorkspace || !confirmDiscardInspectorEdits()) return
 
   try {
     const result = addStarSystem(currentWorkspace)
@@ -875,57 +981,111 @@ async function createSystem(): Promise<void> {
 }
 
 function showClusterMap(): void {
+  if (!confirmDiscardInspectorEdits()) return
   activeView.value = 'cluster'
   selectedObjectId.value = null
   selectedOrbitId.value = null
   selectedRouteId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
+  editingRouteId.value = null
   routeFormOpen.value = false
   editorError.value = ''
 }
 
 function selectSystem(systemId: string): void {
   if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+  if (!confirmDiscardInspectorEdits()) return
   selectedSystemId.value = systemId
   activeView.value = 'system'
   selectedObjectId.value = null
   selectedOrbitId.value = null
   selectedRouteId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
+  editingRouteId.value = null
   routeFormOpen.value = false
   editorError.value = ''
 }
 
 function selectObject(objectId: string): void {
   if (!selectedSystem.value?.objects.some(object => object.id === objectId)) return
+  if (selectedObjectId.value === objectId) return
+  if (!confirmDiscardInspectorEdits()) return
   selectedObjectId.value = objectId
   selectedOrbitId.value = null
+  selectedRouteId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
   editorError.value = ''
 }
 
 function selectOrbit(orbitId: string): void {
   if (!selectedSystem.value?.orbits.some(orbit => orbit.id === orbitId)) return
+  if (selectedOrbitId.value === orbitId) return
+  if (!confirmDiscardInspectorEdits()) return
   selectedOrbitId.value = orbitId
   selectedObjectId.value = null
   selectedRouteId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
+  orbitOrderDraft.value = String(selectedSystem.value.orbits.find(orbit => orbit.id === orbitId)?.order ?? '')
   editorError.value = ''
 }
 
 function selectRoute(routeId: string): void {
-  if (!workspace.value?.cluster.routes.some(route => route.id === routeId)) return
-  selectedRouteId.value = routeId
+  const route = workspace.value?.cluster.routes.find(candidate => candidate.id === routeId)
+  if (!route) return
+  if (selectedRouteId.value === routeId) return
+  if (!confirmDiscardInspectorEdits()) return
+
+  selectedRouteId.value = route.id
+  editingRouteId.value = null
+  routeDraft.jumpLevel = String(route.jumpLevel)
+  routeDraft.fromPointId = route.fromPointId
+  routeDraft.toPointId = route.toPointId ?? ''
+  routeDraft.destination = route.toPointId === null ? 'external' : 'point'
+  routeDraft.unresolvedExit = route.toPointId === null ? route.unresolvedExit : 'Uncharted exit'
   selectedObjectId.value = null
   selectedOrbitId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
   routeFormOpen.value = false
   editorError.value = ''
 }
 
 function beginRoute(): void {
-  routeDraft.name = `Jump-${String((workspace.value?.cluster.routes.length ?? 0) + 1).padStart(2, '0')}`
+  if (!confirmDiscardInspectorEdits()) return
+  routeDraft.jumpLevel = '1'
   routeDraft.fromPointId = jumpPoints.value[0]?.point.id ?? ''
   routeDraft.toPointId = routeDestinationPoints.value[0]?.point.id ?? ''
   routeDraft.destination = routeDestinationPoints.value.length ? 'point' : 'external'
   routeDraft.unresolvedExit = 'Uncharted exit'
   selectedRouteId.value = null
+  editingRouteId.value = null
   routeFormOpen.value = true
+  editorError.value = ''
+}
+
+function beginRouteEdit(): void {
+  const route = selectedRoute.value
+  if (!route) return
+
+  routeDraft.jumpLevel = String(route.jumpLevel)
+  routeDraft.fromPointId = route.fromPointId
+  routeDraft.toPointId = route.toPointId ?? ''
+  routeDraft.destination = route.toPointId === null ? 'external' : 'point'
+  routeDraft.unresolvedExit = route.toPointId === null ? route.unresolvedExit : 'Uncharted exit'
+  editingRouteId.value = route.id
+  selectedRouteId.value = null
+  routeFormOpen.value = true
+  editorError.value = ''
+}
+
+function cancelRouteForm(): void {
+  if (editingRouteId.value) selectedRouteId.value = editingRouteId.value
+  editingRouteId.value = null
+  routeFormOpen.value = false
   editorError.value = ''
 }
 
@@ -934,21 +1094,34 @@ async function submitRoute(): Promise<void> {
   if (!currentWorkspace) return
 
   try {
-    const route = createJumpRoute(
-      currentWorkspace.cluster,
-      routeDraft.name,
-      routeDraft.fromPointId,
-      routeDraft.destination === 'external' ? null : routeDraft.toPointId,
-      routeDraft.unresolvedExit,
-    )
+    const route = editingRouteId.value
+      ? updateJumpRoute(
+          currentWorkspace.cluster,
+          editingRouteId.value,
+          Number(routeDraft.jumpLevel),
+          routeDraft.fromPointId,
+          routeDraft.destination === 'external' ? null : routeDraft.toPointId,
+          routeDraft.unresolvedExit,
+        )
+      : createJumpRoute(
+          currentWorkspace.cluster,
+          Number(routeDraft.jumpLevel),
+          routeDraft.fromPointId,
+          routeDraft.destination === 'external' ? null : routeDraft.toPointId,
+          routeDraft.unresolvedExit,
+        )
+    const routes = currentWorkspace.cluster.routes.some(existing => existing.id === route.id)
+      ? currentWorkspace.cluster.routes.map(existing => existing.id === route.id ? route : existing)
+      : [...currentWorkspace.cluster.routes, route]
     await commit({
       ...currentWorkspace,
       cluster: {
         ...currentWorkspace.cluster,
-        routes: [...currentWorkspace.cluster.routes, route],
+        routes,
       },
     })
     selectedRouteId.value = route.id
+    editingRouteId.value = null
     routeFormOpen.value = false
     editorError.value = ''
   } catch (error) {
@@ -976,7 +1149,9 @@ async function deleteMapEntity(target: MapDeletionTarget): Promise<void> {
 }
 
 function deleteSystem(systemId: string): Promise<void> {
-  return deleteMapEntity({ kind: 'system', systemId })
+  return confirmDiscardInspectorEdits()
+    ? deleteMapEntity({ kind: 'system', systemId })
+    : Promise.resolve()
 }
 
 function deleteSelectedObject(): Promise<void> {
@@ -1016,6 +1191,11 @@ function handleDeleteShortcut(event: KeyboardEvent): void {
       || target.closest('input, textarea, select, [contenteditable="true"]')
     ))
     || saveState.value === 'saving'
+    || objectEditing.value
+    || orbitEditing.value
+    || chartNamesEditing.value
+    || routeFormOpen.value
+    || fieldDefinitionDialogOpen.value
   ) return
 
   const removeSelected = activeView.value === 'cluster'
@@ -1032,9 +1212,14 @@ function handleDeleteShortcut(event: KeyboardEvent): void {
 }
 
 function showChartDetails(): void {
+  if (!confirmDiscardInspectorEdits()) return
   selectedObjectId.value = null
   selectedOrbitId.value = null
   selectedRouteId.value = null
+  objectEditSnapshot.value = null
+  orbitEditing.value = false
+  editingRouteId.value = null
+  routeFormOpen.value = false
   editorError.value = ''
 }
 
@@ -1046,7 +1231,7 @@ async function addObject(
 ): Promise<void> {
   const system = selectedSystem.value
   const currentWorkspace = workspace.value
-  if (!system || !currentWorkspace) return
+  if (!system || !currentWorkspace || !confirmDiscardInspectorEdits()) return
 
   try {
     const orbitId = dropPoint
@@ -1108,12 +1293,14 @@ function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
 async function addOrbit(): Promise<void> {
   const system = selectedSystem.value
   const object = selectedObject.value
-  if (!system || !object) return
+  if (!system || !object || !confirmDiscardInspectorEdits()) return
 
   try {
     const orbit = createOrbit(system, object.id)
     selectedOrbitId.value = orbit.id
     selectedObjectId.value = null
+    objectEditSnapshot.value = null
+    orbitEditing.value = false
     editorError.value = ''
     await saveSystem({ ...system, orbits: [...system.orbits, orbit] })
   } catch (error) {
@@ -1121,55 +1308,158 @@ async function addOrbit(): Promise<void> {
   }
 }
 
-async function reorderSelectedOrbit(direction: -1 | 1): Promise<void> {
+function beginOrbitEdit(): void {
+  const orbit = selectedOrbit.value
+  if (!orbit || !confirmDiscardInspectorEdits()) return
+
+  orbitOrderDraft.value = String(orbit.order)
+  orbitEditing.value = true
+  editorError.value = ''
+}
+
+function cancelOrbitEdit(): void {
+  orbitOrderDraft.value = String(selectedOrbit.value?.order ?? '')
+  orbitEditing.value = false
+  editorError.value = ''
+}
+
+function reorderSelectedOrbit(direction: -1 | 1): void {
+  if (!orbitEditing.value || !canMoveSelectedOrbit(direction)) return
+  orbitOrderDraft.value = String(Number(orbitOrderDraft.value) + direction)
+}
+
+async function saveOrbitEdit(): Promise<void> {
   const system = selectedSystem.value
   const orbit = selectedOrbit.value
+  const targetOrder = Number(orbitOrderDraft.value)
   if (!system || !orbit) return
+  const siblingCount = system.orbits.filter(candidate => candidate.hostId === orbit.hostId).length
+  if (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > siblingCount) {
+    editorError.value = 'Choose a valid Orbit order.'
+    return
+  }
 
   try {
-    await saveSystem(moveOrbit(system, orbit.id, direction))
+    let updatedSystem = system
+    let currentOrder = orbit.order
+    while (currentOrder !== targetOrder) {
+      const direction = currentOrder < targetOrder ? 1 : -1
+      updatedSystem = moveOrbit(updatedSystem, orbit.id, direction)
+      currentOrder += direction
+    }
+    if (updatedSystem !== system) await saveSystem(updatedSystem)
+    orbitEditing.value = false
+    orbitOrderDraft.value = String(targetOrder)
     editorError.value = ''
   } catch (error) {
     editorError.value = errorText(error)
   }
 }
 
-async function saveObjectChanges(changes: SystemObjectChanges): Promise<void> {
+async function saveObjectEdit(): Promise<void> {
+  const currentWorkspace = workspace.value
   const system = selectedSystem.value
-  const object = selectedObject.value
-  const objectFieldSettings = workspace.value?.objectFieldSettings
-  if (!system || !object || !objectFieldSettings) return
+  const snapshot = objectEditSnapshot.value
+  const object = system?.objects.find(candidate => candidate.id === snapshot?.id)
+  if (!currentWorkspace || !system || !snapshot || !object) return
 
-  let updatedSystem: StarSystem
-  try {
-    updatedSystem = updateSystemObject(system, object.id, changes, objectFieldSettings)
-  } catch (error) {
-    editorError.value = errorText(error)
+  const changes: SystemObjectChanges = {}
+  if (objectDraft.locationKey !== snapshot.locationKey) changes.locationKey = objectDraft.locationKey
+  if (objectDraft.name !== snapshot.name) changes.name = objectDraft.name
+  if (objectDraft.description !== snapshot.description) changes.description = objectDraft.description
+  if (objectDraft.subtype !== snapshot.subtype) changes.subtype = objectDraft.subtype
+  if (objectDraft.atmosphere !== (snapshot.atmosphere ?? '')) {
+    changes.atmosphere = objectDraft.atmosphere || undefined
+  }
+  if (objectDraft.portClass !== (snapshot.portClass ?? '')) {
+    changes.portClass = objectDraft.portClass || undefined
+  }
+  if (objectDraft.jumpStationId !== (snapshot.jumpStationId ?? '')) {
+    changes.jumpStationId = objectDraft.jumpStationId || null
+  }
+
+  const snapshotPlacement = snapshot.placement.kind === 'orbit'
+    ? `orbit:${snapshot.placement.orbitId}`
+    : 'system'
+  const draftX = String(objectDraft.x)
+  const draftY = String(objectDraft.y)
+  const systemPositionChanged = snapshot.placement.kind === 'system'
+    && (
+      draftX !== String(snapshot.placement.x)
+      || draftY !== String(snapshot.placement.y)
+    )
+  if (objectDraft.placement !== snapshotPlacement || systemPositionChanged) {
+    if (objectDraft.placement === 'system') {
+      changes.placement = {
+        kind: 'system',
+        x: draftX.trim() ? Number(draftX) : Number.NaN,
+        y: draftY.trim() ? Number(draftY) : Number.NaN,
+      }
+    } else if (objectDraft.placement.startsWith('orbit:')) {
+      changes.placement = {
+        kind: 'orbit',
+        orbitId: objectDraft.placement.slice('orbit:'.length),
+      }
+    } else {
+      editorError.value = 'Choose a valid map placement.'
+      return
+    }
+  }
+
+  const customFieldValues = { ...(object.customFieldValues ?? {}) }
+  let customFieldValuesChanged = false
+  for (const definition of currentWorkspace.objectFieldSettings.customFields) {
+    const draftValue = objectDraft.customFieldValues[definition.id] ?? ''
+    const savedValue = snapshot.customFieldValues?.[definition.id]
+    if (draftValue === (savedValue === undefined ? '' : String(savedValue))) continue
+
+    customFieldValuesChanged = true
+    if (!draftValue) {
+      delete customFieldValues[definition.id]
+    } else if (definition.type === 'number') {
+      const numberValue = Number(draftValue)
+      if (!Number.isFinite(numberValue)) {
+        editorError.value = `"${definition.name}" must be a finite number.`
+        return
+      }
+      customFieldValues[definition.id] = numberValue
+    } else if (definition.type === 'boolean') {
+      if (draftValue !== 'true' && draftValue !== 'false') {
+        editorError.value = `Choose a true or false value for "${definition.name}".`
+        return
+      }
+      customFieldValues[definition.id] = draftValue === 'true'
+    } else {
+      customFieldValues[definition.id] = draftValue
+    }
+  }
+  if (customFieldValuesChanged) {
+    changes.customFieldValues = Object.keys(customFieldValues).length ? customFieldValues : undefined
+  }
+
+  if (!Object.keys(changes).length) {
+    cancelObjectEdit()
     return
   }
 
-  editorError.value = ''
   try {
-    await saveSystem(updatedSystem)
+    await saveSystem(updateSystemObject(system, object.id, changes, currentWorkspace.objectFieldSettings))
+    objectEditSnapshot.value = null
+    syncObjectDraft(selectedObject.value)
+    editorError.value = ''
   } catch (error) {
     editorError.value = errorText(error)
   }
 }
 
-function saveObjectField(field: 'locationKey' | 'name' | 'description' | 'subtype'): Promise<void> {
-  const value = objectDraft[field]
-  const changes: SystemObjectChanges = field === 'locationKey'
-    ? { locationKey: value }
-    : field === 'name'
-      ? { name: value }
-      : field === 'description'
-        ? { description: value }
-        : { subtype: value }
-  return saveObjectChanges(changes)
-}
+function updateObjectPlacementDraft(): void {
+  const system = selectedSystem.value
+  const object = selectedObject.value
+  if (!system || object?.placement.kind !== 'orbit' || objectDraft.placement !== 'system') return
 
-function saveJumpStation(): Promise<void> {
-  return saveObjectChanges({ jumpStationId: objectDraft.jumpStationId || null })
+  const placement = initialSystemPlacement(system)
+  objectDraft.x = String(placement.x)
+  objectDraft.y = String(placement.y)
 }
 
 async function createCustomField(): Promise<void> {
@@ -1235,7 +1525,11 @@ async function saveFieldDefinitionChanges(): Promise<void> {
     : definition.options
   const nameChanged = definition.kind === 'custom' && name !== definition.name
   const optionsChanged = definition.type === 'single-select' && !sameFieldOptions(definition.options, options)
-  if (!nameChanged && !optionsChanged) return
+  if (!nameChanged && !optionsChanged) {
+    fieldDefinitionEditing.value = false
+    syncFieldDefinitionDraft(definition)
+    return
+  }
 
   try {
     const updatedWorkspace = applyFieldDefinitionUpdate(
@@ -1264,6 +1558,7 @@ async function saveFieldDefinitionChanges(): Promise<void> {
     }
 
     await commit(updatedWorkspace)
+    fieldDefinitionEditing.value = false
     selectFieldDefinition(definition.id)
   } catch (error) {
     fieldDefinitionError.value = errorText(error)
@@ -1306,76 +1601,11 @@ async function confirmFieldDefinitionChange(): Promise<void> {
         )
     await commit(updatedWorkspace)
     pendingFieldDefinitionChange.value = null
+    fieldDefinitionEditing.value = false
     selectFieldDefinition(pendingChange.kind === 'remove' ? 'native:atmosphere' : pendingChange.fieldId)
   } catch (error) {
     fieldDefinitionError.value = errorText(error)
   }
-}
-
-function saveNativeObjectField(field: 'atmosphere' | 'portClass'): Promise<void> {
-  return field === 'atmosphere'
-    ? saveObjectChanges({ atmosphere: objectDraft.atmosphere || undefined })
-    : saveObjectChanges({ portClass: objectDraft.portClass || undefined })
-}
-
-async function saveCustomFieldValue(fieldId: string): Promise<void> {
-  const definition = workspace.value?.objectFieldSettings.customFields.find(field => field.id === fieldId)
-  if (!definition) return
-
-  const values = { ...(selectedObject.value?.customFieldValues ?? {}) }
-  const draftValue = objectDraft.customFieldValues[fieldId]
-  if (!draftValue) {
-    delete values[fieldId]
-  } else if (definition.type === 'number') {
-    const numberValue = Number(draftValue)
-    if (!Number.isFinite(numberValue)) {
-      editorError.value = `"${definition.name}" must be a finite number.`
-      return
-    }
-    values[fieldId] = numberValue
-  } else if (definition.type === 'boolean') {
-    if (draftValue !== 'true' && draftValue !== 'false') {
-      editorError.value = `Choose a true or false value for "${definition.name}".`
-      return
-    }
-    values[fieldId] = draftValue === 'true'
-  } else if (definition.type === 'single-select') {
-    values[fieldId] = draftValue
-  } else {
-    values[fieldId] = draftValue
-  }
-
-  await saveObjectChanges({ customFieldValues: Object.keys(values).length ? values : undefined })
-}
-
-function savePlacement(): Promise<void> {
-  const system = selectedSystem.value
-  const object = selectedObject.value
-  if (!system || !object) return Promise.resolve()
-
-  if (objectDraft.placement === 'system') {
-    const placement = object.placement.kind === 'system'
-      ? object.placement
-      : initialSystemPlacement(system)
-    return saveObjectChanges({ placement })
-  }
-  if (objectDraft.placement.startsWith('orbit:')) {
-    return saveObjectChanges({
-      placement: { kind: 'orbit', orbitId: objectDraft.placement.slice('orbit:'.length) },
-    })
-  }
-  throw new Error('Choose a valid map placement.')
-}
-
-function savePosition(axis: 'x' | 'y'): Promise<void> {
-  const object = selectedObject.value
-  if (!object || object.placement.kind !== 'system') return Promise.resolve()
-
-  const rawValue = String(objectDraft[axis])
-  const value = rawValue.trim() ? Number(rawValue) : Number.NaN
-  return saveObjectChanges({
-    placement: { ...object.placement, [axis]: value },
-  })
 }
 
 function canMoveSelectedOrbit(direction: -1 | 1): boolean {
@@ -1383,11 +1613,9 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
   const orbit = selectedOrbit.value
   if (!system || !orbit) return false
 
-  const siblings = system.orbits
-    .filter(candidate => candidate.hostId === orbit.hostId)
-    .sort((left, right) => left.order - right.order)
-  const index = siblings.findIndex(candidate => candidate.id === orbit.id)
-  return index + direction >= 0 && index + direction < siblings.length
+  const siblingCount = system.orbits.filter(candidate => candidate.hostId === orbit.hostId).length
+  const currentOrder = orbitEditing.value ? Number(orbitOrderDraft.value) : orbit.order
+  return Number.isSafeInteger(currentOrder) && currentOrder + direction >= 1 && currentOrder + direction <= siblingCount
 }
 </script>
 
@@ -1739,14 +1967,14 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 class="tree-row object-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
                 :class="{ active: route.id === selectedRouteId }"
                 type="button"
-                :aria-label="`Select ${route.name}${route.toPointId ? ' route' : ', unresolved exit'}`"
+                :aria-label="`Select Jump Level ${route.jumpLevel}: ${routeEndpointSummary(route)}`"
                 :aria-current="route.id === selectedRouteId ? 'true' : undefined"
                 @click="selectRoute(route.id)"
               >
                 <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">R</span>
                 <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-                  {{ route.name }}
-                  <small class="mt-[0.18rem] block">{{ route.toPointId ? 'Jump Points linked' : route.unresolvedExit }}</small>
+                  Jump Level {{ route.jumpLevel }}
+                  <small class="mt-[0.18rem] block">{{ routeEndpointSummary(route) }}</small>
                 </span>
               </button>
             </nav>
@@ -1818,47 +2046,56 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <template v-if="selectedRoute">
               <span class="section-kicker">JUMP ROUTE / SELECTED</span>
               <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
-              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ selectedRoute.name }}</h2>
+              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
+              <p class="inspector-intro mb-[1em]">
+                Routes reference logical Jump Points. A Station is a separate physical location.
+              </p>
               <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
-                <span>From Jump Point</span>
-                <strong>{{ selectedRouteFrom?.point.name ?? 'Missing Jump Point' }}</strong>
-                <span>Origin system</span>
-                <strong>{{ selectedRouteFrom?.system.name ?? 'Unknown' }}</strong>
-                <span>To</span>
-                <strong>{{ selectedRouteTo?.point.name ?? selectedRoute.unresolvedExit ?? 'Unresolved' }}</strong>
-                <span>Destination system</span>
-                <strong>{{ selectedRouteTo?.system.name ?? 'Not mapped' }}</strong>
+                <span>Endpoints</span>
+                <strong class="text-right">{{ routeEndpointSummary(selectedRoute) }}</strong>
               </div>
-              <p v-if="selectedRoute.toPointId === null" class="inspector-intro mb-[1em]" role="status">
-                This route leaves the known Jump Cluster at {{ selectedRoute.unresolvedExit }}.
+              <p v-if="selectedRoute.toPointId === null" class="inspector-intro">
+                <strong>Unknown destination: {{ selectedRoute.unresolvedExit }}</strong> is beyond the known Jump Cluster.
               </p>
-              <p v-else class="inspector-intro mb-[1em]">
-                This route connects Jump Points by stable identity, independently of any physical Station.
-              </p>
-              <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
-              <button
-                class="quiet-button mt-4"
-                type="button"
-                :aria-label="`Delete Jump Route ${selectedRoute.name}`"
-                :disabled="saveState === 'saving'"
-                @click="deleteSelectedRoute"
-              >
-                Delete route
-              </button>
+              <div class="flex flex-wrap gap-2">
+                <button class="primary-button" type="button" aria-label="Edit Jump Route" :disabled="saveState === 'saving'" @click="beginRouteEdit">
+                  Edit
+                </button>
+                <button
+                  class="quiet-button"
+                  type="button"
+                  :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
+                  :disabled="saveState === 'saving'"
+                  @click="deleteSelectedRoute"
+                >
+                  Delete route
+                </button>
+              </div>
             </template>
 
             <template v-else-if="routeFormOpen">
-              <span class="section-kicker">JUMP ROUTE / NEW</span>
-              <h2 class="mt-[0.65rem] mb-[0.35rem] text-[1.65rem]">Connect Jump Points</h2>
+              <span class="section-kicker">{{ editingRouteId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
+              <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
+                {{ editingRouteId ? 'Edit Jump Route' : 'Connect Jump Points' }}
+              </h2>
               <p class="inspector-intro mb-[1em]">
                 Routes reference logical Jump Points. A Station is a separate physical location.
               </p>
               <form class="field-stack mt-4 grid gap-3" @submit.prevent="submitRoute">
                 <template v-if="jumpPoints.length">
-                  <label for="route-name">
-                    Route name
-                    <input id="route-name" v-model="routeDraft.name" maxlength="80" required>
+                  <label for="route-level">
+                    Jump level
+                    <input
+                      id="route-level"
+                      v-model="routeDraft.jumpLevel"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                    >
                   </label>
+                  <p class="inspector-intro m-0">Standard levels are 1-9; custom positive integer levels are supported.</p>
                   <label for="route-from">
                     From Jump Point
                     <select id="route-from" v-model="routeDraft.fromPointId" required>
@@ -1883,23 +2120,37 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                       </option>
                     </select>
                   </label>
+                  <p v-if="routeDraft.destination === 'point'" class="inspector-intro m-0">
+                    Destination system: {{ routeDraftDestination?.system.name ?? 'Select a Jump Point' }}
+                  </p>
+                  <p v-if="routeDraft.destination === 'point'" class="inspector-intro m-0">
+                    This route connects Jump Points by stable identity, independently of any physical Station.
+                  </p>
                   <label v-else for="route-exit">
-                    Unresolved exit label
-                    <input id="route-exit" v-model="routeDraft.unresolvedExit" maxlength="80" required>
+                    Unknown destination label
+                    <input
+                      id="route-exit"
+                      v-model="routeDraft.unresolvedExit"
+                      maxlength="80"
+                      required
+                    >
                   </label>
+                  <p v-if="routeDraft.destination === 'external'" class="inspector-intro m-0" role="status">
+                    <strong>Unknown destination: {{ routeDraft.unresolvedExit }}</strong> is beyond the known Jump Cluster.
+                  </p>
                   <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
                   <div class="flex flex-wrap gap-2">
                     <button class="primary-button" type="submit" :disabled="saveState === 'saving'">
-                      Create Jump Route
+                      {{ editingRouteId ? 'Save Jump Route' : 'Create Jump Route' }}
                     </button>
-                    <button class="quiet-button" type="button" @click="routeFormOpen = false">
+                    <button class="quiet-button" type="button" @click="cancelRouteForm">
                       Cancel
                     </button>
                   </div>
                 </template>
                 <template v-else>
                   <p class="empty-copy m-0" role="status">Open a star system and add a Jump Point before creating a route.</p>
-                  <button class="quiet-button justify-self-start" type="button" @click="routeFormOpen = false">
+                  <button class="quiet-button justify-self-start" type="button" @click="cancelRouteForm">
                     Cancel
                   </button>
                 </template>
@@ -1910,8 +2161,34 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <span class="section-kicker">CLUSTER DETAILS</span>
               <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ workspace.cluster.name }}</h2>
               <p class="inspector-intro mb-[1em]">
-                Choose a route to inspect its logical Jump Point endpoints, or open a system to edit its local map.
+                Choose a route to inspect its logical Jump Point endpoints, or edit the chart names.
               </p>
+              <form class="field-stack mt-4 grid gap-3" @submit.prevent="submitNames">
+                <fieldset class="m-0 grid gap-3 border-0 p-0" :disabled="!chartNamesEditing || saveState === 'saving'">
+                  <label for="cluster-detail-name">Jump Cluster</label>
+                  <input id="cluster-detail-name" v-model="clusterName" maxlength="80" required>
+                  <label for="system-detail-name">Star system</label>
+                  <input id="system-detail-name" v-model="systemName" maxlength="80" required>
+                </fieldset>
+                <p v-if="formError" class="feedback m-0 error-text" role="alert">{{ formError }}</p>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-if="!chartNamesEditing"
+                    class="primary-button"
+                    type="button"
+                    aria-label="Edit chart names"
+                    @click="beginChartNamesEdit"
+                  >
+                    Edit
+                  </button>
+                  <button v-else class="primary-button" type="submit" aria-label="Save chart names" :disabled="saveState === 'saving'">
+                    Save
+                  </button>
+                  <button v-if="chartNamesEditing" class="quiet-button" type="button" @click="cancelChartNamesEdit">
+                    Cancel
+                  </button>
+                </div>
+              </form>
               <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Star systems</span>
                 <strong>{{ workspace.cluster.systems.length }}</strong>
@@ -2028,14 +2305,30 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <details class="chart-names my-4 border-y border-[var(--line-soft)]">
               <summary class="cursor-pointer py-[0.7rem]">Chart names</summary>
               <form class="name-form grid gap-2 pb-[0.9rem]" @submit.prevent="submitNames">
-                <label for="edit-cluster-name">Jump Cluster</label>
-                <input id="edit-cluster-name" v-model="clusterName" maxlength="80" required>
-                <label for="edit-system-name">Star system</label>
-                <input id="edit-system-name" v-model="systemName" maxlength="80" required>
+                <fieldset class="m-0 grid gap-2 border-0 p-0" :disabled="!chartNamesEditing || saveState === 'saving'">
+                  <label for="edit-cluster-name">Jump Cluster</label>
+                  <input id="edit-cluster-name" v-model="clusterName" maxlength="80" required>
+                  <label for="edit-system-name">Star system</label>
+                  <input id="edit-system-name" v-model="systemName" maxlength="80" required>
+                </fieldset>
                 <p v-if="formError" class="feedback m-0 error-text" role="alert">{{ formError }}</p>
-                <button class="secondary-button mt-[0.3rem] min-h-[2.25rem] justify-center" type="submit" :disabled="saveState === 'saving'">
-                  Save chart names
-                </button>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-if="!chartNamesEditing"
+                    class="secondary-button mt-[0.3rem] min-h-[2.25rem] justify-center"
+                    type="button"
+                    aria-label="Edit chart names"
+                    @click="beginChartNamesEdit"
+                  >
+                    Edit
+                  </button>
+                  <button v-else class="primary-button mt-[0.3rem]" type="submit" aria-label="Save chart names" :disabled="saveState === 'saving'">
+                    Save
+                  </button>
+                  <button v-if="chartNamesEditing" class="quiet-button mt-[0.3rem]" type="button" @click="cancelChartNamesEdit">
+                    Cancel
+                  </button>
+                </div>
               </form>
             </details>
 
@@ -2177,7 +2470,8 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 A stable map record. Edit its keyed description without leaving the current chart.
               </p>
 
-              <div class="field-stack mt-4 grid gap-3">
+              <form class="mt-4" @submit.prevent="saveObjectEdit">
+                <fieldset class="field-stack m-0 grid gap-3 border-0 p-0" :disabled="!objectEditing || saveState === 'saving'">
                 <label v-if="selectedObject.family === 'Other'" :for="`object-type-${selectedObject.id}`">
                   Type label
                   <input
@@ -2185,7 +2479,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     v-model="objectDraft.subtype"
                     autocomplete="off"
                     required
-                    @change="saveObjectField('subtype')"
                   >
                 </label>
                 <label :for="`object-key-${selectedObject.id}`">
@@ -2195,7 +2488,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     v-model="objectDraft.locationKey"
                     autocomplete="off"
                     required
-                    @change="saveObjectField('locationKey')"
                   >
                 </label>
                 <label :for="`object-name-${selectedObject.id}`">
@@ -2206,7 +2498,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     autocomplete="off"
                     maxlength="80"
                     required
-                    @change="saveObjectField('name')"
                   >
                 </label>
                 <label :for="`object-placement-${selectedObject.id}`">
@@ -2214,7 +2505,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   <select
                     :id="`object-placement-${selectedObject.id}`"
                     v-model="objectDraft.placement"
-                    @change="savePlacement"
+                    @change="updateObjectPlacementDraft"
                   >
                     <option value="system">System-level position</option>
                     <optgroup v-if="placeableOrbits.length" label="Hosted Orbits">
@@ -2233,7 +2524,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   <select
                     :id="`jump-station-${selectedObject.id}`"
                     v-model="objectDraft.jumpStationId"
-                    @change="saveJumpStation"
                   >
                     <option value="">No physical station</option>
                     <option v-for="station in physicalStations" :key="station.id" :value="station.id">
@@ -2250,7 +2540,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     :id="`object-atmosphere-${selectedObject.id}`"
                     aria-label="Atmosphere"
                     v-model="objectDraft.atmosphere"
-                    @change="saveNativeObjectField('atmosphere')"
                   >
                     <option value="">Not set</option>
                     <option
@@ -2268,7 +2557,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     :id="`object-port-class-${selectedObject.id}`"
                     aria-label="Port class"
                     v-model="objectDraft.portClass"
-                    @change="saveNativeObjectField('portClass')"
                   >
                     <option value="">Not set</option>
                     <option
@@ -2288,7 +2576,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                       :aria-label="field.name"
                       v-model="objectDraft.customFieldValues[field.id]"
                       rows="3"
-                      @change="saveCustomFieldValue(field.id)"
                     />
                   </label>
                   <label v-else-if="field.type === 'number'" :for="`custom-field-value-${field.id}`">
@@ -2299,7 +2586,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                       v-model="objectDraft.customFieldValues[field.id]"
                       type="number"
                       step="any"
-                      @change="saveCustomFieldValue(field.id)"
                     >
                   </label>
                   <label v-else-if="field.type === 'boolean'" :for="`custom-field-value-${field.id}`">
@@ -2308,7 +2594,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                       :id="`custom-field-value-${field.id}`"
                       :aria-label="field.name"
                       v-model="objectDraft.customFieldValues[field.id]"
-                      @change="saveCustomFieldValue(field.id)"
                     >
                       <option value="">Not set</option>
                       <option value="true">Yes</option>
@@ -2321,7 +2606,6 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                       :id="`custom-field-value-${field.id}`"
                       :aria-label="field.name"
                       v-model="objectDraft.customFieldValues[field.id]"
-                      @change="saveCustomFieldValue(field.id)"
                     >
                       <option value="">Not set</option>
                       <option v-for="option in field.options" :key="option" :value="option">
@@ -2330,16 +2614,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     </select>
                   </label>
                 </template>
-                <div v-if="selectedObject.placement.kind === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
+                <div v-if="objectDraft.placement === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
                   <label :for="`object-x-${selectedObject.id}`">
                     Schematic X
                     <input
                       :id="`object-x-${selectedObject.id}`"
                       type="number"
-                      step="0.01"
+                      step="any"
                       v-model="objectDraft.x"
                       required
-                      @change="savePosition('x')"
                     >
                   </label>
                   <label :for="`object-y-${selectedObject.id}`">
@@ -2347,10 +2630,9 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     <input
                       :id="`object-y-${selectedObject.id}`"
                       type="number"
-                      step="0.01"
+                      step="any"
                       v-model="objectDraft.y"
                       required
-                      @change="savePosition('y')"
                     >
                   </label>
                 </div>
@@ -2360,12 +2642,31 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     :id="`object-description-${selectedObject.id}`"
                     rows="5"
                     v-model="objectDraft.description"
-                    @change="saveObjectField('description')"
                   />
                 </label>
-              </div>
-              <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
+                </fieldset>
+                <p v-if="editorError" class="feedback mt-3 mb-0 error-text" role="alert">{{ editorError }}</p>
+                <div class="flex flex-wrap gap-2 mt-4">
+                  <button
+                    v-if="!objectEditing"
+                    class="primary-button"
+                    type="button"
+                    aria-label="Edit map object"
+                    :disabled="saveState === 'saving'"
+                    @click="beginObjectEdit"
+                  >
+                    Edit
+                  </button>
+                  <button v-else class="primary-button" type="submit" aria-label="Save map object" :disabled="saveState === 'saving'">
+                    Save
+                  </button>
+                  <button v-if="objectEditing" class="quiet-button" type="button" aria-label="Cancel map object edits" @click="cancelObjectEdit">
+                    Cancel
+                  </button>
+                </div>
+              </form>
               <button
+                v-if="!objectEditing"
                 class="quiet-button mt-4"
                 type="button"
                 :aria-label="`Delete ${selectedObject.name}`"
@@ -2380,7 +2681,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <template v-else-if="selectedOrbit">
               <span class="section-kicker">SYSTEM STRUCTURE / SELECTED</span>
               <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
-              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ selectedOrbit?.order }}</h2>
+              <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ orbitEditing ? orbitOrderDraft : selectedOrbit.order }}</h2>
               <p class="inspector-intro mb-[1em]">
                 Hosted by {{ selectedSystem.objects.find(object => object.id === selectedOrbit?.hostId)?.name }}.
                 Orbit rings show structure, not measured distance.
@@ -2389,7 +2690,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 <span>Objects placed</span>
                 <strong>{{ selectedSystem.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === selectedOrbit?.id).length }}</strong>
               </div>
-              <div class="orbit-actions flex gap-2" aria-label="Reorder Orbit">
+              <div v-if="orbitEditing" class="orbit-actions flex gap-2" aria-label="Reorder Orbit">
                 <button
                   class="secondary-button"
                   type="button"
@@ -2410,7 +2711,26 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 </button>
               </div>
               <p v-if="editorError" class="feedback m-0 error-text" role="alert">{{ editorError }}</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-if="!orbitEditing"
+                  class="primary-button"
+                  type="button"
+                  aria-label="Edit Orbit"
+                  :disabled="saveState === 'saving'"
+                  @click="beginOrbitEdit"
+                >
+                  Edit
+                </button>
+                <button v-else class="primary-button" type="button" aria-label="Save Orbit" :disabled="saveState === 'saving'" @click="saveOrbitEdit">
+                  Save
+                </button>
+                <button v-if="orbitEditing" class="quiet-button" type="button" aria-label="Cancel Orbit edits" @click="cancelOrbitEdit">
+                  Cancel
+                </button>
+              </div>
               <button
+                v-if="!orbitEditing"
                 class="quiet-button mt-4"
                 type="button"
                 :aria-label="selectedOrbitDeleteLabel"
@@ -2426,17 +2746,33 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <span class="section-kicker">CHART DETAILS</span>
               <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ selectedSystem.name }}</h2>
               <p class="inspector-intro mb-[1em]">
-                Choose a map object or Orbit to inspect it. Chart names remain editable here.
+                Choose a map object or Orbit to inspect it, or edit the chart names.
               </p>
               <form class="field-stack mt-4 grid gap-3" @submit.prevent="submitNames">
-                <label for="detail-cluster-name">Jump Cluster</label>
-                <input id="detail-cluster-name" v-model="clusterName" maxlength="80" required>
-                <label for="detail-system-name">Star system</label>
-                <input id="detail-system-name" v-model="systemName" maxlength="80" required>
+                <fieldset class="m-0 grid gap-3 border-0 p-0" :disabled="!chartNamesEditing || saveState === 'saving'">
+                  <label for="detail-cluster-name">Jump Cluster</label>
+                  <input id="detail-cluster-name" v-model="clusterName" maxlength="80" required>
+                  <label for="detail-system-name">Star system</label>
+                  <input id="detail-system-name" v-model="systemName" maxlength="80" required>
+                </fieldset>
                 <p v-if="formError" class="feedback m-0 error-text" role="alert">{{ formError }}</p>
-                <button class="primary-button mt-[0.65rem]" type="submit" :disabled="saveState === 'saving'">
-                  Save chart names
-                </button>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-if="!chartNamesEditing"
+                    class="primary-button"
+                    type="button"
+                    aria-label="Edit chart names"
+                    @click="beginChartNamesEdit"
+                  >
+                    Edit
+                  </button>
+                  <button v-else class="primary-button" type="submit" aria-label="Save chart names" :disabled="saveState === 'saving'">
+                    Save
+                  </button>
+                  <button v-if="chartNamesEditing" class="quiet-button" type="button" @click="cancelChartNamesEdit">
+                    Cancel
+                  </button>
+                </div>
               </form>
               <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Map objects</span>
@@ -2546,7 +2882,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   v-model="fieldDefinitionNameDraft"
                   aria-label="Custom field name"
                   maxlength="80"
-                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                  :disabled="!fieldDefinitionEditing || saveState === 'saving' || pendingFieldDefinitionChange !== null"
                 >
               </label>
 
@@ -2560,7 +2896,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   v-model="fieldDefinitionOptionsDraft"
                   :aria-label="`${selectedFieldDefinition.name} choices`"
                   rows="4"
-                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                  :disabled="!fieldDefinitionEditing || saveState === 'saving' || pendingFieldDefinitionChange !== null"
                 />
               </label>
 
@@ -2602,6 +2938,17 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 
               <div class="field-definition-actions">
                 <button
+                  v-if="!fieldDefinitionEditing"
+                  class="primary-button"
+                  type="button"
+                  :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
+                  aria-label="Edit field definition"
+                  @click="beginFieldDefinitionEdit"
+                >
+                  Edit
+                </button>
+                <button
+                  v-else
                   class="primary-button"
                   type="button"
                   :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"
@@ -2610,7 +2957,16 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   Save changes
                 </button>
                 <button
-                  v-if="selectedFieldDefinition.kind === 'custom'"
+                  v-if="fieldDefinitionEditing"
+                  class="quiet-button"
+                  type="button"
+                  :disabled="pendingFieldDefinitionChange !== null"
+                  @click="cancelFieldDefinitionEdit"
+                >
+                  Cancel
+                </button>
+                <button
+                  v-if="selectedFieldDefinition.kind === 'custom' && fieldDefinitionEditing"
                   class="quiet-button"
                   type="button"
                   :disabled="saveState === 'saving' || pendingFieldDefinitionChange !== null"

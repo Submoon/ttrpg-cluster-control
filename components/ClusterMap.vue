@@ -108,9 +108,9 @@ function routeLabel(route: JumpRoute, jumpPoints: Map<string, JumpPointReference
   const origin = `${from.point.name} (${from.system.name})`
   if (route.toPointId !== null) {
     const to = requiredJumpPoint(jumpPoints, route.toPointId)
-    return `Select ${route.name} route from ${origin} to ${to.point.name} (${to.system.name})`
+    return `Select Jump Level ${route.jumpLevel} route from ${origin} to ${to.point.name} (${to.system.name})`
   }
-  return `Select ${route.name} route from ${origin} to ${route.unresolvedExit}, unresolved exit`
+  return `Select Jump Level ${route.jumpLevel} route from ${origin} to unknown destination: ${route.unresolvedExit}`
 }
 
 function zoomBy(factor: number): void {
@@ -190,7 +190,8 @@ function render(): void {
   routeMarks.each(function (route, index) {
     const geometry = routeGeometry(route, index, jumpPoints)
     const mark = select(this)
-    const labelWidth = Math.max(78, route.name.length * 7 + 18)
+    const label = `Jump-${route.jumpLevel}`
+    const labelWidth = Math.max(78, label.length * 7 + 18)
 
     mark.append('path')
       .attr('class', 'cluster-route-line')
@@ -206,7 +207,7 @@ function render(): void {
       .attr('class', 'cluster-route-label')
       .attr('x', geometry.labelX)
       .attr('y', geometry.labelY + 2)
-      .text(route.name)
+      .text(label)
 
     if (route.toPointId === null && geometry.exitPoint) {
       mark.append('circle')
@@ -219,14 +220,15 @@ function render(): void {
         .attr('x', geometry.exitPoint.x - 10)
         .attr('y', geometry.exitPoint.y + 24)
         .attr('text-anchor', 'end')
-        .text(route.unresolvedExit)
+        .text(`Unknown: ${route.unresolvedExit}`)
     }
   })
   function updateRouteGeometry(): void {
     routeMarks.each(function (route, index) {
       const geometry = routeGeometry(route, index, jumpPoints, liveSystemPositions)
       const mark = select(this)
-      const labelWidth = Math.max(78, route.name.length * 7 + 18)
+      const label = `Jump-${route.jumpLevel}`
+      const labelWidth = Math.max(78, label.length * 7 + 18)
       mark.select('.cluster-route-line').attr('d', geometry.path)
       mark.select('.cluster-route-label-bg')
         .attr('x', geometry.labelX - labelWidth / 2)

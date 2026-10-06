@@ -17,6 +17,10 @@ _Avoid_: Jump Station (when referring to a logical endpoint)
 **Jump Route**:
 A connection between logical Jump Points in a Jump Cluster; its far end may be unresolved beyond the known cluster.
 
+**Jump level**:
+A positive integer used to identify a Jump Route; standard levels are 1 through 9, with higher positive levels available for custom classifications.
+_Avoid_: Sequential route number, Jump-01
+
 **Orbit**:
 A schematic location around a host object that can contain zero or more map objects; nested Orbits are hosted by objects within other Orbits.
 

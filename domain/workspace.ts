@@ -63,9 +63,15 @@ export interface Orbit {
 
 export type JumpRoute = {
   id: string
-  name: string
+  name?: string
+  jumpLevel: number
   fromPointId: string
 } & (
+  | { toPointId: string; unresolvedExit?: never }
+  | { toPointId: null; unresolvedExit: string }
+)
+
+type JumpRouteDetails = Pick<JumpRoute, 'jumpLevel' | 'fromPointId'> & (
   | { toPointId: string; unresolvedExit?: never }
   | { toPointId: null; unresolvedExit: string }
 )
@@ -586,7 +592,7 @@ export function planMapEntityDeletion(
   } else if (target.kind === 'route') {
     const route = workspace.cluster.routes.find(candidate => candidate.id === target.routeId)
     if (!route) throw new Error('The selected Jump Route no longer exists.')
-    entityLabel = `Jump Route "${route.name}"`
+    entityLabel = `Jump Route (Level ${route.jumpLevel})`
     removedRouteIds.add(route.id)
   } else if (target.kind === 'object') {
     const selectedSystem = requireSystem()
@@ -625,7 +631,7 @@ export function planMapEntityDeletion(
     if (removedRouteIds.has(route.id)) continue
     if (removedObjectIds.has(route.fromPointId) || (route.toPointId && removedObjectIds.has(route.toPointId))) {
       removedRouteIds.add(route.id)
-      addEffect(`Jump Route "${route.name}"`)
+      addEffect(`Jump Route (Level ${route.jumpLevel})`)
     }
   }
 
@@ -676,11 +682,49 @@ export function jumpPointsInCluster(cluster: JumpCluster): JumpPointReference[] 
 
 export function createJumpRoute(
   cluster: JumpCluster,
-  name: string,
+  jumpLevel: number,
   fromPointId: string,
   toPointId: string | null,
   unresolvedExit = 'Uncharted exit',
 ): JumpRoute {
+  return {
+    id: crypto.randomUUID(),
+    ...jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit),
+  }
+}
+
+export function updateJumpRoute(
+  cluster: JumpCluster,
+  routeId: string,
+  jumpLevel: number,
+  fromPointId: string,
+  toPointId: string | null,
+  unresolvedExit = 'Uncharted exit',
+): JumpRoute {
+  const route = cluster.routes.find(candidate => candidate.id === routeId)
+  if (!route) {
+    throw new Error('The selected Jump Route no longer exists.')
+  }
+
+  const details = jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit)
+  return {
+    id: route.id,
+    ...(route.name !== undefined ? { name: route.name } : {}),
+    ...details,
+  }
+}
+
+function jumpRouteDetails(
+  cluster: JumpCluster,
+  jumpLevel: number,
+  fromPointId: string,
+  toPointId: string | null,
+  unresolvedExit: string,
+): JumpRouteDetails {
+  if (!isJumpLevel(jumpLevel)) {
+    throw new Error('Jump level must be a positive integer.')
+  }
+
   const jumpPoints = jumpPointsInCluster(cluster)
   if (!jumpPoints.some(({ point }) => point.id === fromPointId)) {
     throw new Error('Choose an existing Jump Point as the route origin.')
@@ -692,19 +736,15 @@ export function createJumpRoute(
     throw new Error('Choose a different existing Jump Point as the route destination.')
   }
 
-  const route = {
-    id: crypto.randomUUID(),
-    name: validName(name, 'Jump Route name'),
-    fromPointId,
-  }
   if (toPointId === null) {
     return {
-      ...route,
+      jumpLevel,
+      fromPointId,
       toPointId,
       unresolvedExit: validText(unresolvedExit, 'Unresolved exit', maxNameLength),
     }
   }
-  return { ...route, toPointId }
+  return { jumpLevel, fromPointId, toPointId }
 }
 
 export function renameLocalWorkspace(
@@ -1111,10 +1151,13 @@ function isJumpRoute(value: unknown): value is JumpRoute {
     !isRecord(value)
     || typeof value.id !== 'string'
     || !value.id
-    || typeof value.name !== 'string'
-    || !value.name.trim()
-    || value.name !== value.name.trim()
-    || value.name.length > maxNameLength
+    || (value.name !== undefined && (
+      typeof value.name !== 'string'
+      || !value.name.trim()
+      || value.name !== value.name.trim()
+      || value.name.length > maxNameLength
+    ))
+    || !isJumpLevel(value.jumpLevel)
     || typeof value.fromPointId !== 'string'
     || !value.fromPointId
   ) {
@@ -1132,6 +1175,12 @@ function isJumpRoute(value: unknown): value is JumpRoute {
     && !!value.unresolvedExit.trim()
     && value.unresolvedExit === value.unresolvedExit.trim()
     && value.unresolvedExit.length <= maxNameLength
+}
+
+function isJumpLevel(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value > 0
 }
 
 function isSystemStructureValid(system: StarSystem): boolean {
@@ -1323,19 +1372,36 @@ export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
   return isStoredLocalWorkspace(value) && value.objectFieldSettings !== undefined
 }
 
-export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
-  if (!isStoredLocalWorkspace(value)) {
-    return null
+function withDefaultJumpLevels(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.cluster) || !Array.isArray(value.cluster.routes)) {
+    return value
   }
 
   return {
     ...value,
-    layout: {
-      ...value.layout,
-      orbitRadii: value.layout.orbitRadii ?? {},
-      objectAngles: value.layout.objectAngles ?? {},
+    cluster: {
+      ...value.cluster,
+      routes: value.cluster.routes.map(route =>
+        isRecord(route) && route.jumpLevel === undefined ? { ...route, jumpLevel: 1 } : route,
+      ),
     },
-    objectFieldSettings: value.objectFieldSettings ?? defaultObjectFieldSettings(),
+  }
+}
+
+export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
+  const restored = withDefaultJumpLevels(value)
+  if (!isStoredLocalWorkspace(restored)) {
+    return null
+  }
+
+  return {
+    ...restored,
+    layout: {
+      ...restored.layout,
+      orbitRadii: restored.layout.orbitRadii ?? {},
+      objectAngles: restored.layout.objectAngles ?? {},
+    },
+    objectFieldSettings: restored.objectFieldSettings ?? defaultObjectFieldSettings(),
   }
 }
 
@@ -1471,7 +1537,7 @@ function workspaceEntityNames(workspace: LocalWorkspace): Map<string, string> {
     }
   }
   for (const route of workspace.cluster.routes) {
-    entities.set(route.id, `Jump Route "${route.name}"`)
+    entities.set(route.id, `Jump Route (Level ${route.jumpLevel})`)
   }
   for (const field of workspace.objectFieldSettings.customFields) {
     entities.set(field.id, `Custom field "${field.name}"`)
@@ -1525,13 +1591,14 @@ function remapImportedSystem(
 }
 
 export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
-  if (!isImportedMap(value)) {
+  const map = withDefaultJumpLevels(value)
+  if (!isImportedMap(map)) {
     throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
   }
 
-  const sourceSystems = value.type === 'cluster' ? value.cluster.systems : [value.system]
-  const sourceRoutes = value.type === 'cluster' ? value.cluster.routes : []
-  const sourceSettings = value.objectFieldSettings
+  const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
+  const sourceRoutes = map.type === 'cluster' ? map.cluster.routes : []
+  const sourceSettings = map.objectFieldSettings
   const existingNames = workspaceEntityNames(workspace)
   const sourceEntities = [
     ...sourceSystems.flatMap(system => [
@@ -1539,7 +1606,7 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
       ...system.objects.map(object => ({ id: object.id, entity: object.subtype, name: object.name })),
       ...system.orbits.map(orbit => ({ id: orbit.id, entity: 'Orbit', name: `Orbit ${orbit.order}` })),
     ]),
-    ...sourceRoutes.map(route => ({ id: route.id, entity: 'Jump Route', name: route.name })),
+    ...sourceRoutes.map(route => ({ id: route.id, entity: 'Jump Route', name: `Jump Level ${route.jumpLevel}` })),
     ...sourceSettings.customFields.map(field => ({ id: field.id, entity: 'Custom field', name: field.name })),
   ]
   const idCollisions = sourceEntities.flatMap(entity => {
@@ -1584,7 +1651,7 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
   }
 
   const summary: JsonImportSummary = {
-    type: value.type,
+    type: map.type,
     systems: sourceSystems.length,
     objects: sourceSystems.reduce((count, system) => count + system.objects.length, 0),
     orbits: sourceSystems.reduce((count, system) => count + system.orbits.length, 0),
@@ -1633,14 +1700,16 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     route.toPointId === null
       ? {
           id: ids.get(route.id)!,
-          name: route.name,
+          ...(route.name !== undefined ? { name: route.name } : {}),
+          jumpLevel: route.jumpLevel,
           fromPointId: ids.get(route.fromPointId)!,
           toPointId: null,
           unresolvedExit: route.unresolvedExit,
         }
       : {
           id: ids.get(route.id)!,
-          name: route.name,
+          ...(route.name !== undefined ? { name: route.name } : {}),
+          jumpLevel: route.jumpLevel,
           fromPointId: ids.get(route.fromPointId)!,
           toPointId: ids.get(route.toPointId)!,
         },
@@ -1651,21 +1720,21 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     objectAngles: { ...workspace.layout.objectAngles },
   }
   const addedSystemIds = importedSystems.map(system => system.id)
-  if (value.type === 'cluster') {
-    for (const [sourceId, position] of Object.entries(value.layout.systemPositions)) {
+  if (map.type === 'cluster') {
+    for (const [sourceId, position] of Object.entries(map.layout.systemPositions)) {
       layout.systemPositions[ids.get(sourceId)!] = position
     }
-    for (const [sourceId, radius] of Object.entries(value.layout.orbitRadii)) {
+    for (const [sourceId, radius] of Object.entries(map.layout.orbitRadii)) {
       layout.orbitRadii[ids.get(sourceId)!] = radius
     }
-    for (const [sourceId, angle] of Object.entries(value.layout.objectAngles)) {
+    for (const [sourceId, angle] of Object.entries(map.layout.objectAngles)) {
       layout.objectAngles[ids.get(sourceId)!] = angle
     }
   } else {
-    for (const [sourceId, radius] of Object.entries(value.layout.orbitRadii)) {
+    for (const [sourceId, radius] of Object.entries(map.layout.orbitRadii)) {
       layout.orbitRadii[ids.get(sourceId)!] = radius
     }
-    for (const [sourceId, angle] of Object.entries(value.layout.objectAngles)) {
+    for (const [sourceId, angle] of Object.entries(map.layout.objectAngles)) {
       layout.objectAngles[ids.get(sourceId)!] = angle
     }
     layout.systemPositions[addedSystemIds[0]] = initialClusterSystemPosition(

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { restoreLocalWorkspace } from '../domain/workspace'
 
 type WorldPoint = { x: number; y: number }
 type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
@@ -20,7 +21,8 @@ type ExportedSystem = {
 }
 type ExportedRoute = {
   id: string
-  name: string
+  name?: string
+  jumpLevel?: number
   fromPointId: string
   toPointId: string | null
   unresolvedExit?: string
@@ -216,6 +218,18 @@ async function openFieldDefinitionDialog(
 ): Promise<import('@playwright/test').Locator> {
   await page.getByRole('button', { name: 'Open field definitions' }).click()
   return page.getByRole('dialog', { name: 'Field definitions' })
+}
+
+async function editFieldDefinition(dialog: import('@playwright/test').Locator): Promise<void> {
+  await dialog.getByRole('button', { name: 'Edit field definition' }).click()
+}
+
+async function editMapObject(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Edit map object' }).click()
+}
+
+async function saveMapObject(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Save map object' }).click()
 }
 
 async function addCustomFieldThroughDialog(
@@ -1157,10 +1171,12 @@ test('side panels animate and Delete removes the selected object', async ({ page
 
   const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })
   await primaryStar.click()
-  const nameInput = page.getByLabel('Name')
+  await editMapObject(page)
+  const nameInput = page.getByLabel('Name', { exact: true })
   await nameInput.focus()
   await page.keyboard.press('Delete')
   await expect(primaryStar).toBeVisible()
+  await page.getByRole('button', { name: 'Cancel map object edits' }).click()
   await primaryStar.click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await primaryStar.click()
@@ -1239,8 +1255,9 @@ test('the system map expands beyond its initial bounds and exports the full layo
 
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
   await dragHtmlElementToWorldPoint(page, planetButton, map, { x: 1400, y: 700 })
-  await page.getByLabel('Name').fill('Far Planet')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Far Planet')
+  await saveMapObject(page)
   const planet = map.getByRole('button', { name: /Far Planet/ })
   await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), { x: 1750, y: 800 })
   const farPosition = await planet.evaluate((element) => {
@@ -1375,8 +1392,9 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
 
   const planet = map.getByRole('button', { name: /Select PL-01, Iria/ })
   await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), {
@@ -1398,8 +1416,9 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '571')
 
   await addCatalogueObject(page, 'hazard')
-  await page.getByLabel('Name').fill('Glass Wake')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Glass Wake')
+  await saveMapObject(page)
   const hazard = map.getByRole('button', { name: /Glass Wake/ })
   await dragToWorldPoint(page, map, hazard.locator('.object-hit-target'), { x: 230, y: 180 })
   const hazardTransform = await hazard.getAttribute('transform')
@@ -1459,26 +1478,27 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Departure')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Departure')
+  await saveMapObject(page)
 
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Arrival')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Arrival')
+  await saveMapObject(page)
 
   await page.getByRole('button', { name: 'Cluster map' }).click()
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-01')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Departure (Vesper)' })
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Arrival (New System 2)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
 
-  const routeMark = clusterMap.getByRole('button', { name: /Jump-01/ })
+  const routeMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Departure.*Arrival/ })
   const routeLine = routeMark.locator('.cluster-route-line')
   const routeBefore = await routeLine.getAttribute('d')
   const sourceNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
@@ -1557,8 +1577,9 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'moon')
@@ -1685,25 +1706,28 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 2 around Primary Star/ }).click()
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('button', { name: 'Move orbit up' }).click()
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
   await expect(inspector.getByRole('heading', { name: 'Orbit 1' })).toBeVisible()
 
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Description').fill('A chlorine cloud deck.')
-  await page.getByLabel('Description').press('Tab')
+  await saveMapObject(page)
   await expect(inspector.getByRole('heading', { name: 'Iria' })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ })).toBeVisible()
 
   const key = page.getByLabel('Location key')
   const originalKey = await key.inputValue()
+  await editMapObject(page)
   await key.fill('A')
-  await key.press('Tab')
+  await saveMapObject(page)
   await expect(page.getByRole('alert')).toContainText('already used')
   await expect(key).toHaveValue('A')
   await key.fill(originalKey)
-  await key.press('Tab')
+  await saveMapObject(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
@@ -1712,9 +1736,10 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'moon')
-  await page.getByLabel('Name').fill('Nix')
-  await expect(page.getByLabel('Name')).toHaveValue('Nix')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Nix')
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Nix')
+  await saveMapObject(page)
   await expect(inspector.getByRole('heading', { name: 'Nix' })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 1 object/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Nix/ })).toBeVisible()
@@ -1745,14 +1770,12 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
     await expect(inspector.getByRole('heading', { name: generatedNames.get(subtype)! })).toBeVisible()
   }
 
+  await editMapObject(page)
   await page.getByLabel('Type label').fill('Relay Beacon')
-  await page.getByLabel('Type label').press('Tab')
-  await page.getByLabel('Name').fill('Relay Beacon Kestrel')
-  await page.getByLabel('Name').press('Tab')
+  await page.getByLabel('Name', { exact: true }).fill('Relay Beacon Kestrel')
   await page.getByLabel('Schematic X').fill('0.75')
-  await page.getByLabel('Schematic X').press('Tab')
   await page.getByLabel('Schematic Y').fill('0.25')
-  await page.getByLabel('Schematic Y').press('Tab')
+  await saveMapObject(page)
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await expect(inspector.getByRole('heading', { name: 'Relay Beacon Kestrel' })).toBeVisible()
   await expect(page.getByText('Saved on this device')).toBeVisible()
@@ -1767,6 +1790,66 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
 })
 
+test('older saved Jump Routes restore at level 1 and reject invalid levels', () => {
+  const savedWorkspace = {
+    id: 'workspace',
+    cluster: {
+      id: 'cluster',
+      name: 'Kestrel Reach',
+      systems: [{
+        id: 'vesper',
+        name: 'Vesper',
+        objects: [
+          {
+            id: 'origin',
+            family: 'JumpPoint',
+            subtype: 'jump-point',
+            locationKey: 'JP.1',
+            name: 'Vesper Exit',
+            description: '',
+            placement: { kind: 'system', x: 0.5, y: 0.5 },
+          },
+          {
+            id: 'destination',
+            family: 'JumpPoint',
+            subtype: 'jump-point',
+            locationKey: 'JP.2',
+            name: 'Harrow Entry',
+            description: '',
+            placement: { kind: 'system', x: 0.7, y: 0.5 },
+          },
+        ],
+        orbits: [],
+      }],
+      routes: [{
+        id: 'route',
+        name: 'Jump-01',
+        fromPointId: 'origin',
+        toPointId: 'destination',
+      }],
+    },
+    layout: { systemPositions: { vesper: { x: 0.5, y: 0.5 } } },
+  }
+  const restored = restoreLocalWorkspace(savedWorkspace)
+
+  expect(restored?.cluster.routes).toMatchObject([{
+    id: 'route',
+    jumpLevel: 1,
+    fromPointId: 'origin',
+    toPointId: 'destination',
+  }])
+
+  for (const jumpLevel of [0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    expect(restoreLocalWorkspace({
+      ...savedWorkspace,
+      cluster: {
+        ...savedWorkspace.cluster,
+        routes: savedWorkspace.cluster.routes.map(route => ({ ...route, jumpLevel })),
+      },
+    })).toBeNull()
+  }
+})
+
 test('the Warden can connect Jump Points across a cluster and record an unresolved exit', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -1776,19 +1859,23 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
 
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Exit')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
+  await saveMapObject(page)
 
   await addCatalogueObject(page, 'station')
-  await page.getByLabel('Name').fill('Vesper Gate')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Gate')
+  await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
+  await editMapObject(page)
   const station = page.getByLabel('Physical Jump Station')
   const stationOption = page.getByRole('option', { name: /Vesper Gate/ })
   const stationId = await stationOption.getAttribute('value')
   expect(stationId).toBeTruthy()
   await station.selectOption(stationId!)
+  await saveMapObject(page)
   await expect(station).toHaveValue(stationId!)
   await expect(page.getByText('Saved on this device')).toBeVisible()
 
@@ -1797,40 +1884,68 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Harrow Entry')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Harrow Entry')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('3')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01.*Vesper Exit.*Harrow Entry/ })).toBeVisible()
+  const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const knownRoute = clusterMap.getByRole('button', {
+    name: /Jump Level 3.*Vesper Exit.*Harrow Entry.*New System 2/,
+  })
+  await expect(knownRoute).toBeVisible()
+  await knownRoute.click()
+  await expect(routeInspector.getByRole('heading', { name: 'Jump Level 3', level: 2 })).toBeVisible()
+  await expect(routeInspector.locator('.orbit-facts')).toContainText('New System 2')
+  await routeInspector.getByRole('button', { name: 'Edit Jump Route' }).click()
+  await expect(routeInspector.getByText('Destination system: New System 2')).toBeVisible()
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
+  await routeInspector.getByRole('button', { name: 'Save Jump Route' }).click()
+  const customLevelRoute = clusterMap.getByRole('button', {
+    name: /Jump Level 12.*Vesper Exit.*Harrow Entry.*New System 2/,
+  })
+  await expect(customLevelRoute).toBeVisible()
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
-  await page.getByLabel('Name').fill('Vesper Arrival')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01.*Vesper Arrival.*Harrow Entry/ })).toBeVisible()
+  await expect(clusterMap.getByRole('button', {
+    name: /Jump Level 12.*Vesper Arrival.*Harrow Entry.*New System 2/,
+  })).toBeVisible()
 
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-02')
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('15')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Arrival (Vesper)' })
   await page.getByLabel('Route destination').selectOption('external')
-  await page.getByLabel('Unresolved exit label').fill('Unknown Rim')
+  await page.getByLabel('Unknown destination label').fill('Unknown Rim')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-02.*Vesper Arrival.*Unknown Rim.*unresolved exit/ })).toBeVisible()
+  const unknownRoute = clusterMap.getByRole('button', {
+    name: /Jump Level 15.*Vesper Arrival.*unknown destination.*Unknown Rim/i,
+  })
+  await expect(unknownRoute).toBeVisible()
+  await expect(routeInspector.getByRole('heading', { name: 'Jump Level 15', level: 2 })).toBeVisible()
+  await expect(routeInspector.getByText('Unknown destination: Unknown Rim', { exact: true })).toBeVisible()
   await expect(clusterMap.getByRole('button', { name: /Open .* system map/ })).toHaveCount(2)
   await expect(page.getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const restoredMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await expect(restoredMap.getByRole('button', { name: /Jump-01.*Vesper Arrival.*Harrow Entry/ })).toBeVisible()
-  await expect(restoredMap.getByRole('button', { name: /Jump-02.*Vesper Arrival.*Unknown Rim.*unresolved exit/ })).toBeVisible()
+  await expect(restoredMap.getByRole('button', {
+    name: /Jump Level 12.*Vesper Arrival.*Harrow Entry.*New System 2/,
+  })).toBeVisible()
+  await expect(restoredMap.getByRole('button', {
+    name: /Jump Level 15.*Vesper Arrival.*unknown destination.*Unknown Rim/i,
+  })).toBeVisible()
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
   await expect(page.getByLabel('Physical Jump Station')).toHaveValue(stationId!)
@@ -1875,15 +1990,16 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
 
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Exit')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
   await expect(page.getByRole('button', { name: 'Chart details' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  const route = clusterMap.getByRole('button', { name: /Jump-01.*Vesper Exit/ })
+  const route = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Exit/ })
   await expect(route).toBeVisible()
   await route.click()
   await expect(routeInspector.getByText('JUMP ROUTE / SELECTED')).toBeVisible()
@@ -1902,47 +2018,53 @@ test('the Warden can configure native and reusable custom object fields', async 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
 
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
 
   const fieldDialog = await openFieldDefinitionDialog(page)
   await fieldDialog.getByRole('button', { name: /Atmosphere/ }).click()
+  await editFieldDefinition(fieldDialog)
   await fieldDialog.getByLabel('Atmosphere choices').fill('Breathable\nThin\nChlorine')
   await fieldDialog.getByRole('button', { name: 'Save changes' }).click()
   await fieldDialog.getByRole('button', { name: /Port class/ }).click()
+  await editFieldDefinition(fieldDialog)
   await fieldDialog.getByLabel('Port class choices').fill('Class I\nClass II')
   await fieldDialog.getByRole('button', { name: 'Save changes' }).click()
   await fieldDialog.getByRole('button', { name: 'Close field definitions' }).click()
-  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Chlorine')
 
   await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
-  await page.getByLabel('Campaign notes').fill('Relay station under the ice.')
-  await page.getByLabel('Campaign notes').blur()
-
   await addCustomFieldThroughDialog(page, 'Threat level', 'number')
-  await page.getByLabel('Threat level').fill('4')
-  await page.getByLabel('Threat level').blur()
-
   await addCustomFieldThroughDialog(page, 'Hostile', 'boolean')
-  await page.getByLabel('Hostile').selectOption('true')
-
   await addCustomFieldThroughDialog(page, 'Signal class', 'single-select', 'Amber\nBlue')
   const signalClassDialog = await openFieldDefinitionDialog(page)
   await signalClassDialog.getByRole('button', { name: /Signal class/ }).click()
+  await editFieldDefinition(signalClassDialog)
   await signalClassDialog.getByLabel('Signal class choices').fill('Amber\nBlue\nRed')
   await signalClassDialog.getByRole('button', { name: 'Save changes' }).click()
   await signalClassDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await editMapObject(page)
+  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Chlorine')
+  await page.getByLabel('Campaign notes').fill('Relay station under the ice.')
+  await page.getByLabel('Threat level').fill('4')
+  await page.getByLabel('Hostile').selectOption('true')
   await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+  await saveMapObject(page)
 
   await addCatalogueObject(page, 'station')
   await expect(page.getByLabel('Port class', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Campaign notes')).toHaveValue('')
+  await editMapObject(page)
   await page.getByLabel('Port class', { exact: true }).selectOption('Class II')
+  await saveMapObject(page)
 
   await addCatalogueObject(page, 'moon')
   await expect(page.getByLabel('Atmosphere', { exact: true })).toBeVisible()
+  await editMapObject(page)
   await page.getByLabel('Atmosphere', { exact: true }).selectOption('Thin')
+  await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
@@ -1955,8 +2077,9 @@ test('the Warden can configure native and reusable custom object fields', async 
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'planet')
   await expect(page.getByLabel('Campaign notes')).toBeVisible()
+  await editMapObject(page)
   await page.getByLabel('Campaign notes').fill('Reusable in the next system.')
-  await page.getByLabel('Campaign notes').blur()
+  await saveMapObject(page)
 
   await page.reload()
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
@@ -2021,10 +2144,13 @@ test('field definition management previews destructive changes in a map-bound di
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await editMapObject(page)
   await page.getByLabel('Atmosphere', { exact: true }).selectOption('Breathable')
+  await saveMapObject(page)
 
   const openButton = page.getByRole('button', { name: 'Open field definitions' })
   const dialog = await openFieldDefinitionDialog(page)
@@ -2038,6 +2164,7 @@ test('field definition management previews destructive changes in a map-bound di
   const nativeDialog = await openFieldDefinitionDialog(page)
   await expect(nativeDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Iria')
   await expect(nativeDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Breathable')
+  await editFieldDefinition(nativeDialog)
   await nativeDialog.getByLabel('Atmosphere choices').fill('Thin\nVacuum')
   await expect(nativeDialog.getByRole('region', { name: 'Affected values preview' })).toContainText('Breathable')
   await nativeDialog.getByRole('button', { name: 'Save changes' }).click()
@@ -2060,11 +2187,14 @@ test('field definition management previews destructive changes in a map-bound di
   await fieldDialog.getByRole('button', { name: 'Add custom field', exact: true }).click()
   await fieldDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
+  await editMapObject(page)
   await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+  await saveMapObject(page)
   const editDialog = await openFieldDefinitionDialog(page)
   await editDialog.getByRole('button', { name: /Signal class/ }).click()
   await expect(editDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Iria')
   await expect(editDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Red')
+  await editFieldDefinition(editDialog)
   await editDialog.getByLabel('Custom field name').fill('Signal designation')
   await editDialog.getByLabel('Signal class choices').fill('Amber')
   await expect(editDialog.getByRole('region', { name: 'Affected values preview' })).toContainText('Iria')
@@ -2087,7 +2217,9 @@ test('field definition management previews destructive changes in a map-bound di
   await expect(editDialog.getByLabel('Signal designation choices')).toHaveValue('Amber')
   await editDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
+  await editMapObject(page)
   await page.getByLabel('Signal designation', { exact: true }).selectOption('Amber')
+  await saveMapObject(page)
   const updatedExport = await downloadJson(page, 'Export star system JSON')
   expect(updatedExport.objectFieldSettings.customFields).toContainEqual(
     expect.objectContaining({
@@ -2107,6 +2239,7 @@ test('field definition management previews destructive changes in a map-bound di
   const deleteDialog = await openFieldDefinitionDialog(page)
   await deleteDialog.getByRole('button', { name: /Signal designation/ }).click()
   await expect(deleteDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Amber')
+  await editFieldDefinition(deleteDialog)
   await deleteDialog.getByRole('button', { name: 'Delete field definition' }).click()
   const deleteConfirmation = deleteDialog.getByRole('region', { name: 'Field change confirmation' })
   await expect(deleteConfirmation).toContainText('Iria')
@@ -2143,20 +2276,23 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
 
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Exit')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
   await addCatalogueObject(page, 'moon')
-  await page.getByLabel('Name').fill('Nix')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Nix')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
   let orbitDeletionPreview = ''
   page.once('dialog', async (dialog) => {
@@ -2172,24 +2308,25 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Harrow Entry')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Harrow Entry')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('1')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Harrow Entry/ })).toBeVisible()
 
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-02')
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('2')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-02/ })).toBeVisible()
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 2.*Harrow Entry/ })).toBeVisible()
   await page.getByRole('navigation', { name: 'Jump Routes' })
-    .getByRole('button', { name: 'Select Jump-02 route' })
+    .getByRole('button', { name: /Select Jump Level 2/ })
     .click()
   let directRouteDeletionRequested = false
   let directRouteDeletionPreview = ''
@@ -2199,11 +2336,11 @@ test('the Warden can review and safely confirm dependent map deletions', async (
     await dialog.accept()
   }
   page.on('dialog', routeDeletionDialog)
-  await page.getByRole('button', { name: 'Delete Jump Route Jump-02' }).click()
+  await page.getByRole('button', { name: 'Delete Jump Route (Level 2)' }).click()
   await page.off('dialog', routeDeletionDialog)
   expect(directRouteDeletionRequested).toBe(true)
-  expect(directRouteDeletionPreview).toContain('Jump-02')
-  await expect(clusterMap.getByRole('button', { name: /Jump-02/ })).toHaveCount(0)
+  expect(directRouteDeletionPreview).toContain('Level 2')
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 2/ })).toHaveCount(0)
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
@@ -2217,18 +2354,18 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   expect(deletionPreview).toContain('Vesper Exit')
   expect(deletionPreview).toContain('Orbit 1 around Vesper Exit')
   expect(deletionPreview).toContain('Nix')
-  expect(deletionPreview).toContain('Jump-01')
+  expect(deletionPreview).toContain('Level 1')
   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toBeVisible()
   await page.getByRole('button', { name: 'Cluster map' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 1/ })).toBeVisible()
 
   await page.reload()
   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await expect(restoredClusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+  await expect(restoredClusterMap.getByRole('button', { name: /Jump Level 1/ })).toBeVisible()
 
   await restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
@@ -2241,13 +2378,13 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const updatedClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await expect(updatedClusterMap.getByRole('button', { name: /Jump-01/ })).toHaveCount(0)
+  await expect(updatedClusterMap.getByRole('button', { name: /Jump Level 1/ })).toHaveCount(0)
 
   await page.reload()
   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const reloadedClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await expect(reloadedClusterMap.getByRole('button', { name: /Jump-01/ })).toHaveCount(0)
+  await expect(reloadedClusterMap.getByRole('button', { name: /Jump Level 1/ })).toHaveCount(0)
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
   page.once('dialog', async (dialog) => {
     deletionPreview = dialog.message()
@@ -2260,16 +2397,20 @@ test('the Warden can review and safely confirm dependent map deletions', async (
 
   await reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await addCatalogueObject(page, 'station')
-  await page.getByLabel('Name').fill('Vesper Gate')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Gate')
+  await saveMapObject(page)
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Arrival')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
+  await editMapObject(page)
   const physicalStation = page.getByLabel('Physical Jump Station')
   const stationId = await page.getByRole('option', { name: /Vesper Gate/ }).getAttribute('value')
   expect(stationId).toBeTruthy()
   await physicalStation.selectOption(stationId!)
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Gate/ }).click()
   page.once('dialog', async (dialog) => {
     deletionPreview = dialog.message()
@@ -2304,27 +2445,30 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Exit')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
+  await saveMapObject(page)
 
   await page.getByRole('button', { name: 'Cluster map' }).click()
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Harrow Entry')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Harrow Entry')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
 
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-01')
+  await page.getByRole('spinbutton', { name: 'Jump level' }).fill('8')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  const createdRoute = clusterMap.getByRole('button', { name: /Jump-01/ })
+  const createdRoute = clusterMap.getByRole('button', { name: /Jump Level 8.*Harrow Entry/ })
   await expect(createdRoute).toBeVisible()
   await expect(createdRoute).toHaveClass(/is-selected/)
+  await expect(createdRoute.locator('.cluster-route-label')).toHaveText('Jump-8')
   const clusterMapText = await clusterMap.locator('text').allTextContents()
   expect(clusterMapText).not.toContain('Kestrel Reach')
   expect(clusterMapText).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
@@ -2342,7 +2486,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterSvgInfo.contentTransform).toBeNull()
   expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
   expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
-  expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-01']))
+  expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-8']))
   expect(clusterSvgInfo.texts).not.toContain('Kestrel Reach')
   expect(clusterSvgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
   expect(clusterSvgInfo.texts).not.toContain('2 SYSTEMS / 1 ROUTES')
@@ -2363,6 +2507,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   })
   expect(clusterExport.cluster?.systems).toHaveLength(2)
   expect(clusterExport.cluster?.routes).toHaveLength(1)
+  expect(clusterExport.cluster?.routes[0]?.jumpLevel).toBe(8)
   expect(Object.keys(clusterExport.layout.systemPositions ?? {}).sort())
     .toEqual(clusterExport.cluster!.systems.map(system => system.id).sort())
   expect(clusterExport.layout).not.toHaveProperty('zoom')
@@ -2377,11 +2522,11 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
-  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Campaign notes').fill('A local secret.')
-  await page.getByLabel('Campaign notes').press('Tab')
+  await saveMapObject(page)
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
 
   const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
   await dragToWorldPoint(page, systemMap, systemMap.getByRole('button', { name: /Iria/ }).locator('.object-hit-target'), {
@@ -2467,6 +2612,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const renamedSystemName = 'W'.repeat(80)
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details' }).click()
+  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
   await inspector.getByLabel('Star system').fill(renamedSystemName)
   await inspector.getByRole('button', { name: 'Save chart names' }).click()
   await expect(page.getByRole('group', { name: `${renamedSystemName} star system map` })).toBeVisible()
@@ -2592,6 +2738,7 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
         {
           id: 'incoming-exit',
           name: 'Unknown route',
+          jumpLevel: 12,
           fromPointId: 'incoming-point-beta',
           toPointId: null,
           unresolvedExit: 'Uncharted exit',
@@ -2649,7 +2796,13 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   const betaNode = systemList.getByRole('button', { name: 'Open Far Vesper system map' })
   await expect(alphaNode).toBeVisible()
   await expect(betaNode).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Jump Routes' }).getByRole('button', { name: /Known route/ })).toBeVisible()
+  const importedRoutes = page.getByRole('navigation', { name: 'Jump Routes' })
+  await expect(importedRoutes.getByRole('button', {
+    name: /Jump Level 1.*Alpha Gate.*Beta Gate.*Far Vesper/,
+  })).toBeVisible()
+  await expect(importedRoutes.getByRole('button', {
+    name: /Jump Level 12.*Beta Gate.*Unknown destination.*Uncharted exit/,
+  })).toBeVisible()
   await betaNode.click()
   await expect(page.getByRole('heading', { name: 'Far Vesper', level: 1 })).toBeVisible()
 
@@ -2672,10 +2825,12 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   expect(importedPlanet.customFieldValues).toEqual({ [importedField.id]: 'The key is hidden.' })
   expect(importedField.id).not.toBe('incoming-field')
   expect(firstImport.cluster!.routes.find(route => route.name === 'Known route')).toMatchObject({
+    jumpLevel: 1,
     fromPointId: importedPoint.id,
     toPointId: importedBetaPoint.id,
   })
   expect(firstImport.cluster!.routes.find(route => route.name === 'Unknown route')).toMatchObject({
+    jumpLevel: 12,
     fromPointId: importedBetaPoint.id,
     toPointId: null,
     unresolvedExit: 'Uncharted exit',
@@ -2749,6 +2904,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details' }).click()
+  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
   await inspector.getByLabel('Jump Cluster').fill(clusterName)
   await inspector.getByLabel('Star system').fill(systemName)
   await inspector.getByRole('button', { name: 'Save chart names' }).click()
@@ -2757,38 +2913,41 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'planet')
-  await page.getByLabel('Name').fill('Iria')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Warden notes').fill('Existing campaign record.')
-  await page.getByLabel('Warden notes').press('Tab')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
   await addCatalogueObject(page, 'moon')
-  await page.getByLabel('Name').fill('Nix')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Nix')
+  await saveMapObject(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Vesper Departure')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Departure')
+  await saveMapObject(page)
 
   const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map` })
   await page.getByRole('button', { name: 'Cluster map' }).click()
   await page.getByRole('button', { name: 'Add star system' }).click()
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await page.getByRole('button', { name: 'Chart details' }).click()
+  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
   await inspector.getByLabel('Star system').fill('Harrow')
   await inspector.getByRole('button', { name: 'Save chart names' }).click()
   await addCatalogueObject(page, 'jump-point')
-  await page.getByLabel('Name').fill('Harrow Arrival')
-  await page.getByLabel('Name').press('Tab')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Harrow Arrival')
+  await saveMapObject(page)
   await page.getByRole('button', { name: 'Cluster map' }).click()
   await page.getByRole('button', { name: 'Add Jump Route' }).click()
-  await page.getByLabel('Route name').fill('Jump-01')
   await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Departure (Vesper Prime)' })
   await page.getByLabel('Route destination').selectOption('point')
   await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Arrival (Harrow)' })
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Jump-01.*Vesper Departure.*Harrow Arrival/ }))
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ }))
     .toBeVisible()
   await expect(page.getByText('Saved on this device')).toBeVisible()
 
@@ -2823,7 +2982,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   const originalSystem = baseline.cluster!.systems.find(system => system.name === systemName)!
   const originalStar = originalSystem.objects.find(object => object.name === 'Primary Star')!
   const originalPlanet = originalSystem.objects.find(object => object.name === 'Iria')!
-  const originalRoute = baseline.cluster!.routes.find(route => route.name === 'Jump-01')!
+  const originalRoute = baseline.cluster!.routes.find(route => route.jumpLevel === 1)!
   const existingField = baseline.objectFieldSettings.customFields.find(field => field.name === 'Warden notes')!
   const originalSystemIds = baseline.cluster!.systems.map(system => system.id)
   expect(originalPlanet.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
@@ -2946,7 +3105,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await page.reload()
   await expect(page.getByText('Saved on this device')).toBeVisible()
   await page.getByRole('button', { name: 'Cluster map' }).click()
-  await expect(clusterMap.getByRole('button', { name: /Imported route.*Alpha Gate.*Beta Gate/ }))
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Alpha Gate.*Beta Gate/ }))
     .toBeVisible()
 
   const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -2973,6 +3132,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   expect(importedField.id).not.toBe(existingField.id)
   expect(importedRoute.fromPointId).toBe(importedPoint.id)
   expect(importedRoute.toPointId).toBe(importedBetaPoint.id)
+  expect(importedRoute.jumpLevel).toBe(1)
   expect(importedExport.layout.systemPositions?.[importedAlpha.id]).toEqual({ x: 0.25, y: 0.75 })
   expect(importedExport.layout.orbitRadii[importedOrbit.id]).toBe(120)
   expect(importedExport.layout.objectAngles[importedPlanet.id]).toBe(1.2)
@@ -2988,7 +3148,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   expect(clusterSvgInfo.text).toContain(systemName)
   expect(clusterSvgInfo.text).toContain('Harrow')
   expect(clusterSvgInfo.text).toContain('Far Vesper')
-  expect(clusterSvgInfo.text).toContain('Imported route')
+  expect(clusterSvgInfo.text).toContain('Jump-1')
   expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
   expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
   const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
@@ -3030,18 +3190,19 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   })
   await deleteImportedSystem.click()
   expect(deletionPreview).toContain('Beta Gate')
-  expect(deletionPreview).toContain('Imported route')
+  expect(deletionPreview).toContain('Level 1')
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toBeVisible()
-  await expect(clusterMap.getByRole('button', { name: /Imported route/ })).toBeVisible()
+  const importedRouteMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Alpha Gate.*Beta Gate/ })
+  await expect(importedRouteMark).toBeVisible()
 
   page.once('dialog', dialog => dialog.accept())
   await deleteImportedSystem.click()
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)
-  await expect(clusterMap.getByRole('button', { name: /Imported route/ })).toHaveCount(0)
+  await expect(importedRouteMark).toHaveCount(0)
   await page.reload()
   await page.getByRole('button', { name: 'Cluster map' }).click()
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)
-  await expect(clusterMap.getByRole('button', { name: /Jump-01/ })).toBeVisible()
+  await expect(clusterMap.getByRole('button', { name: /Jump Level 1/ })).toBeVisible()
   const finalExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(finalExport.cluster!.systems).toHaveLength(3)
   expect(finalExport.cluster!.systems.some(system => system.id === originalSystem.id)).toBe(true)

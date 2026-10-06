@@ -2,7 +2,8 @@
 title: 23. Supporting Jump levels and destinations
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -32,3 +33,9 @@ As a Warden, I can identify each Jump Route by its Jump level and destination, r
 - [08. Connecting Jump Points across a Jump Cluster](08-jump-cluster-routes.md)
 - [12. Exporting clusters and systems as versioned JSON](12-json-export.md)
 - [13. Importing JSON as a safe independent copy](13-json-import.md)
+
+## Resolution
+
+Jump Routes now require a positive safe-integer Jump level; new routes start at level 1, and standard levels 1–9 plus custom higher levels are supported. Route lists and inspectors identify the level and endpoints; map labels use `Jump-<level>`. Known destinations show their system, while unresolved exits remain explicitly unknown without placeholder systems or Jump Points. Older saved and imported routes without a level migrate to 1 while preserving endpoint references. New routes no longer generate names; optional legacy names remain compatible with saved and imported data.
+
+Updated the domain glossary and map decision. Validation passed: `npm run typecheck` and `npm test` (28 tests).
