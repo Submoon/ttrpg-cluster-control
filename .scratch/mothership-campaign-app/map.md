@@ -73,6 +73,7 @@ Implement in dependency order; each ticket also lists its blockers.
 | 23 | [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md) | None |
 | 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |
 | 25 | [25. Supporting elliptical and centerless Orbits](tickets/25-special-orbits.md) | None |
+| 26 | [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md) | None |
 
 ## Out of scope
 
