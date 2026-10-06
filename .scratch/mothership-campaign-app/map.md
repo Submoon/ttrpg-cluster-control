@@ -48,6 +48,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [21. Including the system name in system-map image exports](tickets/21-system-name-in-image-exports.md): star-system PNG/SVG exports include the current system name in a readable, bounds-fitting title band while leaving the in-app map and Jump Cluster exports unchanged.
 - [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md): system objects and Orbits can extend beyond the former 960x560 scene; the background and grid grow with the layout, Fit and exports include the expanded content, and existing saved positions remain unchanged.
 - [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md): Jump Routes use positive Jump levels and identify their known destination systems or explicitly unknown exits while preserving existing routes and JSON compatibility.
+- [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md): Add Object and Map Files use larger scoped typography with compact, unclipped layouts; Map Files actions scroll within a bounded panel.
 
 ## Implementation tickets
 

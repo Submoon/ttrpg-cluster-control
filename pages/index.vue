@@ -3962,14 +3962,18 @@ textarea[aria-invalid="true"] {
   background: rgba(18, 28, 30, 0.96);
   color: var(--text-secondary);
   cursor: pointer;
-  font: 0.55rem Consolas, monospace;
+  font: 0.875rem Consolas, monospace;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
+.map-workspace-shell .header-map-actions-toggle small {
+  font-size: 0.75rem;
+}
+
 .map-workspace-shell .header-map-actions-indicator {
   color: var(--accent);
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 
 .map-workspace-shell .header-map-actions-toggle:hover {
@@ -3984,6 +3988,7 @@ textarea[aria-invalid="true"] {
   right: 0;
   display: grid;
   width: min(22rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 5rem);
   gap: 0.55rem;
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -3991,12 +3996,13 @@ textarea[aria-invalid="true"] {
   background: rgba(18, 28, 30, 0.98);
   box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(12px);
+  overflow-y: auto;
 }
 
 .map-workspace-shell .header-map-actions-heading {
   margin: 0;
   color: var(--text-muted);
-  font: 0.56rem Consolas, monospace;
+  font: 0.8125rem Consolas, monospace;
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
   text-transform: uppercase;
@@ -4017,11 +4023,16 @@ textarea[aria-invalid="true"] {
   white-space: normal;
 }
 
+.map-workspace-shell .header-map-actions-panel .tool-button {
+  font-size: 0.875rem;
+}
+
 .map-workspace-shell .header-map-actions-note {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: 0.875rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .map-workspace-shell .header-map-actions-import {
@@ -4200,8 +4211,26 @@ textarea[aria-invalid="true"] {
   min-width: 0;
 }
 
+.map-workspace-shell .system-map-tools .object-palette-heading .section-kicker {
+  font-size: 0.875rem;
+}
+
 .map-workspace-shell .object-palette-hint {
   white-space: nowrap;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-hint,
+.map-workspace-shell .system-map-tools .placement-hint {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-button {
+  font-size: 0.875rem;
+}
+
+.map-workspace-shell .system-map-tools .object-palette-category-button {
+  font-size: 0.8125rem;
 }
 
 .map-workspace-shell .object-palette-categories {
@@ -4549,7 +4578,7 @@ textarea[aria-invalid="true"] {
   }
 
   .map-workspace-shell .wordmark small,
-  .map-workspace-shell .system-map-tools .object-palette-heading {
+  .map-workspace-shell .system-map-tools .object-palette-hint {
     display: none;
   }
 
@@ -4600,8 +4629,25 @@ textarea[aria-invalid="true"] {
   }
 
   .map-workspace-shell .system-map-tools .object-palette {
-    gap: 0.15rem;
-    padding: 0.15rem;
+    gap: 0.1rem;
+    padding: 0.1rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .map-workspace-shell .object-palette-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .map-workspace-shell .object-palette-categories {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .map-workspace-shell .object-palette-controls,
+  .map-workspace-shell .system-map-tools .placement-hint {
+    grid-column: 1 / -1;
   }
 
   .map-workspace-shell .object-palette-categories {
@@ -4609,6 +4655,7 @@ textarea[aria-invalid="true"] {
     justify-content: flex-start;
     overflow-x: auto;
     gap: 0.15rem;
+    padding-inline: 0.25rem;
     scrollbar-width: thin;
   }
 
@@ -4619,13 +4666,16 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .system-map-tools .object-palette-button,
   .map-workspace-shell .system-map-tools .object-palette-category-button {
-    min-height: 1.25rem;
+    min-height: 1.5rem;
     gap: 0.15rem;
     padding: 0.12rem 0.25rem;
-    font-size: 0.55rem;
   }
 
-  .map-workspace-shell .system-map-editor-grid .object-palette-orbit {
+  .map-workspace-shell .system-map-tools .object-palette-category-button {
+    min-height: 1.25rem;
+  }
+
+  .map-workspace-shell .system-map-tools .object-palette-orbit {
     margin-bottom: 0;
   }
 
