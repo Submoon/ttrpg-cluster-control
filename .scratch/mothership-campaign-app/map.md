@@ -51,6 +51,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md): Add Object and Map Files use larger scoped typography with compact, unclipped layouts; Map Files actions scroll within a bounded panel.
 - [25. Supporting elliptical Orbits and unoccupied centers](tickets/25-special-orbits.md): every Orbit is an ellipse (equal radii form a circle), draggable from Add Object onto a host or unoccupied center; a selected unoccupied Orbit's center handle moves its objects, while Detach gives a hosted Orbit a nearby unoccupied center without changing dimensions, rotation, or child angles and reindexes its old host's Orbits. Axis handles, uniform ring resizing, and handle/Ctrl+wheel rotation preserve child angles and persist through workspace and JSON; Orbit names do not appear on maps or in SVG/PNG exports.
 - [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md): both sidebars fade content before shrinking and moving to the edge, then reveal upright vertical labels at the existing handle geometry; reduced motion and responsive reopening are covered in both map views.
+- [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md): reusable fields target all objects or selected categories and subtypes; hidden values persist, legacy object targets are discarded on restore/import, and compatible definitions unite selected scopes (unscoped definitions remain global).
 
 ## Implementation tickets
 
@@ -77,10 +78,10 @@ Implement in dependency order; each ticket also lists its blockers.
 | 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |
 | 25 | [25. Supporting elliptical Orbits and unoccupied centers](tickets/25-special-orbits.md) | None |
 | 26 | [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md) | None |
-| 27 | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md) | None |
+| 27 | [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md) | None |
 | 28 | [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md) | None |
-| 29 | [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md) |
-| 30 | [30. Documenting the project and codebase](tickets/30-project-documentation.md) | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md); [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) |
+| 29 | [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) | [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md) |
+| 30 | [30. Documenting the project and codebase](tickets/30-project-documentation.md) | [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md); [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) |
 
 ## Out of scope
 

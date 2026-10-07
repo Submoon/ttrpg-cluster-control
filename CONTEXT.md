@@ -27,3 +27,6 @@ _Avoid_: Centerless Orbit (the center still exists)
 
 **Location key**:
 A short marker unique within a star system that links a map object to its Warden-facing keyed description.
+
+**Custom field applicability**:
+The catalogue objects a reusable custom field applies to: all objects by default, or selected catalogue categories and subtypes.

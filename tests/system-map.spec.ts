@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { restoreLocalWorkspace } from '../domain/workspace'
+import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace'
 
 type WorldPoint = { x: number; y: number }
 type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
@@ -27,6 +27,9 @@ type ExportedRoute = {
   toPointId: string | null
   unresolvedExit?: string
 }
+type ExportedCustomFieldApplicabilityTarget =
+  | { kind: 'category'; family: string }
+  | { kind: 'subtype'; family: string; subtype: string }
 type ExportedMap = {
   format: string
   version: number
@@ -36,7 +39,13 @@ type ExportedMap = {
   objectFieldSettings: {
     atmosphereOptions: string[]
     portClassOptions: string[]
-    customFields: Array<{ id: string; name: string; type: string; options?: string[] }>
+    customFields: Array<{
+      id: string
+      name: string
+      type: string
+      options?: string[]
+      applicability?: ExportedCustomFieldApplicabilityTarget[]
+    }>
   }
   layout: {
     version: number
@@ -2691,6 +2700,44 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
   }
 })
 
+test('restoring a workspace removes legacy object targets without deleting values', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]!
+  const object = system.objects[0]!
+  const fieldId = 'legacy-field'
+  const restored = restoreLocalWorkspace({
+    ...workspace,
+    cluster: {
+      ...workspace.cluster,
+      systems: workspace.cluster.systems.map(currentSystem => ({
+        ...currentSystem,
+        objects: currentSystem.objects.map(currentObject => currentObject.id === object.id
+          ? { ...currentObject, customFieldValues: { [fieldId]: 'Still here.' } }
+          : currentObject),
+      })),
+    },
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: [{
+        id: fieldId,
+        name: 'Campaign notes',
+        type: 'text',
+        applicability: [
+          { kind: 'object', objectId: object.id },
+          { kind: 'category', family: object.family },
+          { kind: 'subtype', family: object.family, subtype: object.subtype },
+        ],
+      }],
+    },
+  })
+
+  expect(restored?.objectFieldSettings.customFields[0]?.applicability).toEqual([
+    { kind: 'category', family: object.family },
+    { kind: 'subtype', family: object.family, subtype: object.subtype },
+  ])
+  expect(restored?.cluster.systems[0]?.objects[0]?.customFieldValues?.[fieldId]).toBe('Still here.')
+})
+
 test('the Warden can connect Jump Points across a cluster and record an unresolved exit', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -2941,6 +2988,202 @@ test('the Warden can configure native and reusable custom object fields', async 
   const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
+})
+
+test('custom field category and subtype scopes hide ineligible objects without deleting values', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
+
+  await addCatalogueObject(page, 'planet')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await page.getByLabel('Campaign notes').fill('Planet survey.')
+  await saveMapObject(page)
+
+  await addCatalogueObject(page, 'station')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Relay Station')
+  await page.getByLabel('Campaign notes').fill('Station report.')
+  await saveMapObject(page)
+
+  const dialog = await openFieldDefinitionDialog(page)
+  await dialog.getByRole('button', { name: /Campaign notes/ }).click()
+  await expect(dialog.getByRole('radio', { name: 'All catalogue objects' })).toBeChecked()
+  await editFieldDefinition(dialog)
+  await dialog.getByRole('radio', { name: 'Selected catalogue targets' }).check()
+  await expect(dialog.getByRole('heading', { name: 'Objects', exact: true })).toHaveCount(0)
+  await dialog.getByLabel('Category Celestial bodies').check()
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
+  await dialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Planet survey.')
+  await hierarchy.getByRole('button', { name: /Relay Station/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
+
+  const categoryDialog = await openFieldDefinitionDialog(page)
+  await categoryDialog.getByRole('button', { name: /Campaign notes/ }).click()
+  const existingValues = categoryDialog.getByRole('region', { name: 'Existing field values' })
+  await expect(existingValues).toContainText('Planet survey.')
+  await expect(existingValues).toContainText('Station report.')
+  await editFieldDefinition(categoryDialog)
+  await categoryDialog.getByLabel('Category Celestial bodies').uncheck()
+  await categoryDialog.getByLabel('Subtype Planet').check()
+  await categoryDialog.getByRole('button', { name: 'Save changes' }).click()
+  await categoryDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Planet survey.')
+  await hierarchy.getByRole('button', { name: /Relay Station/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
+
+  await page.reload()
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Planet survey.')
+  await hierarchy.getByRole('button', { name: /Relay Station/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
+
+  await hierarchy.getByRole('button', { name: /Iria/ }).click()
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: 'Delete Iria' }).click()
+  await expect(hierarchy.getByRole('button', { name: /Iria/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const cleanupExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const cleanedField = cleanupExport.objectFieldSettings.customFields
+    .find(field => field.name === 'Campaign notes')!
+  const remainingStation = cleanupExport.cluster!.systems[0]!.objects
+    .find(object => object.name === 'Relay Station')!
+  expect(cleanedField.applicability).toEqual([
+    { kind: 'subtype', family: 'CelestialBody', subtype: 'planet' },
+  ])
+  expect(remainingStation.customFieldValues?.[cleanedField.id]).toBe('Station report.')
+})
+
+test('custom field category and subtype scopes are united on independent system import', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
+
+  await addCatalogueObject(page, 'planet')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await page.getByLabel('Campaign notes').fill('Planet survey.')
+  await saveMapObject(page)
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await addCatalogueObject(page, 'planet')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Aster')
+  await page.getByLabel('Campaign notes').fill('Remote survey.')
+  await saveMapObject(page)
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+
+  const definitionDialog = await openFieldDefinitionDialog(page)
+  await definitionDialog.getByRole('button', { name: /Campaign notes/ }).click()
+  await editFieldDefinition(definitionDialog)
+  await definitionDialog.getByRole('radio', { name: 'Selected catalogue targets' }).check()
+  await definitionDialog.getByLabel('Subtype Planet').check()
+  await definitionDialog.getByRole('button', { name: 'Save changes' }).click()
+  await definitionDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const sourceExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const sourceSystem = sourceExport.cluster!.systems.find(system => system.name === 'Vesper')!
+  const sourcePlanet = sourceSystem.objects.find(object => object.name === 'Iria')!
+  const remoteSystem = sourceExport.cluster!.systems.find(system => system.name === 'New System 2')!
+  const remotePlanet = remoteSystem.objects.find(object => object.name === 'Aster')!
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  const systemExport = await downloadJson(page, 'Export star system JSON')
+  const exportedField = systemExport.objectFieldSettings.customFields
+    .find(field => field.name === 'Campaign notes')!
+  expect(exportedField.applicability).toEqual([{
+    kind: 'subtype',
+    family: 'CelestialBody',
+    subtype: 'planet',
+  }])
+
+  const existingDefinitionDialog = await openFieldDefinitionDialog(page)
+  await existingDefinitionDialog.getByRole('button', { name: /Campaign notes/ }).click()
+  await editFieldDefinition(existingDefinitionDialog)
+  await existingDefinitionDialog.getByLabel('Subtype Planet').uncheck()
+  await existingDefinitionDialog.getByLabel('Category Celestial bodies').check()
+  await existingDefinitionDialog.getByRole('button', { name: 'Save changes' }).click()
+  await existingDefinitionDialog.getByRole('button', { name: 'Close field definitions' }).click()
+
+  const legacySystemExport: unknown = {
+    ...systemExport,
+    objectFieldSettings: {
+      ...systemExport.objectFieldSettings,
+      customFields: systemExport.objectFieldSettings.customFields.map(field =>
+        field.id === exportedField.id
+          ? {
+              ...field,
+              applicability: [
+                ...(field.applicability ?? []),
+                { kind: 'object', objectId: sourcePlanet.id },
+                { kind: 'object', objectId: remotePlanet.id },
+              ],
+            }
+          : field,
+      ),
+    },
+  }
+
+  const input = page.getByLabel('JSON map file')
+  const previewPromise = page.waitForEvent('dialog')
+  await setJsonFile(input, 'scoped-system.json', JSON.stringify(legacySystemExport))
+  const preview = await previewPromise
+  expect(preview.message()).toContain('Compatible custom field definitions are reused')
+  await preview.accept()
+
+  const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const importedSystem = importedExport.cluster!.systems.find(system =>
+    system.id !== sourceSystem.id && system.name === sourceSystem.name,
+  )!
+  const importedPlanet = importedSystem.objects.find(object => object.name === 'Iria')!
+  expect(importedPlanet.id).not.toBe(sourcePlanet.id)
+  const importedField = importedExport.objectFieldSettings.customFields
+    .find(field => field.name === 'Campaign notes')!
+  expect(importedField.applicability).toEqual([
+    { kind: 'category', family: 'CelestialBody' },
+    { kind: 'subtype', family: 'CelestialBody', subtype: 'planet' },
+  ])
+  expect(importedPlanet.customFieldValues?.[importedField.id]).toBe('Planet survey.')
+
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).last().click()
+  const importedHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await importedHierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('Planet survey.')
 })
 
 test('field definitions dialog stays centered on desktop and narrow viewports', async ({ page }) => {
@@ -3669,6 +3912,7 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   expect(importedPoint.jumpStationId).toBe(importedStation.id)
   expect(importedPlanet.customFieldValues).toEqual({ [importedField.id]: 'The key is hidden.' })
   expect(importedField.id).not.toBe('incoming-field')
+  expect(importedField.applicability).toBeUndefined()
   expect(firstImport.cluster!.routes.find(route => route.name === 'Known route')).toMatchObject({
     jumpLevel: 1,
     fromPointId: importedPoint.id,
@@ -3684,6 +3928,14 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   expect(firstImport.layout.orbitRadii[importedOrbit.id])
     .toEqual({ horizontal: 100, vertical: 100 })
   expect(firstImport.layout.objectAngles[importedPlanet.id]).toBe(1.2)
+
+  await alphaNode.click()
+  const importedHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await importedHierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await expect(page.getByLabel('Campaign notes')).toBeVisible()
+  await importedHierarchy.getByRole('button', { name: /Iria/ }).click()
+  await expect(page.getByLabel('Campaign notes')).toHaveValue('The key is hidden.')
+  await page.getByRole('button', { name: 'Cluster map' }).click()
 
   const duplicatePreviewPromise = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'duplicate.json', JSON.stringify(firstImport))

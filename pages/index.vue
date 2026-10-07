@@ -9,10 +9,12 @@ import {
   createJumpRoute,
   createOrbit,
   createSystemObject,
+  customFieldApplicabilityTargetKey,
   defaultOrbitRadius,
   detachOrbit,
   exportJumpCluster,
   exportStarSystem,
+  isCustomFieldApplicableToObject,
   initialSystemPlacement,
   jumpPointsInCluster,
   minimumOrbitRadius,
@@ -24,10 +26,12 @@ import {
   renameLocalWorkspace,
   renameCustomFieldDefinition,
   removeCustomFieldDefinition,
+  updateCustomFieldApplicability,
   updateJumpRoute,
   updateCustomFieldOptions,
   updateNativeFieldOptions,
   type CustomFieldValue,
+  type CustomFieldApplicabilityTarget,
   type JsonImportSummary,
   type JumpRoute,
   updateSystemObject,
@@ -36,6 +40,7 @@ import {
   type LocalWorkspace,
   type MapDeletionTarget,
   type ObjectPlacement,
+  type ObjectFamily,
   type Orbit,
   type OrbitRadii,
   type Point,
@@ -86,6 +91,7 @@ type FieldDefinitionSummary =
       kind: 'custom'
       type: CustomFieldType
       options: string[]
+      applicability?: CustomFieldApplicabilityTarget[]
     }
 interface FieldValueAssignment {
   objectId: string
@@ -100,6 +106,7 @@ type PendingFieldDefinitionChange =
       fieldName: string
       name: string
       options: string[]
+      applicability: CustomFieldApplicabilityTarget[] | undefined
       affectedAssignments: FieldValueAssignment[]
     }
   | {
@@ -168,6 +175,8 @@ const fieldDefinitionsTrigger = ref<HTMLButtonElement | null>(null)
 const selectedFieldDefinitionId = ref<NativeFieldId | string>('native:atmosphere')
 const fieldDefinitionNameDraft = ref('')
 const fieldDefinitionOptionsDraft = ref('')
+const fieldDefinitionAppliesToAll = ref(true)
+const fieldDefinitionApplicabilityTargets = ref<CustomFieldApplicabilityTarget[]>([])
 const fieldDefinitionError = ref('')
 const pendingFieldDefinitionChange = ref<PendingFieldDefinitionChange | null>(null)
 const fieldDefinitionEditing = ref(false)
@@ -214,7 +223,7 @@ function revealInspectorPanelControl(): void {
 }
 const importError = ref('')
 const jsonImportInput = ref<HTMLInputElement | null>(null)
-const objectPaletteGroups = [
+const objectPaletteGroups = ([
   { family: 'CelestialBody', label: 'Celestial bodies' },
   { family: 'SmallBody/Field', label: 'Small bodies and fields' },
   { family: 'Installation', label: 'Installations' },
@@ -222,7 +231,10 @@ const objectPaletteGroups = [
   { family: 'JumpPoint', label: 'Jump Points' },
   { family: 'Phenomenon', label: 'Phenomena' },
   { family: 'Other', label: 'Other' },
-].map(group => ({
+] satisfies Array<{
+  family: ObjectFamily
+  label: string
+}>).map(group => ({
   ...group,
   types: catalogueTypes.filter(type => type.family === group.family),
 }))
@@ -240,6 +252,14 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
 const selectedObject = computed(() =>
   selectedSystem.value?.objects.find(object => object.id === selectedObjectId.value),
 )
+const applicableCustomFields = computed(() => {
+  const object = selectedObject.value
+  return object
+    ? workspace.value?.objectFieldSettings.customFields.filter(field =>
+        isCustomFieldApplicableToObject(field, object),
+      ) ?? []
+    : []
+})
 const selectedOrbit = computed(() =>
   selectedSystem.value?.orbits.find(orbit => orbit.id === selectedOrbitId.value),
 )
@@ -316,6 +336,7 @@ function fieldDefinitionsFor(currentWorkspace: LocalWorkspace): FieldDefinitionS
       kind: 'custom',
       type: field.type,
       options: field.type === 'single-select' ? field.options : [],
+      applicability: field.applicability,
     })),
   ]
 }
@@ -360,6 +381,46 @@ const selectedFieldAssignments = computed(() => {
 function fieldOptionsFromText(value: string): string[] {
   return value.split(/\r?\n/u).map(option => option.trim()).filter(Boolean)
 }
+function customFieldApplicabilityTargetLabel(target: CustomFieldApplicabilityTarget): string {
+  if (target.kind === 'category') {
+    return `Category ${objectPaletteGroups.find(group => group.family === target.family)?.label ?? target.family}`
+  }
+  const subtype = catalogueTypes.find(type =>
+    type.family === target.family && type.value === target.subtype,
+  )?.label ?? target.subtype
+  return `Subtype ${subtype}`
+}
+function fieldApplicabilitySummary(definition: FieldDefinitionSummary): string {
+  if (definition.kind === 'native' || definition.applicability === undefined) {
+    return 'All catalogue objects'
+  }
+  return definition.applicability.length
+    ? definition.applicability.map(customFieldApplicabilityTargetLabel).join(', ')
+    : 'No catalogue targets'
+}
+function hasCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): boolean {
+  const targetKey = customFieldApplicabilityTargetKey(target)
+  return fieldDefinitionApplicabilityTargets.value.some(candidate =>
+    customFieldApplicabilityTargetKey(candidate) === targetKey,
+  )
+}
+function toggleCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): void {
+  const targetKey = customFieldApplicabilityTargetKey(target)
+  const index = fieldDefinitionApplicabilityTargets.value.findIndex(candidate =>
+    customFieldApplicabilityTargetKey(candidate) === targetKey,
+  )
+  if (index === -1) fieldDefinitionApplicabilityTargets.value.push(target)
+  else fieldDefinitionApplicabilityTargets.value.splice(index, 1)
+}
+function sameCustomFieldApplicability(
+  first: CustomFieldApplicabilityTarget[] | undefined,
+  second: CustomFieldApplicabilityTarget[] | undefined,
+): boolean {
+  if (first === undefined || second === undefined) return first === second
+  const secondKeys = new Set(second.map(customFieldApplicabilityTargetKey))
+  return first.length === second.length
+    && first.every(target => secondKeys.has(customFieldApplicabilityTargetKey(target)))
+}
 const affectedFieldAssignments = computed(() => {
   const definition = selectedFieldDefinition.value
   if (!definition || definition.type !== 'single-select') return []
@@ -389,6 +450,10 @@ function syncFieldDefinitionDraft(definition: FieldDefinitionSummary): void {
   fieldDefinitionOptionsDraft.value = definition.type === 'single-select'
     ? definition.options.join('\n')
     : ''
+  fieldDefinitionAppliesToAll.value = definition.kind === 'native' || definition.applicability === undefined
+  fieldDefinitionApplicabilityTargets.value = definition.kind === 'custom'
+    ? [...(definition.applicability ?? [])]
+    : []
 }
 
 async function openFieldDefinitions(): Promise<void> {
@@ -747,7 +812,7 @@ function importPreview(summary: JsonImportSummary): string {
     `Possible existing matches by name or location key (${summary.possibleMatches.length}):`,
     ...matchLines,
     '',
-    'Nothing will be merged. Imported map entities will receive new IDs.',
+    'Map entities remain separate copies and receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.',
   ].join('\n')
 }
 
@@ -1711,6 +1776,7 @@ function applyFieldDefinitionUpdate(
   fieldId: string,
   name: string,
   options: string[],
+  applicability: CustomFieldApplicabilityTarget[] | undefined,
   clearInvalidValues: boolean,
 ): LocalWorkspace {
   const definition = fieldDefinitionsFor(currentWorkspace).find(field => field.id === fieldId)
@@ -1725,6 +1791,12 @@ function applyFieldDefinitionUpdate(
       ? updateNativeFieldOptions(updatedWorkspace, definition.nativeField, options, clearInvalidValues)
       : updateCustomFieldOptions(updatedWorkspace, definition.id, options, clearInvalidValues)
   }
+  if (
+    definition.kind === 'custom'
+    && !sameCustomFieldApplicability(definition.applicability, applicability)
+  ) {
+    updatedWorkspace = updateCustomFieldApplicability(updatedWorkspace, definition.id, applicability)
+  }
   return updatedWorkspace
 }
 
@@ -1737,9 +1809,14 @@ async function saveFieldDefinitionChanges(): Promise<void> {
   const options = definition.type === 'single-select'
     ? fieldOptionsFromText(fieldDefinitionOptionsDraft.value)
     : definition.options
+  const applicability = definition.kind === 'custom' && !fieldDefinitionAppliesToAll.value
+    ? fieldDefinitionApplicabilityTargets.value
+    : undefined
   const nameChanged = definition.kind === 'custom' && name !== definition.name
   const optionsChanged = definition.type === 'single-select' && !sameFieldOptions(definition.options, options)
-  if (!nameChanged && !optionsChanged) {
+  const applicabilityChanged = definition.kind === 'custom'
+    && !sameCustomFieldApplicability(definition.applicability, applicability)
+  if (!nameChanged && !optionsChanged && !applicabilityChanged) {
     fieldDefinitionEditing.value = false
     syncFieldDefinitionDraft(definition)
     return
@@ -1751,6 +1828,7 @@ async function saveFieldDefinitionChanges(): Promise<void> {
       definition.id,
       name,
       options,
+      applicability,
       true,
     )
     const affectedAssignments = definition.type === 'single-select'
@@ -1765,6 +1843,7 @@ async function saveFieldDefinitionChanges(): Promise<void> {
         fieldName: definition.name,
         name,
         options,
+        applicability: applicability === undefined ? undefined : [...applicability],
         affectedAssignments,
       }
       fieldDefinitionError.value = ''
@@ -1811,6 +1890,7 @@ async function confirmFieldDefinitionChange(): Promise<void> {
           pendingChange.fieldId,
           pendingChange.name,
           pendingChange.options,
+          pendingChange.applicability,
           true,
         )
     await commit(updatedWorkspace)
@@ -2791,7 +2871,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     </option>
                   </select>
                 </label>
-                <template v-for="field in workspace.objectFieldSettings.customFields" :key="field.id">
+                <template v-for="field in applicableCustomFields" :key="field.id">
                   <label v-if="field.type === 'text'" :for="`custom-field-value-${field.id}`">
                     {{ field.name }}
                     <textarea
@@ -3131,6 +3211,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 >
                   <span>{{ field.name }}</span>
                   <small>Custom / {{ field.type }}</small>
+                  <small>{{ fieldApplicabilitySummary(field) }}</small>
                 </button>
                 <p v-if="!customFieldDefinitions.length" class="empty-copy">
                   No custom fields are defined yet.
@@ -3175,6 +3256,64 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   :disabled="!fieldDefinitionEditing || saveState === 'saving' || pendingFieldDefinitionChange !== null"
                 />
               </label>
+
+              <fieldset
+                v-if="selectedFieldDefinition.kind === 'custom'"
+                class="field-definition-applicability"
+                :disabled="!fieldDefinitionEditing || saveState === 'saving' || pendingFieldDefinitionChange !== null"
+              >
+                <legend>Field applicability</legend>
+                <label class="field-definition-target-choice">
+                  <input
+                    v-model="fieldDefinitionAppliesToAll"
+                    type="radio"
+                    name="field-applicability-mode"
+                    :value="true"
+                  >
+                  All catalogue objects
+                </label>
+                <label class="field-definition-target-choice">
+                  <input
+                    v-model="fieldDefinitionAppliesToAll"
+                    type="radio"
+                    name="field-applicability-mode"
+                    :value="false"
+                  >
+                  Selected catalogue targets
+                </label>
+                <div v-if="!fieldDefinitionAppliesToAll" class="field-definition-target-groups">
+                  <section>
+                    <h4>Categories</h4>
+                    <label
+                      v-for="group in objectPaletteGroups"
+                      :key="group.family"
+                      class="field-definition-target-choice"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="hasCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
+                        @change="toggleCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
+                      >
+                      Category {{ group.label }}
+                    </label>
+                  </section>
+                  <section>
+                    <h4>Subtypes</h4>
+                    <label
+                      v-for="type in catalogueTypes"
+                      :key="`${type.family}:${type.value}`"
+                      class="field-definition-target-choice"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="hasCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
+                        @change="toggleCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
+                      >
+                      Subtype {{ type.label }}
+                    </label>
+                  </section>
+                </div>
+              </fieldset>
 
               <section class="field-definition-values" role="region" aria-label="Existing field values">
                 <div class="field-definition-section-heading">
@@ -3533,6 +3672,14 @@ body {
   font: 0.58rem Consolas, monospace;
 }
 
+.field-definition-choice small + small {
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 0.54rem;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+
 .field-definition-list .empty-copy {
   margin: 0;
 }
@@ -3592,6 +3739,67 @@ body {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 1px;
+}
+
+.field-definition-applicability {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line-soft);
+  padding: 0.8rem;
+  background: var(--panel-bg);
+}
+
+.field-definition-applicability legend {
+  padding: 0 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field-definition-target-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.field-definition-applicability input[type="radio"],
+.field-definition-applicability input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0.1rem 0 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.field-definition-target-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.75rem;
+}
+
+.field-definition-target-groups > section {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.field-definition-target-groups > section > h4 {
+  margin: 0 0 0.15rem;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .field-definition-values,
@@ -3717,6 +3925,10 @@ body {
 
   .field-definition-editor {
     padding: 0.75rem;
+  }
+
+  .field-definition-target-groups {
+    grid-template-columns: 1fr;
   }
 
   .field-definition-values li,

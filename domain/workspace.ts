@@ -27,9 +27,23 @@ export type ObjectFamily = typeof catalogueTypes[number]['family']
 export type CustomFieldType = 'text' | 'number' | 'boolean' | 'single-select'
 export type CustomFieldValue = string | number | boolean
 
-export type CustomFieldDefinition =
-  | { id: string; name: string; type: 'text' | 'number' | 'boolean' }
-  | { id: string; name: string; type: 'single-select'; options: string[] }
+export type CustomFieldApplicabilityTarget =
+  | { kind: 'category'; family: ObjectFamily }
+  | { kind: 'subtype'; family: ObjectFamily; subtype: string }
+
+export type CustomFieldDefinition = {
+  id: string
+  name: string
+  applicability?: CustomFieldApplicabilityTarget[]
+} & (
+  | { type: 'text' | 'number' | 'boolean' }
+  | { type: 'single-select'; options: string[] }
+)
+
+export function customFieldApplicabilityTargetKey(target: CustomFieldApplicabilityTarget): string {
+  if (target.kind === 'category') return `category:${target.family}`
+  return `subtype:${target.family}:${target.subtype}`
+}
 
 export interface ObjectFieldSettings {
   atmosphereOptions: string[]
@@ -351,6 +365,41 @@ export function addCustomFieldDefinition(
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: [...workspace.objectFieldSettings.customFields, definition],
+    },
+  }
+}
+
+export function isCustomFieldApplicableToObject(
+  definition: CustomFieldDefinition,
+  object: SystemObject,
+): boolean {
+  return definition.applicability === undefined
+    || definition.applicability.some(target =>
+      target.kind === 'category'
+        ? target.family === object.family
+        : target.family === object.family && target.subtype === object.subtype,
+    )
+}
+
+export function updateCustomFieldApplicability(
+  workspace: LocalWorkspace,
+  fieldId: string,
+  applicability: CustomFieldApplicabilityTarget[] | undefined,
+): LocalWorkspace {
+  if (!workspace.objectFieldSettings.customFields.some(field => field.id === fieldId)) {
+    throw new Error('The selected custom field no longer exists.')
+  }
+  if (applicability !== undefined && !isCustomFieldApplicability(applicability)) {
+    throw new Error('Choose valid custom field applicability targets.')
+  }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.map(field =>
+        field.id === fieldId ? { ...field, applicability } : field,
+      ),
     },
   }
 }
@@ -1149,6 +1198,10 @@ function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition
     return false
   }
 
+  if (value.applicability !== undefined && !isCustomFieldApplicability(value.applicability)) {
+    return false
+  }
+
   if (value.type === 'single-select') {
     return isFieldOptionList(value.options)
   }
@@ -1156,6 +1209,24 @@ function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition
     (value.type === 'text' || value.type === 'number' || value.type === 'boolean')
     && value.options === undefined
   )
+}
+
+function isCustomFieldApplicabilityTarget(value: unknown): value is CustomFieldApplicabilityTarget {
+  if (!isRecord(value)) return false
+  if (value.kind === 'category') {
+    return isObjectFamily(value.family)
+  }
+  return value.kind === 'subtype'
+    && isObjectFamily(value.family)
+    && typeof value.subtype === 'string'
+    && value.subtype.trim() !== ''
+    && (value.family === 'Other'
+      || catalogueTypes.some(type => type.family === value.family && type.value === value.subtype))
+}
+
+function isCustomFieldApplicability(value: unknown): value is CustomFieldApplicabilityTarget[] {
+  return isArrayOf(value, isCustomFieldApplicabilityTarget)
+    && new Set(value.map(customFieldApplicabilityTargetKey)).size === value.length
 }
 
 function isObjectFieldSettings(value: unknown): value is ObjectFieldSettings {
@@ -1569,6 +1640,33 @@ export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
   return isStoredLocalWorkspace(value) && value.objectFieldSettings !== undefined
 }
 
+function withoutLegacyObjectApplicabilityTargets(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.objectFieldSettings)) return value
+
+  const settings = value.objectFieldSettings
+  const customFields = settings.customFields
+  if (!Array.isArray(customFields)) return value
+
+  return {
+    ...value,
+    objectFieldSettings: {
+      ...settings,
+      customFields: customFields.map((field: unknown) => {
+        if (!isRecord(field) || !Array.isArray(field.applicability)) return field
+        return {
+          ...field,
+          applicability: field.applicability.filter(target =>
+            !isRecord(target)
+            || target.kind !== 'object'
+            || typeof target.objectId !== 'string'
+            || target.objectId.length === 0,
+          ),
+        }
+      }),
+    },
+  }
+}
+
 function withDefaultJumpLevels(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.cluster) || !Array.isArray(value.cluster.routes)) {
     return value
@@ -1586,7 +1684,7 @@ function withDefaultJumpLevels(value: unknown): unknown {
 }
 
 export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
-  const restored = withDefaultJumpLevels(value)
+  const restored = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
   if (!isStoredLocalWorkspace(restored)) {
     return null
   }
@@ -1775,6 +1873,15 @@ function sameFieldDefinition(
         && left.options.every((option, index) => option === right.options[index])))
 }
 
+function unionCustomFieldApplicability(
+  first: CustomFieldApplicabilityTarget[],
+  second: CustomFieldApplicabilityTarget[],
+): CustomFieldApplicabilityTarget[] {
+  const targets = new Map(first.map(target => [customFieldApplicabilityTargetKey(target), target]))
+  for (const target of second) targets.set(customFieldApplicabilityTargetKey(target), target)
+  return [...targets.values()]
+}
+
 function remapImportedSystem(
   system: StarSystem,
   ids: Map<string, string>,
@@ -1808,7 +1915,7 @@ function remapImportedSystem(
 }
 
 export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
-  const map = withDefaultJumpLevels(value)
+  const map = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
   if (!isImportedMap(map)) {
     throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
   }
@@ -1899,11 +2006,20 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     const sameName = customFields.find(field =>
       field.name.toLowerCase() === sourceField.name.toLowerCase(),
     )
+    const applicability = sourceField.applicability
     if (sameName) {
       if (!sameFieldDefinition(sameName, sourceField)) {
         throw new Error(`Custom field "${sourceField.name}" conflicts with an existing field definition.`)
       }
       fieldIds.set(sourceField.id, sameName.id)
+      if (sameName.applicability !== undefined) {
+        customFields[customFields.indexOf(sameName)] = applicability === undefined
+          ? { ...sameName, applicability: undefined }
+          : {
+              ...sameName,
+              applicability: unionCustomFieldApplicability(sameName.applicability, applicability),
+            }
+      }
       continue
     }
 

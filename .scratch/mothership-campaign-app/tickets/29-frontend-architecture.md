@@ -28,7 +28,7 @@ As a maintainer, I can navigate the application UI and browser tests by cohesive
 
 ## Blocked by
 
-- [27. Scoping custom fields to objects and categories](27-custom-field-applicability.md) — refactor after the custom-field applicability model and UI are in place.
+- [27. Scoping custom fields to categories and subtypes](27-custom-field-applicability.md) — refactor after the custom-field applicability model and UI are in place.
 - [28. Showing the dragged map object in the drag preview](28-map-object-drag-preview.md) — complete the Add Object drag interaction before reorganizing its UI.
 
 ## Source specs

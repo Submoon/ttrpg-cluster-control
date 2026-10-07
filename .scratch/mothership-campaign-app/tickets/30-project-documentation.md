@@ -22,7 +22,7 @@ As a campaign Warden and project maintainer, I can understand what the applicati
 
 ## Blocked by
 
-- [27. Scoping custom fields to objects and categories](27-custom-field-applicability.md) — document the completed custom-field applicability behavior.
+- [27. Scoping custom fields to categories and subtypes](27-custom-field-applicability.md) — document the completed custom-field applicability behavior.
 - [28. Showing the dragged map object in the drag preview](28-map-object-drag-preview.md) — document the final drag-and-drop behavior.
 - [29. Reviewing and modularizing the frontend architecture](29-frontend-architecture.md) — document and comment the final structure after the refactor.
 
