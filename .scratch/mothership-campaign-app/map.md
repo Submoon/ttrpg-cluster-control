@@ -76,6 +76,10 @@ Implement in dependency order; each ticket also lists its blockers.
 | 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |
 | 25 | [25. Supporting elliptical Orbits and unoccupied centers](tickets/25-special-orbits.md) | None |
 | 26 | [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md) | None |
+| 27 | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md) | None |
+| 28 | [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md) | None |
+| 29 | [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md) |
+| 30 | [30. Documenting the project and codebase](tickets/30-project-documentation.md) | [27. Scoping custom fields to objects and categories](tickets/27-custom-field-applicability.md); [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md); [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md) |
 
 ## Out of scope
 
