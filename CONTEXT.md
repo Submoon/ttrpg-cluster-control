@@ -22,7 +22,8 @@ A positive integer used to identify a Jump Route; standard levels are 1 through 
 _Avoid_: Sequential route number, Jump-01
 
 **Orbit**:
-A schematic location around a host object that can contain zero or more map objects; nested Orbits are hosted by objects within other Orbits.
+An elliptical schematic path around a catalogue-object host or an unoccupied center; a hosted Orbit can be detached by replacing its object host with an unoccupied center. Equal horizontal and vertical radii form a circle, and an Orbit can contain zero or more map objects, each of which may host nested Orbits.
+_Avoid_: Centerless Orbit (the center still exists)
 
 **Location key**:
 A short marker unique within a star system that links a map object to its Warden-facing keyed description.

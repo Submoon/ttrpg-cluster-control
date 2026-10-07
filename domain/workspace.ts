@@ -55,11 +55,18 @@ export interface SystemObject {
   jumpStationId?: string | null
 }
 
-export interface Orbit {
-  id: string
-  hostId: string
-  order: number
+export interface OrbitRadii {
+  horizontal: number
+  vertical: number
 }
+
+export type Orbit = {
+  id: string
+  order: number
+} & (
+  | { hostId: string; center?: never }
+  | { hostId: null; center: Point }
+)
 
 export type JumpRoute = {
   id: string
@@ -100,7 +107,8 @@ export interface LocalWorkspace {
   cluster: JumpCluster
   layout: {
     systemPositions: Record<string, Point>
-    orbitRadii: Record<string, number>
+    orbitRadii: Record<string, OrbitRadii>
+    orbitRotations: Record<string, number>
     objectAngles: Record<string, number>
   }
   objectFieldSettings: ObjectFieldSettings
@@ -108,7 +116,9 @@ export interface LocalWorkspace {
 
 export interface ExportedLayout {
   version: 1
-  orbitRadii: Record<string, number>
+  orbitRadii: Record<string, OrbitRadii | number>
+  orbitEllipseRadii?: Record<string, OrbitRadii>
+  orbitRotations?: Record<string, number>
   objectAngles: Record<string, number>
 }
 
@@ -264,6 +274,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
       orbitRadii: {},
+      orbitRotations: {},
       objectAngles: {},
     },
     objectFieldSettings: defaultObjectFieldSettings(),
@@ -485,12 +496,14 @@ function mapObjectLabel(object: SystemObject): string {
 }
 
 function orbitLabel(system: StarSystem, orbit: Orbit): string {
-  const hostName = system.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
+  const hostName = orbit.hostId === null
+    ? 'unoccupied center'
+    : system.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
   return `Orbit ${orbit.order} around ${hostName}`
 }
 
 function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
-  const byHost = new Map<string, Orbit[]>()
+  const byHost = new Map<string | null, Orbit[]>()
   for (const orbit of orbits) {
     const hosted = byHost.get(orbit.hostId) ?? []
     hosted.push(orbit)
@@ -547,6 +560,7 @@ export function planMapEntityDeletion(
     objectsByOrbit.set(object.placement.orbitId, children)
   }
   for (const orbit of system?.orbits ?? []) {
+    if (orbit.hostId === null) continue
     const hosted = orbitsByHost.get(orbit.hostId) ?? []
     hosted.push(orbit)
     orbitsByHost.set(orbit.hostId, hosted)
@@ -664,6 +678,8 @@ export function planMapEntityDeletion(
         systemPositions: Object.fromEntries(Object.entries(workspace.layout.systemPositions)
           .filter(([systemId]) => !removedSystemIds.has(systemId))),
         orbitRadii: Object.fromEntries(Object.entries(workspace.layout.orbitRadii)
+          .filter(([orbitId]) => !removedOrbitIds.has(orbitId))),
+        orbitRotations: Object.fromEntries(Object.entries(workspace.layout.orbitRotations)
           .filter(([orbitId]) => !removedOrbitIds.has(orbitId))),
         objectAngles: Object.fromEntries(Object.entries(workspace.layout.objectAngles)
           .filter(([objectId]) => !removedObjectIds.has(objectId))),
@@ -802,18 +818,40 @@ export function createSystemObject(
   }
 }
 
-export function createOrbit(system: StarSystem, hostId: string): Orbit {
-  if (!system.objects.some(object => object.id === hostId)) {
+export function createOrbit(system: StarSystem, hostId: string | null): Orbit {
+  if (hostId !== null && !system.objects.some(object => object.id === hostId)) {
     throw new Error('Choose an existing map object to host an Orbit.')
   }
 
   const order = system.orbits
     .filter(orbit => orbit.hostId === hostId)
     .reduce((highest, orbit) => Math.max(highest, orbit.order), 0) + 1
-  return { id: crypto.randomUUID(), hostId, order }
+  if (hostId !== null) return { id: crypto.randomUUID(), hostId, order }
+
+  let centerIndex = 0
+  let center: Point
+  do {
+    center = {
+      x: 0.18 + (centerIndex % 3) * 0.32,
+      y: 0.22 + Math.floor(centerIndex / 3) * 0.3,
+    }
+    centerIndex += 1
+  } while (system.orbits.some(orbit =>
+    orbit.hostId === null
+      && orbit.center.x === center.x
+      && orbit.center.y === center.y,
+  ))
+
+  return {
+    id: crypto.randomUUID(),
+    hostId: null,
+    center,
+    order,
+  }
 }
 
-function orbitHost(system: StarSystem, orbit: Orbit): SystemObject {
+function orbitHost(system: StarSystem, orbit: Orbit): SystemObject | null {
+  if (orbit.hostId === null) return null
   const host = system.objects.find(object => object.id === orbit.hostId)
   if (!host) {
     throw new Error(`Orbit "${orbit.id}" has no host object.`)
@@ -822,13 +860,15 @@ function orbitHost(system: StarSystem, orbit: Orbit): SystemObject {
 }
 
 export function defaultOrbitRadius(system: StarSystem, orbit: Orbit): number {
-  return orbitHost(system, orbit).subtype === 'star'
+  const host = orbitHost(system, orbit)
+  return host === null || host.subtype === 'star'
     ? 112 + (orbit.order - 1) * 58
     : 46 + (orbit.order - 1) * 28
 }
 
 export function minimumOrbitRadius(system: StarSystem, orbit: Orbit): number {
-  return Math.ceil((orbitHost(system, orbit).subtype === 'star' ? 23 : 14) + 16)
+  const host = orbitHost(system, orbit)
+  return Math.ceil((host === null ? 0 : host.subtype === 'star' ? 23 : 14) + 16)
 }
 
 export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbitId: string): boolean {
@@ -836,6 +876,7 @@ export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbi
   if (!orbit) {
     return false
   }
+  if (orbit.hostId === null) return true
 
   const visited = new Set<string>()
   let host = system.objects.find(object => object.id === orbit.hostId)
@@ -850,6 +891,8 @@ export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbi
 
     const placement = host.placement
     const parentOrbit = system.orbits.find(candidate => candidate.id === placement.orbitId)
+    if (!parentOrbit) return false
+    if (parentOrbit.hostId === null) return true
     host = system.objects.find(object => object.id === parentOrbit?.hostId)
   }
   return false
@@ -989,6 +1032,79 @@ export function moveOrbit(system: StarSystem, orbitId: string, direction: -1 | 1
     orbits: system.orbits.map(candidate => {
       if (candidate.id === orbit.id) return { ...candidate, order: adjacent.order }
       if (candidate.id === adjacent.id) return { ...candidate, order: orbit.order }
+      return candidate
+    }),
+  }
+}
+
+export function moveOrbitCenter(
+  system: StarSystem,
+  orbitId: string,
+  center: Point,
+  hostId: string | null,
+): StarSystem {
+  const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+  if (!orbit) {
+    throw new Error('The selected Orbit no longer exists.')
+  }
+  if (orbit.hostId !== null) {
+    throw new Error('Only an Orbit with an unoccupied center can be moved.')
+  }
+  if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) {
+    throw new Error('Orbit center coordinates must be finite numbers.')
+  }
+  if (hostId !== null && !system.objects.some(object => object.id === hostId)) {
+    throw new Error('Choose an existing map object to host an Orbit.')
+  }
+
+  const order = hostId === null
+    ? orbit.order
+    : system.orbits
+      .filter(candidate => candidate.hostId === hostId)
+      .reduce((highest, candidate) => Math.max(highest, candidate.order), 0) + 1
+
+  return {
+    ...system,
+    orbits: system.orbits.map(candidate => {
+      if (candidate.id === orbitId) {
+        return hostId === null
+          ? { id: orbit.id, hostId: null, center, order }
+          : { id: orbit.id, hostId, order }
+      }
+      if (hostId !== null && candidate.hostId === null && candidate.order > orbit.order) {
+        return { ...candidate, order: candidate.order - 1 }
+      }
+      return candidate
+    }),
+  }
+}
+
+export function detachOrbit(system: StarSystem, orbitId: string, center: Point): StarSystem {
+  const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+  if (!orbit) {
+    throw new Error('The selected Orbit no longer exists.')
+  }
+  if (orbit.hostId === null) {
+    throw new Error('The selected Orbit already has an unoccupied center.')
+  }
+  if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) {
+    throw new Error('Orbit center coordinates must be finite numbers.')
+  }
+
+  const hostId = orbit.hostId
+  const nextUnhostedOrder = system.orbits
+    .filter(candidate => candidate.hostId === null)
+    .reduce((highest, candidate) => Math.max(highest, candidate.order), 0) + 1
+
+  return {
+    ...system,
+    orbits: system.orbits.map(candidate => {
+      if (candidate.id === orbit.id) {
+        return { id: orbit.id, hostId: null, center, order: nextUnhostedOrder }
+      }
+      if (candidate.hostId === hostId && candidate.order > orbit.order) {
+        return { ...candidate, order: candidate.order - 1 }
+      }
       return candidate
     }),
   }
@@ -1136,14 +1252,76 @@ function isSystemObject(value: unknown): value is SystemObject {
 }
 
 function isOrbit(value: unknown): value is Orbit {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || value.id.length === 0
+    || typeof value.order !== 'number'
+    || !Number.isSafeInteger(value.order)
+    || value.order <= 0
+  ) {
+    return false
+  }
+
+  return value.hostId === null
+    ? isPoint(value.center)
+    : typeof value.hostId === 'string'
+      && value.hostId.length > 0
+      && value.center === undefined
+}
+
+function isOrbitRadii(value: unknown): value is OrbitRadii {
   return isRecord(value)
-    && typeof value.id === 'string'
-    && value.id.length > 0
-    && typeof value.hostId === 'string'
-    && value.hostId.length > 0
-    && typeof value.order === 'number'
-    && Number.isSafeInteger(value.order)
-    && value.order > 0
+    && typeof value.horizontal === 'number'
+    && Number.isFinite(value.horizontal)
+    && typeof value.vertical === 'number'
+    && Number.isFinite(value.vertical)
+}
+
+function normalizeOrbitRadii(
+  orbitRadii: unknown,
+  legacyEllipseRadii: unknown = {},
+): Record<string, OrbitRadii> | null {
+  if (!isRecord(orbitRadii) || !isRecord(legacyEllipseRadii)) return null
+
+  const normalized = new Map<string, OrbitRadii>()
+  for (const [orbitId, radii] of Object.entries(orbitRadii)) {
+    if (typeof radii === 'number' && Number.isFinite(radii)) {
+      normalized.set(orbitId, { horizontal: radii, vertical: radii })
+    } else if (isOrbitRadii(radii)) {
+      normalized.set(orbitId, radii)
+    } else {
+      return null
+    }
+  }
+  for (const [orbitId, radii] of Object.entries(legacyEllipseRadii)) {
+    if (normalized.has(orbitId) || !isOrbitRadii(radii)) {
+      return null
+    }
+    normalized.set(orbitId, radii)
+  }
+  return Object.fromEntries(normalized)
+}
+
+function orbitRadiiMeetMinimum(radii: OrbitRadii, minimum: number): boolean {
+  return radii.horizontal >= minimum && radii.vertical >= minimum
+}
+
+export function normalizeOrbitRotation(degrees: number): number {
+  if (!Number.isFinite(degrees)) {
+    throw new Error('Orbit rotation must be finite.')
+  }
+  const normalized = ((degrees % 360) + 360) % 360
+  return normalized === 0 ? 0 : normalized
+}
+
+function normalizeOrbitRotations(value: unknown): Record<string, number> | null {
+  if (!isRecord(value)) return null
+  const rotations = new Map<string, number>()
+  for (const [orbitId, rotation] of Object.entries(value)) {
+    if (typeof rotation !== 'number' || !Number.isFinite(rotation)) return null
+    rotations.set(orbitId, normalizeOrbitRotation(rotation))
+  }
+  return Object.fromEntries(rotations)
 }
 
 function isJumpRoute(value: unknown): value is JumpRoute {
@@ -1195,15 +1373,21 @@ function isSystemStructureValid(system: StarSystem): boolean {
     return false
   }
 
-  const ordersByHost = new Map<string, number[]>()
+  const ordersByHost = new Map<string | null, number[]>()
   for (const orbit of system.orbits) {
-    if (!objectIds.has(orbit.hostId) || ids.has(orbit.id)) {
+    if (
+      (orbit.hostId !== null && !objectIds.has(orbit.hostId))
+      || ids.has(orbit.id)
+    ) {
       return false
     }
     ids.add(orbit.id)
     const orders = ordersByHost.get(orbit.hostId) ?? []
     orders.push(orbit.order)
     ordersByHost.set(orbit.hostId, orders)
+    if (orbit.hostId === null && !isPoint(orbit.center)) {
+      return false
+    }
   }
 
   for (const orders of ordersByHost.values()) {
@@ -1255,7 +1439,12 @@ function isStarSystem(value: unknown): value is StarSystem {
 }
 
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
-  & Partial<Pick<LocalWorkspace['layout'], 'orbitRadii' | 'objectAngles'>>
+  & {
+    orbitRadii?: Record<string, unknown>
+    orbitEllipseRadii?: Record<string, unknown>
+    orbitRotations?: Record<string, number>
+    objectAngles?: Record<string, number>
+  }
 
 type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout'> & {
   objectFieldSettings?: ObjectFieldSettings
@@ -1283,6 +1472,8 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     || !isRecord(layout)
     || !isRecord(layout.systemPositions)
     || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
+    || (layout.orbitEllipseRadii !== undefined && !isRecord(layout.orbitEllipseRadii))
+    || (layout.orbitRotations !== undefined && !isRecord(layout.orbitRotations))
     || (layout.objectAngles !== undefined && !isRecord(layout.objectAngles))
   ) {
     return false
@@ -1342,24 +1533,30 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   }
 
   const positions = layout.systemPositions
-  const orbitRadii = isRecord(layout.orbitRadii) ? layout.orbitRadii : {}
+  const orbitRadii = normalizeOrbitRadii(
+    layout.orbitRadii ?? {},
+    layout.orbitEllipseRadii ?? {},
+  )
+  if (!orbitRadii) return false
+  const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
+  if (!orbitRotations) return false
   const objectAngles = layout.objectAngles ?? {}
   const orbits = systems.flatMap(system =>
     system.orbits.map(orbit => ({ orbit, system })),
   )
+  const orbitIds = new Set(orbits.map(({ orbit }) => orbit.id))
   const orbitObjects = new Set(systems.flatMap(system =>
     system.objects
       .filter(object => object.placement.kind === 'orbit')
       .map(object => object.id),
   ))
   return Object.values(positions).every(isPoint)
-    && Object.entries(orbitRadii).every(([orbitId, radius]) => {
+    && Object.entries(orbitRadii).every(([orbitId, radii]) => {
       const entry = orbits.find(candidate => candidate.orbit.id === orbitId)
-      return typeof radius === 'number'
-        && Number.isFinite(radius)
-        && entry !== undefined
-        && radius >= minimumOrbitRadius(entry.system, entry.orbit)
+      return entry !== undefined
+        && orbitRadiiMeetMinimum(radii, minimumOrbitRadius(entry.system, entry.orbit))
     })
+    && Object.keys(orbitRotations).every(orbitId => orbitIds.has(orbitId))
     && Object.values(objectAngles).every(value => typeof value === 'number' && Number.isFinite(value))
     && Object.keys(objectAngles).every(objectId => orbitObjects.has(objectId))
     && systems.every(system =>
@@ -1394,11 +1591,20 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
     return null
   }
 
+  const orbitRadii = normalizeOrbitRadii(
+    restored.layout.orbitRadii ?? {},
+    restored.layout.orbitEllipseRadii ?? {},
+  )
+  if (!orbitRadii) return null
+  const orbitRotations = normalizeOrbitRotations(restored.layout.orbitRotations ?? {})
+  if (!orbitRotations) return null
+
   return {
     ...restored,
     layout: {
-      ...restored.layout,
-      orbitRadii: restored.layout.orbitRadii ?? {},
+      systemPositions: restored.layout.systemPositions,
+      orbitRadii,
+      orbitRotations,
       objectAngles: restored.layout.objectAngles ?? {},
     },
     objectFieldSettings: restored.objectFieldSettings ?? defaultObjectFieldSettings(),
@@ -1439,6 +1645,8 @@ export function exportStarSystem(workspace: LocalWorkspace, systemId: string): S
       version: 1,
       orbitRadii: Object.fromEntries(Object.entries(workspace.layout.orbitRadii)
         .filter(([orbitId]) => orbitIds.has(orbitId))),
+      orbitRotations: Object.fromEntries(Object.entries(workspace.layout.orbitRotations)
+        .filter(([orbitId]) => orbitIds.has(orbitId))),
       objectAngles: Object.fromEntries(Object.entries(workspace.layout.objectAngles)
         .filter(([objectId]) => orbitalObjectIds.has(objectId))),
     },
@@ -1462,6 +1670,13 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
   if (value.type === 'cluster') {
     const cluster = value.cluster
     if (!isRecord(cluster)) return false
+    const orbitRadii = normalizeOrbitRadii(
+      layout.orbitRadii ?? {},
+      layout.orbitEllipseRadii ?? {},
+    )
+    if (!orbitRadii) return false
+    const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
+    if (!orbitRotations) return false
     const validationIds = new Set<string>([cluster.id as string])
     for (const system of Array.isArray(cluster.systems) ? cluster.systems : []) {
       if (isRecord(system) && typeof system.id === 'string') validationIds.add(system.id)
@@ -1489,7 +1704,8 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
       objectFieldSettings: settings,
       layout: {
         systemPositions: layout.systemPositions,
-        orbitRadii: layout.orbitRadii,
+        orbitRadii,
+        orbitRotations,
         objectAngles: layout.objectAngles,
       },
     }
@@ -1504,17 +1720,20 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
   if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)) return false
 
   const orbitIds = new Set(system.orbits.map(orbit => orbit.id))
+  const orbitRadii = normalizeOrbitRadii(layout.orbitRadii, layout.orbitEllipseRadii ?? {})
+  if (!orbitRadii) return false
+  const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
+  if (!orbitRotations) return false
   const orbitalObjectIds = new Set(system.objects
     .filter(object => object.placement.kind === 'orbit')
     .map(object => object.id))
-  return Object.entries(layout.orbitRadii).every(([orbitId, radius]) => {
+  return Object.entries(orbitRadii).every(([orbitId, radii]) => {
     const orbit = system.orbits.find(candidate => candidate.id === orbitId)
     return orbitIds.has(orbitId)
-      && typeof radius === 'number'
-      && Number.isFinite(radius)
       && orbit !== undefined
-      && radius >= minimumOrbitRadius(system, orbit)
+      && orbitRadiiMeetMinimum(radii, minimumOrbitRadius(system, orbit))
   })
+    && Object.keys(orbitRotations).every(orbitId => orbitIds.has(orbitId))
     && Object.values(layout.objectAngles).every(angle => typeof angle === 'number' && Number.isFinite(angle))
     && Object.keys(layout.objectAngles).every(objectId => orbitalObjectIds.has(objectId))
     && system.objects.every(object =>
@@ -1582,11 +1801,9 @@ function remapImportedSystem(
           }
         : {}),
     })),
-    orbits: system.orbits.map(orbit => ({
-      ...orbit,
-      id: ids.get(orbit.id)!,
-      hostId: ids.get(orbit.hostId)!,
-    })),
+    orbits: system.orbits.map((orbit): Orbit => orbit.hostId === null
+      ? { ...orbit, id: ids.get(orbit.id)! }
+      : { ...orbit, id: ids.get(orbit.id)!, hostId: ids.get(orbit.hostId)! }),
   }
 }
 
@@ -1717,6 +1934,7 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
   const layout = {
     systemPositions: { ...workspace.layout.systemPositions },
     orbitRadii: { ...workspace.layout.orbitRadii },
+    orbitRotations: { ...workspace.layout.orbitRotations },
     objectAngles: { ...workspace.layout.objectAngles },
   }
   const addedSystemIds = importedSystems.map(system => system.id)
@@ -1724,22 +1942,30 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     for (const [sourceId, position] of Object.entries(map.layout.systemPositions)) {
       layout.systemPositions[ids.get(sourceId)!] = position
     }
-    for (const [sourceId, radius] of Object.entries(map.layout.orbitRadii)) {
-      layout.orbitRadii[ids.get(sourceId)!] = radius
-    }
-    for (const [sourceId, angle] of Object.entries(map.layout.objectAngles)) {
-      layout.objectAngles[ids.get(sourceId)!] = angle
-    }
   } else {
-    for (const [sourceId, radius] of Object.entries(map.layout.orbitRadii)) {
-      layout.orbitRadii[ids.get(sourceId)!] = radius
-    }
-    for (const [sourceId, angle] of Object.entries(map.layout.objectAngles)) {
-      layout.objectAngles[ids.get(sourceId)!] = angle
-    }
     layout.systemPositions[addedSystemIds[0]] = initialClusterSystemPosition(
       workspace.cluster.systems.length,
     )
+  }
+  const importedOrbitRadii = normalizeOrbitRadii(
+    map.layout.orbitRadii,
+    map.layout.orbitEllipseRadii ?? {},
+  )
+  if (!importedOrbitRadii) {
+    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+  }
+  for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
+    layout.orbitRadii[ids.get(sourceId)!] = radii
+  }
+  const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
+  if (!importedOrbitRotations) {
+    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+  }
+  for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
+    layout.orbitRotations[ids.get(sourceId)!] = rotation
+  }
+  for (const [sourceId, angle] of Object.entries(map.layout.objectAngles)) {
+    layout.objectAngles[ids.get(sourceId)!] = angle
   }
 
   const nextWorkspace: LocalWorkspace = {

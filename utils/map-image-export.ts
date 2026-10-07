@@ -90,6 +90,7 @@ function createExportSvg(source: SVGSVGElement, title?: string): { blob: Blob; w
       if (value) element.style.setProperty(property, value)
     }
   }
+  content.querySelectorAll('.orbit-edit-control').forEach(control => control.remove())
 
   if (exportTitle) {
     const titleElement = copy.ownerDocument.createElementNS(svgNamespace, 'text')

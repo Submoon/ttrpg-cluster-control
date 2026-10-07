@@ -89,14 +89,16 @@ The domain model remains independent of the web framework and renderer. V1 does 
 - The editor uses a map-first canvas, a hierarchical object/Orbit navigator, and a right-side inspector.
 - Nuxt owns the application shell and controls; a client-only D3 map component owns its SVG subtree. Both the Jump Cluster and system views use this D3/SVG approach. Do not add a force simulation or a second map renderer.
 - Both views support pointer-centered wheel/trackpad/pinch zoom, panning by dragging the empty background, and visible zoom-in, zoom-out, and fit controls. Zoom is limited to 25–1600%, with unbounded panning.
-- System nodes and map objects remain separately draggable. Changing an Orbit radius moves its objects along the ring while preserving their stored angles. The radius has a host-clearance minimum and no fixed maximum.
+- System nodes and map objects remain separately draggable. Every Orbit is an ellipse; equal radii form a circle. Its horizontal and vertical radii have host-clearance minimums and no fixed maximum. Selected Orbits expose right and top handles for axis-specific resizing, plus a rotation handle; dragging elsewhere on the ring scales both radii uniformly. Selected Orbits with unoccupied centers expose a draggable center handle. Resizing, rotation, and moving the center preserve child-object angles. Ctrl+mouse wheel over the selected Orbit also rotates it; Ctrl+mouse wheel elsewhere retains map zoom.
+- Orbits can be dragged from the Add Object palette onto a map object to attach them, or onto empty map space to create an Orbit around an unoccupied center at the drop point. The Selected inspector can detach a hosted Orbit to a nearby free center.
+- Orbit names are not drawn on the system map or in SVG/PNG exports.
 - SVG map elements are keyboard-focusable and have accessible names; visible controls provide an alternative to gesture-based zoom.
 - Deleting an entity with dependents requires an explicit confirmation that identifies the affected entities. Canceling leaves all data unchanged.
 
 ### Persistence, interchange, and exports
 
 - Store the local workspace and map layout in IndexedDB. Read it only after application hydration and save committed edits transactionally. A failed write must surface as an unsaved/error state.
-- Cluster JSON contains its systems, routes, system-node positions, and a versioned layout section. Standalone-system JSON contains only local system content and Jump Points, not cluster routes. Both layout sections preserve custom Orbit radii and orbital-object angles. Neither contains current selection or zoom/pan state.
+- Cluster JSON contains its systems, routes, system-node positions, and a versioned layout section. Standalone-system JSON contains only local system content and Jump Points, not cluster routes. Both layout sections preserve custom Orbit radii, rotations, and orbital-object angles. Neither contains current selection or zoom/pan state.
 - Validate and preview imports before writing. An accepted import creates an independent copy with new IDs; it never merges with or replaces existing entities. Show incoming entity counts and original-ID collisions with possible existing duplicates, but do not treat matching names or keys as identity.
 - Remap internal references and ID-keyed layout entries through the same old-to-new ID map. Cluster route endpoints that refer to included Jump Points receive new IDs; unresolved external exits remain unresolved. Standalone-system exports and imports contain no cluster routes.
 - Export the complete map regardless of the current viewport. Serialize the D3-generated SVG for SVG export and rasterize that same scene through browser Canvas for PNG export.

@@ -49,6 +49,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md): system objects and Orbits can extend beyond the former 960x560 scene; the background and grid grow with the layout, Fit and exports include the expanded content, and existing saved positions remain unchanged.
 - [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md): Jump Routes use positive Jump levels and identify their known destination systems or explicitly unknown exits while preserving existing routes and JSON compatibility.
 - [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md): Add Object and Map Files use larger scoped typography with compact, unclipped layouts; Map Files actions scroll within a bounded panel.
+- [25. Supporting elliptical Orbits and unoccupied centers](tickets/25-special-orbits.md): every Orbit is an ellipse (equal radii form a circle), draggable from Add Object onto a host or unoccupied center; a selected unoccupied Orbit's center handle moves its objects, while Detach gives a hosted Orbit a nearby unoccupied center without changing dimensions, rotation, or child angles and reindexes its old host's Orbits. Axis handles, uniform ring resizing, and handle/Ctrl+wheel rotation preserve child angles and persist through workspace and JSON; Orbit names do not appear on maps or in SVG/PNG exports.
 
 ## Implementation tickets
 
@@ -73,7 +74,7 @@ Implement in dependency order; each ticket also lists its blockers.
 | 22 | [22. Expanding the system-map grid and layout bounds](tickets/22-expanding-system-map-grid.md) | None |
 | 23 | [23. Supporting Jump levels and destinations](tickets/23-jump-levels-and-destinations.md) | None |
 | 24 | [24. Improving text readability in Add Object and Map Files](tickets/24-map-actions-typography.md) | None |
-| 25 | [25. Supporting elliptical and centerless Orbits](tickets/25-special-orbits.md) | None |
+| 25 | [25. Supporting elliptical Orbits and unoccupied centers](tickets/25-special-orbits.md) | None |
 | 26 | [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md) | None |
 
 ## Out of scope

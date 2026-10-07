@@ -9,12 +9,16 @@ import {
   createJumpRoute,
   createOrbit,
   createSystemObject,
+  defaultOrbitRadius,
+  detachOrbit,
   exportJumpCluster,
   exportStarSystem,
   initialSystemPlacement,
   jumpPointsInCluster,
   minimumOrbitRadius,
   moveOrbit,
+  moveOrbitCenter,
+  normalizeOrbitRotation,
   planMapEntityDeletion,
   prepareJsonImport,
   renameLocalWorkspace,
@@ -33,6 +37,7 @@ import {
   type MapDeletionTarget,
   type ObjectPlacement,
   type Orbit,
+  type OrbitRadii,
   type Point,
   type StarSystem,
   type SystemObject,
@@ -43,7 +48,7 @@ import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export
 import { catalogueMarks, objectMark } from '../utils/catalogue-marks'
 
 type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
-type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject; childCount: number; depth: number }
+type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject | null; childCount: number; depth: number }
 type HierarchyRow = ObjectRow | OrbitRow
 interface SystemObjectDraft {
   locationKey: string
@@ -104,6 +109,10 @@ type PendingFieldDefinitionChange =
       affectedAssignments: FieldValueAssignment[]
     }
 
+interface SystemMapHandle extends MapImageExporter {
+  getDetachedOrbitCenter(orbitId: string): Point | undefined
+}
+
 const {
   workspace,
   hydrationState,
@@ -125,6 +134,10 @@ const objectEditSnapshot = shallowRef<SystemObject | null>(null)
 const editingRouteId = ref<string | null>(null)
 const orbitEditing = ref(false)
 const orbitOrderDraft = ref('')
+const orbitHorizontalRadiusDraft = ref('')
+const orbitVerticalRadiusDraft = ref('')
+const orbitCenterXDraft = ref('')
+const orbitCenterYDraft = ref('')
 const chartNamesEditing = ref(false)
 const routeFormOpen = ref(false)
 const hierarchyPanelOpen = ref(true)
@@ -169,7 +182,7 @@ const exportError = ref('')
 const headerMapActionsOpen = ref(false)
 const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
 const clusterMapRef = shallowRef<MapImageExporter | null>(null)
-const systemMapRef = shallowRef<MapImageExporter | null>(null)
+const systemMapRef = shallowRef<SystemMapHandle | null>(null)
 
 function updateViewportMode(): void {
   isCompactViewport.value = window.matchMedia('(max-width: 760px)').matches
@@ -218,6 +231,11 @@ const selectedObject = computed(() =>
 const selectedOrbit = computed(() =>
   selectedSystem.value?.orbits.find(orbit => orbit.id === selectedOrbitId.value),
 )
+const selectedOrbitMinimumRadius = computed(() => {
+  const system = selectedSystem.value
+  const orbit = selectedOrbit.value
+  return system && orbit ? minimumOrbitRadius(system, orbit) : 16
+})
 const selectedRoute = computed(() =>
   workspace.value?.cluster.routes.find(route => route.id === selectedRouteId.value),
 )
@@ -257,7 +275,9 @@ const physicalStations = computed(() =>
 const selectedOrbitDeleteLabel = computed(() => {
   const orbit = selectedOrbit.value
   if (!orbit) return 'Delete Orbit'
-  const hostName = selectedSystem.value?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
+  const hostName = orbit.hostId === null
+    ? 'unoccupied center'
+    : selectedSystem.value?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
   return `Delete Orbit ${orbit.order} around ${hostName}`
 })
 function fieldDefinitionsFor(currentWorkspace: LocalWorkspace): FieldDefinitionSummary[] {
@@ -483,7 +503,7 @@ function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
   if (!system) return []
 
   const rows: HierarchyRow[] = []
-  const orbitsByHost = new Map<string, Orbit[]>()
+  const orbitsByHost = new Map<string | null, Orbit[]>()
   const objectsByOrbit = new Map<string, SystemObject[]>()
 
   for (const orbit of system.orbits) {
@@ -499,17 +519,24 @@ function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
     }
   }
 
+  function addOrbitBranch(orbit: Orbit, host: SystemObject | null, depth: number): void {
+    const children = objectsByOrbit.get(orbit.id) ?? []
+    rows.push({ kind: 'orbit', orbit, host, childCount: children.length, depth })
+    for (const child of children) addObjectBranch(child, depth + 1)
+  }
+
   function addObjectBranch(object: SystemObject, depth: number): void {
     rows.push({ kind: 'object', object, depth })
     const hostedOrbits = orbitsByHost.get(object.id) ?? []
     hostedOrbits.sort((left, right) => left.order - right.order)
     for (const orbit of hostedOrbits) {
-      const children = objectsByOrbit.get(orbit.id) ?? []
-      rows.push({ kind: 'orbit', orbit, host: object, childCount: children.length, depth: depth + 1 })
-      for (const child of children) addObjectBranch(child, depth + 2)
+      addOrbitBranch(orbit, object, depth + 1)
     }
   }
 
+  const unhostedOrbits = orbitsByHost.get(null) ?? []
+  unhostedOrbits.sort((left, right) => left.order - right.order)
+  for (const orbit of unhostedOrbits) addOrbitBranch(orbit, null, 0)
   for (const object of system.objects) {
     if (object.placement.kind === 'system') addObjectBranch(object, 0)
   }
@@ -762,6 +789,8 @@ function workspaceWithSystem(currentWorkspace: LocalWorkspace, system: StarSyste
       ...currentWorkspace.layout,
       orbitRadii: Object.fromEntries(Object.entries(currentWorkspace.layout.orbitRadii)
         .filter(([orbitId]) => orbitIds.has(orbitId))),
+      orbitRotations: Object.fromEntries(Object.entries(currentWorkspace.layout.orbitRotations)
+        .filter(([orbitId]) => orbitIds.has(orbitId))),
       objectAngles: Object.fromEntries(Object.entries(currentWorkspace.layout.objectAngles)
         .filter(([objectId]) => orbitalObjectIds.has(objectId))),
     },
@@ -885,22 +914,106 @@ async function rotateMapObject(objectId: string, angle: number): Promise<void> {
   }
 }
 
-async function resizeMapOrbit(orbitId: string, radius: number): Promise<void> {
+async function resizeMapOrbit(orbitId: string, radii: OrbitRadii): Promise<void> {
   const currentWorkspace = workspace.value
   const system = selectedSystem.value
   const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
   if (!currentWorkspace || !system || !orbit) return
 
   try {
-    if (!Number.isFinite(radius)) throw new Error('An Orbit radius must be finite.')
+    const minimum = minimumOrbitRadius(system, orbit)
+    const orbitRadii = { ...currentWorkspace.layout.orbitRadii }
+    if (!Number.isFinite(radii.horizontal) || !Number.isFinite(radii.vertical)) {
+      throw new Error('Orbit radii must be finite.')
+    }
+    orbitRadii[orbitId] = {
+      horizontal: Math.max(minimum, Math.round(radii.horizontal)),
+      vertical: Math.max(minimum, Math.round(radii.vertical)),
+    }
     await commit({
       ...currentWorkspace,
       layout: {
         ...currentWorkspace.layout,
-        orbitRadii: {
-          ...currentWorkspace.layout.orbitRadii,
-          [orbitId]: Math.max(minimumOrbitRadius(system, orbit), Math.round(radius)),
-        },
+        orbitRadii,
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function rotateMapOrbit(orbitId: string, degrees: number): Promise<void> {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  if (!currentWorkspace || !system?.orbits.some(orbit => orbit.id === orbitId)) return
+
+  try {
+    const orbitRotations = {
+      ...currentWorkspace.layout.orbitRotations,
+      [orbitId]: normalizeOrbitRotation(degrees),
+    }
+    await commit({
+      ...currentWorkspace,
+      layout: {
+        ...currentWorkspace.layout,
+        orbitRotations,
+      },
+    })
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function moveMapOrbitCenter(
+  orbitId: string,
+  center: Point,
+  hostId: string | null,
+): Promise<void> {
+  const system = selectedSystem.value
+  if (!system) return
+
+  try {
+    await saveSystem(moveOrbitCenter(system, orbitId, center, hostId))
+    editorError.value = ''
+  } catch (error) {
+    editorError.value = errorText(error)
+  }
+}
+
+async function detachSelectedOrbit(): Promise<void> {
+  const currentWorkspace = workspace.value
+  const system = selectedSystem.value
+  const orbit = selectedOrbit.value
+  if (
+    !currentWorkspace
+    || !system
+    || !orbit
+    || orbit.hostId === null
+    || !confirmDiscardInspectorEdits()
+  ) return
+
+  try {
+    const map = systemMapRef.value
+    if (!map) throw new Error('The system map is not ready.')
+    const center = map.getDetachedOrbitCenter(orbit.id)
+    if (!center) throw new Error('Could not find a nearby empty location for this Orbit.')
+    const nextWorkspace = workspaceWithSystem(
+      currentWorkspace,
+      detachOrbit(system, orbit.id, center),
+    )
+    const defaultRadius = defaultOrbitRadius(system, orbit)
+    const orbitRadii = {
+      ...nextWorkspace.layout.orbitRadii,
+      [orbit.id]: currentWorkspace.layout.orbitRadii[orbit.id]
+        ?? { horizontal: defaultRadius, vertical: defaultRadius },
+    }
+    await commit({
+      ...nextWorkspace,
+      layout: {
+        ...nextWorkspace.layout,
+        orbitRadii,
       },
     })
     editorError.value = ''
@@ -1290,35 +1403,76 @@ function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
   dataTransfer.setData('text/plain', subtype)
 }
 
-async function addOrbit(): Promise<void> {
+function startOrbitDrag(event: DragEvent): void {
+  const dataTransfer = event.dataTransfer
+  if (!dataTransfer) return
+
+  dataTransfer.effectAllowed = 'copy'
+  dataTransfer.setData('application/x-mothership-map-orbit', 'true')
+  dataTransfer.setData('text/plain', 'Orbit')
+}
+
+async function addOrbit(
+  hostId: string | null = selectedObject.value?.id ?? null,
+  dropPoint?: Point,
+): Promise<void> {
   const system = selectedSystem.value
-  const object = selectedObject.value
-  if (!system || !object || !confirmDiscardInspectorEdits()) return
+  if (!system || !confirmDiscardInspectorEdits()) return
 
   try {
-    const orbit = createOrbit(system, object.id)
-    selectedOrbitId.value = orbit.id
+    const orbit = createOrbit(system, hostId)
+    if (dropPoint && (!Number.isFinite(dropPoint.x) || !Number.isFinite(dropPoint.y))) {
+      throw new Error('The dropped map position must contain finite coordinates.')
+    }
+    const placedOrbit: Orbit = hostId === null && dropPoint
+      ? {
+          ...orbit,
+          hostId: null,
+          center: {
+            x: (dropPoint.x - 64) / 832,
+            y: (dropPoint.y - 72) / 416,
+          },
+        }
+      : orbit
+    selectedOrbitId.value = placedOrbit.id
     selectedObjectId.value = null
     objectEditSnapshot.value = null
     orbitEditing.value = false
     editorError.value = ''
-    await saveSystem({ ...system, orbits: [...system.orbits, orbit] })
+    await saveSystem({ ...system, orbits: [...system.orbits, placedOrbit] })
   } catch (error) {
     editorError.value = errorText(error)
   }
+}
+
+function handleOrbitDrop(point: Point, hostId: string | null): Promise<void> {
+  return addOrbit(hostId, point)
+}
+
+function syncOrbitDraft(orbit: Orbit | undefined): void {
+  if (!orbit) return
+  const layout = workspace.value?.layout
+  const defaultRadius = selectedSystem.value ? defaultOrbitRadius(selectedSystem.value, orbit) : 0
+  const radii = layout?.orbitRadii[orbit.id]
+    ?? { horizontal: defaultRadius, vertical: defaultRadius }
+  orbitOrderDraft.value = String(orbit.order)
+  orbitHorizontalRadiusDraft.value = String(radii.horizontal)
+  orbitVerticalRadiusDraft.value = String(radii.vertical)
+  orbitCenterXDraft.value = orbit.hostId === null ? String(orbit.center.x) : ''
+  orbitCenterYDraft.value = orbit.hostId === null ? String(orbit.center.y) : ''
 }
 
 function beginOrbitEdit(): void {
   const orbit = selectedOrbit.value
   if (!orbit || !confirmDiscardInspectorEdits()) return
 
-  orbitOrderDraft.value = String(orbit.order)
+  syncOrbitDraft(orbit)
   orbitEditing.value = true
   editorError.value = ''
 }
 
 function cancelOrbitEdit(): void {
-  orbitOrderDraft.value = String(selectedOrbit.value?.order ?? '')
+  syncOrbitDraft(selectedOrbit.value)
   orbitEditing.value = false
   editorError.value = ''
 }
@@ -1329,10 +1483,11 @@ function reorderSelectedOrbit(direction: -1 | 1): void {
 }
 
 async function saveOrbitEdit(): Promise<void> {
+  const currentWorkspace = workspace.value
   const system = selectedSystem.value
   const orbit = selectedOrbit.value
   const targetOrder = Number(orbitOrderDraft.value)
-  if (!system || !orbit) return
+  if (!currentWorkspace || !system || !orbit) return
   const siblingCount = system.orbits.filter(candidate => candidate.hostId === orbit.hostId).length
   if (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > siblingCount) {
     editorError.value = 'Choose a valid Orbit order.'
@@ -1340,6 +1495,28 @@ async function saveOrbitEdit(): Promise<void> {
   }
 
   try {
+    const minimum = minimumOrbitRadius(system, orbit)
+    const horizontal = Math.round(Number(orbitHorizontalRadiusDraft.value))
+    const vertical = Math.round(Number(orbitVerticalRadiusDraft.value))
+    if (
+      !Number.isFinite(horizontal)
+      || !Number.isFinite(vertical)
+      || horizontal < minimum
+      || vertical < minimum
+    ) {
+      throw new Error(`Both Orbit radii must be at least ${minimum} map units.`)
+    }
+
+    let center: Point | undefined
+    if (orbit.hostId === null) {
+      const x = Number(orbitCenterXDraft.value)
+      const y = Number(orbitCenterYDraft.value)
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new Error('Orbit center coordinates must be finite numbers.')
+      }
+      center = { x, y }
+    }
+
     let updatedSystem = system
     let currentOrder = orbit.order
     while (currentOrder !== targetOrder) {
@@ -1347,9 +1524,34 @@ async function saveOrbitEdit(): Promise<void> {
       updatedSystem = moveOrbit(updatedSystem, orbit.id, direction)
       currentOrder += direction
     }
-    if (updatedSystem !== system) await saveSystem(updatedSystem)
+    if (center) {
+      updatedSystem = {
+        ...updatedSystem,
+        orbits: updatedSystem.orbits.map(candidate =>
+          candidate.id === orbit.id && candidate.hostId === null
+            ? { ...candidate, center }
+            : candidate,
+        ),
+      }
+    }
+    const nextWorkspace = workspaceWithSystem(currentWorkspace, updatedSystem)
+    const orbitRadii = { ...nextWorkspace.layout.orbitRadii }
+    const defaultRadius = defaultOrbitRadius(system, orbit)
+    const savedRadii = currentWorkspace.layout.orbitRadii[orbit.id]
+      ?? { horizontal: defaultRadius, vertical: defaultRadius }
+    if (savedRadii.horizontal !== horizontal || savedRadii.vertical !== vertical) {
+      orbitRadii[orbit.id] = { horizontal, vertical }
+    }
+    await commit({
+      ...nextWorkspace,
+      layout: {
+        ...nextWorkspace.layout,
+        orbitRadii,
+      },
+    })
     orbitEditing.value = false
     orbitOrderDraft.value = String(targetOrder)
+    syncOrbitDraft(updatedSystem.orbits.find(candidate => candidate.id === orbit.id))
     editorError.value = ''
   } catch (error) {
     editorError.value = errorText(error)
@@ -2247,8 +2449,11 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   class="object-palette-button object-palette-orbit"
                   type="button"
                   aria-label="Add orbit"
-                  :disabled="!selectedObject || saveState === 'saving'"
-                  @click="addOrbit"
+                  draggable="true"
+                  :disabled="saveState === 'saving'"
+                  title="Drag Orbit onto an object to host it, or onto the map for an unoccupied center"
+                  @dragstart="startOrbitDrag"
+                  @click="addOrbit()"
                 >
                   <span aria-hidden="true">+</span> Add Orbit
                 </button>
@@ -2378,19 +2583,19 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   :class="{ active: row.orbit.id === selectedOrbitId }"
                   type="button"
                   :style="{ paddingLeft: `${0.55 + row.depth * 0.8}rem` }"
-                  :aria-label="`Orbit ${row.orbit.order} around ${row.host.name}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`"
+                  :aria-label="`Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`"
                   :aria-current="row.orbit.id === selectedOrbitId ? 'true' : undefined"
                   @click="selectOrbit(row.orbit.id)"
                 >
                   <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
                   <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
                     Orbit {{ row.orbit.order }}
-                    <small class="mt-[0.18rem] block">{{ row.host.name }} / {{ row.childCount }} object{{ row.childCount === 1 ? '' : 's' }}</small>
+                    <small class="mt-[0.18rem] block">{{ row.host?.name ?? 'Unoccupied center' }} / {{ row.childCount }} object{{ row.childCount === 1 ? '' : 's' }}</small>
                   </span>
                 </button>
               </template>
             </nav>
-            <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Select an object, then add an Orbit from the map toolbar. Empty Orbits stay on the chart.</p>
+            <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Drag Orbit from Add Object onto a map object to host it, or elsewhere on the map to place an unoccupied center. Empty Orbits stay on the chart.</p>
               </aside>
             </Transition>
 
@@ -2401,15 +2606,19 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                   ref="systemMapRef"
                   :system="selectedSystem"
                   :orbit-radii="workspace.layout.orbitRadii"
+                  :orbit-rotations="workspace.layout.orbitRotations"
                   :object-angles="workspace.layout.objectAngles"
                   :selected-object-id="selectedObjectId"
                   :selected-orbit-id="selectedOrbitId"
                   @select-object="selectObject"
                   @select-orbit="selectOrbit"
                   @move-object="moveMapObject"
+                  @move-orbit-center="moveMapOrbitCenter"
                   @rotate-object="rotateMapObject"
                   @resize-orbit="resizeMapOrbit"
+                  @rotate-orbit="rotateMapOrbit"
                   @place-object-in-orbit="placeMapObjectInOrbit"
+                  @drop-orbit="handleOrbitDrop"
                   @drop-object="addObject"
                 />
                 <template #fallback>
@@ -2508,13 +2717,15 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                     @change="updateObjectPlacementDraft"
                   >
                     <option value="system">System-level position</option>
-                    <optgroup v-if="placeableOrbits.length" label="Hosted Orbits">
+                    <optgroup v-if="placeableOrbits.length" label="Orbits">
                       <option
                         v-for="orbit in placeableOrbits"
                         :key="orbit.id"
                         :value="`orbit:${orbit.id}`"
                       >
-                        Orbit {{ orbit.order }} around {{ selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name }}
+                        Orbit {{ orbit.order }} around {{ orbit.hostId === null
+                          ? 'unoccupied center'
+                          : selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name }}
                       </option>
                     </optgroup>
                   </select>
@@ -2683,12 +2894,55 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
               <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ orbitEditing ? orbitOrderDraft : selectedOrbit.order }}</h2>
               <p class="inspector-intro mb-[1em]">
-                Hosted by {{ selectedSystem.objects.find(object => object.id === selectedOrbit?.hostId)?.name }}.
+                <template v-if="selectedOrbit?.hostId === null">Centered on an unoccupied location.</template>
+                <template v-else>Hosted by {{ selectedSystem.objects.find(object => object.id === selectedOrbit?.hostId)?.name }}.</template>
                 Orbit rings show structure, not measured distance.
               </p>
               <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
                 <span>Objects placed</span>
                 <strong>{{ selectedSystem.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === selectedOrbit?.id).length }}</strong>
+              </div>
+              <div v-if="orbitEditing" class="orbit-edit-fields my-4 grid gap-3">
+                <label>
+                  Horizontal radius
+                  <input
+                    v-model="orbitHorizontalRadiusDraft"
+                    type="number"
+                    :min="selectedOrbitMinimumRadius"
+                    step="1"
+                    required
+                  >
+                </label>
+                <label>
+                  Vertical radius
+                  <input
+                    v-model="orbitVerticalRadiusDraft"
+                    type="number"
+                    :min="selectedOrbitMinimumRadius"
+                    step="1"
+                    required
+                  >
+                </label>
+                <div v-if="selectedOrbit?.hostId === null" class="grid grid-cols-2 gap-2">
+                  <label>
+                    Center X
+                    <input
+                      v-model="orbitCenterXDraft"
+                      type="number"
+                      step="0.01"
+                      required
+                    >
+                  </label>
+                  <label>
+                    Center Y
+                    <input
+                      v-model="orbitCenterYDraft"
+                      type="number"
+                      step="0.01"
+                      required
+                    >
+                  </label>
+                </div>
               </div>
               <div v-if="orbitEditing" class="orbit-actions flex gap-2" aria-label="Reorder Orbit">
                 <button
@@ -2722,7 +2976,17 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
                 >
                   Edit
                 </button>
-                <button v-else class="primary-button" type="button" aria-label="Save Orbit" :disabled="saveState === 'saving'" @click="saveOrbitEdit">
+                <button
+                  v-if="!orbitEditing && selectedOrbit.hostId !== null"
+                  class="secondary-button"
+                  type="button"
+                  aria-label="Detach Orbit"
+                  :disabled="saveState === 'saving'"
+                  @click="detachSelectedOrbit"
+                >
+                  Detach
+                </button>
+                <button v-if="orbitEditing" class="primary-button" type="button" aria-label="Save Orbit" :disabled="saveState === 'saving'" @click="saveOrbitEdit">
                   Save
                 </button>
                 <button v-if="orbitEditing" class="quiet-button" type="button" aria-label="Cancel Orbit edits" @click="cancelOrbitEdit">
@@ -2739,7 +3003,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
               >
                 Delete Orbit and contents
               </button>
-              <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Orbits are unkeyed, may remain empty, and can be nested below any map object.</p>
+              <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Orbits are unkeyed and may be nested. Detach a hosted Orbit to move its center, then drag that center handle. Drag the axis handles to resize, the ring to resize uniformly, or the outer handle or Ctrl+wheel over the ring to rotate.</p>
             </template>
 
             <template v-else>
