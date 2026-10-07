@@ -2,7 +2,8 @@
 title: 28. Showing the dragged map object in the drag preview
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -32,3 +33,9 @@ As a Warden, I see the map object I am placing under the pointer while dragging 
 - [16. Making the workspace darker and more map-first](16-map-first-visual-refresh.md)
 - [24. Improving text readability in Add Object and Map Files](24-map-actions-typography.md)
 - [25. Supporting elliptical Orbits and unoccupied centers](25-special-orbits.md)
+
+## Resolution
+
+The Add Object palette now uses the catalogue mark as its drag image, offset beside the pointer so the drop point stays clear. System-map and Orbit drops, cancellation, click activation, and keyboard activation remain unchanged.
+
+Validation: `npm run typecheck`, the focused browser test, and the latest `npm run test` passed (35/35). The Jump Route drag test alternated across four full runs (34/35, 35/35, 34/35, 35/35) and passed in isolation. Its failure was at source-box lookup, before any #28 drag handler ran; no causal link to #28 was found, though no pre-change baseline was run.

@@ -3,6 +3,16 @@ import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace
 
 type WorldPoint = { x: number; y: number }
 type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+type DragPreviewWindow = Window & {
+  __dragPreview?: {
+    height: number
+    offsetX: number
+    offsetY: number
+    tagName: string
+    text: string
+    width: number
+  }
+}
 type ExportedObject = {
   id: string
   name: string
@@ -109,6 +119,7 @@ async function dragHtmlElementToWorldPoint(
   source: import('@playwright/test').Locator,
   map: import('@playwright/test').Locator,
   point: WorldPoint,
+  duringDrag?: () => Promise<void>,
 ): Promise<void> {
   await source.scrollIntoViewIfNeeded()
   await map.scrollIntoViewIfNeeded()
@@ -129,6 +140,7 @@ async function dragHtmlElementToWorldPoint(
   )
   await page.mouse.down()
   await page.mouse.move(bounds.x + destination.x, bounds.y + destination.y, { steps: 12 })
+  if (duringDrag) await duringDrag()
   await page.mouse.up()
 }
 
@@ -2422,7 +2434,7 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
     .toBeVisible()
 })
 
-test('the object palette adds objects by drag or keyboard and drops planets into Orbits', async ({ page }) => {
+test('object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds', async ({ page }) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -2431,7 +2443,31 @@ test('the object palette adds objects by drag or keyboard and drops planets into
       if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
       return createObjectURL(object)
     }
+    const originalSetDragImage = DataTransfer.prototype.setDragImage
+    DataTransfer.prototype.setDragImage = function (image, offsetX, offsetY) {
+      const bounds = image.getBoundingClientRect()
+      const dragPreviewWindow = window as DragPreviewWindow
+      dragPreviewWindow.__dragPreview = {
+        height: bounds.height,
+        offsetX,
+        offsetY,
+        tagName: image.tagName,
+        text: image.textContent?.trim() ?? '',
+        width: bounds.width,
+      }
+      originalSetDragImage.call(this, image, offsetX, offsetY)
+    }
   })
+  const assertDragPreview = async (expectedText: string): Promise<string> => {
+    const preview = await page.evaluate(() => (window as DragPreviewWindow).__dragPreview)
+    if (!preview) throw new Error('The drag did not set a custom preview.')
+    expect(preview).toMatchObject({ tagName: 'SPAN', text: expectedText })
+    expect(preview.width).toBeGreaterThan(0)
+    expect(preview.offsetX).toBeGreaterThan(preview.width)
+    expect(preview.offsetX - preview.width).toBeLessThanOrEqual(12)
+    expect(preview.offsetY).toBeCloseTo(preview.height / 2, 1)
+    return preview.text
+  }
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -2459,12 +2495,37 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   expect(fileActionsBefore.buttonsFit).toBe(true)
   await setHeaderMapActionsOpen(page, false)
 
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const mapObjects = map.locator('.system-object')
+  const addStar = await selectCatalogueObjectButton(page, 'star')
+  const starMark = (await addStar.locator('.object-mark').textContent())?.trim() ?? ''
+  const objectsBeforeStarDrop = await mapObjects.count()
+  let starPreviewText = ''
+  await page.evaluate(() => {
+    (window as DragPreviewWindow).__dragPreview = undefined
+  })
+  await dragHtmlElementToWorldPoint(page, addStar, map, { x: 320, y: 400 }, async () => {
+    starPreviewText = await assertDragPreview(starMark)
+  })
+  await expect(mapObjects).toHaveCount(objectsBeforeStarDrop + 1)
+  await expect(mapObjects.nth(objectsBeforeStarDrop).locator('.system-object-glyph'))
+    .toHaveText(starPreviewText)
+
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await page.getByRole('button', { name: 'Add orbit' }).click()
-  const addPlanet = palette.getByRole('button', { name: 'Add Planet' })
-  await expect(addPlanet.locator('.object-mark')).toHaveText('◉')
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
-  await dragHtmlElementToWorldPoint(page, addPlanet, map, { x: 592, y: 280 })
+  const addPlanet = await selectCatalogueObjectButton(page, 'planet')
+  const planetMark = (await addPlanet.locator('.object-mark').textContent())?.trim() ?? ''
+  const objectsBeforePlanetDrop = await mapObjects.count()
+  let planetPreviewText = ''
+  await page.evaluate(() => {
+    (window as DragPreviewWindow).__dragPreview = undefined
+  })
+  await dragHtmlElementToWorldPoint(page, addPlanet, map, { x: 592, y: 280 }, async () => {
+    planetPreviewText = await assertDragPreview(planetMark)
+  })
+  await expect(mapObjects).toHaveCount(objectsBeforePlanetDrop + 1)
+  await expect(mapObjects.nth(objectsBeforePlanetDrop).locator('.system-object-glyph'))
+    .toHaveText(planetPreviewText)
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ }))
     .toBeVisible()
 
@@ -2478,6 +2539,22 @@ test('the object palette adds objects by drag or keyboard and drops planets into
     .locator('.object-hit-target'), { x: 592, y: 280 })
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
     .toBeVisible()
+
+  const addHazard = await selectCatalogueObjectButton(page, 'hazard')
+  const transformsBeforeCancel = await mapObjects.evaluateAll(objects =>
+    objects.map(object => object.getAttribute('transform')),
+  )
+  const hazardBounds = await addHazard.boundingBox()
+  if (!hazardBounds) throw new Error('Could not find the Hazard palette button.')
+  await page.mouse.move(hazardBounds.x + hazardBounds.width / 2, hazardBounds.y + hazardBounds.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(1, 1, { steps: 12 })
+  await page.mouse.up()
+  await expect(mapObjects).toHaveCount(transformsBeforeCancel.length)
+  expect(await mapObjects.evaluateAll(objects =>
+    objects.map(object => object.getAttribute('transform')),
+  )).toEqual(transformsBeforeCancel)
+
   await setHeaderMapActionsOpen(page, true)
   const fileActionsAfter = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
@@ -2500,6 +2577,9 @@ test('the object palette adds objects by drag or keyboard and drops planets into
   const system = exported.system
   if (!system) throw new Error('The exported file does not contain a star system.')
   const orbitId = system.orbits[0].id
+  const stars = system.objects.filter(object => object.subtype === 'star')
+  expect(stars).toHaveLength(2)
+  expect(stars[1]?.placement.kind).toBe('system')
   const planets = system.objects.filter(object => object.subtype === 'planet')
   expect(planets).toHaveLength(2)
   expect(planets.map(object => object.placement)).toEqual([

@@ -1478,6 +1478,13 @@ function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
   dataTransfer.effectAllowed = 'copy'
   dataTransfer.setData('application/x-mothership-map-object', subtype)
   dataTransfer.setData('text/plain', subtype)
+  const source = event.currentTarget
+  if (!(source instanceof HTMLElement)) throw new Error('Object drag must start from a palette button.')
+  const mark = source.querySelector<HTMLElement>('.object-mark')
+  if (!mark) throw new Error('Object palette button is missing its map mark.')
+
+  const bounds = mark.getBoundingClientRect()
+  dataTransfer.setDragImage(mark, bounds.width + 8, bounds.height / 2)
 }
 
 function startOrbitDrag(event: DragEvent): void {
