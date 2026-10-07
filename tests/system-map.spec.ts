@@ -1215,36 +1215,233 @@ test('cluster and system summaries stay in the header, outside the map scene', a
   }
 })
 
-test('side panels animate and Delete removes the selected object', async ({ page }) => {
+test('side panels collapse in ordered phases and Delete removes the selected object', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.locator('#workspace-hierarchy-panel')
-  const inspector = page.locator('#workspace-inspector-panel')
-  const expectPanelTransition = async (panel: import('@playwright/test').Locator, buttonName: string) => {
-    await panel.evaluate(element => {
-      const track = (event: Event) => {
-        if (event.target !== element) return
-        element.setAttribute('data-transition-started', 'true')
-        element.removeEventListener('transitionrun', track)
+  const sidebars = ['hierarchy', 'inspector'] as const
+  const expectReopenHandle = async (
+    sidebar: typeof sidebars[number],
+    verticalPosition: 'center' | 'system-bottom' = 'center',
+    reducedMotion = false,
+  ) => {
+    const handle = page.getByRole('button', { name: `Show ${sidebar} panel` })
+    await expect(handle).toBeVisible()
+    await expect(handle).toHaveAttribute('aria-controls', `workspace-${sidebar}-panel`)
+    await expect(handle).toHaveAttribute('aria-expanded', 'false')
+    const metrics = await handle.evaluate((element) => {
+      const label = element.querySelector<HTMLElement>('.panel-reopen-label')
+      const grid = element.closest<HTMLElement>('.editor-grid')
+      if (!label || !grid) throw new Error('The sidebar reopen control is incomplete.')
+      const bounds = element.getBoundingClientRect()
+      const labelBounds = label.getBoundingClientRect()
+      const gridBounds = grid.getBoundingClientRect()
+      const style = getComputedStyle(label)
+      return {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        right: bounds.right,
+        bottom: bounds.bottom,
+        viewportWidth: window.innerWidth,
+        gridCenterY: gridBounds.top + gridBounds.height / 2,
+        gridBottom: gridBounds.bottom,
+        writingMode: style.writingMode,
+        textOrientation: style.textOrientation,
+        labelFontSize: Number.parseFloat(style.fontSize),
+        labelWidth: labelBounds.width,
+        labelHeight: labelBounds.height,
+        animationName: style.animationName,
       }
-      element.removeAttribute('data-transition-started')
-      element.addEventListener('transitionrun', track)
     })
-    await page.getByRole('button', { name: buttonName }).click()
-    await expect(panel).toHaveAttribute('data-transition-started', 'true')
+    expect(metrics.width).toBeCloseTo(2.35 * 16, 1)
+    expect(metrics.height, JSON.stringify(metrics)).toBeCloseTo(7 * 16, 1)
+    expect(metrics.x).toBeCloseTo(
+      sidebar === 'hierarchy' ? 0 : metrics.viewportWidth - metrics.width,
+      1,
+    )
+    if (verticalPosition === 'system-bottom') {
+      expect(metrics.gridBottom - metrics.bottom).toBeCloseTo(2 * 16, 1)
+    } else {
+      expect(metrics.y + metrics.height / 2).toBeCloseTo(metrics.gridCenterY, 1)
+    }
+    expect(metrics.writingMode).toBe('vertical-rl')
+    expect(metrics.textOrientation).toBe('upright')
+    expect(metrics.labelFontSize).toBeCloseTo(0.58 * 16, 1)
+    expect(metrics.labelHeight).toBeGreaterThan(metrics.labelWidth * 3)
+    expect(metrics.animationName).toBe(reducedMotion ? 'none' : 'panel-label-reveal')
+    return handle
   }
 
-  await expectPanelTransition(hierarchy, 'Collapse hierarchy panel')
-  await expect(hierarchy).toBeHidden()
-  await expectPanelTransition(hierarchy, 'Show hierarchy panel')
-  await expect(hierarchy).toBeVisible()
+  const collapseAndReopen = async (sidebar: typeof sidebars[number]) => {
+    const panel = page.locator(`#workspace-${sidebar}-panel`)
+    const initialBounds = await panel.boundingBox()
+    if (!initialBounds) throw new Error(`The ${sidebar} panel is not visible.`)
+    await panel.evaluate((element) => {
+      element.dataset.collapseSequence = ''
+      element.addEventListener('transitionstart', (event) => {
+        const transition = event as TransitionEvent
+        if (event.target === element && transition.propertyName === 'width') {
+          element.dataset.collapseSequence += 'panel'
+          element.dataset.contentsOpacityAtPanel = String(Math.max(
+            ...Array.from(element.children, child => Number(getComputedStyle(child).opacity)),
+          ))
+          const handleClass = element.classList.contains('hierarchy-panel')
+            ? '.panel-reopen-left'
+            : '.panel-reopen-right'
+          element.dataset.handlePresentAtPanel = String(
+            Boolean(element.parentElement?.querySelector(handleClass)),
+          )
+        } else if (
+          event.target instanceof Element
+          && event.target.parentElement === element
+          && transition.propertyName === 'opacity'
+          && !element.dataset.contentWidthAtFade
+        ) {
+          element.dataset.collapseSequence += 'contents,'
+          element.dataset.contentWidthAtFade = String(element.getBoundingClientRect().width)
+        }
+      }, true)
+    })
 
-  await expectPanelTransition(inspector, 'Collapse inspector panel')
+    await page.getByRole('button', { name: `Collapse ${sidebar} panel` }).click()
+    await expect(panel).toBeHidden()
+    const sequence = (await panel.getAttribute('data-collapse-sequence'))?.split(',') ?? []
+    expect(sequence).toEqual(['contents', 'panel'])
+    expect(Number(await panel.getAttribute('data-content-width-at-fade')))
+      .toBeCloseTo(initialBounds.width, 1)
+    expect(Number(await panel.getAttribute('data-contents-opacity-at-panel'))).toBeLessThan(0.1)
+    expect(await panel.getAttribute('data-handle-present-at-panel')).toBe('false')
+    const handle = await expectReopenHandle(sidebar)
+
+    await page.keyboard.press('Tab')
+    await handle.focus()
+    const focusState = await handle.evaluate(element => ({
+      visibleFocus: element.matches(':focus-visible'),
+      outline: getComputedStyle(element).outlineWidth,
+    }))
+    expect(focusState.visibleFocus).toBe(true)
+    expect(Number.parseFloat(focusState.outline)).toBeGreaterThan(0)
+    await panel.evaluate((element) => {
+      element.dataset.openSequence = ''
+      element.dataset.openWidthAtPanel = ''
+      element.dataset.openWidthAtContents = ''
+      element.addEventListener('transitionstart', (event) => {
+        const transition = event as TransitionEvent
+        if (event.target === element && transition.propertyName === 'width') {
+          element.dataset.openSequence += 'panel,'
+          element.dataset.openWidthAtPanel = String(element.getBoundingClientRect().width)
+        } else if (
+          event.target instanceof Element
+          && event.target.parentElement === element
+          && transition.propertyName === 'opacity'
+          && !element.dataset.openWidthAtContents
+        ) {
+          element.dataset.openSequence += 'contents,'
+          element.dataset.openWidthAtContents = String(element.getBoundingClientRect().width)
+        }
+      }, true)
+    })
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeVisible()
+    await expect(panel).toHaveCSS('transform', 'none')
+    await expect(panel).toHaveAttribute('data-open-sequence', 'panel,contents,')
+    const openMetrics = await panel.evaluate((element) => ({
+      sequence: element.dataset.openSequence?.split(',').filter(Boolean) ?? [],
+      widthAtPanelStart: Number(element.dataset.openWidthAtPanel),
+      widthAtContentsStart: Number(element.dataset.openWidthAtContents),
+    }))
+    expect(openMetrics.sequence).toEqual(['panel', 'contents'])
+    expect(openMetrics.widthAtPanelStart).toBeLessThan(initialBounds.width / 2)
+    expect(openMetrics.widthAtContentsStart).toBeGreaterThan(initialBounds.width * 0.9)
+    await expect(handle).toBeHidden()
+  }
+
+  for (const view of ['system', 'cluster'] as const) {
+    if (view === 'cluster') await page.getByRole('button', { name: 'Cluster map' }).click()
+    for (const sidebar of sidebars) await collapseAndReopen(sidebar)
+  }
+
+  await page.locator('#workspace-hierarchy-panel')
+    .getByRole('button', { name: 'Open Vesper system map' }).click()
+  const reducedMotionPanel = page.locator('#workspace-hierarchy-panel')
+  await expect(reducedMotionPanel).toHaveCSS('transform', 'none')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const transitionDuration = await reducedMotionPanel.evaluate((element) => {
+    element.classList.add('hierarchy-panel-leave-active')
+    const duration = getComputedStyle(element).transitionDuration
+    element.classList.remove('hierarchy-panel-leave-active')
+    return duration
+  })
+  const duration = transitionDuration.split(',')[0]!.trim()
+  const durationMilliseconds = Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000)
+  expect(durationMilliseconds).toBeLessThan(0.02)
+  await page.getByRole('button', { name: 'Collapse hierarchy panel' }).click()
+  await expect(reducedMotionPanel).toBeHidden()
+  const reducedMotionHandle = await expectReopenHandle('hierarchy', 'center', true)
+  await reducedMotionHandle.focus()
+  await page.keyboard.press('Enter')
+  await expect(reducedMotionPanel).toBeVisible()
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const hierarchy = page.locator('#workspace-hierarchy-panel')
+  const inspector = page.locator('#workspace-inspector-panel')
   await expect(inspector).toBeHidden()
-  await expectPanelTransition(inspector, 'Show inspector panel')
+  const expectNoHorizontalOverflow = async () => {
+    const viewport = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }))
+    expect(viewport.documentWidth).toBeLessThanOrEqual(viewport.viewportWidth)
+  }
+  await expectReopenHandle('inspector', 'system-bottom')
+  await expectNoHorizontalOverflow()
+  await page.getByRole('button', { name: 'Show inspector panel' }).click()
+  await expect(inspector).toBeVisible()
+  await expect(hierarchy).toBeHidden()
+  await expectReopenHandle('hierarchy', 'system-bottom')
+  await page.getByRole('button', { name: 'Show hierarchy panel' }).click()
+  await expect(hierarchy).toBeVisible()
+  await expect(inspector).toBeHidden()
+  await expectReopenHandle('inspector', 'system-bottom')
+  await expectNoHorizontalOverflow()
+
+  await page.setViewportSize({ width: 390, height: 300 })
+  const compactLabelStyle = await page.getByRole('button', { name: 'Show inspector panel' })
+    .locator('.panel-reopen-label')
+    .evaluate(label => {
+      const style = getComputedStyle(label)
+      return {
+        fontSize: style.fontSize,
+        writingMode: style.writingMode,
+      }
+    })
+  expect(compactLabelStyle).toEqual({
+    fontSize: '8px',
+    writingMode: 'horizontal-tb',
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await page.getByRole('button', { name: 'Show inspector panel' }).click()
+  await expect(inspector).toBeVisible()
+  await expect(hierarchy).toBeHidden()
+  await expectReopenHandle('hierarchy')
+  await page.getByRole('button', { name: 'Show hierarchy panel' }).click()
+  await expect(hierarchy).toBeVisible()
+  await expect(inspector).toBeHidden()
+  await expectReopenHandle('inspector')
+  await expectNoHorizontalOverflow()
+
+  await page.locator('#workspace-hierarchy-panel')
+    .getByRole('button', { name: 'Open Vesper system map' }).click()
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.getByRole('button', { name: 'Show inspector panel' }).click()
   await expect(inspector).toBeVisible()
 
   const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })

@@ -2,7 +2,8 @@
 title: 26. Refining sidebar collapse animation and labels
 label: wayfinder:implement
 type: implement
-status: open
+status: closed
+assignee: Copilot
 parent: "[Mothership Campaign App - V1 Specification](../map.md)"
 ---
 
@@ -25,6 +26,10 @@ As a Warden, I can follow a clear collapse sequence for the hierarchy and inspec
 ## Blocked by
 
 - None.
+
+## Resolution
+
+Both sidebars now fade their contents before shrinking and moving to the existing edge handle, then reveal the title with upright vertical letters. Handle geometry, accessible keyboard controls, narrow-screen reopening, and reduced-motion behavior are covered by browser tests in both map views.
 
 ## Source specs
 

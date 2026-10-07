@@ -142,6 +142,8 @@ const chartNamesEditing = ref(false)
 const routeFormOpen = ref(false)
 const hierarchyPanelOpen = ref(true)
 const inspectorPanelOpen = ref(true)
+const hierarchyPanelCollapsed = ref(false)
+const inspectorPanelCollapsed = ref(false)
 const isCompactViewport = ref(false)
 const objectDraft = reactive<SystemObjectDraft>({
   locationKey: '',
@@ -194,11 +196,21 @@ function updateViewportMode(): void {
 function toggleHierarchyPanel(): void {
   if (!hierarchyPanelOpen.value && isCompactViewport.value) inspectorPanelOpen.value = false
   hierarchyPanelOpen.value = !hierarchyPanelOpen.value
+  hierarchyPanelCollapsed.value = false
 }
 
 function toggleInspectorPanel(): void {
   if (!inspectorPanelOpen.value && isCompactViewport.value) hierarchyPanelOpen.value = false
   inspectorPanelOpen.value = !inspectorPanelOpen.value
+  inspectorPanelCollapsed.value = false
+}
+
+function revealHierarchyPanelControl(): void {
+  if (!hierarchyPanelOpen.value) hierarchyPanelCollapsed.value = true
+}
+
+function revealInspectorPanelControl(): void {
+  if (!inspectorPanelOpen.value) inspectorPanelCollapsed.value = true
 }
 const importError = ref('')
 const jsonImportInput = ref<HTMLInputElement | null>(null)
@@ -2093,7 +2105,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 
         <div class="editor-grid grid min-h-[min(78vh,56rem)] grid-cols-[minmax(13rem,0.72fr)_minmax(0,3fr)_minmax(15rem,0.85fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(12rem,0.72fr)_minmax(0,3fr)] max-[760px]:flex max-[760px]:flex-col">
           <button
-            v-if="!hierarchyPanelOpen"
+            v-if="hierarchyPanelCollapsed"
             class="panel-reopen panel-reopen-left"
             type="button"
             aria-label="Show hierarchy panel"
@@ -2104,7 +2116,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <span class="panel-reopen-icon" aria-hidden="true">›</span>
             <span class="panel-reopen-label">Hierarchy</span>
           </button>
-          <Transition name="hierarchy-panel">
+          <Transition name="hierarchy-panel" @after-leave="revealHierarchyPanelControl">
             <aside
               v-show="hierarchyPanelOpen"
               id="workspace-hierarchy-panel"
@@ -2208,7 +2220,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           </section>
 
           <button
-            v-if="!inspectorPanelOpen"
+            v-if="inspectorPanelCollapsed"
             class="panel-reopen panel-reopen-right"
             type="button"
             aria-label="Show inspector panel"
@@ -2219,7 +2231,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <span class="panel-reopen-icon" aria-hidden="true">‹</span>
             <span class="panel-reopen-label">Inspector</span>
           </button>
-          <Transition name="inspector-panel">
+          <Transition name="inspector-panel" @after-leave="revealInspectorPanelControl">
             <aside
               v-show="inspectorPanelOpen"
               id="workspace-inspector-panel"
@@ -2467,7 +2479,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
 
         <div class="editor-grid system-map-editor-grid grid min-h-[min(78vh,56rem)] grid-cols-[minmax(13rem,0.72fr)_minmax(0,3fr)_minmax(15rem,0.85fr)] items-stretch gap-[0.7rem] max-[1200px]:grid-cols-[minmax(12rem,0.72fr)_minmax(0,3fr)] max-[760px]:flex max-[760px]:flex-col">
           <button
-            v-if="!hierarchyPanelOpen"
+            v-if="hierarchyPanelCollapsed"
             class="panel-reopen panel-reopen-left"
             type="button"
             aria-label="Show hierarchy panel"
@@ -2478,7 +2490,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <span class="panel-reopen-icon" aria-hidden="true">›</span>
             <span class="panel-reopen-label">Hierarchy</span>
           </button>
-          <Transition name="hierarchy-panel">
+          <Transition name="hierarchy-panel" @after-leave="revealHierarchyPanelControl">
             <aside
               v-show="hierarchyPanelOpen"
               id="workspace-hierarchy-panel"
@@ -2632,7 +2644,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
           </section>
 
           <button
-            v-if="!inspectorPanelOpen"
+            v-if="inspectorPanelCollapsed"
             class="panel-reopen panel-reopen-right"
             type="button"
             aria-label="Show inspector panel"
@@ -2643,7 +2655,7 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
             <span class="panel-reopen-icon" aria-hidden="true">‹</span>
             <span class="panel-reopen-label">Inspector</span>
           </button>
-          <Transition name="inspector-panel">
+          <Transition name="inspector-panel" @after-leave="revealInspectorPanelControl">
             <aside
               v-show="inspectorPanelOpen"
               id="workspace-inspector-panel"
@@ -4565,32 +4577,67 @@ textarea[aria-invalid="true"] {
   top: 18.25rem;
 }
 
-.hierarchy-panel-enter-active,
-.hierarchy-panel-leave-active,
-.inspector-panel-enter-active,
-.inspector-panel-leave-active {
-  transition: opacity 180ms ease, transform 180ms ease;
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-active,
+.map-workspace-shell .workspace-side-panel.inspector-panel-enter-active {
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    top 180ms ease,
+    right 180ms ease,
+    bottom 180ms ease,
+    left 180ms ease,
+    width 180ms ease,
+    padding 180ms ease,
+    border-radius 180ms ease;
 }
 
-.hierarchy-panel-enter-from,
-.hierarchy-panel-leave-to {
-  opacity: 0;
-  transform: translateX(-0.75rem);
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-active > *,
+.map-workspace-shell .workspace-side-panel.inspector-panel-enter-active > * {
+  transition: opacity 70ms ease 180ms;
 }
 
-.inspector-panel-enter-from,
-.inspector-panel-leave-to {
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-from > *,
+.map-workspace-shell .workspace-side-panel.inspector-panel-enter-from > * {
   opacity: 0;
-  transform: translateX(0.75rem);
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-active,
+.map-workspace-shell .workspace-side-panel.inspector-panel-leave-active {
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    top 180ms ease 70ms,
+    right 180ms ease 70ms,
+    bottom 180ms ease 70ms,
+    left 180ms ease 70ms,
+    width 180ms ease 70ms,
+    padding 180ms ease 70ms,
+    border-radius 180ms ease 70ms;
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-active > *,
+.map-workspace-shell .workspace-side-panel.inspector-panel-leave-active > * {
+  transition: opacity 70ms ease;
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-to > *,
+.map-workspace-shell .workspace-side-panel.inspector-panel-leave-to > * {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hierarchy-panel-enter-active,
-  .hierarchy-panel-leave-active,
-  .inspector-panel-enter-active,
-  .inspector-panel-leave-active {
+  .map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-active,
+  .map-workspace-shell .workspace-side-panel.inspector-panel-enter-active,
+  .map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-active,
+  .map-workspace-shell .workspace-side-panel.inspector-panel-leave-active,
+  .map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-active > *,
+  .map-workspace-shell .workspace-side-panel.inspector-panel-enter-active > *,
+  .map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-active > *,
+  .map-workspace-shell .workspace-side-panel.inspector-panel-leave-active > * {
     transition-duration: 0.01ms;
+    transition-delay: 0ms;
   }
+
 }
 
 .map-workspace-shell .hierarchy-panel {
@@ -4640,7 +4687,7 @@ textarea[aria-invalid="true"] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
+  gap: 0.08rem;
   border: 1px solid var(--line-strong);
   background: rgba(18, 28, 30, 0.96);
   color: var(--text-secondary);
@@ -4652,15 +4699,32 @@ textarea[aria-invalid="true"] {
 }
 
 .map-workspace-shell .panel-reopen-icon {
-  font-size: 1.2rem;
+  font-size: 0.8rem;
   line-height: 1;
 }
 
 .map-workspace-shell .panel-reopen-label {
   writing-mode: vertical-rl;
-  text-orientation: mixed;
-  font-size: 0.56rem;
+  text-orientation: upright;
+  font-size: 0.58rem;
+  letter-spacing: -0.05em;
   line-height: 1;
+  animation: panel-label-reveal 80ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-workspace-shell .panel-reopen-label {
+    animation: none;
+  }
+}
+
+@keyframes panel-label-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .map-workspace-shell .panel-reopen:hover {
@@ -4782,10 +4846,18 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .workspace-side-panel {
     top: 14rem;
-    right: 0.5rem;
     bottom: 0.5rem;
+    width: calc(100% - 1rem);
+  }
+
+  .map-workspace-shell .workspace-side-panel.hierarchy-panel {
     left: 0.5rem;
-    width: auto;
+    right: auto;
+  }
+
+  .map-workspace-shell .workspace-side-panel.inspector-panel {
+    right: 0.5rem;
+    left: auto;
   }
 
   .map-workspace-shell .system-map-editor-grid .workspace-side-panel {
@@ -4969,7 +5041,8 @@ textarea[aria-invalid="true"] {
 
   .map-workspace-shell .system-map-editor-grid .panel-reopen-label {
     writing-mode: horizontal-tb;
-    font-size: 0.45rem;
+    font-size: 0.5rem;
+    letter-spacing: 0;
   }
 
   .map-workspace-shell .system-map-editor-grid .panel-reopen-left {
@@ -4983,6 +5056,50 @@ textarea[aria-invalid="true"] {
     right: 0.5rem;
     border: 1px solid var(--line-strong);
     border-radius: 3px;
+  }
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-to,
+.map-workspace-shell .workspace-side-panel.inspector-panel-leave-to,
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-from,
+.map-workspace-shell .workspace-side-panel.inspector-panel-enter-from {
+  top: calc(50% - 3.5rem);
+  bottom: calc(50% - 3.5rem);
+  width: 2.35rem;
+  padding: 0;
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-leave-to {
+  right: auto;
+  left: 0;
+  border-radius: 0 3px 3px 0;
+}
+
+.map-workspace-shell .workspace-side-panel.hierarchy-panel-enter-from {
+  right: auto;
+  left: 0;
+  border-radius: 0 3px 3px 0;
+}
+
+.map-workspace-shell .workspace-side-panel.inspector-panel-leave-to {
+  right: 0;
+  left: auto;
+  border-radius: 3px 0 0 3px;
+}
+
+.map-workspace-shell .workspace-side-panel.inspector-panel-enter-from {
+  right: 0;
+  left: auto;
+  border-radius: 3px 0 0 3px;
+}
+
+@media (max-width: 760px) {
+  .map-workspace-shell .system-map-editor-grid .workspace-side-panel.hierarchy-panel-leave-to,
+  .map-workspace-shell .system-map-editor-grid .workspace-side-panel.inspector-panel-leave-to,
+  .map-workspace-shell .system-map-editor-grid .workspace-side-panel.hierarchy-panel-enter-from,
+  .map-workspace-shell .system-map-editor-grid .workspace-side-panel.inspector-panel-enter-from {
+    top: calc(100% - 9rem);
+    bottom: 2rem;
   }
 }
 </style>
