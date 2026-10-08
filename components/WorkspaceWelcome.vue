@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Presents workspace loading and creation states without owning hydration or persistence.
+ */
 type HydrationState = 'loading' | 'ready' | 'error'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 

@@ -1,9 +1,17 @@
+/**
+ * Composes editor state and focused commands around the page's commit boundary; it does not own persistence.
+ */
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
 import { useEditorState } from './editor-workflows/useEditorState'
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
 import type { EditorWorkflowOptions } from './editor-workflows/types'
 
+/**
+ * Builds the state and action surface consumed by the workspace page.
+ * @param options Shared refs and the single persistence callback provided by the page owner.
+ * @returns Combined editor state, field-definition, cluster, and system-map workflows.
+ */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const editorState = useEditorState(options)
   const fieldDefinitions = useFieldDefinitionWorkflows({

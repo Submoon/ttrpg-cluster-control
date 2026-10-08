@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
+ */
 import { onMounted } from 'vue'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'

@@ -1,3 +1,6 @@
+/**
+ * Owns chart names, selection, and navigation guards; workspace persistence remains on the injected commit.
+ */
 import { computed, ref, shallowRef, watch } from 'vue'
 import {
   createLocalWorkspace,
@@ -8,6 +11,11 @@ import {
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { EditorWorkflowOptions, MapInspectorHandle, SystemMapHandle } from './types'
 
+/**
+ * Derives editor selections from workspace IDs and keeps navigation coherent as entities change.
+ * @param options Shared workspace/save refs and the page-owned persistence callback.
+ * @returns Name drafts, selection refs/computeds, map handles, status text, and guarded navigation actions.
+ */
 export function useEditorState({ workspace, saveState, saveError, commit }: EditorWorkflowOptions) {
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
@@ -39,6 +47,11 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [],
   )
 
+  /**
+   * Formats a route's current endpoints, retaining explicit labels for unresolved or dangling references.
+   * @param route Route whose endpoint IDs are summarized.
+   * @returns Human-readable endpoint names, including a fallback when either Jump Point is missing.
+   */
   function routeEndpointSummary(route: JumpRoute): string {
     const origin = jumpPoints.value.find(({ point }) => point.id === route.fromPointId)
     let destination: string
@@ -112,6 +125,11 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     return error instanceof Error ? error.message : String(error)
   }
 
+  /**
+   * Creates the first workspace or renames the current cluster and selected system.
+   * Name drafts leave edit mode only after the injected commit succeeds.
+   * @returns A promise that resolves after the attempt; errors populate formError.
+   */
   async function submitNames(): Promise<void> {
     formError.value = ''
     try {
@@ -131,6 +149,7 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     }
   }
 
+  /** Starts name drafts from committed values after guarding any open inspector edit. */
   function beginChartNamesEdit(): void {
     if (!workspace.value || !selectedSystem.value || !confirmDiscardInspectorEdits()) return
     clusterName.value = workspace.value.cluster.name
@@ -139,6 +158,7 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     formError.value = ''
   }
 
+  /** Restores committed names and closes the name editor without changing workspace data. */
   function cancelChartNamesEdit(): void {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
@@ -150,6 +170,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     formError.value = ''
   }
 
+  /**
+   * Guards navigation across inspector and chart-name drafts with one confirmation.
+   * @returns True when no draft is open or the user accepted discarding all guarded drafts.
+   */
   function confirmDiscardInspectorEdits(): boolean {
     const hasOpenEdit = (mapInspectorRef.value?.hasUnsavedEdits() ?? false)
       || chartNamesEditing.value
@@ -161,6 +185,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     return true
   }
 
+  /**
+   * Selects the first imported system when available and switches to the cluster view.
+   * @param firstAddedSystemId First added system from a prepared import, if one was included.
+   */
   function selectImportedWorkspace(firstAddedSystemId: string | undefined): void {
     selectedSystemId.value = firstAddedSystemId ?? selectedSystemId.value
     selectedObjectId.value = null
@@ -169,6 +197,7 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     activeView.value = 'cluster'
   }
 
+  /** Shows the cluster map and clears map-entity selections after the draft guard passes. */
   function showClusterMap(): void {
     if (!confirmDiscardInspectorEdits()) return
     activeView.value = 'cluster'
@@ -178,6 +207,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
+  /**
+   * Selects an existing system and opens its map after the draft guard passes.
+   * @param systemId System to select; unknown IDs are ignored.
+   */
   function selectSystem(systemId: string): void {
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     if (!confirmDiscardInspectorEdits()) return
@@ -189,6 +222,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
+  /**
+   * Selects an object in the current system after the draft guard passes.
+   * @param objectId Object to select; unknown or already-selected IDs are ignored.
+   */
   function selectObject(objectId: string): void {
     if (!selectedSystem.value?.objects.some(object => object.id === objectId)) return
     if (selectedObjectId.value === objectId) return
@@ -199,6 +236,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
+  /**
+   * Selects an Orbit in the current system after the draft guard passes.
+   * @param orbitId Orbit to select; unknown or already-selected IDs are ignored.
+   */
   function selectOrbit(orbitId: string): void {
     if (!selectedSystem.value?.orbits.some(orbit => orbit.id === orbitId)) return
     if (selectedOrbitId.value === orbitId) return
@@ -209,6 +250,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
+  /**
+   * Selects an existing cluster route and clears system-entity selections after the draft guard passes.
+   * @param routeId Route to select; unknown or already-selected IDs are ignored.
+   */
   function selectRoute(routeId: string): void {
     const route = workspace.value?.cluster.routes.find(candidate => candidate.id === routeId)
     if (!route) return
@@ -221,6 +266,7 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
+  /** Clears map-entity selections so the chart-details panel can be shown after the draft guard passes. */
   function showChartDetails(): void {
     if (!confirmDiscardInspectorEdits()) return
     selectedObjectId.value = null

@@ -1,3 +1,6 @@
+/**
+ * Stable public domain facade; implementation modules import focused peers directly to avoid facade cycles.
+ */
 export {
   catalogueTypes,
   customFieldApplicabilityTargetKey,

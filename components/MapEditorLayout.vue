@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Keeps panel state shared while switching maps and delays reopen controls until leave transitions finish.
+ */
 import { onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps<{
@@ -13,6 +16,9 @@ const hierarchyPanelCollapsed = ref(false)
 const inspectorPanelCollapsed = ref(false)
 const isCompactViewport = ref(false)
 
+/**
+ * Refreshes compact-layout state and prevents both side panels from remaining open on narrow screens.
+ */
 function updateViewportMode(): void {
   isCompactViewport.value = window.matchMedia('(max-width: 760px)').matches
   if (isCompactViewport.value && hierarchyPanelOpen.value && inspectorPanelOpen.value) {
@@ -20,22 +26,26 @@ function updateViewportMode(): void {
   }
 }
 
+/** Toggles hierarchy visibility and enforces one-open-panel behavior on compact viewports. */
 function toggleHierarchyPanel(): void {
   if (!hierarchyPanelOpen.value && isCompactViewport.value) inspectorPanelOpen.value = false
   hierarchyPanelOpen.value = !hierarchyPanelOpen.value
   hierarchyPanelCollapsed.value = false
 }
 
+/** Toggles inspector visibility and enforces one-open-panel behavior on compact viewports. */
 function toggleInspectorPanel(): void {
   if (!inspectorPanelOpen.value && isCompactViewport.value) hierarchyPanelOpen.value = false
   inspectorPanelOpen.value = !inspectorPanelOpen.value
   inspectorPanelCollapsed.value = false
 }
 
+/** Shows the hierarchy reopen tab only after its leave transition finishes. */
 function revealHierarchyPanelControl(): void {
   if (!hierarchyPanelOpen.value) hierarchyPanelCollapsed.value = true
 }
 
+/** Shows the inspector reopen tab only after its leave transition finishes. */
 function revealInspectorPanelControl(): void {
   if (!inspectorPanelOpen.value) inspectorPanelCollapsed.value = true
 }

@@ -1,3 +1,6 @@
+/**
+ * Pure projections for the field-definition UI; stored workspace values remain owned by the domain model.
+ */
 import {
   catalogueTypes,
   customFieldApplicabilityTargetKey,
@@ -72,6 +75,11 @@ export const applicabilityGroups = [
   { family: 'Other', label: 'Other' },
 ] satisfies Array<{ family: ObjectFamily; label: string }>
 
+/**
+ * Projects built-in and custom definitions into one dialog list without modifying workspace settings.
+ * @param workspace Current workspace.
+ * @returns Native options and custom definitions with a consistent UI shape.
+ */
 export function fieldDefinitionSummaries(workspace: LocalWorkspace): FieldDefinitionSummary[] {
   const settings = workspace.objectFieldSettings
   return [
@@ -102,6 +110,11 @@ export function fieldDefinitionSummaries(workspace: LocalWorkspace): FieldDefini
   ] satisfies FieldDefinitionSummary[]
 }
 
+/**
+ * Parses newline-separated option drafts, trimming values and dropping blank lines.
+ * @param value Textarea value.
+ * @returns Non-empty option labels in entered order; uniqueness is validated by the domain command.
+ */
 export function fieldOptionsFromText(value: string): string[] {
   return value.split(/\r?\n/u).map(option => option.trim()).filter(Boolean)
 }
@@ -116,6 +129,11 @@ function customFieldApplicabilityTargetLabel(target: CustomFieldApplicabilityTar
   return `Subtype ${subtype}`
 }
 
+/**
+ * Describes a field's visibility scope, distinguishing global, explicitly empty, and selected-target scopes.
+ * @param definition Field summary to label.
+ * @returns Compact user-facing applicability text.
+ */
 export function fieldApplicabilitySummary(definition: FieldDefinitionSummary): string {
   if (definition.kind === 'native' || definition.applicability === undefined) {
     return 'All catalogue objects'
@@ -125,6 +143,12 @@ export function fieldApplicabilitySummary(definition: FieldDefinitionSummary): s
     : 'No catalogue targets'
 }
 
+/**
+ * Collects saved native/custom assignments from every system, including currently out-of-scope objects.
+ * @param workspace Workspace whose objects hold the values.
+ * @param definition Definition whose saved assignments are listed.
+ * @returns Object/system/value records, excluding unset and empty-string values.
+ */
 export function fieldValueAssignments(
   workspace: LocalWorkspace,
   definition: FieldDefinitionSummary,
@@ -147,6 +171,12 @@ export function fieldValueAssignments(
   return assignments
 }
 
+/**
+ * Compares explicit applicability sets by canonical target identity, independent of target order.
+ * @param first Existing optional scope.
+ * @param second Proposed optional scope.
+ * @returns True when both are global or contain the same targets.
+ */
 export function sameCustomFieldApplicability(
   first: CustomFieldApplicabilityTarget[] | undefined,
   second: CustomFieldApplicabilityTarget[] | undefined,

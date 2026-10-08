@@ -1,5 +1,8 @@
 
 
+/**
+ * Domain contracts separate stable entity identity and placement from durable schematic layout.
+ */
 export interface Point {
   x: number
   y: number
@@ -36,12 +39,18 @@ export type CustomFieldApplicabilityTarget =
 export type CustomFieldDefinition = {
   id: string
   name: string
+  /** Undefined applies to every object; an empty scope applies to none. */
   applicability?: CustomFieldApplicabilityTarget[]
 } & (
   | { type: 'text' | 'number' | 'boolean' }
   | { type: 'single-select'; options: string[] }
 )
 
+/**
+ * Builds a stable key for comparing category/subtype targets independent of object identity.
+ * @param target Explicit applicability target.
+ * @returns Canonical key unique to its target kind and family/subtype.
+ */
 export function customFieldApplicabilityTargetKey(target: CustomFieldApplicabilityTarget): string {
   if (target.kind === 'category') return `category:${target.family}`
   return `subtype:${target.family}:${target.subtype}`
@@ -53,10 +62,18 @@ export interface ObjectFieldSettings {
   customFields: CustomFieldDefinition[]
 }
 
+/**
+ * Valid system placements use finite normalized coordinates mapped into the initial scene body.
+ * Values may extend beyond [0, 1] as the schematic scene grows.
+ */
 export type ObjectPlacement =
   | { kind: 'system'; x: number; y: number }
   | { kind: 'orbit'; orbitId: string }
 
+/**
+ * Catalogue entity with stable ID/key, domain values, and either system-level or Orbit placement.
+ * A Jump Point's optional physical Station link is separate from logical route endpoints.
+ */
 export interface SystemObject {
   id: string
   family: ObjectFamily
@@ -71,11 +88,15 @@ export interface SystemObject {
   jumpStationId?: string | null
 }
 
+/** Horizontal and vertical Orbit extents, measured in SVG scene units. */
 export interface OrbitRadii {
   horizontal: number
   vertical: number
 }
 
+/**
+ * Hosted Orbits use a stable object ID; unoccupied centers store normalized map coordinates.
+ */
 export type Orbit = {
   id: string
   order: number
@@ -84,6 +105,9 @@ export type Orbit = {
   | { hostId: null; center: Point }
 )
 
+/**
+ * Routes connect logical Jump Point IDs; a null destination records an unresolved external exit.
+ */
 export type JumpRoute = {
   id: string
   name?: string
@@ -113,18 +137,26 @@ export interface JumpPointReference {
   system: StarSystem
 }
 
+/**
+ * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
+ */
 export interface LocalWorkspace {
   id: string
   cluster: JumpCluster
   layout: {
+    /** Normalized cluster positions; interactive system drags clamp each axis to [0, 1]. */
     systemPositions: Record<string, Point>
+    /** Orbit radii in SVG scene units. */
     orbitRadii: Record<string, OrbitRadii>
+    /** Orbit rotations in degrees. */
     orbitRotations: Record<string, number>
+    /** Object positions around Orbits in radians; missing entries use sibling-order defaults. */
     objectAngles: Record<string, number>
   }
   objectFieldSettings: ObjectFieldSettings
 }
 
+/** Versioned portable layout; numeric radii and separate ellipse radii are accepted for legacy exports. */
 export interface ExportedLayout {
   version: 1
   orbitRadii: Record<string, OrbitRadii | number>
@@ -151,6 +183,7 @@ export type StarSystemExport = {
   layout: ExportedLayout
 }
 
+/** Informational import preview; possible name/key matches do not merge map entities. */
 export interface JsonImportSummary {
   type: 'cluster' | 'system'
   systems: number
@@ -162,12 +195,14 @@ export interface JsonImportSummary {
   possibleMatches: Array<{ entity: string; name: string; existingSystem: string; reason: string }>
 }
 
+/** Validated copy candidate returned before confirmation or persistence. */
 export interface PreparedJsonImport {
   workspace: LocalWorkspace
   addedSystemIds: string[]
   summary: JsonImportSummary
 }
 
+/** Partial fields accepted by the object-edit command; omitted fields retain their current values. */
 export interface SystemObjectChanges {
   locationKey?: string
   name?: string
@@ -192,6 +227,7 @@ export interface MapDeletionPlan {
   affectedEntities: string[]
 }
 
+/** Creates the built-in field options with no custom definitions. */
 export function defaultObjectFieldSettings(): ObjectFieldSettings {
   return {
     atmosphereOptions: ['Breathable', 'Unbreathable', 'Vacuum'],

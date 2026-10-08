@@ -1,3 +1,6 @@
+/**
+ * Cluster commands coordinate selection and confirmation, then delegate persistence through the injected commit.
+ */
 import { onMounted, onUnmounted, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   addStarSystem,
@@ -33,6 +36,11 @@ interface ClusterWorkflowOptions {
   editorError: Ref<string>
 }
 
+/**
+ * Composes cluster/system creation, route editing, dependent deletion, and keyboard-delete behavior.
+ * @param options Editor refs, inspector bridge, discard guard, and page-owned commit.
+ * @returns Cluster commands; commit and validation failures are surfaced through editorError.
+ */
 export function useClusterWorkflows({
   workspace,
   commit,
@@ -56,6 +64,10 @@ export function useClusterWorkflows({
     return error instanceof Error ? error.message : String(error)
   }
 
+  /**
+   * Creates and selects a new system before committing it to the workspace.
+   * @returns A promise that resolves after the attempt; commit failures populate editorError.
+   */
   async function createSystem(): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace || !confirmDiscardInspectorEdits()) return
@@ -73,6 +85,7 @@ export function useClusterWorkflows({
     }
   }
 
+  /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
   function beginRoute(): void {
     if (!confirmDiscardInspectorEdits()) return
     selectedRouteId.value = null
@@ -80,16 +93,26 @@ export function useClusterWorkflows({
     editorError.value = ''
   }
 
+  /**
+   * Starts an edit draft only if routeId is still selected and other inspector edits are resolved.
+   * @param routeId Route expected to own the edit draft.
+   */
   function beginRouteEdit(routeId: string): void {
     if (selectedRoute.value?.id !== routeId || !confirmDiscardInspectorEdits()) return
     mapInspectorRef.value?.startRouteEdit()
     editorError.value = ''
   }
 
+  /** Restores the route selection saved before its editor temporarily cleared it. */
   function restoreRouteSelection(routeId: string | null): void {
     selectedRouteId.value = routeId
   }
 
+  /**
+   * Validates a route draft with the domain, commits it, then acknowledges the child draft.
+   * @param request Route identity and submitted endpoints/level; null routeId creates a route.
+   * @returns A promise that resolves after the attempt; failures remain visible in editorError.
+   */
   async function submitRoute(request: JumpRouteSaveRequest): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
@@ -129,6 +152,12 @@ export function useClusterWorkflows({
     }
   }
 
+  /**
+   * Previews dependent effects, asks for confirmation, then commits the planned deletion.
+   * Deletion is skipped while a prior write is visibly pending.
+   * @param target Object, Orbit, route, or system selected for removal.
+   * @returns A promise that resolves after cancellation or the commit attempt; failures populate editorError.
+   */
   async function deleteMapEntity(target: MapDeletionTarget): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace || saveState.value === 'saving') return
@@ -148,6 +177,7 @@ export function useClusterWorkflows({
     }
   }
 
+  /** Guards unsaved inspector edits before delegating a system cascade to the shared deletion planner. */
   function deleteSystem(systemId: string): Promise<void> {
     return confirmDiscardInspectorEdits()
       ? deleteMapEntity({ kind: 'system', systemId })
@@ -177,6 +207,11 @@ export function useClusterWorkflows({
       : Promise.resolve()
   }
 
+  /**
+   * Handles an unmodified Delete key only when an eligible map selection is safe to remove.
+   * Inputs, open drafts/dialogs, repeats, and pending saves retain their native behavior.
+   * @param event Window keydown event.
+   */
   function handleDeleteShortcut(event: KeyboardEvent): void {
     const target = event.target
     if (

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Owns cluster navigation and projects nested objects/Orbits into a selectable hierarchy.
+ */
 import { computed } from 'vue'
 import {
   type JumpRoute,
@@ -45,6 +48,13 @@ const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),
 )
 
+/**
+ * Flattens unoccupied Orbits and system-level objects into depth-first rows of their nested children.
+ * Orbit siblings are ordered by their stored order; root objects retain system.objects order.
+ * Expects the acyclic host/placement relationships enforced by workspace validation.
+ * @param system Current selected system, if any.
+ * @returns Display rows with host, child-count, and indentation metadata; empty when no system is selected.
+ */
 function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
   if (!system) return []
 

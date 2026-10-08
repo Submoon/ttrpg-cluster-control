@@ -1,5 +1,9 @@
+/**
+ * Pure Cluster-map scene geometry; drag overrides preview moved systems without changing saved positions.
+ */
 import type { JumpPointReference, JumpRoute, Point } from '../domain/workspace'
 
+/** SVG path and label geometry for one logical Cluster route. */
 export interface ClusterRouteGeometry {
   path: string
   labelX: number
@@ -7,6 +11,14 @@ export interface ClusterRouteGeometry {
   exitPoint?: Point
 }
 
+/**
+ * Resolves a saved normalized Cluster position to scene coordinates, unless a drag preview overrides it.
+ * @param systemPositions Durable normalized map positions keyed by system ID.
+ * @param systemId System whose location is requested.
+ * @param overrides Optional temporary positions already in SVG scene coordinates.
+ * @returns System center in Cluster-map scene coordinates.
+ * @throws If no saved position exists and there is no drag override.
+ */
 export function clusterSystemPosition(
   systemPositions: Readonly<Record<string, Point>>,
   systemId: string,
@@ -22,6 +34,13 @@ export function clusterSystemPosition(
   return { x: 112 + position.x * 736, y: 96 + position.y * 368 }
 }
 
+/**
+ * Resolves a route endpoint reference or reports the broken logical Jump Point link.
+ * @param jumpPoints Current Cluster Jump Points keyed by object ID.
+ * @param pointId Route endpoint ID.
+ * @returns Jump Point and owning system.
+ * @throws If pointId does not resolve in the current Cluster.
+ */
 export function requiredJumpPoint(
   jumpPoints: ReadonlyMap<string, JumpPointReference>,
   pointId: string,
@@ -33,6 +52,16 @@ export function requiredJumpPoint(
   return reference
 }
 
+/**
+ * Builds a scene-space quadratic route path, label point, and optional unresolved-exit marker.
+ * @param route Logical Jump Route to draw.
+ * @param index Stable list index used to separate parallel route bends.
+ * @param jumpPoints Current logical endpoints.
+ * @param systemPositions Durable normalized positions for endpoint systems.
+ * @param positionOverrides Optional temporary scene-space positions while systems are dragged.
+ * @returns SVG path data and label coordinates in Cluster-map scene units.
+ * @throws If a referenced Jump Point or required system position is missing.
+ */
 export function clusterRouteGeometry(
   route: JumpRoute,
   index: number,
@@ -82,6 +111,13 @@ export function clusterRouteGeometry(
   }
 }
 
+/**
+ * Creates an accessible selection label from route endpoints or its unresolved external-exit name.
+ * @param route Route represented by the rendered control.
+ * @param jumpPoints Current logical endpoint references.
+ * @returns Human-readable label for assistive technology.
+ * @throws If a referenced logical Jump Point no longer exists.
+ */
 export function clusterRouteLabel(
   route: JumpRoute,
   jumpPoints: ReadonlyMap<string, JumpPointReference>,

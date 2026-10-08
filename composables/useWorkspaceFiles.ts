@@ -1,3 +1,6 @@
+/**
+ * Browser file actions use domain codecs and import preparation; persistence and selection remain page-owned.
+ */
 import { ref, type Ref } from 'vue'
 import {
   exportJumpCluster,
@@ -19,6 +22,11 @@ interface WorkspaceFileActionsOptions {
   onImported: (firstAddedSystemId: string | undefined) => void
 }
 
+/**
+ * Composes local JSON/image export and copy-import actions around the page's commit and selection callbacks.
+ * @param options Current workspace/selection refs and page-owned persistence, discard, and import callbacks.
+ * @returns Export/import status refs and event handlers; failures are exposed through those status refs.
+ */
 export function useWorkspaceFiles({
   workspace,
   selectedSystem,
@@ -33,6 +41,11 @@ export function useWorkspaceFiles({
     return error instanceof Error ? error.message : String(error)
   }
 
+  /**
+   * Triggers a browser download and revokes its object URL after the click has been dispatched.
+   * @param filename Suggested download name.
+   * @param blob File contents and media type.
+   */
   function downloadFile(filename: string, blob: Blob): void {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -47,6 +60,12 @@ export function useWorkspaceFiles({
     }
   }
 
+  /**
+   * Serializes a value as indented JSON and starts its browser download.
+   * @param filename Suggested download name.
+   * @param value JSON-serializable payload.
+   * @throws If JSON.stringify cannot produce a string.
+   */
   function downloadJsonFile(filename: string, value: unknown): void {
     const json = JSON.stringify(value, null, 2)
     if (json === undefined) {
@@ -55,6 +74,13 @@ export function useWorkspaceFiles({
     downloadFile(filename, new Blob([json], { type: 'application/json' }))
   }
 
+  /**
+   * Builds a download name with filesystem-reserved characters replaced.
+   * @param name Map name supplied by workspace data.
+   * @param kind Map format suffix distinguishing cluster from system files.
+   * @param extension File extension without a leading dot.
+   * @returns Sanitized filename ending in the map kind and extension.
+   */
   function exportFileName(
     name: string,
     kind: MapKind,
@@ -64,6 +90,9 @@ export function useWorkspaceFiles({
     return `${safeName || 'map'}-${kind}.${extension}`
   }
 
+  /**
+   * Exports the current complete Cluster JSON; serialization/download failures populate exportError.
+   */
   function downloadClusterJson(): void {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
@@ -79,6 +108,10 @@ export function useWorkspaceFiles({
     }
   }
 
+  /**
+   * Exports the selected system with shared field settings and only its durable Orbit/object layout.
+   * Serialization/download failures populate exportError.
+   */
   function downloadSystemJson(): void {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
@@ -95,6 +128,14 @@ export function useWorkspaceFiles({
     }
   }
 
+  /**
+   * Exports an image through the renderer handle and reports failures in exportError.
+   * @param map Mounted renderer, or null before its component handle is available.
+   * @param name Map name used in the download filename.
+   * @param kind Map type used in the filename.
+   * @param format Requested image encoding.
+   * @returns A promise that resolves after download dispatch; export errors are caught and exposed.
+   */
   async function downloadMapImage(
     map: MapImageExporter | null,
     name: string | undefined,
@@ -111,6 +152,11 @@ export function useWorkspaceFiles({
     }
   }
 
+  /**
+   * Formats an import confirmation from counts, ID collisions, and informational possible matches.
+   * @param summary Preview data from domain validation; possible matches do not merge map entities.
+   * @returns Confirmation text describing the independent-copy behavior.
+   */
   function importPreview(summary: JsonImportSummary): string {
     const collisionLines = summary.idCollisions.length
       ? summary.idCollisions.map(collision =>
@@ -141,6 +187,12 @@ export function useWorkspaceFiles({
     ].join('\n')
   }
 
+  /**
+   * Parses a selected JSON file, prepares a validated independent copy, asks for confirmation, then commits.
+   * The input is cleared immediately so selecting the same file again still emits a change event.
+   * @param event File-input change event.
+   * @returns A promise that resolves after preparation and any confirmed commit; errors populate importError.
+   */
   async function importJsonFile(event: Event): Promise<void> {
     const input = event.target
     if (!(input instanceof HTMLInputElement)) return

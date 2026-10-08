@@ -1,3 +1,6 @@
+/**
+ * Scope changes affect visibility only; removing assigned option values requires an explicit caller opt-in.
+ */
 import type {
   CustomFieldApplicabilityTarget,
   CustomFieldDefinition,
@@ -7,6 +10,15 @@ import type {
 } from './workspace-model'
 import { isCustomFieldApplicability, validFieldOptions, validName } from './workspace-validation'
 
+/**
+ * Replaces a built-in option list, optionally clearing assigned values removed from it.
+ * @param workspace Current immutable workspace.
+ * @param field Built-in field whose options change.
+ * @param options Proposed option values, normalized and checked for duplicates.
+ * @param clearInvalidValues Explicitly opt in to clearing assignments that use removed values.
+ * @returns Workspace with the new options and any opted-in cleanup.
+ * @throws If options are invalid or an assigned value would be removed without opt-in.
+ */
 export function updateNativeFieldOptions(
   workspace: LocalWorkspace,
   field: 'atmosphere' | 'portClass',
@@ -52,6 +64,15 @@ export function updateNativeFieldOptions(
   }
 }
 
+/**
+ * Adds a reusable field that defaults to all catalogue objects.
+ * @param workspace Current immutable workspace.
+ * @param name Unique field name, compared case-insensitively.
+ * @param type Value type for the new definition.
+ * @param options Allowed values when type is single-select.
+ * @returns Workspace with the new definition and no object values assigned.
+ * @throws If the name or single-select options are invalid or the name already exists.
+ */
 export function addCustomFieldDefinition(
   workspace: LocalWorkspace,
   name: string,
@@ -81,6 +102,12 @@ export function addCustomFieldDefinition(
   }
 }
 
+/**
+ * Tests visibility scope only; it does not remove or validate the object's stored field value.
+ * @param definition Reusable field definition.
+ * @param object Catalogue object whose family and subtype are compared.
+ * @returns True for an undefined global scope or a matching category/subtype target.
+ */
 export function isCustomFieldApplicableToObject(
   definition: CustomFieldDefinition,
   object: SystemObject,
@@ -93,6 +120,14 @@ export function isCustomFieldApplicableToObject(
     )
 }
 
+/**
+ * Changes which objects display a custom field without changing any stored values.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Definition to update.
+ * @param applicability Target scopes; undefined means all objects and [] means no objects.
+ * @returns Workspace with the new scope only.
+ * @throws If the definition is missing or any target is invalid or duplicated.
+ */
 export function updateCustomFieldApplicability(
   workspace: LocalWorkspace,
   fieldId: string,
@@ -116,6 +151,14 @@ export function updateCustomFieldApplicability(
   }
 }
 
+/**
+ * Renames a reusable field while preserving its ID and all object assignments.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Definition to rename.
+ * @param name New unique field name.
+ * @returns Workspace with the renamed definition.
+ * @throws If the definition is missing, the name is invalid, or another definition uses it.
+ */
 export function renameCustomFieldDefinition(
   workspace: LocalWorkspace,
   fieldId: string,
@@ -144,6 +187,15 @@ export function renameCustomFieldDefinition(
   }
 }
 
+/**
+ * Replaces single-select choices; assigned values are preserved unless clearing is explicitly enabled.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Single-select definition to update.
+ * @param options New allowed values.
+ * @param clearInvalidValues Explicitly opt in to deleting assignments no longer present in options.
+ * @returns Workspace with updated choices and any opted-in cleanup.
+ * @throws If the field is missing, not single-select, options are invalid, or values would be removed without opt-in.
+ */
 export function updateCustomFieldOptions(
   workspace: LocalWorkspace,
   fieldId: string,
@@ -199,6 +251,14 @@ export function updateCustomFieldOptions(
   }
 }
 
+/**
+ * Removes a definition and every saved value referring to it from all map objects.
+ * This operation does not ask for confirmation; the calling UI owns that decision.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Definition to remove.
+ * @returns Workspace without the definition or its assigned values.
+ * @throws If the definition no longer exists.
+ */
 export function removeCustomFieldDefinition(workspace: LocalWorkspace, fieldId: string): LocalWorkspace {
   if (!workspace.objectFieldSettings.customFields.some(field => field.id === fieldId)) {
     throw new Error('The selected custom field no longer exists.')

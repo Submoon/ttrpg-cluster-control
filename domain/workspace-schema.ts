@@ -1,3 +1,6 @@
+/**
+ * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
+ */
 import { defaultObjectFieldSettings } from './workspace-model'
 import type { LocalWorkspace, ObjectFieldSettings, StarSystem } from './workspace-model'
 import {
@@ -19,6 +22,11 @@ import {
   orbitRadiiMeetMinimum,
 } from './workspace-orbits'
 
+/**
+ * Checks references and cross-entity invariants that cannot be verified by individual object guards.
+ * @param system Structurally shaped system candidate.
+ * @returns False for duplicate IDs/keys, invalid hosts or station links, bad sibling orders, or cyclic placement.
+ */
 function isSystemStructureValid(system: StarSystem): boolean {
   const objectIds = new Set(system.objects.map(object => object.id))
   if (objectIds.size !== system.objects.length) {
@@ -74,6 +82,11 @@ function isSystemStructureValid(system: StarSystem): boolean {
   })
 }
 
+/**
+ * Validates a star system and its internal object, Orbit, station-link, and placement relationships.
+ * @param value Unknown imported or restored data.
+ * @returns True only when both field shapes and system-wide references are valid.
+ */
 export function isStarSystem(value: unknown): value is StarSystem {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id) {
     return false
@@ -109,6 +122,11 @@ type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout
   layout: StoredWorkspaceLayout
 }
 
+/**
+ * Validates stored workspace data, accepting only the explicitly supported older optional fields/layout forms.
+ * @param value Unknown persisted or imported workspace candidate.
+ * @returns False if structure, entity IDs/references, layout values, or saved field values are invalid.
+ */
 function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id || !isRecord(value.cluster)) {
     return false
@@ -223,10 +241,21 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     )
 }
 
+/**
+ * Type guard for the current workspace shape; unlike restoreLocalWorkspace, it does not normalize legacy data.
+ * @param value Unknown candidate.
+ * @returns True only when objectFieldSettings is present and the stored workspace validation succeeds.
+ */
 export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
   return isStoredLocalWorkspace(value) && value.objectFieldSettings !== undefined
 }
 
+/**
+ * Removes legacy per-object applicability entries before the stricter category/subtype validator runs.
+ * Other malformed targets remain for validation to reject.
+ * @param value Arbitrary stored/imported data.
+ * @returns A shallow copy when workspace settings contain a customFields array; otherwise the input value.
+ */
 export function withoutLegacyObjectApplicabilityTargets(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.objectFieldSettings)) return value
 
@@ -254,6 +283,11 @@ export function withoutLegacyObjectApplicabilityTargets(value: unknown): unknown
   }
 }
 
+/**
+ * Adds the legacy default Level 1 only to route records that predate the required jumpLevel field.
+ * @param value Arbitrary stored/imported data.
+ * @returns A shallowly copied value with route defaults, or the original value when no route array is present.
+ */
 export function withDefaultJumpLevels(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.cluster) || !Array.isArray(value.cluster.routes)) {
     return value
@@ -270,6 +304,12 @@ export function withDefaultJumpLevels(value: unknown): unknown {
   }
 }
 
+/**
+ * Restores a persisted candidate by applying supported legacy shims, validation, and normalized layout defaults.
+ * Malformed or unsupported data is rejected rather than partially repaired.
+ * @param value Unknown workspace record read from storage, including supported legacy workspace shapes.
+ * @returns Current workspace shape, or null when validation or layout normalization fails.
+ */
 export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
   const restored = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
   if (!isStoredLocalWorkspace(restored)) {

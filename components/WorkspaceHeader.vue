@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Shows shared chart summaries and dispatches file actions supplied by the page.
+ */
 import { computed, ref } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
@@ -33,10 +36,12 @@ const headerMapActionsOpen = ref(false)
 const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
 const jsonImportInput = ref<HTMLInputElement | null>(null)
 
+/** Opens the hidden file input so import still flows through the page-owned preparation/commit handler. */
 function openJsonImportPicker(): void {
   jsonImportInput.value?.click()
 }
 
+/** Closes the file-action menu and returns keyboard focus to its toggle. */
 function closeHeaderMapActions(): void {
   headerMapActionsOpen.value = false
   headerMapActionsToggle.value?.focus()

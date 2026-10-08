@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Holds one definition's edit draft and emits requests; the dialog coordinates confirmation and persistence.
+ */
 import { computed, ref, watch } from 'vue'
 import {
   catalogueTypes,
@@ -42,6 +45,11 @@ const affectedFieldAssignments = computed(() => {
   )
 })
 
+/**
+ * Checks a target by its canonical category/subtype identity rather than object reference.
+ * @param target Category or subtype shown by the selector.
+ * @returns True when the local scope draft currently includes that target.
+ */
 function hasCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): boolean {
   const targetKey = customFieldApplicabilityTargetKey(target)
   return fieldDefinitionApplicabilityTargets.value.some(candidate =>
@@ -49,6 +57,10 @@ function hasCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarge
   )
 }
 
+/**
+ * Adds or removes one explicit scope target in the local draft without changing saved field values.
+ * @param target Category or subtype selected by the user.
+ */
 function toggleCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): void {
   const targetKey = customFieldApplicabilityTargetKey(target)
   const index = fieldDefinitionApplicabilityTargets.value.findIndex(candidate =>
@@ -58,6 +70,10 @@ function toggleCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTa
   else fieldDefinitionApplicabilityTargets.value.splice(index, 1)
 }
 
+/**
+ * Copies the selected definition into editable strings and scope controls.
+ * Undefined custom applicability is represented as the global/all-objects mode.
+ */
 function syncFieldDefinitionDraft(): void {
   const definition = props.definition
   fieldDefinitionNameDraft.value = definition.kind === 'custom' ? definition.name : ''
@@ -70,6 +86,7 @@ function syncFieldDefinitionDraft(): void {
     : []
 }
 
+/** Ends local editing and reloads the draft from the current definition props. */
 function reset(): void {
   fieldDefinitionEditing.value = false
   syncFieldDefinitionDraft()
@@ -80,16 +97,22 @@ watch(() => props.definition, () => {
   if (!fieldDefinitionEditing.value) syncFieldDefinitionDraft()
 })
 
+/** Starts editing the current definition and clears any parent-visible error. */
 function beginFieldDefinitionEdit(): void {
   fieldDefinitionEditing.value = true
   emit('clear-error')
 }
 
+/** Discards local changes by reloading current props, then clears the parent-visible error. */
 function cancelFieldDefinitionEdit(): void {
   reset()
   emit('clear-error')
 }
 
+/**
+ * Emits only changed field properties and includes every assignment affected by removed select options.
+ * The dialog, not this editor, decides whether that request requires confirmation or may be committed.
+ */
 function saveFieldDefinitionChanges(): void {
   const definition = props.definition
   const name = definition.kind === 'custom' ? fieldDefinitionNameDraft.value.trim() : definition.name
@@ -129,6 +152,7 @@ function saveFieldDefinitionChanges(): void {
   })
 }
 
+/** Requests removal of a custom definition together with all its saved assignments for confirmation. */
 function requestFieldDefinitionRemoval(): void {
   const definition = props.definition
   if (definition.kind !== 'custom') return

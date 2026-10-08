@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Emits catalogue add/drag intents; the editor resolves placement, while native buttons preserve click and keyboard paths.
 import { computed, ref } from 'vue'
 import {
   catalogueTypes,
@@ -34,11 +35,18 @@ const groups = ([
 const activeFamily = ref(groups[0]!.family)
 const activeGroup = computed(() => groups.find(group => group.family === activeFamily.value)!)
 
+/**
+ * Publishes a catalogue key in the native drag payload and keeps the pointer beside the visible mark.
+ * @param event Native dragstart event from the source palette button.
+ * @param subtype Catalogue key resolved by the system-map renderer on drop.
+ * @throws If the source is not a button with a rendered object mark.
+ */
 function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
   const dataTransfer = event.dataTransfer
   if (!dataTransfer) return
 
   dataTransfer.effectAllowed = 'copy'
+  // SystemMap consumes this catalogue subtype token when resolving a dropped object.
   dataTransfer.setData('application/x-mothership-map-object', subtype)
   dataTransfer.setData('text/plain', subtype)
   const source = event.currentTarget
@@ -47,9 +55,14 @@ function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
   if (!mark) throw new Error('Object palette button is missing its map mark.')
 
   const bounds = mark.getBoundingClientRect()
+  // Keep the pointer beside the mark so the drag preview does not hide the drop target.
   dataTransfer.setDragImage(mark, bounds.width + 8, bounds.height / 2)
 }
 
+/**
+ * Marks a native drag as an Orbit intent; the renderer later resolves its map point and optional host.
+ * @param event Native dragstart event from the Add Orbit button.
+ */
 function startOrbitDrag(event: DragEvent): void {
   const dataTransfer = event.dataTransfer
   if (!dataTransfer) return

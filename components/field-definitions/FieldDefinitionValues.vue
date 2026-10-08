@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Read-only assignment list shared by definition inspection and destructive-change previews.
+ */
 import type { FieldValueAssignment } from './model'
 
 const props = defineProps<{

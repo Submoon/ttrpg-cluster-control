@@ -1,3 +1,6 @@
+/**
+ * D3 owns the system SVG scene and gestures; Vue receives selection and completed-edit actions through handlers.
+ */
 import { drag, pointer, select, zoom, zoomTransform, type ZoomBehavior } from 'd3'
 import {
   canPlaceObjectInOrbit,
@@ -47,15 +50,25 @@ interface OrbitRotationGesture {
 }
 
 export interface SystemMapEventHandlers {
+  /** Select an existing system object. */
   selectObject(id: string): void
+  /** Select an existing Orbit. */
   selectOrbit(id: string): void
+  /** Commit a system-level object position in normalized initial-scene coordinates. */
   moveObject(id: string, position: Point): void
+  /** Commit an unoccupied Orbit center in normalized coordinates, optionally attaching it to a host object. */
   moveOrbitCenter(id: string, center: Point, hostId: string | null): void
+  /** Commit an object's Orbit parameter angle in radians. */
   rotateObject(id: string, angle: number): void
+  /** Commit horizontal and vertical Orbit radii in SVG scene units. */
   resizeOrbit(id: string, radii: OrbitRadii): void
+  /** Commit an Orbit ellipse rotation in degrees. */
   rotateOrbit(id: string, rotation: number): void
+  /** Commit object placement into an Orbit using a parameter angle in radians. */
   placeObjectInOrbit(id: string, orbitId: string, angle: number): void
+  /** Handle Orbit drops at an SVG scene point, with an optional object host. */
   dropOrbit(point: Point, hostId: string | null): void
+  /** Handle catalogue-object drops in scene coordinates; angle is radians or null outside an Orbit. */
   dropObject(
     subtype: CatalogueSubtype,
     point: Point,
@@ -65,19 +78,28 @@ export interface SystemMapEventHandlers {
 }
 
 export interface SystemMapRendererOptions {
+  /** SVG element whose children are owned and rebuilt by D3. */
   element: SVGSVGElement
+  /** Current domain entities and their saved Orbit/angle geometry. */
   system: StarSystem
   geometry: SystemMapGeometry
+  /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
   orbitRotationWheelEvents: WeakSet<Event>
+  /** Callbacks for selection and completed edits; gesture previews remain local to the renderer. */
   handlers: SystemMapEventHandlers
+  /** Receives the current percentage zoom for Vue's accessible controls. */
   setZoomLevel(zoomLevel: number): void
 }
 
+/** Live D3 capabilities exposed to the Vue wrapper. */
 export interface SystemMapRenderer {
   zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>
+  /** Captures Ctrl+wheel rotation before the same event reaches D3's zoom behavior. */
   captureOrbitRotationWheel(event: WheelEvent): void
+  /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
   handleObjectDrop(event: DragEvent): void
 }
 
@@ -90,6 +112,14 @@ function orbitLabel(system: StarSystem, orbit: Orbit): string {
   return `Orbit ${orbit.order} around ${host.name}`
 }
 
+/**
+ * Rebuilds the SVG scene and installs local pan/zoom, selection, drop, and Orbit/object gestures.
+ * Re-rendering preserves the user's temporary zoom transform and focused Orbit control; drag previews stay local
+ * and only completed geometry is sent through handlers. Scene bounds expand to include content outside the viewBox.
+ * @param options SVG host, current system/layout/selection, and event callbacks.
+ * @returns D3 zoom behavior and Vue-facing wheel/drop adapters.
+ * @throws If nested system geometry has missing references or an invalid host/cycle.
+ */
 export function renderSystemMap({
   element,
   system,
@@ -102,12 +132,22 @@ export function renderSystemMap({
 }: SystemMapRendererOptions): SystemMapRenderer {
   let rotateOrbitFromWheel: (event: WheelEvent) => boolean = () => false
 
+  /**
+   * Prevents selected-Orbit Ctrl+wheel rotation from also becoming a D3 map-zoom gesture.
+   * @param event Native wheel event captured by Vue on the SVG.
+   */
   function captureOrbitRotationWheel(event: WheelEvent): void {
     if (!rotateOrbitFromWheel(event)) return
     event.preventDefault()
     orbitRotationWheelEvents.add(event)
   }
 
+  /**
+   * Resolves palette Orbit/object MIME payloads to scene-coordinate intents without persisting them.
+   * Object drops resolve the Orbit under the pointer and its parameter angle in radians when applicable.
+   * @param event Native drop event on the map.
+   * @throws If current nested system geometry cannot be resolved.
+   */
   function handleObjectDrop(event: DragEvent): void {
     const orbitDrag = event.dataTransfer?.getData('application/x-mothership-map-orbit')
     if (orbitDrag) {
@@ -420,6 +460,9 @@ export function renderSystemMap({
       .text(objectMark(object))
   })
 
+  /**
+   * Expands the background and grid around both object and Orbit bounds beyond the initial SVG viewBox.
+   */
   function updateMapSurface(): void {
     const bounds = [items.node()?.getBBox(), orbitMarks.node()?.getBBox()]
       .filter((box): box is DOMRect => box !== undefined && (box.width > 0 || box.height > 0))
@@ -443,6 +486,7 @@ export function renderSystemMap({
     }
   }
 
+  /** Applies temporary drag overrides to rendered objects, Orbit handles, accessibility values, and scene bounds. */
   function updateLiveGeometry(): void {
     const positions = currentPositions()
     objectMarks.attr('transform', object => {
@@ -606,6 +650,11 @@ export function renderSystemMap({
   }
   updateMapSurface()
 
+  /**
+   * Applies a fine degree-based rotation only when Ctrl+wheel targets the selected Orbit.
+   * @param event Wheel event captured before D3 zoom.
+   * @returns True when this handler consumed the event as an Orbit rotation.
+   */
   rotateOrbitFromWheel = (event) => {
     if (!event.ctrlKey || !event.deltaY || !selectedOrbitId) return false
     const targetOrbitId = event.target instanceof Element
@@ -638,6 +687,14 @@ export function renderSystemMap({
 
   const resizedOrbits = new WeakSet<SVGElement>()
   const orbitResizeGestures = new WeakMap<SVGElement, OrbitResizeGesture>()
+  /**
+   * Converts a scene-space resize pointer into minimum-clamped radii.
+   * Global gestures scale both axes together; axis handles measure in the rotated ellipse's local frame.
+   * @param point Current pointer in SVG scene coordinates.
+   * @param orbit Orbit being resized.
+   * @param gesture Captured start radii, center, distance, and handle axis.
+   * @returns Proposed horizontal/vertical radii in SVG scene units.
+   */
   function resizedRadii(
     point: Point,
     orbit: Orbit,

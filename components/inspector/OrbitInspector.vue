@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Owns local Orbit-edit drafts; pending or rejected saves stay open until success is acknowledged or cancelled.
+ */
 import { computed, ref, watch } from 'vue'
 import {
   defaultOrbitRadius,
@@ -49,6 +52,10 @@ const selectedOrbitDeleteLabel = computed(() => {
   return `Delete Orbit ${orbit.order} around ${hostName}`
 })
 
+/**
+ * Loads Orbit order, effective saved/default radii, and center strings for unoccupied Orbits.
+ * @param orbit Selected Orbit, or undefined when no draft can be synchronized.
+ */
 function syncOrbitDraft(orbit: Orbit | undefined): void {
   if (!orbit) return
   const defaultRadius = selectedSystem.value ? defaultOrbitRadius(selectedSystem.value, orbit) : 0
@@ -61,6 +68,7 @@ function syncOrbitDraft(orbit: Orbit | undefined): void {
   orbitCenterYDraft.value = orbit.hostId === null ? String(orbit.center.y) : ''
 }
 
+/** Starts a form draft from the selected Orbit's committed geometry. */
 function startOrbitEdit(): void {
   if (!selectedOrbit.value) return
   syncOrbitDraft(selectedOrbit.value)
@@ -69,6 +77,10 @@ function startOrbitEdit(): void {
   emit('clear-error')
 }
 
+/**
+ * Discards the form draft and reloads the current Orbit props.
+ * @param clearError Whether to ask the parent to clear its shared editor error.
+ */
 function cancelOrbitEdit(clearError = true): void {
   syncOrbitDraft(selectedOrbit.value)
   orbitEditing.value = false
@@ -76,6 +88,11 @@ function cancelOrbitEdit(clearError = true): void {
   if (clearError) emit('clear-error')
 }
 
+/**
+ * Checks whether one sibling-order step remains within this host group's current range.
+ * @param direction -1 for an earlier order or 1 for a later order.
+ * @returns False when no Orbit is selected or the draft/current edge has no neighbor.
+ */
 function canMoveSelectedOrbit(direction: -1 | 1): boolean {
   const system = selectedSystem.value
   const orbit = selectedOrbit.value
@@ -87,11 +104,16 @@ function canMoveSelectedOrbit(direction: -1 | 1): boolean {
     && currentOrder + direction <= siblingCount
 }
 
+/** Moves the local order draft one available sibling slot without submitting it. */
 function reorderSelectedOrbit(direction: -1 | 1): void {
   if (!orbitEditing.value || !canMoveSelectedOrbit(direction)) return
   orbitOrderDraft.value = String(Number(orbitOrderDraft.value) + direction)
 }
 
+/**
+ * Validates sibling order, rounded scene-unit radii, and finite normalized center before emitting a save request.
+ * Only unoccupied Orbits submit a center; the parent acknowledgement closes this draft after commit success.
+ */
 function saveOrbitEdit(): void {
   const system = selectedSystem.value
   const orbit = selectedOrbit.value
@@ -140,6 +162,7 @@ watch(() => [selectedOrbit.value, props.workspace.layout.orbitRadii] as const, (
   if (!orbitEditing.value) syncOrbitDraft(selectedOrbit.value)
 }, { immediate: true })
 
+/** Parent invokes orbitSaveSucceeded only after the associated workspace commit succeeds. */
 const inspectorHandle = {
   hasUnsavedEdits: () => orbitEditing.value,
   cancelEdits: cancelOrbitEdit,

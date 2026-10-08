@@ -1,3 +1,6 @@
+/**
+ * Applies confirmed definition edits through the injected commit and acknowledges only successful saves.
+ */
 import { ref, shallowRef, type Ref } from 'vue'
 import {
   addCustomFieldDefinition,
@@ -18,6 +21,11 @@ interface FieldDefinitionWorkflowOptions {
   confirmDiscardInspectorEdits: () => boolean
 }
 
+/**
+ * Provides field-definition commands while leaving dialog drafts and destructive-change confirmation in the UI.
+ * @param options Workspace, persistence callback, and inspector-draft guard.
+ * @returns Dialog state, a save acknowledgement revision, and definition commands.
+ */
 export function useFieldDefinitionWorkflows({
   workspace,
   commit,
@@ -25,6 +33,7 @@ export function useFieldDefinitionWorkflows({
 }: FieldDefinitionWorkflowOptions) {
   const fieldDefinitionDialogOpen = ref(false)
   const fieldDefinitionError = ref('')
+  // The dialog uses this revision as a success acknowledgement before resetting its local drafts.
   const fieldDefinitionSaveRevision = ref(0)
   const fieldDefinitionsDialog = shallowRef<{ open: () => void } | null>(null)
 
@@ -32,12 +41,18 @@ export function useFieldDefinitionWorkflows({
     return error instanceof Error ? error.message : String(error)
   }
 
+  /** Opens the dialog only for an existing workspace and after the inspector-draft guard passes. */
   function openFieldDefinitions(): void {
     if (!workspace.value || fieldDefinitionDialogOpen.value || !confirmDiscardInspectorEdits()) return
     fieldDefinitionError.value = ''
     fieldDefinitionsDialog.value?.open()
   }
 
+  /**
+   * Creates and commits a definition, advancing the acknowledgement only after durable commit success.
+   * @param request New field values from the dialog.
+   * @returns A promise that resolves after the attempt; failures are exposed in fieldDefinitionError.
+   */
   async function createCustomField(request: CustomFieldCreateRequest): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
@@ -71,6 +86,14 @@ export function useFieldDefinitionWorkflows({
       && first.every(target => secondKeys.has(customFieldApplicabilityTargetKey(target)))
   }
 
+  /**
+   * Applies only changed definition properties to a candidate workspace.
+   * Destructive option changes reach this helper after affected assignments are confirmed for clearing.
+   * @param currentWorkspace Workspace candidate to update.
+   * @param request Submitted name, options, and applicability.
+   * @returns Updated workspace; no persistence or draft acknowledgement occurs here.
+   * @throws If the definition disappeared or any domain update is invalid.
+   */
   function applyFieldDefinitionUpdate(
     currentWorkspace: LocalWorkspace,
     request: FieldDefinitionUpdateRequest,
@@ -106,6 +129,11 @@ export function useFieldDefinitionWorkflows({
     return updatedWorkspace
   }
 
+  /**
+   * Applies and commits a confirmed field edit, preserving the draft if the write fails.
+   * @param request Confirmed field-definition values.
+   * @returns A promise that resolves after the attempt; failures populate fieldDefinitionError.
+   */
   async function saveFieldDefinitionChanges(request: FieldDefinitionUpdateRequest): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
@@ -119,6 +147,11 @@ export function useFieldDefinitionWorkflows({
     }
   }
 
+  /**
+   * Removes a definition and its assigned values after the dialog's confirmation step.
+   * @param fieldId Definition selected for removal.
+   * @returns A promise that resolves after the attempt; failures populate fieldDefinitionError.
+   */
   async function removeFieldDefinition(fieldId: string): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return

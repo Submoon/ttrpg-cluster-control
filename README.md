@@ -1,38 +1,66 @@
-# Mothership Campaign Cartography
+# Campaign Cartography
 
-Application web locale pour préparer et gérer des cartes de campagne Mothership : Jump Clusters, systèmes stellaires, objets orbitaux et Jump Routes. Les cartes sont schématiques, pas à l’échelle.
+**Designed for use with Mothership®**
 
-## Lancer l’application
+A local-first campaign cartography app for Wardens to plan and maintain schematic, not-to-scale maps of Jump Clusters and star systems.
 
-Prérequis : Node.js et npm.
+## Build a campaign map
+
+Start with a local Jump Cluster and its first star system. Add more systems from the Cluster map as campaign knowledge grows, then connect their Jump Points with routes.
+
+- **Jump Clusters and routes:** Connect logical Jump Points with Jump Routes using positive integer Jump levels (standard levels are 1–9; higher positive levels are supported). A route can lead to another known Jump Point or a named unresolved exit beyond the known Cluster. A Jump Point may optionally reference a separate physical Station object; the route itself remains a logical connection.
+- **Star-system maps:** Choose from catalogue objects including stars, planets, moons, asteroids, belts, Stations, Bases, Colonies, vessels, derelicts, Jump Points, anomalies, nebulae, hazards, and named “Other” objects. Place them at schematic coordinates or in an Orbit.
+- **Elliptical Orbits:** Create nested Orbits hosted by map objects or centered on an unoccupied point. Resize either axis, rotate an Orbit, move an unoccupied center, and detach a hosted Orbit while keeping its child placements.
+- **Editing workflow:** The Cluster and system views pair the map with a hierarchy and inspectors. Add catalogue objects by clicking or keyboard activation, or drag them onto the chart or an Orbit; the drag preview shows the matching catalogue mark beside the pointer to keep the drop target clear. Deletion previews affected entities and asks for confirmation.
+- **Reusable fields:** Edit native options and define typed custom fields (`text`, `number`, `boolean`, and `single-select`) that apply to all catalogue objects or selected categories and subtypes. A value remains on its object when the field is hidden from that object.
+- **Map files:** Export a whole Jump Cluster or a standalone star system as versioned JSON. Cluster exports include systems and routes; system exports contain local system data and applicable layout, not Cluster routes. Export the full rendered map as SVG or PNG.
+
+## Local storage and backups
+
+The current workspace is automatically saved in IndexedDB for this browser profile and site origin. Only committed edits persist; unsaved inspector drafts and temporary pan/zoom do not. Storage is local, not cloud-synced, and clearing browser or site data can erase it. Export the Jump Cluster as JSON for backup or transfer. After creating a workspace, validated JSON imports append an independent copy rather than overwrite it. PNG and SVG are map images, not data backups. Load and save errors appear in the app; a failed load can be retried.
+
+## Technology
+
+The app uses Nuxt 4, Vue 3, and TypeScript with server-side rendering enabled. The workspace is hydrated in the browser after mount; D3/SVG map views are rendered inside Vue's `<ClientOnly>` boundary. Tailwind CSS 4 is integrated through the Vite plugin. SVG exports copy the rendered scene and its styles; PNG exports rasterize that SVG through Canvas.
+
+## Setup and development
+
+Recommended: Node.js 24 LTS (`24.15.0` or newer within 24.x), and npm.
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
-Ouvre ensuite l’adresse locale affichée par Nuxt dans le terminal.
+Open the local URL printed by Nuxt.
 
-## Utilisation
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the development server. |
+| `npm run typecheck` | Run Nuxt and TypeScript type checking. |
+| `npx playwright install chromium` | Install the Chromium browser required by the browser tests (once per environment). |
+| `npm test` | Run the Playwright browser suite; Playwright starts the app at `http://127.0.0.1:3100`. |
+| `npm run build` | Build the production app. |
+| `npm run preview` | Preview the production build locally; run `npm run build` first. |
 
-1. Crée un workspace local en donnant un nom au Jump Cluster et à son premier système.
-2. Depuis la carte du Cluster, ajoute d’autres systèmes. Ouvre un système et utilise la palette d’objets, regroupée par type : glisse un type sur la carte ou active son bouton au clavier. Déposer un objet sur un anneau le place dans cette Orbit.
-3. Ajoute des Jump Points dans les systèmes, puis crée des Jump Routes depuis la carte du Cluster en choisissant leurs points de départ et d’arrivée.
-4. Sélectionne un système, objet, Orbit ou route pour modifier ses détails. Ouvre **Field Definitions** dans l’en-tête pour gérer les définitions de champs partagés; leurs valeurs restent attachées aux objets.
-5. Utilise les contrôles de navigation pour zoomer ou ajuster la carte. Déplace les systèmes et objets pour organiser la disposition; glisse un anneau pour en modifier le rayon.
-6. Les actions de suppression affichent les éléments dépendants concernés avant confirmation.
+## Project map
 
-Les cartes peuvent être exportées en JSON, PNG ou SVG. L’import JSON affiche un aperçu et ajoute une copie indépendante; il ne fusionne ni ne remplace les données existantes.
+| Path | Responsibility |
+| --- | --- |
+| `pages/index.vue` | Editor composition and cross-view coordination; the only owner of `useLocalWorkspace()`. |
+| `composables/useLocalWorkspace.ts` | Nuxt workspace state, browser hydration, serialized commits, and save status. |
+| `composables/useEditorWorkflows.ts`, `composables/editor-workflows/` | Compose editor state with focused cluster, map, and field-definition workflows. |
+| `composables/useWorkspaceFiles.ts` | JSON and image downloads, import preview, and confirmation. |
+| `utils/workspace-storage.ts` | IndexedDB read/write boundary. |
+| `domain/workspace.ts`, `domain/workspace-*.ts` | Stable domain facade over focused model, validation, fields, cluster, system objects, Orbits, deletion, schema, codec, and JSON-import modules. |
+| `components/` | Focused header, welcome, palette, hierarchy, inspector, field-definition, map-layout, and map-view UI. `components/inspector/` and `components/field-definitions/` hold focused subviews; `components/maps/system-map-renderer.ts` owns the D3/SVG system-map renderer. `MapEditorLayout.vue` stays mounted between map modes, so panel-collapse state is shared. |
+| `utils/` | Map geometry, zoom, catalogue marks, and SVG/PNG image export. |
+| `assets/css/main.css`, `assets/css/map-workspace.css` | Global and workspace styles, including unscoped styles for D3-created SVG elements. |
+| `tests/` | Six focused Playwright specs and shared browser helpers. |
+| `CONTEXT.md` | Domain terms and relationships. |
 
-## Données et sauvegarde
+## License
 
-Le workspace est enregistré dans IndexedDB du navigateur utilisé. Il n’y a ni compte ni stockage distant. Pour sauvegarder ou déplacer les données, exporte le Jump Cluster en JSON. L’import crée une copie; il ne restaure pas par-dessus le workspace existant.
+This repository's code and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies remain subject to their respective licenses.
 
-## Vérifications de développement
-
-```sh
-npm run typecheck
-npm run build
-npx playwright install chromium
-npm test
-```
+Mothership® is a trademark of Tuesday Knight Games. This project is an unofficial fan-made tool and is not affiliated with or endorsed by Tuesday Knight Games.

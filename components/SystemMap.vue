@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Vue owns map controls and component lifecycle; D3 owns the scene nodes created under the SVG element.
+ * Unscoped styles intentionally reach those renderer-created nodes.
+ */
 import { select, zoomIdentity } from 'd3'
 import {
   type CatalogueSubtype,
@@ -64,26 +68,39 @@ const handlers: SystemMapEventHandlers = {
     emit('drop-object', subtype, point, orbitId, angle),
 }
 
+/** Forwards a captured wheel event so Orbit rotation cannot also zoom the map. */
 function captureOrbitRotationWheel(event: WheelEvent): void {
   mapRenderer?.captureOrbitRotationWheel(event)
 }
 
+/** Forwards palette drops to the D3 renderer for scene-coordinate target resolution. */
 function handleObjectDrop(event: DragEvent): void {
   mapRenderer?.handleObjectDrop(event)
 }
 
+/** Applies a relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
   if (svgElement.value && mapRenderer) {
     select(svgElement.value).call(mapRenderer.zoomBehavior.scaleBy, factor)
   }
 }
 
+/**
+ * Exports the full system scene and includes the current system name in its title band.
+ * @param format Requested SVG or PNG output.
+ * @returns Export blob.
+ * @throws If the SVG is not mounted or scene export/rasterization fails.
+ */
 async function exportImage(format: MapImageFormat): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The star system map is not ready to export.')
   return exportMapImage(element, format, props.system.name)
 }
 
+/**
+ * Fits both object and Orbit scene bounds inside the viewport, clamping to supported zoom limits.
+ * If no map geometry exists, resets the view to the identity transform.
+ */
 function fitMap(): void {
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
@@ -113,6 +130,9 @@ function fitMap(): void {
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
 }
 
+/**
+ * Rebuilds the D3 scene from current props; zoom and scene gestures remain renderer-owned.
+ */
 function render(): void {
   const element = svgElement.value
   if (!element) return
@@ -131,6 +151,11 @@ function render(): void {
   })
 }
 
+/**
+ * Delegates to the geometry search used by detach workflows.
+ * @param orbitId Hosted Orbit to detach.
+ * @returns Normalized center with point clearance, or undefined when the Orbit is missing/unoccupied.
+ */
 function getDetachedOrbitCenter(orbitId: string): Point | undefined {
   return findDetachedOrbitCenter(props.system, orbitId, mapGeometry.value)
 }

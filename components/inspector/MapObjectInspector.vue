@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Owns local object-edit drafts; the parent controls commit acknowledgement and navigation guards.
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import {
   canPlaceObjectInOrbit,
@@ -61,6 +64,7 @@ const objectEditing = computed(() =>
   objectEditSnapshot.value?.id === selectedObject.value?.id && !!selectedObject.value,
 )
 const objectError = ref('')
+/** Applicability filters visible controls only; this draft retains values for every defined field. */
 const applicableCustomFields = computed(() => {
   const object = selectedObject.value
   return object
@@ -84,6 +88,10 @@ const placeableOrbits = computed(() => {
     .sort((left, right) => left.order - right.order)
 })
 
+/**
+ * Loads a selected object's values into form strings, retaining slots for every current custom definition.
+ * @param object Selected object, or undefined to clear the draft fields.
+ */
 function syncObjectDraft(object: SystemObject | undefined): void {
   objectDraft.locationKey = object?.locationKey ?? ''
   objectDraft.name = object?.name ?? ''
@@ -105,6 +113,7 @@ function syncObjectDraft(object: SystemObject | undefined): void {
   objectDraft.jumpStationId = object?.jumpStationId ?? ''
 }
 
+/** Starts a local draft from the current selection without committing workspace state. */
 function startObjectEdit(): void {
   if (!selectedObject.value) return
   syncObjectDraft(selectedObject.value)
@@ -113,6 +122,10 @@ function startObjectEdit(): void {
   emit('clear-error')
 }
 
+/**
+ * Discards the active object draft and reloads current props.
+ * @param clearError Whether to ask the parent to clear its shared editor error.
+ */
 function cancelObjectEdit(clearError = true): void {
   objectEditSnapshot.value = null
   syncObjectDraft(selectedObject.value)
@@ -120,6 +133,11 @@ function cancelObjectEdit(clearError = true): void {
   if (clearError) emit('clear-error')
 }
 
+/**
+ * Builds a sparse candidate request and parses custom number/boolean fields before handing off to the parent.
+ * Unsupported local placement text sets objectError; finite-coordinate and domain validation remain parent/domain work.
+ * A successful request remains a draft until the parent acknowledges its commit.
+ */
 function saveObjectEdit(): void {
   const snapshot = objectEditSnapshot.value
   const object = selectedObject.value
@@ -207,6 +225,10 @@ function saveObjectEdit(): void {
   emit('save-object', { objectId: snapshot.id, changes })
 }
 
+/**
+ * Seeds default normalized coordinates when an Orbit-placed object is switched to system-level placement.
+ * The generated position remains a draft until the parent accepts and commits it.
+ */
 function updateObjectPlacementDraft(): void {
   const system = selectedSystem.value
   if (!system || selectedObject.value?.placement.kind !== 'orbit' || objectDraft.placement !== 'system') return
@@ -232,6 +254,7 @@ watch(() => props.workspace.objectFieldSettings, (settings) => {
   }
 }, { immediate: true })
 
+/** Parent save acknowledgement is the only path that clears a submitted draft. */
 const inspectorHandle = {
   hasUnsavedEdits: () => objectEditing.value,
   isEditingObject: (objectId: string) => objectEditSnapshot.value?.id === objectId,

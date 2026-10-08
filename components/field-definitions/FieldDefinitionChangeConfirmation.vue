@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Shows destructive-change impact and emits an explicit confirmation intent without mutating workspace data.
+ */
 import type { PendingFieldDefinitionChange } from './model'
 
 const props = defineProps<{

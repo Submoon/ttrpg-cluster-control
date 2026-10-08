@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Lists native and custom definitions, returning selection and creation intents to the dialog owner.
+ */
 import { fieldApplicabilitySummary, type FieldDefinitionSummary } from './model'
 
 const props = defineProps<{

@@ -1,3 +1,6 @@
+/**
+ * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
+ */
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
@@ -40,6 +43,11 @@ interface MapWorkflowOptions {
   editorError: Ref<string>
 }
 
+/**
+ * Builds system-map commands around the page commit and inspector draft-acknowledgement boundaries.
+ * @param options Current selection refs, renderer handles, discard guard, and persistence callback.
+ * @returns Map edit commands; rejected edits are exposed through editorError rather than thrown to the UI.
+ */
 export function useMapWorkflows({
   workspace,
   commit,
@@ -57,6 +65,11 @@ export function useMapWorkflows({
     return error instanceof Error ? error.message : String(error)
   }
 
+  /**
+   * Replaces one system in the current workspace and waits for the page-owned durable commit.
+   * @param system Complete updated system.
+   * @throws If the workspace is unavailable, the system replacement is invalid, or persistence fails.
+   */
   async function saveSystem(system: StarSystem): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) {
@@ -65,6 +78,12 @@ export function useMapWorkflows({
     await commit(replaceWorkspaceSystem(currentWorkspace, system))
   }
 
+  /**
+   * Persists a cluster-map drag position after clamping each normalized coordinate to [0, 1].
+   * @param systemId System being moved.
+   * @param position Proposed normalized cluster-map position.
+   * @returns A promise that resolves after the attempt; invalid coordinates or save failures populate editorError.
+   */
   async function moveSystem(systemId: string, position: Point): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace?.cluster.systems.some(system => system.id === systemId)) return
@@ -92,6 +111,13 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Persists a system-map object position unless its inspector currently owns an edit draft.
+   * Position coordinates are normalized against the initial scene body and may extend outside [0, 1].
+   * @param objectId Object being moved.
+   * @param position Proposed normalized system-map coordinates.
+   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
+   */
   async function moveMapObject(objectId: string, position: Point): Promise<void> {
     if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const system = selectedSystem.value
@@ -117,6 +143,14 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Moves an object to an Orbit and persists its orbital angle in radians.
+   * Editing objects in the inspector blocks map placement until that draft is resolved.
+   * @param objectId Object to place.
+   * @param orbitId Destination Orbit, validated against recursive host placement.
+   * @param angle Orbital position in radians.
+   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
+   */
   async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
     if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const currentWorkspace = workspace.value
@@ -150,6 +184,12 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Persists an object's Orbit angle without changing its placement.
+   * @param objectId Object whose current placement must be an Orbit.
+   * @param angle Orbital position in radians.
+   * @returns A promise that resolves after the attempt; invalid angles and save failures populate editorError.
+   */
   async function rotateMapObject(objectId: string, angle: number): Promise<void> {
     if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const currentWorkspace = workspace.value
@@ -174,6 +214,12 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Saves Orbit radii in SVG scene units, rounding and clamping both axes to the host-specific minimum.
+   * @param orbitId Orbit to resize.
+   * @param radii Proposed horizontal and vertical radii.
+   * @returns A promise that resolves after the attempt; invalid radii and save failures populate editorError.
+   */
   async function resizeMapOrbit(orbitId: string, radii: OrbitRadii): Promise<void> {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
@@ -203,6 +249,12 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Persists an Orbit ellipse rotation normalized to [0, 360) degrees.
+   * @param orbitId Orbit to rotate.
+   * @param degrees Proposed rotation in degrees.
+   * @returns A promise that resolves after the attempt; invalid input or save failures populate editorError.
+   */
   async function rotateMapOrbit(orbitId: string, degrees: number): Promise<void> {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
@@ -226,6 +278,13 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Moves an unoccupied Orbit center or attaches that Orbit to an object host.
+   * @param orbitId Orbit whose center or host changes.
+   * @param center Proposed normalized map center, used when hostId is null.
+   * @param hostId Object to host the Orbit, or null to leave it unoccupied.
+   * @returns A promise that resolves after the attempt; domain and save failures populate editorError.
+   */
   async function moveMapOrbitCenter(
     orbitId: string,
     center: Point,
@@ -242,6 +301,11 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Finds a point-clear unoccupied center, detaches the selected Orbit, and preserves its effective radii.
+   * The search does not promise clearance between the full rings of separate Orbits.
+   * @returns A promise that resolves after the attempt or any early guard; failures populate editorError.
+   */
   async function detachSelectedOrbit(): Promise<void> {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
@@ -282,18 +346,25 @@ export function useMapWorkflows({
     }
   }
 
+  /** Starts the selected object draft only after any other inspector draft is accepted or discarded. */
   function beginObjectEdit(): void {
     if (!selectedObject.value || !confirmDiscardInspectorEdits()) return
     mapInspectorRef.value?.startObjectEdit()
     editorError.value = ''
   }
 
+  /** Starts the selected Orbit draft only after any other inspector draft is accepted or discarded. */
   function beginOrbitEdit(): void {
     if (!selectedOrbit.value || !confirmDiscardInspectorEdits()) return
     mapInspectorRef.value?.startOrbitEdit()
     editorError.value = ''
   }
 
+  /**
+   * Validates and commits the inspector's object candidate, acknowledging the draft only after success.
+   * @param request Object ID and proposed field changes.
+   * @returns A promise that resolves after the attempt; errors populate editorError and leave the draft active.
+   */
   async function saveObjectEdit(request: ObjectEditRequest): Promise<void> {
     const system = selectedSystem.value
     const currentWorkspace = workspace.value
@@ -314,6 +385,17 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Adds a catalogue object from a click/keyboard intent or a map drop.
+   * Drop points use SVG scene coordinates and are converted to normalized initial-scene placement;
+   * an Orbit drop angle, when supplied, is stored in radians. Click/keyboard additions to a selected Orbit
+   * leave the angle unset so geometry uses its sibling-order default.
+   * @param subtype Catalogue subtype to add.
+   * @param dropPoint Optional drop position in SVG scene coordinates.
+   * @param dropOrbitId Optional Orbit under a map drop; omitted click/keyboard intents use the selected Orbit.
+   * @param dropAngle Optional orbital position for an Orbit drop, in radians.
+   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
+   */
   async function addObject(
     subtype: CatalogueSubtype,
     dropPoint?: Point,
@@ -372,6 +454,13 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Adds an Orbit under a host or at a dropped unoccupied center.
+   * A dropped center is in SVG scene coordinates and is stored in normalized map coordinates.
+   * @param hostId Host object ID, or null for an unoccupied center; defaults to selected object or no host.
+   * @param dropPoint Optional center supplied by the map renderer.
+   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
+   */
   async function addOrbit(
     hostId: string | null = selectedObject.value?.id ?? null,
     dropPoint?: Point,
@@ -403,10 +492,22 @@ export function useMapWorkflows({
     }
   }
 
+  /**
+   * Adapts the renderer's Orbit-drop event to the shared Orbit creation command.
+   * @param point Drop position in SVG scene coordinates.
+   * @param hostId Object under the drop, or null for an unoccupied center.
+   * @returns The addOrbit attempt.
+   */
   function handleOrbitDrop(point: Point, hostId: string | null): Promise<void> {
     return addOrbit(hostId, point)
   }
 
+  /**
+   * Applies sibling order, optional unoccupied center, and scene-unit radii from the Orbit draft.
+   * The inspector receives a save acknowledgement only after the workspace commit succeeds.
+   * @param request Orbit ID, target sibling order, radii, and optional normalized center.
+   * @returns A promise that resolves after the attempt; failures populate editorError and retain the draft.
+   */
   async function saveOrbitEdit(request: OrbitEditRequest): Promise<void> {
     const currentWorkspace = workspace.value
     const system = selectedSystem.value

@@ -1,3 +1,6 @@
+/**
+ * Builds a previewable cascade without mutating the current workspace; callers commit only after confirmation.
+ */
 import { catalogueTypes } from './workspace-model'
 import type {
   LocalWorkspace,
@@ -21,6 +24,7 @@ function orbitLabel(system: StarSystem, orbit: Orbit): string {
   return `Orbit ${orbit.order} around ${hostName}`
 }
 
+/** Reindexes surviving Orbits independently within each host group while preserving their relative order. */
 function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
   const byHost = new Map<string | null, Orbit[]>()
   for (const orbit of orbits) {
@@ -40,6 +44,15 @@ function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
   })
 }
 
+/**
+ * Plans the dependent cleanup for deleting a system, object, Orbit, or route without mutating the input.
+ * Nested object/Orbit branches cascade; surviving sibling orders and durable layout are updated.
+ * Routes depending on removed Jump Points are deleted; surviving points lose links to removed Stations.
+ * @param workspace Current workspace snapshot.
+ * @param target Entity selected for removal.
+ * @returns Confirmation labels and a proposed next workspace; persistence remains the caller's responsibility.
+ * @throws If the target is stale or deletion would remove the Cluster's last system.
+ */
 export function planMapEntityDeletion(
   workspace: LocalWorkspace,
   target: MapDeletionTarget,
@@ -85,6 +98,10 @@ export function planMapEntityDeletion(
     orbitsByHost.set(orbit.hostId, hosted)
   }
 
+  /**
+   * Marks an object and every Orbit branch it hosts, adding labels only for included objects.
+   * Removed-ID sets prevent duplicate traversal/effects when dependencies converge.
+   */
   function collectObjectBranch(objectId: string, includeObject: boolean): void {
     if (removedObjectIds.has(objectId)) return
     const candidate = objectsById.get(objectId)
@@ -97,6 +114,7 @@ export function planMapEntityDeletion(
     }
   }
 
+  /** Marks an Orbit and all objects placed in it, recursively following Orbits hosted by those objects. */
   function collectOrbitBranch(orbit: Orbit, includeOrbit: boolean): void {
     if (removedOrbitIds.has(orbit.id)) return
     removedOrbitIds.add(orbit.id)

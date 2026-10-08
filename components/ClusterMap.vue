@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * D3 owns the SVG scene and gestures; Vue owns controls/events, with unscoped styles targeting D3-created nodes.
+ */
 import { drag, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import {
   jumpPointsInCluster,
@@ -32,18 +35,29 @@ const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 
+/** Applies a relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
   if (svgElement.value && zoomBehavior) {
     select(svgElement.value).call(zoomBehavior.scaleBy, factor)
   }
 }
 
+/**
+ * Exports the complete Cluster-map scene without adding a system title band.
+ * @param format Requested SVG or PNG output.
+ * @returns Export blob.
+ * @throws If the SVG is not mounted or scene export/rasterization fails.
+ */
 async function exportImage(format: MapImageFormat): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The Jump Cluster map is not ready to export.')
   return exportMapImage(element, format)
 }
 
+/**
+ * Fits route and system-card bounds inside the viewport, clamping to supported zoom limits.
+ * Empty geometry resets the view to the identity transform.
+ */
 function fitMap(): void {
   const element = svgElement.value
   const features = element?.querySelector<SVGGElement>('.cluster-map-items')
@@ -65,6 +79,10 @@ function fitMap(): void {
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
 }
 
+/**
+ * Rebuilds D3 route/system nodes while preserving the user's temporary pan and zoom transform.
+ * System drag positions remain preview-only until drag end; the emitted save position is normalized and clamped.
+ */
 function render(): void {
   const element = svgElement.value
   if (!element) return
@@ -142,6 +160,7 @@ function render(): void {
         .text(`Unknown: ${route.unresolvedExit}`)
     }
   })
+  /** Recomputes route paths and labels against temporary scene-space system positions during a drag. */
   function updateRouteGeometry(): void {
     routeMarks.each(function (route, index) {
       const geometry = clusterRouteGeometry(

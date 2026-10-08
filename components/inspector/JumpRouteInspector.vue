@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Owns route drafts and selection UI; persistence and route identity validation stay with the page and domain.
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import {
   jumpPointsInCluster,
@@ -72,6 +75,10 @@ const routeDraftDestination = computed(() =>
   routeDestinationPoints.value.find(({ point }) => point.id === routeDraft.toPointId),
 )
 
+/**
+ * Projects a committed route into form strings, using the first available Jump Point for a new draft.
+ * @param route Selected route, or undefined to initialize a route-creation draft.
+ */
 function syncRouteDraft(route: JumpRoute | undefined): void {
   routeDraft.jumpLevel = String(route?.jumpLevel ?? 1)
   routeDraft.fromPointId = route?.fromPointId ?? jumpPoints.value[0]?.point.id ?? ''
@@ -82,6 +89,9 @@ function syncRouteDraft(route: JumpRoute | undefined): void {
   routeDraft.unresolvedExit = route?.toPointId === null ? route.unresolvedExit : 'Uncharted exit'
 }
 
+/**
+ * Opens a new route draft seeded with available logical endpoints or an unresolved external exit.
+ */
 function beginRoute(): void {
   routeDraft.jumpLevel = '1'
   routeDraft.fromPointId = jumpPoints.value[0]?.point.id ?? ''
@@ -94,6 +104,7 @@ function beginRoute(): void {
   emit('clear-error')
 }
 
+/** Opens an edit draft for the selected route and temporarily clears its page selection. */
 function startRouteEdit(): void {
   const route = selectedRoute.value
   if (!route) return
@@ -105,6 +116,10 @@ function startRouteEdit(): void {
   emit('clear-error')
 }
 
+/**
+ * Closes the route form and asks the parent to restore the route selection that the form replaced.
+ * @param clearError Whether to ask the parent to clear its shared editor error.
+ */
 function cancelRouteForm(clearError = true): void {
   const routeId = editingRouteId.value
   editingRouteId.value = null
@@ -114,6 +129,9 @@ function cancelRouteForm(clearError = true): void {
   if (clearError) emit('clear-error')
 }
 
+/**
+ * Emits the current route fields; numeric/domain validation and the commit remain parent/domain responsibilities.
+ */
 function submitRoute(): void {
   routeDraftError.value = ''
   emit('save-route', {
@@ -125,6 +143,7 @@ function submitRoute(): void {
   })
 }
 
+/** Discards an active route form, leaving the parent to restore its prior selection. */
 function cancelEdits(clearError = true): void {
   if (routeFormOpen.value) cancelRouteForm(clearError)
 }
@@ -142,6 +161,7 @@ watch(() => routeDraft.fromPointId, fromPointId => {
   if (!firstDestination) routeDraft.destination = 'external'
 })
 
+/** Parent invokes routeSaveSucceeded only after the associated workspace commit succeeds. */
 const inspectorHandle = {
   hasUnsavedEdits: () => routeFormOpen.value,
   cancelEdits,

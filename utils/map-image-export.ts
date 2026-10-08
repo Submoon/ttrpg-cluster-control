@@ -1,3 +1,6 @@
+/**
+ * Exports the full SVG scene rather than its viewport, inlining styles before serialization or rasterization.
+ */
 export type MapImageFormat = 'png' | 'svg'
 
 export interface MapImageExporter {
@@ -35,6 +38,14 @@ const styleProperties = [
   'visibility',
 ] as const
 
+/**
+ * Clones and serializes the complete scene with computed styles and export-only bounds.
+ * The clone drops the viewport transform and edit handles; an optional system title gets a band above the scene.
+ * @param source Mounted map SVG containing a recognized map-content group.
+ * @param title Optional system name to include; omitted for Cluster exports.
+ * @returns SVG blob and pixel dimensions used by PNG rasterization.
+ * @throws If scene bounds, clone styling, title measurement, or exportable content are unavailable.
+ */
 function createExportSvg(source: SVGSVGElement, title?: string): { blob: Blob; width: number; height: number } {
   const sourceContent = source.querySelector<SVGGElement>('.cluster-map-content, .system-map-content')
   if (!sourceContent) throw new Error('The map scene is not ready to export.')
@@ -130,6 +141,14 @@ function createExportSvg(source: SVGSVGElement, title?: string): { blob: Blob; w
   }
 }
 
+/**
+ * Decodes an SVG blob and encodes its full dimensions as a PNG canvas.
+ * @param svg Serialized SVG scene.
+ * @param width Raster output width in pixels.
+ * @param height Raster output height in pixels.
+ * @returns Encoded PNG blob.
+ * @throws If image decoding, Canvas creation, drawing, or PNG encoding fails.
+ */
 async function rasterizeSvg(svg: Blob, width: number, height: number): Promise<Blob> {
   const url = URL.createObjectURL(svg)
   try {
@@ -155,6 +174,14 @@ async function rasterizeSvg(svg: Blob, width: number, height: number): Promise<B
   }
 }
 
+/**
+ * Exports a mounted full map scene as SVG or as a rasterized PNG.
+ * @param source Mounted SVG renderer element.
+ * @param format Requested image format.
+ * @param title Optional system title band; Cluster callers omit it.
+ * @returns Downloadable image blob.
+ * @throws If scene serialization or requested rasterization fails.
+ */
 export async function exportMapImage(
   source: SVGSVGElement,
   format: MapImageFormat,

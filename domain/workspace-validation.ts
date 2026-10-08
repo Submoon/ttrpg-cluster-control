@@ -1,3 +1,6 @@
+/**
+ * Runtime guards and editable-value validation keep external, stored, and domain data constraints consistent.
+ */
 import {
   catalogueTypes,
   customFieldApplicabilityTargetKey,
@@ -14,6 +17,14 @@ import {
 
 export const maxNameLength = 80
 
+/**
+ * Trims required text and enforces an optional maximum length.
+ * @param value User-entered text.
+ * @param label Field name used in validation errors.
+ * @param maxLength Optional maximum character count after trimming.
+ * @returns Trimmed non-empty value.
+ * @throws If the value is blank or exceeds maxLength.
+ */
 export function validText(value: string, label: string, maxLength?: number): string {
   const text = value.trim()
   if (!text) throw new Error(`${label} is required.`)
@@ -23,10 +34,18 @@ export function validText(value: string, label: string, maxLength?: number): str
   return text
 }
 
+/** Validates and trims a name using the shared maximum name length. */
 export function validName(value: string, label: string): string {
   return validText(value, label, maxNameLength)
 }
 
+/**
+ * Trims option labels and rejects blank, overlong, or case-insensitively duplicated values.
+ * @param options Proposed option labels.
+ * @param label Field name used in validation errors.
+ * @returns Normalized labels in their original order.
+ * @throws If options are not text values or contain invalid/duplicate labels.
+ */
 export function validFieldOptions(options: string[], label: string): string[] {
   if (!Array.isArray(options) || options.some(option => typeof option !== 'string')) {
     throw new Error(`${label} must be a list of text values.`)
@@ -39,10 +58,12 @@ export function validFieldOptions(options: string[], label: string): string[] {
   return normalized
 }
 
+/** Narrows a non-null, non-array object to a string-keyed record. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** Checks every array entry with the supplied type guard; an empty array passes. */
 export function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): value is T[] {
   return Array.isArray(value) && value.every(guard)
 }
@@ -65,6 +86,11 @@ function isFieldOptionList(value: unknown): value is string[] {
     && new Set(value.map(option => option.toLowerCase())).size === value.length
 }
 
+/**
+ * Validates a reusable definition's identity, name, scope, value type, and select options.
+ * @param value Unknown definition candidate.
+ * @returns True for one supported custom-field contract.
+ */
 function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition {
   if (
     !isRecord(value)
@@ -91,6 +117,11 @@ function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition
   )
 }
 
+/**
+ * Accepts only known catalogue-family categories or valid family/subtype pairs.
+ * @param value Unknown explicit scope target.
+ * @returns True when the target uses a supported category/subtype form.
+ */
 function isCustomFieldApplicabilityTarget(value: unknown): value is CustomFieldApplicabilityTarget {
   if (!isRecord(value)) return false
   if (value.kind === 'category') {
@@ -104,11 +135,21 @@ function isCustomFieldApplicabilityTarget(value: unknown): value is CustomFieldA
       || catalogueTypes.some(type => type.family === value.family && type.value === value.subtype))
 }
 
+/**
+ * Validates explicit category/subtype targets without allowing per-object scopes.
+ * @param value Unknown stored scope; an empty array is a valid scope matching no objects.
+ * @returns True when every target is supported and canonical target keys are unique.
+ */
 export function isCustomFieldApplicability(value: unknown): value is CustomFieldApplicabilityTarget[] {
   return isArrayOf(value, isCustomFieldApplicabilityTarget)
     && new Set(value.map(customFieldApplicabilityTargetKey)).size === value.length
 }
 
+/**
+ * Validates shared native options and unique custom-field IDs/names and definitions.
+ * @param value Unknown settings object.
+ * @returns True when all options and definitions match the current field schema.
+ */
 export function isObjectFieldSettings(value: unknown): value is ObjectFieldSettings {
   if (
     !isRecord(value)
@@ -124,6 +165,11 @@ export function isObjectFieldSettings(value: unknown): value is ObjectFieldSetti
   return ids.size === value.customFields.length && names.size === value.customFields.length
 }
 
+/**
+ * Checks finite x/y coordinates without imposing a normalized range.
+ * @param value Unknown point candidate.
+ * @returns True for an object containing finite numeric coordinates.
+ */
 export function isPoint(value: unknown): value is Point {
   return isRecord(value)
     && typeof value.x === 'number'
@@ -142,6 +188,12 @@ function isObjectFamily(value: unknown): value is ObjectFamily {
     || value === 'Other'
 }
 
+/**
+ * Validates one object's shape, catalogue family/subtype, placement form, and primitive field values.
+ * Cross-entity references and custom-field definition compatibility are checked at the containing-system boundary.
+ * @param value Unknown object candidate.
+ * @returns True when the object is structurally valid.
+ */
 export function isSystemObject(value: unknown): value is SystemObject {
   if (
     !isRecord(value)
@@ -202,6 +254,11 @@ export function isSystemObject(value: unknown): value is SystemObject {
       && value.placement.orbitId.length > 0
 }
 
+/**
+ * Validates the mutually exclusive hosted and unoccupied-center Orbit shapes.
+ * @param value Unknown Orbit candidate.
+ * @returns True when identity/order are valid and its host or finite center is structurally present.
+ */
 export function isOrbit(value: unknown): value is Orbit {
   if (!isRecord(value)
     || typeof value.id !== 'string'
@@ -220,6 +277,11 @@ export function isOrbit(value: unknown): value is Orbit {
       && value.center === undefined
 }
 
+/**
+ * Validates a positive-level route between distinct Jump Points or to a named unresolved exit.
+ * @param value Unknown route candidate.
+ * @returns True when endpoints and optional name match one supported route shape.
+ */
 export function isJumpRoute(value: unknown): value is JumpRoute {
   if (
     !isRecord(value)
@@ -251,12 +313,20 @@ export function isJumpRoute(value: unknown): value is JumpRoute {
     && value.unresolvedExit.length <= maxNameLength
 }
 
+/** Checks that a jump level is a positive safe integer. */
 export function isJumpLevel(value: unknown): value is number {
   return typeof value === 'number'
     && Number.isSafeInteger(value)
     && value > 0
 }
 
+/**
+ * Validates saved built-in and custom values against the current definitions and option lists.
+ * Applicability controls visibility only: an assigned value remains valid while its field is out of scope.
+ * @param object Object whose stored field values are checked.
+ * @param settings Current shared field definitions and allowed options.
+ * @returns The first validation message, or null when every saved value remains valid.
+ */
 export function objectFieldValidationError(object: SystemObject, settings: ObjectFieldSettings): string | null {
   if (object.atmosphere !== undefined) {
     if (

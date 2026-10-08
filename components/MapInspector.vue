@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Inspector panels own local drafts; this boundary exposes save acknowledgements and edit guards to the page.
+ */
 import { computed, shallowRef } from 'vue'
 import type {
   JumpRoute,
@@ -66,6 +69,7 @@ const chartDetailsActive = computed(() =>
   && !(routeInspectorRef.value?.hasUnsavedEdits() ?? false),
 )
 
+/** Discards every child inspector draft and clears the parent-visible editor error. */
 function cancelEdits(): void {
   objectInspectorRef.value?.cancelEdits(false)
   orbitInspectorRef.value?.cancelEdits(false)

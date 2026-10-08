@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * Shared chart-name editor and summary for Cluster and system views.
+ */
 import { computed } from 'vue'
 import {
   jumpPointsInCluster,

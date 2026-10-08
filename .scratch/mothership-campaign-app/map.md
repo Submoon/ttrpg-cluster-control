@@ -1,7 +1,7 @@
 ---
 title: Mothership Campaign App - V1 Specification
 label: wayfinder:map
-status: open
+status: closed
 ---
 
 ## Destination
@@ -17,7 +17,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - The V1 object catalogue includes celestial bodies, stations/bases/colonies, vessels/derelicts, Jump Points, anomalies/nebulae/hazards, and a freely named "other" type.
 - The existing Obsidian notes use Markdown wikilinks and `.canvas` maps; V1 uses app-native JSON, with direct Obsidian compatibility deferred.
 - Map zoom, dependent deletion, and Orbit-resize behavior are specified in [04. Choosing the V1 application and rendering architecture](tickets/04-application-architecture.md).
-- The Nuxt application now has its local workspace foundation; remaining V1 implementation work is listed below.
+- The Nuxt V1 map workspace is implemented; implementation and documentation tickets are indexed below.
 - Use `grilling` and `domain-modeling` for human decisions; use `prototype` for visual/interaction questions.
 - Warden's Operations Manual pp. 44-45 describes the Jump Cluster map as a schematic network of known systems and notable locations that can grow during play.
 
@@ -54,6 +54,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md): reusable fields target all objects or selected categories and subtypes; hidden values persist, legacy object targets are discarded on restore/import, and compatible definitions unite selected scopes (unscoped definitions remain global).
 - [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md): Add Object drags preview the selected catalogue mark beside the pointer, preserving the drop target and existing placement and activation behavior.
 - [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md): `domain/workspace.ts` is now a stable façade over focused domain modules; the editor page, workflows, inspectors, dialogs, and map renderers are modularized, with all 35 Playwright cases passing. Nuxt `useState` and one persistence owner remain sufficient, so Pinia was not added.
+- [30. Documenting the project and codebase](tickets/30-project-documentation.md): English documentation now includes a practical README with concise backup guidance, compatibility and trademark notices, an MIT license, and JSDoc for important Vue/TypeScript functions and algorithms; executable code is unchanged.
 
 ## Implementation tickets
 

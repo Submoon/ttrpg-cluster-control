@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * The dialog owns selection and confirmation; submitted drafts reset only after the parent's save revision advances.
+ */
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import type { CustomFieldType, LocalWorkspace } from '../domain/workspace'
 import FieldDefinitionChangeConfirmation from './field-definitions/FieldDefinitionChangeConfirmation.vue'
@@ -56,6 +59,10 @@ const selectedFieldAssignments = computed(() => {
   return definition ? fieldValueAssignments(props.workspace, definition) : []
 })
 
+/**
+ * Selects an existing definition, confirming before discarding another definition's active draft.
+ * @param fieldId Native or custom definition ID to display.
+ */
 function selectFieldDefinition(fieldId: string): void {
   if (!fieldDefinitions.value.some(field => field.id === fieldId)) return
   const editor = fieldDefinitionEditor.value
@@ -70,6 +77,7 @@ function selectFieldDefinition(fieldId: string): void {
   pendingFieldDefinitionChange.value = null
 }
 
+/** Resets dialog-local creation state and opens on the Atmosphere definition after the next render tick. */
 function show(): void {
   if (dialogOpen.value) return
   newCustomFieldFormOpen.value = false
@@ -84,6 +92,9 @@ function show(): void {
   })
 }
 
+/**
+ * Closes after any active definition draft is accepted for discard, clears pending actions, and restores focus.
+ */
 function close(): void {
   if (
     fieldDefinitionEditor.value?.isEditing()
@@ -98,11 +109,13 @@ function close(): void {
   void nextTick(() => trigger.value?.focus())
 }
 
+/** Prevents the native dialog cancel path from bypassing the draft-discard confirmation. */
 function cancelDialog(event: Event): void {
   event.preventDefault()
   close()
 }
 
+/** Opens a fresh create draft after confirming and discarding an active definition edit, if present. */
 function openNewCustomFieldForm(): void {
   if (fieldDefinitionEditor.value?.isEditing()) {
     if (!window.confirm('Discard unsaved field definition edits?')) return
@@ -116,6 +129,10 @@ function openNewCustomFieldForm(): void {
   emit('clear-error')
 }
 
+/**
+ * Dispatches safe edits immediately but retains destructive requests for explicit assignment review.
+ * @param change Proposed definition save/removal and the assignments it could clear.
+ */
 function requestFieldDefinitionChange(change: PendingFieldDefinitionChange): void {
   if (change.kind === 'save' && !change.affectedAssignments.length) {
     pendingAction.value = 'save'
@@ -127,11 +144,13 @@ function requestFieldDefinitionChange(change: PendingFieldDefinitionChange): voi
   emit('clear-error')
 }
 
+/** Drops the pending destructive request without changing the selected definition. */
 function cancelFieldDefinitionChange(): void {
   pendingFieldDefinitionChange.value = null
   emit('clear-error')
 }
 
+/** Dispatches the reviewed save/removal; drafts remain until the parent reports commit success. */
 function confirmFieldDefinitionChange(): void {
   const change = pendingFieldDefinitionChange.value
   if (!change) return
@@ -141,6 +160,10 @@ function confirmFieldDefinitionChange(): void {
   else emit('save-field-definition', change.update)
 }
 
+/**
+ * Emits a new custom-field request with blank option lines removed by the shared parser.
+ * The form resets only when the parent's save revision advances.
+ */
 function createCustomField(): void {
   pendingAction.value = 'create'
   emit('clear-error')
