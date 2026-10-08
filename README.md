@@ -36,12 +36,14 @@ Open the local URL printed by Nuxt.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the development server. |
+| `npm run dev` | Start the development server with Nuxt DevTools enabled. |
 | `npm run typecheck` | Run Nuxt and TypeScript type checking. |
 | `npx playwright install chromium` | Install the Chromium browser required by the browser tests (once per environment). |
 | `npm test` | Run the Playwright browser suite; Playwright starts the app at `http://127.0.0.1:3100`. |
 | `npm run build` | Build the production app. |
 | `npm run preview` | Preview the production build locally; run `npm run build` first. |
+
+Nuxt DevTools is disabled for production builds.
 
 ## Project map
 

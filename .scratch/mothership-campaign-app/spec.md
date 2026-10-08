@@ -1,6 +1,6 @@
 ---
 title: Mothership Campaign App - V1 Specification
-status: open
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent

@@ -9,7 +9,7 @@ export default defineNuxtConfig({
       inline: [/[\\/]node_modules[\\/]nuxt[\\/]dist[\\/]/],
     },
   },
-  devtools: { enabled: false },
+  devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: [tailwindcss()],

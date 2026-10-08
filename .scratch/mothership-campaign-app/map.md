@@ -17,7 +17,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - The V1 object catalogue includes celestial bodies, stations/bases/colonies, vessels/derelicts, Jump Points, anomalies/nebulae/hazards, and a freely named "other" type.
 - The existing Obsidian notes use Markdown wikilinks and `.canvas` maps; V1 uses app-native JSON, with direct Obsidian compatibility deferred.
 - Map zoom, dependent deletion, and Orbit-resize behavior are specified in [04. Choosing the V1 application and rendering architecture](tickets/04-application-architecture.md).
-- The Nuxt V1 map workspace is implemented; implementation and documentation tickets are indexed below.
+- The Nuxt 4 V1 map workspace is complete; all planned implementation and documentation tickets are closed and indexed below.
 - Use `grilling` and `domain-modeling` for human decisions; use `prototype` for visual/interaction questions.
 - Warden's Operations Manual pp. 44-45 describes the Jump Cluster map as a schematic network of known systems and notable locations that can grow during play.
 
