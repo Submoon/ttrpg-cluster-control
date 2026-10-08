@@ -3,11 +3,15 @@ import { drag, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } fr
 import {
   jumpPointsInCluster,
   type JumpCluster,
-  type JumpPointReference,
   type JumpRoute,
   type Point,
   type StarSystem,
 } from '../domain/workspace'
+import {
+  clusterRouteGeometry,
+  clusterRouteLabel,
+  clusterSystemPosition,
+} from '../utils/cluster-map-geometry'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
 
@@ -27,91 +31,6 @@ const emit = defineEmits<{
 const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
-
-interface RouteGeometry {
-  path: string
-  labelX: number
-  labelY: number
-  exitPoint?: Point
-}
-
-function systemPosition(systemId: string, overrides?: ReadonlyMap<string, Point>): Point {
-  const override = overrides?.get(systemId)
-  if (override) return override
-  const position = props.systemPositions[systemId]
-  if (!position) {
-    throw new Error(`No cluster-map position exists for star system "${systemId}".`)
-  }
-
-  return { x: 112 + position.x * 736, y: 96 + position.y * 368 }
-}
-
-function requiredJumpPoint(
-  jumpPoints: Map<string, JumpPointReference>,
-  pointId: string,
-): JumpPointReference {
-  const reference = jumpPoints.get(pointId)
-  if (!reference) {
-    throw new Error(`Jump Route references missing Jump Point "${pointId}".`)
-  }
-  return reference
-}
-
-function routeGeometry(
-  route: JumpRoute,
-  index: number,
-  jumpPoints: Map<string, JumpPointReference>,
-  positionOverrides?: ReadonlyMap<string, Point>,
-): RouteGeometry {
-  const from = requiredJumpPoint(jumpPoints, route.fromPointId)
-  const start = systemPosition(from.system.id, positionOverrides)
-  const to = route.toPointId === null
-    ? undefined
-    : requiredJumpPoint(jumpPoints, route.toPointId)
-
-  if (to?.system.id === from.system.id) {
-    const controlY = start.y - 126 - (index % 2) * 20
-    return {
-      path: `M ${start.x - 46} ${start.y - 38} Q ${start.x} ${controlY} ${start.x + 46} ${start.y - 38}`,
-      labelX: start.x,
-      labelY: controlY + 20,
-    }
-  }
-
-  const exitPoint = to
-    ? undefined
-    : { x: 860, y: Math.min(500, Math.max(88, start.y + 128 + (index % 3) * 24)) }
-  const end = to ? systemPosition(to.system.id, positionOverrides) : exitPoint!
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const length = Math.max(1, Math.hypot(dx, dy))
-  const ux = dx / length
-  const uy = dy / length
-  const x1 = start.x + ux * 84
-  const y1 = start.y + uy * 40
-  const x2 = to ? end.x - ux * 84 : end.x
-  const y2 = to ? end.y - uy * 40 : end.y
-  const bend = to ? (index % 2 === 0 ? 32 : -32) : 18
-  const controlX = (x1 + x2) / 2 - uy * bend
-  const controlY = (y1 + y2) / 2 + ux * bend
-
-  return {
-    path: `M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}`,
-    labelX: (x1 + 2 * controlX + x2) / 4,
-    labelY: (y1 + 2 * controlY + y2) / 4 - 8,
-    exitPoint,
-  }
-}
-
-function routeLabel(route: JumpRoute, jumpPoints: Map<string, JumpPointReference>): string {
-  const from = requiredJumpPoint(jumpPoints, route.fromPointId)
-  const origin = `${from.point.name} (${from.system.name})`
-  if (route.toPointId !== null) {
-    const to = requiredJumpPoint(jumpPoints, route.toPointId)
-    return `Select Jump Level ${route.jumpLevel} route from ${origin} to ${to.point.name} (${to.system.name})`
-  }
-  return `Select Jump Level ${route.jumpLevel} route from ${origin} to unknown destination: ${route.unresolvedExit}`
-}
 
 function zoomBy(factor: number): void {
   if (svgElement.value && zoomBehavior) {
@@ -185,10 +104,10 @@ function render(): void {
     .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', route => routeLabel(route, jumpPoints))
+    .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
 
   routeMarks.each(function (route, index) {
-    const geometry = routeGeometry(route, index, jumpPoints)
+    const geometry = clusterRouteGeometry(route, index, jumpPoints, props.systemPositions)
     const mark = select(this)
     const label = `Jump-${route.jumpLevel}`
     const labelWidth = Math.max(78, label.length * 7 + 18)
@@ -225,7 +144,13 @@ function render(): void {
   })
   function updateRouteGeometry(): void {
     routeMarks.each(function (route, index) {
-      const geometry = routeGeometry(route, index, jumpPoints, liveSystemPositions)
+      const geometry = clusterRouteGeometry(
+        route,
+        index,
+        jumpPoints,
+        props.systemPositions,
+        liveSystemPositions,
+      )
       const mark = select(this)
       const label = `Jump-${route.jumpLevel}`
       const labelWidth = Math.max(78, label.length * 7 + 18)
@@ -264,7 +189,7 @@ function render(): void {
     .join('g')
     .attr('class', system => `cluster-system-node${props.selectedSystemId === system.id ? ' is-selected' : ''}`)
     .attr('transform', system => {
-      const position = systemPosition(system.id)
+      const position = clusterSystemPosition(props.systemPositions, system.id)
       return `translate(${position.x} ${position.y})`
     })
     .attr('role', 'button')
@@ -315,7 +240,7 @@ function render(): void {
 
   const systemDrag = drag<SVGGElement, StarSystem>()
     .container(() => content.node()!)
-    .subject((_event, system) => systemPosition(system.id))
+    .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
     .on('start', function () {
       movedSystems.delete(this)
       select(this).classed('is-dragging', true)

@@ -53,6 +53,7 @@ An implementation-ready functional and technical definition for a single-user, l
 - [26. Refining sidebar collapse animation and labels](tickets/26-sidebar-collapse-animation.md): both sidebars fade content before shrinking and moving to the edge, then reveal upright vertical labels at the existing handle geometry; reduced motion and responsive reopening are covered in both map views.
 - [27. Scoping custom fields to categories and subtypes](tickets/27-custom-field-applicability.md): reusable fields target all objects or selected categories and subtypes; hidden values persist, legacy object targets are discarded on restore/import, and compatible definitions unite selected scopes (unscoped definitions remain global).
 - [28. Showing the dragged map object in the drag preview](tickets/28-map-object-drag-preview.md): Add Object drags preview the selected catalogue mark beside the pointer, preserving the drop target and existing placement and activation behavior.
+- [29. Reviewing and modularizing the frontend architecture](tickets/29-frontend-architecture.md): `domain/workspace.ts` is now a stable façade over focused domain modules; the editor page, workflows, inspectors, dialogs, and map renderers are modularized, with all 35 Playwright cases passing. Nuxt `useState` and one persistence owner remain sufficient, so Pinia was not added.
 
 ## Implementation tickets
 
