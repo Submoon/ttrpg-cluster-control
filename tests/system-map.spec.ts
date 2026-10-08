@@ -66,10 +66,12 @@ test('the system map expands beyond its initial bounds and exports the full layo
     const rect = (selector: string) => {
       const surface = element.querySelector<SVGRectElement>(selector)
       if (!surface) throw new Error(`The map is missing ${selector}.`)
-      return Object.fromEntries(['x', 'y', 'width', 'height'].map(attribute => [
-        attribute,
-        Number(surface.getAttribute(attribute)),
-      ]))
+      return {
+        x: Number(surface.getAttribute('x')),
+        y: Number(surface.getAttribute('y')),
+        width: Number(surface.getAttribute('width')),
+        height: Number(surface.getAttribute('height')),
+      }
     }
     return { background: rect('.map-background'), grid: rect('.map-grid') }
   })

@@ -838,7 +838,9 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   const exported = await downloadJson(page, 'Export star system JSON')
   const system = exported.system
   if (!system) throw new Error('The exported file does not contain a star system.')
-  const orbitId = system.orbits[0].id
+  const orbit = system.orbits[0]
+  if (!orbit) throw new Error('The exported star system does not contain an Orbit.')
+  const orbitId = orbit.id
   const stars = system.objects.filter(object => object.subtype === 'star')
   expect(stars).toHaveLength(2)
   expect(stars[1]?.placement.kind).toBe('system')

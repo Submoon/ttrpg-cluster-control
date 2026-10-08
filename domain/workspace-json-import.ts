@@ -1,3 +1,6 @@
+/**
+ * Validates and prepares an independent copy, remapping map IDs and merging compatible reusable field definitions.
+ */
 import { customFieldApplicabilityTargetKey } from './workspace-model'
 import type {
   CustomFieldApplicabilityTarget,
@@ -21,6 +24,11 @@ import {
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
 import { isObjectFieldSettings, isRecord, objectFieldValidationError } from './workspace-validation'
 
+/**
+ * Validates a version 1 Cluster or standalone-system export, including entity references and layout ownership.
+ * @param value Unknown parsed JSON value.
+ * @returns True only when the export and every saved map-specific value satisfy current domain rules.
+ */
 function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemExport {
   if (!isRecord(value)) return false
   const settings = value.objectFieldSettings
@@ -109,6 +117,11 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
     )
 }
 
+/**
+ * Indexes all existing workspace, map-entity, and custom-field IDs for collision reporting and ID allocation.
+ * @param workspace Current workspace.
+ * @returns Existing entity IDs mapped to human-readable descriptions.
+ */
 function workspaceEntityNames(workspace: LocalWorkspace): Map<string, string> {
   const entities = new Map<string, string>([
     [workspace.id, 'Local workspace'],
@@ -132,6 +145,12 @@ function workspaceEntityNames(workspace: LocalWorkspace): Map<string, string> {
   return entities
 }
 
+/**
+ * Checks whether same-name definitions can share one ID without changing their value contract.
+ * @param left Existing reusable field.
+ * @param right Imported reusable field.
+ * @returns True for the same type and, for single-select fields, the same ordered option list.
+ */
 function sameFieldDefinition(
   left: CustomFieldDefinition,
   right: CustomFieldDefinition,
@@ -143,6 +162,12 @@ function sameFieldDefinition(
         && left.options.every((option, index) => option === right.options[index])))
 }
 
+/**
+ * Unions explicit scope targets by their canonical category/subtype key, preserving first-seen order.
+ * @param first Existing definition's explicit targets.
+ * @param second Imported definition's explicit targets.
+ * @returns Deduplicated targets; global/undefined scope is handled by the caller.
+ */
 function unionCustomFieldApplicability(
   first: CustomFieldApplicabilityTarget[],
   second: CustomFieldApplicabilityTarget[],
@@ -152,6 +177,13 @@ function unionCustomFieldApplicability(
   return [...targets.values()]
 }
 
+/**
+ * Rewrites a validated system's entity and field references through preallocated import-ID maps.
+ * @param system Validated source system.
+ * @param ids New IDs for system, object, Orbit, and host/placement references.
+ * @param fieldIds New or reused IDs for custom-field definitions.
+ * @returns A detached system copy whose internal references target the imported copy.
+ */
 function remapImportedSystem(
   system: StarSystem,
   ids: Map<string, string>,
@@ -184,6 +216,15 @@ function remapImportedSystem(
   }
 }
 
+/**
+ * Validates an export and prepares its independent copy and preview without persistence or confirmation.
+ * All map-entity IDs are allocated before their references are remapped; compatible field definitions may be reused.
+ * Explicit applicability scopes are unioned, while an undefined/global scope dominates the union.
+ * @param workspace Current workspace into which the copy would be added.
+ * @param value Parsed JSON candidate.
+ * @returns Proposed next workspace, IDs of added systems, and an informational collision/match summary.
+ * @throws If the export is invalid, same-name custom fields conflict, or the proposed workspace fails validation.
+ */
 export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
   const map = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
   if (!isImportedMap(map)) {
@@ -329,7 +370,11 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
       layout.systemPositions[ids.get(sourceId)!] = position
     }
   } else {
-    layout.systemPositions[addedSystemIds[0]] = initialClusterSystemPosition(
+    const addedSystemId = addedSystemIds[0]
+    if (!addedSystemId) {
+      throw new Error('The imported star system is missing.')
+    }
+    layout.systemPositions[addedSystemId] = initialClusterSystemPosition(
       workspace.cluster.systems.length,
     )
   }
@@ -381,6 +426,12 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
   return { workspace: nextWorkspace, addedSystemIds, summary }
 }
 
+/**
+ * Merges built-in option lists by case-insensitive value while preserving existing order and spelling.
+ * @param existing Current options, kept first.
+ * @param incoming Imported options to append when new.
+ * @returns Combined list without case-insensitive duplicates.
+ */
 function mergeFieldOptions(existing: string[], incoming: string[]): string[] {
   const merged = [...existing]
   const existingOptions = new Set(existing.map(option => option.toLowerCase()))

@@ -6,11 +6,16 @@ import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace
 function relativeLuminance(color: string): number {
   const channels = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
   if (!channels) throw new Error(`Expected an opaque RGB color, received "${color}".`)
-  const [red, green, blue] = channels.slice(1).map(channel => Number(channel) / 255)
+  const [, red, green, blue] = channels
+  if (red === undefined || green === undefined || blue === undefined) {
+    throw new Error(`Expected an opaque RGB color, received "${color}".`)
+  }
   const linearize = (channel: number) => channel <= 0.04045
     ? channel / 12.92
     : ((channel + 0.055) / 1.055) ** 2.4
-  return 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue)
+  return 0.2126 * linearize(Number(red) / 255)
+    + 0.7152 * linearize(Number(green) / 255)
+    + 0.0722 * linearize(Number(blue) / 255)
 }
 
 function contrastRatio(foreground: string, background: string): number {
@@ -562,7 +567,9 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterExport.layout).not.toHaveProperty('pan')
   expect(clusterExport).not.toHaveProperty('selectedRouteId')
   const exportedSecondSystem = clusterExport.cluster!.systems.find(system => system.name === 'New System 2')!
-  expect(clusterExport.layout.systemPositions?.[exportedSecondSystem.id].x).not.toBe(0.5)
+  const secondSystemPosition = clusterExport.layout.systemPositions?.[exportedSecondSystem.id]
+  if (!secondSystemPosition) throw new Error('The exported second system is missing its position.')
+  expect(secondSystemPosition.x).not.toBe(0.5)
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
@@ -591,6 +598,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const clusterSystem = updatedClusterExport.cluster!.systems.find(system => system.name === 'Vesper')!
   const planet = clusterSystem.objects.find(object => object.name === 'Iria')!
   const orbit = clusterSystem.orbits[0]
+  if (!orbit) throw new Error('The exported star system does not contain an Orbit.')
   const field = updatedClusterExport.objectFieldSettings.customFields.find(item => item.name === 'Campaign notes')!
   expect(planet.customFieldValues?.[field.id]).toBe('A local secret.')
   expect(updatedClusterExport.layout.orbitRadii[orbit.id])
@@ -866,6 +874,7 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   const importedBeta = firstImport.cluster!.systems.find(system => system.name === 'Far Vesper')!
   const importedPlanet = importedAlpha.objects.find(object => object.name === 'Iria')!
   const importedOrbit = importedAlpha.orbits[0]
+  if (!importedOrbit) throw new Error('The imported star system does not contain an Orbit.')
   const importedStation = importedAlpha.objects.find(object => object.name === 'Relay Station')!
   const importedPoint = importedAlpha.objects.find(object => object.name === 'Alpha Gate')!
   const importedBetaPoint = importedBeta.objects.find(object => object.name === 'Beta Gate')!
@@ -941,9 +950,18 @@ test('the Warden can import a standalone system without adding cluster routes', 
   const exportedCluster = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exportedCluster.cluster?.systems).toHaveLength(2)
   expect(exportedCluster.cluster?.routes).toHaveLength(0)
-  expect(exportedCluster.cluster?.systems[0].id).not.toBe(exportedCluster.cluster?.systems[1].id)
-  expect(exportedCluster.cluster?.systems[0].objects[0].id)
-    .not.toBe(exportedCluster.cluster?.systems[1].objects[0].id)
+  const exportedSystems = exportedCluster.cluster?.systems
+  if (!exportedSystems || exportedSystems.length !== 2) {
+    throw new Error('The exported Cluster does not contain both star systems.')
+  }
+  const [firstSystem, secondSystem] = exportedSystems
+  const firstObject = firstSystem?.objects[0]
+  const secondObject = secondSystem?.objects[0]
+  if (!firstSystem || !secondSystem || !firstObject || !secondObject) {
+    throw new Error('The exported star systems do not contain their expected objects.')
+  }
+  expect(firstSystem.id).not.toBe(secondSystem.id)
+  expect(firstObject.id).not.toBe(secondObject.id)
 })
 
 test('the Warden can complete the local campaign workflow end to end', async ({ page }) => {
@@ -1181,6 +1199,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   const importedPoint = importedAlpha.objects.find(object => object.name === 'Alpha Gate')!
   const importedPlanet = importedAlpha.objects.find(object => object.name === 'Imported Iria')!
   const importedOrbit = importedAlpha.orbits[0]
+  if (!importedOrbit) throw new Error('The imported star system does not contain an Orbit.')
   const importedBetaPoint = importedBeta.objects.find(object => object.name === 'Beta Gate')!
   const importedField = importedExport.objectFieldSettings.customFields
     .find(field => field.name === 'Imported observations')!

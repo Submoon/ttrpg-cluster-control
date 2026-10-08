@@ -273,7 +273,9 @@ export async function downloadImage(
       const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
       const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
       if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-      const [blob] = blobs.splice(index, 1)
+      const blob = blobs[index]
+      if (!blob) throw new Error(`Could not read the downloaded ${expectedType} file.`)
+      blobs.splice(index, 1)
 
       if (expectedType === 'image/svg+xml') {
         return { type: blob.type, size: blob.size, text: await blob.text() }
@@ -301,7 +303,7 @@ export async function inspectImageSvg(
   page: import('@playwright/test').Page,
   text: string,
 ): Promise<{
-  viewBox: number[]
+  viewBox: [number, number, number, number]
   width: number
   height: number
   contentTransform: string | null
@@ -324,6 +326,15 @@ export async function inspectImageSvg(
     const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement
     const viewBox = svg.getAttribute('viewBox')
     if (svg.localName !== 'svg' || !viewBox) throw new Error('The downloaded SVG is invalid.')
+    const viewBoxValues = viewBox.trim().split(/\s+/).map(Number)
+    if (viewBoxValues.length !== 4 || viewBoxValues.some(value => !Number.isFinite(value))) {
+      throw new Error('The downloaded SVG has an invalid viewBox.')
+    }
+    const [minX, minY, width, height] = viewBoxValues
+    if (minX === undefined || minY === undefined || width === undefined || height === undefined) {
+      throw new Error('The downloaded SVG has an invalid viewBox.')
+    }
+    const parsedViewBox: [number, number, number, number] = [minX, minY, width, height]
     const fill = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('fill') ?? null
     const stroke = (selector: string) => svg.querySelector<SVGElement>(selector)?.style.getPropertyValue('stroke') ?? null
     const title = svg.querySelector<SVGTextElement>('.system-map-export-title')
@@ -345,7 +356,7 @@ export async function inspectImageSvg(
         })()
       : null
     return {
-      viewBox: viewBox.split(/\s+/).map(Number),
+      viewBox: parsedViewBox,
       width: Number(svg.getAttribute('width')?.replace('px', '')),
       height: Number(svg.getAttribute('height')?.replace('px', '')),
       contentTransform: svg.querySelector('.cluster-map-content, .system-map-content')?.getAttribute('transform') ?? null,
