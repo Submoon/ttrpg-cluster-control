@@ -1,3 +1,59 @@
+<template>
+  <section class="object-palette" role="region" aria-label="Object palette">
+    <div class="object-palette-heading flex items-center justify-between gap-2">
+      <span class="section-kicker">ADD OBJECT</span>
+      <span class="object-palette-hint">Choose a category, then add or drag an object.</span>
+    </div>
+    <div class="object-palette-categories" role="group" aria-label="Object categories">
+      <button
+        v-for="group in groups"
+        :key="group.family"
+        class="object-palette-category-button"
+        type="button"
+        :aria-pressed="activeFamily === group.family"
+        :title="`Show ${group.label} objects`"
+        @click="activeFamily = group.family"
+      >
+        {{ group.label }}
+      </button>
+    </div>
+    <div class="object-palette-controls">
+      <div class="object-palette-items" role="group" :aria-label="activeGroup.label">
+        <button
+          v-for="type in activeGroup.types"
+          :key="type.value"
+          class="object-palette-button"
+          type="button"
+          draggable="true"
+          :disabled="props.saving"
+          :aria-label="`Add ${type.label}`"
+          :title="`Drag ${type.label} onto the map, or activate to add it`"
+          @dragstart="startObjectDrag($event, type.value)"
+          @click="emit('add-object', type.value)"
+        >
+          <span class="object-mark" aria-hidden="true">{{ catalogueMarks[type.value] }}</span>
+          <span>{{ type.label }}</span>
+        </button>
+      </div>
+      <button
+        class="object-palette-button object-palette-orbit"
+        type="button"
+        aria-label="Add orbit"
+        draggable="true"
+        :disabled="props.saving"
+        title="Drag Orbit onto an object to host it, or onto the map for an unoccupied center"
+        @dragstart="startOrbitDrag"
+        @click="emit('add-orbit')"
+      >
+        <span aria-hidden="true">+</span> Add Orbit
+      </button>
+    </div>
+    <span v-if="props.selectedOrbit" class="placement-hint">
+      New objects go in Orbit {{ props.selectedOrbit.order }}
+    </span>
+  </section>
+</template>
+
 <script setup lang="ts">
 // Emits catalogue add/drag intents; the editor resolves placement, while native buttons preserve click and keyboard paths.
 import { computed, ref } from 'vue'
@@ -72,62 +128,6 @@ function startOrbitDrag(event: DragEvent): void {
   dataTransfer.setData('text/plain', 'Orbit')
 }
 </script>
-
-<template>
-  <section class="object-palette" role="region" aria-label="Object palette">
-    <div class="object-palette-heading flex items-center justify-between gap-2">
-      <span class="section-kicker">ADD OBJECT</span>
-      <span class="object-palette-hint">Choose a category, then add or drag an object.</span>
-    </div>
-    <div class="object-palette-categories" role="group" aria-label="Object categories">
-      <button
-        v-for="group in groups"
-        :key="group.family"
-        class="object-palette-category-button"
-        type="button"
-        :aria-pressed="activeFamily === group.family"
-        :title="`Show ${group.label} objects`"
-        @click="activeFamily = group.family"
-      >
-        {{ group.label }}
-      </button>
-    </div>
-    <div class="object-palette-controls">
-      <div class="object-palette-items" role="group" :aria-label="activeGroup.label">
-        <button
-          v-for="type in activeGroup.types"
-          :key="type.value"
-          class="object-palette-button"
-          type="button"
-          draggable="true"
-          :disabled="props.saving"
-          :aria-label="`Add ${type.label}`"
-          :title="`Drag ${type.label} onto the map, or activate to add it`"
-          @dragstart="startObjectDrag($event, type.value)"
-          @click="emit('add-object', type.value)"
-        >
-          <span class="object-mark" aria-hidden="true">{{ catalogueMarks[type.value] }}</span>
-          <span>{{ type.label }}</span>
-        </button>
-      </div>
-      <button
-        class="object-palette-button object-palette-orbit"
-        type="button"
-        aria-label="Add orbit"
-        draggable="true"
-        :disabled="props.saving"
-        title="Drag Orbit onto an object to host it, or onto the map for an unoccupied center"
-        @dragstart="startOrbitDrag"
-        @click="emit('add-orbit')"
-      >
-        <span aria-hidden="true">+</span> Add Orbit
-      </button>
-    </div>
-    <span v-if="props.selectedOrbit" class="placement-hint">
-      New objects go in Orbit {{ props.selectedOrbit.order }}
-    </span>
-  </section>
-</template>
 
 <style>
 .object-palette {

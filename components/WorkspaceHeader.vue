@@ -1,53 +1,3 @@
-<script setup lang="ts">
-/**
- * Shows shared chart summaries and dispatches file actions supplied by the page.
- */
-import { computed, ref } from 'vue'
-import type { LocalWorkspace, StarSystem } from '../domain/workspace'
-import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
-
-type ActiveView = 'cluster' | 'system'
-type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-type MapKind = 'jump-cluster' | 'star-system'
-
-const props = defineProps<{
-  workspace: LocalWorkspace | null
-  activeView: ActiveView
-  selectedSystem: StarSystem | undefined
-  jumpPointCount: number
-  saveState: SaveState
-  clusterMap: MapImageExporter | null
-  systemMap: MapImageExporter | null
-  exportError: string
-}>()
-
-const emit = defineEmits<{
-  'export-cluster-json': []
-  'export-system-json': []
-  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: MapKind, format: MapImageFormat]
-  'import-file': [event: Event]
-}>()
-
-const mapFileScope = computed(() => props.activeView === 'cluster'
-  ? `Jump Cluster ${props.workspace?.cluster.name ?? ''}`
-  : `star system ${props.selectedSystem?.name ?? ''}`,
-)
-const headerMapActionsOpen = ref(false)
-const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
-const jsonImportInput = ref<HTMLInputElement | null>(null)
-
-/** Opens the hidden file input so import still flows through the page-owned preparation/commit handler. */
-function openJsonImportPicker(): void {
-  jsonImportInput.value?.click()
-}
-
-/** Closes the file-action menu and returns keyboard focus to its toggle. */
-function closeHeaderMapActions(): void {
-  headerMapActionsOpen.value = false
-  headerMapActionsToggle.value?.focus()
-}
-</script>
-
 <template>
   <header class="topbar flex min-h-20 items-center justify-between gap-4 border-b border-[var(--line-soft)] max-[760px]:min-h-[4.5rem]">
     <a class="wordmark inline-flex items-center gap-3 text-inherit no-underline" href="/" aria-label="Mothership Campaign Cartography home">
@@ -218,3 +168,53 @@ function closeHeaderMapActions(): void {
     >
   </header>
 </template>
+
+<script setup lang="ts">
+/**
+ * Shows shared chart summaries and dispatches file actions supplied by the page.
+ */
+import { computed, ref } from 'vue'
+import type { LocalWorkspace, StarSystem } from '../domain/workspace'
+import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
+
+type ActiveView = 'cluster' | 'system'
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+type MapKind = 'jump-cluster' | 'star-system'
+
+const props = defineProps<{
+  workspace: LocalWorkspace | null
+  activeView: ActiveView
+  selectedSystem: StarSystem | undefined
+  jumpPointCount: number
+  saveState: SaveState
+  clusterMap: MapImageExporter | null
+  systemMap: MapImageExporter | null
+  exportError: string
+}>()
+
+const emit = defineEmits<{
+  'export-cluster-json': []
+  'export-system-json': []
+  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: MapKind, format: MapImageFormat]
+  'import-file': [event: Event]
+}>()
+
+const mapFileScope = computed(() => props.activeView === 'cluster'
+  ? `Jump Cluster ${props.workspace?.cluster.name ?? ''}`
+  : `star system ${props.selectedSystem?.name ?? ''}`,
+)
+const headerMapActionsOpen = ref(false)
+const headerMapActionsToggle = ref<HTMLButtonElement | null>(null)
+const jsonImportInput = ref<HTMLInputElement | null>(null)
+
+/** Opens the hidden file input so import still flows through the page-owned preparation/commit handler. */
+function openJsonImportPicker(): void {
+  jsonImportInput.value?.click()
+}
+
+/** Closes the file-action menu and returns keyboard focus to its toggle. */
+function closeHeaderMapActions(): void {
+  headerMapActionsOpen.value = false
+  headerMapActionsToggle.value?.focus()
+}
+</script>

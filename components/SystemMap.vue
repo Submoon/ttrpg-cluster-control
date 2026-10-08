@@ -1,3 +1,24 @@
+<template>
+  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
+      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
+      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
+      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
+    </div>
+    <svg
+      ref="svgElement"
+      class="system-map-svg block h-full min-h-0 w-full flex-1"
+      viewBox="0 0 960 560"
+      role="group"
+      :aria-label="`${system.name} star system map`"
+      @wheel.capture="captureOrbitRotationWheel"
+      @dragover.prevent
+      @drop.prevent="handleObjectDrop"
+    />
+  </div>
+</template>
+
 <script setup lang="ts">
 /**
  * Vue owns map controls and component lifecycle; D3 owns the scene nodes created under the SVG element.
@@ -170,27 +191,6 @@ watch(() => props.selectedOrbitId, render)
 
 defineExpose({ exportImage, getDetachedOrbitCenter })
 </script>
-
-<template>
-  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
-    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
-      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
-      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
-      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
-      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
-    </div>
-    <svg
-      ref="svgElement"
-      class="system-map-svg block h-full min-h-0 w-full flex-1"
-      viewBox="0 0 960 560"
-      role="group"
-      :aria-label="`${system.name} star system map`"
-      @wheel.capture="captureOrbitRotationWheel"
-      @dragover.prevent
-      @drop.prevent="handleObjectDrop"
-    />
-  </div>
-</template>
 
 <style>
 .map-view {

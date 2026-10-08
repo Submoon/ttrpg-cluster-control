@@ -1,3 +1,228 @@
+<template>
+  <template v-if="selectedObject">
+    <span class="section-kicker">MAP OBJECT / SELECTED</span>
+    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">{{ selectedObject.family }} / {{ selectedObject.subtype }}</span>
+    <h2 class="object-title mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
+      <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
+      <span>{{ selectedObject.name }}</span>
+    </h2>
+    <p class="inspector-intro mb-[1em]">
+      A stable map record. Edit its keyed description without leaving the current chart.
+    </p>
+
+    <form class="mt-4" @submit.prevent="saveObjectEdit">
+      <fieldset class="field-stack m-0 grid gap-3 border-0 p-0" :disabled="!objectEditing || props.saving">
+        <label v-if="selectedObject.family === 'Other'" :for="`object-type-${selectedObject.id}`">
+          Type label
+          <input
+            :id="`object-type-${selectedObject.id}`"
+            v-model="objectDraft.subtype"
+            autocomplete="off"
+            required
+          >
+        </label>
+        <label :for="`object-key-${selectedObject.id}`">
+          Location key
+          <input
+            :id="`object-key-${selectedObject.id}`"
+            v-model="objectDraft.locationKey"
+            autocomplete="off"
+            required
+          >
+        </label>
+        <label :for="`object-name-${selectedObject.id}`">
+          Name
+          <input
+            :id="`object-name-${selectedObject.id}`"
+            v-model="objectDraft.name"
+            autocomplete="off"
+            maxlength="80"
+            required
+          >
+        </label>
+        <label :for="`object-placement-${selectedObject.id}`">
+          Placement
+          <select
+            :id="`object-placement-${selectedObject.id}`"
+            v-model="objectDraft.placement"
+            @change="updateObjectPlacementDraft"
+          >
+            <option value="system">System-level position</option>
+            <optgroup v-if="placeableOrbits.length" label="Orbits">
+              <option
+                v-for="orbit in placeableOrbits"
+                :key="orbit.id"
+                :value="`orbit:${orbit.id}`"
+              >
+                Orbit {{ orbit.order }} around {{ orbit.hostId === null
+                  ? 'unoccupied center'
+                  : selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name }}
+              </option>
+            </optgroup>
+          </select>
+        </label>
+        <label v-if="selectedObject.family === 'JumpPoint'" :for="`jump-station-${selectedObject.id}`">
+          Physical Jump Station
+          <select
+            :id="`jump-station-${selectedObject.id}`"
+            v-model="objectDraft.jumpStationId"
+          >
+            <option value="">No physical station</option>
+            <option v-for="station in physicalStations" :key="station.id" :value="station.id">
+              {{ station.name }} ({{ station.locationKey }})
+            </option>
+          </select>
+        </label>
+        <p v-if="selectedObject.family === 'JumpPoint' && physicalStations.length === 0" class="empty-copy m-0">
+          Add a separate Station object from the catalogue to record its physical location.
+        </p>
+        <label v-if="selectedObject.family === 'CelestialBody' && (selectedObject.subtype === 'planet' || selectedObject.subtype === 'moon')" :for="`object-atmosphere-${selectedObject.id}`">
+          Atmosphere
+          <select
+            :id="`object-atmosphere-${selectedObject.id}`"
+            aria-label="Atmosphere"
+            v-model="objectDraft.atmosphere"
+          >
+            <option value="">Not set</option>
+            <option
+              v-for="option in props.workspace.objectFieldSettings.atmosphereOptions"
+              :key="option"
+              :value="option"
+            >
+              {{ option }}
+            </option>
+          </select>
+        </label>
+        <label v-if="selectedObject.family === 'Installation'" :for="`object-port-class-${selectedObject.id}`">
+          Port class
+          <select
+            :id="`object-port-class-${selectedObject.id}`"
+            aria-label="Port class"
+            v-model="objectDraft.portClass"
+          >
+            <option value="">Not set</option>
+            <option
+              v-for="option in props.workspace.objectFieldSettings.portClassOptions"
+              :key="option"
+              :value="option"
+            >
+              {{ option }}
+            </option>
+          </select>
+        </label>
+        <template v-for="field in applicableCustomFields" :key="field.id">
+          <label v-if="field.type === 'text'" :for="`custom-field-value-${field.id}`">
+            {{ field.name }}
+            <textarea
+              :id="`custom-field-value-${field.id}`"
+              :aria-label="field.name"
+              v-model="objectDraft.customFieldValues[field.id]"
+              rows="3"
+            />
+          </label>
+          <label v-else-if="field.type === 'number'" :for="`custom-field-value-${field.id}`">
+            {{ field.name }}
+            <input
+              :id="`custom-field-value-${field.id}`"
+              :aria-label="field.name"
+              v-model="objectDraft.customFieldValues[field.id]"
+              type="number"
+              step="any"
+            >
+          </label>
+          <label v-else-if="field.type === 'boolean'" :for="`custom-field-value-${field.id}`">
+            {{ field.name }}
+            <select
+              :id="`custom-field-value-${field.id}`"
+              :aria-label="field.name"
+              v-model="objectDraft.customFieldValues[field.id]"
+            >
+              <option value="">Not set</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+          <label v-else-if="field.type === 'single-select'" :for="`custom-field-value-${field.id}`">
+            {{ field.name }}
+            <select
+              :id="`custom-field-value-${field.id}`"
+              :aria-label="field.name"
+              v-model="objectDraft.customFieldValues[field.id]"
+            >
+              <option value="">Not set</option>
+              <option v-for="option in field.options" :key="option" :value="option">
+                {{ option }}
+              </option>
+            </select>
+          </label>
+        </template>
+        <div v-if="objectDraft.placement === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
+          <label :for="`object-x-${selectedObject.id}`">
+            Schematic X
+            <input
+              :id="`object-x-${selectedObject.id}`"
+              type="number"
+              step="any"
+              v-model="objectDraft.x"
+              required
+            >
+          </label>
+          <label :for="`object-y-${selectedObject.id}`">
+            Schematic Y
+            <input
+              :id="`object-y-${selectedObject.id}`"
+              type="number"
+              step="any"
+              v-model="objectDraft.y"
+              required
+            >
+          </label>
+        </div>
+        <label :for="`object-description-${selectedObject.id}`">
+          Description
+          <textarea
+            :id="`object-description-${selectedObject.id}`"
+            rows="5"
+            v-model="objectDraft.description"
+          />
+        </label>
+      </fieldset>
+      <p v-if="objectError || props.editorError" class="feedback mt-3 mb-0 error-text" role="alert">
+        {{ objectError || props.editorError }}
+      </p>
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button
+          v-if="!objectEditing"
+          class="primary-button"
+          type="button"
+          aria-label="Edit map object"
+          :disabled="props.saving"
+          @click="emit('request-object-edit')"
+        >
+          Edit
+        </button>
+        <button v-else class="primary-button" type="submit" aria-label="Save map object" :disabled="props.saving">
+          Save
+        </button>
+        <button v-if="objectEditing" class="quiet-button" type="button" aria-label="Cancel map object edits" @click="cancelObjectEdit()">
+          Cancel
+        </button>
+      </div>
+    </form>
+    <button
+      v-if="!objectEditing"
+      class="quiet-button mt-4"
+      type="button"
+      :aria-label="`Delete ${selectedObject.name}`"
+      :disabled="props.saving"
+      @click="emit('delete-object')"
+    >
+      Delete object
+    </button>
+    <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Location keys are required and unique within this star system.</p>
+  </template>
+</template>
+
 <script setup lang="ts">
 /**
  * Owns local object-edit drafts; the parent controls commit acknowledgement and navigation guards.
@@ -269,228 +494,3 @@ const inspectorHandle = {
 
 defineExpose(inspectorHandle)
 </script>
-
-<template>
-  <template v-if="selectedObject">
-    <span class="section-kicker">MAP OBJECT / SELECTED</span>
-    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">{{ selectedObject.family }} / {{ selectedObject.subtype }}</span>
-    <h2 class="object-title mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
-      <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
-      <span>{{ selectedObject.name }}</span>
-    </h2>
-    <p class="inspector-intro mb-[1em]">
-      A stable map record. Edit its keyed description without leaving the current chart.
-    </p>
-
-    <form class="mt-4" @submit.prevent="saveObjectEdit">
-      <fieldset class="field-stack m-0 grid gap-3 border-0 p-0" :disabled="!objectEditing || props.saving">
-        <label v-if="selectedObject.family === 'Other'" :for="`object-type-${selectedObject.id}`">
-          Type label
-          <input
-            :id="`object-type-${selectedObject.id}`"
-            v-model="objectDraft.subtype"
-            autocomplete="off"
-            required
-          >
-        </label>
-        <label :for="`object-key-${selectedObject.id}`">
-          Location key
-          <input
-            :id="`object-key-${selectedObject.id}`"
-            v-model="objectDraft.locationKey"
-            autocomplete="off"
-            required
-          >
-        </label>
-        <label :for="`object-name-${selectedObject.id}`">
-          Name
-          <input
-            :id="`object-name-${selectedObject.id}`"
-            v-model="objectDraft.name"
-            autocomplete="off"
-            maxlength="80"
-            required
-          >
-        </label>
-        <label :for="`object-placement-${selectedObject.id}`">
-          Placement
-          <select
-            :id="`object-placement-${selectedObject.id}`"
-            v-model="objectDraft.placement"
-            @change="updateObjectPlacementDraft"
-          >
-            <option value="system">System-level position</option>
-            <optgroup v-if="placeableOrbits.length" label="Orbits">
-              <option
-                v-for="orbit in placeableOrbits"
-                :key="orbit.id"
-                :value="`orbit:${orbit.id}`"
-              >
-                Orbit {{ orbit.order }} around {{ orbit.hostId === null
-                  ? 'unoccupied center'
-                  : selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name }}
-              </option>
-            </optgroup>
-          </select>
-        </label>
-        <label v-if="selectedObject.family === 'JumpPoint'" :for="`jump-station-${selectedObject.id}`">
-          Physical Jump Station
-          <select
-            :id="`jump-station-${selectedObject.id}`"
-            v-model="objectDraft.jumpStationId"
-          >
-            <option value="">No physical station</option>
-            <option v-for="station in physicalStations" :key="station.id" :value="station.id">
-              {{ station.name }} ({{ station.locationKey }})
-            </option>
-          </select>
-        </label>
-        <p v-if="selectedObject.family === 'JumpPoint' && physicalStations.length === 0" class="empty-copy m-0">
-          Add a separate Station object from the catalogue to record its physical location.
-        </p>
-        <label v-if="selectedObject.family === 'CelestialBody' && (selectedObject.subtype === 'planet' || selectedObject.subtype === 'moon')" :for="`object-atmosphere-${selectedObject.id}`">
-          Atmosphere
-          <select
-            :id="`object-atmosphere-${selectedObject.id}`"
-            aria-label="Atmosphere"
-            v-model="objectDraft.atmosphere"
-          >
-            <option value="">Not set</option>
-            <option
-              v-for="option in props.workspace.objectFieldSettings.atmosphereOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option }}
-            </option>
-          </select>
-        </label>
-        <label v-if="selectedObject.family === 'Installation'" :for="`object-port-class-${selectedObject.id}`">
-          Port class
-          <select
-            :id="`object-port-class-${selectedObject.id}`"
-            aria-label="Port class"
-            v-model="objectDraft.portClass"
-          >
-            <option value="">Not set</option>
-            <option
-              v-for="option in props.workspace.objectFieldSettings.portClassOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option }}
-            </option>
-          </select>
-        </label>
-        <template v-for="field in applicableCustomFields" :key="field.id">
-          <label v-if="field.type === 'text'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <textarea
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-              rows="3"
-            />
-          </label>
-          <label v-else-if="field.type === 'number'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <input
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-              type="number"
-              step="any"
-            >
-          </label>
-          <label v-else-if="field.type === 'boolean'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <select
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-            >
-              <option value="">Not set</option>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </label>
-          <label v-else-if="field.type === 'single-select'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <select
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-            >
-              <option value="">Not set</option>
-              <option v-for="option in field.options" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </label>
-        </template>
-        <div v-if="objectDraft.placement === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
-          <label :for="`object-x-${selectedObject.id}`">
-            Schematic X
-            <input
-              :id="`object-x-${selectedObject.id}`"
-              type="number"
-              step="any"
-              v-model="objectDraft.x"
-              required
-            >
-          </label>
-          <label :for="`object-y-${selectedObject.id}`">
-            Schematic Y
-            <input
-              :id="`object-y-${selectedObject.id}`"
-              type="number"
-              step="any"
-              v-model="objectDraft.y"
-              required
-            >
-          </label>
-        </div>
-        <label :for="`object-description-${selectedObject.id}`">
-          Description
-          <textarea
-            :id="`object-description-${selectedObject.id}`"
-            rows="5"
-            v-model="objectDraft.description"
-          />
-        </label>
-      </fieldset>
-      <p v-if="objectError || props.editorError" class="feedback mt-3 mb-0 error-text" role="alert">
-        {{ objectError || props.editorError }}
-      </p>
-      <div class="flex flex-wrap gap-2 mt-4">
-        <button
-          v-if="!objectEditing"
-          class="primary-button"
-          type="button"
-          aria-label="Edit map object"
-          :disabled="props.saving"
-          @click="emit('request-object-edit')"
-        >
-          Edit
-        </button>
-        <button v-else class="primary-button" type="submit" aria-label="Save map object" :disabled="props.saving">
-          Save
-        </button>
-        <button v-if="objectEditing" class="quiet-button" type="button" aria-label="Cancel map object edits" @click="cancelObjectEdit()">
-          Cancel
-        </button>
-      </div>
-    </form>
-    <button
-      v-if="!objectEditing"
-      class="quiet-button mt-4"
-      type="button"
-      :aria-label="`Delete ${selectedObject.name}`"
-      :disabled="props.saving"
-      @click="emit('delete-object')"
-    >
-      Delete object
-    </button>
-    <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Location keys are required and unique within this star system.</p>
-  </template>
-</template>

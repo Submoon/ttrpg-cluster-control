@@ -1,104 +1,3 @@
-<script setup lang="ts">
-/**
- * Owns cluster navigation and projects nested objects/Orbits into a selectable hierarchy.
- */
-import { computed } from 'vue'
-import {
-  type JumpRoute,
-  type LocalWorkspace,
-  type Orbit,
-  type StarSystem,
-  type SystemObject,
-} from '../domain/workspace'
-import { objectMark } from '../utils/catalogue-marks'
-
-type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
-type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject | null; childCount: number; depth: number }
-type HierarchyRow = ObjectRow | OrbitRow
-
-const props = defineProps<{
-  mode: 'cluster' | 'system'
-  workspace: LocalWorkspace
-  selectedSystemId: string | null
-  selectedObjectId: string | null
-  selectedOrbitId: string | null
-  selectedRouteId: string | null
-  chartNamesEditing: boolean
-  saving: boolean
-  formError: string
-  routeSummary: (route: JumpRoute) => string
-}>()
-
-const emit = defineEmits<{
-  'select-system': [systemId: string]
-  'delete-system': [systemId: string]
-  'select-object': [objectId: string]
-  'select-orbit': [orbitId: string]
-  'select-route': [routeId: string]
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
-  'show-cluster': []
-}>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
-
-const selectedSystem = computed(() =>
-  props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),
-)
-
-/**
- * Flattens unoccupied Orbits and system-level objects into depth-first rows of their nested children.
- * Orbit siblings are ordered by their stored order; root objects retain system.objects order.
- * Expects the acyclic host/placement relationships enforced by workspace validation.
- * @param system Current selected system, if any.
- * @returns Display rows with host, child-count, and indentation metadata; empty when no system is selected.
- */
-function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
-  if (!system) return []
-
-  const rows: HierarchyRow[] = []
-  const orbitsByHost = new Map<string | null, Orbit[]>()
-  const objectsByOrbit = new Map<string, SystemObject[]>()
-  for (const orbit of system.orbits) {
-    const hosted = orbitsByHost.get(orbit.hostId) ?? []
-    hosted.push(orbit)
-    orbitsByHost.set(orbit.hostId, hosted)
-  }
-  for (const object of system.objects) {
-    if (object.placement.kind === 'orbit') {
-      const children = objectsByOrbit.get(object.placement.orbitId) ?? []
-      children.push(object)
-      objectsByOrbit.set(object.placement.orbitId, children)
-    }
-  }
-
-  function addOrbitBranch(orbit: Orbit, host: SystemObject | null, depth: number): void {
-    const children = objectsByOrbit.get(orbit.id) ?? []
-    rows.push({ kind: 'orbit', orbit, host, childCount: children.length, depth })
-    for (const child of children) addObjectBranch(child, depth + 1)
-  }
-
-  function addObjectBranch(object: SystemObject, depth: number): void {
-    rows.push({ kind: 'object', object, depth })
-    const hostedOrbits = orbitsByHost.get(object.id) ?? []
-    hostedOrbits.sort((left, right) => left.order - right.order)
-    for (const orbit of hostedOrbits) addOrbitBranch(orbit, object, depth + 1)
-  }
-
-  const unhostedOrbits = orbitsByHost.get(null) ?? []
-  unhostedOrbits.sort((left, right) => left.order - right.order)
-  for (const orbit of unhostedOrbits) addOrbitBranch(orbit, null, 0)
-  for (const object of system.objects) {
-    if (object.placement.kind === 'system') addObjectBranch(object, 0)
-  }
-  return rows
-}
-
-const hierarchyRows = computed(() => buildHierarchy(selectedSystem.value))
-</script>
-
 <template>
   <template v-if="props.mode === 'cluster'">
     <div class="panel-heading flex items-center justify-between gap-[0.8rem]">
@@ -276,6 +175,107 @@ const hierarchyRows = computed(() => buildHierarchy(selectedSystem.value))
     <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Drag Orbit from Add Object onto a map object to host it, or elsewhere on the map to place an unoccupied center. Empty Orbits stay on the chart.</p>
   </template>
 </template>
+
+<script setup lang="ts">
+/**
+ * Owns cluster navigation and projects nested objects/Orbits into a selectable hierarchy.
+ */
+import { computed } from 'vue'
+import {
+  type JumpRoute,
+  type LocalWorkspace,
+  type Orbit,
+  type StarSystem,
+  type SystemObject,
+} from '../domain/workspace'
+import { objectMark } from '../utils/catalogue-marks'
+
+type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
+type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject | null; childCount: number; depth: number }
+type HierarchyRow = ObjectRow | OrbitRow
+
+const props = defineProps<{
+  mode: 'cluster' | 'system'
+  workspace: LocalWorkspace
+  selectedSystemId: string | null
+  selectedObjectId: string | null
+  selectedOrbitId: string | null
+  selectedRouteId: string | null
+  chartNamesEditing: boolean
+  saving: boolean
+  formError: string
+  routeSummary: (route: JumpRoute) => string
+}>()
+
+const emit = defineEmits<{
+  'select-system': [systemId: string]
+  'delete-system': [systemId: string]
+  'select-object': [objectId: string]
+  'select-orbit': [orbitId: string]
+  'select-route': [routeId: string]
+  'submit-names': []
+  'edit-chart-names': []
+  'cancel-chart-names': []
+  'show-cluster': []
+}>()
+
+const clusterName = defineModel<string>('clusterName', { required: true })
+const systemName = defineModel<string>('systemName', { required: true })
+
+const selectedSystem = computed(() =>
+  props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),
+)
+
+/**
+ * Flattens unoccupied Orbits and system-level objects into depth-first rows of their nested children.
+ * Orbit siblings are ordered by their stored order; root objects retain system.objects order.
+ * Expects the acyclic host/placement relationships enforced by workspace validation.
+ * @param system Current selected system, if any.
+ * @returns Display rows with host, child-count, and indentation metadata; empty when no system is selected.
+ */
+function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
+  if (!system) return []
+
+  const rows: HierarchyRow[] = []
+  const orbitsByHost = new Map<string | null, Orbit[]>()
+  const objectsByOrbit = new Map<string, SystemObject[]>()
+  for (const orbit of system.orbits) {
+    const hosted = orbitsByHost.get(orbit.hostId) ?? []
+    hosted.push(orbit)
+    orbitsByHost.set(orbit.hostId, hosted)
+  }
+  for (const object of system.objects) {
+    if (object.placement.kind === 'orbit') {
+      const children = objectsByOrbit.get(object.placement.orbitId) ?? []
+      children.push(object)
+      objectsByOrbit.set(object.placement.orbitId, children)
+    }
+  }
+
+  function addOrbitBranch(orbit: Orbit, host: SystemObject | null, depth: number): void {
+    const children = objectsByOrbit.get(orbit.id) ?? []
+    rows.push({ kind: 'orbit', orbit, host, childCount: children.length, depth })
+    for (const child of children) addObjectBranch(child, depth + 1)
+  }
+
+  function addObjectBranch(object: SystemObject, depth: number): void {
+    rows.push({ kind: 'object', object, depth })
+    const hostedOrbits = orbitsByHost.get(object.id) ?? []
+    hostedOrbits.sort((left, right) => left.order - right.order)
+    for (const orbit of hostedOrbits) addOrbitBranch(orbit, object, depth + 1)
+  }
+
+  const unhostedOrbits = orbitsByHost.get(null) ?? []
+  unhostedOrbits.sort((left, right) => left.order - right.order)
+  for (const orbit of unhostedOrbits) addOrbitBranch(orbit, null, 0)
+  for (const object of system.objects) {
+    if (object.placement.kind === 'system') addObjectBranch(object, 0)
+  }
+  return rows
+}
+
+const hierarchyRows = computed(() => buildHierarchy(selectedSystem.value))
+</script>
 
 <style>
 .panel-heading {

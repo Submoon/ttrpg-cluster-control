@@ -1,3 +1,83 @@
+<template>
+  <JumpRouteInspector
+    v-if="props.mode === 'cluster'"
+    ref="routeInspectorRef"
+    v-model:cluster-name="clusterName"
+    v-model:system-name="systemName"
+    :workspace="props.workspace"
+    :selected-system="props.selectedSystem"
+    :selected-object="props.selectedObject"
+    :selected-orbit="props.selectedOrbit"
+    :selected-route="props.selectedRoute"
+    :selected-route-summary="props.selectedRouteSummary"
+    :chart-names-editing="props.chartNamesEditing"
+    :saving="props.saving"
+    :form-error="props.formError"
+    :editor-error="props.editorError"
+    @submit-names="emit('submit-names')"
+    @edit-chart-names="emit('edit-chart-names')"
+    @cancel-chart-names="emit('cancel-chart-names')"
+    @show-chart-details="emit('show-chart-details')"
+    @request-route-edit="emit('request-route-edit', $event)"
+    @save-route="emit('save-route', $event)"
+    @cancel-route="emit('cancel-route', $event)"
+    @delete-route="emit('delete-route')"
+    @clear-route-selection="emit('clear-route-selection')"
+    @clear-error="emit('clear-error')"
+  />
+  <template v-else-if="props.selectedSystem">
+    <button
+      class="quiet-button chart-details-control mb-4"
+      type="button"
+      :aria-pressed="chartDetailsActive"
+      @click="emit('show-chart-details')"
+    >
+      Chart details
+    </button>
+    <MapObjectInspector
+      v-if="props.selectedObject"
+      ref="objectInspectorRef"
+      :workspace="props.workspace"
+      :selected-system="props.selectedSystem"
+      :selected-object="props.selectedObject"
+      :saving="props.saving"
+      :editor-error="props.editorError"
+      @request-object-edit="emit('request-object-edit')"
+      @save-object="emit('save-object', $event)"
+      @delete-object="emit('delete-object')"
+      @clear-error="emit('clear-error')"
+    />
+    <OrbitInspector
+      v-else-if="props.selectedOrbit"
+      ref="orbitInspectorRef"
+      :workspace="props.workspace"
+      :selected-system="props.selectedSystem"
+      :selected-orbit="props.selectedOrbit"
+      :saving="props.saving"
+      :editor-error="props.editorError"
+      @request-orbit-edit="emit('request-orbit-edit')"
+      @save-orbit="emit('save-orbit', $event)"
+      @detach-orbit="emit('detach-orbit')"
+      @delete-orbit="emit('delete-orbit')"
+      @clear-error="emit('clear-error')"
+    />
+    <ChartDetailsPanel
+      v-else
+      v-model:cluster-name="clusterName"
+      v-model:system-name="systemName"
+      mode="system"
+      :workspace="props.workspace"
+      :selected-system="props.selectedSystem"
+      :chart-names-editing="props.chartNamesEditing"
+      :saving="props.saving"
+      :form-error="props.formError"
+      @submit-names="emit('submit-names')"
+      @edit-chart-names="emit('edit-chart-names')"
+      @cancel-chart-names="emit('cancel-chart-names')"
+    />
+  </template>
+</template>
+
 <script setup lang="ts">
 /**
  * Inspector panels own local drafts; this boundary exposes save acknowledgements and edit guards to the page.
@@ -94,86 +174,6 @@ defineExpose({
   routeSaveSucceeded: () => routeInspectorRef.value?.routeSaveSucceeded(),
 })
 </script>
-
-<template>
-  <JumpRouteInspector
-    v-if="props.mode === 'cluster'"
-    ref="routeInspectorRef"
-    v-model:cluster-name="clusterName"
-    v-model:system-name="systemName"
-    :workspace="props.workspace"
-    :selected-system="props.selectedSystem"
-    :selected-object="props.selectedObject"
-    :selected-orbit="props.selectedOrbit"
-    :selected-route="props.selectedRoute"
-    :selected-route-summary="props.selectedRouteSummary"
-    :chart-names-editing="props.chartNamesEditing"
-    :saving="props.saving"
-    :form-error="props.formError"
-    :editor-error="props.editorError"
-    @submit-names="emit('submit-names')"
-    @edit-chart-names="emit('edit-chart-names')"
-    @cancel-chart-names="emit('cancel-chart-names')"
-    @show-chart-details="emit('show-chart-details')"
-    @request-route-edit="emit('request-route-edit', $event)"
-    @save-route="emit('save-route', $event)"
-    @cancel-route="emit('cancel-route', $event)"
-    @delete-route="emit('delete-route')"
-    @clear-route-selection="emit('clear-route-selection')"
-    @clear-error="emit('clear-error')"
-  />
-  <template v-else-if="props.selectedSystem">
-    <button
-      class="quiet-button chart-details-control mb-4"
-      type="button"
-      :aria-pressed="chartDetailsActive"
-      @click="emit('show-chart-details')"
-    >
-      Chart details
-    </button>
-    <MapObjectInspector
-      v-if="props.selectedObject"
-      ref="objectInspectorRef"
-      :workspace="props.workspace"
-      :selected-system="props.selectedSystem"
-      :selected-object="props.selectedObject"
-      :saving="props.saving"
-      :editor-error="props.editorError"
-      @request-object-edit="emit('request-object-edit')"
-      @save-object="emit('save-object', $event)"
-      @delete-object="emit('delete-object')"
-      @clear-error="emit('clear-error')"
-    />
-    <OrbitInspector
-      v-else-if="props.selectedOrbit"
-      ref="orbitInspectorRef"
-      :workspace="props.workspace"
-      :selected-system="props.selectedSystem"
-      :selected-orbit="props.selectedOrbit"
-      :saving="props.saving"
-      :editor-error="props.editorError"
-      @request-orbit-edit="emit('request-orbit-edit')"
-      @save-orbit="emit('save-orbit', $event)"
-      @detach-orbit="emit('detach-orbit')"
-      @delete-orbit="emit('delete-orbit')"
-      @clear-error="emit('clear-error')"
-    />
-    <ChartDetailsPanel
-      v-else
-      v-model:cluster-name="clusterName"
-      v-model:system-name="systemName"
-      mode="system"
-      :workspace="props.workspace"
-      :selected-system="props.selectedSystem"
-      :chart-names-editing="props.chartNamesEditing"
-      :saving="props.saving"
-      :form-error="props.formError"
-      @submit-names="emit('submit-names')"
-      @edit-chart-names="emit('edit-chart-names')"
-      @cancel-chart-names="emit('cancel-chart-names')"
-    />
-  </template>
-</template>
 
 <style>
 .chart-details-control[aria-pressed="true"] {

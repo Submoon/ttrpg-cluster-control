@@ -1,3 +1,365 @@
+<template>
+  <div class="prototype-root" :class="`variant-${currentVariant.toLowerCase()}`">
+    <header class="app-bar">
+      <NuxtLink to="/" class="brand" aria-label="Return to the map editor">
+        <span class="brand-mark" aria-hidden="true"><span /></span>
+        <span class="brand-wordmark">
+          <strong>MOTHERSHIP</strong>
+          <small>CAMPAIGN CARTOGRAPHY</small>
+        </span>
+      </NuxtLink>
+
+      <div class="workspace-context">
+        <span class="workspace-kicker">JUMP CLUSTER / 03</span>
+        <strong>Kestrel Reach</strong>
+        <span class="context-divider" />
+        <span class="active-system"><i /> Vesper system</span>
+      </div>
+
+      <span class="prototype-stamp"><i /> Reference prototype · sample data · no saves</span>
+    </header>
+
+    <main class="work-area">
+      <section v-if="currentVariant !== 'A'" class="map-context" aria-label="Map editor preview">
+        <div class="map-context-heading">
+          <span class="workspace-kicker">STAR SYSTEM / ACTIVE CHART</span>
+          <h2>Vesper</h2>
+          <p>Four mapped objects <span /> Last charted 06.14.2187</p>
+        </div>
+        <div class="map-plot" aria-hidden="true">
+          <div class="orbit orbit--outer" />
+          <div class="orbit orbit--middle" />
+          <div class="orbit orbit--inner" />
+          <div class="plot-star"><span>✦</span></div>
+          <div class="plot-object plot-object--one"><i /> <span>IRIA <small>PLANET</small></span></div>
+          <div class="plot-object plot-object--two"><i /> <span>NIX <small>MOON</small></span></div>
+          <div class="plot-object plot-object--three"><i /> <span>ASTERION RELAY <small>STATION</small></span></div>
+        </div>
+        <div class="map-context-footer">
+          <span>LOCAL CHART / VE-01</span>
+          <span><i /> FIELD DEFINITIONS OPEN</span>
+        </div>
+      </section>
+
+      <div v-else class="page-context">
+        <div class="breadcrumb">
+          <NuxtLink to="/">Map editor</NuxtLink>
+          <span>/</span>
+          <span>Kestrel Reach</span>
+          <span>/</span>
+          <strong>Field definitions</strong>
+        </div>
+        <div class="page-context-note">
+          <span>CAMPAIGN CONFIGURATION / SCHEMA REGISTER</span>
+          <p>Reusable definitions for the objects charted across this Jump Cluster.</p>
+        </div>
+      </div>
+
+      <button
+        v-if="currentVariant === 'C'"
+        class="modal-backdrop"
+        type="button"
+        tabindex="-1"
+        aria-label="Close field definitions and return to the map editor"
+        @click="backToMap"
+      />
+
+      <component
+        :is="managerTag"
+        ref="managerSurface"
+        class="manager-shell"
+        :class="`manager-shell--${currentVariant.toLowerCase()}`"
+        :open="currentVariant === 'C' ? true : undefined"
+        :role="currentVariant === 'C' ? 'dialog' : undefined"
+        :aria-modal="currentVariant === 'C' ? 'true' : undefined"
+        :aria-labelledby="currentVariant === 'C' ? 'manager-title' : undefined"
+        :tabindex="currentVariant === 'C' ? -1 : undefined"
+        @cancel.prevent="backToMap"
+      >
+        <header class="manager-header">
+          <div class="manager-title-block">
+            <span class="field-mark" aria-hidden="true">F<span>·</span></span>
+            <div>
+              <p class="eyebrow">REUSABLE OBJECT SCHEMA</p>
+              <h1 id="manager-title">Field definitions</h1>
+              <p class="manager-intro">Manage shared labels and choices here; individual values stay on their map objects.</p>
+            </div>
+          </div>
+          <NuxtLink to="/" class="back-link">
+            <span aria-hidden="true">←</span>
+            <span>Back to map editor</span>
+          </NuxtLink>
+        </header>
+
+        <div class="scope-strip">
+          <span><i class="scope-dot" /> Workspace-wide</span>
+          <span>Available across Jump Clusters</span>
+          <span>Map objects only · Orbits excluded</span>
+        </div>
+
+        <div
+          v-if="notice"
+          class="manager-notice"
+          :class="{ 'manager-notice--error': noticeIsError }"
+          :role="noticeIsError ? 'alert' : 'status'"
+          aria-live="polite"
+        >
+          <span aria-hidden="true">{{ noticeIsError ? '!' : '✓' }}</span>
+          {{ notice }}
+        </div>
+
+        <div class="manager-toolbar">
+          <div>
+            <p class="eyebrow">DEFINITION REGISTER</p>
+            <span>{{ fields.length }} definitions <i>·</i> {{ nativeFields.length }} native <i>·</i> {{ customFields.length }} custom</span>
+          </div>
+          <button class="add-button" type="button" @click="toggleCreateForm">
+            <span aria-hidden="true">{{ showCreateForm ? '−' : '+' }}</span>
+            {{ showCreateForm ? 'Cancel' : 'New definition' }}
+          </button>
+        </div>
+
+        <form v-if="showCreateForm" class="create-form" @submit.prevent="addFieldDefinition">
+          <div class="create-form-heading">
+            <div>
+              <p class="eyebrow">NEW CUSTOM FIELD</p>
+              <h2>Add a reusable definition</h2>
+            </div>
+            <span>Starts with no object values</span>
+          </div>
+          <div class="create-form-grid">
+            <label>
+              Field name
+              <input v-model="newFieldName" maxlength="48" placeholder="e.g. Signal source" required>
+            </label>
+            <label>
+              Value type
+              <select v-model="newFieldType">
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="single-select">Single-select</option>
+              </select>
+            </label>
+            <label v-if="newFieldType === 'single-select'" class="create-options">
+              Allowed options <span>(one per line)</span>
+              <textarea v-model="newFieldOptions" rows="3" placeholder="Unknown&#10;Confirmed" />
+            </label>
+          </div>
+          <p v-if="creationError" class="form-error" role="alert">{{ creationError }}</p>
+          <div class="create-form-actions">
+            <p>Custom fields are reusable on planets, moons, and installations.</p>
+            <button class="add-button" type="submit">Add definition <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+
+        <div class="manager-body">
+          <nav class="definition-directory" aria-label="Field definitions">
+            <div class="field-group">
+              <h2>Native <span>{{ nativeFields.length }}</span></h2>
+              <button
+                v-for="field in nativeFields"
+                :key="field.id"
+                type="button"
+                class="definition-choice"
+                :class="{ 'definition-choice--active': selectedFieldId === field.id }"
+                :aria-pressed="selectedFieldId === field.id"
+                @click="selectedFieldId = field.id; pendingRemovalId = null"
+              >
+                <span class="choice-mark choice-mark--native">N</span>
+                <span class="choice-copy">
+                  <strong>{{ field.name }}</strong>
+                  <small>{{ fieldTypeLabel(field.type) }} <i>·</i> {{ field.assignments.length }} values</small>
+                </span>
+                <span class="choice-chevron" aria-hidden="true">›</span>
+              </button>
+            </div>
+            <div class="field-group">
+              <h2>Custom <span>{{ customFields.length }}</span></h2>
+              <button
+                v-for="field in customFields"
+                :key="field.id"
+                type="button"
+                class="definition-choice"
+                :class="{ 'definition-choice--active': selectedFieldId === field.id }"
+                :aria-pressed="selectedFieldId === field.id"
+                @click="selectedFieldId = field.id; pendingRemovalId = null"
+              >
+                <span class="choice-mark">C</span>
+                <span class="choice-copy">
+                  <strong>{{ field.name }}</strong>
+                  <small>{{ fieldTypeLabel(field.type) }} <i>·</i> {{ field.assignments.length }} values</small>
+                </span>
+                <span class="choice-chevron" aria-hidden="true">›</span>
+              </button>
+              <p v-if="customFields.length === 0" class="empty-directory">No custom definitions yet.</p>
+            </div>
+          </nav>
+
+          <section v-if="selectedField" class="definition-editor" aria-labelledby="definition-name-heading">
+            <header class="selected-field-heading">
+              <div class="selected-field-identity">
+                <p class="eyebrow">{{ selectedField.kind === 'native' ? 'BUILT-IN FIELD' : 'CUSTOM DEFINITION' }}</p>
+                <h2 id="definition-name-heading">{{ selectedField.name }}</h2>
+                <div class="field-metadata">
+                  <span class="type-badge" :class="`type-badge--${selectedField.type}`">{{ fieldTypeLabel(selectedField.type) }}</span>
+                  <span>{{ selectedField.appliesTo }}</span>
+                  <span>{{ selectedField.assignments.length }} current values</span>
+                </div>
+              </div>
+              <button
+                v-if="selectedField.kind === 'custom'"
+                class="remove-button"
+                type="button"
+                @click="requestRemoval(selectedField.id)"
+              >
+                Remove definition
+              </button>
+              <span v-else class="native-lock"><i /> Native</span>
+            </header>
+
+            <form v-if="selectedField.kind === 'custom'" class="name-editor" @submit.prevent="saveDefinitionName">
+              <label for="definition-name">Field name</label>
+              <div class="name-editor-row">
+                <input id="definition-name" v-model="nameDraft" maxlength="48">
+                <button class="secondary-action" type="submit">Save name</button>
+              </div>
+              <p>Renaming preserves every value already stored on map objects.</p>
+            </form>
+            <p v-else class="native-explanation">
+              This built-in definition cannot be removed. Edit its allowed values below; values in use are protected.
+            </p>
+
+            <section v-if="selectedField.type === 'single-select'" class="options-editor" aria-labelledby="allowed-options-heading">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">CONSTRAINTS</p>
+                  <h3 id="allowed-options-heading">Allowed options</h3>
+                </div>
+                <span class="count-chip">{{ selectedField.options.length }} options</span>
+              </div>
+              <ul class="option-usage" aria-label="Current option usage">
+                <li v-for="option in selectedField.options" :key="option">
+                  <span class="option-swatch" />
+                  <strong>{{ option }}</strong>
+                  <span>{{ optionUsageCount(selectedField, option) }} assigned</span>
+                </li>
+                <li v-if="selectedField.options.length === 0" class="option-list-empty">No options yet.</li>
+              </ul>
+              <label class="field-label" for="option-draft">Edit list <span>one option per line</span></label>
+              <textarea id="option-draft" v-model="optionDraft" rows="4" spellcheck="false" />
+              <div class="editor-actions">
+                <p>Options assigned to objects cannot be removed until those values are changed.</p>
+                <button class="secondary-action" type="button" @click="saveOptions">Save options</button>
+              </div>
+            </section>
+
+            <section v-else class="type-explanation">
+              <span class="type-mark" aria-hidden="true">{{ selectedField.type === 'boolean' ? '01' : selectedField.type === 'number' ? '#' : 'T' }}</span>
+              <div>
+                <p class="eyebrow">{{ fieldTypeLabel(selectedField.type) }} VALUE</p>
+                <p>{{ fieldTypeDescription(selectedField.type) }}</p>
+              </div>
+            </section>
+
+            <section class="value-preview" aria-labelledby="values-heading">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">IMPACT PREVIEW / READ ONLY</p>
+                  <h3 id="values-heading">Existing object values</h3>
+                </div>
+                <span class="count-chip">{{ selectedField.assignments.length }} stored</span>
+              </div>
+              <p class="value-preview-help">Definition changes do not edit object cards. These values are shown so their impact stays visible.</p>
+              <div v-if="selectedField.assignments.length > 0" class="value-table-wrap">
+                <table class="value-table">
+                  <thead>
+                    <tr><th>Map object</th><th>System</th><th>Stored value</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="assignment in selectedField.assignments" :key="`${assignment.objectName}-${assignment.systemName}`">
+                      <td><strong>{{ assignment.objectName }}</strong><small>{{ assignment.objectType }}</small></td>
+                      <td>{{ assignment.systemName }}</td>
+                      <td><span class="stored-value">{{ formatValue(selectedField, assignment.value) }}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="no-values">
+                <span aria-hidden="true">—</span>
+                <p>No objects currently have a value for this definition.</p>
+              </div>
+            </section>
+
+            <section
+              v-if="pendingRemoval"
+              class="removal-impact"
+              role="group"
+              aria-labelledby="removal-title"
+            >
+              <p class="eyebrow">CONFIRM DEFINITION REMOVAL</p>
+              <h3 id="removal-title">Remove “{{ pendingRemoval.name }}”?</h3>
+              <p v-if="pendingRemoval.assignments.length">
+                This removes the reusable definition and clears {{ pendingRemoval.assignments.length }} stored value{{ pendingRemoval.assignments.length === 1 ? '' : 's' }} from these objects:
+              </p>
+              <p v-else>This definition has no stored object values to clear.</p>
+              <ul v-if="pendingRemoval.assignments.length">
+                <li v-for="assignment in pendingRemoval.assignments" :key="`${assignment.objectName}-${assignment.systemName}`">
+                  <strong>{{ assignment.objectName }}</strong>
+                  <span>{{ assignment.systemName }} · {{ formatValue(pendingRemoval, assignment.value) }}</span>
+                </li>
+              </ul>
+              <p class="removal-prototype-note">This demo changes sample data in memory only. In a real workspace, these values would be deleted with the definition.</p>
+              <div class="removal-actions">
+                <button class="secondary-action" type="button" @click="cancelRemoval">Keep definition</button>
+                <button class="remove-button remove-button--confirm" type="button" @click="confirmRemoval">
+                  Remove and clear {{ pendingRemoval.assignments.length }} value{{ pendingRemoval.assignments.length === 1 ? '' : 's' }}
+                </button>
+              </div>
+            </section>
+          </section>
+          <div v-else class="no-selection">
+            <span class="field-mark" aria-hidden="true">F<span>·</span></span>
+            <h2>Select a field definition</h2>
+            <p>Choose a definition from the register to inspect its type, options, and current object values.</p>
+          </div>
+        </div>
+
+        <aside class="recommendation">
+          <div class="recommendation-heading">
+            <p class="eyebrow">USER PREFERENCE</p>
+            <strong>C <span>·</span> Quick dialog</strong>
+          </div>
+          <p>Keep shared-field management close to the map in a focused dialog. Show existing-value impacts and require explicit confirmation for destructive changes.</p>
+        </aside>
+      </component>
+    </main>
+
+    <nav class="variant-switcher" aria-label="Prototype layout variants">
+      <button class="switch-arrow" type="button" aria-label="Previous layout variant" @click="stepVariant(-1)">←</button>
+      <div class="switch-current">
+        <span class="switch-index">{{ currentVariant }}</span>
+        <span><small>LAYOUT STUDY</small><strong>{{ currentVariantLabel }}</strong></span>
+      </div>
+      <div class="switch-options" aria-label="Choose a layout">
+        <button
+          v-for="choice in variantChoices"
+          :key="choice.key"
+          type="button"
+          :class="{ 'switch-option--active': currentVariant === choice.key }"
+          :aria-pressed="currentVariant === choice.key"
+          :aria-label="`Variant ${choice.key}: ${choice.label}`"
+          @click="setVariant(choice.key)"
+        >
+          {{ choice.key }}
+        </button>
+      </div>
+      <button class="switch-arrow" type="button" aria-label="Next layout variant" @click="stepVariant(1)">→</button>
+      <span class="switch-hint">Use ← →</span>
+    </nav>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
@@ -410,368 +772,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
-
-<template>
-  <div class="prototype-root" :class="`variant-${currentVariant.toLowerCase()}`">
-    <header class="app-bar">
-      <NuxtLink to="/" class="brand" aria-label="Return to the map editor">
-        <span class="brand-mark" aria-hidden="true"><span /></span>
-        <span class="brand-wordmark">
-          <strong>MOTHERSHIP</strong>
-          <small>CAMPAIGN CARTOGRAPHY</small>
-        </span>
-      </NuxtLink>
-
-      <div class="workspace-context">
-        <span class="workspace-kicker">JUMP CLUSTER / 03</span>
-        <strong>Kestrel Reach</strong>
-        <span class="context-divider" />
-        <span class="active-system"><i /> Vesper system</span>
-      </div>
-
-      <span class="prototype-stamp"><i /> Reference prototype · sample data · no saves</span>
-    </header>
-
-    <main class="work-area">
-      <section v-if="currentVariant !== 'A'" class="map-context" aria-label="Map editor preview">
-        <div class="map-context-heading">
-          <span class="workspace-kicker">STAR SYSTEM / ACTIVE CHART</span>
-          <h2>Vesper</h2>
-          <p>Four mapped objects <span /> Last charted 06.14.2187</p>
-        </div>
-        <div class="map-plot" aria-hidden="true">
-          <div class="orbit orbit--outer" />
-          <div class="orbit orbit--middle" />
-          <div class="orbit orbit--inner" />
-          <div class="plot-star"><span>✦</span></div>
-          <div class="plot-object plot-object--one"><i /> <span>IRIA <small>PLANET</small></span></div>
-          <div class="plot-object plot-object--two"><i /> <span>NIX <small>MOON</small></span></div>
-          <div class="plot-object plot-object--three"><i /> <span>ASTERION RELAY <small>STATION</small></span></div>
-        </div>
-        <div class="map-context-footer">
-          <span>LOCAL CHART / VE-01</span>
-          <span><i /> FIELD DEFINITIONS OPEN</span>
-        </div>
-      </section>
-
-      <div v-else class="page-context">
-        <div class="breadcrumb">
-          <NuxtLink to="/">Map editor</NuxtLink>
-          <span>/</span>
-          <span>Kestrel Reach</span>
-          <span>/</span>
-          <strong>Field definitions</strong>
-        </div>
-        <div class="page-context-note">
-          <span>CAMPAIGN CONFIGURATION / SCHEMA REGISTER</span>
-          <p>Reusable definitions for the objects charted across this Jump Cluster.</p>
-        </div>
-      </div>
-
-      <button
-        v-if="currentVariant === 'C'"
-        class="modal-backdrop"
-        type="button"
-        tabindex="-1"
-        aria-label="Close field definitions and return to the map editor"
-        @click="backToMap"
-      />
-
-      <component
-        :is="managerTag"
-        ref="managerSurface"
-        class="manager-shell"
-        :class="`manager-shell--${currentVariant.toLowerCase()}`"
-        :open="currentVariant === 'C' ? true : undefined"
-        :role="currentVariant === 'C' ? 'dialog' : undefined"
-        :aria-modal="currentVariant === 'C' ? 'true' : undefined"
-        :aria-labelledby="currentVariant === 'C' ? 'manager-title' : undefined"
-        :tabindex="currentVariant === 'C' ? -1 : undefined"
-        @cancel.prevent="backToMap"
-      >
-        <header class="manager-header">
-          <div class="manager-title-block">
-            <span class="field-mark" aria-hidden="true">F<span>·</span></span>
-            <div>
-              <p class="eyebrow">REUSABLE OBJECT SCHEMA</p>
-              <h1 id="manager-title">Field definitions</h1>
-              <p class="manager-intro">Manage shared labels and choices here; individual values stay on their map objects.</p>
-            </div>
-          </div>
-          <NuxtLink to="/" class="back-link">
-            <span aria-hidden="true">←</span>
-            <span>Back to map editor</span>
-          </NuxtLink>
-        </header>
-
-        <div class="scope-strip">
-          <span><i class="scope-dot" /> Workspace-wide</span>
-          <span>Available across Jump Clusters</span>
-          <span>Map objects only · Orbits excluded</span>
-        </div>
-
-        <div
-          v-if="notice"
-          class="manager-notice"
-          :class="{ 'manager-notice--error': noticeIsError }"
-          :role="noticeIsError ? 'alert' : 'status'"
-          aria-live="polite"
-        >
-          <span aria-hidden="true">{{ noticeIsError ? '!' : '✓' }}</span>
-          {{ notice }}
-        </div>
-
-        <div class="manager-toolbar">
-          <div>
-            <p class="eyebrow">DEFINITION REGISTER</p>
-            <span>{{ fields.length }} definitions <i>·</i> {{ nativeFields.length }} native <i>·</i> {{ customFields.length }} custom</span>
-          </div>
-          <button class="add-button" type="button" @click="toggleCreateForm">
-            <span aria-hidden="true">{{ showCreateForm ? '−' : '+' }}</span>
-            {{ showCreateForm ? 'Cancel' : 'New definition' }}
-          </button>
-        </div>
-
-        <form v-if="showCreateForm" class="create-form" @submit.prevent="addFieldDefinition">
-          <div class="create-form-heading">
-            <div>
-              <p class="eyebrow">NEW CUSTOM FIELD</p>
-              <h2>Add a reusable definition</h2>
-            </div>
-            <span>Starts with no object values</span>
-          </div>
-          <div class="create-form-grid">
-            <label>
-              Field name
-              <input v-model="newFieldName" maxlength="48" placeholder="e.g. Signal source" required>
-            </label>
-            <label>
-              Value type
-              <select v-model="newFieldType">
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="single-select">Single-select</option>
-              </select>
-            </label>
-            <label v-if="newFieldType === 'single-select'" class="create-options">
-              Allowed options <span>(one per line)</span>
-              <textarea v-model="newFieldOptions" rows="3" placeholder="Unknown&#10;Confirmed" />
-            </label>
-          </div>
-          <p v-if="creationError" class="form-error" role="alert">{{ creationError }}</p>
-          <div class="create-form-actions">
-            <p>Custom fields are reusable on planets, moons, and installations.</p>
-            <button class="add-button" type="submit">Add definition <span aria-hidden="true">→</span></button>
-          </div>
-        </form>
-
-        <div class="manager-body">
-          <nav class="definition-directory" aria-label="Field definitions">
-            <div class="field-group">
-              <h2>Native <span>{{ nativeFields.length }}</span></h2>
-              <button
-                v-for="field in nativeFields"
-                :key="field.id"
-                type="button"
-                class="definition-choice"
-                :class="{ 'definition-choice--active': selectedFieldId === field.id }"
-                :aria-pressed="selectedFieldId === field.id"
-                @click="selectedFieldId = field.id; pendingRemovalId = null"
-              >
-                <span class="choice-mark choice-mark--native">N</span>
-                <span class="choice-copy">
-                  <strong>{{ field.name }}</strong>
-                  <small>{{ fieldTypeLabel(field.type) }} <i>·</i> {{ field.assignments.length }} values</small>
-                </span>
-                <span class="choice-chevron" aria-hidden="true">›</span>
-              </button>
-            </div>
-            <div class="field-group">
-              <h2>Custom <span>{{ customFields.length }}</span></h2>
-              <button
-                v-for="field in customFields"
-                :key="field.id"
-                type="button"
-                class="definition-choice"
-                :class="{ 'definition-choice--active': selectedFieldId === field.id }"
-                :aria-pressed="selectedFieldId === field.id"
-                @click="selectedFieldId = field.id; pendingRemovalId = null"
-              >
-                <span class="choice-mark">C</span>
-                <span class="choice-copy">
-                  <strong>{{ field.name }}</strong>
-                  <small>{{ fieldTypeLabel(field.type) }} <i>·</i> {{ field.assignments.length }} values</small>
-                </span>
-                <span class="choice-chevron" aria-hidden="true">›</span>
-              </button>
-              <p v-if="customFields.length === 0" class="empty-directory">No custom definitions yet.</p>
-            </div>
-          </nav>
-
-          <section v-if="selectedField" class="definition-editor" aria-labelledby="definition-name-heading">
-            <header class="selected-field-heading">
-              <div class="selected-field-identity">
-                <p class="eyebrow">{{ selectedField.kind === 'native' ? 'BUILT-IN FIELD' : 'CUSTOM DEFINITION' }}</p>
-                <h2 id="definition-name-heading">{{ selectedField.name }}</h2>
-                <div class="field-metadata">
-                  <span class="type-badge" :class="`type-badge--${selectedField.type}`">{{ fieldTypeLabel(selectedField.type) }}</span>
-                  <span>{{ selectedField.appliesTo }}</span>
-                  <span>{{ selectedField.assignments.length }} current values</span>
-                </div>
-              </div>
-              <button
-                v-if="selectedField.kind === 'custom'"
-                class="remove-button"
-                type="button"
-                @click="requestRemoval(selectedField.id)"
-              >
-                Remove definition
-              </button>
-              <span v-else class="native-lock"><i /> Native</span>
-            </header>
-
-            <form v-if="selectedField.kind === 'custom'" class="name-editor" @submit.prevent="saveDefinitionName">
-              <label for="definition-name">Field name</label>
-              <div class="name-editor-row">
-                <input id="definition-name" v-model="nameDraft" maxlength="48">
-                <button class="secondary-action" type="submit">Save name</button>
-              </div>
-              <p>Renaming preserves every value already stored on map objects.</p>
-            </form>
-            <p v-else class="native-explanation">
-              This built-in definition cannot be removed. Edit its allowed values below; values in use are protected.
-            </p>
-
-            <section v-if="selectedField.type === 'single-select'" class="options-editor" aria-labelledby="allowed-options-heading">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">CONSTRAINTS</p>
-                  <h3 id="allowed-options-heading">Allowed options</h3>
-                </div>
-                <span class="count-chip">{{ selectedField.options.length }} options</span>
-              </div>
-              <ul class="option-usage" aria-label="Current option usage">
-                <li v-for="option in selectedField.options" :key="option">
-                  <span class="option-swatch" />
-                  <strong>{{ option }}</strong>
-                  <span>{{ optionUsageCount(selectedField, option) }} assigned</span>
-                </li>
-                <li v-if="selectedField.options.length === 0" class="option-list-empty">No options yet.</li>
-              </ul>
-              <label class="field-label" for="option-draft">Edit list <span>one option per line</span></label>
-              <textarea id="option-draft" v-model="optionDraft" rows="4" spellcheck="false" />
-              <div class="editor-actions">
-                <p>Options assigned to objects cannot be removed until those values are changed.</p>
-                <button class="secondary-action" type="button" @click="saveOptions">Save options</button>
-              </div>
-            </section>
-
-            <section v-else class="type-explanation">
-              <span class="type-mark" aria-hidden="true">{{ selectedField.type === 'boolean' ? '01' : selectedField.type === 'number' ? '#' : 'T' }}</span>
-              <div>
-                <p class="eyebrow">{{ fieldTypeLabel(selectedField.type) }} VALUE</p>
-                <p>{{ fieldTypeDescription(selectedField.type) }}</p>
-              </div>
-            </section>
-
-            <section class="value-preview" aria-labelledby="values-heading">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">IMPACT PREVIEW / READ ONLY</p>
-                  <h3 id="values-heading">Existing object values</h3>
-                </div>
-                <span class="count-chip">{{ selectedField.assignments.length }} stored</span>
-              </div>
-              <p class="value-preview-help">Definition changes do not edit object cards. These values are shown so their impact stays visible.</p>
-              <div v-if="selectedField.assignments.length > 0" class="value-table-wrap">
-                <table class="value-table">
-                  <thead>
-                    <tr><th>Map object</th><th>System</th><th>Stored value</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="assignment in selectedField.assignments" :key="`${assignment.objectName}-${assignment.systemName}`">
-                      <td><strong>{{ assignment.objectName }}</strong><small>{{ assignment.objectType }}</small></td>
-                      <td>{{ assignment.systemName }}</td>
-                      <td><span class="stored-value">{{ formatValue(selectedField, assignment.value) }}</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="no-values">
-                <span aria-hidden="true">—</span>
-                <p>No objects currently have a value for this definition.</p>
-              </div>
-            </section>
-
-            <section
-              v-if="pendingRemoval"
-              class="removal-impact"
-              role="group"
-              aria-labelledby="removal-title"
-            >
-              <p class="eyebrow">CONFIRM DEFINITION REMOVAL</p>
-              <h3 id="removal-title">Remove “{{ pendingRemoval.name }}”?</h3>
-              <p v-if="pendingRemoval.assignments.length">
-                This removes the reusable definition and clears {{ pendingRemoval.assignments.length }} stored value{{ pendingRemoval.assignments.length === 1 ? '' : 's' }} from these objects:
-              </p>
-              <p v-else>This definition has no stored object values to clear.</p>
-              <ul v-if="pendingRemoval.assignments.length">
-                <li v-for="assignment in pendingRemoval.assignments" :key="`${assignment.objectName}-${assignment.systemName}`">
-                  <strong>{{ assignment.objectName }}</strong>
-                  <span>{{ assignment.systemName }} · {{ formatValue(pendingRemoval, assignment.value) }}</span>
-                </li>
-              </ul>
-              <p class="removal-prototype-note">This demo changes sample data in memory only. In a real workspace, these values would be deleted with the definition.</p>
-              <div class="removal-actions">
-                <button class="secondary-action" type="button" @click="cancelRemoval">Keep definition</button>
-                <button class="remove-button remove-button--confirm" type="button" @click="confirmRemoval">
-                  Remove and clear {{ pendingRemoval.assignments.length }} value{{ pendingRemoval.assignments.length === 1 ? '' : 's' }}
-                </button>
-              </div>
-            </section>
-          </section>
-          <div v-else class="no-selection">
-            <span class="field-mark" aria-hidden="true">F<span>·</span></span>
-            <h2>Select a field definition</h2>
-            <p>Choose a definition from the register to inspect its type, options, and current object values.</p>
-          </div>
-        </div>
-
-        <aside class="recommendation">
-          <div class="recommendation-heading">
-            <p class="eyebrow">USER PREFERENCE</p>
-            <strong>C <span>·</span> Quick dialog</strong>
-          </div>
-          <p>Keep shared-field management close to the map in a focused dialog. Show existing-value impacts and require explicit confirmation for destructive changes.</p>
-        </aside>
-      </component>
-    </main>
-
-    <nav class="variant-switcher" aria-label="Prototype layout variants">
-      <button class="switch-arrow" type="button" aria-label="Previous layout variant" @click="stepVariant(-1)">←</button>
-      <div class="switch-current">
-        <span class="switch-index">{{ currentVariant }}</span>
-        <span><small>LAYOUT STUDY</small><strong>{{ currentVariantLabel }}</strong></span>
-      </div>
-      <div class="switch-options" aria-label="Choose a layout">
-        <button
-          v-for="choice in variantChoices"
-          :key="choice.key"
-          type="button"
-          :class="{ 'switch-option--active': currentVariant === choice.key }"
-          :aria-pressed="currentVariant === choice.key"
-          :aria-label="`Variant ${choice.key}: ${choice.label}`"
-          @click="setVariant(choice.key)"
-        >
-          {{ choice.key }}
-        </button>
-      </div>
-      <button class="switch-arrow" type="button" aria-label="Next layout variant" @click="stepVariant(1)">→</button>
-      <span class="switch-hint">Use ← →</span>
-    </nav>
-  </div>
-</template>
 
 <style scoped>
 .prototype-root {

@@ -1,3 +1,152 @@
+<template>
+  <section class="field-definition-editor" aria-label="Field definition editor">
+    <header class="field-definition-editor-heading">
+      <div>
+        <span class="section-kicker">{{ props.definition.kind }} field / {{ props.definition.type }}</span>
+        <h3>{{ props.definition.name }}</h3>
+      </div>
+      <span class="field-definition-value-count">{{ props.assignments.length }} saved values</span>
+    </header>
+
+    <label v-if="props.definition.kind === 'custom'" for="field-definition-name">
+      Custom field name
+      <input
+        id="field-definition-name"
+        v-model="fieldDefinitionNameDraft"
+        aria-label="Custom field name"
+        maxlength="80"
+        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
+      >
+    </label>
+
+    <label
+      v-if="props.definition.type === 'single-select'"
+      for="field-definition-options"
+    >
+      {{ props.definition.name }} choices
+      <textarea
+        id="field-definition-options"
+        v-model="fieldDefinitionOptionsDraft"
+        :aria-label="`${props.definition.name} choices`"
+        rows="4"
+        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
+      />
+    </label>
+
+    <fieldset
+      v-if="props.definition.kind === 'custom'"
+      class="field-definition-applicability"
+      :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
+    >
+      <legend>Field applicability</legend>
+      <label class="field-definition-target-choice">
+        <input
+          v-model="fieldDefinitionAppliesToAll"
+          type="radio"
+          name="field-applicability-mode"
+          :value="true"
+        >
+        All catalogue objects
+      </label>
+      <label class="field-definition-target-choice">
+        <input
+          v-model="fieldDefinitionAppliesToAll"
+          type="radio"
+          name="field-applicability-mode"
+          :value="false"
+        >
+        Selected catalogue targets
+      </label>
+      <div v-if="!fieldDefinitionAppliesToAll" class="field-definition-target-groups">
+        <section>
+          <h4>Categories</h4>
+          <label
+            v-for="group in applicabilityGroups"
+            :key="group.family"
+            class="field-definition-target-choice"
+          >
+            <input
+              type="checkbox"
+              :checked="hasCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
+              @change="toggleCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
+            >
+            Category {{ group.label }}
+          </label>
+        </section>
+        <section>
+          <h4>Subtypes</h4>
+          <label
+            v-for="type in catalogueTypes"
+            :key="`${type.family}:${type.value}`"
+            class="field-definition-target-choice"
+          >
+            <input
+              type="checkbox"
+              :checked="hasCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
+              @change="toggleCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
+            >
+            Subtype {{ type.label }}
+          </label>
+        </section>
+      </div>
+    </fieldset>
+
+    <FieldDefinitionValues
+      :assignments="props.assignments"
+      heading="Existing field values"
+      region-label="Existing field values"
+      empty-message="No values are assigned to this field."
+    />
+    <FieldDefinitionValues
+      v-if="affectedFieldAssignments.length"
+      :assignments="affectedFieldAssignments"
+      heading="Values that will be cleared"
+      region-label="Affected values preview"
+      affected
+    />
+
+    <div class="field-definition-actions">
+      <button
+        v-if="!fieldDefinitionEditing"
+        class="primary-button"
+        type="button"
+        :disabled="props.saving || props.changePending"
+        aria-label="Edit field definition"
+        @click="beginFieldDefinitionEdit"
+      >
+        Edit
+      </button>
+      <button
+        v-else
+        class="primary-button"
+        type="button"
+        :disabled="props.saving || props.changePending"
+        @click="saveFieldDefinitionChanges"
+      >
+        Save changes
+      </button>
+      <button
+        v-if="fieldDefinitionEditing"
+        class="quiet-button"
+        type="button"
+        :disabled="props.changePending"
+        @click="cancelFieldDefinitionEdit"
+      >
+        Cancel
+      </button>
+      <button
+        v-if="props.definition.kind === 'custom' && fieldDefinitionEditing"
+        class="quiet-button"
+        type="button"
+        :disabled="props.saving || props.changePending"
+        @click="requestFieldDefinitionRemoval"
+      >
+        Delete field definition
+      </button>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
 /**
  * Holds one definition's edit draft and emits requests; the dialog coordinates confirmation and persistence.
@@ -169,155 +318,6 @@ defineExpose({
   reset,
 })
 </script>
-
-<template>
-  <section class="field-definition-editor" aria-label="Field definition editor">
-    <header class="field-definition-editor-heading">
-      <div>
-        <span class="section-kicker">{{ props.definition.kind }} field / {{ props.definition.type }}</span>
-        <h3>{{ props.definition.name }}</h3>
-      </div>
-      <span class="field-definition-value-count">{{ props.assignments.length }} saved values</span>
-    </header>
-
-    <label v-if="props.definition.kind === 'custom'" for="field-definition-name">
-      Custom field name
-      <input
-        id="field-definition-name"
-        v-model="fieldDefinitionNameDraft"
-        aria-label="Custom field name"
-        maxlength="80"
-        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-      >
-    </label>
-
-    <label
-      v-if="props.definition.type === 'single-select'"
-      for="field-definition-options"
-    >
-      {{ props.definition.name }} choices
-      <textarea
-        id="field-definition-options"
-        v-model="fieldDefinitionOptionsDraft"
-        :aria-label="`${props.definition.name} choices`"
-        rows="4"
-        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-      />
-    </label>
-
-    <fieldset
-      v-if="props.definition.kind === 'custom'"
-      class="field-definition-applicability"
-      :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-    >
-      <legend>Field applicability</legend>
-      <label class="field-definition-target-choice">
-        <input
-          v-model="fieldDefinitionAppliesToAll"
-          type="radio"
-          name="field-applicability-mode"
-          :value="true"
-        >
-        All catalogue objects
-      </label>
-      <label class="field-definition-target-choice">
-        <input
-          v-model="fieldDefinitionAppliesToAll"
-          type="radio"
-          name="field-applicability-mode"
-          :value="false"
-        >
-        Selected catalogue targets
-      </label>
-      <div v-if="!fieldDefinitionAppliesToAll" class="field-definition-target-groups">
-        <section>
-          <h4>Categories</h4>
-          <label
-            v-for="group in applicabilityGroups"
-            :key="group.family"
-            class="field-definition-target-choice"
-          >
-            <input
-              type="checkbox"
-              :checked="hasCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
-              @change="toggleCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
-            >
-            Category {{ group.label }}
-          </label>
-        </section>
-        <section>
-          <h4>Subtypes</h4>
-          <label
-            v-for="type in catalogueTypes"
-            :key="`${type.family}:${type.value}`"
-            class="field-definition-target-choice"
-          >
-            <input
-              type="checkbox"
-              :checked="hasCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
-              @change="toggleCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
-            >
-            Subtype {{ type.label }}
-          </label>
-        </section>
-      </div>
-    </fieldset>
-
-    <FieldDefinitionValues
-      :assignments="props.assignments"
-      heading="Existing field values"
-      region-label="Existing field values"
-      empty-message="No values are assigned to this field."
-    />
-    <FieldDefinitionValues
-      v-if="affectedFieldAssignments.length"
-      :assignments="affectedFieldAssignments"
-      heading="Values that will be cleared"
-      region-label="Affected values preview"
-      affected
-    />
-
-    <div class="field-definition-actions">
-      <button
-        v-if="!fieldDefinitionEditing"
-        class="primary-button"
-        type="button"
-        :disabled="props.saving || props.changePending"
-        aria-label="Edit field definition"
-        @click="beginFieldDefinitionEdit"
-      >
-        Edit
-      </button>
-      <button
-        v-else
-        class="primary-button"
-        type="button"
-        :disabled="props.saving || props.changePending"
-        @click="saveFieldDefinitionChanges"
-      >
-        Save changes
-      </button>
-      <button
-        v-if="fieldDefinitionEditing"
-        class="quiet-button"
-        type="button"
-        :disabled="props.changePending"
-        @click="cancelFieldDefinitionEdit"
-      >
-        Cancel
-      </button>
-      <button
-        v-if="props.definition.kind === 'custom' && fieldDefinitionEditing"
-        class="quiet-button"
-        type="button"
-        :disabled="props.saving || props.changePending"
-        @click="requestFieldDefinitionRemoval"
-      >
-        Delete field definition
-      </button>
-    </div>
-  </section>
-</template>
 
 <style scoped>
 .field-definition-editor {

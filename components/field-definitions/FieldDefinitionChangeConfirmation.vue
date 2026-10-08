@@ -1,19 +1,3 @@
-<script setup lang="ts">
-/**
- * Shows destructive-change impact and emits an explicit confirmation intent without mutating workspace data.
- */
-import type { PendingFieldDefinitionChange } from './model'
-
-const props = defineProps<{
-  change: PendingFieldDefinitionChange
-}>()
-
-const emit = defineEmits<{
-  cancel: []
-  confirm: []
-}>()
-</script>
-
 <template>
   <section
     class="field-definition-confirmation"
@@ -51,6 +35,22 @@ const emit = defineEmits<{
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+/**
+ * Shows destructive-change impact and emits an explicit confirmation intent without mutating workspace data.
+ */
+import type { PendingFieldDefinitionChange } from './model'
+
+const props = defineProps<{
+  change: PendingFieldDefinitionChange
+}>()
+
+const emit = defineEmits<{
+  cancel: []
+  confirm: []
+}>()
+</script>
 
 <style scoped>
 .field-definition-confirmation {

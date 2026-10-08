@@ -1,21 +1,3 @@
-<script setup lang="ts">
-/**
- * Lists native and custom definitions, returning selection and creation intents to the dialog owner.
- */
-import { fieldApplicabilitySummary, type FieldDefinitionSummary } from './model'
-
-const props = defineProps<{
-  nativeFields: FieldDefinitionSummary[]
-  customFields: FieldDefinitionSummary[]
-  selectedFieldId: string
-}>()
-
-const emit = defineEmits<{
-  select: [fieldId: string]
-  'create-custom-field': []
-}>()
-</script>
-
 <template>
   <nav class="field-definition-list" aria-label="Field definitions">
     <section>
@@ -63,6 +45,24 @@ const emit = defineEmits<{
     </section>
   </nav>
 </template>
+
+<script setup lang="ts">
+/**
+ * Lists native and custom definitions, returning selection and creation intents to the dialog owner.
+ */
+import { fieldApplicabilitySummary, type FieldDefinitionSummary } from './model'
+
+const props = defineProps<{
+  nativeFields: FieldDefinitionSummary[]
+  customFields: FieldDefinitionSummary[]
+  selectedFieldId: string
+}>()
+
+const emit = defineEmits<{
+  select: [fieldId: string]
+  'create-custom-field': []
+}>()
+</script>
 
 <style scoped>
 .field-definition-list {

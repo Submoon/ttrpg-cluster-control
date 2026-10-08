@@ -1,18 +1,3 @@
-<script setup lang="ts">
-/**
- * Read-only assignment list shared by definition inspection and destructive-change previews.
- */
-import type { FieldValueAssignment } from './model'
-
-const props = defineProps<{
-  assignments: FieldValueAssignment[]
-  heading: string
-  regionLabel: string
-  emptyMessage?: string
-  affected?: boolean
-}>()
-</script>
-
 <template>
   <section
     class="field-definition-values"
@@ -36,6 +21,21 @@ const props = defineProps<{
     </ul>
   </section>
 </template>
+
+<script setup lang="ts">
+/**
+ * Read-only assignment list shared by definition inspection and destructive-change previews.
+ */
+import type { FieldValueAssignment } from './model'
+
+const props = defineProps<{
+  assignments: FieldValueAssignment[]
+  heading: string
+  regionLabel: string
+  emptyMessage?: string
+  affected?: boolean
+}>()
+</script>
 
 <style scoped>
 .field-definition-values {

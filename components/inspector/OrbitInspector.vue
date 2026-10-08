@@ -1,3 +1,124 @@
+<template>
+  <template v-if="selectedOrbit">
+    <span class="section-kicker">SYSTEM STRUCTURE / SELECTED</span>
+    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
+    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ orbitEditing ? orbitOrderDraft : selectedOrbit.order }}</h2>
+    <p class="inspector-intro mb-[1em]">
+      <template v-if="selectedOrbit.hostId === null">Centered on an unoccupied location.</template>
+      <template v-else>Hosted by {{ selectedSystem?.objects.find(object => object.id === selectedOrbit?.hostId)?.name ?? 'unknown object' }}.</template>
+      Orbit rings show structure, not measured distance.
+    </p>
+    <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
+      <span>Objects placed</span>
+      <strong>{{ selectedSystem?.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === selectedOrbit?.id).length ?? 0 }}</strong>
+    </div>
+    <div v-if="orbitEditing" class="orbit-edit-fields my-4 grid gap-3">
+      <label>
+        Horizontal radius
+        <input
+          v-model="orbitHorizontalRadiusDraft"
+          type="number"
+          :min="selectedOrbitMinimumRadius"
+          step="1"
+          required
+        >
+      </label>
+      <label>
+        Vertical radius
+        <input
+          v-model="orbitVerticalRadiusDraft"
+          type="number"
+          :min="selectedOrbitMinimumRadius"
+          step="1"
+          required
+        >
+      </label>
+      <div v-if="selectedOrbit.hostId === null" class="grid grid-cols-2 gap-2">
+        <label>
+          Center X
+          <input
+            v-model="orbitCenterXDraft"
+            type="number"
+            step="0.01"
+            required
+          >
+        </label>
+        <label>
+          Center Y
+          <input
+            v-model="orbitCenterYDraft"
+            type="number"
+            step="0.01"
+            required
+          >
+        </label>
+      </div>
+    </div>
+    <div v-if="orbitEditing" class="orbit-actions flex gap-2" aria-label="Reorder Orbit">
+      <button
+        class="secondary-button"
+        type="button"
+        aria-label="Move orbit up"
+        :disabled="!canMoveSelectedOrbit(-1) || props.saving"
+        @click="reorderSelectedOrbit(-1)"
+      >
+        Move up
+      </button>
+      <button
+        class="secondary-button"
+        type="button"
+        aria-label="Move orbit down"
+        :disabled="!canMoveSelectedOrbit(1) || props.saving"
+        @click="reorderSelectedOrbit(1)"
+      >
+        Move down
+      </button>
+    </div>
+    <p v-if="orbitDraftError || props.editorError" class="feedback m-0 error-text" role="alert">
+      {{ orbitDraftError || props.editorError }}
+    </p>
+    <div class="flex flex-wrap gap-2">
+      <button
+        v-if="!orbitEditing"
+        class="primary-button"
+        type="button"
+        aria-label="Edit Orbit"
+        :disabled="props.saving"
+        @click="emit('request-orbit-edit')"
+      >
+        Edit
+      </button>
+      <button
+        v-if="!orbitEditing && selectedOrbit.hostId !== null"
+        class="secondary-button"
+        type="button"
+        aria-label="Detach Orbit"
+        :disabled="props.saving"
+        @click="emit('detach-orbit')"
+      >
+        Detach
+      </button>
+      <button v-if="orbitEditing" class="primary-button" type="button" aria-label="Save Orbit" :disabled="props.saving" @click="saveOrbitEdit">
+        Save
+      </button>
+      <button v-if="orbitEditing" class="quiet-button" type="button" aria-label="Cancel Orbit edits" @click="cancelOrbitEdit()">
+        Cancel
+      </button>
+    </div>
+    <button
+      v-if="!orbitEditing"
+      class="quiet-button mt-4"
+      type="button"
+      :aria-label="selectedOrbitDeleteLabel"
+      :disabled="props.saving"
+      @click="emit('delete-orbit')"
+    >
+      Delete Orbit and contents
+    </button>
+    <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Orbits are unkeyed and may be nested. Detach a hosted Orbit to move its center, then drag that center handle. Drag the axis handles to resize, the ring to resize uniformly, or the outer handle or Ctrl+wheel over the ring to rotate.</p>
+  </template>
+</template>
+
 <script setup lang="ts">
 /**
  * Owns local Orbit-edit drafts; pending or rejected saves stay open until success is acknowledged or cancelled.
@@ -176,124 +297,3 @@ const inspectorHandle = {
 
 defineExpose(inspectorHandle)
 </script>
-
-<template>
-  <template v-if="selectedOrbit">
-    <span class="section-kicker">SYSTEM STRUCTURE / SELECTED</span>
-    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">UNKEYED PLACEMENT</span>
-    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Orbit {{ orbitEditing ? orbitOrderDraft : selectedOrbit.order }}</h2>
-    <p class="inspector-intro mb-[1em]">
-      <template v-if="selectedOrbit.hostId === null">Centered on an unoccupied location.</template>
-      <template v-else>Hosted by {{ selectedSystem?.objects.find(object => object.id === selectedOrbit?.hostId)?.name ?? 'unknown object' }}.</template>
-      Orbit rings show structure, not measured distance.
-    </p>
-    <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
-      <span>Objects placed</span>
-      <strong>{{ selectedSystem?.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === selectedOrbit?.id).length ?? 0 }}</strong>
-    </div>
-    <div v-if="orbitEditing" class="orbit-edit-fields my-4 grid gap-3">
-      <label>
-        Horizontal radius
-        <input
-          v-model="orbitHorizontalRadiusDraft"
-          type="number"
-          :min="selectedOrbitMinimumRadius"
-          step="1"
-          required
-        >
-      </label>
-      <label>
-        Vertical radius
-        <input
-          v-model="orbitVerticalRadiusDraft"
-          type="number"
-          :min="selectedOrbitMinimumRadius"
-          step="1"
-          required
-        >
-      </label>
-      <div v-if="selectedOrbit.hostId === null" class="grid grid-cols-2 gap-2">
-        <label>
-          Center X
-          <input
-            v-model="orbitCenterXDraft"
-            type="number"
-            step="0.01"
-            required
-          >
-        </label>
-        <label>
-          Center Y
-          <input
-            v-model="orbitCenterYDraft"
-            type="number"
-            step="0.01"
-            required
-          >
-        </label>
-      </div>
-    </div>
-    <div v-if="orbitEditing" class="orbit-actions flex gap-2" aria-label="Reorder Orbit">
-      <button
-        class="secondary-button"
-        type="button"
-        aria-label="Move orbit up"
-        :disabled="!canMoveSelectedOrbit(-1) || props.saving"
-        @click="reorderSelectedOrbit(-1)"
-      >
-        Move up
-      </button>
-      <button
-        class="secondary-button"
-        type="button"
-        aria-label="Move orbit down"
-        :disabled="!canMoveSelectedOrbit(1) || props.saving"
-        @click="reorderSelectedOrbit(1)"
-      >
-        Move down
-      </button>
-    </div>
-    <p v-if="orbitDraftError || props.editorError" class="feedback m-0 error-text" role="alert">
-      {{ orbitDraftError || props.editorError }}
-    </p>
-    <div class="flex flex-wrap gap-2">
-      <button
-        v-if="!orbitEditing"
-        class="primary-button"
-        type="button"
-        aria-label="Edit Orbit"
-        :disabled="props.saving"
-        @click="emit('request-orbit-edit')"
-      >
-        Edit
-      </button>
-      <button
-        v-if="!orbitEditing && selectedOrbit.hostId !== null"
-        class="secondary-button"
-        type="button"
-        aria-label="Detach Orbit"
-        :disabled="props.saving"
-        @click="emit('detach-orbit')"
-      >
-        Detach
-      </button>
-      <button v-if="orbitEditing" class="primary-button" type="button" aria-label="Save Orbit" :disabled="props.saving" @click="saveOrbitEdit">
-        Save
-      </button>
-      <button v-if="orbitEditing" class="quiet-button" type="button" aria-label="Cancel Orbit edits" @click="cancelOrbitEdit()">
-        Cancel
-      </button>
-    </div>
-    <button
-      v-if="!orbitEditing"
-      class="quiet-button mt-4"
-      type="button"
-      :aria-label="selectedOrbitDeleteLabel"
-      :disabled="props.saving"
-      @click="emit('delete-orbit')"
-    >
-      Delete Orbit and contents
-    </button>
-    <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Orbits are unkeyed and may be nested. Detach a hosted Orbit to move its center, then drag that center handle. Drag the axis handles to resize, the ring to resize uniformly, or the outer handle or Ctrl+wheel over the ring to rotate.</p>
-  </template>
-</template>

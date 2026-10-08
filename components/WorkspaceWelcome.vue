@@ -1,26 +1,3 @@
-<script setup lang="ts">
-/**
- * Presents workspace loading and creation states without owning hydration or persistence.
- */
-type HydrationState = 'loading' | 'ready' | 'error'
-type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-
-defineProps<{
-  hydrationState: HydrationState
-  loadError: string | null
-  saveState: SaveState
-  saveError: string | null
-  formError: string
-}>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
-const emit = defineEmits<{
-  retry: []
-  submit: []
-}>()
-</script>
-
 <template>
   <section v-if="hydrationState === 'loading'" class="message-panel max-w-[44rem] p-[clamp(1.5rem,4vw,3rem)]" role="status" aria-live="polite">
     <span class="section-kicker">LOCAL ARCHIVE</span>
@@ -84,3 +61,26 @@ const emit = defineEmits<{
     </form>
   </section>
 </template>
+
+<script setup lang="ts">
+/**
+ * Presents workspace loading and creation states without owning hydration or persistence.
+ */
+type HydrationState = 'loading' | 'ready' | 'error'
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+defineProps<{
+  hydrationState: HydrationState
+  loadError: string | null
+  saveState: SaveState
+  saveError: string | null
+  formError: string
+}>()
+
+const clusterName = defineModel<string>('clusterName', { required: true })
+const systemName = defineModel<string>('systemName', { required: true })
+const emit = defineEmits<{
+  retry: []
+  submit: []
+}>()
+</script>

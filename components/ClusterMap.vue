@@ -1,3 +1,21 @@
+<template>
+  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
+      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
+      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
+      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
+    </div>
+    <svg
+      ref="svgElement"
+      class="cluster-map-svg block h-full min-h-0 w-full flex-1"
+      viewBox="0 0 960 560"
+      role="group"
+      :aria-label="`${cluster.name} Jump Cluster map`"
+    />
+  </div>
+</template>
+
 <script setup lang="ts">
 /**
  * D3 owns the SVG scene and gestures; Vue owns controls/events, with unscoped styles targeting D3-created nodes.
@@ -321,24 +339,6 @@ watch(() => props.selectedRouteId, render)
 
 defineExpose({ exportImage })
 </script>
-
-<template>
-  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
-    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
-      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
-      <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
-      <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
-      <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
-    </div>
-    <svg
-      ref="svgElement"
-      class="cluster-map-svg block h-full min-h-0 w-full flex-1"
-      viewBox="0 0 960 560"
-      role="group"
-      :aria-label="`${cluster.name} Jump Cluster map`"
-    />
-  </div>
-</template>
 
 <style>
 .map-view {

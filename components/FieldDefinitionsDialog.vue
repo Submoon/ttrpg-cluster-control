@@ -1,3 +1,131 @@
+<template>
+  <button
+    ref="trigger"
+    class="field-definitions-trigger"
+    type="button"
+    aria-haspopup="dialog"
+    aria-controls="field-definitions-dialog"
+    :aria-expanded="dialogOpen"
+    aria-label="Open field definitions"
+    title="Manage native and custom field definitions"
+    @click="emit('request-open')"
+  >
+    <span>FIELD DEFINITIONS</span>
+    <small>MAP DATA</small>
+  </button>
+
+  <Teleport to="body">
+    <dialog
+      v-if="dialogOpen"
+      id="field-definitions-dialog"
+      ref="dialog"
+      class="field-definitions-dialog"
+      aria-labelledby="field-definitions-title"
+      aria-modal="true"
+      @cancel="cancelDialog"
+      @click.self="close"
+    >
+      <div class="field-definitions-content">
+        <header class="field-definitions-header">
+          <div>
+            <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
+            <h2 id="field-definitions-title">Field definitions</h2>
+            <p>Manage values available across this map without changing the active system or selection.</p>
+          </div>
+          <button
+            class="quiet-button field-definitions-close"
+            type="button"
+            aria-label="Close field definitions"
+            autofocus
+            @click="close"
+          >
+            Close
+          </button>
+        </header>
+
+        <div class="field-definitions-layout">
+          <FieldDefinitionList
+            :native-fields="nativeFieldDefinitions"
+            :custom-fields="customFieldDefinitions"
+            :selected-field-id="selectedFieldDefinitionId"
+            @select="selectFieldDefinition"
+            @create-custom-field="openNewCustomFieldForm"
+          />
+          <FieldDefinitionEditor
+            v-if="selectedFieldDefinition"
+            ref="fieldDefinitionEditor"
+            :definition="selectedFieldDefinition"
+            :assignments="selectedFieldAssignments"
+            :saving="props.saving"
+            :change-pending="pendingFieldDefinitionChange !== null"
+            @clear-error="emit('clear-error')"
+            @request-change="requestFieldDefinitionChange"
+          />
+        </div>
+
+        <p v-if="props.saveError" class="feedback field-definition-error" role="alert">
+          {{ props.saveError }}
+        </p>
+
+        <form
+          v-if="newCustomFieldFormOpen"
+          class="field-definition-create-form"
+          @submit.prevent="createCustomField"
+        >
+          <div class="field-definition-section-heading">
+            <div>
+              <span class="section-kicker">NEW REUSABLE FIELD</span>
+              <h3>Add custom field</h3>
+            </div>
+            <button
+              class="quiet-button"
+              type="button"
+              @click="newCustomFieldFormOpen = false"
+            >
+              Cancel
+            </button>
+          </div>
+          <label for="new-custom-field-name">
+            Custom field label
+            <input
+              id="new-custom-field-name"
+              v-model="newCustomFieldName"
+              maxlength="80"
+              required
+              autofocus
+            >
+          </label>
+          <label for="new-custom-field-type">
+            Value type
+            <select id="new-custom-field-type" v-model="newCustomFieldType">
+              <option value="text">Text</option>
+              <option value="number">Number</option>
+              <option value="boolean">Boolean</option>
+              <option value="single-select">Single-select</option>
+            </select>
+          </label>
+          <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
+            New field choices
+            <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
+          </label>
+          <div class="field-definition-actions">
+            <button class="primary-button" type="submit" :disabled="props.saving">
+              Add custom field
+            </button>
+          </div>
+        </form>
+
+        <FieldDefinitionChangeConfirmation
+          v-if="pendingFieldDefinitionChange"
+          :change="pendingFieldDefinitionChange"
+          @cancel="cancelFieldDefinitionChange"
+          @confirm="confirmFieldDefinitionChange"
+        />
+      </div>
+    </dialog>
+  </Teleport>
+</template>
+
 <script setup lang="ts">
 /**
  * The dialog owns selection and confirmation; submitted drafts reset only after the parent's save revision advances.
@@ -203,134 +331,6 @@ defineExpose({
   isOpen: () => dialogOpen.value,
 })
 </script>
-
-<template>
-  <button
-    ref="trigger"
-    class="field-definitions-trigger"
-    type="button"
-    aria-haspopup="dialog"
-    aria-controls="field-definitions-dialog"
-    :aria-expanded="dialogOpen"
-    aria-label="Open field definitions"
-    title="Manage native and custom field definitions"
-    @click="emit('request-open')"
-  >
-    <span>FIELD DEFINITIONS</span>
-    <small>MAP DATA</small>
-  </button>
-
-  <Teleport to="body">
-    <dialog
-      v-if="dialogOpen"
-      id="field-definitions-dialog"
-      ref="dialog"
-      class="field-definitions-dialog"
-      aria-labelledby="field-definitions-title"
-      aria-modal="true"
-      @cancel="cancelDialog"
-      @click.self="close"
-    >
-      <div class="field-definitions-content">
-        <header class="field-definitions-header">
-          <div>
-            <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
-            <h2 id="field-definitions-title">Field definitions</h2>
-            <p>Manage values available across this map without changing the active system or selection.</p>
-          </div>
-          <button
-            class="quiet-button field-definitions-close"
-            type="button"
-            aria-label="Close field definitions"
-            autofocus
-            @click="close"
-          >
-            Close
-          </button>
-        </header>
-
-        <div class="field-definitions-layout">
-          <FieldDefinitionList
-            :native-fields="nativeFieldDefinitions"
-            :custom-fields="customFieldDefinitions"
-            :selected-field-id="selectedFieldDefinitionId"
-            @select="selectFieldDefinition"
-            @create-custom-field="openNewCustomFieldForm"
-          />
-          <FieldDefinitionEditor
-            v-if="selectedFieldDefinition"
-            ref="fieldDefinitionEditor"
-            :definition="selectedFieldDefinition"
-            :assignments="selectedFieldAssignments"
-            :saving="props.saving"
-            :change-pending="pendingFieldDefinitionChange !== null"
-            @clear-error="emit('clear-error')"
-            @request-change="requestFieldDefinitionChange"
-          />
-        </div>
-
-        <p v-if="props.saveError" class="feedback field-definition-error" role="alert">
-          {{ props.saveError }}
-        </p>
-
-        <form
-          v-if="newCustomFieldFormOpen"
-          class="field-definition-create-form"
-          @submit.prevent="createCustomField"
-        >
-          <div class="field-definition-section-heading">
-            <div>
-              <span class="section-kicker">NEW REUSABLE FIELD</span>
-              <h3>Add custom field</h3>
-            </div>
-            <button
-              class="quiet-button"
-              type="button"
-              @click="newCustomFieldFormOpen = false"
-            >
-              Cancel
-            </button>
-          </div>
-          <label for="new-custom-field-name">
-            Custom field label
-            <input
-              id="new-custom-field-name"
-              v-model="newCustomFieldName"
-              maxlength="80"
-              required
-              autofocus
-            >
-          </label>
-          <label for="new-custom-field-type">
-            Value type
-            <select id="new-custom-field-type" v-model="newCustomFieldType">
-              <option value="text">Text</option>
-              <option value="number">Number</option>
-              <option value="boolean">Boolean</option>
-              <option value="single-select">Single-select</option>
-            </select>
-          </label>
-          <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
-            New field choices
-            <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
-          </label>
-          <div class="field-definition-actions">
-            <button class="primary-button" type="submit" :disabled="props.saving">
-              Add custom field
-            </button>
-          </div>
-        </form>
-
-        <FieldDefinitionChangeConfirmation
-          v-if="pendingFieldDefinitionChange"
-          :change="pendingFieldDefinitionChange"
-          @cancel="cancelFieldDefinitionChange"
-          @confirm="confirmFieldDefinitionChange"
-        />
-      </div>
-    </dialog>
-  </Teleport>
-</template>
 
 <style>
 .field-definitions-trigger {

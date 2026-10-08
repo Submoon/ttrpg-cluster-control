@@ -1,107 +1,3 @@
-<script setup lang="ts">
-/**
- * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
- */
-import { onMounted } from 'vue'
-import { useEditorWorkflows } from '../composables/useEditorWorkflows'
-import { useLocalWorkspace } from '../composables/useLocalWorkspace'
-import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
-
-const {
-  workspace,
-  hydrationState,
-  loadError,
-  saveState,
-  saveError,
-  hydrate,
-  commit,
-} = useLocalWorkspace()
-
-const {
-  clusterName,
-  systemName,
-  activeView,
-  selectedSystemId,
-  selectedObjectId,
-  selectedOrbitId,
-  selectedRouteId,
-  chartNamesEditing,
-  fieldDefinitionDialogOpen,
-  fieldDefinitionError,
-  fieldDefinitionSaveRevision,
-  fieldDefinitionsDialog,
-  formError,
-  editorError,
-  mapInspectorRef,
-  clusterMapRef,
-  systemMapRef,
-  selectedSystem,
-  selectedObject,
-  selectedOrbit,
-  selectedRoute,
-  jumpPoints,
-  routeEndpointSummary,
-  hasUncommittedNames,
-  saveMessage,
-  openFieldDefinitions,
-  confirmDiscardInspectorEdits,
-  selectImportedWorkspace,
-  moveSystem,
-  moveMapObject,
-  placeMapObjectInOrbit,
-  rotateMapObject,
-  resizeMapOrbit,
-  rotateMapOrbit,
-  moveMapOrbitCenter,
-  detachSelectedOrbit,
-  submitNames,
-  beginChartNamesEdit,
-  cancelChartNamesEdit,
-  createSystem,
-  showClusterMap,
-  selectSystem,
-  selectObject,
-  selectOrbit,
-  selectRoute,
-  beginRoute,
-  beginRouteEdit,
-  restoreRouteSelection,
-  submitRoute,
-  deleteSystem,
-  deleteSelectedObject,
-  deleteSelectedOrbit,
-  deleteSelectedRoute,
-  showChartDetails,
-  beginObjectEdit,
-  beginOrbitEdit,
-  saveObjectEdit,
-  addObject,
-  addOrbit,
-  handleOrbitDrop,
-  saveOrbitEdit,
-  createCustomField,
-  saveFieldDefinitionChanges,
-  removeFieldDefinition,
-} = useEditorWorkflows({ workspace, saveState, saveError, commit })
-
-const {
-  exportError,
-  importError,
-  downloadClusterJson,
-  downloadSystemJson,
-  downloadMapImage,
-  importJsonFile,
-} = useWorkspaceFiles({
-  workspace,
-  selectedSystem,
-  commit,
-  confirmDiscardInspectorEdits,
-  onImported: selectImportedWorkspace,
-})
-
-onMounted(hydrate)
-</script>
-
 <template>
   <div
     class="app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3"
@@ -325,5 +221,109 @@ onMounted(hydrate)
     </footer>
   </div>
 </template>
+
+<script setup lang="ts">
+/**
+ * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
+ */
+import { onMounted } from 'vue'
+import { useEditorWorkflows } from '../composables/useEditorWorkflows'
+import { useLocalWorkspace } from '../composables/useLocalWorkspace'
+import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+
+const {
+  workspace,
+  hydrationState,
+  loadError,
+  saveState,
+  saveError,
+  hydrate,
+  commit,
+} = useLocalWorkspace()
+
+const {
+  clusterName,
+  systemName,
+  activeView,
+  selectedSystemId,
+  selectedObjectId,
+  selectedOrbitId,
+  selectedRouteId,
+  chartNamesEditing,
+  fieldDefinitionDialogOpen,
+  fieldDefinitionError,
+  fieldDefinitionSaveRevision,
+  fieldDefinitionsDialog,
+  formError,
+  editorError,
+  mapInspectorRef,
+  clusterMapRef,
+  systemMapRef,
+  selectedSystem,
+  selectedObject,
+  selectedOrbit,
+  selectedRoute,
+  jumpPoints,
+  routeEndpointSummary,
+  hasUncommittedNames,
+  saveMessage,
+  openFieldDefinitions,
+  confirmDiscardInspectorEdits,
+  selectImportedWorkspace,
+  moveSystem,
+  moveMapObject,
+  placeMapObjectInOrbit,
+  rotateMapObject,
+  resizeMapOrbit,
+  rotateMapOrbit,
+  moveMapOrbitCenter,
+  detachSelectedOrbit,
+  submitNames,
+  beginChartNamesEdit,
+  cancelChartNamesEdit,
+  createSystem,
+  showClusterMap,
+  selectSystem,
+  selectObject,
+  selectOrbit,
+  selectRoute,
+  beginRoute,
+  beginRouteEdit,
+  restoreRouteSelection,
+  submitRoute,
+  deleteSystem,
+  deleteSelectedObject,
+  deleteSelectedOrbit,
+  deleteSelectedRoute,
+  showChartDetails,
+  beginObjectEdit,
+  beginOrbitEdit,
+  saveObjectEdit,
+  addObject,
+  addOrbit,
+  handleOrbitDrop,
+  saveOrbitEdit,
+  createCustomField,
+  saveFieldDefinitionChanges,
+  removeFieldDefinition,
+} = useEditorWorkflows({ workspace, saveState, saveError, commit })
+
+const {
+  exportError,
+  importError,
+  downloadClusterJson,
+  downloadSystemJson,
+  downloadMapImage,
+  importJsonFile,
+} = useWorkspaceFiles({
+  workspace,
+  selectedSystem,
+  commit,
+  confirmDiscardInspectorEdits,
+  onImported: selectImportedWorkspace,
+})
+
+onMounted(hydrate)
+</script>
 
 <style src="../assets/css/map-workspace.css"></style>

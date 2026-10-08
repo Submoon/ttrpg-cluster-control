@@ -1,41 +1,3 @@
-<script setup lang="ts">
-/**
- * Shared chart-name editor and summary for Cluster and system views.
- */
-import { computed } from 'vue'
-import {
-  jumpPointsInCluster,
-  type LocalWorkspace,
-  type StarSystem,
-} from '../../domain/workspace'
-
-const props = defineProps<{
-  mode: 'cluster' | 'system'
-  workspace: LocalWorkspace
-  selectedSystem?: StarSystem
-  chartNamesEditing: boolean
-  saving: boolean
-  formError: string
-  editorError?: string
-}>()
-
-const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
-}>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
-const clusterNameId = computed(() =>
-  props.mode === 'cluster' ? 'cluster-detail-name' : 'detail-cluster-name',
-)
-const systemNameId = computed(() =>
-  props.mode === 'cluster' ? 'system-detail-name' : 'detail-system-name',
-)
-const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
-</script>
-
 <template>
   <template v-if="props.mode === 'cluster'">
     <span class="section-kicker">CLUSTER DETAILS</span>
@@ -102,3 +64,41 @@ const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluste
     {{ props.editorError }}
   </p>
 </template>
+
+<script setup lang="ts">
+/**
+ * Shared chart-name editor and summary for Cluster and system views.
+ */
+import { computed } from 'vue'
+import {
+  jumpPointsInCluster,
+  type LocalWorkspace,
+  type StarSystem,
+} from '../../domain/workspace'
+
+const props = defineProps<{
+  mode: 'cluster' | 'system'
+  workspace: LocalWorkspace
+  selectedSystem?: StarSystem
+  chartNamesEditing: boolean
+  saving: boolean
+  formError: string
+  editorError?: string
+}>()
+
+const emit = defineEmits<{
+  'submit-names': []
+  'edit-chart-names': []
+  'cancel-chart-names': []
+}>()
+
+const clusterName = defineModel<string>('clusterName', { required: true })
+const systemName = defineModel<string>('systemName', { required: true })
+const clusterNameId = computed(() =>
+  props.mode === 'cluster' ? 'cluster-detail-name' : 'detail-cluster-name',
+)
+const systemNameId = computed(() =>
+  props.mode === 'cluster' ? 'system-detail-name' : 'detail-system-name',
+)
+const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
+</script>
