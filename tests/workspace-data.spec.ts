@@ -978,6 +978,9 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await expect.poll(() => page.evaluate(async () =>
+    (await indexedDB.databases()).some(database => database.name === 'ttrpg-cluster-control'),
+  )).toBe(true)
 
   const clusterName = 'Kestrel Reach Prime'
   const systemName = 'Vesper Prime'
