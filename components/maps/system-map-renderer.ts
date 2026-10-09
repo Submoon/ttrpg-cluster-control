@@ -149,7 +149,7 @@ export function renderSystemMap({
    * @throws If current nested system geometry cannot be resolved.
    */
   function handleObjectDrop(event: DragEvent): void {
-    const orbitDrag = event.dataTransfer?.getData('application/x-mothership-map-orbit')
+    const orbitDrag = event.dataTransfer?.getData('application/x-ttrpg-cluster-control-map-orbit')
     if (orbitDrag) {
       const content = element.querySelector<SVGGElement>('.system-map-content')
       if (!content) return
@@ -162,7 +162,7 @@ export function renderSystemMap({
       return
     }
 
-    const subtype = event.dataTransfer?.getData('application/x-mothership-map-object')
+    const subtype = event.dataTransfer?.getData('application/x-ttrpg-cluster-control-map-object')
     const catalogueType = catalogueTypes.find(type => type.value === subtype)
     const content = element.querySelector<SVGGElement>('.system-map-content')
     if (!catalogueType || !content) return

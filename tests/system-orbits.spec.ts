@@ -3,6 +3,7 @@ import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, d
 import type { WorldPoint, DownloadWindow } from './helpers'
 
 type DragPreviewWindow = Window & {
+  __nativeDragTypes?: string[][]
   __dragPreview?: {
     height: number
     offsetX: number
@@ -11,6 +12,14 @@ type DragPreviewWindow = Window & {
     text: string
     width: number
   }
+}
+
+function recordNativeDragTypes(): void {
+  const dragWindow = window as DragPreviewWindow
+  dragWindow.__nativeDragTypes = []
+  document.addEventListener('dragstart', (event) => {
+    dragWindow.__nativeDragTypes?.push(Array.from(event.dataTransfer?.types ?? []))
+  })
 }
 
 async function moveToWorldPoint(
@@ -619,6 +628,7 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
 })
 
 test('dragging Add Orbit onto a map object hosts it there', async ({ page }) => {
+  await page.addInitScript(recordNativeDragTypes)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -640,6 +650,10 @@ test('dragging Add Orbit onto a map object hosts it there', async ({ page }) => 
     hostPoint,
   )
 
+  const orbitDragTypes = await page.evaluate(() =>
+    (window as DragPreviewWindow).__nativeDragTypes?.slice(-1)[0],
+  )
+  expect(orbitDragTypes).toContain('application/x-ttrpg-cluster-control-map-orbit')
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 0 objects/ }))
     .toBeVisible()
   const ring = map.getByRole('group', { name: 'Orbit 1 around Primary Star' }).locator('.orbit-ring')
@@ -697,6 +711,7 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
 })
 
 test('object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds', async ({ page }) => {
+  await page.addInitScript(recordNativeDragTypes)
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -769,6 +784,10 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await dragHtmlElementToWorldPoint(page, addStar, map, { x: 320, y: 400 }, async () => {
     starPreviewText = await assertDragPreview(starMark)
   })
+  const objectDragTypes = await page.evaluate(() =>
+    (window as DragPreviewWindow).__nativeDragTypes?.slice(-1)[0],
+  )
+  expect(objectDragTypes).toContain('application/x-ttrpg-cluster-control-map-object')
   await expect(mapObjects).toHaveCount(objectsBeforeStarDrop + 1)
   await expect(mapObjects.nth(objectsBeforeStarDrop).locator('.system-object-glyph'))
     .toHaveText(starPreviewText)

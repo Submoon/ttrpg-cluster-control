@@ -825,6 +825,10 @@ p-note {
     height: 1.75rem;
   }
 
+  .map-workspace-shell .wordmark strong {
+    letter-spacing: 0.02em;
+  }
+
   .map-workspace-shell .local-badge {
     display: none;
   }

@@ -10,7 +10,7 @@ import type { JumpClusterExport, LocalWorkspace, StarSystemExport } from './work
  */
 export function exportJumpCluster(workspace: LocalWorkspace): JumpClusterExport {
   return {
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'cluster',
     cluster: workspace.cluster,
@@ -42,7 +42,7 @@ export function exportStarSystem(workspace: LocalWorkspace, systemId: string): S
     .map(object => object.id))
   // A standalone system carries only its own Orbit/object layout, never Cluster routes or system positions.
   return {
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'system',
     system,

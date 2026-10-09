@@ -166,7 +166,7 @@ export interface ExportedLayout {
 }
 
 export type JumpClusterExport = {
-  format: 'mothership-campaign-map'
+  format: 'ttrpg-cluster-control-map'
   version: 1
   type: 'cluster'
   cluster: JumpCluster
@@ -175,7 +175,7 @@ export type JumpClusterExport = {
 }
 
 export type StarSystemExport = {
-  format: 'mothership-campaign-map'
+  format: 'ttrpg-cluster-control-map'
   version: 1
   type: 'system'
   system: StarSystem

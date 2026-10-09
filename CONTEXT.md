@@ -1,6 +1,6 @@
-# Mothership Campaign Cartography
+# TTRPG Cluster Control
 
-This context defines the language for the Warden's schematic maps of star systems and Jump Clusters.
+This context defines the language for the Warden's schematic maps of Jump Clusters and star systems.
 
 ## Language
 
