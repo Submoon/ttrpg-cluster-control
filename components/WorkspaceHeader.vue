@@ -1,9 +1,9 @@
 <template>
   <header class="topbar flex min-h-20 items-center justify-between gap-4 border-b border-[var(--line-soft)] max-[760px]:min-h-[4.5rem]">
-    <a class="wordmark inline-flex items-center gap-3 text-inherit no-underline" href="/" aria-label="Mothership Campaign Cartography home">
-      <span class="wordmark-symbol grid size-[2.15rem] place-items-center rounded-full border border-[var(--accent)]" aria-hidden="true">M</span>
+    <a class="wordmark inline-flex items-center gap-3 text-inherit no-underline" href="/" aria-label="TTRPG Cluster Control home">
+      <span class="wordmark-symbol grid size-[2.15rem] place-items-center rounded-full border border-[var(--accent)]" aria-hidden="true">T</span>
       <span>
-        <strong class="block">MOTHERSHIP</strong>
+        <strong class="block">TTRPG Cluster Control</strong>
         <small class="mt-[0.22rem] block">CAMPAIGN CARTOGRAPHY</small>
       </span>
     </a>

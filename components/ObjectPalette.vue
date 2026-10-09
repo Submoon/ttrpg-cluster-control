@@ -103,7 +103,7 @@ function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
 
   dataTransfer.effectAllowed = 'copy'
   // SystemMap consumes this catalogue subtype token when resolving a dropped object.
-  dataTransfer.setData('application/x-mothership-map-object', subtype)
+  dataTransfer.setData('application/x-ttrpg-cluster-control-map-object', subtype)
   dataTransfer.setData('text/plain', subtype)
   const source = event.currentTarget
   if (!(source instanceof HTMLElement)) throw new Error('Object drag must start from a palette button.')
@@ -124,7 +124,7 @@ function startOrbitDrag(event: DragEvent): void {
   if (!dataTransfer) return
 
   dataTransfer.effectAllowed = 'copy'
-  dataTransfer.setData('application/x-mothership-map-orbit', 'true')
+  dataTransfer.setData('application/x-ttrpg-cluster-control-map-orbit', 'true')
   dataTransfer.setData('text/plain', 'Orbit')
 }
 </script>

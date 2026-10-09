@@ -3,7 +3,7 @@
  */
 import { restoreLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 
-const databaseName = 'mothership-campaign'
+const databaseName = 'ttrpg-cluster-control'
 const storeName = 'workspace'
 const workspaceKey = 'current'
 

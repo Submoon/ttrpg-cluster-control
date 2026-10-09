@@ -1,6 +1,6 @@
-# Campaign Cartography
+# TTRPG Cluster Control
 
-**Designed for use with Mothership®**
+**Can be used with Mothership**
 
 A local-first campaign cartography app for Wardens to plan and maintain schematic, not-to-scale maps of Jump Clusters and star systems.
 

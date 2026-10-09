@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test'
 import { setHeaderMapActionsOpen, editMapObject, catalogueSubtypes, selectCatalogueObjectButton } from './helpers'
 
+test('the application exposes its generic brand visibly and accessibly', async ({ page }) => {
+  await page.goto('/')
+
+  await expect(page.getByRole('link', { name: 'TTRPG Cluster Control home' })).toBeVisible()
+  await expect(page.getByText('TTRPG Cluster Control', { exact: true })).toBeVisible()
+  await expect(page).toHaveTitle('TTRPG Cluster Control')
+})
+
 test('the dark map-first workspace stays usable at narrow viewport widths', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')

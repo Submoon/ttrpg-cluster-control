@@ -34,7 +34,7 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
   const settings = value.objectFieldSettings
   const layout = value.layout
   if (
-    value.format !== 'mothership-campaign-map'
+    value.format !== 'ttrpg-cluster-control-map'
     || value.version !== 1
     || !isObjectFieldSettings(settings)
     || !isRecord(layout)
