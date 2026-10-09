@@ -553,7 +553,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterPng.height).toBe(clusterSvgInfo.height)
   const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(clusterExport).toMatchObject({
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'cluster',
     layout: { version: 1 },
@@ -646,7 +646,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemPngInfo.systemTitle?.text).toBe('Vesper')
   const systemExport = await downloadJson(page, 'Export star system JSON')
   expect(systemExport).toMatchObject({
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'system',
     layout: { version: 1 },
@@ -719,7 +719,7 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
 
   const incoming = {
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'cluster',
     cluster: {
@@ -978,6 +978,9 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await expect.poll(() => page.evaluate(async () =>
+    (await indexedDB.databases()).some(database => database.name === 'ttrpg-cluster-control'),
+  )).toBe(true)
 
   const clusterName = 'Kestrel Reach Prime'
   const systemName = 'Vesper Prime'
@@ -1068,7 +1071,7 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   expect(originalPlanet.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
 
   const incoming = {
-    format: 'mothership-campaign-map',
+    format: 'ttrpg-cluster-control-map',
     version: 1,
     type: 'cluster',
     cluster: {
