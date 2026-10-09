@@ -2,11 +2,11 @@
 
 ### Issue tracker
 
-Issues are Markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md` for the file layout and Wayfinder conventions.
+For GitHub intake or local planning, read `docs/agents/issue-tracker.md`: GitHub holds requests; local Markdown holds complex efforts under `.scratch/<feature>/`.
 
 ### Triage labels
 
-`status` tracks ticket lifecycle; `/triage` roles use `triage_labels` separately. See `docs/agents/triage-labels.md`.
+For triage role mappings and their separation from ticket lifecycle, read `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
