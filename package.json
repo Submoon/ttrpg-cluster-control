@@ -1,13 +1,12 @@
 {
-  "name": "mothership-campaign-app",
-  "private": true,
+  "name": "ttrpg-cluster-control",
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev",
-    "build": "nuxt build",
-    "preview": "nuxt preview",
-    "typecheck": "nuxt typecheck",
-    "test": "playwright test"
+    "dev": "npx nuxt dev",
+    "build": "npx nuxt build",
+    "preview": "npx nuxt preview",
+    "typecheck": "npx nuxt typecheck",
+    "test": "npx playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
