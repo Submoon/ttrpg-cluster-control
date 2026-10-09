@@ -1,6 +1,6 @@
-# Campaign Cartography
+# TTRPG Cluster Control
 
-**Designed for use with Mothership®**
+**Can be used with Mothership**
 
 A local-first campaign cartography app for Wardens to plan and maintain schematic, not-to-scale maps of Jump Clusters and star systems.
 
@@ -64,5 +64,3 @@ Nuxt DevTools is disabled for production builds.
 ## License
 
 This repository's code and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies remain subject to their respective licenses.
-
-Mothership® is a trademark of Tuesday Knight Games. This project is an unofficial fan-made tool and is not affiliated with or endorsed by Tuesday Knight Games.
