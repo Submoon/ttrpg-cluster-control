@@ -290,11 +290,33 @@ export function useMapWorkflows({
     center: Point,
     hostId: string | null,
   ): Promise<void> {
+    const currentWorkspace = workspace.value
     const system = selectedSystem.value
-    if (!system) return
+    if (!currentWorkspace || !system) return
 
     try {
-      await saveSystem(moveOrbitCenter(system, orbitId, center, hostId))
+      const updatedSystem = moveOrbitCenter(system, orbitId, center, hostId)
+      const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
+      const savedRadii = currentWorkspace.layout.orbitRadii[orbitId]
+      const updatedOrbit = updatedSystem.orbits.find(orbit => orbit.id === orbitId)
+      if (hostId !== null && savedRadii && updatedOrbit) {
+        const minimum = minimumOrbitRadius(updatedSystem, updatedOrbit)
+        await commit({
+          ...nextWorkspace,
+          layout: {
+            ...nextWorkspace.layout,
+            orbitRadii: {
+              ...nextWorkspace.layout.orbitRadii,
+              [orbitId]: {
+                horizontal: Math.max(minimum, savedRadii.horizontal),
+                vertical: Math.max(minimum, savedRadii.vertical),
+              },
+            },
+          },
+        })
+      } else {
+        await commit(nextWorkspace)
+      }
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)

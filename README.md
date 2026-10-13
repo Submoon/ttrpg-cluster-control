@@ -17,7 +17,7 @@ Start with a local Jump Cluster and its first star system. Add more systems from
 
 ## Local storage and backups
 
-The current workspace is automatically saved in IndexedDB for this browser profile and site origin. Only committed edits persist; unsaved inspector drafts and temporary pan/zoom do not. Storage is local, not cloud-synced, and clearing browser or site data can erase it. Export the Jump Cluster as JSON for backup or transfer. After creating a workspace, validated JSON imports append an independent copy rather than overwrite it. PNG and SVG are map images, not data backups. Load and save errors appear in the app; a failed load can be retried.
+The current workspace is automatically saved in IndexedDB for this browser profile and site origin. The app also keeps one recovery snapshot: the first successful save seeds it, and later successful saves replace it with the previous valid workspace. If the current workspace cannot load, the error screen lets you retry or restore that snapshot when it is available. Only committed edits persist; unsaved inspector drafts and temporary pan/zoom do not. Storage is local, not cloud-synced, and clearing browser or site data can erase it. Export the Jump Cluster as JSON for backup or transfer. After creating a workspace, validated JSON imports append an independent copy rather than overwrite it. PNG and SVG are map images, not data backups. Load and save errors appear in the app.
 
 ## Technology
 
@@ -58,7 +58,7 @@ Nuxt DevTools is disabled for production builds.
 | `components/` | Focused header, welcome, palette, hierarchy, inspector, field-definition, map-layout, and map-view UI. `components/inspector/` and `components/field-definitions/` hold focused subviews; `components/maps/system-map-renderer.ts` owns the D3/SVG system-map renderer. `MapEditorLayout.vue` stays mounted between map modes, so panel-collapse state is shared. |
 | `utils/` | Map geometry, zoom, catalogue marks, and SVG/PNG image export. |
 | `assets/css/main.css`, `assets/css/map-workspace.css` | Global and workspace styles, including unscoped styles for D3-created SVG elements. |
-| `tests/` | Six focused Playwright specs and shared browser helpers. |
+| `tests/` | Focused Playwright specs, including workspace recovery, and shared browser helpers. |
 | `CONTEXT.md` | Domain terms and relationships. |
 
 ## License
