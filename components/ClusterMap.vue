@@ -36,12 +36,13 @@ import {
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   cluster: JumpCluster
   systemPositions: Record<string, Point>
   selectedSystemId: string | null
   selectedRouteId: string | null
-}>()
+  moveEnabled?: boolean
+}>(), { moveEnabled: true })
 
 const emit = defineEmits<{
   'open-system': [id: string]
@@ -224,6 +225,7 @@ function render(): void {
   const systemMarks = items.selectAll<SVGGElement, StarSystem>('g.cluster-system-node')
     .data(props.cluster.systems)
     .join('g')
+    .attr('data-system-id', system => system.id)
     .attr('class', system => `cluster-system-node${props.selectedSystemId === system.id ? ' is-selected' : ''}`)
     .attr('transform', system => {
       const position = clusterSystemPosition(props.systemPositions, system.id)
@@ -276,6 +278,7 @@ function render(): void {
     })
 
   const systemDrag = drag<SVGGElement, StarSystem>()
+    .filter(() => props.moveEnabled)
     .container(() => content.node()!)
     .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
     .on('start', function () {
@@ -318,7 +321,7 @@ function render(): void {
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
-      return (!isMapMark || event.type === 'wheel' || touchPinch)
+      return (!isMapMark || !props.moveEnabled || event.type === 'wheel' || touchPinch)
         && (!event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })
@@ -337,7 +340,7 @@ watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
 
-defineExpose({ exportImage })
+defineExpose({ exportImage, zoomBy, fitMap })
 </script>
 
 <style>

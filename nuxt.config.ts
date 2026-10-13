@@ -1,8 +1,8 @@
-import tailwindcss from '@tailwindcss/vite'
-
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-08',
   ssr: true,
+  modules: ['@nuxt/ui'],
+  ui: { fonts: false },
   app: {
     head: {
       title: 'TTRPG Cluster Control',
@@ -14,9 +14,6 @@ export default defineNuxtConfig({
       inline: [/[\\/]node_modules[\\/]nuxt[\\/]dist[\\/]/],
     },
   },
-  devtools: { enabled: true },
+  devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
-  vite: {
-    plugins: [tailwindcss()],
-  },
 })

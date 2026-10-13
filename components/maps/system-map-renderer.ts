@@ -86,6 +86,8 @@ export interface SystemMapRendererOptions {
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
+  moveEnabled: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
   orbitRotationWheelEvents: WeakSet<Event>
   /** Callbacks for selection and completed edits; gesture previews remain local to the renderer. */
@@ -126,6 +128,7 @@ export function renderSystemMap({
   geometry,
   selectedObjectId,
   selectedOrbitId,
+  moveEnabled,
   orbitRotationWheelEvents,
   handlers,
   setZoomLevel,
@@ -137,7 +140,7 @@ export function renderSystemMap({
    * @param event Native wheel event captured by Vue on the SVG.
    */
   function captureOrbitRotationWheel(event: WheelEvent): void {
-    if (!rotateOrbitFromWheel(event)) return
+    if (!moveEnabled || !rotateOrbitFromWheel(event)) return
     event.preventDefault()
     orbitRotationWheelEvents.add(event)
   }
@@ -149,6 +152,7 @@ export function renderSystemMap({
    * @throws If current nested system geometry cannot be resolved.
    */
   function handleObjectDrop(event: DragEvent): void {
+    if (!moveEnabled) return
     const orbitDrag = event.dataTransfer?.getData('application/x-ttrpg-cluster-control-map-orbit')
     if (orbitDrag) {
       const content = element.querySelector<SVGGElement>('.system-map-content')
@@ -557,6 +561,7 @@ export function renderSystemMap({
       }
     })
   const objectDrag = drag<SVGGElement, SystemObject>()
+    .filter(() => moveEnabled)
     .container(() => content.node()!)
     .subject((_event, object) => requiredPosition(positions, object.id))
     .on('start', function () {
@@ -734,6 +739,7 @@ export function renderSystemMap({
   }
   orbitResizeTargets.call(
     drag<SVGElement, Orbit>()
+      .filter(() => moveEnabled)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
@@ -772,6 +778,7 @@ export function renderSystemMap({
 
   orbitCenterHandles.call(
     drag<SVGCircleElement, Orbit>()
+      .filter(() => moveEnabled)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function () {
@@ -801,6 +808,7 @@ export function renderSystemMap({
   const orbitRotationGestures = new WeakMap<SVGCircleElement, OrbitRotationGesture>()
   orbitRotationHandles.call(
     drag<SVGCircleElement, Orbit>()
+      .filter(() => moveEnabled)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
@@ -851,7 +859,7 @@ export function renderSystemMap({
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
-      return (!isMapMark || event.type === 'wheel' || touchPinch)
+      return (!isMapMark || !moveEnabled || event.type === 'wheel' || touchPinch)
         && (!event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })

@@ -43,14 +43,15 @@ import {
   type SystemMapRenderer,
 } from './maps/system-map-renderer'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   system: StarSystem
   orbitRadii: Record<string, OrbitRadii>
   orbitRotations: Record<string, number>
   objectAngles: Record<string, number>
   selectedObjectId: string | null
   selectedOrbitId: string | null
-}>()
+  moveEnabled?: boolean
+}>(), { moveEnabled: true })
 
 const emit = defineEmits<{
   'select-object': [id: string]
@@ -164,6 +165,7 @@ function render(): void {
     geometry: mapGeometry.value,
     selectedObjectId: props.selectedObjectId,
     selectedOrbitId: props.selectedOrbitId,
+    moveEnabled: props.moveEnabled,
     orbitRotationWheelEvents,
     handlers,
     setZoomLevel: (value) => {
@@ -188,8 +190,9 @@ watch(() => props.orbitRotations, render, { deep: true })
 watch(() => props.objectAngles, render, { deep: true })
 watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
+watch(() => props.moveEnabled, render)
 
-defineExpose({ exportImage, getDetachedOrbitCenter })
+defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap })
 </script>
 
 <style>
