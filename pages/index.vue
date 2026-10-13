@@ -44,10 +44,12 @@
         v-model:system-name="systemName"
         :hydration-state="hydrationState"
         :load-error="loadError"
+        :recovery-error="recoveryError"
         :save-state="saveState"
         :save-error="saveError"
         :form-error="formError"
         @retry="hydrate"
+        @restore-backup="restoreBackup"
         @submit="submitNames"
       />
       <section v-else-if="workspace" class="editor">
@@ -236,10 +238,12 @@ const {
   workspace,
   hydrationState,
   loadError,
+  recoveryError,
   saveState,
   saveError,
   hydrate,
   commit,
+  restoreBackup,
 } = useLocalWorkspace()
 
 const {
