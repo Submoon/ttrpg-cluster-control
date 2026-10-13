@@ -36,6 +36,7 @@
     </WorkspaceHeader>
 
     <main class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
+      <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
       <WorkspaceWelcome
         v-if="!workspace"
@@ -256,6 +257,7 @@ const {
   fieldDefinitionsDialog,
   formError,
   editorError,
+  orbitAdjustmentNotice,
   mapInspectorRef,
   clusterMapRef,
   systemMapRef,
