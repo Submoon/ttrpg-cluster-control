@@ -665,7 +665,16 @@ test('dragging Add Orbit onto a map object hosts it there', async ({ page }) => 
   ).toBeLessThan(1)
 })
 
-test('dropping an existing unoccupied Orbit center onto an object hosts it there', async ({ page }) => {
+test('dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -681,8 +690,18 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
   )
 
   const unoccupiedOrbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
+  const orbitId = await unoccupiedOrbit.getAttribute('data-orbit-id')
   const centerHandle = unoccupiedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
+  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByLabel('Horizontal radius').fill('16')
+  await page.getByLabel('Vertical radius').fill('60')
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  const unoccupiedRing = unoccupiedOrbit.locator('.orbit-ring')
+  await expect(unoccupiedRing).toHaveAttribute('rx', '16')
+  await expect(unoccupiedRing).toHaveAttribute('ry', '60')
+
   const host = map.getByRole('button', { name: /Primary Star/ })
   const hostPoint = await host.evaluate(element => {
     const transform = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
@@ -695,19 +714,102 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
   const hostedOrbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
   await expect(hostedOrbit).toBeVisible()
   const ring = hostedOrbit.locator('.orbit-ring')
-  await expect.poll(async () =>
-    Math.abs(Number(await ring.getAttribute('cx')) - hostPoint.x),
-  ).toBeLessThan(1)
-  await expect.poll(async () =>
-    Math.abs(Number(await ring.getAttribute('cy')) - hostPoint.y),
-  ).toBeLessThan(1)
+  await expect(ring).toHaveAttribute('rx', '39')
+  await expect(ring).toHaveAttribute('ry', '60')
+  await expect.poll(async () => Math.abs(Number(await ring.getAttribute('cx')) - hostPoint.x))
+    .toBeLessThan(1)
+  await expect.poll(async () => Math.abs(Number(await ring.getAttribute('cy')) - hostPoint.y))
+    .toBeLessThan(1)
+  const radiusNotice = page.getByRole('status').filter({
+    hasText: 'Orbit radii increased to the new host minimum of 39.',
+  })
+  await page.getByRole('button', { name: 'Collapse inspector panel' }).click()
+  await expect(page.getByRole('button', { name: 'Show inspector panel' })).toBeVisible()
+  await expect(radiusNotice).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 0 objects/ }))
     .toBeVisible()
 
+  await page.getByRole('button', { name: 'Show inspector panel' }).click()
+  await dragHtmlElementToWorldPoint(
+    page,
+    page.getByRole('button', { name: 'Add orbit' }),
+    map,
+    { x: 660, y: 350 },
+  )
+  const smallOrbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
+  const smallOrbitId = await smallOrbit.getAttribute('data-orbit-id')
+  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByLabel('Horizontal radius').fill('16')
+  await page.getByLabel('Vertical radius').fill('16')
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  await expect(smallOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '16')
+  await expect(smallOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '16')
+  await dragToWorldPoint(page, map, smallOrbit.locator('.orbit-center-handle'), hostPoint)
+  const secondHostedOrbit = map.getByRole('group', { name: 'Orbit 2 around Primary Star' })
+  await expect(secondHostedOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(secondHostedOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
+
+  const exported = await downloadJson(page, 'Export star system JSON')
+  const exportedOrbit = exported.system?.orbits.find(orbit => orbit.id === orbitId)
+  expect(exportedOrbit).toMatchObject({ id: orbitId, hostId: expect.any(String), order: 1 })
+  expect(exported.layout.orbitRadii[orbitId!]).toEqual({ horizontal: 39, vertical: 60 })
+  expect(exported.system?.orbits.find(orbit => orbit.id === smallOrbitId))
+    .toMatchObject({ id: smallOrbitId, hostId: expect.any(String), order: 2 })
+  expect(exported.layout.orbitRadii[smallOrbitId!]).toEqual({ horizontal: 39, vertical: 39 })
+
+  const input = page.getByLabel('JSON map file')
+  const importPreview = page.waitForEvent('dialog')
+  await setJsonFile(input, 'hosted-orbit.json', JSON.stringify(exported))
+  const confirmation = await importPreview
+  expect(confirmation.message()).toContain('Star systems: 1')
+  await confirmation.accept()
+
+  const systems = page.getByRole('navigation', { name: 'Star systems' })
+  const openSystem = systems.getByRole('button', { name: 'Open Vesper system map' }).last()
+  await openSystem.click()
+  const copiedMap = page.getByRole('group', { name: 'Vesper star system map' })
+  const copiedOrbit = copiedMap.getByRole('group', { name: 'Orbit 1 around Primary Star' })
+  await expect(copiedOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(copiedOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '60')
+  const copiedSecondOrbit = copiedMap.getByRole('group', { name: 'Orbit 2 around Primary Star' })
+  await expect(copiedSecondOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(copiedSecondOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
   await page.reload()
+  const restoredSystems = page.getByRole('navigation', { name: 'Star systems' })
+  await restoredSystems.getByRole('button').last().click()
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
-  await expect(restoredMap.getByRole('group', { name: 'Orbit 1 around Primary Star' }))
-    .toBeVisible()
+  const restoredOrbit = restoredMap.getByRole('group', { name: 'Orbit 1 around Primary Star' })
+  await expect(restoredOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(restoredOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '60')
+  const restoredSecondOrbit = restoredMap.getByRole('group', { name: 'Orbit 2 around Primary Star' })
+  await expect(restoredSecondOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(restoredSecondOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
+
+  await page.getByRole('button', { name: 'Cluster map' }).click()
+  const exportedCluster = await downloadJson(page, 'Export Jump Cluster JSON')
+  const hostedOrbits = exportedCluster.cluster!.systems.flatMap(system =>
+    system.orbits.filter(orbit => orbit.hostId !== null),
+  )
+  expect(hostedOrbits).toHaveLength(4)
+  for (const hostedOrbit of hostedOrbits) {
+    const expected = hostedOrbit.order === 1
+      ? { horizontal: 39, vertical: 60 }
+      : { horizontal: 39, vertical: 39 }
+    expect(exportedCluster.layout.orbitRadii[hostedOrbit.id]).toEqual(expected)
+  }
+  const clusterImportPreview = page.waitForEvent('dialog')
+  await setJsonFile(input, 'hosted-orbit-cluster.json', JSON.stringify(exportedCluster))
+  const clusterConfirmation = await clusterImportPreview
+  expect(clusterConfirmation.message()).toContain('Star systems: 2')
+  await clusterConfirmation.accept()
+  await page.getByRole('navigation', { name: 'Star systems' })
+    .getByRole('button', { name: 'Open Vesper system map' }).last().click()
+  const clusteredMapCopy = page.getByRole('group', { name: 'Vesper star system map' })
+  await expect(clusteredMapCopy.getByRole('group', { name: 'Orbit 1 around Primary Star' }).locator('.orbit-ring'))
+    .toHaveAttribute('rx', '39')
+  await expect(clusteredMapCopy.getByRole('group', { name: 'Orbit 2 around Primary Star' }).locator('.orbit-ring'))
+    .toHaveAttribute('ry', '39')
 })
 
 test('object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds', async ({ page }) => {
