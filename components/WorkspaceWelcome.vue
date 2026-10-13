@@ -8,10 +8,20 @@
   <section v-else-if="hydrationState === 'error'" class="message-panel error-panel max-w-[44rem] p-[clamp(1.5rem,4vw,3rem)]">
     <span class="section-kicker">LOCAL ARCHIVE UNAVAILABLE</span>
     <h1 class="my-4 text-[clamp(2.2rem,5vw,3.7rem)]">Your workspace could not be opened.</h1>
-    <p class="max-w-[38rem] mb-[1em]" role="alert">{{ loadError }}</p>
-    <button class="secondary-button" type="button" @click="emit('retry')">
-      Try again
-    </button>
+    <p class="max-w-[38rem] mb-[1em]" role="alert">
+      {{ recoveryError ? `${loadError} ${recoveryError}` : loadError }}
+    </p>
+    <p class="max-w-[38rem] mb-[1em]">
+      This browser keeps the last valid workspace snapshot as a backup when one is available.
+    </p>
+    <div class="flex flex-wrap gap-2">
+      <button class="secondary-button" type="button" @click="emit('retry')">
+        Try again
+      </button>
+      <button class="secondary-button" type="button" @click="emit('restore-backup')">
+        Restore last valid backup
+      </button>
+    </div>
   </section>
 
   <section v-else class="welcome mx-auto my-[5vh] grid max-w-[72rem] grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] items-center gap-[clamp(2rem,7vw,7rem)] max-[760px]:my-4 max-[760px]:grid-cols-1">
@@ -72,6 +82,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 defineProps<{
   hydrationState: HydrationState
   loadError: string | null
+  recoveryError: string | null
   saveState: SaveState
   saveError: string | null
   formError: string
@@ -81,6 +92,7 @@ const clusterName = defineModel<string>('clusterName', { required: true })
 const systemName = defineModel<string>('systemName', { required: true })
 const emit = defineEmits<{
   retry: []
+  'restore-backup': []
   submit: []
 }>()
 </script>

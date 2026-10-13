@@ -690,11 +690,21 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
     return { x: Number(transform[1]), y: Number(transform[2]) }
   })
 
+  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center/ }).click()
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByLabel('Horizontal radius').fill('16')
+  await page.getByLabel('Vertical radius').fill('24')
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  await expect(unoccupiedOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '16')
+  await expect(unoccupiedOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '24')
+
   await dragToWorldPoint(page, map, centerHandle, hostPoint)
 
   const hostedOrbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
   await expect(hostedOrbit).toBeVisible()
   const ring = hostedOrbit.locator('.orbit-ring')
+  await expect.poll(async () => Number(await ring.getAttribute('rx'))).toBeGreaterThanOrEqual(39)
+  await expect.poll(async () => Number(await ring.getAttribute('ry'))).toBeGreaterThanOrEqual(39)
   await expect.poll(async () =>
     Math.abs(Number(await ring.getAttribute('cx')) - hostPoint.x),
   ).toBeLessThan(1)
@@ -706,8 +716,10 @@ test('dropping an existing unoccupied Orbit center onto an object hosts it there
 
   await page.reload()
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
-  await expect(restoredMap.getByRole('group', { name: 'Orbit 1 around Primary Star' }))
-    .toBeVisible()
+  const restoredOrbit = restoredMap.getByRole('group', { name: 'Orbit 1 around Primary Star' })
+  await expect(restoredOrbit).toBeVisible()
+  await expect(restoredOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
+  await expect(restoredOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
 })
 
 test('object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds', async ({ page }) => {
