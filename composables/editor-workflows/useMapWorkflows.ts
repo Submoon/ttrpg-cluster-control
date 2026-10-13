@@ -1,7 +1,7 @@
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
-import type { ComputedRef, Ref, ShallowRef } from 'vue'
+import { ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
   createOrbit,
@@ -61,6 +61,8 @@ export function useMapWorkflows({
   confirmDiscardInspectorEdits,
   editorError,
 }: MapWorkflowOptions) {
+  const orbitAdjustmentNotice = ref('')
+
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
   }
@@ -280,6 +282,7 @@ export function useMapWorkflows({
 
   /**
    * Moves an unoccupied Orbit center or attaches that Orbit to an object host.
+   * If the new host raises its minimum, saved radii are clamped and an independent status notice follows commit.
    * @param orbitId Orbit whose center or host changes.
    * @param center Proposed normalized map center, used when hostId is null.
    * @param hostId Object to host the Orbit, or null to leave it unoccupied.
@@ -294,30 +297,42 @@ export function useMapWorkflows({
     const system = selectedSystem.value
     if (!currentWorkspace || !system) return
 
+    orbitAdjustmentNotice.value = ''
     try {
       const updatedSystem = moveOrbitCenter(system, orbitId, center, hostId)
       const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
+      const updatedOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbitId)
       const savedRadii = currentWorkspace.layout.orbitRadii[orbitId]
-      const updatedOrbit = updatedSystem.orbits.find(orbit => orbit.id === orbitId)
-      if (hostId !== null && savedRadii && updatedOrbit) {
-        const minimum = minimumOrbitRadius(updatedSystem, updatedOrbit)
-        await commit({
-          ...nextWorkspace,
-          layout: {
-            ...nextWorkspace.layout,
-            orbitRadii: {
-              ...nextWorkspace.layout.orbitRadii,
-              [orbitId]: {
-                horizontal: Math.max(minimum, savedRadii.horizontal),
-                vertical: Math.max(minimum, savedRadii.vertical),
+      const minimum = hostId !== null && updatedOrbit
+        ? minimumOrbitRadius(updatedSystem, updatedOrbit)
+        : undefined
+      const adjustedRadii = savedRadii && minimum !== undefined
+        ? {
+            horizontal: Math.max(savedRadii.horizontal, minimum),
+            vertical: Math.max(savedRadii.vertical, minimum),
+          }
+        : undefined
+      const adjusted = adjustedRadii !== undefined && savedRadii !== undefined && (
+        adjustedRadii.horizontal !== savedRadii.horizontal
+        || adjustedRadii.vertical !== savedRadii.vertical
+      )
+
+      await commit(adjusted && adjustedRadii
+        ? {
+            ...nextWorkspace,
+            layout: {
+              ...nextWorkspace.layout,
+              orbitRadii: {
+                ...nextWorkspace.layout.orbitRadii,
+                [orbitId]: adjustedRadii,
               },
             },
-          },
-        })
-      } else {
-        await commit(nextWorkspace)
-      }
+          }
+        : nextWorkspace)
       editorError.value = ''
+      if (adjusted && minimum !== undefined) {
+        orbitAdjustmentNotice.value = `Orbit radii increased to the new host minimum of ${minimum}.`
+      }
     } catch (error) {
       editorError.value = errorText(error)
     }
@@ -580,6 +595,7 @@ export function useMapWorkflows({
   }
 
   return {
+    orbitAdjustmentNotice,
     moveSystem,
     moveMapObject,
     placeMapObjectInOrbit,
