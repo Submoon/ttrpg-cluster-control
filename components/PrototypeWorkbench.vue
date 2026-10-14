@@ -68,7 +68,7 @@
     <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen }]" :data-theme="theme">
       <header class="b-commandbar">
         <div class="brand-mark"><span class="brand-seal">✦</span><div><strong>TTRPG CLUSTER CONTROL</strong><small>FIELD CONSOLE · CHART 07</small></div></div>
-        <div class="b-breadcrumb"><button v-if="activeView === 'system'" @click="backToCluster">JUMP CLUSTER</button><span v-if="activeView === 'system'">/</span><strong>{{ contextName }}</strong><UBadge color="success" variant="subtle">LIVE MAP</UBadge></div>
+        <div class="b-breadcrumb"><button v-if="activeView === 'system'" @click="backToCluster">JUMP CLUSTER</button><span v-if="activeView === 'system'">/</span><strong>{{ contextName }}</strong></div>
         <div class="b-command-actions"><span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span><UButton size="sm" color="neutral" variant="outline" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton><UButton size="sm" color="neutral" variant="outline" @click="openFieldManager">Fields</UButton></div>
       </header>
       <main class="b-map-board">
@@ -76,7 +76,7 @@
           <div class="rail-cap">TOOLS</div>
           <button class="rail-button" :class="{ 'is-active': activeTool === 'navigation' }" title="Navigation" :aria-pressed="activeTool === 'navigation'" @click="setNavigation"><b>⌖</b><span>Navigate</span></button>
           <button class="rail-button" :class="{ 'is-active': activeTool === 'move' }" title="Move / Modify" :aria-pressed="activeTool === 'move'" @click="activateTool('move', false)"><b>↗</b><span>Move</span></button>
-          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-object' || catalogueOpen }" title="Choose a catalogue mark to add" :aria-pressed="catalogueOpen" @click="toggleCatalogue"><b>＋</b><span>Add mark</span></button>
+          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-object' || catalogueOpen }" title="Choose a catalogue mark to add" :aria-pressed="activeTool === 'add-object' || catalogueOpen" :aria-expanded="catalogueOpen" @click="toggleCatalogue"><b>＋</b><span>Add mark</span></button>
           <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-orbit' }" title="Add an Orbit" :aria-pressed="activeTool === 'add-orbit'" @click="activateTool('add-orbit', false)"><b>◎</b><span>Orbit</span></button>
           <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-system' }" title="Add a system" :aria-pressed="activeTool === 'add-system'" @click="activateTool('add-system', false)"><b>✦</b><span>System</span></button>
           <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-route' }" title="Draw Jump Route" :aria-pressed="activeTool === 'add-route'" @click="activateTool('add-route', false)"><b>⤳</b><span>Route</span></button>
@@ -89,7 +89,6 @@
         </nav>
         <section class="b-map-area">
           <div class="b-map-hud"><div><small>{{ activeView === 'cluster' ? 'CHART / 01' : `SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div><div class="hud-actions"><UButton v-if="activeView === 'system'" size="sm" color="neutral" variant="outline" @click="backToCluster">← Back</UButton><UButton size="sm" color="neutral" variant="outline" @click="exportMap('svg')">SVG</UButton><UButton size="sm" color="neutral" variant="outline" @click="copyShareLink">Share</UButton></div></div>
-          <div class="b-map-utility"><button v-if="activeView === 'system'" class="b-utility-type" :aria-expanded="catalogueOpen" @click="toggleCatalogue"><span aria-hidden="true">{{ catalogueMarks[activeSubtype] }}</span>{{ activeSubtypeLabel }}<b aria-hidden="true">⌄</b></button><span class="utility-tool"><i class="tool-indicator" :class="`tool-${activeTool}`"></i>{{ toolPrompt }}</span><UButton v-if="activeTool !== 'navigation'" size="xs" color="neutral" variant="outline" @click="setNavigation">Exit tool</UButton></div>
           <PrototypeHierarchy v-if="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
           <PrototypeCataloguePicker v-if="catalogueOpen && activeView === 'system'" :selected="activeSubtype" @close="catalogueOpen = false" @select="selectCatalogueType" />
           <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" @open-system="navigateToSystem" @select-route="id => requestSelection({ kind: 'route', id })" @select-object="id => requestSelection({ kind: 'object', id })" @select-orbit="id => requestSelection({ kind: 'orbit', id })" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
@@ -98,7 +97,7 @@
         </section>
         <aside class="b-inspector-float" :class="{ 'inspector-open': inspectorOpen }">
           <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
-          <button v-else class="detail-tab" @click="inspectorOpen = true"><span>≡</span><b>Inspect</b><small>{{ inspectorDescriptor.title }}</small></button>
+          <button v-else class="detail-tab" @click="openInspector"><span>≡</span><b>Inspect</b><small>{{ inspectorDescriptor.title }}</small></button>
         </aside>
       </main>
     </div>
@@ -171,7 +170,6 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { catalogueTypes, isCustomFieldApplicableToObject, planMapEntityDeletion, updateSystemObject, type CatalogueSubtype, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionTarget, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
 import { addCustomFieldDefinition, removeCustomFieldDefinition, renameCustomFieldDefinition, updateCustomFieldApplicability, updateCustomFieldOptions, updateNativeFieldOptions } from '../domain/workspace-fields'
-import { catalogueMarks } from '../utils/catalogue-marks'
 import { sameCustomFieldApplicability, type CustomFieldCreate, type FieldDefinitionUpdate } from './field-definitions/model'
 import type { MapImageFormat } from '../utils/map-image-export'
 
@@ -179,6 +177,7 @@ type Variant = 'A' | 'B' | 'C'
 type Tool = 'navigation' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
 type Selection = { kind: 'system' | 'object' | 'orbit' | 'route'; id: string }
 type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection; fromHierarchy?: boolean } | { kind: 'field-conflict'; commit: () => void }
+const bMobileQuery = '(max-width: 760px), (max-width: 1024px) and (max-height: 600px)'
 
 const props = defineProps<{ initialVariant: Variant }>()
 const route = useRoute()
@@ -200,6 +199,7 @@ const activeSubtype = ref<CatalogueSubtype>('planet')
 const catalogueOpen = ref(false)
 const hierarchyOpen = ref(false)
 const inspectorOpen = ref(true)
+const lastBPanel = ref<'inspector' | 'hierarchy'>('inspector')
 const saveState = ref<'saved' | 'saving' | 'error'>('saved')
 const saveMessage = ref('This is a memory-only design study; no workspace storage is connected.')
 const guardOpen = ref(false)
@@ -224,13 +224,13 @@ const inspectorConflictError = ref('')
 const routeOriginPoint = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+let mobilePanelsQuery: MediaQueryList | null = null
 let failFirstSave = true
 
 const activeSystem = computed(() => workspace.value.cluster.systems.find(system => system.id === activeSystemId.value) ?? null)
 const activeSystemIndex = computed(() => Math.max(0, workspace.value.cluster.systems.findIndex(system => system.id === activeSystemId.value)))
 const systemNumber = computed(() => activeSystemIndex.value + 1)
 const contextName = computed(() => activeView.value === 'cluster' ? workspace.value.cluster.name : activeSystem.value?.name ?? 'Unknown system')
-const activeSubtypeLabel = computed(() => catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'Planet')
 const currentRoute = computed(() => selection.value.kind === 'route' ? workspace.value.cluster.routes.find(routeItem => routeItem.id === selection.value.id) ?? null : null)
 const currentObject = computed(() => selection.value.kind === 'object' ? activeSystem.value?.objects.find(object => object.id === selection.value.id) ?? null : null)
 const currentOrbit = computed(() => selection.value.kind === 'orbit' ? activeSystem.value?.orbits.find(orbit => orbit.id === selection.value.id) ?? null : null)
@@ -341,11 +341,42 @@ function setNavigation(): void {
   catalogueOpen.value = false
 }
 
+function isBMobileViewport(): boolean {
+  return variant.value === 'B' && typeof window !== 'undefined' && window.matchMedia(bMobileQuery).matches
+}
+
+function openInspector(): void {
+  inspectorOpen.value = true
+  if (variant.value === 'B') {
+    lastBPanel.value = 'inspector'
+    catalogueOpen.value = false
+    if (isBMobileViewport()) hierarchyOpen.value = false
+  }
+}
+
+function openHierarchy(): void {
+  hierarchyOpen.value = true
+  if (variant.value === 'B') {
+    lastBPanel.value = 'hierarchy'
+    catalogueOpen.value = false
+    if (isBMobileViewport()) inspectorOpen.value = false
+  }
+}
+
+function reflowBPanelsForMobile(): void {
+  if (isBMobileViewport() && inspectorOpen.value && hierarchyOpen.value) {
+    if (lastBPanel.value === 'hierarchy') inspectorOpen.value = false
+    else hierarchyOpen.value = false
+  }
+}
+
+watch(variant, reflowBPanelsForMobile)
+
 function activateTool(tool: Tool, revealInspector = true): void {
   activeTool.value = tool
   if (tool !== 'add-route') routeOriginPoint.value = null
   if (tool !== 'add-object') catalogueOpen.value = false
-  if (revealInspector) inspectorOpen.value = true
+  if (revealInspector) openInspector()
   showToast(tool === 'move' ? 'Move / Modify active. Escape returns to Navigation.' : `${toolLabel(tool)} active. Escape returns to Navigation.`)
 }
 
@@ -353,7 +384,10 @@ function toggleCatalogue(): void {
   if (activeView.value !== 'system') return
   if (activeTool.value !== 'add-object') activateTool('add-object', false)
   catalogueOpen.value = !catalogueOpen.value
-  if (catalogueOpen.value) hierarchyOpen.value = false
+  if (catalogueOpen.value) {
+    hierarchyOpen.value = false
+    if (isBMobileViewport()) inspectorOpen.value = false
+  }
 }
 
 function selectCatalogueType(subtype: CatalogueSubtype): void {
@@ -364,16 +398,13 @@ function selectCatalogueType(subtype: CatalogueSubtype): void {
 }
 
 function toggleHierarchy(): void {
-  hierarchyOpen.value = !hierarchyOpen.value
-  if (hierarchyOpen.value) catalogueOpen.value = false
+  if (hierarchyOpen.value) hierarchyOpen.value = false
+  else openHierarchy()
 }
 
 function toggleInspector(): void {
-  inspectorOpen.value = !inspectorOpen.value
-  if (inspectorOpen.value) {
-    hierarchyOpen.value = false
-    catalogueOpen.value = false
-  }
+  if (inspectorOpen.value) inspectorOpen.value = false
+  else openInspector()
 }
 
 function runPending(action: PendingAction): void {
@@ -385,7 +416,7 @@ function runPending(action: PendingAction): void {
     if (action.fromHierarchy) {
       hierarchyOpen.value = false
       catalogueOpen.value = false
-      inspectorOpen.value = true
+      openInspector()
     }
     return
   }
@@ -403,7 +434,7 @@ function runPending(action: PendingAction): void {
     systemSelections[action.systemId] = selection.value
   }
   setNavigation()
-  inspectorOpen.value = true
+  openInspector()
 }
 
 function requestTransition(action: PendingAction): void {
@@ -442,7 +473,7 @@ function requestHierarchySelection(next: Selection): void {
   if (selection.value.kind === next.kind && selection.value.id === next.id) {
     hierarchyOpen.value = false
     catalogueOpen.value = false
-    inspectorOpen.value = true
+    openInspector()
     return
   }
   requestTransition({ kind: 'selection', selection: next, fromHierarchy: true })
@@ -600,7 +631,7 @@ function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'or
   selection.value = { kind: 'object', id }
   systemSelections[activeSystemId.value] = selection.value
   setNavigation()
-  inspectorOpen.value = true
+  openInspector()
   syncDraft()
   beginSimulatedSave()
   showToast(`${subtype.label} placed. One-shot Add returned to Navigation.`)
@@ -937,13 +968,18 @@ function applyPageTheme(): void {
 
 onMounted(() => {
   syncDraft()
-  if (window.matchMedia('(max-width: 760px), (max-height: 600px)').matches) inspectorOpen.value = false
+  const compactViewport = variant.value === 'B' ? window.matchMedia(bMobileQuery).matches : window.matchMedia('(max-width: 760px), (max-height: 600px)').matches
+  if (compactViewport) inspectorOpen.value = false
+  mobilePanelsQuery = window.matchMedia(bMobileQuery)
+  mobilePanelsQuery.addEventListener('change', reflowBPanelsForMobile)
+  reflowBPanelsForMobile()
   applyPageTheme()
   window.addEventListener('keydown', onVariantKeydown)
 })
 watch(theme, applyPageTheme)
 onUnmounted(() => {
   window.removeEventListener('keydown', onVariantKeydown)
+  mobilePanelsQuery?.removeEventListener('change', reflowBPanelsForMobile)
   if (toastTimer) clearTimeout(toastTimer)
   if (saveTimer) clearTimeout(saveTimer)
   delete document.documentElement.dataset.prototypeTheme
@@ -1161,12 +1197,6 @@ function seedWorkspace(): LocalWorkspace {
 .b-map-hud > div:first-child { display: grid; gap: .15rem; }
 .b-map-hud small { color: var(--proto-accent); font-size: .49rem; letter-spacing: .13em; }
 .b-map-hud strong { max-width: 14rem; overflow: hidden; font: 500 1.1rem var(--proto-display-font); text-overflow: ellipsis; white-space: nowrap; }
-.b-map-utility { position: absolute; z-index: 3; top: 5.3rem; right: 1rem; display: flex; align-items: center; gap: .5rem; max-width: min(38rem, 48vw); padding: .42rem .55rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 90%, transparent); backdrop-filter: blur(12px); }
-.b-utility-type { display: flex; min-height: 2rem; min-width: 7rem; align-items: center; gap: .35rem; border: 1px solid var(--proto-line); padding: .3rem .45rem; background: var(--proto-soft); color: var(--proto-ink); font-size: .58rem; text-align: left; cursor: pointer; }
-.b-utility-type > span { color: var(--proto-accent); font-size: .85rem; }
-.b-utility-type b { margin-left: auto; color: var(--proto-muted); font-size: .7rem; }
-.b-utility-type:hover { border-color: var(--proto-accent); }
-.utility-tool { display: flex; align-items: center; gap: .4rem; overflow: hidden; color: var(--proto-muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
 .b-tool-rail { position: absolute; z-index: 4; top: 50%; left: .9rem; display: flex; width: 4rem; max-height: calc(100dvh - 9rem); flex-direction: column; align-items: center; gap: .3rem; padding: .55rem .35rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0, 0, 0, .18); transform: translateY(-43%); backdrop-filter: blur(16px); }
 .rail-cap { padding: .25rem 0 .45rem; color: var(--proto-muted); font-size: .4rem; font-weight: 700; letter-spacing: .13em; }
 .rail-button { display: grid; width: 3.15rem; min-height: 3.25rem; align-content: center; justify-items: center; gap: .23rem; border: 1px solid transparent; background: transparent; color: var(--proto-muted); cursor: pointer; }
@@ -1328,7 +1358,6 @@ function seedWorkspace(): LocalWorkspace {
   .b-commandbar .brand-mark small { display: none; }
   .b-breadcrumb { gap: .25rem; }
   .b-breadcrumb strong { max-width: 7rem; font-size: .82rem; }
-  .b-breadcrumb .rounded-full { display: none; }
   .b-command-actions { gap: .1rem; }
   .b-command-actions button { min-height: 1.9rem; padding: .25rem .4rem; font-size: .53rem; }
   .command-save { display: none; }
@@ -1341,24 +1370,20 @@ function seedWorkspace(): LocalWorkspace {
   .b-map-hud strong { max-width: 8rem; font-size: .9rem; }
   .b-map-hud small { font-size: .42rem; }
   .b-map-hud .hud-actions { display: none; }
-  .b-map-utility { top: 3.75rem; right: .45rem; max-width: 52vw; gap: .2rem; padding: .28rem; }
-  .b-map-utility > :first-child { width: 6.2rem; }
-  .utility-tool { display: none; }
   .b-map-frame .map-navigation { bottom: 7rem; }
   .b-map-footer { right: .55rem; bottom: 6.6rem; left: .55rem; font-size: .4rem; }
   .b-map-footer span:last-child { display: none; }
-  .b-inspector-float { z-index: 12; top: auto; right: 0; bottom: calc(3.15rem + env(safe-area-inset-bottom)); left: 0; width: 100%; max-height: min(46dvh, 28rem); overflow-y: auto; overscroll-behavior: contain; padding: .7rem .8rem 1rem; border-right: 0; border-bottom: 0; border-left: 0; border-radius: .85rem .85rem 0 0; background: var(--proto-surface); box-shadow: 0 -1rem 2.4rem rgba(0, 0, 0, .3); }
+  .b-inspector-float.inspector-open { position: fixed; z-index: 12; inset: 0; width: auto; height: auto; max-height: none; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(8.5rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
+  .b-inspector-float.inspector-open .inspector-heading { position: sticky; top: env(safe-area-inset-top); z-index: 2; background: var(--proto-surface); }
   .b-inspector-float:not(.inspector-open) { top: 4.1rem; right: .4rem; bottom: auto; left: auto; width: auto; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
   .proto-b.has-open-side-panel .b-inspector-float:not(.inspector-open) { visibility: hidden; pointer-events: none; }
   .b-inspector-float:not(.inspector-open) .detail-tab { display: flex; width: auto; min-height: 2.4rem; align-items: center; gap: .35rem; padding: .35rem .5rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab b { font-size: .6rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab > span { font-size: .8rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab small { display: none; }
-  .proto-b.has-open-inspector .b-tool-rail { bottom: calc(min(46dvh, 28rem) + 3.85rem + env(safe-area-inset-bottom)); }
+  .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: calc(4.3rem + env(safe-area-inset-bottom)); left: .5rem; }
   .proto-b.has-open-inspector .b-zoom-controls { top: 6.2rem; right: .5rem; bottom: auto; }
   .proto-b.has-open-inspector .b-map-footer { display: none; }
-  .proto-b.has-open-inspector .b-hierarchy-panel { bottom: calc(min(46dvh, 28rem) + 6.1rem + env(safe-area-inset-bottom)); }
-  .proto-b.has-open-inspector .b-catalogue-panel { max-height: calc(100dvh - min(46dvh, 28rem) - 7rem - env(safe-area-inset-bottom)); }
   .b-zoom-controls { right: .5rem; bottom: 6.6rem; gap: .12rem; padding: .18rem; }
   .b-zoom-controls button { min-width: 1.9rem; min-height: 1.85rem; padding: .2rem .35rem; }
   .proto-modal-body { padding: 1rem; }
@@ -1371,7 +1396,7 @@ function seedWorkspace(): LocalWorkspace {
   .map-context-bar, .c-map-heading { min-height: 3.5rem; }
   .workbench-map-frame, .c-map-frame { min-height: 16rem; }
   .b-commandbar { top: .35rem; }
-  .b-map-hud, .b-map-utility { top: 4.2rem; }
+  .b-map-hud { top: 4.2rem; }
   .b-inspector-float { top: 7.6rem; bottom: 2.8rem; }
   .b-map-footer { bottom: 4.2rem; }
   .b-tool-rail { top: auto; left: 50%; bottom: 4.6rem; width: max-content; max-width: calc(100vw - 2rem); max-height: none; flex-direction: row; overflow-x: auto; transform: translateX(-50%); }
@@ -1379,5 +1404,11 @@ function seedWorkspace(): LocalWorkspace {
   .rail-button { width: auto; min-width: 3.2rem; min-height: 2.7rem; }
   .b-inspector-float:not(.inspector-open) { top: 4.3rem; right: 1rem; }
   .b-zoom-controls { top: 6.2rem; right: 1rem; bottom: auto; }
+}
+
+@media (max-width: 1024px) and (max-height: 600px) and (min-width: 761px) {
+  .proto-b .b-inspector-float.inspector-open { position: fixed; z-index: 12; inset: 0; width: auto; height: auto; max-height: none; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(8.5rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
+  .proto-b .b-inspector-float.inspector-open .inspector-heading { position: sticky; top: env(safe-area-inset-top); z-index: 2; background: var(--proto-surface); }
+  .proto-b .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: calc(4.3rem + env(safe-area-inset-bottom)); left: .5rem; width: auto; max-width: calc(100% - 1rem); transform: none; }
 }
 </style>
