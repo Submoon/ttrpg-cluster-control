@@ -4,3 +4,5 @@
 /measurement-lab/source-b/
 /measurement-lab/source-b-original-output/
 /measurement-lab/artifacts/*.pid
+/preview-build/
+/device-preservation-lab/*.pid

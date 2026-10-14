@@ -1,6 +1,8 @@
 # TTRPG Cluster Control UI prototype
 
-This disposable prototype compares three layouts over the same seeded Jump Cluster and star-system maps. It lives at `/` only when the URL has `?variant=A`, `?variant=B`, or `?variant=C`; opening `/` without a supported variant mounts the existing baseline page. The development-only switcher changes the query string, and its Share button copies the current variant URL.
+This disposable prototype compares three layouts over the same seeded Jump Cluster and star-system maps. Opening `/` loads the accepted B direction by default. Use `?variant=A` or `?variant=C` to compare the other layouts, or `?variant=baseline` to open the existing baseline application. The development-only switcher changes the prototype query string, and its Share button copies the current variant URL.
+
+The B interface is a preview backed by seeded in-memory data. Its inspector states that no workspace storage is connected; edits reset when the page reloads. It does not read or change the saved IndexedDB workspace. The baseline application remains available at `/?variant=baseline`.
 
 ## Run
 
