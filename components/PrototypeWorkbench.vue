@@ -59,13 +59,13 @@
         </section>
 
         <aside class="a-inspector" :class="{ 'inspector-open': inspectorOpen }">
-          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
+          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
           <button v-else class="reopen-inspector" @click="inspectorOpen = true"><span>◷</span> Open inspector <small>{{ inspectorDescriptor.title }}</small></button>
         </aside>
       </main>
     </div>
 
-    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="theme" :data-theme="theme">
+    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen }]" :data-theme="theme">
       <header class="b-commandbar">
         <div class="brand-mark"><span class="brand-seal">✦</span><div><strong>TTRPG CLUSTER CONTROL</strong><small>FIELD CONSOLE · CHART 07</small></div></div>
         <div class="b-breadcrumb"><button v-if="activeView === 'system'" @click="backToCluster">JUMP CLUSTER</button><span v-if="activeView === 'system'">/</span><strong>{{ contextName }}</strong><UBadge color="success" variant="subtle">LIVE MAP</UBadge></div>
@@ -74,27 +74,30 @@
       <main class="b-map-board">
         <nav class="b-tool-rail" aria-label="Map tools">
           <div class="rail-cap">TOOLS</div>
-          <button class="rail-button" :class="{ 'is-active': activeTool === 'navigation' }" title="Navigation" @click="setNavigation"><b>⌖</b><span>Navigate</span></button>
-          <button class="rail-button" :class="{ 'is-active': activeTool === 'move' }" title="Move / Modify" @click="activateTool('move')"><b>↗</b><span>Move</span></button>
-          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-object' }" title="Add a map object" @click="activateTool('add-object')"><b>＋</b><span>Add mark</span></button>
-          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-orbit' }" title="Add an Orbit" @click="activateTool('add-orbit')"><b>◎</b><span>Orbit</span></button>
-          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-system' }" title="Add a system" @click="activateTool('add-system')"><b>✦</b><span>System</span></button>
-          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-route' }" title="Draw Jump Route" @click="activateTool('add-route')"><b>⤳</b><span>Route</span></button>
+          <button class="rail-button" :class="{ 'is-active': activeTool === 'navigation' }" title="Navigation" :aria-pressed="activeTool === 'navigation'" @click="setNavigation"><b>⌖</b><span>Navigate</span></button>
+          <button class="rail-button" :class="{ 'is-active': activeTool === 'move' }" title="Move / Modify" :aria-pressed="activeTool === 'move'" @click="activateTool('move', false)"><b>↗</b><span>Move</span></button>
+          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-object' || catalogueOpen }" title="Choose a catalogue mark to add" :aria-pressed="catalogueOpen" @click="toggleCatalogue"><b>＋</b><span>Add mark</span></button>
+          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-orbit' }" title="Add an Orbit" :aria-pressed="activeTool === 'add-orbit'" @click="activateTool('add-orbit', false)"><b>◎</b><span>Orbit</span></button>
+          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-system' }" title="Add a system" :aria-pressed="activeTool === 'add-system'" @click="activateTool('add-system', false)"><b>✦</b><span>System</span></button>
+          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-route' }" title="Draw Jump Route" :aria-pressed="activeTool === 'add-route'" @click="activateTool('add-route', false)"><b>⤳</b><span>Route</span></button>
+          <button class="rail-button" :class="{ 'is-active': hierarchyOpen }" title="Show map hierarchy" :aria-expanded="hierarchyOpen" @click="toggleHierarchy"><b>⌘</b><span>Hierarchy</span></button>
           <span class="rail-spacer"></span>
           <button class="rail-button" title="Import map file" @click="chooseImport"><b>⇧</b><span>Import</span></button>
           <button class="rail-button" title="Export map image" @click="exportMap('png')"><b>⇩</b><span>Export</span></button>
-          <button class="rail-button" :class="{ 'is-active': inspectorOpen }" title="Toggle inspector" @click="inspectorOpen = !inspectorOpen"><b>▤</b><span>Details</span></button>
+          <button class="rail-button" :class="{ 'is-active': inspectorOpen }" title="Toggle inspector" :aria-expanded="inspectorOpen" @click="toggleInspector"><b>▤</b><span>Details</span></button>
           <div class="rail-bottom"><span class="online-dot"></span><small>NO SYNC</small></div>
         </nav>
         <section class="b-map-area">
           <div class="b-map-hud"><div><small>{{ activeView === 'cluster' ? 'CHART / 01' : `SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div><div class="hud-actions"><UButton v-if="activeView === 'system'" size="sm" color="neutral" variant="outline" @click="backToCluster">← Back</UButton><UButton size="sm" color="neutral" variant="outline" @click="exportMap('svg')">SVG</UButton><UButton size="sm" color="neutral" variant="outline" @click="copyShareLink">Share</UButton></div></div>
-          <div class="b-map-utility"><USelect v-if="activeView === 'system'" v-model="activeSubtype" size="sm" :items="catalogueItems" aria-label="Object type to add" /><span class="utility-tool"><i class="tool-indicator" :class="`tool-${activeTool}`"></i>{{ toolPrompt }}</span><UButton v-if="activeTool !== 'navigation'" size="xs" color="neutral" variant="outline" @click="setNavigation">Exit tool</UButton></div>
+          <div class="b-map-utility"><button v-if="activeView === 'system'" class="b-utility-type" :aria-expanded="catalogueOpen" @click="toggleCatalogue"><span aria-hidden="true">{{ catalogueMarks[activeSubtype] }}</span>{{ activeSubtypeLabel }}<b aria-hidden="true">⌄</b></button><span class="utility-tool"><i class="tool-indicator" :class="`tool-${activeTool}`"></i>{{ toolPrompt }}</span><UButton v-if="activeTool !== 'navigation'" size="xs" color="neutral" variant="outline" @click="setNavigation">Exit tool</UButton></div>
+          <PrototypeHierarchy v-if="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
+          <PrototypeCataloguePicker v-if="catalogueOpen && activeView === 'system'" :selected="activeSubtype" @close="catalogueOpen = false" @select="selectCatalogueType" />
           <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" @open-system="navigateToSystem" @select-route="id => requestSelection({ kind: 'route', id })" @select-object="id => requestSelection({ kind: 'object', id })" @select-orbit="id => requestSelection({ kind: 'orbit', id })" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
           <div class="b-zoom-controls" role="toolbar" aria-label="Map zoom controls"><button aria-label="Zoom out" @click="mapCanvas?.zoomBy(1 / 1.2)">−</button><button aria-label="Fit map" @click="mapCanvas?.fitMap()">Fit</button><button aria-label="Zoom in" @click="mapCanvas?.zoomBy(1.2)">＋</button></div>
           <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG BACKGROUND TO PAN · WHEEL TO ZOOM</span></div>
         </section>
         <aside class="b-inspector-float" :class="{ 'inspector-open': inspectorOpen }">
-          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
+          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
           <button v-else class="detail-tab" @click="inspectorOpen = true"><span>≡</span><b>Inspect</b><small>{{ inspectorDescriptor.title }}</small></button>
         </aside>
       </main>
@@ -119,7 +122,7 @@
         </section>
         <aside class="c-notes-column" :class="{ 'inspector-open': inspectorOpen }">
           <div class="c-notes-head"><span>FIELD NOTES</span><UButton size="xs" color="neutral" variant="ghost" @click="inspectorOpen = !inspectorOpen">{{ inspectorOpen ? 'Close' : 'Open' }}</UButton></div>
-          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
+          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
           <div v-else class="c-note-empty"><p>Open the margin editor to inspect the selected mark without leaving the map.</p><UButton color="neutral" variant="outline" @click="inspectorOpen = true">Inspect selection</UButton></div>
           <div class="c-sidenote"><span>01 / NAVIGATION</span><p>Activate a system from the chart to open its local survey. Return restores the Jump Cluster context.</p></div>
           <div class="c-sidenote"><span>02 / EDITION MARK</span><p>Edits and file actions in this atlas are simulated. The seeded survey lives in memory only.</p></div>
@@ -136,10 +139,11 @@
       <UButton class="switcher-share" size="xs" color="neutral" variant="ghost" @click="copyShareLink">Copy link</UButton>
     </div>
 
-    <UModal v-model:open="guardOpen" title="Unsaved inspector draft" description="This draft belongs to the current selection.">
+    <UModal v-if="guardReason === 'navigation'" v-model:open="guardOpen" title="Unsaved inspector draft" description="This draft belongs to the current selection.">
       <template #content>
         <div class="proto-modal-body">
-          <p class="proto-eyebrow">CONTEXT CHANGE PAUSED</p><h2>Keep this edit with its current mark?</h2><p>Apply updates the in-memory chart. Discard restores the last applied values. Stay keeps this view and draft open.</p>
+          <p class="proto-eyebrow">CONTEXT CHANGE PAUSED</p><h2>Keep this edit with its current mark?</h2>
+          <p>Apply updates the in-memory chart. Discard restores the last applied values. Stay keeps this view and draft open.</p>
           <div class="proto-modal-actions"><UButton color="primary" @click="resolveGuard('apply')">Apply and continue</UButton><UButton color="neutral" variant="outline" @click="resolveGuard('discard')">Discard and continue</UButton><UButton color="neutral" variant="ghost" @click="resolveGuard('stay')">Stay here</UButton></div>
         </div>
       </template>
@@ -151,15 +155,7 @@
       </template>
     </UModal>
 
-    <UModal v-model:open="fieldsOpen" title="Custom field definitions" description="Reusable field definitions for this sample chart.">
-      <template #content>
-        <div class="proto-modal-body field-manager"><p class="proto-eyebrow">REUSABLE FIELD KEY</p><h2>Fields for the chart</h2><p>Field changes are in memory. Existing values stay with their map object when a field is hidden.</p>
-          <div class="field-definition-list"><div v-for="field in workspace.objectFieldSettings.customFields" :key="field.id" class="field-definition-row"><div><strong>{{ field.name }}</strong><small>{{ field.type }} · applies to all marks</small></div><UButton size="xs" color="error" variant="ghost" @click="removeField(field.id)">Remove</UButton></div><p v-if="workspace.objectFieldSettings.customFields.length === 0" class="empty-fields">No custom fields defined yet.</p></div>
-          <div class="field-create-form"><UFormField label="Field name"><UInput v-model="newField.name" placeholder="e.g. Signal status" /></UFormField><UFormField label="Type"><USelect v-model="newField.type" :items="fieldTypeItems" /></UFormField><UFormField v-if="newField.type === 'single-select'" label="Options · comma separated"><UInput v-model="newField.options" placeholder="Quiet, Intermittent, Strong" /></UFormField><UButton color="primary" @click="createField">Add field</UButton></div>
-          <div class="proto-modal-actions"><UButton color="neutral" variant="outline" @click="fieldsOpen = false">Done</UButton></div>
-        </div>
-      </template>
-    </UModal>
+    <FieldDefinitionsDialog ref="fieldDefinitionsDialog" hide-trigger :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :inspector-conflict="guardOpen && guardReason === 'field'" :inspector-conflict-error="inspectorConflictError" @request-open="openFieldManager" @create-custom-field="createFieldDefinition" @save-field-definition="saveFieldDefinition" @remove-field-definition="removeFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" />
 
     <UModal v-model:open="importOpen" title="Review imported map" description="The file is validated before replacing the in-memory sample.">
       <template #content>
@@ -173,13 +169,16 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { catalogueTypes, planMapEntityDeletion, type CatalogueSubtype, type CustomFieldDefinition, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionTarget, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
+import { catalogueTypes, isCustomFieldApplicableToObject, planMapEntityDeletion, updateSystemObject, type CatalogueSubtype, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionTarget, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
+import { addCustomFieldDefinition, removeCustomFieldDefinition, renameCustomFieldDefinition, updateCustomFieldApplicability, updateCustomFieldOptions, updateNativeFieldOptions } from '../domain/workspace-fields'
+import { catalogueMarks } from '../utils/catalogue-marks'
+import { sameCustomFieldApplicability, type CustomFieldCreate, type FieldDefinitionUpdate } from './field-definitions/model'
 import type { MapImageFormat } from '../utils/map-image-export'
 
 type Variant = 'A' | 'B' | 'C'
 type Tool = 'navigation' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
 type Selection = { kind: 'system' | 'object' | 'orbit' | 'route'; id: string }
-type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection }
+type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection; fromHierarchy?: boolean } | { kind: 'field-conflict'; commit: () => void }
 
 const props = defineProps<{ initialVariant: Variant }>()
 const route = useRoute()
@@ -198,24 +197,30 @@ const clusterSelection = ref<Selection>({ kind: 'route', id: 'route-vela-kestrel
 const systemSelections = reactive<Record<string, Selection>>({})
 const activeTool = ref<Tool>('navigation')
 const activeSubtype = ref<CatalogueSubtype>('planet')
+const catalogueOpen = ref(false)
+const hierarchyOpen = ref(false)
 const inspectorOpen = ref(true)
 const saveState = ref<'saved' | 'saving' | 'error'>('saved')
 const saveMessage = ref('This is a memory-only design study; no workspace storage is connected.')
 const guardOpen = ref(false)
+const guardReason = ref<'navigation' | 'field'>('navigation')
 const pendingAction = ref<PendingAction | null>(null)
 const deleteOpen = ref(false)
 const deleteTarget = ref<Selection | null>(null)
-const fieldsOpen = ref(false)
 const importOpen = ref(false)
 const importSummary = ref<ReturnType<typeof prepareJsonImport>['summary'] | null>(null)
 const importCandidate = ref<LocalWorkspace | null>(null)
 const importError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const mapCanvas = ref<{ exportImage(format: MapImageFormat): Promise<Blob>; zoomBy(factor: number): void; fitMap(): void } | null>(null)
+const fieldDefinitionsDialog = ref<{ open(): void; cancelImpactReview(): void } | null>(null)
 const toast = ref('')
-const draft = reactive({ name: '', description: '', jumpLevel: 1, unresolvedExit: '', fieldValues: {} as Record<string, CustomFieldValue> })
+const draft = reactive({ name: '', description: '', jumpLevel: 1, unresolvedExit: '', fieldValues: {} as Record<string, CustomFieldValue>, nativeValues: { atmosphere: '', portClass: '' } })
 const draftBaseline = ref('')
-const newField = reactive({ name: '', type: 'text' as CustomFieldDefinition['type'], options: '' })
+const fieldDefinitionSaveRevision = ref(0)
+const fieldDefinitionError = ref('')
+const inspectorError = ref('')
+const inspectorConflictError = ref('')
 const routeOriginPoint = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -225,17 +230,13 @@ const activeSystem = computed(() => workspace.value.cluster.systems.find(system 
 const activeSystemIndex = computed(() => Math.max(0, workspace.value.cluster.systems.findIndex(system => system.id === activeSystemId.value)))
 const systemNumber = computed(() => activeSystemIndex.value + 1)
 const contextName = computed(() => activeView.value === 'cluster' ? workspace.value.cluster.name : activeSystem.value?.name ?? 'Unknown system')
+const activeSubtypeLabel = computed(() => catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'Planet')
 const currentRoute = computed(() => selection.value.kind === 'route' ? workspace.value.cluster.routes.find(routeItem => routeItem.id === selection.value.id) ?? null : null)
 const currentObject = computed(() => selection.value.kind === 'object' ? activeSystem.value?.objects.find(object => object.id === selection.value.id) ?? null : null)
 const currentOrbit = computed(() => selection.value.kind === 'orbit' ? activeSystem.value?.orbits.find(orbit => orbit.id === selection.value.id) ?? null : null)
 const currentSystemSelection = computed(() => selection.value.kind === 'system' ? workspace.value.cluster.systems.find(system => system.id === selection.value.id) ?? null : null)
 const hasDirtyDraft = computed(() => serializeDraft() !== draftBaseline.value)
 const catalogueItems = computed(() => catalogueTypes.map(type => ({ label: type.label, value: type.value })))
-const fieldTypeItems = [
-  { label: 'Text', value: 'text' }, { label: 'Number', value: 'number' },
-  { label: 'True / false', value: 'boolean' }, { label: 'Single select', value: 'single-select' },
-]
-
 const inspectorDescriptor = computed(() => {
   if (currentRoute.value) {
     return { kind: 'route' as const, eyebrow: 'JUMP ROUTE / INSPECTION', title: currentRoute.value.name ?? `Jump-${currentRoute.value.jumpLevel}`, subtitle: 'Logical passage between known Jump Points.', canDelete: true, routeIsUnresolved: currentRoute.value.toPointId === null, routeSummary: routeLabel(currentRoute.value) }
@@ -255,9 +256,15 @@ const inspectorDescriptor = computed(() => {
 const inspectorBindings = computed(() => ({
   ...inspectorDescriptor.value,
   dirty: hasDirtyDraft.value,
-  customFields: workspace.value.objectFieldSettings.customFields,
+  customFields: currentObject.value
+    ? workspace.value.objectFieldSettings.customFields.filter(field => isCustomFieldApplicableToObject(field, currentObject.value!))
+    : [],
+  object: currentObject.value,
+  atmosphereOptions: workspace.value.objectFieldSettings.atmosphereOptions,
+  portClassOptions: workspace.value.objectFieldSettings.portClassOptions,
   saveState: saveState.value,
   saveMessage: saveMessage.value,
+  validationError: inspectorError.value,
 }))
 const deleteLabel = computed(() => {
   if (deleteTarget.value?.kind === 'route') return 'this Jump Route'
@@ -287,7 +294,7 @@ const visibleState = computed(() => ({
 }))
 
 function serializeDraft(): string {
-  return JSON.stringify({ name: draft.name, description: draft.description, jumpLevel: draft.jumpLevel, unresolvedExit: draft.unresolvedExit, fieldValues: draft.fieldValues })
+  return JSON.stringify({ name: draft.name, description: draft.description, jumpLevel: draft.jumpLevel, unresolvedExit: draft.unresolvedExit, fieldValues: draft.fieldValues, nativeValues: draft.nativeValues })
 }
 
 function syncDraft(): void {
@@ -296,6 +303,7 @@ function syncDraft(): void {
   draft.jumpLevel = 1
   draft.unresolvedExit = ''
   draft.fieldValues = {}
+  draft.nativeValues = { atmosphere: '', portClass: '' }
   if (currentRoute.value) {
     draft.name = currentRoute.value.name ?? `Jump-${currentRoute.value.jumpLevel}`
     draft.jumpLevel = currentRoute.value.jumpLevel
@@ -304,6 +312,7 @@ function syncDraft(): void {
     draft.name = currentObject.value.name
     draft.description = currentObject.value.description
     draft.fieldValues = { ...(currentObject.value.customFieldValues ?? {}) }
+    draft.nativeValues = { atmosphere: currentObject.value.atmosphere ?? '', portClass: currentObject.value.portClass ?? '' }
   } else if (currentOrbit.value) {
     draft.name = `Orbit ${currentOrbit.value.order}`
     draft.description = orbitLabel(activeSystem.value, currentOrbit.value)
@@ -318,6 +327,7 @@ function syncDraft(): void {
 
 watch(selection, syncDraft, { deep: true, immediate: true })
 watch(() => workspace.value.cluster.name, () => { if (selection.value.kind === 'route') return; if (!hasDirtyDraft.value) syncDraft() })
+watch(() => serializeDraft(), () => { inspectorError.value = '' })
 
 function showToast(message: string): void {
   toast.value = message
@@ -328,26 +338,65 @@ function showToast(message: string): void {
 function setNavigation(): void {
   activeTool.value = 'navigation'
   routeOriginPoint.value = null
+  catalogueOpen.value = false
 }
 
-function activateTool(tool: Tool): void {
+function activateTool(tool: Tool, revealInspector = true): void {
   activeTool.value = tool
   if (tool !== 'add-route') routeOriginPoint.value = null
-  inspectorOpen.value = true
+  if (tool !== 'add-object') catalogueOpen.value = false
+  if (revealInspector) inspectorOpen.value = true
   showToast(tool === 'move' ? 'Move / Modify active. Escape returns to Navigation.' : `${toolLabel(tool)} active. Escape returns to Navigation.`)
 }
 
+function toggleCatalogue(): void {
+  if (activeView.value !== 'system') return
+  if (activeTool.value !== 'add-object') activateTool('add-object', false)
+  catalogueOpen.value = !catalogueOpen.value
+  if (catalogueOpen.value) hierarchyOpen.value = false
+}
+
+function selectCatalogueType(subtype: CatalogueSubtype): void {
+  activeSubtype.value = subtype
+  activeTool.value = 'add-object'
+  catalogueOpen.value = false
+  showToast(`${catalogueTypes.find(type => type.value === subtype)?.label ?? 'Map mark'} selected. Choose open space or an Orbit to place it.`)
+}
+
+function toggleHierarchy(): void {
+  hierarchyOpen.value = !hierarchyOpen.value
+  if (hierarchyOpen.value) catalogueOpen.value = false
+}
+
+function toggleInspector(): void {
+  inspectorOpen.value = !inspectorOpen.value
+  if (inspectorOpen.value) {
+    hierarchyOpen.value = false
+    catalogueOpen.value = false
+  }
+}
+
 function runPending(action: PendingAction): void {
+  if (action.kind === 'field-conflict') return
   if (action.kind === 'selection') {
     selection.value = action.selection
     if (activeView.value === 'cluster') clusterSelection.value = action.selection
     else systemSelections[activeSystemId.value] = action.selection
+    if (action.fromHierarchy) {
+      hierarchyOpen.value = false
+      catalogueOpen.value = false
+      inspectorOpen.value = true
+    }
     return
   }
   if (action.view === 'cluster') {
+    hierarchyOpen.value = false
+    catalogueOpen.value = false
     activeView.value = 'cluster'
     selection.value = clusterSelection.value
   } else if (action.systemId) {
+    hierarchyOpen.value = false
+    catalogueOpen.value = false
     activeView.value = 'system'
     activeSystemId.value = action.systemId
     selection.value = systemSelections[action.systemId] ?? { kind: 'object', id: firstObjectId(action.systemId) }
@@ -359,6 +408,7 @@ function runPending(action: PendingAction): void {
 
 function requestTransition(action: PendingAction): void {
   if (hasDirtyDraft.value) {
+    guardReason.value = 'navigation'
     pendingAction.value = action
     guardOpen.value = true
     return
@@ -388,34 +438,76 @@ function requestSelection(next: Selection): void {
   requestTransition({ kind: 'selection', selection: next })
 }
 
+function requestHierarchySelection(next: Selection): void {
+  if (selection.value.kind === next.kind && selection.value.id === next.id) {
+    hierarchyOpen.value = false
+    catalogueOpen.value = false
+    inspectorOpen.value = true
+    return
+  }
+  requestTransition({ kind: 'selection', selection: next, fromHierarchy: true })
+}
+
 function resolveGuard(choice: 'apply' | 'discard' | 'stay'): void {
   const action = pendingAction.value
   guardOpen.value = false
   pendingAction.value = null
   if (choice === 'stay' || !action) return
-  if (choice === 'apply') applyDraft()
-  else discardDraft(false)
+  if (action.kind === 'field-conflict') {
+    if (choice === 'discard') {
+      discardDraft(false)
+      action.commit()
+    } else {
+      if (!applyDraft()) {
+        inspectorConflictError.value = inspectorError.value
+        guardOpen.value = true
+        pendingAction.value = action
+        return
+      }
+      fieldDefinitionsDialog.value?.cancelImpactReview()
+      inspectorConflictError.value = ''
+      showToast('Object draft applied. Save the field change again to refresh its affected-values review.')
+    }
+    guardReason.value = 'navigation'
+    return
+  }
+  if (choice === 'apply') {
+    if (!applyDraft()) return
+  } else discardDraft(false)
   runPending(action)
 }
 
-function applyDraft(): void {
+function applyDraft(): boolean {
   if (currentRoute.value) {
     const next: JumpRoute = currentRoute.value.toPointId === null
       ? { ...currentRoute.value, name: draft.name, jumpLevel: Math.max(1, draft.jumpLevel), unresolvedExit: draft.unresolvedExit || 'Uncharted exit' }
       : { ...currentRoute.value, name: draft.name, jumpLevel: Math.max(1, draft.jumpLevel) }
     replaceRoute(next)
   } else if (currentObject.value && activeSystem.value) {
-    replaceSystem({ ...activeSystem.value, objects: activeSystem.value.objects.map(object => object.id === currentObject.value!.id
-      ? { ...object, name: draft.name, description: draft.description, customFieldValues: { ...draft.fieldValues } }
-      : object) })
+    const validFieldIds = new Set(workspace.value.objectFieldSettings.customFields.map(field => field.id))
+    const customFieldValues = Object.fromEntries(Object.entries(draft.fieldValues).filter(([fieldId]) => validFieldIds.has(fieldId)))
+    try {
+      replaceSystem(updateSystemObject(activeSystem.value, currentObject.value.id, {
+        name: draft.name,
+        description: draft.description,
+        customFieldValues,
+        atmosphere: draft.nativeValues.atmosphere || undefined,
+        portClass: draft.nativeValues.portClass || undefined,
+      }, workspace.value.objectFieldSettings))
+    } catch (error) {
+      inspectorError.value = error instanceof Error ? error.message : 'The object changes could not be applied.'
+      return false
+    }
   } else if (currentSystemSelection.value) {
     renameSystem(currentSystemSelection.value.id, draft.name)
   } else if (selection.value.kind === 'route' || selection.value.kind === 'system') {
     workspace.value.cluster.name = draft.name
   }
   syncDraft()
+  inspectorError.value = ''
   beginSimulatedSave()
   showToast('Applied to the in-memory map; simulated save started.')
+  return true
 }
 
 function discardDraft(announce = true): void {
@@ -611,24 +703,101 @@ function confirmDelete(): void {
   }
 }
 
-function openFieldManager(): void { fieldsOpen.value = true }
+function openFieldManager(): void { fieldDefinitionsDialog.value?.open() }
 
-function createField(): void {
-  const name = newField.name.trim()
-  if (!name) return
-  const id = `field-${Date.now().toString(36)}`
-  const definition: CustomFieldDefinition = newField.type === 'single-select'
-    ? { id, name, type: 'single-select', options: newField.options.split(',').map(option => option.trim()).filter(Boolean) }
-    : { id, name, type: newField.type }
-  workspace.value.objectFieldSettings.customFields.push(definition)
-  newField.name = ''
-  newField.options = ''
-  showToast(`Custom field “${name}” added to the sample definition.`)
+function clearFieldDefinitionError(): void { fieldDefinitionError.value = '' }
+
+function acceptFieldWorkspace(next: LocalWorkspace, message: string): void {
+  const refreshInspector = !hasDirtyDraft.value
+  workspace.value = next
+  if (refreshInspector) syncDraft()
+  fieldDefinitionSaveRevision.value += 1
+  fieldDefinitionError.value = ''
+  beginSimulatedSave()
+  showToast(message)
 }
 
-function removeField(id: string): void {
-  workspace.value.objectFieldSettings.customFields = workspace.value.objectFieldSettings.customFields.filter(field => field.id !== id)
-  showToast('Field hidden from the sample editor. Existing object values remain untouched.')
+function reportFieldError(error: unknown): void {
+  fieldDefinitionError.value = error instanceof Error ? error.message : 'The field definition could not be changed.'
+}
+
+function createFieldDefinition(request: CustomFieldCreate): void {
+  try {
+    acceptFieldWorkspace(
+      addCustomFieldDefinition(workspace.value, request.name, request.type, request.options),
+      `Custom field “${request.name.trim()}” added to the in-memory chart.`,
+    )
+  } catch (error) { reportFieldError(error) }
+}
+
+function saveFieldDefinition(request: FieldDefinitionUpdate): void {
+  try {
+    const next = updatedWorkspaceWithFieldDefinition(workspace.value, request)
+    const message = `Field definition “${request.name}” updated in memory.`
+    if (hasConflictingInspectorFieldDraft(next)) {
+      guardReason.value = 'field'
+      inspectorConflictError.value = ''
+      pendingAction.value = { kind: 'field-conflict', commit: () => saveFieldDefinition(request) }
+      guardOpen.value = true
+      return
+    }
+    acceptFieldWorkspace(next, message)
+  } catch (error) { reportFieldError(error) }
+}
+
+function removeFieldDefinition(fieldId: string): void {
+  const name = workspace.value.objectFieldSettings.customFields.find(field => field.id === fieldId)?.name ?? 'Custom field'
+  try {
+    const next = removeCustomFieldDefinition(workspace.value, fieldId)
+    const message = `Field definition “${name}” and its saved values were removed from the in-memory chart.`
+    if (hasConflictingInspectorFieldDraft(next)) {
+      guardReason.value = 'field'
+      inspectorConflictError.value = ''
+      pendingAction.value = { kind: 'field-conflict', commit: () => removeFieldDefinition(fieldId) }
+      guardOpen.value = true
+      return
+    }
+    acceptFieldWorkspace(next, message)
+  } catch (error) { reportFieldError(error) }
+}
+
+function updatedWorkspaceWithFieldDefinition(base: LocalWorkspace, request: FieldDefinitionUpdate): LocalWorkspace {
+  let next = base
+  if (request.fieldId === 'native:atmosphere') return updateNativeFieldOptions(next, 'atmosphere', request.options, true)
+  if (request.fieldId === 'native:port-class') return updateNativeFieldOptions(next, 'portClass', request.options, true)
+  const current = next.objectFieldSettings.customFields.find(field => field.id === request.fieldId)
+  if (!current) throw new Error('The selected custom field no longer exists.')
+  if (request.name !== current.name) next = renameCustomFieldDefinition(next, current.id, request.name)
+  if (current.type === 'single-select' && (current.options.length !== request.options.length || current.options.some((option, index) => option !== request.options[index]))) {
+    next = updateCustomFieldOptions(next, current.id, request.options, true)
+  }
+  if (!sameCustomFieldApplicability(current.applicability, request.applicability)) {
+    next = updateCustomFieldApplicability(next, current.id, request.applicability)
+  }
+  return next
+}
+
+function hasConflictingInspectorFieldDraft(candidate: LocalWorkspace): boolean {
+  if (!hasDirtyDraft.value || !currentObject.value || !activeSystem.value) return false
+  const objectId = currentObject.value.id
+  const updated = candidate.cluster.systems.find(system => system.id === activeSystemId.value)?.objects.find(object => object.id === objectId)
+  if (!updated) return false
+  const existing = currentObject.value
+  const storedValuesChanged = existing.atmosphere !== updated.atmosphere
+    || existing.portClass !== updated.portClass
+    || JSON.stringify(existing.customFieldValues ?? {}) !== JSON.stringify(updated.customFieldValues ?? {})
+  if (storedValuesChanged) return true
+
+  const definitions = candidate.objectFieldSettings.customFields
+  for (const [fieldId, value] of Object.entries(draft.fieldValues)) {
+    if (value === '' || value === undefined) continue
+    const definition = definitions.find(field => field.id === fieldId)
+    if (!definition) return true
+    if (definition.type === 'single-select' && typeof value === 'string' && !definition.options.includes(value)) return true
+  }
+  if (draft.nativeValues.atmosphere && !candidate.objectFieldSettings.atmosphereOptions.includes(draft.nativeValues.atmosphere)) return true
+  if (draft.nativeValues.portClass && !candidate.objectFieldSettings.portClassOptions.includes(draft.nativeValues.portClass)) return true
+  return false
 }
 
 function chooseImport(): void { fileInput.value?.click() }
@@ -831,8 +1000,8 @@ function toRoman(value: number): string { return ['', 'I', 'II', 'III', 'IV', 'V
 
 function seedWorkspace(): LocalWorkspace {
   const star: SystemObject = { id: 'obj-vela-star', family: 'CelestialBody', subtype: 'star', locationKey: 'STAR-1', name: 'Vela Prime', description: 'A pale gold star with a restless corona.', placement: { kind: 'system', x: 0.5, y: 0.48 }, customFieldValues: { signal: 'Intermittent', threat: 2 } }
-  const planet: SystemObject = { id: 'obj-vela-planet', family: 'CelestialBody', subtype: 'planet', locationKey: 'PL-1', name: 'Aster', description: 'Tidally locked; the night side is threaded with old beacons.', placement: { kind: 'orbit', orbitId: 'orbit-vela-one' }, customFieldValues: { signal: 'Quiet', threat: 1 } }
-  const moon: SystemObject = { id: 'obj-vela-moon', family: 'CelestialBody', subtype: 'moon', locationKey: 'MO-1', name: 'Morrow', description: 'A mining settlement went dark six months ago.', placement: { kind: 'orbit', orbitId: 'orbit-vela-two' }, customFieldValues: { signal: 'Strong', threat: 3 } }
+  const planet: SystemObject = { id: 'obj-vela-planet', family: 'CelestialBody', subtype: 'planet', locationKey: 'PL-1', name: 'Aster', description: 'Tidally locked; the night side is threaded with old beacons.', placement: { kind: 'orbit', orbitId: 'orbit-vela-one' }, atmosphere: 'Breathable', customFieldValues: { signal: 'Quiet', threat: 1 } }
+  const moon: SystemObject = { id: 'obj-vela-moon', family: 'CelestialBody', subtype: 'moon', locationKey: 'MO-1', name: 'Morrow', description: 'A mining settlement went dark six months ago.', placement: { kind: 'orbit', orbitId: 'orbit-vela-two' }, atmosphere: 'Thin', customFieldValues: { signal: 'Strong', threat: 3 } }
   const station: SystemObject = { id: 'obj-vela-station', family: 'Installation', subtype: 'station', locationKey: 'ST-3', name: 'Pilgrim Anchorage', description: 'A small station at the edge of the charted lane.', placement: { kind: 'system', x: 0.79, y: 0.4 }, portClass: 'C' }
   const velaPoint: SystemObject = { id: 'jp-vela', family: 'JumpPoint', subtype: 'jump-point', locationKey: 'JP-1', name: 'Vela Gate', description: 'Stable at Jump-4. The signal repeats every 31 hours.', placement: { kind: 'system', x: 0.2, y: 0.72 } }
   const anomaly: SystemObject = { id: 'obj-vela-anomaly', family: 'Phenomenon', subtype: 'anomaly', locationKey: 'AN-1', name: 'Blue Lenticular', description: 'A lens-shaped distortion beyond the third Orbit.', placement: { kind: 'system', x: 0.82, y: 0.76 }, customFieldValues: { signal: 'Strong', threat: 4 } }
@@ -971,7 +1140,7 @@ function seedWorkspace(): LocalWorkspace {
 .proto-shell .map-navigation output { color: var(--proto-ink); font-family: var(--proto-ui-font); }
 
 /* B changes the hierarchy: almost all area belongs to the map; commands and details float above it. */
-.proto-b { min-height: 100dvh; }
+.proto-b { min-height: 100dvh; overflow: hidden; }
 .b-commandbar { position: absolute; z-index: 5; top: .8rem; right: 1rem; left: 1rem; display: flex; min-height: 3.5rem; align-items: center; justify-content: space-between; gap: 1rem; padding: .45rem .7rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .5rem 2rem rgba(0, 0, 0, .16); backdrop-filter: blur(18px); }
 .b-breadcrumb { display: flex; min-width: 0; align-items: center; gap: .55rem; color: var(--proto-muted); }
 .b-breadcrumb button { padding: .35rem .45rem; border: 0; background: transparent; color: var(--proto-accent); font-size: .58rem; letter-spacing: .1em; cursor: pointer; }
@@ -993,7 +1162,10 @@ function seedWorkspace(): LocalWorkspace {
 .b-map-hud small { color: var(--proto-accent); font-size: .49rem; letter-spacing: .13em; }
 .b-map-hud strong { max-width: 14rem; overflow: hidden; font: 500 1.1rem var(--proto-display-font); text-overflow: ellipsis; white-space: nowrap; }
 .b-map-utility { position: absolute; z-index: 3; top: 5.3rem; right: 1rem; display: flex; align-items: center; gap: .5rem; max-width: min(38rem, 48vw); padding: .42rem .55rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 90%, transparent); backdrop-filter: blur(12px); }
-.b-map-utility > :first-child { width: 9rem; }
+.b-utility-type { display: flex; min-height: 2rem; min-width: 7rem; align-items: center; gap: .35rem; border: 1px solid var(--proto-line); padding: .3rem .45rem; background: var(--proto-soft); color: var(--proto-ink); font-size: .58rem; text-align: left; cursor: pointer; }
+.b-utility-type > span { color: var(--proto-accent); font-size: .85rem; }
+.b-utility-type b { margin-left: auto; color: var(--proto-muted); font-size: .7rem; }
+.b-utility-type:hover { border-color: var(--proto-accent); }
 .utility-tool { display: flex; align-items: center; gap: .4rem; overflow: hidden; color: var(--proto-muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
 .b-tool-rail { position: absolute; z-index: 4; top: 50%; left: .9rem; display: flex; width: 4rem; max-height: calc(100dvh - 9rem); flex-direction: column; align-items: center; gap: .3rem; padding: .55rem .35rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0, 0, 0, .18); transform: translateY(-43%); backdrop-filter: blur(16px); }
 .rail-cap { padding: .25rem 0 .45rem; color: var(--proto-muted); font-size: .4rem; font-weight: 700; letter-spacing: .13em; }
@@ -1160,9 +1332,9 @@ function seedWorkspace(): LocalWorkspace {
   .b-command-actions { gap: .1rem; }
   .b-command-actions button { min-height: 1.9rem; padding: .25rem .4rem; font-size: .53rem; }
   .command-save { display: none; }
-  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; width: auto; max-height: none; flex-direction: row; justify-content: center; gap: .15rem; padding: .22rem; transform: none; }
+  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; width: auto; max-width: calc(100% - 1rem); max-height: none; flex-direction: row; justify-content: flex-start; gap: .15rem; overflow-x: auto; overflow-y: hidden; padding: .22rem; transform: none; }
   .rail-cap, .rail-spacer, .rail-bottom { display: none; }
-  .rail-button { width: auto; min-width: 3.15rem; min-height: 2.55rem; flex: 1; gap: .08rem; }
+  .rail-button { width: auto; min-width: 3.15rem; min-height: 2.75rem; flex: 0 0 auto; gap: .08rem; }
   .rail-button b { font-size: .9rem; }
   .rail-button span { font-size: .68rem; }
   .b-map-hud { top: 3.75rem; left: .45rem; gap: .4rem; padding: .4rem .55rem; }
@@ -1175,12 +1347,18 @@ function seedWorkspace(): LocalWorkspace {
   .b-map-frame .map-navigation { bottom: 7rem; }
   .b-map-footer { right: .55rem; bottom: 6.6rem; left: .55rem; font-size: .4rem; }
   .b-map-footer span:last-child { display: none; }
-  .b-inspector-float { top: auto; right: .5rem; bottom: 6.5rem; width: min(20rem, calc(100vw - 1rem)); max-height: 45dvh; overflow: auto; padding: .7rem; }
-  .b-inspector-float:not(.inspector-open) { top: 4.1rem; right: .4rem; bottom: auto; transform: none; }
+  .b-inspector-float { z-index: 12; top: auto; right: 0; bottom: calc(3.15rem + env(safe-area-inset-bottom)); left: 0; width: 100%; max-height: min(46dvh, 28rem); overflow-y: auto; overscroll-behavior: contain; padding: .7rem .8rem 1rem; border-right: 0; border-bottom: 0; border-left: 0; border-radius: .85rem .85rem 0 0; background: var(--proto-surface); box-shadow: 0 -1rem 2.4rem rgba(0, 0, 0, .3); }
+  .b-inspector-float:not(.inspector-open) { top: 4.1rem; right: .4rem; bottom: auto; left: auto; width: auto; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
+  .proto-b.has-open-side-panel .b-inspector-float:not(.inspector-open) { visibility: hidden; pointer-events: none; }
   .b-inspector-float:not(.inspector-open) .detail-tab { display: flex; width: auto; min-height: 2.4rem; align-items: center; gap: .35rem; padding: .35rem .5rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab b { font-size: .6rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab > span { font-size: .8rem; }
   .b-inspector-float:not(.inspector-open) .detail-tab small { display: none; }
+  .proto-b.has-open-inspector .b-tool-rail { bottom: calc(min(46dvh, 28rem) + 3.85rem + env(safe-area-inset-bottom)); }
+  .proto-b.has-open-inspector .b-zoom-controls { top: 6.2rem; right: .5rem; bottom: auto; }
+  .proto-b.has-open-inspector .b-map-footer { display: none; }
+  .proto-b.has-open-inspector .b-hierarchy-panel { bottom: calc(min(46dvh, 28rem) + 6.1rem + env(safe-area-inset-bottom)); }
+  .proto-b.has-open-inspector .b-catalogue-panel { max-height: calc(100dvh - min(46dvh, 28rem) - 7rem - env(safe-area-inset-bottom)); }
   .b-zoom-controls { right: .5rem; bottom: 6.6rem; gap: .12rem; padding: .18rem; }
   .b-zoom-controls button { min-width: 1.9rem; min-height: 1.85rem; padding: .2rem .35rem; }
   .proto-modal-body { padding: 1rem; }

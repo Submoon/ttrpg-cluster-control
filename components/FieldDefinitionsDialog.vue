@@ -1,5 +1,6 @@
 <template>
   <button
+    v-if="!props.hideTrigger"
     ref="trigger"
     class="field-definitions-trigger"
     type="button"
@@ -121,6 +122,20 @@
           @cancel="cancelFieldDefinitionChange"
           @confirm="confirmFieldDefinitionChange"
         />
+
+        <div v-if="props.inspectorConflict" class="field-inspector-conflict" role="dialog" aria-modal="true" aria-labelledby="field-inspector-conflict-title">
+          <section class="field-inspector-conflict-card">
+            <span class="section-kicker">OBJECT FIELD CONFLICT</span>
+            <h2 id="field-inspector-conflict-title">Resolve this object’s draft first?</h2>
+            <p>This definition change affects field values on the selected object. Apply the object draft and review the field change again, discard the object draft and use the current preview, or keep both drafts open.</p>
+            <p v-if="props.inspectorConflictError" class="feedback field-definition-error" role="alert">{{ props.inspectorConflictError }} Close this dialog to correct the inspector draft.</p>
+            <div class="field-definition-actions">
+              <button class="primary-button" type="button" @click="emit('resolve-inspector-conflict', 'apply')">Apply object draft · review again</button>
+              <button class="quiet-button" type="button" @click="emit('resolve-inspector-conflict', 'discard')">Discard object draft · continue</button>
+              <button class="quiet-button" type="button" @click="emit('resolve-inspector-conflict', 'stay')">Keep both drafts open</button>
+            </div>
+          </section>
+        </div>
       </div>
     </dialog>
   </Teleport>
@@ -149,12 +164,16 @@ const props = defineProps<{
   saving: boolean
   saveError: string
   saveRevision: number
+  hideTrigger?: boolean
+  inspectorConflict?: boolean
+  inspectorConflictError?: string
 }>()
 
 const emit = defineEmits<{
   'request-open': []
   'open-change': [open: boolean]
   'clear-error': []
+  'resolve-inspector-conflict': [choice: 'apply' | 'discard' | 'stay']
   'create-custom-field': [request: CustomFieldCreate]
   'save-field-definition': [request: FieldDefinitionUpdate]
   'remove-field-definition': [fieldId: string]
@@ -328,6 +347,10 @@ watch(() => props.saveError, (error) => {
 
 defineExpose({
   open: show,
+  cancelImpactReview: () => {
+    pendingFieldDefinitionChange.value = null
+    pendingAction.value = null
+  },
   isOpen: () => dialogOpen.value,
 })
 </script>
@@ -386,6 +409,46 @@ defineExpose({
   display: grid;
   gap: 1rem;
   padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.field-inspector-conflict {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+  background: rgba(4, 9, 11, .78);
+}
+
+.field-inspector-conflict-card {
+  display: grid;
+  width: min(30rem, 100%);
+  gap: .75rem;
+  border: 1px solid var(--line);
+  padding: clamp(1rem, 4vw, 1.4rem);
+  background: var(--panel-bg);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, .42);
+}
+
+.field-inspector-conflict-card h2 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  font-weight: 500;
+}
+
+.field-inspector-conflict-card > p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: .78rem;
+  line-height: 1.55;
+}
+
+.field-inspector-conflict-card .field-definition-actions {
+  align-items: stretch;
+  flex-direction: column;
 }
 
 .field-definitions-header,

@@ -30,24 +30,30 @@
         <p class="inspector-hint">{{ routeSummary }}</p>
       </template>
 
-      <section v-if="kind === 'object' && customFields.length" class="custom-field-stack">
+      <section v-if="kind === 'object'" class="custom-field-stack">
         <div class="section-row">
-          <p class="proto-eyebrow">LOCAL FIELD NOTES</p>
+          <p class="proto-eyebrow">OBJECT FIELDS</p>
           <UButton size="xs" color="neutral" variant="ghost" @click="emit('manage-fields')">Manage</UButton>
         </div>
+        <UFormField v-if="object?.family === 'CelestialBody' && (object.subtype === 'planet' || object.subtype === 'moon')" label="Atmosphere">
+          <USelect :model-value="nativeValues.atmosphere || unsetFieldValue" :items="[{ label: 'Not recorded', value: unsetFieldValue }, ...atmosphereOptions.map(option => ({ label: option, value: option }))]" @update:model-value="value => nativeValues.atmosphere = value === unsetFieldValue ? '' : value" />
+        </UFormField>
+        <UFormField v-if="object?.family === 'Installation'" label="Port class">
+          <USelect :model-value="nativeValues.portClass || unsetFieldValue" :items="[{ label: 'Not recorded', value: unsetFieldValue }, ...portClassOptions.map(option => ({ label: option, value: option }))]" @update:model-value="value => nativeValues.portClass = value === unsetFieldValue ? '' : value" />
+        </UFormField>
         <UFormField v-for="field in customFields" :key="field.id" :label="field.name">
           <USelect
-            v-if="field.type === 'single-select'"
-            :model-value="String(fieldValues[field.id] ?? '')"
-            @update:model-value="value => fieldValues[field.id] = value"
-            :items="field.options.map(option => ({ label: option, value: option }))"
+            v-if="field.type === 'single-select' || field.type === 'boolean'"
+            :model-value="fieldValues[field.id] === undefined || fieldValues[field.id] === '' ? unsetFieldValue : String(fieldValues[field.id])"
+            @update:model-value="value => setSelectValue(field, value)"
+            :items="field.type === 'single-select' ? [{ label: 'Not recorded', value: unsetFieldValue }, ...field.options.map(option => ({ label: option, value: option }))] : [{ label: 'Not recorded', value: unsetFieldValue }, { label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]"
             :placeholder="`Choose ${field.name.toLowerCase()}`"
           />
           <UInput
             v-else
             :model-value="String(fieldValues[field.id] ?? '')"
             :type="field.type === 'number' ? 'number' : 'text'"
-            :placeholder="field.type === 'boolean' ? 'true / false' : 'Not recorded'"
+            placeholder="Not recorded"
             @update:model-value="setCustomValue(field, $event)"
           />
         </UFormField>
@@ -57,6 +63,7 @@
         <UButton color="primary" :disabled="!dirty" @click="emit('apply')">Apply changes</UButton>
         <UButton color="neutral" variant="outline" :disabled="!dirty" @click="emit('discard')">Discard</UButton>
       </div>
+      <p v-if="validationError" class="inspector-validation-error" role="alert">{{ validationError }}</p>
       <div class="save-card" :class="`is-${saveState}`" role="status" aria-live="polite">
         <span class="save-dot" aria-hidden="true"></span>
         <div>
@@ -75,13 +82,15 @@
 </template>
 
 <script setup lang="ts">
-import type { CustomFieldDefinition, CustomFieldValue } from '../domain/workspace'
+import type { CustomFieldDefinition, CustomFieldValue, SystemObject } from '../domain/workspace'
 
 const name = defineModel<string>('name', { required: true })
 const description = defineModel<string>('description', { required: true })
 const jumpLevel = defineModel<number>('jumpLevel', { required: true })
 const unresolvedExit = defineModel<string>('unresolvedExit', { required: true })
 const fieldValues = defineModel<Record<string, CustomFieldValue>>('fieldValues', { required: true })
+const nativeValues = defineModel<{ atmosphere: string; portClass: string }>('nativeValues', { required: true })
+const unsetFieldValue = '__not_recorded__'
 
 withDefaults(defineProps<{
   kind: 'object' | 'route' | 'system' | 'chart' | 'orbit'
@@ -93,8 +102,12 @@ withDefaults(defineProps<{
   routeIsUnresolved: boolean
   routeSummary: string
   customFields: CustomFieldDefinition[]
+  object: SystemObject | null
+  atmosphereOptions: string[]
+  portClassOptions: string[]
   saveState: 'saved' | 'saving' | 'error'
   saveMessage: string
+  validationError: string
 }>(), {})
 
 const emit = defineEmits<{
@@ -109,11 +122,15 @@ const emit = defineEmits<{
 function setCustomValue(field: CustomFieldDefinition, value: string | number): void {
   if (field.type === 'number') {
     fieldValues.value[field.id] = value === '' ? '' : Number(value)
-  } else if (field.type === 'boolean') {
-    fieldValues.value[field.id] = String(value).toLowerCase() === 'true'
   } else {
     fieldValues.value[field.id] = String(value)
   }
+}
+
+function setSelectValue(field: CustomFieldDefinition, value: string): void {
+  if (value === unsetFieldValue) fieldValues.value[field.id] = ''
+  else if (field.type === 'boolean') fieldValues.value[field.id] = value === 'true'
+  else fieldValues.value[field.id] = value
 }
 </script>
 
@@ -149,6 +166,16 @@ function setCustomValue(field: CustomFieldDefinition, value: string | number): v
   display: grid;
   gap: 0.9rem;
   padding-top: 1rem;
+}
+
+.inspector-validation-error {
+  margin: 0;
+  border-left: 2px solid #b75842;
+  padding: .5rem .65rem;
+  background: color-mix(in srgb, #b75842 11%, transparent);
+  color: var(--proto-ink);
+  font-size: .76rem;
+  line-height: 1.45;
 }
 
 .section-row,
