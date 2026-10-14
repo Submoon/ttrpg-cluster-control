@@ -1,0 +1,5 @@
+RUN baseline desktop 1/1
+DONE baseline desktop 1: nativeMap=system/746.2ms clusterToVela=65.4ms systemToCluster=86.3ms overlay=158.6ms js=424152 css=62957
+RUN B desktop 1/1
+DONE B desktop 1: nativeMap=cluster/1947.4ms clusterToVela=165.1ms systemToCluster=70.1ms overlay=154.0ms js=830902 css=284514
+WROTE C:\Git\PERSO\ttrpg-cluster-control\.scratch\interface-revamp\measurement-lab\artifacts\summary.json

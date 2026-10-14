@@ -1,0 +1,2 @@
+# Preserve fixture hashes and raw evidence across Windows/Linux checkouts.
+measurement-lab/** -text

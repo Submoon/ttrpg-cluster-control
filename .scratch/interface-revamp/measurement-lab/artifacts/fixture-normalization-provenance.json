@@ -1,0 +1,34 @@
+{
+  "sourceFixture": "seedWorkspace() from accepted B source, preserved as fixture-original.json",
+  "acceptedPrototypeSourceCommit": "7ea41e0a9b0e585e23812eb9165e95420d72dc89",
+  "acceptedPrototypeWorkbenchSha256": "1157cf21328688595b948f2620dbe06f46c7b45e4d134d8aa6bdddf8233aae72",
+  "originalSha256": "5eaae7d58a73e5fe7a881375714af74f1a62db9816abb29c425f87bb722051f5",
+  "normalizedSha256": "ddaed1023f81e6060291c45fb9106fdb683216f69c8fe23eb130a7e216d05874",
+  "measurementBSourcePath": "source-b/components/PrototypeWorkbench.vue",
+  "measurementBSourceSha256AfterAdaptation": "4fd80eaa372c227bbc6b4b49ede152d0d086123dfef1ac2877f5d9a206d90e34",
+  "measurementAdaptationPatchPath": "artifacts/b-fixture-normalization.patch",
+  "changes": [
+    {
+      "systemId": "sys-vela",
+      "orbitId": "orbit-vela-two",
+      "hostId": "obj-vela-planet",
+      "from": 2,
+      "to": 1
+    },
+    {
+      "systemId": "sys-vela",
+      "orbitId": "orbit-vela-three",
+      "hostId": null,
+      "from": 3,
+      "to": 1
+    },
+    {
+      "systemId": "sys-kestrel",
+      "orbitId": "orbit-kestrel-two",
+      "hostId": null,
+      "from": 2,
+      "to": 1
+    }
+  ],
+  "rule": "Within each system, renumber orbit orders consecutively from 1 within each hostId group (null is the unhosted-center group), preserving original sibling order, identities, objects, positions, radii, and all other values."
+}

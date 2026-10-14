@@ -1,0 +1,15 @@
+RUN baseline desktop 1/1
+DONE baseline desktop 1: nativeMap=system/835.1ms clusterToVela=84.2ms systemToCluster=58.9ms overlay=130.9ms js=424152 css=62957
+RUN B desktop 1/1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 60000ms exceeded.
+    at runOne (C:\Git\PERSO\ttrpg-cluster-control\.scratch\interface-revamp\measurement-lab\measure.mjs:292:14)
+    at async file:///C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/measure.mjs:506:22 {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.1

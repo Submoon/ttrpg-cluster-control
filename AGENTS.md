@@ -1,3 +1,11 @@
+## Documentation language
+
+Write all project documentation in English, including planning artifacts under `.scratch/`, specifications, tickets, research reports, domain documentation, and agent instructions.
+
+## Repository baseline
+
+Before GitHub-driven analysis or implementation, fetch `origin` and compare the checkout with `origin/main`. Fast-forward an outdated `main` when safe, preserving local work. Record the actual baseline commit in planning artifacts; identify any intentionally different base explicitly.
+
 ## Agent skills
 
 ### Issue tracker

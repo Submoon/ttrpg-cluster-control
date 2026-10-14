@@ -1,0 +1,6 @@
+# Recreate these local checkouts and build trees from the captured Git history.
+/prototype-worktree/
+/measurement-lab/source-baseline/
+/measurement-lab/source-b/
+/measurement-lab/source-b-original-output/
+/measurement-lab/artifacts/*.pid

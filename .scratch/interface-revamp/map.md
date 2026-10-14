@@ -1,0 +1,48 @@
+---
+title: "Revamp the interface: make the map central on desktop and mobile"
+label: wayfinder:map
+status: open
+---
+
+## Destination
+
+An analysis, decisions, and a UI redesign specification ready to prepare implementation: a map-first, responsive, touch-friendly interface, light/dark themes, and preservation of all existing functionality. Related issues are coordinated separately; this effort establishes their coherence without implementing them.
+
+## Source issue
+
+[Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3), refreshed on 2026-10-14 during the hybrid revision, open, `enhancement`, `priority:P1`, no comments. Requirements: research a considered modern design, responsiveness, a touch-usable map that is prominent on mobile, and preservation of functionality; an explicit, remembered light/dark control, coherent UI/map palettes, readable states, and legible SVG/PNG exports. A tool-based approach, compact icons, and Nuxt UI are to be evaluated. Resolved choices follow the indexed contracts; the Nuxt UI prototype direction is conditional, with final adoption awaiting actual evidence and a later human decision.
+
+## Notes
+
+- Human-confirmed scope: “UI redesign, with related issues coordinated separately.”
+- Analysis: `gpt-6.1-sol`, effort `high`. Later implementation: subagents `gpt-6-luna`, effort `xhigh`.
+- Baseline and risks: [Provisional analysis of the interface revamp and its dependencies](analysis.md), a static audit with a preservation matrix and source-code references.
+- Local planning only. No product changes, GitHub writes, or implementation tickets in this planning effort.
+- Inspected baseline: local `main` at `629d2a98715c3a16b954e0f77c639b1f0c31212c`, confirmed again by the root's fresh fetch on 2026-10-14 with `HEAD == origin/main`, zero commits ahead/behind; the earlier divergence is no longer current. Existing local AGENTS/planning changes and unrelated files are preserved. Product identity, storage/interchange compatibility, and merged Orbit host-minimum and snapshot-recovery corrections remain part of the baseline to preserve.
+- Read `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`, `docs/agents/domain.md`, `CONTEXT.md`, and the V1 effort `.scratch/ttrpg-cluster-control/`.
+- Skills: `wayfinder` for the effort, `grilling` and `domain-modeling` for human decisions, `prototype` for visual/interaction direction, and `research` for external facts.
+- HITL choices are resolved only with the user. Only documented resolutions go in the index; scope is recorded in Destination/Notes.
+
+## Decisions so far
+
+- [Set the revamp's navigation boundary against future semantic zoom](tickets/01-map-navigation-boundary.md): retain separate maps, open systems directly outside a drag, show context and explicit return, and restore each view's temporary zoom/pan and valid selection; unified-map implementation remains separate.
+- [Evaluate Nuxt UI for the revamp without destabilizing map rendering](tickets/02-nuxt-ui-fit.md): documentary Nuxt 4/Tailwind 4 compatibility and integration trade-offs established; application behavior, weight, and performance remain unmeasured by this research.
+- [Decide touch, mouse, and keyboard map gestures and controls](tickets/03-touch-keyboard-interactions.md): safe Navigation with explicit editing, targeted one-shot Add, persistent Move/Modify, pinch/cancellation precedence, explicit attachment and target choice, complete keyboard/single-pointer alternatives, and Navigation reset after accepted context changes.
+- [Define revamp guarantees for drafts, selection, and saving](tickets/05-editor-state-and-preservation.md): targeted draft exclusion, resumable session drafts, guarded transitions, application distinct from durable saving, visible retry/export after save failure, and non-destructive operation previews.
+- [Define the light/dark, accessibility, and export palette contract](tickets/06-themes-accessibility-export.md): OS default then durable local choice, common token palettes without state loss, clean full-scene SVG/PNG with independent light-print option, measurable contrast/focus targets, and useful status relocated from the decorative footer.
+- [Decide Nuxt UI adoption and scope](tickets/07-nuxt-ui-adoption.md): broad prototype use, application-owned maps/state/data boundaries, adaptation-first targeted exceptions, and final adoption conditional on representative evidence and human confirmation.
+- [Choose a map-first UI direction through desktop and mobile prototypes](tickets/04-map-first-ui-direction.md): human accepts B with the main tool rail, optional nested hierarchy and icon catalogue; mobile Inspect is full-height and exclusive with Hierarchy, the pictured utility toolbar and LIVE MAP badge are removed, and missing library-adoption evidence remains downstream.
+- [Measure Nuxt UI integration, offline resources, and comparative performance](tickets/09-measure-nuxt-ui-integration.md): production desktop costs and targeted SSR/theme/portal/offline behavior are measured; cold control icons and theme coordination fail, mobile/gesture comparisons remain partial, and device/preservation evidence plus human library adoption remain downstream.
+
+## Not yet specified
+
+- Specification-level distribution of remaining controls and detailed dialogs within the accepted B direction, resolved navigation contract and full-height mobile Inspect amendment. The chosen rail, optional hierarchy, icon catalogue and removed decoration are decided in the direction ticket.
+- Visual realization of the confirmed interaction contract, detailed bindings and touch targets, and usability of cancellation/target-choice controls following reactions to the prototype.
+- Exact palette values, status placement, visual density, and prototype usability/readability measures within the resolved theme, contrast, focus, and state-preservation contracts.
+- Specification assembly, criteria for the map area that is actually available, representative data volumes, and coordination conditions with separate fixes, once prototype feedback is known.
+
+## Out of scope
+
+- Product implementation, implementation-ticket breakdown, and GitHub closure during this effort.
+- Implementing features from related issues: unified map, undo/redo, multi-selection/groups, search/filters, player export, annotations, and campaign modules. Their requirements inform the coherence of the revamp and have separate efforts.
+- Changing the glossary without a human resolution of a term or relationship.

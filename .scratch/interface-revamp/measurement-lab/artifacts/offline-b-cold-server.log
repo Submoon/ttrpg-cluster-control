@@ -1,0 +1,15 @@
+[stdout] Listening on http://127.0.0.1:3124
+[stderr] 
+ ERROR  Offline probe denied outbound fetch: https://api.iconify.design/lucide.json?icons=check,chevron-down
+
+    at guardedFetch (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/deny-egress.mjs:39:11)
+    at defineCachedEventHandler.group (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:5188:30)
+    at /C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3951:26
+    at /C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3799:13
+    at _resolve (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3746:40)
+    at get (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3775:39)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async /C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3797:19
+    at async Object.handler (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:3991:22)
+    at async Object.handler (/C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/source-b-original-output/server/chunks/_/nitro.mjs:1692:19)
+
