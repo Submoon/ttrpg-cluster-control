@@ -34,7 +34,15 @@ The [menu survey](../device-preservation-lab/artifacts/resolved-tools-2026-10-15
 
 The parent independently verified that all six application source files match the built copy; full SHA-256 values are in the [source manifest](../device-preservation-lab/artifacts/resolved-tools-2026-10-15/source-manifest.json). Final screenshots are in that artifact directory. A panel assertion initially measured an unfinished animation, and closed native-details descendants required a visibility-filter correction; neither harness issue was a product fix. The full suite passed after these corrections.
 
-The checks use viewport-emulated Chrome and synthetic CDP touch input, not physical hardware. They do not prove complete serialized-model equality, every menu action's outcome, 390×500 layout, virtual-keyboard behavior, all exports or production storage preservation. The later authenticated deployed-browser spot check is recorded separately after publication.
+The checks use viewport-emulated Chrome and synthetic CDP touch input, not physical hardware. They do not prove complete serialized-model equality, every menu action's outcome, 390×500 layout, virtual-keyboard behavior, all exports or production storage preservation.
+
+## Published artifact and connected-browser spot check
+
+Application source and bounded evidence were published as `1666b008b41439360bbef80d35735c7f72620c4f` on the existing draft [PR 28](https://github.com/Submoon/ttrpg-cluster-control/pull/28). Its exact-commit Vercel status was SUCCESS: [deployment](https://vercel.com/submoon/ttrpg-cluster-control/Gz58P3bM7ioUdeAMouJp1BtRaWDQ). Compare [Grouped rail](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=groups) and [Mode dock](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=dock). A later documentation-only checkpoint does not change these six application-source hashes.
+
+The parent used a fresh tab in the authenticated in-app browser, preserving the user's original tab. On the published Grouped rail, Select changed system names to inspection actions and opened Vela's metadata Inspector while the cluster map remained active. After hiding Inspect, Navigate entered Vela without opening Inspect; Back returned to the cluster. Both control presentations rendered in the normal desktop-size browser.
+
+At the requested 390×844 viewport, Dock Inspect settled at `(0,0)` with height 844 and layout width 375 (the browser retained a 15 px scrollbar gutter); dock and zoom computed to `display:none`. Hiding Inspect and opening Hierarchy left only Hierarchy visible. At requested 844×390, all four open Map files action centers hit their buttons, including Share; closing the disclosure restored the map controls. Temporary viewport overrides were reset afterward and the new Dock preview tab was left open for review. These bounded checks supplement the local QA; they are not a physical-device or keyboard acceptance claim.
 
 ## Pending human decisions and limits
 

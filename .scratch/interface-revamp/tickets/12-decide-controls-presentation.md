@@ -62,4 +62,4 @@ The current asset may establish this ticket's presentation choice. [Test the res
 
 ### Prototype artifact
 
-The [focused B control-presentation report](../research/b-controls-prototype-2026-10-15.md) records the two candidates, source provenance, review findings and validation progress. It remains an exploration until the human compares the actual presentations; this link is not a Resolution.
+The [focused B control-presentation report](../research/b-controls-prototype-2026-10-15.md) records the two published candidates, source hashes, corrected review findings, passing build/typecheck, nine emulated-browser cases and the parent connected-browser spot check on `1666b008`. Compare [Grouped rail](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=groups) and [Mode dock](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=dock). This remains an exploration until the human compares the actual presentations; publication is not a Resolution.
