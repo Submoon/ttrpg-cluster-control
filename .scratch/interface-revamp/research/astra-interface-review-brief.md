@@ -8,6 +8,8 @@ The parent launches an independent subagent using **`gpt-6-astra`** after the pe
 
 The current published draft [Preview the accepted B interface from the main application](https://github.com/Submoon/ttrpg-cluster-control/pull/28) is at `99fe1a5709839d12d95fb3aacf1d73117015aa01`. The [preview URL](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/) defaults to B; `/?variant=baseline` is the persisted baseline comparison. At brief preparation the corrections are uncommitted and their deployment identity is pending. The named branch URL can change builds: verify the new identity at review time. Use authorized authenticated access; the anonymous Vercel Login redirect is deployment protection. Keep the human's active work and storage intact.
 
+Publication checkpoint, 2026-10-15: the preparation state above is historical. The corrected review target is now **`4d90f9774ea14b49fe6f99f1c72becacfd8454ed`**, pushed to `codex/interface-revamp`, with Vercel **SUCCESS for that exact commit** ([deployment record](https://vercel.com/submoon/ttrpg-cluster-control/FN4szvZbJrXNqsHAaHqioZhMx4zg)). The parent has launched the independent `gpt-6-astra` whole-interface review; authenticated IAB access works and the review is in progress. Verify this identity in the review artifact. PR draft status, physical retest and final adoption remain separate from this publication and reviewer launch.
+
 ## General interface review
 
 Form an independent overall judgment of the corrected interface on desktop and mobile, in both map contexts. Inspect representative actions and states, beyond the rail, and prioritize concrete problems across these areas:
