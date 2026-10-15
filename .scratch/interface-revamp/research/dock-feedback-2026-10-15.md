@@ -41,6 +41,10 @@ The final focused chooser harness passes in Chrome 155.0.8059.41 at 1440×900, 3
 
 Evidence and reproduction are in the [artifact README](../device-preservation-lab/artifacts/dock-feedback-2026-10-15/README.md), with baseline red evidence under `before/`, intermediate production geometry/dismissal evidence under `after/final/`, and final source-linked development checks under `after/final-dev/`. The final layering-only follow-up does not claim to rerun the full geometry or prior nine-case preservation suite. Virtual keyboards, 390×500, physical-phone behavior and complete production feature coverage remain outside this bounded check.
 
+## Human phone follow-up
+
+After trying the refined Dock on their phone, the human requests that mobile Add status and Quit Add reuse existing Star System/context chrome or toolbar space rather than add another permanent region. They allow replacement or overlay and delegate the exact location. The coordinator retains the mode dock and chooses the context-banner area for compact Add type/progress/next-target feedback and Quit Add, while keeping Back to Jump Cluster and the current context accessible. Exiting Add restores the ordinary context summary. This is an accepted direction for a later bounded prototype/specification; it is not implemented in the tested or deployed source captured above. The human does not report a new browser/OS version or a scenario-by-scenario matrix, so this is qualitative physical-phone feedback rather than complete device acceptance.
+
 ## Publication boundary
 
 The human clarifies that agent testing and iteration should use the local `npm run dev` runtime. Vercel supplies the human's mobile preview. The final local production build was already complete when this instruction arrived; its ongoing bounded browser check may finish, but subsequent UI loops should use the development server rather than repeat production builds or test the deployed preview. Deployment readiness checks do not substitute for local behavioral evidence or physical-phone acceptance.
