@@ -4,6 +4,7 @@
     @click.capture="captureMapIntent"
     @pointerdown.capture="onPointerDownCapture"
     @mousedown.capture="onMouseDownCapture"
+    @keydown.capture="captureMapKeyboardIntent"
     @touchstart.capture="onTouchStartCapture"
     @touchend.capture="onTouchEndCapture"
     @touchcancel.capture="onTouchEndCapture"
@@ -59,6 +60,7 @@
 <script setup lang="ts">
 import type { CatalogueSubtype, LocalWorkspace, Point, StarSystem } from '../domain/workspace'
 import type { MapImageFormat } from '../utils/map-image-export'
+import { objectPositions, orbitAngleAtPoint, orbitCenter, orbitRadii, orbitRotation } from '../utils/system-map-geometry'
 
 type View = 'cluster' | 'system'
 type Tool = 'navigation' | 'select' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
@@ -76,7 +78,8 @@ const props = withDefaults(defineProps<{
   touchNavigation?: boolean
   longPressEnabled?: boolean
   showZoomControls?: boolean
-}>(), { selectSystemsInMove: false, touchNavigation: false, longPressEnabled: false, showZoomControls: true })
+  creationChooserOpen?: boolean
+}>(), { selectSystemsInMove: false, touchNavigation: false, longPressEnabled: false, showZoomControls: true, creationChooserOpen: false })
 
 const emit = defineEmits<{
   'open-system': [id: string]
@@ -91,7 +94,8 @@ const emit = defineEmits<{
   'rotate-orbit': [id: string, rotation: number]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
   'inspect-entity': [target: { kind: 'system' | 'route' | 'object' | 'orbit'; id: string }]
-  'map-target': [target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string } | { kind: 'object'; id: string } | { kind: 'system'; id: string }]
+  'map-target': [target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string; angle?: number } | { kind: 'object'; id: string } | { kind: 'system'; id: string }]
+  'dismiss-creation-chooser': []
 }>()
 
 type MapControls = {
@@ -120,6 +124,7 @@ let selectPanGesture: SelectPanGesture | undefined
 let touchNavigationOwned = false
 let suppressNextMapClickUntil = 0
 let touchNavigationEndTimer: ReturnType<typeof setTimeout> | undefined
+let creationChooserDismissalPointerId: number | undefined
 type RightPanGesture = { startEvent: MouseEvent; map: MapControls; dragged: boolean }
 let rightPanGesture: RightPanGesture | undefined
 let rightPanReleasePending = false
@@ -149,11 +154,22 @@ function cancelLongPress(): void {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  const mapTarget = event.target instanceof Element
+    ? event.target.closest('svg.cluster-map-svg, svg.system-map-svg')
+    : null
+  if (activePointers.size === 0) {
+    // A canceled dismissal gesture has no click to consume; a new press starts a fresh gesture.
+    creationChooserDismissalPointerId = undefined
+  }
   if (activePointers.size === 0 && Date.now() <= suppressNextMapClickUntil) {
     // A previous long-press/pinch did not produce a browser click; do not eat a later deliberate tap.
     suppressNextMapClickUntil = 0
   }
   if (activePointers.size === 0 && !rightPanReleasePending) suppressRightGestureUntil = 0
+  if (props.creationChooserOpen && mapTarget && event.isPrimary && event.button === 0) {
+    creationChooserDismissalPointerId = event.pointerId
+    emit('dismiss-creation-chooser')
+  }
   activePointers.add(event.pointerId)
   if (event.button !== 0) {
     cancelLongPress()
@@ -260,6 +276,7 @@ function onWindowBlur(): void {
   rightPanReleasePending = false
   selectPanGesture = undefined
   activePointers.clear()
+  creationChooserDismissalPointerId = undefined
   cancelLongPress()
 }
 
@@ -376,6 +393,15 @@ function captureMapIntent(event: MouseEvent): void {
   const svg = target.closest('svg.cluster-map-svg, svg.system-map-svg') as SVGSVGElement | null
   if (!svg) return
 
+  const clickPointerId = 'pointerId' in event ? Number((event as PointerEvent).pointerId) : undefined
+  if (event.detail > 0 && creationChooserDismissalPointerId !== undefined
+    && (clickPointerId === undefined || clickPointerId === creationChooserDismissalPointerId)) {
+    creationChooserDismissalPointerId = undefined
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
+
   if (event.detail > 0 && (touchNavigationOwned || Date.now() <= suppressNextMapClickUntil
     || rightPanReleasePending || rightPanGesture?.dragged || Date.now() <= suppressRightGestureUntil)) {
     suppressNextMapClickUntil = 0
@@ -422,7 +448,9 @@ function captureMapIntent(event: MouseEvent): void {
 
   if (props.tool === 'add-object') {
     if (orbit) {
-      emit('map-target', { kind: 'orbit', id: orbit.getAttribute('data-orbit-id') ?? '' })
+      const id = orbit.getAttribute('data-orbit-id') ?? ''
+      const angle = orbitPlacementAngle(event, svg, id)
+      emit('map-target', angle === undefined ? { kind: 'orbit', id } : { kind: 'orbit', id, angle })
     } else if (systemObject) {
       emit('map-target', { kind: 'object', id: systemObject.getAttribute('data-object-id') ?? '' })
     } else {
@@ -437,6 +465,48 @@ function captureMapIntent(event: MouseEvent): void {
       : systemObject
       ? { kind: 'object', id: systemObject.getAttribute('data-object-id') ?? '' }
       : { kind: 'empty', point: systemPoint(event, svg) })
+  }
+}
+
+function captureMapKeyboardIntent(event: KeyboardEvent): void {
+  if ((event.key !== 'Enter' && event.key !== ' ') || event.defaultPrevented
+    || props.tool !== 'add-object' || props.view !== 'system') return
+  const target = event.target instanceof Element
+    ? event.target.closest('.system-map-svg .orbit-hit-target[data-orbit-id]')
+    : null
+  if (!target) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  // Keyboard placement has no pointer position; use the Orbit's explicit local 12 o'clock point.
+  emit('map-target', { kind: 'orbit', id: target.getAttribute('data-orbit-id') ?? '', angle: -Math.PI / 2 })
+}
+
+function orbitPlacementAngle(event: MouseEvent, svg: SVGSVGElement, orbitId: string): number | undefined {
+  const system = props.system
+  const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+  const content = svg.querySelector<SVGGElement>('.system-map-content')
+  const matrix = content?.getScreenCTM()
+  if (!system || !orbit || !matrix) return undefined
+
+  try {
+    const pointer = svg.createSVGPoint()
+    pointer.x = event.clientX
+    pointer.y = event.clientY
+    const scenePoint = pointer.matrixTransform(matrix.inverse())
+    if (!Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) return undefined
+
+    const geometry = props.workspace.layout
+    const positions = objectPositions(system, geometry)
+    const center = orbitCenter(orbit, positions)
+    const angle = orbitAngleAtPoint(
+      { x: scenePoint.x, y: scenePoint.y },
+      center,
+      orbitRadii(system, orbit, geometry),
+      orbitRotation(orbit, geometry),
+    )
+    return Number.isFinite(angle) ? angle : undefined
+  } catch {
+    return undefined
   }
 }
 

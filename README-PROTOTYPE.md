@@ -1,6 +1,6 @@
 # TTRPG Cluster Control UI prototype
 
-This disposable prototype compares three layouts over the same seeded Jump Cluster and star-system maps. Opening `/` loads the accepted B direction by default. Use `?variant=A` or `?variant=C` to compare the other layouts, or `?variant=baseline` to open the existing baseline application. Variant B has two focused control-presentation candidates at `/?variant=B&controls=groups` and `/?variant=B&controls=dock`; `/` and `/?variant=B` default to `groups`. The development-only switcher changes the prototype query string, and its Share button copies the current variant URL.
+This disposable prototype compares three layouts over the same seeded Jump Cluster and star-system maps. Opening `/` loads the accepted B direction by default. Use `?variant=A` or `?variant=C` to compare the other layouts, or `?variant=baseline` to open the existing baseline application. Variant B has two focused control-presentation candidates at `/?variant=B&controls=groups` and `/?variant=B&controls=dock`; `/` and `/?variant=B` default to the human-selected `dock`. The development-only switcher changes the prototype query string, and its Share button copies the current variant URL.
 
 The B interface is a preview backed by seeded in-memory data. Its inspector states that no workspace storage is connected; edits reset when the page reloads. It does not read or change the saved IndexedDB workspace. The baseline application remains available at `/?variant=baseline`.
 
@@ -9,10 +9,16 @@ The B interface is a preview backed by seeded in-memory data. Its inspector stat
 From the repository root, run:
 
 ```sh
+npm run dev
+```
+
+Use the local development server for agent testing and iteration. Vercel is the human's mobile preview. To use the original fixed prototype port instead, run:
+
+```sh
 npm run prototype
 ```
 
-The Nuxt development server listens on `http://127.0.0.1:3113`. This command does not build or publish the product.
+The latter command listens on `http://127.0.0.1:3113`. Neither command builds or publishes the product. Use a separate owned port if another server is already running.
 
 ## What is connected
 
@@ -24,12 +30,14 @@ Nuxt UI provides the shared buttons, fields, selects, badges, menus, and dialogs
 
 Variant B keeps its map-first layout. At phone widths (up to 760 px), and in short landscape viewports up to 1024 px wide, Inspector and Hierarchy each cover the full viewport and scroll internally. Each has its own close control; mode controls and zoom stay hidden until the panel closes. A system map keeps a visible return to the Jump Cluster. Only one of Inspector and Hierarchy can be open at a time in these responsive ranges. Switching panels keeps an unsaved inspector draft, while a hierarchy selection still passes through the Apply, Discard, or Stay guard before it opens the inspector. Wider desktop layouts keep the panels non-modal and allow both to remain open; if both are open when the viewport becomes phone-sized, the last panel opened stays visible. The catalogue picker groups the existing addable mark types by family. Selecting an existing map item remains a separate action.
 
-## Variant B control candidates
+## Variant B controls
 
-These are two presentations of the same B modes, creation actions, panels, and map-file commands. They are visual candidates for human comparison; neither has been approved as the final control arrangement.
+The human selected Dock after comparing two presentations of the same B modes, creation actions, panels and map-file commands. Groups remains available as a reference. The refined preview is ready for representative device feedback; it does not establish final product or library acceptance.
 
-- `/?variant=B&controls=groups` places Navigate, Select, and Move in a mode group; Add in its own group; and Hierarchy and Inspect in a panel group. Import, PNG, SVG, and Share commands remain directly visible in the map header. On narrow screens the three modes occupy the first row and Add, Hierarchy, and Inspect the second.
-- `/?variant=B&controls=dock` places the three modes in a map dock and keeps Add with its type and placement state nearby. Hierarchy and Inspect sit together in the header. A Map files menu groups Import, PNG, SVG, and Share as a candidate.
+- `/?variant=B&controls=groups` retains the grouped Navigate, Select, Move and Add rail, with direct Import, PNG, SVG and Share commands. The shared panel commands now sit in map chrome.
+- `/?variant=B&controls=dock` is the default. It places the three modes in a map dock, with Add beside them. Hierarchy and Inspect sit beside Map files in the map HUD; the command row wraps on narrow screens.
+
+Add now uses a Nuxt UI Popover with the actual Add button as its trigger. Creation choices and the catalogue share that anchored surface; close, outside interaction and Escape preserve the selected tool/type. A map gesture used to dismiss the chooser is consumed without creating an object, and the next distinct activation works normally. Orbit placement converts the pointer through the SVG scene transform and uses existing ellipse geometry to preserve the chosen angle, including rotated and hosted Orbits. Keyboard activation uses an explicit local twelve-o'clock position rather than synthetic pointer coordinates. See the [Dock feedback report](.scratch/interface-revamp/research/dock-feedback-2026-10-15.md) for source provenance, review and executed validation.
 
 The query switch and development switcher preserve the current in-memory map, mode, Add type, route origin, selection, and drafts. Both candidates keep a single zoom group and visible Back to Jump Cluster control. A right-button pan and two-contact pan navigate in every mode without placing or editing on release. Orbit manipulation handles expose their operation and target to assistive technology. The switcher does not resolve ticket 12's presentation decision.
 
@@ -68,3 +76,9 @@ The Playwright QA command `node ..\device-preservation-lab\qa-resolved-tools.mjs
 The short-landscape Dock Map files menu is now two columns. At 844×390 its bounds are `(431.8, 162.4)–(815.8, 249.2)`, ending above the Dock and zoom controls; all four action centers hit, and closing with the summary trigger restores all seven Dock/zoom controls. At 390×844 the one-column menu bounds are `(165.8, 144.2)–(373.8, 309.3)`; its four actions remain visible and hit-testable, and trigger-close restores the controls. Temporary Add-menu overlays were also measured: the Dock portrait menu `(59.0, 652.0)–(331.0, 744.8)` overlaps the zoom group while open, and the Dock landscape menu `(139.2, 172.8)–(347.2, 265.6)` crosses the Dock top by about 2.4 px. Both Add choices remain in viewport and center-hit-testable; closing with the Add trigger restores all seven Dock/zoom controls. The Groups Add menus have no measured overlap with their controls. These transient overlaps are recorded as open-menu states, not permanent layout occlusion.
 
 This is viewport-emulated Chrome evidence. The two-contact route gesture was dispatched through CDP, not performed on physical hardware. The harness filters action buttons inside the closed Map files details element because those descendants retain measurable DOM rectangles while hidden; the summary trigger remains included and verified. This check does not cover 390×500, every menu action's application outcome, virtual keyboards, or physical touch behavior. SOL source review and the parent connected in-app-browser spot check on published commit `1666b008` are recorded separately in the [focused controls report](.scratch/interface-revamp/research/b-controls-prototype-2026-10-15.md).
+
+### Selected Dock refinements
+
+The subsequent [Dock feedback report](.scratch/interface-revamp/research/dock-feedback-2026-10-15.md) records targeted Orbit placement, adjacent panel/file commands and the anchored Nuxt UI Add chooser. The local production check at 1440×900, 390×844 and 844×390 passed repeated placement on rotated free-center and hosted Orbits, touch dismissal without placement, persistent Add and reachable HUD/status controls, with no page errors. That intermediate build predates the final chooser-layering correction.
+
+The final two-file layering follow-up passes typecheck and independent SOL review. Focused local `npm run dev` checks pass at the same three sizes: both creation actions, header/close, seven catalogue families and their types remain visible and hit-testable over map chrome; stale Add-cancellation feedback does not cover the chooser, and closing preserves Add. The final source-linked screenshots include the development-only switcher. See [evidence and reproduction](.scratch/interface-revamp/device-preservation-lab/artifacts/dock-feedback-2026-10-15/README.md). This follow-up does not claim a fresh local production build or a complete replay of the earlier preservation suite. Vercel supplies the human's phone preview; physical-device and virtual-keyboard acceptance remain pending.

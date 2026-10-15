@@ -57,7 +57,7 @@ const activeGroup = computed(() => groups.find(group => group.family === selecte
 </script>
 
 <style scoped>
-.b-catalogue-panel { position: absolute; z-index: 7; top: 5.3rem; left: 5.5rem; display: grid; width: min(28rem, calc(100% - 6.5rem)); gap: .6rem; border: 1px solid var(--proto-line); padding: .7rem; background: color-mix(in srgb, var(--proto-surface) 97%, transparent); color: var(--proto-ink); box-shadow: 0 1rem 3rem rgba(0,0,0,.34); backdrop-filter: blur(20px); }
+.b-catalogue-panel { position: static; display: grid; width: 100%; gap: .6rem; border: 0; padding: .25rem 0 0; background: transparent; color: var(--proto-ink); }
 .b-catalogue-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .b-catalogue-heading > div { display: grid; gap: .18rem; }
 .b-catalogue-heading small { color: var(--proto-muted); font-size: .46rem; font-weight: 700; letter-spacing: .13em; }
@@ -74,10 +74,6 @@ const activeGroup = computed(() => groups.find(group => group.family === selecte
 .b-catalogue-panel p { margin: 0; color: var(--proto-muted); font-size: .76rem; line-height: 1.45; }
 .b-catalogue-panel :focus-visible { outline: 2px solid var(--proto-accent); outline-offset: 1px; }
 @media (max-width: 760px) {
-  .b-catalogue-panel { top: 3.3rem; right: .4rem; bottom: auto; left: .4rem; width: auto; height: auto; max-height: min(46dvh, 28rem); align-content: start; overflow: auto; }
   .b-catalogue-family-list button { flex: 1 1 calc(50% - .25rem); justify-content: flex-start; }
-}
-@media (max-height: 600px) and (min-width: 761px) {
-  .b-catalogue-panel { top: 5.2rem; bottom: 7.6rem; overflow: auto; }
 }
 </style>

@@ -1,0 +1,330 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900,
+    "isMobile": false,
+    "hasTouch": false,
+    "deviceScaleFactor": 1
+  },
+  "defaultLayout": "dock",
+  "commandRow": {
+    "rowPresent": true,
+    "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+    "targets": {
+      "hierarchy": {
+        "x": 1200.03125,
+        "y": 98.78125,
+        "right": 1273.78125,
+        "bottom": 137.171875,
+        "width": 73.75,
+        "height": 38.390625,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      },
+      "inspect": {
+        "x": 1276.65625,
+        "y": 98.78125,
+        "right": 1337.96875,
+        "bottom": 137.171875,
+        "width": 61.3125,
+        "height": 38.390625,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      },
+      "mapFiles": {
+        "x": 1346.953125,
+        "y": 99.96875,
+        "right": 1411.8125,
+        "bottom": 135.96875,
+        "width": 64.859375,
+        "height": 36,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      }
+    }
+  },
+  "commandRowWithAdd": {
+    "rowPresent": true,
+    "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+    "targets": {
+      "hierarchy": {
+        "x": 1200.03125,
+        "y": 98.78125,
+        "right": 1273.78125,
+        "bottom": 137.171875,
+        "width": 73.75,
+        "height": 38.390625,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      },
+      "inspect": {
+        "x": 1276.65625,
+        "y": 98.78125,
+        "right": 1337.96875,
+        "bottom": 137.171875,
+        "width": 61.3125,
+        "height": 38.390625,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      },
+      "mapFiles": {
+        "x": 1346.953125,
+        "y": 99.96875,
+        "right": 1411.8125,
+        "bottom": 135.96875,
+        "width": 64.859375,
+        "height": 36,
+        "visible": true,
+        "insideViewport": true,
+        "hitTestable": true
+      }
+    }
+  },
+  "picker": {
+    "geometry": {
+      "trigger": {
+        "x": 847.6640625,
+        "y": 835.015625,
+        "width": 69.625,
+        "height": 42.390625
+      },
+      "actionMenu": {
+        "x": 479.1330261230469,
+        "y": 739.30322265625,
+        "width": 431.3260803222656,
+        "height": 38.873291015625
+      },
+      "picker": {
+        "x": 475.59375,
+        "y": 600.59375,
+        "width": 434.8125,
+        "height": 219.5
+      }
+    },
+    "anchor": {
+      "trigger": {
+        "x": 847.6640625,
+        "y": 835.015625,
+        "right": 917.2890625,
+        "bottom": 877.40625,
+        "width": 69.625,
+        "height": 42.390625
+      },
+      "picker": {
+        "x": 475.59375,
+        "y": 600.59375,
+        "right": 910.40625,
+        "bottom": 820.09375,
+        "width": 434.8125,
+        "height": 219.5
+      },
+      "horizontalOverlap": true,
+      "verticalGap": 14.921875,
+      "anchored": true
+    }
+  },
+  "orbit": {
+    "orbitId": "orbit-vela-three",
+    "ellipse": {
+      "center": {
+        "x": 772,
+        "y": 300
+      },
+      "radii": {
+        "horizontal": 102,
+        "vertical": 146
+      },
+      "rotationDegrees": -21,
+      "transform": "rotate(-21 772 300)"
+    },
+    "first": {
+      "angle": -1.8325957145940461,
+      "scene": {
+        "x": 696.7967529296875,
+        "y": 177.48680114746094
+      },
+      "ellipseScene": {
+        "x": 696.8150025238449,
+        "y": 177.80241099940451
+      },
+      "client": {
+        "x": 1080,
+        "y": 163
+      }
+    },
+    "second": {
+      "angle": 2.094395102393195,
+      "scene": {
+        "x": 769.6131591796875,
+        "y": 436.30560302734375
+      },
+      "ellipseScene": {
+        "x": 769.6993374870648,
+        "y": 436.31840283689354
+      },
+      "client": {
+        "x": 1273,
+        "y": 849
+      }
+    },
+    "angularDistance": 2.3561944901923453,
+    "pixelDistance": 712.6324438306187,
+    "candidateCount": 18,
+    "contentTransform": "translate(-511.2411711395546,-224.95283390847385) scale(1.767001886978647)"
+  },
+  "objectCountBefore": 6,
+  "placements": [
+    {
+      "target": {
+        "angle": 2.094395102393195,
+        "scene": {
+          "x": 769.6131591796875,
+          "y": 436.30560302734375
+        },
+        "ellipseScene": {
+          "x": 769.6993374870648,
+          "y": 436.31840283689354
+        },
+        "client": {
+          "x": 1273,
+          "y": 849
+        }
+      },
+      "object": {
+        "id": "obj-demo-mv9lyt6e-1",
+        "transform": "translate(769.6180579692526 436.2910575549014)",
+        "label": "Select MO-2, Moon 2 (CelestialBody / moon)",
+        "point": {
+          "x": 769.6180579692526,
+          "y": 436.2910575549014
+        }
+      },
+      "error": 0.01534825422564047
+    },
+    {
+      "target": {
+        "angle": -0.7853981633974483,
+        "scene": {
+          "x": 802.059814453125,
+          "y": 177.48680114746094
+        },
+        "ellipseScene": {
+          "x": 802.337343673262,
+          "y": 177.77215710464992
+        },
+        "client": {
+          "x": 1359,
+          "y": 163
+        }
+      },
+      "object": {
+        "id": "obj-demo-mv9lyt8b-2",
+        "transform": "translate(802.01427490829 177.55442993704605)",
+        "label": "Select MO-3, Moon 3 (CelestialBody / moon)",
+        "point": {
+          "x": 802.01427490829,
+          "y": 177.55442993704605
+        }
+      },
+      "error": 0.08153222261492743
+    },
+    {
+      "target": {
+        "angle": -0.39269908169872414,
+        "scene": {
+          "x": 655.2952270507812,
+          "y": 218.61106872558594
+        },
+        "ellipseScene": {
+          "x": 655.5371111771444,
+          "y": 218.8696863336176
+        },
+        "client": {
+          "x": 970,
+          "y": 272
+        }
+      },
+      "object": {
+        "id": "obj-demo-mv9lytak-3",
+        "transform": "translate(655.3659365759892 218.57052852405286)",
+        "label": "Select MO-4, Moon 4 (CelestialBody / moon)",
+        "point": {
+          "x": 655.3659365759892,
+          "y": 218.57052852405286
+        }
+      },
+      "error": 0.08150671687334433
+    },
+    {
+      "target": {
+        "angle": 0.5235987755982987,
+        "scene": {
+          "x": 644.3538818359375,
+          "y": 340.4747314453125
+        },
+        "ellipseScene": {
+          "x": 644.5448267190434,
+          "y": 340.67999999999995
+        },
+        "client": {
+          "x": 941,
+          "y": 595
+        }
+      },
+      "object": {
+        "id": "obj-demo-mv9lytcm-4",
+        "transform": "translate(644.5709468666105 340.647130003019)",
+        "label": "Select MO-5, Moon 5 (CelestialBody / moon)",
+        "point": {
+          "x": 644.5709468666105,
+          "y": 340.647130003019
+        }
+      },
+      "error": 0.2771975653579051
+    }
+  ],
+  "distinctPositions": true,
+  "positionsMatchTargets": true,
+  "addRemainsActive": true,
+  "addStatus": {
+    "status": {
+      "x": 336,
+      "y": 758.8125,
+      "right": 1104,
+      "bottom": 830.40625,
+      "width": 768,
+      "height": 71.59375,
+      "insideViewport": true,
+      "hitTestable": true
+    },
+    "buttons": {
+      "Change the selected map mark type": {
+        "x": 910.1875,
+        "y": 776.609375,
+        "right": 995.703125,
+        "bottom": 812.609375,
+        "width": 85.515625,
+        "height": 36,
+        "insideViewport": true,
+        "hitTestable": true
+      },
+      "Quit Add and return to Navigate": {
+        "x": 1003.703125,
+        "y": 776.609375,
+        "right": 1092.609375,
+        "bottom": 812.609375,
+        "width": 88.90625,
+        "height": 36,
+        "insideViewport": true,
+        "hitTestable": true
+      }
+    }
+  },
+  "inspectorOpened": false,
+  "pageErrors": []
+}

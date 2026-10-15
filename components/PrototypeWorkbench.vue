@@ -65,16 +65,12 @@
       </main>
     </div>
 
-    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, `controls-${controlLayout}`, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen, 'has-active-add': isAddTool, 'has-open-add-menu': addMenuOpen || catalogueOpen, 'has-prototype-switcher': isDev }]" :data-theme="theme" :data-controls="controlLayout">
+    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, `controls-${controlLayout}`, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen, 'has-active-add': isAddTool, 'has-open-add-menu': creationChooserOpen, 'has-prototype-switcher': isDev }]" :data-theme="theme" :data-controls="controlLayout">
       <header class="b-commandbar">
         <div class="brand-mark"><span class="brand-seal">✦</span><div><strong>TTRPG CLUSTER CONTROL</strong><small>FIELD CONSOLE · CHART 07</small></div></div>
         <div class="b-breadcrumb"><strong>{{ contextName }}</strong></div>
         <div class="b-command-actions">
           <span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span>
-          <div v-if="controlLayout === 'dock'" class="b-panel-actions" role="group" aria-label="Map panels">
-            <button class="panel-command" :aria-expanded="hierarchyOpen" aria-controls="b-hierarchy-panel" @click="toggleHierarchy">Hierarchy</button>
-            <button class="panel-command" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector">Inspect</button>
-          </div>
           <UButton size="sm" color="neutral" variant="outline" :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton>
           <UButton size="sm" color="neutral" variant="outline" aria-label="Open field definitions" @click="openFieldManager">Fields</UButton>
         </div>
@@ -89,12 +85,11 @@
           </div>
           <div class="control-group control-group--create" role="group" aria-label="Add to the map">
             <span class="control-group-label">CREATE</span>
-            <button class="rail-button" :class="{ 'is-active': isAddTool || addMenuOpen || catalogueOpen }" :aria-expanded="addMenuOpen || catalogueOpen" aria-controls="b-create-menu" aria-label="Choose an item to add to the map" @click="toggleAddMenu"><b aria-hidden="true">＋</b><span>Add…</span></button>
-          </div>
-          <div class="control-group control-group--panels" role="group" aria-label="Map panels">
-            <span class="control-group-label">PANELS</span>
-            <button class="rail-button" :class="{ 'is-active': hierarchyOpen }" aria-label="Show map hierarchy" :aria-expanded="hierarchyOpen" aria-controls="b-hierarchy-panel" @click="toggleHierarchy"><b aria-hidden="true">⌘</b><span>Hierarchy</span></button>
-            <button class="rail-button" :class="{ 'is-active': inspectorOpen }" :aria-label="inspectorOpen ? 'Hide Inspect panel' : 'Open Inspect panel'" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector"><b aria-hidden="true">▤</b><span>Inspect</span></button>
+            <PrototypeCreationPopover :open="creationChooserOpen" :view="activeView" :catalogue-open="catalogueOpen" :selected="activeSubtype" @update:open="onCreationChooserOpenChange" @choose="chooseAddAction" @open-catalogue="openCatalogue" @close="closeCreationChooser" @select="selectCatalogueType">
+              <template #trigger="{ open }">
+                <button class="rail-button" :class="{ 'is-active': isAddTool || open }" :aria-expanded="open" :aria-controls="open ? 'b-create-menu' : undefined" aria-haspopup="dialog" aria-label="Choose an item to add to the map"><b aria-hidden="true">＋</b><span>Add…</span></button>
+              </template>
+            </PrototypeCreationPopover>
           </div>
           <div class="rail-bottom"><span class="online-dot"></span><small>MEMORY ONLY</small></div>
         </nav>
@@ -102,31 +97,28 @@
           <div class="b-map-hud">
             <div class="b-map-context"><small>{{ activeView === 'cluster' ? 'JUMP CLUSTER' : `STAR SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div>
             <UButton v-if="activeView === 'system'" class="b-map-return" size="sm" color="neutral" variant="outline" aria-label="Back to Jump Cluster" @click="backToCluster">← Jump Cluster</UButton>
-            <div v-if="controlLayout === 'groups'" class="b-file-actions" role="group" aria-label="Map file actions">
-              <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
-            </div>
-            <details v-else class="b-files-menu">
-              <summary aria-label="Open map file commands">Map files</summary>
-              <div class="b-files-menu-items" role="group" aria-label="Map file commands">
+            <div class="b-map-hud-actions">
+              <div class="b-panel-actions" role="group" aria-label="Map panels">
+                <button class="panel-command" :class="{ 'is-active': hierarchyOpen }" aria-label="Show map hierarchy" :aria-expanded="hierarchyOpen" aria-controls="b-hierarchy-panel" @click="toggleHierarchy">Hierarchy</button>
+                <button class="panel-command" :class="{ 'is-active': inspectorOpen }" :aria-label="inspectorOpen ? 'Hide Inspect panel' : 'Open Inspect panel'" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector">Inspect</button>
+              </div>
+              <div v-if="controlLayout === 'groups'" class="b-file-actions" role="group" aria-label="Map file actions">
                 <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
               </div>
-            </details>
-          </div>
-          <div v-show="addMenuOpen" id="b-create-menu" class="b-create-menu" role="group" aria-label="Choose what to add">
-            <template v-if="activeView === 'cluster'">
-              <button @click="chooseAddAction('add-system')">Add star system</button><button @click="chooseAddAction('add-route')">Add Jump Route</button>
-            </template>
-            <template v-else>
-              <button @click="openCatalogue">Add map mark…</button><button @click="chooseAddAction('add-orbit')">Add Orbit</button>
-            </template>
+              <details v-else class="b-files-menu">
+                <summary aria-label="Open map file commands">Map files</summary>
+                <div class="b-files-menu-items" role="group" aria-label="Map file commands">
+                  <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
+                </div>
+              </details>
+            </div>
           </div>
           <Transition name="b-mobile-panel">
             <PrototypeHierarchy id="b-hierarchy-panel" v-show="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
           </Transition>
-          <PrototypeCataloguePicker v-if="catalogueOpen && activeView === 'system'" :selected="activeSubtype" @close="catalogueOpen = false" @select="selectCatalogueType" />
-          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" :select-systems-in-move="true" :touch-navigation="true" :long-press-enabled="true" :show-zoom-controls="false" @open-system="handleMapSystemClick" @inspect-entity="inspectMapEntity" @select-route="handleMapRouteSelection" @select-object="handleMapObjectSelection" @select-orbit="handleMapOrbitSelection" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
+          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" :creation-chooser-open="creationChooserOpen" :select-systems-in-move="true" :touch-navigation="true" :long-press-enabled="true" :show-zoom-controls="false" @open-system="handleMapSystemClick" @inspect-entity="inspectMapEntity" @dismiss-creation-chooser="dismissCreationChooser" @select-route="handleMapRouteSelection" @select-object="handleMapObjectSelection" @select-orbit="handleMapOrbitSelection" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
           <div class="b-zoom-controls" role="toolbar" aria-label="Map zoom controls"><button aria-label="Zoom out" @click="mapCanvas?.zoomBy(1 / 1.2)">−</button><button aria-label="Fit map" @click="mapCanvas?.fitMap()">Fit</button><button aria-label="Zoom in" @click="mapCanvas?.zoomBy(1.2)">＋</button></div>
-          <div v-if="isAddTool && !addMenuOpen && !catalogueOpen" class="b-add-status" :class="{ 'has-feedback': addFeedback }" role="status" aria-live="polite">
+          <div v-if="isAddTool && !creationChooserOpen" class="b-add-status" :class="{ 'has-feedback': addFeedback }" role="status" aria-live="polite">
             <div><strong>{{ addTypeLabel }}</strong><span v-if="addFeedback" class="add-feedback-message">{{ addFeedback }}</span><span>{{ toolPrompt }}</span></div>
             <button v-if="activeTool === 'add-object'" aria-label="Change the selected map mark type" @click="openCatalogue">Change mark</button>
             <button class="quit-add" aria-label="Quit Add and return to Navigate" @click="quitAdd">Quit Add · Esc</button>
@@ -140,7 +132,11 @@
             </div>
             <div class="dock-create-group" role="group" aria-label="Add to the map">
               <span class="dock-group-label">CREATE</span>
-              <button class="dock-add-button" :class="{ 'is-active': isAddTool || addMenuOpen || catalogueOpen }" :aria-expanded="addMenuOpen || catalogueOpen" aria-controls="b-create-menu" aria-label="Choose an item to add to the map" @click="toggleAddMenu">＋ <span>Add…</span></button>
+              <PrototypeCreationPopover :open="creationChooserOpen" :view="activeView" :catalogue-open="catalogueOpen" :selected="activeSubtype" @update:open="onCreationChooserOpenChange" @choose="chooseAddAction" @open-catalogue="openCatalogue" @close="closeCreationChooser" @select="selectCatalogueType">
+                <template #trigger="{ open }">
+                  <button class="dock-add-button" :class="{ 'is-active': isAddTool || open }" :aria-expanded="open" :aria-controls="open ? 'b-create-menu' : undefined" aria-haspopup="dialog" aria-label="Choose an item to add to the map">＋ <span>Add…</span></button>
+                </template>
+              </PrototypeCreationPopover>
             </div>
           </div>
           <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG ORBIT/OBJECT WITH MOVE · DRAG VIEW OR USE TWO FINGERS / RIGHT BUTTON · WHEEL TO ZOOM</span></div>
@@ -214,7 +210,7 @@
       </template>
     </UModal>
     <input ref="fileInput" class="visually-hidden" type="file" accept="application/json,.json" @change="previewImport" />
-    <div v-if="toast" class="prototype-toast" role="status" aria-live="polite">{{ toast }}</div>
+    <div v-if="toast" class="prototype-toast" :class="{ 'is-add-feedback': toastIsAddFeedback }" role="status" aria-live="polite">{{ toast }}</div>
   </div>
 </template>
 
@@ -238,7 +234,7 @@ const route = useRoute()
 const router = useRouter()
 const variant = ref<Variant>(props.initialVariant)
 watch(() => props.initialVariant, value => { variant.value = value })
-const controlLayout = computed<ControlLayout>(() => route.query.controls === 'dock' ? 'dock' : 'groups')
+const controlLayout = computed<ControlLayout>(() => route.query.controls === 'groups' ? 'groups' : 'dock')
 
 const variantNames: Record<Variant, string> = { A: 'Cartographer’s workbench', B: 'Map-first field console', C: 'Atlas folio' }
 const controlLayoutLabel = computed(() => controlLayout.value === 'groups' ? 'Grouped rail' : 'Mode dock')
@@ -254,7 +250,7 @@ const systemSelections = reactive<Record<string, Selection>>({})
 const activeTool = ref<Tool>('navigation')
 const activeSubtype = ref<CatalogueSubtype>('planet')
 const catalogueOpen = ref(false)
-const addMenuOpen = ref(false)
+const creationChooserOpen = ref(false)
 const hierarchyOpen = ref(false)
 const inspectorOpen = ref(true)
 const lastBPanel = ref<'inspector' | 'hierarchy'>('inspector')
@@ -420,7 +416,7 @@ function setNavigation(): void {
   activeTool.value = 'navigation'
   routeOriginPoint.value = null
   catalogueOpen.value = false
-  addMenuOpen.value = false
+  creationChooserOpen.value = false
 }
 
 function isBMobileViewport(): boolean {
@@ -431,6 +427,7 @@ function openInspector(): void {
   inspectorOpen.value = true
   if (variant.value === 'B') {
     lastBPanel.value = 'inspector'
+    creationChooserOpen.value = false
     catalogueOpen.value = false
     if (isBMobileViewport()) hierarchyOpen.value = false
   }
@@ -440,6 +437,7 @@ function openHierarchy(): void {
   hierarchyOpen.value = true
   if (variant.value === 'B') {
     lastBPanel.value = 'hierarchy'
+    creationChooserOpen.value = false
     catalogueOpen.value = false
     if (isBMobileViewport()) inspectorOpen.value = false
   }
@@ -457,8 +455,8 @@ watch(variant, reflowBPanelsForMobile)
 function activateTool(tool: Tool, revealInspector = true): void {
   activeTool.value = tool
   if (tool !== 'add-route') routeOriginPoint.value = null
-  if (tool !== 'add-object') catalogueOpen.value = false
-  addMenuOpen.value = false
+  catalogueOpen.value = false
+  creationChooserOpen.value = false
   if (revealInspector) openInspector()
   showToast(variant.value === 'B'
     ? tool === 'move'
@@ -469,46 +467,53 @@ function activateTool(tool: Tool, revealInspector = true): void {
     : tool === 'move' ? 'Move / Modify active. Escape returns to Navigation.' : `${toolLabel(tool)} active. Escape returns to Navigation.`)
 }
 
-function toggleAddMenu(): void {
-  addMenuOpen.value = !addMenuOpen.value
-  if (addMenuOpen.value) catalogueOpen.value = false
+function onCreationChooserOpenChange(open: boolean): void {
+  creationChooserOpen.value = open
+  if (!open) catalogueOpen.value = false
+}
+
+function closeCreationChooser(): void {
+  onCreationChooserOpenChange(false)
+}
+
+function dismissCreationChooser(): void {
+  onCreationChooserOpenChange(false)
 }
 
 function chooseAddAction(tool: Extract<Tool, `add-${string}`>): void {
   activateTool(tool, false)
-  addMenuOpen.value = false
 }
 
 function openCatalogue(): void {
   if (activeView.value !== 'system') return
   activeTool.value = 'add-object'
   routeOriginPoint.value = null
-  addMenuOpen.value = false
+  creationChooserOpen.value = true
   catalogueOpen.value = true
-  hierarchyOpen.value = false
-  if (isBMobileViewport()) inspectorOpen.value = false
 }
 
 function quitAdd(): void {
   if (!isAddTool.value) return
   setNavigation()
-  showToast('Unfinished Add canceled. Completed map items and Inspect drafts remain in memory.')
+  showToast('Unfinished Add canceled. Completed map items and Inspect drafts remain in memory.', { addFeedback: true })
 }
 
 function selectCatalogueType(subtype: CatalogueSubtype): void {
   activeSubtype.value = subtype
   activeTool.value = 'add-object'
   catalogueOpen.value = false
-  addMenuOpen.value = false
+  creationChooserOpen.value = false
   showToast(`Add ${catalogueTypes.find(type => type.value === subtype)?.label ?? 'map mark'} selected. It stays active after each successful placement.`)
 }
 
 function toggleHierarchy(): void {
+  onCreationChooserOpenChange(false)
   if (hierarchyOpen.value) hierarchyOpen.value = false
   else openHierarchy()
 }
 
 function toggleInspector(): void {
+  onCreationChooserOpenChange(false)
   if (inspectorOpen.value) inspectorOpen.value = false
   else openInspector()
 }
@@ -746,13 +751,16 @@ function placeObjectInOrbit(id: string, orbitId: string, angle: number): void {
   workspace.value.layout.objectAngles[id] = angle
 }
 
-function handleMapTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string } | { kind: 'object'; id: string } | { kind: 'system'; id: string }): void {
+function handleMapTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string; angle?: number } | { kind: 'object'; id: string } | { kind: 'system'; id: string }): void {
   if (activeTool.value === 'add-object') {
     if (target.kind !== 'empty' && target.kind !== 'orbit') {
       if (variant.value === 'B') showToast('Add mark needs open space or an Orbit. The selected mark type remains ready.', { addFeedback: true })
       return
     }
-    addObjectAtTarget(target)
+    if (target.kind === 'empty') addObjectAtTarget(target)
+    else if (target.angle === undefined || !Number.isFinite(target.angle)) {
+      if (variant.value === 'B') showToast('Could not read that Orbit position. No mark was added; Add remains ready.', { addFeedback: true })
+    } else addObjectAtTarget({ kind: 'orbit', id: target.id, angle: target.angle })
   } else if (activeTool.value === 'add-orbit') {
     if (target.kind !== 'empty' && target.kind !== 'object') {
       if (variant.value === 'B') showToast('Add Orbit needs open space or an object to host it. Add Orbit remains ready.', { addFeedback: true })
@@ -767,7 +775,7 @@ function handleMapTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbi
   }
 }
 
-function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string }): void {
+function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string; angle: number }): void {
   if (!activeSystem.value) return
   const subtype = catalogueTypes.find(type => type.value === activeSubtype.value) ?? catalogueTypes[1]
   const index = activeSystem.value.objects.filter(object => object.subtype === subtype.value).length + 1
@@ -777,7 +785,7 @@ function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'or
     name: `${subtype.label} ${index}`, description: '',
     placement: target.kind === 'orbit' ? { kind: 'orbit', orbitId: target.id } : { kind: 'system', ...target.point },
   }
-  if (target.kind === 'orbit') workspace.value.layout.objectAngles[id] = Math.PI / 5
+  if (target.kind === 'orbit') workspace.value.layout.objectAngles[id] = target.angle
   replaceSystem({ ...activeSystem.value, objects: [...activeSystem.value.objects, object] })
   if (variant.value === 'B') {
     beginSimulatedSave()
@@ -1135,15 +1143,15 @@ function onVariantKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return
     const target = event.target instanceof Element ? event.target : null
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+    if (creationChooserOpen.value) {
+      onCreationChooserOpenChange(false)
+      catalogueOpen.value = false
+      event.preventDefault()
+      return
+    }
     if (isAddTool.value) {
       event.preventDefault()
       quitAdd()
-      return
-    }
-    if (addMenuOpen.value || catalogueOpen.value) {
-      addMenuOpen.value = false
-      catalogueOpen.value = false
-      event.preventDefault()
       return
     }
   }
@@ -1397,6 +1405,7 @@ function seedWorkspace(): LocalWorkspace {
 .b-zoom-controls button:hover { border-color: var(--proto-accent); color: var(--proto-accent); }
 .b-map-hud { position: absolute; z-index: 3; top: 5.3rem; right: 1rem; left: 5.2rem; display: flex; align-items: center; justify-content: space-between; gap: .7rem; padding: .55rem .7rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .4rem 1.6rem rgba(0, 0, 0, .13); backdrop-filter: blur(12px); }
 .b-map-context { display: grid; min-width: 8rem; gap: .15rem; }
+.b-map-hud-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .3rem; }
 .b-file-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .25rem; }
 .b-file-actions button, .b-files-menu summary, .b-files-menu-items button { min-height: 2.25rem; padding: .35rem .52rem; border: 1px solid var(--proto-line); background: var(--proto-raised); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .72rem; line-height: 1.2; cursor: pointer; }
 .b-file-actions button:hover, .b-files-menu summary:hover, .b-files-menu-items button:hover { border-color: var(--proto-accent); color: var(--proto-accent); }
@@ -1416,9 +1425,6 @@ function seedWorkspace(): LocalWorkspace {
 .rail-button span { font-size: .74rem; line-height: 1.2; }
 .rail-button:hover, .rail-button.is-active { border-color: color-mix(in srgb, var(--proto-accent) 45%, transparent); background: var(--proto-soft); color: var(--proto-ink); }
 .rail-button.is-active b { color: var(--proto-accent); }
-.b-create-menu { position: absolute; z-index: 7; top: 9.8rem; left: 8.7rem; display: grid; min-width: 13rem; gap: .18rem; padding: .3rem; border: 1px solid var(--proto-line); background: var(--proto-surface); box-shadow: 0 .8rem 2rem rgba(0,0,0,.25); }
-.b-create-menu button { min-height: 2.45rem; border: 1px solid transparent; padding: .45rem .6rem; background: var(--proto-soft); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .78rem; text-align: left; cursor: pointer; }
-.b-create-menu button:hover { border-color: var(--proto-accent); }
 .b-control-dock { position: absolute; z-index: 4; bottom: 1rem; left: 50%; display: flex; align-items: stretch; gap: .5rem; padding: .35rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 95%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0,0,0,.2); transform: translateX(-50%); backdrop-filter: blur(16px); }
 .dock-mode-group, .dock-create-group { display: flex; align-items: center; gap: .16rem; }
 .dock-group-label { padding: 0 .25rem; }
@@ -1433,9 +1439,7 @@ function seedWorkspace(): LocalWorkspace {
 .b-add-status button { min-height: 2.25rem; flex: 0 0 auto; border: 1px solid var(--proto-line); padding: .35rem .5rem; background: var(--proto-raised); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .72rem; cursor: pointer; }
 .b-add-status .quit-add { border-color: var(--proto-accent); color: var(--proto-accent); }
 .proto-b.controls-dock .b-add-status { right: auto; bottom: 4.35rem; left: 50%; width: min(48rem, calc(100% - 2rem)); max-width: none; transform: translateX(-50%); }
-.proto-b.controls-groups .b-catalogue-panel { left: 8.7rem; }
-.proto-b.controls-dock .b-catalogue-panel { top: 9.8rem; left: 1rem; }
-.b-create-menu button:focus-visible, .b-add-status button:focus-visible, .b-control-dock button:focus-visible, .b-tool-rail button:focus-visible, .b-file-actions button:focus-visible, .b-files-menu summary:focus-visible, .b-files-menu-items button:focus-visible, .b-command-actions button:focus-visible { outline: 2px solid var(--proto-accent); outline-offset: 2px; }
+.b-add-status button:focus-visible, .b-control-dock button:focus-visible, .b-tool-rail button:focus-visible, .b-file-actions button:focus-visible, .b-files-menu summary:focus-visible, .b-files-menu-items button:focus-visible, .b-command-actions button:focus-visible, .b-panel-actions button:focus-visible { outline: 2px solid var(--proto-accent); outline-offset: 2px; }
 .rail-spacer { min-height: .2rem; flex: 1; }
 .rail-bottom { display: grid; justify-items: center; gap: .24rem; padding-top: .45rem; border-top: 1px solid var(--proto-line); color: var(--proto-muted); }
 .rail-bottom small { font-size: .4rem; }
@@ -1596,7 +1600,7 @@ function seedWorkspace(): LocalWorkspace {
   .b-command-actions button, .panel-command { min-height: 2.15rem; padding: .3rem .45rem; font-size: .72rem; }
   .b-panel-actions { gap: .05rem; padding: .1rem; }
   .command-save { display: none; }
-  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; display: grid; width: auto; max-width: calc(100% - 1rem); max-height: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .12rem; overflow: visible; padding: .25rem; transform: none; }
+  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; display: grid; width: auto; max-width: calc(100% - 1rem); max-height: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .12rem; overflow: visible; padding: .25rem; transform: none; }
   .control-group { display: contents; }
   .control-group-label, .rail-cap, .rail-spacer, .rail-bottom { display: none; }
   .rail-button { width: 100%; min-width: 0; min-height: 2.75rem; flex-direction: column; justify-content: center; gap: .12rem; padding: .22rem .12rem; }
@@ -1606,15 +1610,13 @@ function seedWorkspace(): LocalWorkspace {
   .b-map-context { flex: 1 1 8rem; }
   .b-map-hud strong { max-width: 8rem; font-size: .9rem; }
   .b-map-hud small { font-size: .42rem; }
+  .b-map-hud-actions { width: 100%; justify-content: space-between; }
   .b-file-actions { display: grid; flex: 1 1 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .18rem; }
   .b-file-actions button, .b-files-menu summary { min-height: 2.15rem; padding: .28rem .38rem; font-size: .68rem; }
   .b-files-menu { margin-left: auto; }
   .b-files-menu-items { right: 0; }
   .b-map-return { min-height: 2rem; padding: .3rem .45rem; font-size: .58rem; white-space: nowrap; }
-  .b-create-menu { top: 14.6rem; right: .5rem; left: .5rem; min-width: 0; }
-  .proto-b.controls-groups .b-catalogue-panel, .proto-b.controls-groups .b-add-status { top: 14.6rem; right: .45rem; left: .45rem; }
-  .proto-b.controls-dock .b-create-menu { top: auto; bottom: 6.2rem; left: 50%; width: min(17rem, calc(100% - 1rem)); transform: translateX(-50%); }
-  .proto-b.controls-dock .b-catalogue-panel, .proto-b.controls-dock .b-add-status { top: 9.7rem; right: .45rem; left: .45rem; }
+  .proto-b.controls-groups .b-add-status, .proto-b.controls-dock .b-add-status { top: 12rem; right: .45rem; bottom: auto; left: .45rem; transform: none; }
   .b-add-status { bottom: auto; max-width: none; flex-wrap: wrap; gap: .28rem; padding: .4rem; }
   .b-add-status > div { flex-basis: 100%; }
   .b-add-status span { overflow: visible; font-size: .72rem; }
@@ -1661,17 +1663,15 @@ function seedWorkspace(): LocalWorkspace {
   .b-breadcrumb { grid-area: breadcrumb; min-width: 0; justify-self: end; }
   .b-command-actions { grid-area: actions; width: 100%; justify-content: space-between; }
   .b-map-hud { top: 7rem; right: 1rem; left: 1rem; }
-  .b-create-menu { top: 10.8rem; }
   .b-add-status { top: 10.8rem; right: 9rem; bottom: auto; left: 1rem; max-width: none; }
   .proto-b.controls-dock .b-add-status { top: 10.8rem; right: 9rem; bottom: auto; left: 1rem; width: auto; max-width: none; transform: none; }
-  .proto-b.controls-dock .b-catalogue-panel { top: 10.8rem; }
   .b-control-dock { bottom: 4.45rem; }
   .proto-b.has-prototype-switcher .b-control-dock { bottom: 4.45rem; }
   .b-zoom-controls { top: auto; right: 1rem; bottom: 4.2rem; }
 }
 
 @media (max-width: 430px) {
-  .proto-b .b-tool-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: auto; align-items: stretch; gap: .1rem; overflow: visible; }
+  .proto-b .b-tool-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; align-items: stretch; gap: .1rem; overflow: visible; }
   .proto-b .b-tool-rail .rail-button { width: 100%; min-width: 0; min-height: 2.6rem; flex: none; padding: .14rem .08rem; }
   .proto-b .b-tool-rail .rail-button b { font-size: .98rem; line-height: 1; }
   .proto-b .b-tool-rail .rail-button span { font-size: .72rem; line-height: 1.1; white-space: nowrap; }
@@ -1716,6 +1716,7 @@ function seedWorkspace(): LocalWorkspace {
 }
 
 .proto-b.has-active-add:not(.has-open-add-menu):not(.has-open-inspector):not(.has-open-side-panel) ~ .prototype-toast { display: none; }
+.proto-b.has-open-add-menu ~ .prototype-toast.is-add-feedback { display: none; }
 
 @media (max-width: 760px) and (prefers-reduced-motion: reduce), (max-width: 1024px) and (max-height: 600px) and (prefers-reduced-motion: reduce) {
   .b-mobile-panel-enter-active,

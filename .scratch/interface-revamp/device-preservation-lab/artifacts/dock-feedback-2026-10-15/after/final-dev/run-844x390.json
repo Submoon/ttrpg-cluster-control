@@ -1,0 +1,620 @@
+{
+  "runtime": "Nuxt dev via npm run dev in the isolated preview-build runtime on localhost:3139",
+  "viewport": {
+    "width": 844,
+    "height": 390,
+    "isMobile": true,
+    "hasTouch": true,
+    "deviceScaleFactor": 1
+  },
+  "defaultLayout": "dock",
+  "initialInspectorDismissed": true,
+  "toastBeforeOpen": {
+    "className": "prototype-toast is-add-feedback",
+    "display": "block",
+    "text": "Unfinished Add canceled. Completed map items and Inspect drafts remain in memory."
+  },
+  "actionLayer": {
+    "shellClass": "proto-shell proto-b dark controls-dock has-open-add-menu has-prototype-switcher",
+    "content": {
+      "text": "Add map mark…Add Orbit",
+      "rect": {
+        "x": 183.51193237304688,
+        "y": 186.65538024902344,
+        "right": 619,
+        "bottom": 279.078125,
+        "width": 435.4880676269531,
+        "height": 92.42274475097656
+      },
+      "position": "static",
+      "zIndex": "15",
+      "display": "block",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "DIV",
+        "className": "b-create-content",
+        "label": "Choose what to add"
+      },
+      "hitTestable": true
+    },
+    "hud": {
+      "text": "STAR SYSTEM / 1Vela Reach← Jump ClusterHierarchyInspectMap filesImport map…Export image · ",
+      "rect": {
+        "x": 16,
+        "y": 112,
+        "right": 828,
+        "bottom": 178.359375,
+        "width": 812,
+        "height": 66.359375
+      },
+      "position": "absolute",
+      "zIndex": "3",
+      "display": "flex",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "DIV",
+        "className": "b-map-hud",
+        "label": "STAR SYSTEM / 1Vela Reach← Jump ClusterHierarchyInspectMap f"
+      },
+      "hitTestable": true
+    },
+    "toast": {
+      "text": "Unfinished Add canceled. Completed map items and Inspect drafts remain in memory.",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "position": "fixed",
+      "zIndex": "35",
+      "display": "none",
+      "visible": false,
+      "insideViewport": false,
+      "hitTarget": null,
+      "hitTestable": false
+    },
+    "header": null,
+    "closeButton": null,
+    "families": [],
+    "types": [],
+    "actionButtons": [
+      {
+        "index": 0,
+        "label": "Add map mark…",
+        "text": "Add map mark…",
+        "rect": {
+          "x": 189.92152404785156,
+          "y": 193.06497192382812,
+          "right": 612.5904083251953,
+          "bottom": 231.1580352783203,
+          "width": 422.66888427734375,
+          "height": 38.09306335449219
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "block",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "BUTTON",
+          "className": "",
+          "label": "Add map mark…"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 1,
+        "label": "Add Orbit",
+        "text": "Add Orbit",
+        "rect": {
+          "x": 189.92152404785156,
+          "y": 234.57546997070312,
+          "right": 612.5904083251953,
+          "bottom": 272.66851806640625,
+          "width": 422.66888427734375,
+          "height": 38.093048095703125
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "block",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "BUTTON",
+          "className": "",
+          "label": "Add Orbit"
+        },
+        "hitTestable": true
+      }
+    ]
+  },
+  "catalogueLayer": {
+    "shellClass": "proto-shell proto-b dark controls-dock has-active-add has-open-add-menu has-prototype-switcher",
+    "content": {
+      "text": "ADD OBJECT / CATALOGUEChoose a mark×✦Celestial bodies◌Small bodies & fields⌂Installations⌁",
+      "rect": {
+        "x": 171,
+        "y": 47,
+        "right": 619,
+        "bottom": 279.6875,
+        "width": 448,
+        "height": 232.6875
+      },
+      "position": "static",
+      "zIndex": "15",
+      "display": "block",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "BUTTON",
+        "className": "",
+        "label": "◇Other"
+      },
+      "hitTestable": true
+    },
+    "hud": {
+      "text": "STAR SYSTEM / 1Vela Reach← Jump ClusterHierarchyInspectMap filesImport map…Export image · ",
+      "rect": {
+        "x": 16,
+        "y": 112,
+        "right": 828,
+        "bottom": 178.359375,
+        "width": 812,
+        "height": 66.359375
+      },
+      "position": "absolute",
+      "zIndex": "3",
+      "display": "flex",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "BUTTON",
+        "className": "",
+        "label": "◇Other"
+      },
+      "hitTestable": false
+    },
+    "toast": {
+      "text": "Unfinished Add canceled. Completed map items and Inspect drafts remain in memory.",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "position": "fixed",
+      "zIndex": "35",
+      "display": "none",
+      "visible": false,
+      "insideViewport": false,
+      "hitTarget": null,
+      "hitTestable": false
+    },
+    "header": {
+      "text": "ADD OBJECT / CATALOGUEChoose a mark×",
+      "rect": {
+        "x": 177.59375,
+        "y": 57.59375,
+        "right": 612.40625,
+        "bottom": 90.5,
+        "width": 434.8125,
+        "height": 32.90625
+      },
+      "position": "static",
+      "zIndex": "auto",
+      "display": "flex",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "HEADER",
+        "className": "b-catalogue-heading",
+        "label": "ADD OBJECT / CATALOGUEChoose a mark×"
+      },
+      "hitTestable": true
+    },
+    "closeButton": {
+      "text": "×",
+      "rect": {
+        "x": 580.40625,
+        "y": 58.046875,
+        "right": 612.40625,
+        "bottom": 90.046875,
+        "width": 32,
+        "height": 32
+      },
+      "position": "static",
+      "zIndex": "auto",
+      "display": "block",
+      "visible": true,
+      "insideViewport": true,
+      "hitTarget": {
+        "tag": "BUTTON",
+        "className": "",
+        "label": "Close object catalogue"
+      },
+      "hitTestable": true
+    },
+    "families": [
+      {
+        "index": 0,
+        "label": "✦Celestial bodies",
+        "text": "✦Celestial bodies",
+        "rect": {
+          "x": 177.59375,
+          "y": 100.09375,
+          "right": 293.8125,
+          "bottom": 135.28125,
+          "width": 116.21875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Celestial bodies"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 1,
+        "label": "◌Small bodies & fields",
+        "text": "◌Small bodies & fields",
+        "rect": {
+          "x": 297.8125,
+          "y": 100.09375,
+          "right": 439,
+          "bottom": 135.28125,
+          "width": 141.1875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Small bodies & fields"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 2,
+        "label": "⌂Installations",
+        "text": "⌂Installations",
+        "rect": {
+          "x": 443,
+          "y": 100.09375,
+          "right": 536.96875,
+          "bottom": 135.28125,
+          "width": 93.96875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Installations"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 3,
+        "label": "⌁Vessels",
+        "text": "⌁Vessels",
+        "rect": {
+          "x": 540.96875,
+          "y": 100.09375,
+          "right": 606.9375,
+          "bottom": 135.28125,
+          "width": 65.96875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Vessels"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 4,
+        "label": "⊙Jump Points",
+        "text": "⊙Jump Points",
+        "rect": {
+          "x": 177.59375,
+          "y": 139.28125,
+          "right": 275.78125,
+          "bottom": 174.46875,
+          "width": 98.1875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Jump Points"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 5,
+        "label": "✧Phenomena",
+        "text": "✧Phenomena",
+        "rect": {
+          "x": 279.78125,
+          "y": 139.28125,
+          "right": 372.65625,
+          "bottom": 174.46875,
+          "width": 92.875,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Phenomena"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 6,
+        "label": "◇Other",
+        "text": "◇Other",
+        "rect": {
+          "x": 376.65625,
+          "y": 139.28125,
+          "right": 438.75,
+          "bottom": 174.46875,
+          "width": 62.09375,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Other"
+        },
+        "hitTestable": true
+      }
+    ],
+    "types": [
+      {
+        "index": 0,
+        "label": "✦Star",
+        "text": "✦Star",
+        "rect": {
+          "x": 177.59375,
+          "y": 193.0625,
+          "right": 232.546875,
+          "bottom": 228.25,
+          "width": 54.953125,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Star"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 1,
+        "label": "◉Planet",
+        "text": "◉Planet",
+        "rect": {
+          "x": 237.34375,
+          "y": 193.0625,
+          "right": 306.609375,
+          "bottom": 228.25,
+          "width": 69.265625,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Planet"
+        },
+        "hitTestable": true
+      },
+      {
+        "index": 2,
+        "label": "☾Moon",
+        "text": "☾Moon",
+        "rect": {
+          "x": 311.40625,
+          "y": 193.0625,
+          "right": 369.734375,
+          "bottom": 228.25,
+          "width": 58.328125,
+          "height": 35.1875
+        },
+        "position": "static",
+        "zIndex": "auto",
+        "display": "flex",
+        "visible": true,
+        "insideViewport": true,
+        "hitTarget": {
+          "tag": "SPAN",
+          "className": "",
+          "label": "Moon"
+        },
+        "hitTestable": true
+      }
+    ],
+    "actionButtons": []
+  },
+  "familyProbes": [
+    {
+      "family": "✦\nCelestial bodies",
+      "types": [
+        {
+          "label": "✦\nStar",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "◉\nPlanet",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "☾\nMoon",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "◌\nSmall bodies & fields",
+      "types": [
+        {
+          "label": "◆\nAsteroid",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "⋯\nBelt",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "⌂\nInstallations",
+      "types": [
+        {
+          "label": "⌂\nStation",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "▤\nBase",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "⚑\nColony",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "⌁\nVessels",
+      "types": [
+        {
+          "label": "△\nVessel",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "▽\nDerelict",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "⊙\nJump Points",
+      "types": [
+        {
+          "label": "⊕\nJump Point",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "✧\nPhenomena",
+      "types": [
+        {
+          "label": "✧\nAnomaly",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "◌\nNebula",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        {
+          "label": "⚠\nHazard",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    },
+    {
+      "family": "◇\nOther",
+      "types": [
+        {
+          "label": "◇\nOther",
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      ]
+    }
+  ],
+  "addPreservedAfterClose": true,
+  "pageErrors": [],
+  "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\dock-feedback-2026-10-15\\after\\final-dev\\dock-chooser-844x390.png"
+}
