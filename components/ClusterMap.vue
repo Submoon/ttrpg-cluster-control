@@ -44,10 +44,10 @@ const props = withDefaults(defineProps<{
   selectedSystemId: string | null
   selectedRouteId: string | null
   moveEnabled?: boolean
-  selectSystems?: boolean
+  systemActivation?: 'open' | 'select' | 'inspect'
   touchNavigation?: boolean
   showZoomControls?: boolean
-}>(), { moveEnabled: true, selectSystems: false, touchNavigation: false, showZoomControls: true })
+}>(), { moveEnabled: true, systemActivation: 'open', touchNavigation: false, showZoomControls: true })
 
 const emit = defineEmits<{
   'open-system': [id: string]
@@ -62,6 +62,7 @@ type ClusterTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: ClusterTouchGesture | null = null
+let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 const activeSystemGestures = new Map<SVGGElement, () => void>()
 const cancelledSystemGestures = new WeakSet<SVGGElement>()
 let refreshLiveRouteGeometry: (() => void) | undefined
@@ -181,6 +182,25 @@ function cancelActiveGesture(): void {
   activeSystemGestures.clear()
   refreshLiveRouteGeometry?.()
 }
+
+/** Starts a view-only pan, including when a different button owns an unfinished edit. */
+function startViewPan(event: MouseEvent): void {
+  const element = svgElement.value
+  if (!element || !zoomBehavior) return
+  cancelActiveGesture()
+  viewPan = { transform: zoomTransform(element), start: pointer(event, element) as [number, number] }
+}
+
+function moveViewPan(event: MouseEvent): void {
+  const element = svgElement.value
+  if (!element || !zoomBehavior || !viewPan) return
+  const point = pointer(event, element)
+  select(element).call(zoomBehavior.transform, zoomIdentity
+    .translate(viewPan.transform.x + point[0] - viewPan.start[0], viewPan.transform.y + point[1] - viewPan.start[1])
+    .scale(viewPan.transform.k))
+}
+
+function endViewPan(): void { viewPan = null }
 
 /**
  * Rebuilds D3 route/system nodes while preserving the user's temporary pan and zoom transform.
@@ -320,7 +340,11 @@ function render(): void {
     })
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', system => props.selectSystems ? `Select ${system.name} system` : `Open ${system.name} system map`)
+    .attr('aria-label', system => props.systemActivation === 'inspect'
+      ? `Inspect ${system.name} system details`
+      : props.systemActivation === 'select'
+        ? `Select ${system.name} system`
+        : `Open ${system.name} system map`)
 
   systemMarks.append('rect')
     .attr('class', 'cluster-system-card')
@@ -365,7 +389,9 @@ function render(): void {
     })
 
   const systemDrag = drag<SVGGElement, StarSystem>()
-    .filter(() => props.moveEnabled)
+    .filter(event => props.moveEnabled && !event.ctrlKey && !event.button
+      && (!('touches' in event) || event.touches.length === 1))
+    .clickDistance(6)
     .container(() => content.node()!)
     .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
     .on('start', function (_event, system) {
@@ -416,6 +442,7 @@ function render(): void {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent([[0, 0], [960, 560]])
     .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
+    .clickDistance(6)
     .filter((event) => {
       const target = event.target
       const isMapMark = target instanceof Element
@@ -423,9 +450,8 @@ function render(): void {
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
-      return (props.touchNavigation && event.type.startsWith('touch'))
-        || (!isMapMark || !props.moveEnabled || event.type === 'wheel' || touchPinch)
-        && (!event.ctrlKey || event.type === 'wheel')
+      return (!isMapMark || !props.moveEnabled || event.type === 'wheel' || touchPinch)
+        && (!props.moveEnabled || !event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })
     .on('zoom', (event) => {
@@ -442,9 +468,9 @@ watch(() => props.cluster, render, { deep: true })
 watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
-watch(() => props.selectSystems, render)
+watch(() => props.systemActivation, render)
 
-defineExpose({ exportImage, zoomBy, fitMap, cancelActiveGesture, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+defineExpose({ exportImage, zoomBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>

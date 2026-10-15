@@ -1,5 +1,5 @@
 <template>
-  <section class="b-catalogue-panel" aria-label="Choose catalogue object type">
+  <section id="b-catalogue-panel" class="b-catalogue-panel" aria-label="Choose catalogue object type">
     <header class="b-catalogue-heading">
       <div><small>ADD OBJECT / CATALOGUE</small><strong>Choose a mark</strong></div>
       <button type="button" aria-label="Close object catalogue" @click="emit('close')">×</button>
@@ -27,7 +27,7 @@
         <span>{{ type.label }}</span>
       </button>
     </div>
-    <p>Then choose open space or an Orbit on the map. Add exits after one placement.</p>
+    <p>Choose open space or an Orbit on the map. Add stays active for this mark type until you choose another tool.</p>
   </section>
 </template>
 
@@ -65,13 +65,13 @@ const activeGroup = computed(() => groups.find(group => group.family === selecte
 .b-catalogue-heading button { width: 2rem; min-height: 2rem; border: 1px solid var(--proto-line); background: var(--proto-soft); color: var(--proto-ink); font-size: 1.05rem; cursor: pointer; }
 .b-catalogue-family-list { display: flex; flex-wrap: wrap; gap: .25rem; border-bottom: 1px solid var(--proto-line); padding-bottom: .5rem; }
 .b-catalogue-family-list button, .b-catalogue-types button { display: inline-flex; min-height: 2.2rem; align-items: center; justify-content: center; gap: .32rem; border: 1px solid var(--proto-line); padding: .3rem .45rem; background: var(--proto-soft); color: var(--proto-ink); font: inherit; cursor: pointer; }
-.b-catalogue-family-list button { min-height: 1.9rem; color: var(--proto-muted); font-size: .54rem; }
+.b-catalogue-family-list button { min-height: 2.2rem; color: var(--proto-muted); font-size: .75rem; }
 .b-catalogue-family-list button[aria-pressed="true"], .b-catalogue-types button[aria-pressed="true"] { border-color: var(--proto-accent); background: color-mix(in srgb, var(--proto-accent) 14%, var(--proto-surface)); color: var(--proto-ink); }
 .b-catalogue-family-list button > span:first-child { color: var(--proto-accent); }
 .b-catalogue-types { display: flex; flex-wrap: wrap; gap: .3rem; }
-.b-catalogue-types button { font-size: .58rem; }
+.b-catalogue-types button { font-size: .78rem; }
 .b-catalogue-glyph { color: var(--proto-accent); font-size: .85rem; }
-.b-catalogue-panel p { margin: 0; color: var(--proto-muted); font-size: .56rem; line-height: 1.4; }
+.b-catalogue-panel p { margin: 0; color: var(--proto-muted); font-size: .76rem; line-height: 1.45; }
 .b-catalogue-panel :focus-visible { outline: 2px solid var(--proto-accent); outline-offset: 1px; }
 @media (max-width: 760px) {
   .b-catalogue-panel { top: 3.3rem; right: .4rem; bottom: auto; left: .4rem; width: auto; height: auto; max-height: min(46dvh, 28rem); align-content: start; overflow: auto; }

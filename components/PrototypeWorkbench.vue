@@ -65,40 +65,88 @@
       </main>
     </div>
 
-    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen, 'has-prototype-switcher': isDev }]" :data-theme="theme">
+    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, `controls-${controlLayout}`, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen, 'has-active-add': isAddTool, 'has-open-add-menu': addMenuOpen || catalogueOpen, 'has-prototype-switcher': isDev }]" :data-theme="theme" :data-controls="controlLayout">
       <header class="b-commandbar">
         <div class="brand-mark"><span class="brand-seal">✦</span><div><strong>TTRPG CLUSTER CONTROL</strong><small>FIELD CONSOLE · CHART 07</small></div></div>
         <div class="b-breadcrumb"><strong>{{ contextName }}</strong></div>
-        <div class="b-command-actions"><span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span><UButton size="sm" color="neutral" variant="outline" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton><UButton size="sm" color="neutral" variant="outline" @click="openFieldManager">Fields</UButton></div>
+        <div class="b-command-actions">
+          <span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span>
+          <div v-if="controlLayout === 'dock'" class="b-panel-actions" role="group" aria-label="Map panels">
+            <button class="panel-command" :aria-expanded="hierarchyOpen" aria-controls="b-hierarchy-panel" @click="toggleHierarchy">Hierarchy</button>
+            <button class="panel-command" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector">Inspect</button>
+          </div>
+          <UButton size="sm" color="neutral" variant="outline" :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton>
+          <UButton size="sm" color="neutral" variant="outline" aria-label="Open field definitions" @click="openFieldManager">Fields</UButton>
+        </div>
       </header>
       <main class="b-map-board">
-        <nav class="b-tool-rail" aria-label="Map tools">
-          <div class="rail-cap">TOOLS</div>
-          <button class="rail-button" :class="{ 'is-active': activeTool === 'navigation' }" title="Navigation" :aria-pressed="activeTool === 'navigation'" @click="setNavigation"><b>⌖</b><span>Navigate</span></button>
-          <button class="rail-button" :class="{ 'is-active': activeTool === 'move' }" title="Move / Modify" :aria-pressed="activeTool === 'move'" @click="activateTool('move', false)"><b>↗</b><span>Move</span></button>
-          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-object' || catalogueOpen }" title="Choose a catalogue mark to add" :aria-pressed="activeTool === 'add-object' || catalogueOpen" :aria-expanded="catalogueOpen" @click="toggleCatalogue"><b>＋</b><span>Add mark</span></button>
-          <button v-if="activeView === 'system'" class="rail-button" :class="{ 'is-active': activeTool === 'add-orbit' }" title="Add an Orbit" :aria-pressed="activeTool === 'add-orbit'" @click="activateTool('add-orbit', false)"><b>◎</b><span>Orbit</span></button>
-          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-system' }" title="Add a system" :aria-pressed="activeTool === 'add-system'" @click="activateTool('add-system', false)"><b>✦</b><span>System</span></button>
-          <button v-if="activeView === 'cluster'" class="rail-button" :class="{ 'is-active': activeTool === 'add-route' }" title="Draw Jump Route" :aria-pressed="activeTool === 'add-route'" @click="activateTool('add-route', false)"><b>⤳</b><span>Route</span></button>
-          <button class="rail-button" :class="{ 'is-active': hierarchyOpen }" title="Show map hierarchy" :aria-expanded="hierarchyOpen" @click="toggleHierarchy"><b>⌘</b><span>Hierarchy</span></button>
-          <span class="rail-spacer"></span>
-          <button class="rail-button" title="Import map file" @click="chooseImport"><b>⇧</b><span>Import</span></button>
-          <button class="rail-button" title="Export map image" @click="exportMap('png')"><b>⇩</b><span>Export</span></button>
-          <button class="rail-button" :class="{ 'is-active': inspectorOpen }" :title="inspectorOpen ? 'Hide Inspector' : 'Open Inspector'" :aria-label="inspectorOpen ? 'Hide Inspector panel' : 'Open Inspector panel'" :aria-expanded="inspectorOpen" @click="toggleInspector"><b aria-hidden="true">▤</b><span>Inspect</span></button>
-          <div class="rail-bottom"><span class="online-dot"></span><small>NO SYNC</small></div>
+        <nav v-if="controlLayout === 'groups'" class="b-tool-rail" aria-label="Map controls">
+          <div class="control-group control-group--modes" role="group" aria-label="Map mode">
+            <span class="control-group-label">MODE</span>
+            <button class="rail-button" :class="{ 'is-active': activeTool === 'navigation' }" aria-label="Navigate: pan the view or open a system" :aria-pressed="activeTool === 'navigation'" @click="setNavigation"><b aria-hidden="true">⌖</b><span>Navigate</span></button>
+            <button class="rail-button" :class="{ 'is-active': activeTool === 'select' }" aria-label="Select: tap a map item to inspect it" :aria-pressed="activeTool === 'select'" @click="activateTool('select', false)"><b aria-hidden="true">⌕</b><span>Select</span></button>
+            <button class="rail-button" :class="{ 'is-active': activeTool === 'move' }" aria-label="Move: drag existing map geometry" :aria-pressed="activeTool === 'move'" @click="activateTool('move', false)"><b aria-hidden="true">↗</b><span>Move</span></button>
+          </div>
+          <div class="control-group control-group--create" role="group" aria-label="Add to the map">
+            <span class="control-group-label">CREATE</span>
+            <button class="rail-button" :class="{ 'is-active': isAddTool || addMenuOpen || catalogueOpen }" :aria-expanded="addMenuOpen || catalogueOpen" aria-controls="b-create-menu" aria-label="Choose an item to add to the map" @click="toggleAddMenu"><b aria-hidden="true">＋</b><span>Add…</span></button>
+          </div>
+          <div class="control-group control-group--panels" role="group" aria-label="Map panels">
+            <span class="control-group-label">PANELS</span>
+            <button class="rail-button" :class="{ 'is-active': hierarchyOpen }" aria-label="Show map hierarchy" :aria-expanded="hierarchyOpen" aria-controls="b-hierarchy-panel" @click="toggleHierarchy"><b aria-hidden="true">⌘</b><span>Hierarchy</span></button>
+            <button class="rail-button" :class="{ 'is-active': inspectorOpen }" :aria-label="inspectorOpen ? 'Hide Inspect panel' : 'Open Inspect panel'" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector"><b aria-hidden="true">▤</b><span>Inspect</span></button>
+          </div>
+          <div class="rail-bottom"><span class="online-dot"></span><small>MEMORY ONLY</small></div>
         </nav>
         <section class="b-map-area">
-          <div class="b-map-hud"><div><small>{{ activeView === 'cluster' ? 'CHART / 01' : `SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div><UButton v-if="activeView === 'system'" class="b-map-return" size="sm" color="neutral" variant="outline" aria-label="Back to Jump Cluster" @click="backToCluster">← Jump Cluster</UButton><div class="hud-actions"><UButton size="sm" color="neutral" variant="outline" @click="exportMap('svg')">SVG</UButton><UButton size="sm" color="neutral" variant="outline" @click="copyShareLink">Share</UButton></div></div>
+          <div class="b-map-hud">
+            <div class="b-map-context"><small>{{ activeView === 'cluster' ? 'JUMP CLUSTER' : `STAR SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div>
+            <UButton v-if="activeView === 'system'" class="b-map-return" size="sm" color="neutral" variant="outline" aria-label="Back to Jump Cluster" @click="backToCluster">← Jump Cluster</UButton>
+            <div v-if="controlLayout === 'groups'" class="b-file-actions" role="group" aria-label="Map file actions">
+              <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
+            </div>
+            <details v-else class="b-files-menu">
+              <summary aria-label="Open map file commands">Map files</summary>
+              <div class="b-files-menu-items" role="group" aria-label="Map file commands">
+                <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
+              </div>
+            </details>
+          </div>
+          <div v-show="addMenuOpen" id="b-create-menu" class="b-create-menu" role="group" aria-label="Choose what to add">
+            <template v-if="activeView === 'cluster'">
+              <button @click="chooseAddAction('add-system')">Add star system</button><button @click="chooseAddAction('add-route')">Add Jump Route</button>
+            </template>
+            <template v-else>
+              <button @click="openCatalogue">Add map mark…</button><button @click="chooseAddAction('add-orbit')">Add Orbit</button>
+            </template>
+          </div>
           <Transition name="b-mobile-panel">
-            <PrototypeHierarchy v-show="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
+            <PrototypeHierarchy id="b-hierarchy-panel" v-show="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
           </Transition>
           <PrototypeCataloguePicker v-if="catalogueOpen && activeView === 'system'" :selected="activeSubtype" @close="catalogueOpen = false" @select="selectCatalogueType" />
-          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" :select-systems-in-move="true" :touch-navigation="true" :long-press-enabled="true" :show-zoom-controls="false" @open-system="handleMapSystemClick" @inspect-entity="inspectMapEntity" @select-route="id => requestSelection({ kind: 'route', id })" @select-object="id => requestSelection({ kind: 'object', id })" @select-orbit="id => requestSelection({ kind: 'orbit', id })" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
+          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" :select-systems-in-move="true" :touch-navigation="true" :long-press-enabled="true" :show-zoom-controls="false" @open-system="handleMapSystemClick" @inspect-entity="inspectMapEntity" @select-route="handleMapRouteSelection" @select-object="handleMapObjectSelection" @select-orbit="handleMapOrbitSelection" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
           <div class="b-zoom-controls" role="toolbar" aria-label="Map zoom controls"><button aria-label="Zoom out" @click="mapCanvas?.zoomBy(1 / 1.2)">−</button><button aria-label="Fit map" @click="mapCanvas?.fitMap()">Fit</button><button aria-label="Zoom in" @click="mapCanvas?.zoomBy(1.2)">＋</button></div>
-          <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG BACKGROUND TO PAN · WHEEL TO ZOOM</span></div>
+          <div v-if="isAddTool && !addMenuOpen && !catalogueOpen" class="b-add-status" :class="{ 'has-feedback': addFeedback }" role="status" aria-live="polite">
+            <div><strong>{{ addTypeLabel }}</strong><span v-if="addFeedback" class="add-feedback-message">{{ addFeedback }}</span><span>{{ toolPrompt }}</span></div>
+            <button v-if="activeTool === 'add-object'" aria-label="Change the selected map mark type" @click="openCatalogue">Change mark</button>
+            <button class="quit-add" aria-label="Quit Add and return to Navigate" @click="quitAdd">Quit Add · Esc</button>
+          </div>
+          <div v-if="controlLayout === 'dock'" class="b-control-dock" role="group" aria-label="Map modes and creation">
+            <div class="dock-mode-group" role="group" aria-label="Map mode">
+              <span class="dock-group-label">MODE</span>
+              <button :class="{ 'is-active': activeTool === 'navigation' }" aria-label="Navigate: pan the view or open a system" :aria-pressed="activeTool === 'navigation'" @click="setNavigation">⌖ <span>Navigate</span></button>
+              <button :class="{ 'is-active': activeTool === 'select' }" aria-label="Select: tap a map item to inspect it" :aria-pressed="activeTool === 'select'" @click="activateTool('select', false)">⌕ <span>Select</span></button>
+              <button :class="{ 'is-active': activeTool === 'move' }" aria-label="Move: drag existing map geometry" :aria-pressed="activeTool === 'move'" @click="activateTool('move', false)">↗ <span>Move</span></button>
+            </div>
+            <div class="dock-create-group" role="group" aria-label="Add to the map">
+              <span class="dock-group-label">CREATE</span>
+              <button class="dock-add-button" :class="{ 'is-active': isAddTool || addMenuOpen || catalogueOpen }" :aria-expanded="addMenuOpen || catalogueOpen" aria-controls="b-create-menu" aria-label="Choose an item to add to the map" @click="toggleAddMenu">＋ <span>Add…</span></button>
+            </div>
+          </div>
+          <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG ORBIT/OBJECT WITH MOVE · DRAG VIEW OR USE TWO FINGERS / RIGHT BUTTON · WHEEL TO ZOOM</span></div>
         </section>
         <Transition name="b-mobile-panel">
-          <aside v-show="inspectorOpen" class="b-inspector-float inspector-open">
+          <aside id="b-inspector-panel" v-show="inspectorOpen" class="b-inspector-float inspector-open">
             <PrototypeInspector v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
           </aside>
         </Transition>
@@ -138,6 +186,7 @@
       <button aria-label="Previous interface" title="Previous interface · ←" @click="cycleVariant(-1)">←</button>
       <div class="switcher-current"><span>{{ variant }}</span><div><strong>{{ variantNames[variant] }}</strong><small>DISPOSABLE UI PROTOTYPE</small></div></div>
       <button aria-label="Next interface" title="Next interface · →" @click="cycleVariant(1)">→</button>
+      <button v-if="variant === 'B'" class="control-layout-switch" :aria-label="`Switch control presentation; current: ${controlLayoutLabel}`" :title="`Switch control presentation; current: ${controlLayoutLabel}`" @click="cycleControlLayout">Layout: {{ controlLayoutShortLabel }}</button>
       <UButton class="switcher-share" size="xs" color="neutral" variant="ghost" @click="copyShareLink">Copy link</UButton>
     </div>
 
@@ -178,7 +227,8 @@ import type { MapImageFormat } from '../utils/map-image-export'
 import { toNormalizedMapPoint } from '../utils/system-map-geometry'
 
 type Variant = 'A' | 'B' | 'C'
-type Tool = 'navigation' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
+type Tool = 'navigation' | 'select' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
+type ControlLayout = 'groups' | 'dock'
 type Selection = { kind: 'system' | 'object' | 'orbit' | 'route'; id: string }
 type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection; openInspector?: boolean } | { kind: 'field-conflict'; commit: () => void }
 const bMobileQuery = '(max-width: 760px), (max-width: 1024px) and (max-height: 600px)'
@@ -188,8 +238,11 @@ const route = useRoute()
 const router = useRouter()
 const variant = ref<Variant>(props.initialVariant)
 watch(() => props.initialVariant, value => { variant.value = value })
+const controlLayout = computed<ControlLayout>(() => route.query.controls === 'dock' ? 'dock' : 'groups')
 
 const variantNames: Record<Variant, string> = { A: 'Cartographer’s workbench', B: 'Map-first field console', C: 'Atlas folio' }
+const controlLayoutLabel = computed(() => controlLayout.value === 'groups' ? 'Grouped rail' : 'Mode dock')
+const controlLayoutShortLabel = computed(() => controlLayout.value === 'groups' ? 'Rail' : 'Dock')
 const isDev = import.meta.dev
 const theme = ref<'dark' | 'light'>('dark')
 const workspace = ref<LocalWorkspace>(seedWorkspace())
@@ -201,6 +254,7 @@ const systemSelections = reactive<Record<string, Selection>>({})
 const activeTool = ref<Tool>('navigation')
 const activeSubtype = ref<CatalogueSubtype>('planet')
 const catalogueOpen = ref(false)
+const addMenuOpen = ref(false)
 const hierarchyOpen = ref(false)
 const inspectorOpen = ref(true)
 const lastBPanel = ref<'inspector' | 'hierarchy'>('inspector')
@@ -226,6 +280,8 @@ const fieldDefinitionError = ref('')
 const inspectorError = ref('')
 const inspectorConflictError = ref('')
 const routeOriginPoint = ref<string | null>(null)
+const toastIsAddFeedback = ref(false)
+let demoEntitySequence = 0
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let mobilePanelsQuery: MediaQueryList | null = null
@@ -275,14 +331,34 @@ const deleteLabel = computed(() => {
   if (deleteTarget.value?.kind === 'system') return 'this star system'
   return 'this map mark'
 })
+const routeOriginSystem = computed(() => routeOriginPoint.value
+  ? workspace.value.cluster.systems.find(system => system.objects.some(object => object.id === routeOriginPoint.value)) ?? null
+  : null)
+const isAddTool = computed(() => activeTool.value.startsWith('add-'))
+const addFeedback = computed(() => isAddTool.value && toastIsAddFeedback.value ? toast.value : '')
+const addTypeLabel = computed(() => toolLabel(activeTool.value))
 const toolPrompt = computed(() => {
   const prompts: Record<Tool, string> = {
-    navigation: activeView.value === 'cluster' ? 'Click or tap a system to open its chart; drag the background to pan.' : 'Click or tap a mark or Orbit to inspect. Dragging the background pans the chart.',
-    move: 'Move / Modify is active. Select and drag a mark; the chart itself stays pannable.',
-    'add-object': `Place a ${catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'map mark'} in open space or target an Orbit.`,
-    'add-orbit': 'Choose an object to host this Orbit, or click open space for an unoccupied center.',
-    'add-system': 'Click open space in the Jump Cluster to place a new star system.',
-    'add-route': routeOriginPoint.value ? 'Choose the destination system to finish this Jump Route.' : 'Choose a system to set the first Jump Point, then choose a destination.',
+    navigation: activeView.value === 'cluster' ? 'Drag to pan; tap a system to open its chart. Two fingers or right-button drag pan in every mode; wheel zooms.' : 'Drag to pan; tap a mark or Orbit for its current map action. Two fingers or right-button drag pan; wheel zooms.',
+    select: 'Tap a map item to select it and open Inspect after the draft guard. Drag anywhere, including over items, to pan without editing.',
+    move: 'Drag existing geometry to move it. Drag the background to pan; two fingers or right-button drag pan the view only.',
+    'add-object': `Add ${catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'map mark'}: choose open space or an Orbit. Successful placement keeps this type ready.`,
+    'add-orbit': 'Add Orbit: choose an object to host it, or choose open space for an unoccupied center. Successful placement keeps Add Orbit ready.',
+    'add-system': 'Add star system: choose open space in the Jump Cluster. Each placement leaves the cluster open and Add System ready.',
+    'add-route': routeOriginPoint.value
+      ? `Origin: ${routeOriginSystem.value?.name ?? 'selected system'} · choose a different system with a Jump Point to finish the route.`
+      : 'Choose a system with a Jump Point to set the origin. After each route, Add stays ready for a fresh origin.',
+  }
+  if (variant.value !== 'B') {
+    const originalPrompts: Partial<Record<Tool, string>> = {
+      navigation: activeView.value === 'cluster' ? 'Click or tap a system to open its chart; drag the background to pan.' : 'Click or tap a mark or Orbit to inspect. Dragging the background pans the chart.',
+      move: 'Move / Modify is active. Select and drag a mark; the chart itself stays pannable.',
+      'add-object': `Place a ${catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'map mark'} in open space or target an Orbit.`,
+      'add-orbit': 'Choose an object to host this Orbit, or click open space for an unoccupied center.',
+      'add-system': 'Click open space in the Jump Cluster to place a new star system.',
+      'add-route': routeOriginPoint.value ? 'Choose the destination system to finish this Jump Route.' : 'Choose a system to set the first Jump Point, then choose a destination.',
+    }
+    return originalPrompts[activeTool.value] ?? prompts[activeTool.value]
   }
   return prompts[activeTool.value]
 })
@@ -333,16 +409,18 @@ watch(selection, syncDraft, { deep: true, immediate: true })
 watch(() => workspace.value.cluster.name, () => { if (selection.value.kind === 'route') return; if (!hasDirtyDraft.value) syncDraft() })
 watch(() => serializeDraft(), () => { inspectorError.value = '' })
 
-function showToast(message: string): void {
+function showToast(message: string, options: { addFeedback?: boolean } = {}): void {
   toast.value = message
+  toastIsAddFeedback.value = options.addFeedback ?? (variant.value === 'B' && isAddTool.value)
   if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toast.value = '' }, 3200)
+  toastTimer = setTimeout(() => { toast.value = ''; toastIsAddFeedback.value = false }, 3200)
 }
 
 function setNavigation(): void {
   activeTool.value = 'navigation'
   routeOriginPoint.value = null
   catalogueOpen.value = false
+  addMenuOpen.value = false
 }
 
 function isBMobileViewport(): boolean {
@@ -380,25 +458,49 @@ function activateTool(tool: Tool, revealInspector = true): void {
   activeTool.value = tool
   if (tool !== 'add-route') routeOriginPoint.value = null
   if (tool !== 'add-object') catalogueOpen.value = false
+  addMenuOpen.value = false
   if (revealInspector) openInspector()
-  showToast(tool === 'move' ? 'Move / Modify active. Escape returns to Navigation.' : `${toolLabel(tool)} active. Escape returns to Navigation.`)
+  showToast(variant.value === 'B'
+    ? tool === 'move'
+      ? 'Move active. Drag existing geometry; use two fingers or right-button drag to pan the view.'
+      : tool === 'select'
+        ? 'Select active. Tap an item to Inspect; drag to pan the view.'
+        : `${toolLabel(tool)} active.`
+    : tool === 'move' ? 'Move / Modify active. Escape returns to Navigation.' : `${toolLabel(tool)} active. Escape returns to Navigation.`)
 }
 
-function toggleCatalogue(): void {
+function toggleAddMenu(): void {
+  addMenuOpen.value = !addMenuOpen.value
+  if (addMenuOpen.value) catalogueOpen.value = false
+}
+
+function chooseAddAction(tool: Extract<Tool, `add-${string}`>): void {
+  activateTool(tool, false)
+  addMenuOpen.value = false
+}
+
+function openCatalogue(): void {
   if (activeView.value !== 'system') return
-  if (activeTool.value !== 'add-object') activateTool('add-object', false)
-  catalogueOpen.value = !catalogueOpen.value
-  if (catalogueOpen.value) {
-    hierarchyOpen.value = false
-    if (isBMobileViewport()) inspectorOpen.value = false
-  }
+  activeTool.value = 'add-object'
+  routeOriginPoint.value = null
+  addMenuOpen.value = false
+  catalogueOpen.value = true
+  hierarchyOpen.value = false
+  if (isBMobileViewport()) inspectorOpen.value = false
+}
+
+function quitAdd(): void {
+  if (!isAddTool.value) return
+  setNavigation()
+  showToast('Unfinished Add canceled. Completed map items and Inspect drafts remain in memory.')
 }
 
 function selectCatalogueType(subtype: CatalogueSubtype): void {
   activeSubtype.value = subtype
   activeTool.value = 'add-object'
   catalogueOpen.value = false
-  showToast(`${catalogueTypes.find(type => type.value === subtype)?.label ?? 'Map mark'} selected. Choose open space or an Orbit to place it.`)
+  addMenuOpen.value = false
+  showToast(`Add ${catalogueTypes.find(type => type.value === subtype)?.label ?? 'map mark'} selected. It stays active after each successful placement.`)
 }
 
 function toggleHierarchy(): void {
@@ -467,11 +569,30 @@ function navigateToSystem(systemId: string): void {
 }
 
 function handleMapSystemClick(systemId: string): void {
+  if (variant.value === 'B' && activeTool.value === 'select') {
+    inspectMapEntity({ kind: 'system', id: systemId })
+    return
+  }
   if (variant.value === 'B' && activeTool.value === 'move') {
     requestSelection({ kind: 'system', id: systemId })
     return
   }
   navigateToSystem(systemId)
+}
+
+function handleMapRouteSelection(id: string): void {
+  if (variant.value === 'B' && activeTool.value === 'select') inspectMapEntity({ kind: 'route', id })
+  else requestSelection({ kind: 'route', id })
+}
+
+function handleMapObjectSelection(id: string): void {
+  if (variant.value === 'B' && activeTool.value === 'select') inspectMapEntity({ kind: 'object', id })
+  else requestSelection({ kind: 'object', id })
+}
+
+function handleMapOrbitSelection(id: string): void {
+  if (variant.value === 'B' && activeTool.value === 'select') inspectMapEntity({ kind: 'orbit', id })
+  else requestSelection({ kind: 'orbit', id })
 }
 
 function inspectMapEntity(target: Selection): void {
@@ -627,13 +748,20 @@ function placeObjectInOrbit(id: string, orbitId: string, angle: number): void {
 
 function handleMapTarget(target: { kind: 'empty'; point: Point } | { kind: 'orbit'; id: string } | { kind: 'object'; id: string } | { kind: 'system'; id: string }): void {
   if (activeTool.value === 'add-object') {
-    if (target.kind !== 'empty' && target.kind !== 'orbit') return
+    if (target.kind !== 'empty' && target.kind !== 'orbit') {
+      if (variant.value === 'B') showToast('Add mark needs open space or an Orbit. The selected mark type remains ready.', { addFeedback: true })
+      return
+    }
     addObjectAtTarget(target)
   } else if (activeTool.value === 'add-orbit') {
-    if (target.kind !== 'empty' && target.kind !== 'object') return
+    if (target.kind !== 'empty' && target.kind !== 'object') {
+      if (variant.value === 'B') showToast('Add Orbit needs open space or an object to host it. Add Orbit remains ready.', { addFeedback: true })
+      return
+    }
     addOrbitAtTarget(target)
-  } else if (activeTool.value === 'add-system' && target.kind === 'empty') {
-    addSystemAtTarget(target.point)
+  } else if (activeTool.value === 'add-system') {
+    if (target.kind === 'empty') addSystemAtTarget(target.point)
+    else if (variant.value === 'B') showToast('Add System needs open space in the Jump Cluster. Add System remains ready.', { addFeedback: true })
   } else if (activeTool.value === 'add-route' && target.kind === 'system') {
     chooseRouteSystem(target.id)
   }
@@ -643,7 +771,7 @@ function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'or
   if (!activeSystem.value) return
   const subtype = catalogueTypes.find(type => type.value === activeSubtype.value) ?? catalogueTypes[1]
   const index = activeSystem.value.objects.filter(object => object.subtype === subtype.value).length + 1
-  const id = `obj-demo-${Date.now().toString(36)}`
+  const id = nextDemoId('obj-demo')
   const object: SystemObject = {
     id, family: subtype.family, subtype: subtype.value, locationKey: `${subtype.keyPrefix}-${index}`,
     name: `${subtype.label} ${index}`, description: '',
@@ -651,6 +779,11 @@ function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'or
   }
   if (target.kind === 'orbit') workspace.value.layout.objectAngles[id] = Math.PI / 5
   replaceSystem({ ...activeSystem.value, objects: [...activeSystem.value.objects, object] })
+  if (variant.value === 'B') {
+    beginSimulatedSave()
+    showToast(`${subtype.label} placed. Add ${subtype.label} remains active; select it later to Inspect.`)
+    return
+  }
   selection.value = { kind: 'object', id }
   systemSelections[activeSystemId.value] = selection.value
   setNavigation()
@@ -663,11 +796,16 @@ function addObjectAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'or
 function addOrbitAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'object'; id: string }): void {
   if (!activeSystem.value) return
   const order = Math.max(0, ...activeSystem.value.orbits.map(orbit => orbit.order)) + 1
-  const id = `orbit-demo-${Date.now().toString(36)}`
+  const id = nextDemoId('orbit-demo')
   const orbit: Orbit = target.kind === 'object' ? { id, order, hostId: target.id } : { id, order, hostId: null, center: target.point }
   replaceSystem({ ...activeSystem.value, orbits: [...activeSystem.value.orbits, orbit] })
   workspace.value.layout.orbitRadii[id] = { horizontal: 120, vertical: 82 }
   workspace.value.layout.orbitRotations[id] = 0
+  if (variant.value === 'B') {
+    beginSimulatedSave()
+    showToast(`Orbit ${order} created. Add Orbit remains active; select it later to Inspect.`)
+    return
+  }
   selection.value = { kind: 'orbit', id }
   systemSelections[activeSystemId.value] = selection.value
   setNavigation()
@@ -678,10 +816,15 @@ function addOrbitAtTarget(target: { kind: 'empty'; point: Point } | { kind: 'obj
 
 function addSystemAtTarget(point: Point): void {
   const index = workspace.value.cluster.systems.length + 1
-  const id = `sys-demo-${Date.now().toString(36)}`
+  const id = nextDemoId('sys-demo')
   const system: StarSystem = { id, name: `Uncharted System ${index}`, objects: [], orbits: [] }
   workspace.value.cluster.systems.push(system)
   workspace.value.layout.systemPositions[id] = point
+  if (variant.value === 'B') {
+    beginSimulatedSave()
+    showToast('Star system added. The Jump Cluster stays open and Add System remains active.')
+    return
+  }
   setNavigation()
   navigateToSystem(id)
   showToast('System added to the in-memory Jump Cluster.')
@@ -691,7 +834,7 @@ function chooseRouteSystem(systemId: string): void {
   const system = workspace.value.cluster.systems.find(candidate => candidate.id === systemId)
   const point = system?.objects.find(object => object.subtype === 'jump-point')
   if (!point) {
-    showToast('This system has no Jump Point to use as a route endpoint.')
+    showToast('This system has no Jump Point to use as a route endpoint.', { addFeedback: true })
     return
   }
   if (!routeOriginPoint.value) {
@@ -700,19 +843,23 @@ function chooseRouteSystem(systemId: string): void {
     return
   }
   if (routeOriginPoint.value === point.id) {
-    showToast('Choose a different destination Jump Point.')
+    showToast('Choose a different destination Jump Point.', { addFeedback: true })
     return
   }
-  const id = `route-demo-${Date.now().toString(36)}`
+  const id = nextDemoId('route-demo')
   const routeItem: JumpRoute = { id, jumpLevel: Math.min(9, workspace.value.cluster.routes.length + 1), fromPointId: routeOriginPoint.value, toPointId: point.id }
   workspace.value.cluster.routes.push(routeItem)
-  selection.value = { kind: 'route', id }
-  clusterSelection.value = selection.value
+  if (variant.value !== 'B') {
+    selection.value = { kind: 'route', id }
+    clusterSelection.value = selection.value
+    setNavigation()
+    syncDraft()
+  }
   routeOriginPoint.value = null
-  setNavigation()
-  syncDraft()
   beginSimulatedSave()
-  showToast(`Jump-${routeItem.jumpLevel} added to the sample cluster.`)
+  showToast(variant.value === 'B'
+    ? `Jump-${routeItem.jumpLevel} added. Add Jump Route stays ready for a fresh origin.`
+    : `Jump-${routeItem.jumpLevel} added to the sample cluster.`)
 }
 
 function requestDelete(): void {
@@ -977,7 +1124,29 @@ async function cycleVariant(direction: number): Promise<void> {
   variant.value = next
 }
 
+async function cycleControlLayout(): Promise<void> {
+  const next: ControlLayout = controlLayout.value === 'groups' ? 'dock' : 'groups'
+  await router.replace({ query: { ...route.query, variant: 'B', controls: next } })
+  showToast(`B control presentation changed to ${next === 'groups' ? 'Grouped rail' : 'Mode dock'}. Map state and drafts remain in memory.`)
+}
+
 function onVariantKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && variant.value === 'B') {
+    if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return
+    const target = event.target instanceof Element ? event.target : null
+    if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+    if (isAddTool.value) {
+      event.preventDefault()
+      quitAdd()
+      return
+    }
+    if (addMenuOpen.value || catalogueOpen.value) {
+      addMenuOpen.value = false
+      catalogueOpen.value = false
+      event.preventDefault()
+      return
+    }
+  }
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
   const target = event.target instanceof Element ? event.target : null
   if (target?.closest('input, textarea, select, button, [contenteditable="true"], .map-view, [role="slider"], [role="button"]')) return
@@ -1039,6 +1208,11 @@ function selectionLabel(item: Selection): string {
   return system?.orbits.find(orbit => orbit.id === item.id) ? `Orbit ${system.orbits.find(orbit => orbit.id === item.id)?.order}` : 'No Orbit selected'
 }
 
+function nextDemoId(prefix: string): string {
+  demoEntitySequence += 1
+  return `${prefix}-${Date.now().toString(36)}-${demoEntitySequence.toString(36)}`
+}
+
 function placementLabel(object: SystemObject): string {
   const placement = object.placement
   if (placement.kind === 'system') return `free placement · ${Math.round(placement.x * 100)} / ${Math.round(placement.y * 100)}`
@@ -1051,7 +1225,7 @@ function orbitLabel(system: StarSystem | null, orbit: Orbit): string {
 }
 
 function toolLabel(tool: Tool): string {
-  return ({ navigation: 'Navigation', move: 'Move / Modify', 'add-object': 'Add mark', 'add-orbit': 'Add Orbit', 'add-system': 'Add system', 'add-route': 'Draw Jump Route' })[tool]
+  return ({ navigation: 'Navigate', select: 'Select', move: 'Move', 'add-object': `Add ${catalogueTypes.find(type => type.value === activeSubtype.value)?.label ?? 'map mark'}`, 'add-orbit': 'Add Orbit', 'add-system': 'Add System', 'add-route': 'Add Jump Route' })[tool]
 }
 
 function slug(value: string): string { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'chart' }
@@ -1206,6 +1380,10 @@ function seedWorkspace(): LocalWorkspace {
 .b-breadcrumb button { padding: .35rem .45rem; border: 0; background: transparent; color: var(--proto-accent); font-size: .58rem; letter-spacing: .1em; cursor: pointer; }
 .b-breadcrumb strong { overflow: hidden; color: var(--proto-ink); font: 500 1.1rem var(--proto-display-font); text-overflow: ellipsis; white-space: nowrap; }
 .b-command-actions { display: flex; align-items: center; gap: .35rem; }
+.b-command-actions button, .panel-command { min-height: 2.4rem; padding: .4rem .65rem; font-family: var(--proto-ui-font); font-size: .76rem; }
+.b-panel-actions { display: flex; align-items: center; gap: .18rem; padding: .2rem; border: 1px solid var(--proto-line); background: var(--proto-soft); }
+.panel-command { border: 1px solid transparent; background: transparent; color: var(--proto-muted); cursor: pointer; }
+.panel-command[aria-expanded="true"] { border-color: var(--proto-accent); background: color-mix(in srgb, var(--proto-accent) 12%, var(--proto-surface)); color: var(--proto-ink); }
 .command-save { display: flex; align-items: center; gap: .35rem; color: var(--proto-muted); font-size: .49rem; letter-spacing: .09em; }
 .command-save i { width: .4rem; height: .4rem; border-radius: 50%; background: var(--proto-good); }
 .command-save .state-error { background: var(--proto-danger); }
@@ -1217,17 +1395,47 @@ function seedWorkspace(): LocalWorkspace {
 .b-zoom-controls { position: absolute; z-index: 5; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: .25rem; padding: .25rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 94%, transparent); box-shadow: 0 .45rem 1.4rem rgba(0, 0, 0, .2); backdrop-filter: blur(12px); }
 .b-zoom-controls button { min-width: 2.2rem; min-height: 2rem; padding: .25rem .45rem; border: 1px solid var(--proto-line); background: var(--proto-raised); color: var(--proto-ink); font-size: .72rem; cursor: pointer; }
 .b-zoom-controls button:hover { border-color: var(--proto-accent); color: var(--proto-accent); }
-.b-map-hud { position: absolute; z-index: 3; top: 5.3rem; left: 5.2rem; display: flex; align-items: center; gap: 1rem; padding: .65rem .85rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 90%, transparent); box-shadow: 0 .4rem 1.6rem rgba(0, 0, 0, .13); backdrop-filter: blur(12px); }
-.b-map-hud > div:first-child { display: grid; gap: .15rem; }
+.b-map-hud { position: absolute; z-index: 3; top: 5.3rem; right: 1rem; left: 5.2rem; display: flex; align-items: center; justify-content: space-between; gap: .7rem; padding: .55rem .7rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .4rem 1.6rem rgba(0, 0, 0, .13); backdrop-filter: blur(12px); }
+.b-map-context { display: grid; min-width: 8rem; gap: .15rem; }
+.b-file-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .25rem; }
+.b-file-actions button, .b-files-menu summary, .b-files-menu-items button { min-height: 2.25rem; padding: .35rem .52rem; border: 1px solid var(--proto-line); background: var(--proto-raised); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .72rem; line-height: 1.2; cursor: pointer; }
+.b-file-actions button:hover, .b-files-menu summary:hover, .b-files-menu-items button:hover { border-color: var(--proto-accent); color: var(--proto-accent); }
+.b-files-menu { position: relative; }
+.b-files-menu summary { display: flex; align-items: center; list-style: none; }
+.b-files-menu summary::-webkit-details-marker { display: none; }
+.b-files-menu-items { position: absolute; z-index: 8; top: calc(100% + .25rem); right: 0; display: grid; min-width: 13rem; gap: .2rem; padding: .3rem; border: 1px solid var(--proto-line); background: var(--proto-surface); box-shadow: 0 .7rem 1.7rem rgba(0,0,0,.24); }
+.b-files-menu-items button { text-align: left; }
 .b-map-hud small { color: var(--proto-accent); font-size: .49rem; letter-spacing: .13em; }
 .b-map-hud strong { max-width: 14rem; overflow: hidden; font: 500 1.1rem var(--proto-display-font); text-overflow: ellipsis; white-space: nowrap; }
-.b-tool-rail { position: absolute; z-index: 4; top: 50%; left: .9rem; display: flex; width: 4rem; max-height: calc(100dvh - 9rem); flex-direction: column; align-items: center; gap: .3rem; padding: .55rem .35rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 92%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0, 0, 0, .18); transform: translateY(-43%); backdrop-filter: blur(16px); }
+.b-tool-rail { position: absolute; z-index: 4; top: 50%; left: .9rem; display: flex; width: 7.2rem; max-height: calc(100dvh - 9rem); flex-direction: column; align-items: stretch; gap: .38rem; padding: .55rem .42rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 94%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0, 0, 0, .18); transform: translateY(-43%); backdrop-filter: blur(16px); }
+.control-group { display: grid; gap: .12rem; padding-bottom: .25rem; border-bottom: 1px solid var(--proto-line); }
+.control-group-label, .dock-group-label { padding: .08rem .25rem .15rem; color: var(--proto-muted); font-size: .64rem; font-weight: 700; letter-spacing: .1em; }
 .rail-cap { padding: .25rem 0 .45rem; color: var(--proto-muted); font-size: .4rem; font-weight: 700; letter-spacing: .13em; }
-.rail-button { display: grid; width: 3.15rem; min-height: 3.25rem; align-content: center; justify-items: center; gap: .23rem; border: 1px solid transparent; background: transparent; color: var(--proto-muted); cursor: pointer; }
+.rail-button { display: flex; width: 100%; min-height: 2.8rem; align-items: center; justify-content: flex-start; gap: .62rem; border: 1px solid transparent; padding: .38rem .48rem; background: transparent; color: var(--proto-muted); text-align: left; cursor: pointer; }
 .rail-button b { color: var(--proto-ink); font: 400 1.15rem var(--proto-display-font); }
-.rail-button span { font-size: .43rem; }
+.rail-button span { font-size: .74rem; line-height: 1.2; }
 .rail-button:hover, .rail-button.is-active { border-color: color-mix(in srgb, var(--proto-accent) 45%, transparent); background: var(--proto-soft); color: var(--proto-ink); }
 .rail-button.is-active b { color: var(--proto-accent); }
+.b-create-menu { position: absolute; z-index: 7; top: 9.8rem; left: 8.7rem; display: grid; min-width: 13rem; gap: .18rem; padding: .3rem; border: 1px solid var(--proto-line); background: var(--proto-surface); box-shadow: 0 .8rem 2rem rgba(0,0,0,.25); }
+.b-create-menu button { min-height: 2.45rem; border: 1px solid transparent; padding: .45rem .6rem; background: var(--proto-soft); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .78rem; text-align: left; cursor: pointer; }
+.b-create-menu button:hover { border-color: var(--proto-accent); }
+.b-control-dock { position: absolute; z-index: 4; bottom: 1rem; left: 50%; display: flex; align-items: stretch; gap: .5rem; padding: .35rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 95%, transparent); box-shadow: 0 .5rem 1.8rem rgba(0,0,0,.2); transform: translateX(-50%); backdrop-filter: blur(16px); }
+.dock-mode-group, .dock-create-group { display: flex; align-items: center; gap: .16rem; }
+.dock-group-label { padding: 0 .25rem; }
+.dock-mode-group button, .dock-add-button { min-height: 2.65rem; padding: .4rem .62rem; border: 1px solid transparent; background: transparent; color: var(--proto-muted); font-family: var(--proto-ui-font); font-size: .78rem; white-space: nowrap; cursor: pointer; }
+.dock-mode-group button.is-active, .dock-mode-group button:hover, .dock-add-button.is-active, .dock-add-button:hover { border-color: var(--proto-accent); background: color-mix(in srgb, var(--proto-accent) 12%, var(--proto-surface)); color: var(--proto-ink); }
+.dock-create-group { border-left: 1px solid var(--proto-line); padding-left: .35rem; }
+.b-add-status { position: absolute; z-index: 5; right: 1rem; bottom: 3.3rem; left: 8.7rem; display: flex; max-width: min(48rem, calc(100% - 10rem)); align-items: center; gap: .5rem; padding: .5rem .65rem; border: 1px solid color-mix(in srgb, var(--proto-accent) 60%, var(--proto-line)); background: color-mix(in srgb, var(--proto-surface) 96%, transparent); color: var(--proto-ink); box-shadow: 0 .4rem 1.3rem rgba(0,0,0,.18); }
+.b-add-status > div { display: grid; min-width: 0; flex: 1; gap: .12rem; }
+.b-add-status strong { color: var(--proto-accent); font-size: .78rem; }
+.b-add-status span { overflow: hidden; color: var(--proto-muted); font-size: .72rem; line-height: 1.35; }
+.b-add-status .add-feedback-message { color: var(--proto-accent); font-weight: 600; }
+.b-add-status button { min-height: 2.25rem; flex: 0 0 auto; border: 1px solid var(--proto-line); padding: .35rem .5rem; background: var(--proto-raised); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .72rem; cursor: pointer; }
+.b-add-status .quit-add { border-color: var(--proto-accent); color: var(--proto-accent); }
+.proto-b.controls-dock .b-add-status { right: auto; bottom: 4.35rem; left: 50%; width: min(48rem, calc(100% - 2rem)); max-width: none; transform: translateX(-50%); }
+.proto-b.controls-groups .b-catalogue-panel { left: 8.7rem; }
+.proto-b.controls-dock .b-catalogue-panel { top: 9.8rem; left: 1rem; }
+.b-create-menu button:focus-visible, .b-add-status button:focus-visible, .b-control-dock button:focus-visible, .b-tool-rail button:focus-visible, .b-file-actions button:focus-visible, .b-files-menu summary:focus-visible, .b-files-menu-items button:focus-visible, .b-command-actions button:focus-visible { outline: 2px solid var(--proto-accent); outline-offset: 2px; }
 .rail-spacer { min-height: .2rem; flex: 1; }
 .rail-bottom { display: grid; justify-items: center; gap: .24rem; padding-top: .45rem; border-top: 1px solid var(--proto-line); color: var(--proto-muted); }
 .rail-bottom small { font-size: .4rem; }
@@ -1272,8 +1480,9 @@ function seedWorkspace(): LocalWorkspace {
 .c-index-bottom { margin-top: auto; }
 
 .prototype-switcher { position: fixed; z-index: 30; bottom: .85rem; left: 50%; display: flex; min-height: 3.25rem; align-items: center; gap: .5rem; padding: .3rem .45rem; border: 1px solid rgba(232, 184, 121, .54); border-radius: 999px; background: #13211e; color: #edf0e7; box-shadow: 0 .7rem 2.5rem rgba(0, 0, 0, .35); transform: translateX(-50%); }
-.prototype-switcher > button:not(.switcher-share) { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .07); color: #f2c98d; font-size: 1.1rem; cursor: pointer; }
+.prototype-switcher > button:not(.switcher-share):not(.control-layout-switch) { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .07); color: #f2c98d; font-size: 1.1rem; cursor: pointer; }
 .prototype-switcher > button:hover { background: rgba(232, 184, 121, .17); }
+.control-layout-switch { min-height: 2.1rem; padding: .3rem .55rem; border: 1px solid rgba(232, 184, 121, .5); border-radius: 999px; background: rgba(255,255,255,.06); color: #f2c98d; font-family: var(--proto-ui-font); font-size: .68rem; white-space: nowrap; cursor: pointer; }
 .switcher-current { display: flex; min-width: 13.2rem; align-items: center; gap: .55rem; }
 .switcher-current > span { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border: 1px solid #e8b879; border-radius: 50%; color: #f2c98d; font: 600 .75rem var(--proto-display-font); }
 .switcher-current > div { display: grid; gap: .13rem; }
@@ -1344,7 +1553,8 @@ function seedWorkspace(): LocalWorkspace {
   .map-legend { gap: .35rem; }
   .map-instruction { display: none; }
   .prototype-switcher { bottom: .45rem; min-height: 2.8rem; gap: .3rem; padding: .22rem .3rem; }
-  .prototype-switcher > button:not(.switcher-share) { width: 1.95rem; height: 1.95rem; }
+  .prototype-switcher > button:not(.switcher-share):not(.control-layout-switch) { width: 1.95rem; height: 1.95rem; }
+  .prototype-switcher > .control-layout-switch { width: auto; height: auto; min-height: 2rem; padding: .25rem .42rem; font-size: .65rem; }
   .switcher-current { min-width: 10.3rem; gap: .4rem; }
   .switcher-current > span { width: 1.55rem; height: 1.55rem; }
   .switcher-current strong { font-size: .66rem; }
@@ -1375,23 +1585,45 @@ function seedWorkspace(): LocalWorkspace {
   .c-map-caption { position: absolute; right: .5rem; bottom: 3.05rem; left: .5rem; z-index: 2; min-height: 1.7rem; justify-content: space-between; padding: .3rem .4rem; background: color-mix(in srgb, var(--proto-surface) 88%, transparent); font-size: .43rem; }
   .c-notes-column { display: none !important; }
   .c-notes-column.inspector-open { position: fixed; z-index: 8; top: auto; right: .5rem; bottom: 3.7rem; left: .5rem; display: flex !important; max-height: 45dvh; overflow: auto; padding: .8rem; border: 1px solid var(--proto-line); background: var(--proto-surface); box-shadow: 0 -1rem 3rem rgba(0, 0, 0, .3); }
-  .b-commandbar { top: .4rem; right: .4rem; left: .4rem; min-height: 3rem; gap: .4rem; padding: .28rem .4rem; }
+  .b-commandbar { top: .4rem; right: .4rem; left: .4rem; min-height: 3rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand breadcrumb" "actions actions"; gap: .22rem .4rem; padding: .3rem .4rem; }
+  .b-commandbar > .brand-mark { grid-area: brand; min-width: 0; }
+  .b-commandbar .brand-mark > div { min-width: 0; }
+  .b-commandbar .brand-mark strong { font-size: .68rem; letter-spacing: .1em; white-space: nowrap; }
   .b-commandbar .brand-mark small { display: none; }
-  .b-breadcrumb { gap: .25rem; }
+  .b-breadcrumb { grid-area: breadcrumb; min-width: 0; justify-self: end; gap: .25rem; }
   .b-breadcrumb strong { max-width: 7rem; font-size: .82rem; }
-  .b-command-actions { gap: .1rem; }
-  .b-command-actions button { min-height: 1.9rem; padding: .25rem .4rem; font-size: .53rem; }
+  .b-command-actions { grid-area: actions; width: 100%; justify-content: space-between; gap: .2rem; }
+  .b-command-actions button, .panel-command { min-height: 2.15rem; padding: .3rem .45rem; font-size: .72rem; }
+  .b-panel-actions { gap: .05rem; padding: .1rem; }
   .command-save { display: none; }
-  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; width: auto; max-width: calc(100% - 1rem); max-height: none; flex-direction: row; justify-content: flex-start; gap: .15rem; overflow-x: auto; overflow-y: hidden; padding: .22rem; transform: none; }
-  .rail-cap, .rail-spacer, .rail-bottom { display: none; }
-  .rail-button { width: auto; min-width: 3.15rem; min-height: 2.75rem; flex: 0 0 auto; gap: .08rem; }
-  .rail-button b { font-size: .9rem; }
-  .rail-button span { font-size: .68rem; }
-  .b-map-hud { top: 3.75rem; left: .45rem; gap: .4rem; padding: .4rem .55rem; }
+  .b-tool-rail { top: auto; right: .5rem; bottom: 3.5rem; left: .5rem; display: grid; width: auto; max-width: calc(100% - 1rem); max-height: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .12rem; overflow: visible; padding: .25rem; transform: none; }
+  .control-group { display: contents; }
+  .control-group-label, .rail-cap, .rail-spacer, .rail-bottom { display: none; }
+  .rail-button { width: 100%; min-width: 0; min-height: 2.75rem; flex-direction: column; justify-content: center; gap: .12rem; padding: .22rem .12rem; }
+  .rail-button b { font-size: 1rem; line-height: 1; }
+  .rail-button span { font-size: .72rem; line-height: 1.15; white-space: nowrap; }
+  .b-map-hud { top: 6.15rem; right: .45rem; left: .45rem; flex-wrap: wrap; gap: .35rem; padding: .4rem .5rem; }
+  .b-map-context { flex: 1 1 8rem; }
   .b-map-hud strong { max-width: 8rem; font-size: .9rem; }
   .b-map-hud small { font-size: .42rem; }
-  .b-map-hud .hud-actions { display: none; }
+  .b-file-actions { display: grid; flex: 1 1 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .18rem; }
+  .b-file-actions button, .b-files-menu summary { min-height: 2.15rem; padding: .28rem .38rem; font-size: .68rem; }
+  .b-files-menu { margin-left: auto; }
+  .b-files-menu-items { right: 0; }
   .b-map-return { min-height: 2rem; padding: .3rem .45rem; font-size: .58rem; white-space: nowrap; }
+  .b-create-menu { top: 14.6rem; right: .5rem; left: .5rem; min-width: 0; }
+  .proto-b.controls-groups .b-catalogue-panel, .proto-b.controls-groups .b-add-status { top: 14.6rem; right: .45rem; left: .45rem; }
+  .proto-b.controls-dock .b-create-menu { top: auto; bottom: 6.2rem; left: 50%; width: min(17rem, calc(100% - 1rem)); transform: translateX(-50%); }
+  .proto-b.controls-dock .b-catalogue-panel, .proto-b.controls-dock .b-add-status { top: 9.7rem; right: .45rem; left: .45rem; }
+  .b-add-status { bottom: auto; max-width: none; flex-wrap: wrap; gap: .28rem; padding: .4rem; }
+  .b-add-status > div { flex-basis: 100%; }
+  .b-add-status span { overflow: visible; font-size: .72rem; }
+  .b-add-status button { min-height: 2.15rem; font-size: .7rem; }
+  .b-control-dock { position: fixed; bottom: calc(.45rem + env(safe-area-inset-bottom)); left: 50%; max-width: calc(100vw - 1rem); gap: .15rem; padding: .22rem; }
+  .dock-mode-group, .dock-create-group { gap: .04rem; }
+  .dock-group-label { display: none; }
+  .dock-mode-group button, .dock-add-button { min-height: 2.8rem; padding: .3rem .42rem; font-size: .72rem; }
+  .dock-create-group { padding-left: .15rem; }
   .b-map-frame .map-navigation { bottom: 7rem; }
   .b-map-footer { right: .55rem; bottom: 6.6rem; left: .55rem; font-size: .4rem; }
   .b-map-footer span:last-child { display: none; }
@@ -1400,6 +1632,8 @@ function seedWorkspace(): LocalWorkspace {
   .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: 0; left: .5rem; padding-bottom: calc(.22rem + env(safe-area-inset-bottom)); }
   .proto-b.has-prototype-switcher .b-tool-rail { bottom: 3.25rem; }
   .b-zoom-controls { right: .5rem; bottom: calc(6.6rem + env(safe-area-inset-bottom)); gap: .12rem; padding: .18rem; }
+  .proto-b.controls-groups .b-zoom-controls { bottom: calc(11.8rem + env(safe-area-inset-bottom)); }
+  .proto-b.controls-dock .b-zoom-controls { bottom: calc(6.8rem + env(safe-area-inset-bottom)); }
   .proto-b.has-prototype-switcher .b-zoom-controls { bottom: calc(7.2rem + env(safe-area-inset-bottom)); }
   .b-zoom-controls button { min-width: 1.9rem; min-height: 1.85rem; padding: .2rem .35rem; }
   .proto-modal-body { padding: 1rem; }
@@ -1416,16 +1650,31 @@ function seedWorkspace(): LocalWorkspace {
   .b-inspector-float { top: 7.6rem; bottom: 2.8rem; }
   .b-map-footer { bottom: 4.2rem; }
   .b-tool-rail { top: auto; left: 50%; bottom: 4.6rem; width: max-content; max-width: calc(100vw - 2rem); max-height: none; flex-direction: row; overflow-x: auto; transform: translateX(-50%); }
-  .b-tool-rail .rail-spacer, .b-tool-rail .rail-bottom { display: none; }
-  .rail-button { width: auto; min-width: 3.2rem; min-height: 2.7rem; }
-  .b-zoom-controls { top: 6.2rem; right: 1rem; bottom: auto; }
+  .control-group { display: flex; align-items: center; gap: .08rem; padding: 0; border: 0; }
+  .control-group-label, .b-tool-rail .rail-spacer, .b-tool-rail .rail-bottom { display: none; }
+  .rail-button { width: auto; min-width: 5rem; min-height: 2.7rem; justify-content: center; padding: .3rem .42rem; }
+  .rail-button span { font-size: .72rem; white-space: nowrap; }
+  .b-commandbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand breadcrumb" "actions actions"; gap: .22rem .6rem; }
+  .b-commandbar > .brand-mark { grid-area: brand; min-width: 0; }
+  .b-commandbar .brand-mark > div { min-width: 0; }
+  .b-commandbar .brand-mark strong { font-size: .68rem; letter-spacing: .1em; white-space: nowrap; }
+  .b-breadcrumb { grid-area: breadcrumb; min-width: 0; justify-self: end; }
+  .b-command-actions { grid-area: actions; width: 100%; justify-content: space-between; }
+  .b-map-hud { top: 7rem; right: 1rem; left: 1rem; }
+  .b-create-menu { top: 10.8rem; }
+  .b-add-status { top: 10.8rem; right: 9rem; bottom: auto; left: 1rem; max-width: none; }
+  .proto-b.controls-dock .b-add-status { top: 10.8rem; right: 9rem; bottom: auto; left: 1rem; width: auto; max-width: none; transform: none; }
+  .proto-b.controls-dock .b-catalogue-panel { top: 10.8rem; }
+  .b-control-dock { bottom: 4.45rem; }
+  .proto-b.has-prototype-switcher .b-control-dock { bottom: 4.45rem; }
+  .b-zoom-controls { top: auto; right: 1rem; bottom: 4.2rem; }
 }
 
 @media (max-width: 430px) {
-  .proto-b .b-tool-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; align-items: stretch; gap: .08rem; overflow: visible; }
-  .proto-b .b-tool-rail .rail-button { width: 100%; min-width: 0; min-height: 2.35rem; flex: none; padding: .12rem .08rem; }
-  .proto-b .b-tool-rail .rail-button b { font-size: .82rem; line-height: 1; }
-  .proto-b .b-tool-rail .rail-button span { font-size: .58rem; line-height: 1.1; white-space: nowrap; }
+  .proto-b .b-tool-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: auto; align-items: stretch; gap: .1rem; overflow: visible; }
+  .proto-b .b-tool-rail .rail-button { width: 100%; min-width: 0; min-height: 2.6rem; flex: none; padding: .14rem .08rem; }
+  .proto-b .b-tool-rail .rail-button b { font-size: .98rem; line-height: 1; }
+  .proto-b .b-tool-rail .rail-button span { font-size: .72rem; line-height: 1.1; white-space: nowrap; }
 }
 
 @media (max-width: 1024px) and (max-height: 600px) and (min-width: 761px) {
@@ -1436,9 +1685,14 @@ function seedWorkspace(): LocalWorkspace {
 
 @media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {
   .proto-b.has-prototype-switcher .b-tool-rail { bottom: 3.25rem; }
+  .proto-b.has-prototype-switcher .b-control-dock { bottom: calc(3.35rem + env(safe-area-inset-bottom)); }
+  .proto-b.controls-groups .b-zoom-controls { bottom: calc(9.7rem + env(safe-area-inset-bottom)); }
+  .proto-b.controls-dock .b-zoom-controls { bottom: calc(6.8rem + env(safe-area-inset-bottom)); }
   .proto-b.has-open-inspector .b-tool-rail,
+  .proto-b.has-open-inspector .b-control-dock,
   .proto-b.has-open-inspector .b-zoom-controls,
   .proto-b.has-open-side-panel .b-tool-rail,
+  .proto-b.has-open-side-panel .b-control-dock,
   .proto-b.has-open-side-panel .b-zoom-controls { display: none; }
   .proto-b.has-open-inspector .b-map-footer,
   .proto-b.has-open-side-panel .b-map-footer { display: none; }
@@ -1448,15 +1702,20 @@ function seedWorkspace(): LocalWorkspace {
   .b-mobile-panel-leave-active { transition: transform 220ms cubic-bezier(.2, .75, .25, 1); }
   .b-mobile-panel-enter-from,
   .b-mobile-panel-leave-to { transform: translateY(100%); }
-  .proto-b ~ .prototype-toast { right: .5rem; bottom: calc(10rem + env(safe-area-inset-bottom)); max-width: min(24rem, calc(100vw - 1rem)); }
-  .proto-b.has-prototype-switcher ~ .prototype-toast { bottom: calc(11.5rem + env(safe-area-inset-bottom)); }
+  .proto-b ~ .prototype-toast { top: 15rem; right: .5rem; bottom: auto; max-width: min(24rem, calc(100vw - 1rem)); pointer-events: none; }
 }
 
 @media (max-width: 1024px) and (max-height: 600px) and (min-width: 761px) {
+  .proto-b.controls-dock .b-files-menu-items { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 24rem; }
+  .proto-b ~ .prototype-toast { top: 10.9rem; right: auto; bottom: auto; left: .5rem; max-width: min(24rem, calc(100vw - 16rem)); pointer-events: none; }
   .proto-b .b-zoom-controls { top: auto; right: .5rem; bottom: calc(4.2rem + env(safe-area-inset-bottom)); }
   .proto-b.has-prototype-switcher .b-zoom-controls { bottom: calc(7.2rem + env(safe-area-inset-bottom)); }
+  .proto-b.controls-groups .b-zoom-controls { top: auto; bottom: calc(9.7rem + env(safe-area-inset-bottom)); }
+  .proto-b.controls-dock .b-zoom-controls { top: auto; bottom: calc(4.15rem + env(safe-area-inset-bottom)); }
   .b-map-return { min-height: 2rem; padding: .3rem .45rem; font-size: .58rem; white-space: nowrap; }
 }
+
+.proto-b.has-active-add:not(.has-open-add-menu):not(.has-open-inspector):not(.has-open-side-panel) ~ .prototype-toast { display: none; }
 
 @media (max-width: 760px) and (prefers-reduced-motion: reduce), (max-width: 1024px) and (max-height: 600px) and (prefers-reduced-motion: reduce) {
   .b-mobile-panel-enter-active,

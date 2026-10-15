@@ -234,6 +234,11 @@ export function renderSystemMap({
     ?.getAttribute('data-orbit-id')
   const focusedOrbitId = element.querySelector<SVGElement>('.orbit-hit-target:focus')
     ?.getAttribute('data-orbit-id')
+  const focusedOrbitAxis = element.querySelector<SVGElement>('.orbit-axis-handle:focus')
+  const focusedOrbitAxisId = focusedOrbitAxis?.getAttribute('data-orbit-id')
+  const focusedOrbitAxisDirection = focusedOrbitAxis?.getAttribute('data-resize-axis')
+  const focusedOrbitRotationId = element.querySelector<SVGElement>('.orbit-rotation-handle:focus')
+    ?.getAttribute('data-orbit-id')
   svg.selectAll('*').remove()
 
   const content = svg.append('g').attr('class', 'system-map-content')
@@ -283,9 +288,9 @@ export function renderSystemMap({
       .attr('rx', radii.horizontal)
       .attr('ry', radii.vertical)
       .attr('transform', rotationTransform)
-      .attr('role', 'slider')
+      .attr('role', moveEnabled ? 'slider' : 'button')
       .attr('tabindex', 0)
-      .attr('aria-label', `Resize ${orbitLabel(system, orbit)}`)
+      .attr('aria-label', `${moveEnabled ? 'Resize' : 'Inspect'} ${orbitLabel(system, orbit)}`)
       .attr('aria-valuemin', minimumOrbitRadius(system, orbit))
       .attr('aria-valuemax', radii.horizontal + 400)
       .attr('aria-valuenow', Math.round(radii.horizontal))
@@ -296,12 +301,21 @@ export function renderSystemMap({
     ] as const) {
       mark.append('circle')
         .attr('class', `orbit-edit-control orbit-axis-handle orbit-axis-handle--${axis}`)
+        .attr('data-orbit-id', orbit.id)
         .attr('data-resize-axis', axis)
         .attr('cx', x)
         .attr('cy', y)
         .attr('r', 6)
         .style('cursor', orbitAxisCursor(axis, rotation))
-        .attr('aria-hidden', 'true')
+        .attr('role', moveEnabled ? 'slider' : 'button')
+        .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
+        .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
+        .attr('aria-label', moveEnabled
+          ? `Resize ${axis} radius of ${orbitLabel(system, orbit)}`
+          : `Inspect ${orbitLabel(system, orbit)}`)
+        .attr('aria-valuemin', minimumOrbitRadius(system, orbit))
+        .attr('aria-valuemax', radii[axis] + 400)
+        .attr('aria-valuenow', Math.round(radii[axis]))
         .append('title')
         .text(label)
     }
@@ -315,7 +329,9 @@ export function renderSystemMap({
         .attr('role', 'button')
         .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
         .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
-        .attr('aria-label', `Move center of ${orbitLabel(system, orbit)}`)
+        .attr('aria-label', moveEnabled
+          ? `Move center of ${orbitLabel(system, orbit)}`
+          : `Inspect ${orbitLabel(system, orbit)}`)
         .append('title')
         .text('Drag to move the Orbit center')
     }
@@ -331,10 +347,10 @@ export function renderSystemMap({
       .attr('cx', rotationHandle.x)
       .attr('cy', rotationHandle.y)
       .attr('r', 7)
-      .attr('role', 'slider')
+      .attr('role', moveEnabled ? 'slider' : 'button')
       .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
       .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
-      .attr('aria-label', `Rotate ${orbitLabel(system, orbit)}`)
+      .attr('aria-label', `${moveEnabled ? 'Rotate' : 'Inspect'} ${orbitLabel(system, orbit)}`)
       .attr('aria-valuemin', 0)
       .attr('aria-valuemax', 359)
       .attr('aria-valuenow', Math.round(rotation))
@@ -367,6 +383,8 @@ export function renderSystemMap({
         return
       }
 
+      if (!moveEnabled) return
+
       const current = orbitRadii(system, orbit, geometry, liveOrbitRadii)
       const step = event.shiftKey ? 10 : 1
       const minimum = minimumOrbitRadius(system, orbit)
@@ -385,10 +403,30 @@ export function renderSystemMap({
       event.preventDefault()
       handlers.resizeOrbit(orbit.id, { horizontal, vertical })
     })
-  orbitAxisHandles.on('click', (event, orbit) => {
-    event.stopPropagation()
-    handlers.selectOrbit(orbit.id)
-  })
+  orbitAxisHandles
+    .on('click', (event, orbit) => {
+      event.stopPropagation()
+      handlers.selectOrbit(orbit.id)
+    })
+    .on('keydown', function (event, orbit) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        handlers.selectOrbit(orbit.id)
+        return
+      }
+      if (!moveEnabled) return
+      const axis = this.getAttribute('data-resize-axis') === 'vertical' ? 'vertical' : 'horizontal'
+      const current = orbitRadii(system, orbit, geometry, liveOrbitRadii)
+      const step = event.shiftKey ? 10 : 1
+      let radius = current[axis]
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') radius -= step
+      else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') radius += step
+      else if (event.key === 'Home') radius = minimumOrbitRadius(system, orbit)
+      else if (event.key === 'End') radius += 400
+      else return
+      event.preventDefault()
+      handlers.resizeOrbit(orbit.id, { ...current, [axis]: Math.max(minimumOrbitRadius(system, orbit), radius) })
+    })
   orbitCenterHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
@@ -405,6 +443,8 @@ export function renderSystemMap({
         handlers.selectOrbit(orbit.id)
         return
       }
+
+      if (!moveEnabled) return
 
       const step = event.shiftKey ? 10 : 1
       const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
@@ -428,6 +468,12 @@ export function renderSystemMap({
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', (event, orbit) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        handlers.selectOrbit(orbit.id)
+        return
+      }
+      if (!moveEnabled) return
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       event.preventDefault()
       const step = event.shiftKey ? 10 : 1
@@ -540,10 +586,14 @@ export function renderSystemMap({
       mark.select<SVGCircleElement>('.orbit-axis-handle--horizontal')
         .attr('cx', horizontalHandle.x)
         .attr('cy', horizontalHandle.y)
+        .attr('aria-valuenow', Math.round(radii.horizontal))
+        .attr('aria-valuemax', radii.horizontal + 400)
         .style('cursor', orbitAxisCursor('horizontal', rotation))
       mark.select<SVGCircleElement>('.orbit-axis-handle--vertical')
         .attr('cx', verticalHandle.x)
         .attr('cy', verticalHandle.y)
+        .attr('aria-valuenow', Math.round(radii.vertical))
+        .attr('aria-valuemax', radii.vertical + 400)
         .style('cursor', orbitAxisCursor('vertical', rotation))
       mark.select<SVGLineElement>('.orbit-rotation-stem')
         .attr('x1', verticalHandle.x)
@@ -583,7 +633,9 @@ export function renderSystemMap({
       }
     })
   const objectDrag = drag<SVGGElement, SystemObject>()
-    .filter(() => moveEnabled)
+    .filter(event => moveEnabled && !event.ctrlKey && !event.button
+      && (!('touches' in event) || event.touches.length === 1))
+    .clickDistance(6)
     .container(() => content.node()!)
     .subject((_event, object) => requiredPosition(positions, object.id))
     .on('start', function (_event, object) {
@@ -772,7 +824,9 @@ export function renderSystemMap({
   }
   orbitResizeTargets.call(
     drag<SVGElement, Orbit>()
-      .filter(() => moveEnabled)
+      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
@@ -824,7 +878,9 @@ export function renderSystemMap({
 
   orbitCenterHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(() => moveEnabled)
+      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (_event, orbit) {
@@ -865,7 +921,9 @@ export function renderSystemMap({
   const orbitRotationGestures = new WeakMap<SVGCircleElement, OrbitRotationGesture>()
   orbitRotationHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(() => moveEnabled)
+      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
@@ -919,6 +977,7 @@ export function renderSystemMap({
   const zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent([[0, 0], [960, 560]])
     .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
+    .clickDistance(6)
     .filter((event) => {
       if (orbitRotationWheelEvents.has(event as Event)) return false
       const target = event.target
@@ -930,7 +989,7 @@ export function renderSystemMap({
         && 'touches' in event
         && event.touches.length > 1
       return (!isMapMark || !moveEnabled || event.type === 'wheel' || touchPinch)
-        && (!event.ctrlKey || event.type === 'wheel')
+        && (!moveEnabled || !event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })
     .on('zoom', (event) => {
@@ -940,7 +999,13 @@ export function renderSystemMap({
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())
   setZoomLevel(Math.round(currentTransform.k * 100))
-  if (focusedOrbitCenterId) {
+  if (focusedOrbitAxisId) {
+    orbitAxisHandles.filter(function (orbit) {
+      return orbit.id === focusedOrbitAxisId && this.getAttribute('data-resize-axis') === focusedOrbitAxisDirection
+    }).node()?.focus()
+  } else if (focusedOrbitRotationId) {
+    orbitRotationHandles.filter(orbit => orbit.id === focusedOrbitRotationId).node()?.focus()
+  } else if (focusedOrbitCenterId) {
     orbitCenterHandles.filter(orbit => orbit.id === focusedOrbitCenterId).node()?.focus()
   } else if (focusedOrbitId) {
     orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()

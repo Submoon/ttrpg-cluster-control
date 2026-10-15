@@ -3,6 +3,7 @@
     class="prototype-map-canvas"
     @click.capture="captureMapIntent"
     @pointerdown.capture="onPointerDownCapture"
+    @mousedown.capture="onMouseDownCapture"
     @touchstart.capture="onTouchStartCapture"
     @touchend.capture="onTouchEndCapture"
     @touchcancel.capture="onTouchEndCapture"
@@ -18,7 +19,7 @@
           :selected-system-id="selectedSystemId"
           :selected-route-id="selectedRouteId"
           :move-enabled="tool === 'move'"
-          :select-systems="selectSystemsInMove && tool === 'move'"
+          :system-activation="tool === 'select' ? 'inspect' : selectSystemsInMove && tool === 'move' ? 'select' : 'open'"
           :touch-navigation="touchNavigation"
           :show-zoom-controls="showZoomControls"
           @open-system="emit('open-system', $event)"
@@ -60,7 +61,7 @@ import type { CatalogueSubtype, LocalWorkspace, Point, StarSystem } from '../dom
 import type { MapImageFormat } from '../utils/map-image-export'
 
 type View = 'cluster' | 'system'
-type Tool = 'navigation' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
+type Tool = 'navigation' | 'select' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace
@@ -98,6 +99,9 @@ type MapControls = {
   zoomBy(factor: number): void
   fitMap(): void
   cancelActiveGesture(): void
+  startViewPan(event: MouseEvent): void
+  moveViewPan(event: MouseEvent): void
+  endViewPan(): void
   startTouchNavigation(event: TouchEvent): void
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
@@ -108,12 +112,18 @@ const systemMap = ref<MapControls | null>(null)
 
 type Inspectable = { kind: 'system' | 'route' | 'object' | 'orbit'; id: string }
 type LongPressCandidate = { pointerId: number; target: Inspectable; x: number; y: number; triggered: boolean }
+type SelectPanGesture = { pointerId: number; x: number; y: number; dragged: boolean }
 const activePointers = new Set<number>()
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
 let longPressCandidate: LongPressCandidate | undefined
+let selectPanGesture: SelectPanGesture | undefined
 let touchNavigationOwned = false
 let suppressNextMapClickUntil = 0
 let touchNavigationEndTimer: ReturnType<typeof setTimeout> | undefined
+type RightPanGesture = { startEvent: MouseEvent; map: MapControls; dragged: boolean }
+let rightPanGesture: RightPanGesture | undefined
+let rightPanReleasePending = false
+let suppressRightGestureUntil = 0
 
 function activeMap(): MapControls | null {
   return props.view === 'cluster' ? clusterMap.value : systemMap.value
@@ -143,10 +153,20 @@ function onPointerDownCapture(event: PointerEvent): void {
     // A previous long-press/pinch did not produce a browser click; do not eat a later deliberate tap.
     suppressNextMapClickUntil = 0
   }
+  if (activePointers.size === 0 && !rightPanReleasePending) suppressRightGestureUntil = 0
   activePointers.add(event.pointerId)
-  if (activePointers.size > 1 || (event.pointerType === 'touch' && touchNavigationOwned)) {
+  if (event.button !== 0) {
     cancelLongPress()
     return
+  }
+  if (activePointers.size > 1 || (event.pointerType === 'touch' && touchNavigationOwned)) {
+    selectPanGesture = undefined
+    cancelLongPress()
+    return
+  }
+  if (props.tool === 'select' && event.target instanceof Element
+    && event.target.closest('svg.cluster-map-svg, svg.system-map-svg')) {
+    selectPanGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dragged: false }
   }
   if (!props.longPressEnabled || (props.tool !== 'navigation' && props.tool !== 'move')) return
   const target = inspectableTarget(event.target)
@@ -170,7 +190,84 @@ function onPointerDownCapture(event: PointerEvent): void {
   }, 520)
 }
 
+function onMouseDownCapture(event: MouseEvent): void {
+  if (event.button !== 2 || !(event.target instanceof Element)
+    || !event.target.closest('svg.cluster-map-svg, svg.system-map-svg')) return
+  const map = activeMap()
+  if (!map) return
+  cancelLongPress()
+  rightPanGesture = { startEvent: event, map, dragged: false }
+  suppressRightGestureUntil = 0
+  // Keep the stationary right click available; D3 must never start an editorial drag from this press.
+  event.stopImmediatePropagation()
+}
+
+function onWindowMouseDown(): void {
+  // A new deliberate press outside the map must not inherit an earlier pan's release guard.
+  if (!rightPanGesture && !rightPanReleasePending) suppressRightGestureUntil = 0
+}
+
+function onWindowMouseMove(event: MouseEvent): void {
+  const gesture = rightPanGesture
+  if (!gesture || !(event.buttons & 2)) return
+  if (!gesture.dragged) {
+    if (Math.hypot(event.clientX - gesture.startEvent.clientX, event.clientY - gesture.startEvent.clientY) <= 6) return
+    gesture.dragged = true
+    rightPanReleasePending = true
+    cancelLongPress()
+    gesture.map.startViewPan(gesture.startEvent)
+  }
+  gesture.map.moveViewPan(event)
+  event.preventDefault()
+  event.stopImmediatePropagation()
+}
+
+function onWindowMouseUp(event: MouseEvent): void {
+  const gesture = rightPanGesture
+  if (gesture && event.button === 2) {
+    if (gesture.dragged) {
+      gesture.map.moveViewPan(event)
+      gesture.map.endViewPan()
+      suppressRightGestureUntil = Date.now() + 1000
+      event.preventDefault()
+    } else if (event.buttons & 1) {
+      // An incidental secondary-button release must not finish D3's primary-button edit.
+      event.stopImmediatePropagation()
+    }
+    rightPanGesture = undefined
+  }
+  if (rightPanReleasePending && event.buttons === 0) {
+    rightPanReleasePending = false
+    suppressRightGestureUntil = Date.now() + 1000
+    event.preventDefault()
+    // Let cancelled D3 gestures receive mouseup so their native listeners are cleaned up.
+  }
+}
+
+function captureRightGestureRelease(event: MouseEvent): void {
+  if (event.type === 'click' && event.detail === 0) return
+  if (!rightPanGesture?.dragged && !rightPanReleasePending && Date.now() > suppressRightGestureUntil) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+}
+
+function onWindowBlur(): void {
+  if (rightPanGesture?.dragged) {
+    rightPanGesture.map.endViewPan()
+    suppressRightGestureUntil = Date.now() + 1000
+  }
+  rightPanGesture = undefined
+  rightPanReleasePending = false
+  selectPanGesture = undefined
+  activePointers.clear()
+  cancelLongPress()
+}
+
 function onPointerMoveCapture(event: PointerEvent): void {
+  if (selectPanGesture?.pointerId === event.pointerId && !selectPanGesture.dragged
+    && Math.hypot(event.clientX - selectPanGesture.x, event.clientY - selectPanGesture.y) > 6) {
+    selectPanGesture.dragged = true
+  }
   const candidate = longPressCandidate
   if (candidate?.pointerId !== event.pointerId) return
   if (candidate.triggered) return
@@ -178,6 +275,10 @@ function onPointerMoveCapture(event: PointerEvent): void {
 }
 
 function onPointerEndCapture(event: PointerEvent): void {
+  if (selectPanGesture?.pointerId === event.pointerId) {
+    if (selectPanGesture.dragged) suppressNextMapClickUntil = Date.now() + 1000
+    selectPanGesture = undefined
+  }
   const candidate = longPressCandidate
   if (candidate?.pointerId === event.pointerId) {
     if (candidate.triggered) suppressNextMapClickUntil = Date.now() + 1000
@@ -197,6 +298,7 @@ function onTouchStartCapture(event: TouchEvent): void {
     return
   }
   cancelLongPress()
+  selectPanGesture = undefined
   touchNavigationOwned = true
   if (touchNavigationEndTimer) clearTimeout(touchNavigationEndTimer)
   activeMap()?.cancelActiveGesture()
@@ -238,16 +340,35 @@ onMounted(() => {
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerEnd, true)
   window.addEventListener('pointercancel', onWindowPointerEnd, true)
+  window.addEventListener('mousemove', onWindowMouseMove, true)
+  window.addEventListener('mousedown', onWindowMouseDown, true)
+  window.addEventListener('mouseup', onWindowMouseUp, true)
+  window.addEventListener('contextmenu', captureRightGestureRelease, true)
+  window.addEventListener('auxclick', captureRightGestureRelease, true)
+  window.addEventListener('click', captureRightGestureRelease, true)
+  window.addEventListener('blur', onWindowBlur)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('touchmove', onWindowTouchMove, true)
   window.removeEventListener('pointermove', onWindowPointerMove, true)
   window.removeEventListener('pointerup', onWindowPointerEnd, true)
   window.removeEventListener('pointercancel', onWindowPointerEnd, true)
+  window.removeEventListener('mousemove', onWindowMouseMove, true)
+  window.removeEventListener('mousedown', onWindowMouseDown, true)
+  window.removeEventListener('mouseup', onWindowMouseUp, true)
+  window.removeEventListener('contextmenu', captureRightGestureRelease, true)
+  window.removeEventListener('auxclick', captureRightGestureRelease, true)
+  window.removeEventListener('click', captureRightGestureRelease, true)
+  window.removeEventListener('blur', onWindowBlur)
+  rightPanGesture?.map.endViewPan()
   cancelLongPress()
+  selectPanGesture = undefined
   if (touchNavigationEndTimer) clearTimeout(touchNavigationEndTimer)
 })
-watch(() => [props.tool, props.view], cancelLongPress)
+watch(() => [props.tool, props.view], () => {
+  cancelLongPress()
+  selectPanGesture = undefined
+})
 
 function captureMapIntent(event: MouseEvent): void {
   const target = event.target
@@ -255,7 +376,8 @@ function captureMapIntent(event: MouseEvent): void {
   const svg = target.closest('svg.cluster-map-svg, svg.system-map-svg') as SVGSVGElement | null
   if (!svg) return
 
-  if (event.detail > 0 && (touchNavigationOwned || Date.now() <= suppressNextMapClickUntil)) {
+  if (event.detail > 0 && (touchNavigationOwned || Date.now() <= suppressNextMapClickUntil
+    || rightPanReleasePending || rightPanGesture?.dragged || Date.now() <= suppressRightGestureUntil)) {
     suppressNextMapClickUntil = 0
     event.preventDefault()
     event.stopImmediatePropagation()
@@ -264,18 +386,35 @@ function captureMapIntent(event: MouseEvent): void {
   if (props.tool === 'navigation' || props.tool === 'move') return
 
   const systemObject = target.closest('.system-object')
-  const orbit = target.closest('.orbit-hit-target')
+  const orbit = target.closest('.orbit-hit-target, .orbit-mark')
   const systemNode = target.closest('.cluster-system-node')
+  const route = target.closest('.cluster-route')
 
   event.preventDefault()
   event.stopImmediatePropagation()
+
+  if (props.tool === 'select') {
+    if (props.view === 'cluster') {
+      if (systemNode) emit('inspect-entity', { kind: 'system', id: systemNode.getAttribute('data-system-id') ?? '' })
+      else if (route) emit('inspect-entity', { kind: 'route', id: route.getAttribute('data-route-id') ?? '' })
+    } else if (systemObject) {
+      emit('inspect-entity', { kind: 'object', id: systemObject.getAttribute('data-object-id') ?? '' })
+    } else if (orbit) {
+      emit('inspect-entity', { kind: 'orbit', id: orbit.getAttribute('data-orbit-id') ?? '' })
+    }
+    return
+  }
 
   if (props.view === 'cluster') {
     if (systemNode && props.tool === 'add-route') {
       emit('map-target', { kind: 'system', id: systemNode.getAttribute('data-system-id') ?? '' })
       return
     }
-    if (!systemNode && !target.closest('.cluster-route')) {
+    if (systemNode && props.tool === 'add-system') {
+      emit('map-target', { kind: 'system', id: systemNode.getAttribute('data-system-id') ?? '' })
+      return
+    }
+    if (!systemNode && !route) {
       emit('map-target', { kind: 'empty', point: clusterPoint(event, svg) })
     }
     return
@@ -284,14 +423,18 @@ function captureMapIntent(event: MouseEvent): void {
   if (props.tool === 'add-object') {
     if (orbit) {
       emit('map-target', { kind: 'orbit', id: orbit.getAttribute('data-orbit-id') ?? '' })
-    } else if (!systemObject) {
+    } else if (systemObject) {
+      emit('map-target', { kind: 'object', id: systemObject.getAttribute('data-object-id') ?? '' })
+    } else {
       emit('map-target', { kind: 'empty', point: systemPoint(event, svg) })
     }
     return
   }
 
   if (props.tool === 'add-orbit') {
-    emit('map-target', systemObject
+    emit('map-target', orbit
+      ? { kind: 'orbit', id: orbit.getAttribute('data-orbit-id') ?? '' }
+      : systemObject
       ? { kind: 'object', id: systemObject.getAttribute('data-object-id') ?? '' }
       : { kind: 'empty', point: systemPoint(event, svg) })
   }

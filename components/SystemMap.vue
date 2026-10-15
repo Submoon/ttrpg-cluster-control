@@ -83,6 +83,7 @@ type SystemTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: SystemTouchGesture | null = null
+let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 
 const handlers: SystemMapEventHandlers = {
   selectObject: id => emit('select-object', id),
@@ -177,6 +178,25 @@ function endTouchNavigation(event: TouchEvent): void {
   }
 }
 
+/** Starts a view-only pan and rolls back any unfinished object or Orbit preview. */
+function startViewPan(event: MouseEvent): void {
+  const element = svgElement.value
+  if (!element || !mapRenderer) return
+  mapRenderer.cancelActiveGesture()
+  viewPan = { transform: zoomTransform(element), start: pointer(event, element) as [number, number] }
+}
+
+function moveViewPan(event: MouseEvent): void {
+  const element = svgElement.value
+  if (!element || !mapRenderer || !viewPan) return
+  const point = pointer(event, element)
+  select(element).call(mapRenderer.zoomBehavior.transform, zoomIdentity
+    .translate(viewPan.transform.x + point[0] - viewPan.start[0], viewPan.transform.y + point[1] - viewPan.start[1])
+    .scale(viewPan.transform.k))
+}
+
+function endViewPan(): void { viewPan = null }
+
 /**
  * Exports the full system scene and includes the current system name in its title band.
  * @param format Requested SVG or PNG output.
@@ -263,7 +283,7 @@ watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
 watch(() => props.moveEnabled, render)
 
-defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap, cancelActiveGesture: () => mapRenderer?.cancelActiveGesture(), startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap, cancelActiveGesture: () => mapRenderer?.cancelActiveGesture(), startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>
@@ -445,6 +465,7 @@ defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap, cancelActive
   cursor: grabbing;
 }
 
+.orbit-axis-handle:focus-visible,
 .orbit-rotation-handle:focus-visible {
   stroke: var(--focus);
   stroke-width: 3;

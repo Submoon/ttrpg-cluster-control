@@ -75,6 +75,8 @@ The first human round asks for the root interaction mode: safe navigation with e
 
 ## Resolution
 
+**Later amendment, 2026-10-15:** [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md) is authoritative for the human-confirmed addition of Select and right-button view pan, persistent same-type Add, post-creation panel/context behavior, and preservation of a chosen route origin while panning. In particular, the one-shot Add / successful-Add Navigation reset clauses below are superseded. The original Resolution is retained as dated decision history; its other guarantees remain binding.
+
 Resolved on 2026-10-13 by the explicit human answers to Q1–Q9. This is the interaction contract for the revamp, not product implementation or closure of its GitHub source.
 
 ### Navigation and explicit editing
