@@ -1,6 +1,6 @@
 <template>
   <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
-    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
+    <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
       <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
       <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
@@ -9,9 +9,11 @@
     <svg
       ref="svgElement"
       class="cluster-map-svg block h-full min-h-0 w-full flex-1"
+      :class="{ 'prototype-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${cluster.name} Jump Cluster map`"
+      @touchstart.capture="startTouchNavigation"
     />
   </div>
 </template>
@@ -20,7 +22,7 @@
 /**
  * D3 owns the SVG scene and gestures; Vue owns controls/events, with unscoped styles targeting D3-created nodes.
  */
-import { drag, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
+import { drag, pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -42,7 +44,10 @@ const props = withDefaults(defineProps<{
   selectedSystemId: string | null
   selectedRouteId: string | null
   moveEnabled?: boolean
-}>(), { moveEnabled: true })
+  selectSystems?: boolean
+  touchNavigation?: boolean
+  showZoomControls?: boolean
+}>(), { moveEnabled: true, selectSystems: false, touchNavigation: false, showZoomControls: true })
 
 const emit = defineEmits<{
   'open-system': [id: string]
@@ -53,6 +58,13 @@ const emit = defineEmits<{
 const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
+type ClusterTouchGesture =
+  | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
+  | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
+let touchGesture: ClusterTouchGesture | null = null
+const activeSystemGestures = new Map<SVGGElement, () => void>()
+const cancelledSystemGestures = new WeakSet<SVGGElement>()
+let refreshLiveRouteGeometry: (() => void) | undefined
 
 /** Applies a relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
@@ -98,6 +110,78 @@ function fitMap(): void {
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
 }
 
+function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
+  return pointer(touch, element) as [number, number]
+}
+
+function beginTouchPinch(touches: TouchList): void {
+  const element = svgElement.value
+  if (!element || !zoomBehavior || touches.length < 2) return
+  const first = touchPoint(touches[0]!, element)
+  const second = touchPoint(touches[1]!, element)
+  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+  const dx = second[0] - first[0]
+  const dy = second[1] - first[1]
+  const transform = zoomTransform(element)
+  touchGesture = {
+    mode: 'pinch',
+    transform,
+    distance: Math.max(1, Math.hypot(dx, dy)),
+    anchor: transform.invert(center),
+  }
+}
+
+function startTouchNavigation(event: TouchEvent): void {
+  if (!props.touchNavigation || event.touches.length < 2) return
+  cancelActiveGesture()
+  beginTouchPinch(event.touches)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function moveTouchNavigation(event: TouchEvent): void {
+  const element = svgElement.value
+  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
+    const first = touchPoint(event.touches[0]!, element)
+    const second = touchPoint(event.touches[1]!, element)
+    const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+    const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
+    const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+    const [anchorX, anchorY] = touchGesture.anchor
+    select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - anchorX * scale, center[1] - anchorY * scale).scale(scale))
+  } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
+    const point = touchPoint(event.touches[0]!, element)
+    select(element).call(zoomBehavior.transform, zoomIdentity
+      .translate(touchGesture.transform.x + point[0] - touchGesture.start[0], touchGesture.transform.y + point[1] - touchGesture.start[1])
+      .scale(touchGesture.transform.k))
+  }
+}
+
+function endTouchNavigation(event: TouchEvent): void {
+  const element = svgElement.value
+  if (!props.touchNavigation || !element || !touchGesture) return
+  if (event.touches.length >= 2) {
+    beginTouchPinch(event.touches)
+  } else if (event.touches.length === 1) {
+    touchGesture = { mode: 'pan', transform: zoomTransform(element), start: touchPoint(event.touches[0]!, element) }
+  } else {
+    touchGesture = null
+  }
+}
+
+function cancelActiveGesture(): void {
+  for (const [node, rollback] of activeSystemGestures) {
+    cancelledSystemGestures.add(node)
+    rollback()
+  }
+  activeSystemGestures.clear()
+  refreshLiveRouteGeometry?.()
+}
+
 /**
  * Rebuilds D3 route/system nodes while preserving the user's temporary pan and zoom transform.
  * System drag positions remain preview-only until drag end; the emitted save position is normalized and clamped.
@@ -106,6 +190,7 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
+  cancelActiveGesture()
   const svg = select(element)
   const currentTransform = zoomTransform(element)
   const liveSystemPositions = new Map<string, Point>()
@@ -138,6 +223,7 @@ function render(): void {
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
     .join('g')
+    .attr('data-route-id', route => route.id)
     .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
     .attr('role', 'button')
     .attr('tabindex', 0)
@@ -210,6 +296,7 @@ function render(): void {
       }
     })
   }
+  refreshLiveRouteGeometry = updateRouteGeometry
   routeMarks
     .on('click', (event, route) => {
       event.stopPropagation()
@@ -233,7 +320,7 @@ function render(): void {
     })
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', system => `Open ${system.name} system map`)
+    .attr('aria-label', system => props.selectSystems ? `Select ${system.name} system` : `Open ${system.name} system map`)
 
   systemMarks.append('rect')
     .attr('class', 'cluster-system-card')
@@ -281,18 +368,33 @@ function render(): void {
     .filter(() => props.moveEnabled)
     .container(() => content.node()!)
     .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
-    .on('start', function () {
+    .on('start', function (_event, system) {
       movedSystems.delete(this)
+      cancelledSystemGestures.delete(this)
+      activeSystemGestures.set(this, () => {
+        movedSystems.delete(this)
+        liveSystemPositions.delete(system.id)
+        const position = clusterSystemPosition(props.systemPositions, system.id)
+        select(this).classed('is-dragging', false).attr('transform', `translate(${position.x} ${position.y})`)
+        updateRouteGeometry()
+      })
       select(this).classed('is-dragging', true)
     })
     .on('drag', function (event, system) {
+      if (cancelledSystemGestures.has(this)) return
       if (event.dx || event.dy) movedSystems.add(this)
       select(this).attr('transform', `translate(${event.x} ${event.y})`)
       liveSystemPositions.set(system.id, { x: event.x, y: event.y })
       updateRouteGeometry()
     })
     .on('end', function (event, system) {
+      activeSystemGestures.delete(this)
       select(this).classed('is-dragging', false)
+      if (cancelledSystemGestures.has(this)) {
+        cancelledSystemGestures.delete(this)
+        movedSystems.delete(this)
+        return
+      }
       if (!movedSystems.has(this)) return
       setTimeout(() => movedSystems.delete(this), 0)
       emit('move-system', system.id, {
@@ -321,7 +423,8 @@ function render(): void {
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
-      return (!isMapMark || !props.moveEnabled || event.type === 'wheel' || touchPinch)
+      return (props.touchNavigation && event.type.startsWith('touch'))
+        || (!isMapMark || !props.moveEnabled || event.type === 'wheel' || touchPinch)
         && (!event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })
@@ -339,8 +442,9 @@ watch(() => props.cluster, render, { deep: true })
 watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
+watch(() => props.selectSystems, render)
 
-defineExpose({ exportImage, zoomBy, fitMap })
+defineExpose({ exportImage, zoomBy, fitMap, cancelActiveGesture, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>
@@ -351,6 +455,8 @@ defineExpose({ exportImage, zoomBy, fitMap })
 .cluster-map-svg {
   background: var(--map-bg);
 }
+
+.prototype-touch-surface { touch-action: none; }
 
 .map-navigation {
   position: absolute;

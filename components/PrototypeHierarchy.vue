@@ -158,9 +158,9 @@ function routeLabel(route: JumpRoute): string {
 .route-tree-row { padding-left: .65rem; }
 .b-hierarchy-panel :focus-visible { outline: 2px solid var(--proto-accent); outline-offset: -2px; }
 @media (max-width: 760px) {
-  .b-hierarchy-panel { top: 3.3rem; right: .4rem; bottom: 8rem; left: .4rem; width: auto; min-width: 0; max-width: none; }
+  .b-hierarchy-panel { position: fixed; z-index: 20; inset: 0; width: auto; min-width: 0; max-width: none; height: 100dvh; max-height: none; box-sizing: border-box; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(.8rem + env(safe-area-inset-bottom)); border: 0; box-shadow: none; backdrop-filter: none; }
 }
-@media (max-height: 600px) and (min-width: 761px) {
-  .b-hierarchy-panel { top: 5.2rem; bottom: 7.6rem; }
+@media (max-width: 1024px) and (max-height: 600px) {
+  .b-hierarchy-panel { position: fixed; z-index: 20; inset: 0; width: auto; min-width: 0; max-width: none; height: 100dvh; max-height: none; box-sizing: border-box; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(.8rem + env(safe-area-inset-bottom)); border: 0; box-shadow: none; backdrop-filter: none; }
 }
 </style>

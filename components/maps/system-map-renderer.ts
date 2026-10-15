@@ -99,6 +99,8 @@ export interface SystemMapRendererOptions {
 /** Live D3 capabilities exposed to the Vue wrapper. */
 export interface SystemMapRenderer {
   zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>
+  /** Cancels and rolls back active local previews without publishing geometry. */
+  cancelActiveGesture(): void
   /** Captures Ctrl+wheel rotation before the same event reaches D3's zoom behavior. */
   captureOrbitRotationWheel(event: WheelEvent): void
   /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
@@ -199,6 +201,26 @@ export function renderSystemMap({
   const liveOrbitCenters = new Map<string, Point>()
   const liveOrbitRadii = new Map<string, OrbitRadii>()
   const liveOrbitRotations = new Map<string, number>()
+  const activeGestures = new Map<Element, () => void>()
+  const cancelledGestures = new WeakSet<Element>()
+  function beginGesture(element: Element, rollback: () => void): void {
+    cancelledGestures.delete(element)
+    activeGestures.set(element, rollback)
+  }
+  function finishGesture(element: Element): boolean {
+    activeGestures.delete(element)
+    const cancelled = cancelledGestures.has(element)
+    if (cancelled) cancelledGestures.delete(element)
+    return cancelled
+  }
+  function cancelActiveGesture(): void {
+    for (const [element, rollback] of activeGestures) {
+      cancelledGestures.add(element)
+      rollback()
+    }
+    activeGestures.clear()
+    updateLiveGeometry()
+  }
   const currentPositions = () => objectPositions(system, geometry, {
     positions: livePositions,
     orbitCenters: liveOrbitCenters,
@@ -564,11 +586,17 @@ export function renderSystemMap({
     .filter(() => moveEnabled)
     .container(() => content.node()!)
     .subject((_event, object) => requiredPosition(positions, object.id))
-    .on('start', function () {
+    .on('start', function (_event, object) {
       movedObjects.delete(this)
+      beginGesture(this, () => {
+        movedObjects.delete(this)
+        livePositions.delete(object.id)
+        select(this).classed('is-dragging', false)
+      })
       select(this).classed('is-dragging', true)
     })
     .on('drag', function (event, object) {
+      if (cancelledGestures.has(this)) return
       if (event.dx || event.dy) {
         movedObjects.add(this)
         livePositions.set(object.id, { x: event.x, y: event.y })
@@ -576,6 +604,11 @@ export function renderSystemMap({
       }
     })
     .on('end', function (event, object) {
+      if (finishGesture(this)) {
+        select(this).classed('is-dragging', false)
+        movedObjects.delete(this)
+        return
+      }
       select(this).classed('is-dragging', false)
       if (!movedObjects.has(this)) return
       setTimeout(() => movedObjects.delete(this), 0)
@@ -744,6 +777,12 @@ export function renderSystemMap({
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
         resizedOrbits.delete(this)
+        beginGesture(this, () => {
+          resizedOrbits.delete(this)
+          orbitResizeGestures.delete(this)
+          liveOrbitRadii.delete(orbit.id)
+          select(this).classed('is-resizing', false)
+        })
         const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
         const handleAxis = this.getAttribute('data-resize-axis')
         const axis: OrbitResizeAxis = handleAxis === 'horizontal' || handleAxis === 'vertical'
@@ -758,6 +797,7 @@ export function renderSystemMap({
         select(this).classed('is-resizing', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) resizedOrbits.add(this)
         const gesture = orbitResizeGestures.get(this)
         if (!gesture) return
@@ -765,6 +805,12 @@ export function renderSystemMap({
         updateLiveGeometry()
       })
       .on('end', function (event, orbit) {
+        if (finishGesture(this)) {
+          orbitResizeGestures.delete(this)
+          resizedOrbits.delete(this)
+          select(this).classed('is-resizing', false)
+          return
+        }
         select(this).classed('is-resizing', false)
         const gesture = orbitResizeGestures.get(this)
         orbitResizeGestures.delete(this)
@@ -781,16 +827,27 @@ export function renderSystemMap({
       .filter(() => moveEnabled)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
-      .on('start', function () {
+      .on('start', function (_event, orbit) {
         movedOrbitCenters.delete(this)
+        beginGesture(this, () => {
+          movedOrbitCenters.delete(this)
+          liveOrbitCenters.delete(orbit.id)
+          select(this).classed('is-moving', false)
+        })
         select(this).classed('is-moving', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) movedOrbitCenters.add(this)
         liveOrbitCenters.set(orbit.id, { x: event.x, y: event.y })
         updateLiveGeometry()
       })
       .on('end', function (event, orbit) {
+        if (finishGesture(this)) {
+          movedOrbitCenters.delete(this)
+          select(this).classed('is-moving', false)
+          return
+        }
         select(this).classed('is-moving', false)
         if (!movedOrbitCenters.has(this)) return
         const center = { x: event.x, y: event.y }
@@ -813,6 +870,12 @@ export function renderSystemMap({
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
         rotatedOrbits.delete(this)
+        beginGesture(this, () => {
+          rotatedOrbits.delete(this)
+          orbitRotationGestures.delete(this)
+          liveOrbitRotations.delete(orbit.id)
+          select(this).classed('is-rotating', false)
+        })
         const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
         orbitRotationGestures.set(this, {
           center,
@@ -822,6 +885,7 @@ export function renderSystemMap({
         select(this).classed('is-rotating', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) rotatedOrbits.add(this)
         const gesture = orbitRotationGestures.get(this)
         if (!gesture) return
@@ -838,6 +902,12 @@ export function renderSystemMap({
         updateLiveGeometry()
       })
       .on('end', function (_event, orbit) {
+        if (finishGesture(this)) {
+          orbitRotationGestures.delete(this)
+          rotatedOrbits.delete(this)
+          select(this).classed('is-rotating', false)
+          return
+        }
         select(this).classed('is-rotating', false)
         const gesture = orbitRotationGestures.get(this)
         orbitRotationGestures.delete(this)
@@ -876,5 +946,5 @@ export function renderSystemMap({
     orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
   }
 
-  return { zoomBehavior, captureOrbitRotationWheel, handleObjectDrop }
+  return { zoomBehavior, cancelActiveGesture, captureOrbitRotationWheel, handleObjectDrop }
 }

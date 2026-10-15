@@ -43,7 +43,7 @@ The [research](../research/nuxt-ui-fit.md) establishes documentary generation co
 
 ## Current decision boundary
 
-2026-10-14 — The human accepted a B-style UI direction and specified the mobile/presentation adjustments. This settles the visual HITL question, with no redundant visual-approval round after routine authorized changes. The integration investigation is now complete; its failures and measured costs remain part of this review. Final Nuxt UI adoption stays blocked on the open, unclaimed device/preservation task, including the precise incomplete baseline/mobile gesture and overlay paths referenced by the integration artifact, and requires the later live library decision originally agreed in [Decide Nuxt UI adoption and scope](07-nuxt-ui-adoption.md). Technical evidence-task closure does not pass its unsupported gates or authorize starting the next task automatically.
+2026-10-14, claim status refreshed 2026-10-15 — The human accepted a B-style UI direction and specified the mobile/presentation adjustments. This settles the visual HITL question, with no redundant visual-approval round after routine authorized changes. The integration investigation is now complete; its failures and measured costs remain part of this review. Final Nuxt UI adoption stays blocked on the claimed, in-progress device/preservation task, including the precise incomplete baseline/mobile gesture and overlay paths referenced by the integration artifact, and requires the later live library decision originally agreed in [Decide Nuxt UI adoption and scope](07-nuxt-ui-adoption.md). Technical evidence-task closure does not pass its unsupported gates or authorize starting the next task automatically.
 
 ## Notes
 

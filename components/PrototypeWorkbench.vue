@@ -65,10 +65,10 @@
       </main>
     </div>
 
-    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen }]" :data-theme="theme">
+    <div v-else-if="variant === 'B'" class="proto-shell proto-b" :class="[theme, { 'has-open-inspector': inspectorOpen, 'has-open-side-panel': hierarchyOpen || catalogueOpen, 'has-prototype-switcher': isDev }]" :data-theme="theme">
       <header class="b-commandbar">
         <div class="brand-mark"><span class="brand-seal">✦</span><div><strong>TTRPG CLUSTER CONTROL</strong><small>FIELD CONSOLE · CHART 07</small></div></div>
-        <div class="b-breadcrumb"><button v-if="activeView === 'system'" @click="backToCluster">JUMP CLUSTER</button><span v-if="activeView === 'system'">/</span><strong>{{ contextName }}</strong></div>
+        <div class="b-breadcrumb"><strong>{{ contextName }}</strong></div>
         <div class="b-command-actions"><span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span><UButton size="sm" color="neutral" variant="outline" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton><UButton size="sm" color="neutral" variant="outline" @click="openFieldManager">Fields</UButton></div>
       </header>
       <main class="b-map-board">
@@ -84,21 +84,24 @@
           <span class="rail-spacer"></span>
           <button class="rail-button" title="Import map file" @click="chooseImport"><b>⇧</b><span>Import</span></button>
           <button class="rail-button" title="Export map image" @click="exportMap('png')"><b>⇩</b><span>Export</span></button>
-          <button class="rail-button" :class="{ 'is-active': inspectorOpen }" title="Toggle inspector" :aria-expanded="inspectorOpen" @click="toggleInspector"><b>▤</b><span>Details</span></button>
+          <button class="rail-button" :class="{ 'is-active': inspectorOpen }" :title="inspectorOpen ? 'Hide Inspector' : 'Open Inspector'" :aria-label="inspectorOpen ? 'Hide Inspector panel' : 'Open Inspector panel'" :aria-expanded="inspectorOpen" @click="toggleInspector"><b aria-hidden="true">▤</b><span>Inspect</span></button>
           <div class="rail-bottom"><span class="online-dot"></span><small>NO SYNC</small></div>
         </nav>
         <section class="b-map-area">
-          <div class="b-map-hud"><div><small>{{ activeView === 'cluster' ? 'CHART / 01' : `SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div><div class="hud-actions"><UButton v-if="activeView === 'system'" size="sm" color="neutral" variant="outline" @click="backToCluster">← Back</UButton><UButton size="sm" color="neutral" variant="outline" @click="exportMap('svg')">SVG</UButton><UButton size="sm" color="neutral" variant="outline" @click="copyShareLink">Share</UButton></div></div>
-          <PrototypeHierarchy v-if="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
+          <div class="b-map-hud"><div><small>{{ activeView === 'cluster' ? 'CHART / 01' : `SYSTEM / ${systemNumber}` }}</small><strong>{{ contextName }}</strong></div><UButton v-if="activeView === 'system'" class="b-map-return" size="sm" color="neutral" variant="outline" aria-label="Back to Jump Cluster" @click="backToCluster">← Jump Cluster</UButton><div class="hud-actions"><UButton size="sm" color="neutral" variant="outline" @click="exportMap('svg')">SVG</UButton><UButton size="sm" color="neutral" variant="outline" @click="copyShareLink">Share</UButton></div></div>
+          <Transition name="b-mobile-panel">
+            <PrototypeHierarchy v-show="hierarchyOpen" :workspace="workspace" :active-view="activeView" :active-system-id="activeSystemId" :selection="selection" @close="hierarchyOpen = false" @back-to-cluster="backToCluster" @open-system="navigateToSystem" @select-route="id => requestHierarchySelection({ kind: 'route', id })" @select-object="id => requestHierarchySelection({ kind: 'object', id })" @select-orbit="id => requestHierarchySelection({ kind: 'orbit', id })" />
+          </Transition>
           <PrototypeCataloguePicker v-if="catalogueOpen && activeView === 'system'" :selected="activeSubtype" @close="catalogueOpen = false" @select="selectCatalogueType" />
-          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" @open-system="navigateToSystem" @select-route="id => requestSelection({ kind: 'route', id })" @select-object="id => requestSelection({ kind: 'object', id })" @select-orbit="id => requestSelection({ kind: 'orbit', id })" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
+          <div class="map-frame b-map-frame"><PrototypeMapCanvas ref="mapCanvas" :workspace="workspace" :view="activeView" :system="activeSystem" :selected-system-id="selection.kind === 'system' ? selection.id : null" :selected-route-id="selection.kind === 'route' ? selection.id : null" :selected-object-id="selection.kind === 'object' ? selection.id : null" :selected-orbit-id="selection.kind === 'orbit' ? selection.id : null" :tool="activeTool" :select-systems-in-move="true" :touch-navigation="true" :long-press-enabled="true" :show-zoom-controls="false" @open-system="handleMapSystemClick" @inspect-entity="inspectMapEntity" @select-route="id => requestSelection({ kind: 'route', id })" @select-object="id => requestSelection({ kind: 'object', id })" @select-orbit="id => requestSelection({ kind: 'orbit', id })" @move-system="moveSystem" @move-object="moveObject" @move-orbit-center="moveOrbitCenter" @rotate-object="rotateObject" @resize-orbit="resizeOrbit" @rotate-orbit="rotateOrbit" @place-object-in-orbit="placeObjectInOrbit" @map-target="handleMapTarget" /></div>
           <div class="b-zoom-controls" role="toolbar" aria-label="Map zoom controls"><button aria-label="Zoom out" @click="mapCanvas?.zoomBy(1 / 1.2)">−</button><button aria-label="Fit map" @click="mapCanvas?.fitMap()">Fit</button><button aria-label="Zoom in" @click="mapCanvas?.zoomBy(1.2)">＋</button></div>
           <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG BACKGROUND TO PAN · WHEEL TO ZOOM</span></div>
         </section>
-        <aside class="b-inspector-float" :class="{ 'inspector-open': inspectorOpen }">
-          <PrototypeInspector v-if="inspectorOpen" v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
-          <button v-else class="detail-tab" @click="openInspector"><span>≡</span><b>Inspect</b><small>{{ inspectorDescriptor.title }}</small></button>
-        </aside>
+        <Transition name="b-mobile-panel">
+          <aside v-show="inspectorOpen" class="b-inspector-float inspector-open">
+            <PrototypeInspector v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
+          </aside>
+        </Transition>
       </main>
     </div>
 
@@ -176,7 +179,7 @@ import type { MapImageFormat } from '../utils/map-image-export'
 type Variant = 'A' | 'B' | 'C'
 type Tool = 'navigation' | 'move' | 'add-object' | 'add-orbit' | 'add-system' | 'add-route'
 type Selection = { kind: 'system' | 'object' | 'orbit' | 'route'; id: string }
-type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection; fromHierarchy?: boolean } | { kind: 'field-conflict'; commit: () => void }
+type PendingAction = { kind: 'view'; view: 'cluster' | 'system'; systemId?: string } | { kind: 'selection'; selection: Selection; openInspector?: boolean } | { kind: 'field-conflict'; commit: () => void }
 const bMobileQuery = '(max-width: 760px), (max-width: 1024px) and (max-height: 600px)'
 
 const props = defineProps<{ initialVariant: Variant }>()
@@ -413,7 +416,7 @@ function runPending(action: PendingAction): void {
     selection.value = action.selection
     if (activeView.value === 'cluster') clusterSelection.value = action.selection
     else systemSelections[activeSystemId.value] = action.selection
-    if (action.fromHierarchy) {
+    if (action.openInspector) {
       hierarchyOpen.value = false
       catalogueOpen.value = false
       openInspector()
@@ -434,7 +437,10 @@ function runPending(action: PendingAction): void {
     systemSelections[action.systemId] = selection.value
   }
   setNavigation()
-  openInspector()
+  if (variant.value === 'B') {
+    inspectorOpen.value = false
+    hierarchyOpen.value = false
+  } else openInspector()
 }
 
 function requestTransition(action: PendingAction): void {
@@ -459,6 +465,22 @@ function navigateToSystem(systemId: string): void {
   requestTransition({ kind: 'view', view: 'system', systemId })
 }
 
+function handleMapSystemClick(systemId: string): void {
+  if (variant.value === 'B' && activeTool.value === 'move') {
+    requestSelection({ kind: 'system', id: systemId })
+    return
+  }
+  navigateToSystem(systemId)
+}
+
+function inspectMapEntity(target: Selection): void {
+  if (selection.value.kind === target.kind && selection.value.id === target.id) {
+    openInspector()
+    return
+  }
+  requestTransition({ kind: 'selection', selection: target, openInspector: true })
+}
+
 function backToCluster(): void {
   if (activeView.value === 'cluster') return
   requestTransition({ kind: 'view', view: 'cluster' })
@@ -476,7 +498,7 @@ function requestHierarchySelection(next: Selection): void {
     openInspector()
     return
   }
-  requestTransition({ kind: 'selection', selection: next, fromHierarchy: true })
+  requestTransition({ kind: 'selection', selection: next, openInspector: true })
 }
 
 function resolveGuard(choice: 'apply' | 'discard' | 'stay'): void {
@@ -1168,9 +1190,9 @@ function seedWorkspace(): LocalWorkspace {
 .map-legend .legend-exit { background: var(--proto-accent); }
 .map-instruction { text-align: right; }
 .a-inspector { min-height: 0; overflow: auto; padding: 1.35rem 1.1rem; border-left: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 80%, transparent); }
-.reopen-inspector, .detail-tab { display: grid; width: 100%; min-height: 5rem; gap: .3rem; justify-items: start; padding: 1rem; border: 1px dashed var(--proto-line); background: var(--proto-soft); color: var(--proto-ink); text-align: left; cursor: pointer; }
-.reopen-inspector > span, .detail-tab > span { color: var(--proto-accent); font-size: 1.1rem; }
-.reopen-inspector small, .detail-tab small { color: var(--proto-muted); }
+.reopen-inspector { display: grid; width: 100%; min-height: 5rem; gap: .3rem; justify-items: start; padding: 1rem; border: 1px dashed var(--proto-line); background: var(--proto-soft); color: var(--proto-ink); text-align: left; cursor: pointer; }
+.reopen-inspector > span { color: var(--proto-accent); font-size: 1.1rem; }
+.reopen-inspector small { color: var(--proto-muted); }
 .proto-shell .map-navigation { bottom: .7rem; border-color: var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 96%, transparent); }
 .proto-shell .map-navigation button { border-color: var(--proto-line); background: var(--control-bg); color: var(--proto-ink); font-family: var(--proto-ui-font); }
 .proto-shell .map-navigation output { color: var(--proto-ink); font-family: var(--proto-ui-font); }
@@ -1208,9 +1230,6 @@ function seedWorkspace(): LocalWorkspace {
 .rail-bottom { display: grid; justify-items: center; gap: .24rem; padding-top: .45rem; border-top: 1px solid var(--proto-line); color: var(--proto-muted); }
 .rail-bottom small { font-size: .4rem; }
 .b-inspector-float { position: absolute; z-index: 4; top: 9.4rem; right: 1rem; bottom: 4.1rem; width: min(20rem, calc(100vw - 7rem)); overflow: auto; padding: 1rem; border: 1px solid var(--proto-line); background: color-mix(in srgb, var(--proto-surface) 95%, transparent); box-shadow: 0 .7rem 2.2rem rgba(0, 0, 0, .21); backdrop-filter: blur(18px); }
-.b-inspector-float:not(.inspector-open) { width: auto; top: 50%; right: .9rem; bottom: auto; padding: .3rem; transform: translateY(-50%); }
-.b-inspector-float:not(.inspector-open) .detail-tab { width: 3.7rem; min-height: 5rem; justify-items: center; padding: .5rem .25rem; text-align: center; }
-.b-inspector-float:not(.inspector-open) .detail-tab small { display: none; }
 .b-map-footer { position: absolute; z-index: 3; right: 1rem; bottom: .7rem; left: 5.2rem; display: flex; justify-content: space-between; gap: .8rem; color: var(--proto-muted); font-size: .48rem; letter-spacing: .11em; pointer-events: none; }
 
 /* C uses a reading order: regional index, chart plate, then marginal notes. */
@@ -1370,21 +1389,16 @@ function seedWorkspace(): LocalWorkspace {
   .b-map-hud strong { max-width: 8rem; font-size: .9rem; }
   .b-map-hud small { font-size: .42rem; }
   .b-map-hud .hud-actions { display: none; }
+  .b-map-return { min-height: 2rem; padding: .3rem .45rem; font-size: .58rem; white-space: nowrap; }
   .b-map-frame .map-navigation { bottom: 7rem; }
   .b-map-footer { right: .55rem; bottom: 6.6rem; left: .55rem; font-size: .4rem; }
   .b-map-footer span:last-child { display: none; }
-  .b-inspector-float.inspector-open { position: fixed; z-index: 12; inset: 0; width: auto; height: auto; max-height: none; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(8.5rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
+  .b-inspector-float.inspector-open { position: fixed; z-index: 20; inset: 0; width: auto; height: 100dvh; max-height: none; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(.8rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
   .b-inspector-float.inspector-open .inspector-heading { position: sticky; top: env(safe-area-inset-top); z-index: 2; background: var(--proto-surface); }
-  .b-inspector-float:not(.inspector-open) { top: 4.1rem; right: .4rem; bottom: auto; left: auto; width: auto; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
-  .proto-b.has-open-side-panel .b-inspector-float:not(.inspector-open) { visibility: hidden; pointer-events: none; }
-  .b-inspector-float:not(.inspector-open) .detail-tab { display: flex; width: auto; min-height: 2.4rem; align-items: center; gap: .35rem; padding: .35rem .5rem; }
-  .b-inspector-float:not(.inspector-open) .detail-tab b { font-size: .6rem; }
-  .b-inspector-float:not(.inspector-open) .detail-tab > span { font-size: .8rem; }
-  .b-inspector-float:not(.inspector-open) .detail-tab small { display: none; }
-  .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: calc(4.3rem + env(safe-area-inset-bottom)); left: .5rem; }
-  .proto-b.has-open-inspector .b-zoom-controls { top: 6.2rem; right: .5rem; bottom: auto; }
-  .proto-b.has-open-inspector .b-map-footer { display: none; }
-  .b-zoom-controls { right: .5rem; bottom: 6.6rem; gap: .12rem; padding: .18rem; }
+  .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: 0; left: .5rem; padding-bottom: calc(.22rem + env(safe-area-inset-bottom)); }
+  .proto-b.has-prototype-switcher .b-tool-rail { bottom: 3.25rem; }
+  .b-zoom-controls { right: .5rem; bottom: calc(6.6rem + env(safe-area-inset-bottom)); gap: .12rem; padding: .18rem; }
+  .proto-b.has-prototype-switcher .b-zoom-controls { bottom: calc(7.2rem + env(safe-area-inset-bottom)); }
   .b-zoom-controls button { min-width: 1.9rem; min-height: 1.85rem; padding: .2rem .35rem; }
   .proto-modal-body { padding: 1rem; }
 }
@@ -1402,13 +1416,48 @@ function seedWorkspace(): LocalWorkspace {
   .b-tool-rail { top: auto; left: 50%; bottom: 4.6rem; width: max-content; max-width: calc(100vw - 2rem); max-height: none; flex-direction: row; overflow-x: auto; transform: translateX(-50%); }
   .b-tool-rail .rail-spacer, .b-tool-rail .rail-bottom { display: none; }
   .rail-button { width: auto; min-width: 3.2rem; min-height: 2.7rem; }
-  .b-inspector-float:not(.inspector-open) { top: 4.3rem; right: 1rem; }
   .b-zoom-controls { top: 6.2rem; right: 1rem; bottom: auto; }
 }
 
+@media (max-width: 430px) {
+  .proto-b .b-tool-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; align-items: stretch; gap: .08rem; overflow: visible; }
+  .proto-b .b-tool-rail .rail-button { width: 100%; min-width: 0; min-height: 2.35rem; flex: none; padding: .12rem .08rem; }
+  .proto-b .b-tool-rail .rail-button b { font-size: .82rem; line-height: 1; }
+  .proto-b .b-tool-rail .rail-button span { font-size: .58rem; line-height: 1.1; white-space: nowrap; }
+}
+
 @media (max-width: 1024px) and (max-height: 600px) and (min-width: 761px) {
-  .proto-b .b-inspector-float.inspector-open { position: fixed; z-index: 12; inset: 0; width: auto; height: auto; max-height: none; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(8.5rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
+  .proto-b .b-inspector-float.inspector-open { position: fixed; z-index: 20; inset: 0; width: auto; height: 100dvh; max-height: none; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: calc(.7rem + env(safe-area-inset-top)) .8rem calc(.8rem + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: var(--proto-surface); box-shadow: none; }
   .proto-b .b-inspector-float.inspector-open .inspector-heading { position: sticky; top: env(safe-area-inset-top); z-index: 2; background: var(--proto-surface); }
-  .proto-b .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: calc(4.3rem + env(safe-area-inset-bottom)); left: .5rem; width: auto; max-width: calc(100% - 1rem); transform: none; }
+  .proto-b .b-tool-rail { position: fixed; z-index: 13; top: auto; right: .5rem; bottom: 0; left: .5rem; width: auto; max-width: calc(100% - 1rem); padding-bottom: calc(.22rem + env(safe-area-inset-bottom)); transform: none; }
+}
+
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {
+  .proto-b.has-prototype-switcher .b-tool-rail { bottom: 3.25rem; }
+  .proto-b.has-open-inspector .b-tool-rail,
+  .proto-b.has-open-inspector .b-zoom-controls,
+  .proto-b.has-open-side-panel .b-tool-rail,
+  .proto-b.has-open-side-panel .b-zoom-controls { display: none; }
+  .proto-b.has-open-inspector .b-map-footer,
+  .proto-b.has-open-side-panel .b-map-footer { display: none; }
+  .proto-b.has-open-inspector + .prototype-switcher,
+  .proto-b.has-open-side-panel + .prototype-switcher { display: none; }
+  .b-mobile-panel-enter-active,
+  .b-mobile-panel-leave-active { transition: transform 220ms cubic-bezier(.2, .75, .25, 1); }
+  .b-mobile-panel-enter-from,
+  .b-mobile-panel-leave-to { transform: translateY(100%); }
+  .proto-b ~ .prototype-toast { right: .5rem; bottom: calc(10rem + env(safe-area-inset-bottom)); max-width: min(24rem, calc(100vw - 1rem)); }
+  .proto-b.has-prototype-switcher ~ .prototype-toast { bottom: calc(11.5rem + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 1024px) and (max-height: 600px) and (min-width: 761px) {
+  .proto-b .b-zoom-controls { top: auto; right: .5rem; bottom: calc(4.2rem + env(safe-area-inset-bottom)); }
+  .proto-b.has-prototype-switcher .b-zoom-controls { bottom: calc(7.2rem + env(safe-area-inset-bottom)); }
+  .b-map-return { min-height: 2rem; padding: .3rem .45rem; font-size: .58rem; white-space: nowrap; }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce), (max-width: 1024px) and (max-height: 600px) and (prefers-reduced-motion: reduce) {
+  .b-mobile-panel-enter-active,
+  .b-mobile-panel-leave-active { transition: none; }
 }
 </style>

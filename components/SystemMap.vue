@@ -1,6 +1,6 @@
 <template>
   <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
-    <div class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
+    <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
       <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
       <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
@@ -9,10 +9,12 @@
     <svg
       ref="svgElement"
       class="system-map-svg block h-full min-h-0 w-full flex-1"
+      :class="{ 'prototype-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${system.name} star system map`"
       @wheel.capture="captureOrbitRotationWheel"
+      @touchstart.capture="startTouchNavigation"
       @dragover.prevent
       @drop.prevent="handleObjectDrop"
     />
@@ -24,7 +26,7 @@
  * Vue owns map controls and component lifecycle; D3 owns the scene nodes created under the SVG element.
  * Unscoped styles intentionally reach those renderer-created nodes.
  */
-import { select, zoomIdentity } from 'd3'
+import { pointer, select, zoomIdentity, zoomTransform } from 'd3'
 import {
   type CatalogueSubtype,
   type OrbitRadii,
@@ -51,7 +53,9 @@ const props = withDefaults(defineProps<{
   selectedObjectId: string | null
   selectedOrbitId: string | null
   moveEnabled?: boolean
-}>(), { moveEnabled: true })
+  touchNavigation?: boolean
+  showZoomControls?: boolean
+}>(), { moveEnabled: true, touchNavigation: false, showZoomControls: true })
 
 const emit = defineEmits<{
   'select-object': [id: string]
@@ -75,6 +79,10 @@ const mapGeometry = computed<SystemMapGeometry>(() => ({
   orbitRotations: props.orbitRotations,
 }))
 let mapRenderer: SystemMapRenderer | undefined
+type SystemTouchGesture =
+  | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
+  | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
+let touchGesture: SystemTouchGesture | null = null
 
 const handlers: SystemMapEventHandlers = {
   selectObject: id => emit('select-object', id),
@@ -104,6 +112,68 @@ function handleObjectDrop(event: DragEvent): void {
 function zoomBy(factor: number): void {
   if (svgElement.value && mapRenderer) {
     select(svgElement.value).call(mapRenderer.zoomBehavior.scaleBy, factor)
+  }
+}
+
+function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
+  return pointer(touch, element) as [number, number]
+}
+
+function beginTouchPinch(touches: TouchList): void {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  if (!element || !zoomBehavior || touches.length < 2) return
+  const first = touchPoint(touches[0]!, element)
+  const second = touchPoint(touches[1]!, element)
+  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+  const transform = zoomTransform(element)
+  touchGesture = {
+    mode: 'pinch',
+    transform,
+    distance: Math.max(1, Math.hypot(second[0] - first[0], second[1] - first[1])),
+    anchor: transform.invert(center),
+  }
+}
+
+function startTouchNavigation(event: TouchEvent): void {
+  if (!props.touchNavigation || event.touches.length < 2) return
+  mapRenderer?.cancelActiveGesture()
+  beginTouchPinch(event.touches)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function moveTouchNavigation(event: TouchEvent): void {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
+    const first = touchPoint(event.touches[0]!, element)
+    const second = touchPoint(event.touches[1]!, element)
+    const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+    const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
+    const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+    select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale).scale(scale))
+  } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
+    const point = touchPoint(event.touches[0]!, element)
+    select(element).call(zoomBehavior.transform, zoomIdentity
+      .translate(touchGesture.transform.x + point[0] - touchGesture.start[0], touchGesture.transform.y + point[1] - touchGesture.start[1])
+      .scale(touchGesture.transform.k))
+  }
+}
+
+function endTouchNavigation(event: TouchEvent): void {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  if (event.touches.length >= 2) {
+    beginTouchPinch(event.touches)
+  } else if (event.touches.length === 1) {
+    touchGesture = { mode: 'pan', transform: zoomTransform(element), start: touchPoint(event.touches[0]!, element) }
+  } else {
+    touchGesture = null
   }
 }
 
@@ -159,6 +229,7 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
+  mapRenderer?.cancelActiveGesture()
   mapRenderer = renderSystemMap({
     element,
     system: props.system,
@@ -192,7 +263,7 @@ watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
 watch(() => props.moveEnabled, render)
 
-defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap })
+defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap, cancelActiveGesture: () => mapRenderer?.cancelActiveGesture(), startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>
@@ -203,6 +274,8 @@ defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap })
 .system-map-svg {
   background: var(--map-bg);
 }
+
+.prototype-touch-surface { touch-action: none; }
 
 .map-navigation {
   position: absolute;
