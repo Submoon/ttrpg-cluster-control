@@ -2,7 +2,7 @@
 
 ## Overall verdict
 
-**Continue with the accepted B direction, but do not call the current preview ready for acceptance.** The map-led composition, restrained field-console styling, explicit system return, and separate inspector are a convincing foundation. Navigation and draft protection worked on the representative route inspected. The interface still needs a functional Fit correction and clearer operational hierarchy, more readable controls, and a less vertically expensive mobile field-management flow. These are refinements of B, not grounds for restarting the layout choice.
+**Continue with the accepted B direction; final acceptance remains pending.** The map-led composition, restrained field-console styling, explicit system return, and separate inspector are a convincing foundation. Navigation and draft protection worked on the representative route inspected. The Fit disappearance observed on the globally reviewed build was subsequently corrected and verified in a bounded parent-session check on `3111a19`, documented below; it is no longer an active blocker on that evidence. Clearer operational hierarchy, more readable controls, and a less vertically expensive mobile field-management flow remain recommendations to address. These are refinements of B, not grounds for restarting the layout choice.
 
 This is a review of the whole interface. Tools coherence is an explicit sub-verdict below. No final Nuxt UI adoption decision or closure of ticket 10 follows from this report.
 
@@ -20,6 +20,8 @@ This is a review of the whole interface. Tools coherence is an explicit sub-verd
 ## Prioritized findings across the interface
 
 ### P1 — Fit can remove the complete system drawing from view
+
+**Follow-up status: resolved for the reproduced disappearance in the parent's targeted check on `3111a1959c9afd557fed5c12c1537b010921ac9e`.** The original finding below remains valid for `4d90f97`; see the corrective appendix for separate provenance and limits.
 
 **Observed current defect; introduction date not established.** Clean reproduction at 844 × 390: reload the disposable B page, open Vela Reach in Navigate, observe the system drawing, click Fit. The canvas becomes empty while the context, selection and entity accessibility nodes remain. Read-only DOM inspection finds the map transform `translate(-79859.74531173706,-15362.942461013794) scale(0.25)`. The earlier portrait sequence produced the same result; returning to the cluster and reopening Vela retained the unusable system view.
 
@@ -109,7 +111,7 @@ These sources support organizing principles, not a mandate to reproduce Foundry'
 
 ## Follow-up decisions and acceptance boundary
 
-Correct and recheck the current Fit failure with explicit new-build provenance. Then consider the grouping alternative, minimum readable action typography, mobile Fields flow and pending-placement feedback as a small set of design decisions. Preserve the working navigation/draft contracts while doing so. Physical phone input, keyboard paths, assistive technology and production save semantics remain separate acceptance work; no wholesale redesign, publication or implementation was performed by this review.
+The parent's targeted follow-up below resolves the reproduced Fit disappearance with explicit new-build provenance. Consider the grouping alternative, minimum readable action typography, mobile Fields flow and pending-placement feedback as a small set of design decisions. Preserve the working navigation/draft contracts while doing so. Physical phone input, keyboard paths, assistive technology and production save semantics remain separate acceptance work; no wholesale redesign, publication or implementation was performed by this review.
 
 ## Human proposed mode split
 
@@ -117,23 +119,25 @@ Correct and recheck the current Fit failure with explicit new-build provenance. 
 
 The human subsequently proposed separating selection/data modification, movement only, and adding things or moving existing objects (possibly split). This is conceptual analysis requested after the review, not another browser test or an accepted replacement contract.
 
-**Recommendation: separate existing-object manipulation from Add. A dedicated selection/data mode is defensible if deliberate editing is the goal; retain Navigate rather than replacing it with strict Pan for now.** The resulting candidate is **Navigate / Select / Move**, plus **Add… as a temporary operation**. Select means selecting a target for its data editor; Move means changing existing geometry on the map. These are task distinctions, not four mutually exclusive permanent modes.
+**Recommendation: one camera-navigation mode, a selection/data mode, a geometry-manipulation mode, and a separate temporary Add operation.** Use **Navigate / Select / Move**, plus **Add…**, as the candidate labels. Navigate supplies the requested view pan; do not add a redundant Pan entry beside it. Select means selecting a target for its data editor; Move means changing existing geometry on the map. These are task distinctions, not four mutually exclusive permanent modes.
 
-“Movement only” is ambiguous. The primary reading here is **moving the view**, because the final proposed category already mentions moving objects. If it means **moving objects without editing their data**, it is simply Move in this recommendation: there is no reason to add a second tool that also moves those same objects. In that reading, Select / Move / Add, with existing Navigate retained for browsing, covers the request.
+**The human has confirmed that “movement only” means moving the VIEW (pan), not moving objects.** That ambiguity is resolved. The clarification does not decide whether tapping a system in that camera mode may also open its map, which mode starts active, whether Add and geometric editing should be combined, or whether Select opens Inspect immediately. Those remain design choices.
+
+There are two variants of the **same camera-mode slot**, not two tools to install together: **strict Pan** changes only the view and requires explicit context-opening actions elsewhere; **contextual Navigate** pans the view and also opens a system on a deliberate tap, without opening Inspect. I prefer contextual Navigate for the current browsing workflow because it preserves the accepted direct system entry and avoids a mode switch solely to enter a system. If the human wants “only” to prohibit every entity activation, choose strict Pan instead and explicitly provide Open system through selection/Hierarchy. The confirmed pan meaning alone does not select between these variants. The existing default and gestures remain unchanged until that decision is made.
 
 ### Three concrete models
 
 | Model | Persistent modes and temporary action | Benefit | Cost / judgment |
 | --- | --- | --- | --- |
 | A — Earlier compact proposal | Navigate, Move; Add…; Hierarchy and Inspect are panels | Lowest mode-switch cost; preserves the accepted default and five principal entries | Selecting data still relies on explicit Inspect, long press or Hierarchy. Good for browsing, less explicit for deliberate editing. |
-| B — Literal split | Pan, Select, Move; Add… | Maximum separation: Pan cannot accidentally open or edit an entity | Strict Pan removes direct system opening from the default map tap; needs a separate Open system action. Adds mode switches even during ordinary browsing. Not my preferred default. |
-| C — Recommended candidate | Navigate, Select, Move; Add… | Keeps direct browsing while giving data editing and geometric editing distinct intentions | One extra persistent mode versus A. The six principal entries, including Hierarchy/Inspect panel access, need a layout decision; do not merely squeeze another tiny icon into the rail. |
+| B — Strict camera variant | Pan, Select, Move; Add… | Maximum separation: Pan cannot accidentally open or edit an entity | System taps in Pan cannot enter a system; needs a separate Open system action. If chosen as default, ordinary browsing gains an extra step. |
+| C — Recommended contextual camera variant | Navigate, Select, Move; Add… | The single camera mode also permits deliberate context entry; data editing and geometric editing have distinct intentions | One extra persistent mode versus A, but no separate Pan plus Navigate. The six principal entries, including Hierarchy/Inspect panel access, need a layout decision; do not merely squeeze another tiny icon into the rail. |
 
 The following table describes **proposed** pointer semantics. It is not a claim about untested current gestures. “Select” below means select the target and request Inspect through the existing draft guard. On mobile this opens the accepted full-height panel, so sequential inspection requires Hide between targets unless Hierarchy supplies the next target.
 
 | Action / gesture | A — compact | B — strict Pan split | C — recommended candidate |
 | --- | --- | --- | --- |
-| Tap system in default mode | Navigate opens its map, Inspect closed | Pan does nothing to the entity; use explicit Open system | Navigate opens its map, Inspect closed |
+| Tap system in camera mode (default undecided for B/C) | Navigate opens its map, Inspect closed | Pan does nothing to the entity; use explicit Open system | Navigate opens its map, Inspect closed |
 | Tap object to edit data | Select target then explicit Inspect, or long press / Hierarchy | Select mode: select target and request Inspect | Select mode: select target and request Inspect |
 | Tap system while selecting data | Explicit inspection path needed | Select edits system metadata; explicit Open system enters it | Select edits system metadata; explicit Open system enters it |
 | One-pointer drag on background | Pan view | Pan view in Pan; allow background pan in other modes too | Pan view in all three modes |
@@ -155,7 +159,23 @@ Selection is shared state across modes, not ownership of the Select tool. Switch
 - **Keep two contacts reserved for the view in every mode.** A second contact must cancel uncommitted geometric/placement preview rather than committing an accidental edit. Preserve one-finger editing in Move; a Pan mode does not justify removing it. Long press must continue to cancel movement preview before opening Inspect.
 - **Keyboard must offer the same intentions without requiring long press.** Focusable, named mode buttons; explicit Inspect and Open system actions; visible Cancel plus Escape for an armed Add; keyboard geometry controls with target/operation names. Do not assign arrow keys simultaneously to view pan and object motion without an explicit mode/focus rule. Specific shortcuts and focus transitions need design/validation; they are not accepted merely by this table.
 - **Do not reset a dirty draft when changing mode.** Preserve it, and apply the existing guard when selection/context changes or another action would invalidate its target. Whether opening an existing target in Select focuses the first field or only the panel header should be decided and tested for keyboard users.
-- **Model C needs a human decision to add Select and define tap-to-edit.** Existing Navigate remains default; system taps still open a map without Inspect. Strict Pan as a replacement default (model B), a different post-Add return mode, or removal of long-press inspection would each change an existing decision and need explicit agreement. None is inferred from the question.
+- **Decisions still needed:** choose strict Pan versus contextual Navigate for the single camera slot; choose the default mode; approve Select and its tap-to-open-Inspect behavior; keep Add separate from Move or specify a different unambiguous contract; define the post-Add return mode if it changes; and resolve long press in a strict camera-only mode. Today, Navigate remains default, system taps open a map without Inspect, and Add returns to Navigate. The human's pan clarification changes none of those decisions by itself. I recommend contextual Navigate, retaining the current default/return behavior, and separating Add from Move, but these are recommendations rather than accepted amendments.
 - **Layout cost is real.** Model C has four map-operation entries rather than three in the earlier proposal. Hierarchy/Inspect access must remain available, but can be visually grouped as panels instead of pretending to be more map modes. Decide that grouping before increasing the mobile rail count. If the extra mode proves cumbersome in representative browsing/editing, model A remains the simpler fallback.
 
 The previously cited Foundry sources support distinguishing active tools, immediate actions and toggles, and separating selection from creation. They do not establish that this application needs strict Pan, a particular number of modes, or any of the proposed touch rules. The recommended candidate is an application-specific judgment; no implementation or ticket closure is authorized by this analysis.
+
+## Corrective Fit follow-up — verification boundary
+
+The parent published the two-centre demonstration-fixture correction as `3111a1959c9afd557fed5c12c1537b010921ac9e` and supplied exact-head Vercel SUCCESS at 09:01:59 UTC on 2026-10-15, [deployment Dppe5VWvKAbvPUbSXNu9Q3wtnqrE](https://vercel.com/submoon/ttrpg-cluster-control/Dppe5VWvKAbvPUbSXNu9Q3wtnqrE). This is a new build, separate from the globally reviewed `4d90f97` build.
+
+After readiness was confirmed, Astra attempted to create a fresh authenticated IAB tab for a bounded Vela/Kestrel Fit check. The browser tool returned “Browser is not available: iab”; the subsequent inventory contained no browsers. No tab was created and no viewport override was changed. **The corrected Fit behavior has not been independently verified by Astra at this point; the original P1 remains an observed finding on the original reviewed build.** Deployment SUCCESS alone does not resolve it. The parent was informed and may supply a separately attributed targeted check or restore browser access. No new global review or mode implementation was performed.
+
+At the parent's request, one final creation attempt used the previously selected browser ID `2` directly rather than the `iab` alias. It also returned “Browser is not available: 2”. Access exploration stopped; no tab or viewport cleanup was needed. A parent-session check must retain its own attribution.
+
+### Parent-session verification — reproduced disappearance resolved
+
+The parent subsequently executed the targeted check in its authenticated IAB on exact deployment `3111a1959c9afd557fed5c12c1537b010921ac9e`, whose Vercel SUCCESS was recorded at 09:01:59 UTC. **The observations in this subsection belong to the parent, not to Astra.** Astra incorporated the parent's supplied results without performing another browser test.
+
+The parent used fresh disposable tab 3, requested viewport 844 × 390, with document drawable width 829 because of the desktop scrollbar gutter. From a fresh page it hid the initial inspector, opened Vela in Navigate, and clicked Fit. The drawing remained visible; the parent captured a viewport-cropped screenshot and read `.system-map-content` as `translate(-208.36192440246845,-70.66169021421798) scale(1.2270846437351717)`, with visible objects and reasonable centres. It returned to the cluster, opened Kestrel and clicked Fit: the drawing remained visible, with transform `translate(-83.2594476568573,-111.86488888982197) scale(1.2611800176735006)`. Returning and reopening Vela retained its exact preceding transform and visible drawing. The parent captured both systems and reset its viewport override.
+
+This resolves the **total drawing disappearance** reproduced in the original P1 for these two corrected seed systems and this landscape browser route. No data or draft was edited. It is not physical-device acceptance, an independent Astra retest, exhaustive label/occlusion verification, export validation, or a repeat of the overall interface review. Other findings and acceptance boundaries remain open. The original `4d90f97` observation and the failed Astra access attempts above are retained as historical evidence, not active failures attributed to the corrected deployment.
