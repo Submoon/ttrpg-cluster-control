@@ -12,7 +12,7 @@ Follow-up red/green checks found and fixed three concrete integration issues:
 
 ## Validation
 
-All Playwright checks used the prewarmed local development server on port 3100 and the temporary no-server config under this directory. No full suite or compiled build was run; QA owns the single compiled full-suite run after review.
+All Playwright checks used the prewarmed local development server on port 3100 and the temporary no-server config under this directory. The implementation owner ran development checks only; independent QA owns compiled builds, presentation checks and the full-suite run.
 
 | Command / scope | Result |
 | --- | ---: |
@@ -29,23 +29,40 @@ Existing Playwright assertions for the exact “Saved on this device” state we
 
 ## Limits and handoff
 
-Physical Android Chrome, operating-system keyboard behavior, and device safe-area rendering were not available. The QA handoff should validate the compiled candidate, the eight presentation/theme/viewport cases, and the full suite once. At source freeze, the owner verified that launcher 22276 and its owned subtree (including listener 54204) were absent and port 3100 had no listener; only the stale ticket-21 PID marker was removed. Runtime ownership is released to the compiled QA owner. No product build or full-suite pass is inferred from this handoff.
+Physical Android Chrome, operating-system keyboard behavior, and device safe-area rendering were not available. The QA handoff should validate the compiled candidate, the eight presentation/theme/viewport cases, and the full suite once. At the initial source freeze, the owner verified that launcher 22276 and its owned subtree (including listener 54204) were absent and port 3100 had no listener; only the stale ticket-21 PID marker was removed. Runtime ownership is released to the compiled QA owner. No product build or full-suite pass is inferred from this handoff.
 
-## Frozen source SHA-256
+## Correction gate after independent review
 
-These hashes identify the principal implementation, state-boundary, and focused-test files at handoff:
+The initial focused navigation/panel/touch/import counts above precede the whole-candidate review corrections. Four distinct confirmed defects are repaired: known object-draft exclusion before every preview, pointer-only activation suppression, interrupted gesture/timer cleanup, and active Jump Route form precedence over inspected-system details. The original state/context files retain their independently reviewed hashes.
+
+Final corrected development command:
+
+`npx playwright test --config .scratch/interface-revamp/implementation-lab/ticket-21/playwright.config.ts tests/workspace-map-gesture-guards.spec.ts tests/workspace-route-inspection.spec.ts --workers=1`
+
+Result: **5 passed in 22.8s**. `npm run typecheck` passes, exit 0. A separate existing Select-B rename check also passes. The gesture cases prove unchanged held preview, retained draft/current JSON, Resolve access, independent-object movement, immediate Enter/Space, blur rollback and pending-hold cancellation on a real keyboard mode change. Removing only the watcher reproduces the latter RED; it is restored for the final source.
+
+An earlier route attempt reloads during development HMR and supplies no product result. The final route fixture explicitly Fits before hit-testing newly added system B in a preserved cluster view, then exercises real fields, cancellation and a zero-route JSON export. No forced click, skipped assertion or production change is used to hide target visibility.
+
+The corrected source still requires independent review follow-up and compiled/full-suite QA. Physical Android Chrome remains unavailable.
+
+The separate focused invocation contains Move-guard, blur and existing Select-B rename: **3/3 passed**. An initial sandbox browser attempt fails before launch; the authorized host invocation supplies the actual results. At corrected runtime handoff, the owner verifies follow-up launcher 51996 and its descendants (8456, 50804, 7664, 32480, 48488, 37472, 47380) absent, port 3100 without a listener, and removes only its stale PID file. No competing runtime remains.
+
+## Frozen corrected source SHA-256
+
+These principal source/test hashes identify the corrected handoff; independent QA also captures its complete source/test/package identity.
 
 | File | SHA-256 |
 | --- | --- |
-| `components/BaselinePage.vue` | `839D0A90564169B8E6FA0CFC50400ECBBDB23D5E76250661F7DD69A8793DE8BB` |
+| `components/BaselinePage.vue` | `BAFB995BA753F42B3C07EECE33D91EADEA2D6E42FD20F65A6B8879DDC65F6462` |
 | `components/MapEditorLayout.vue` | `A2EBBFD480CE7C882AD0604B5A04CEE7EE43C7AA23A96ADEB3F14C209284830A` |
 | `components/WorkspaceFeedback.vue` | `386FF7BCA7B74383A60A6DBDFFA5DF5960ABDADA1FCBFB31103B017A93A90C62` |
 | `components/WorkspaceHeader.vue` | `6E7ABB726BE768F3B79EE361E4862FBA299B2625B7595CF31A7BF0C6D368E850` |
 | `components/WorkspaceDock.vue` | `1738DC5D178FB27B08F416EFF0AA9249DE48A78335A4596B36AC8879D21A526B` |
-| `components/WorkspaceMapCanvas.vue` | `7EE5D98704B62091022C898B5FAF7630975D3A4BBDE96BF0FF75228989A6C18F` |
+| `components/WorkspaceMapCanvas.vue` | `9447F773552791753358E48AA6B386FE5573B34D21CE6F653D9B532D68BF5059` |
 | `components/ClusterMap.vue` | `330BEAC78097C78E9C57BD836B05AB6191BFE6692FEC0D14DAE33180BD24C8EB` |
-| `components/SystemMap.vue` | `0241889CD0006D4D6D515F193361A10105EA6F2F609A0648CA555C4C512292C1` |
-| `components/maps/system-map-renderer.ts` | `E0A752F05C72A8E628A1DBCF2D841A1BA811756E4124ECD5A43C182E3284D254` |
+| `components/SystemMap.vue` | `88DBB2861AEDEF3DF315D232A2F40C2EED5EB55B2082D584589E824EEE0E976B` |
+| `components/maps/system-map-renderer.ts` | `4A1C0340D3D92622CC657B654434A35E361AC088B56AB25F3337F2BB0F4B335E` |
+| `components/inspector/JumpRouteInspector.vue` | `72C034002682CDC9351C8A4CC228B8C61FBF438EC102F8679B1CCF704DE221A3` |
 | `utils/map-zoom.ts` | `99BACEEB7C3056E632218F119CC9BF94992A764346615B4B31CF366536CA0FFF` |
 | `composables/editor-workflows/useEditorState.ts` | `039E047DF79FAB8F55E1885F5DADCD4F98E6D80C31AB677BBBCC958FE8173BBF` |
 | `composables/editor-workflows/useClusterWorkflows.ts` | `985BE90139165EF20309E37E8BE2088BCB2A490B66A0190A8C9120D3D6252107` |
@@ -53,6 +70,8 @@ These hashes identify the principal implementation, state-boundary, and focused-
 | `tests/workspace-navigation.spec.ts` | `DDF47A3F010533D64EC9B9573B9542C2A0C683070652F92A733F803B30B85B12` |
 | `tests/workspace-panels.spec.ts` | `9A6B521D1C9EC89FE1F2D43395D9DACD6612C5477EF42794B69E503DD0583C99` |
 | `tests/workspace-touch-takeover.spec.ts` | `7018DA6D5C48E2889679F021C1287AB9033457A785CC280AECD4C5B55F283569` |
+| `tests/workspace-map-gesture-guards.spec.ts` | `876AC05A5D7E094FA78A304A405546DC426626EAD980D99D36B7AED8A1CCAC46` |
+| `tests/workspace-route-inspection.spec.ts` | `5532A2DA610056293594923622D231152DFB5E322FF27897134C64748402C9E8` |
 | `tests/workspace-chart-drafts.spec.ts` | `59574114745F4D9C43B2AF334B0ADDEDF2B131A23E74375AE2892888A88E008C` |
 | `tests/helpers.ts` | `FCC5F9883C8506E82AF95F716C601B9F138B6AE76A8F93BB8ECED29731D43702` |
 | `assets/css/map-workspace.css` | `EB777A17DE825B496C9BC14B98BCE00A08105CA25C9696F13E90723C13181C3E` |

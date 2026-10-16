@@ -39,7 +39,7 @@
   </template>
 
   <ChartDetailsPanel
-    v-else-if="props.inspectedSystem"
+    v-else-if="props.inspectedSystem && !routeFormOpen"
     mode="system"
     :workspace="props.workspace"
     :selected-system="props.inspectedSystem"

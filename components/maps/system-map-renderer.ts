@@ -40,6 +40,17 @@ import {
 
 const mapSurfacePadding = 160
 
+function dragClientPoint(sourceEvent: Event): Point | null {
+  if (sourceEvent instanceof MouseEvent) {
+    return { x: sourceEvent.clientX, y: sourceEvent.clientY }
+  }
+  if (sourceEvent instanceof TouchEvent) {
+    const touch = sourceEvent.changedTouches[0] ?? sourceEvent.touches[0]
+    return touch ? { x: touch.clientX, y: touch.clientY } : null
+  }
+  return null
+}
+
 type OrbitResizeAxis = 'global' | 'horizontal' | 'vertical'
 
 interface OrbitResizeGesture {
@@ -58,6 +69,10 @@ interface OrbitRotationGesture {
 export interface SystemMapEventHandlers {
   /** Select an existing system object. */
   selectObject(id: string): void
+  /** Checks whether the inspector currently owns a draft for this object. */
+  isObjectMoveBlocked(id: string): boolean
+  /** Reports a blocked drag after the pointer has crossed D3's client-pixel click threshold. */
+  objectMoveBlocked(id: string): void
   /** Select an existing Orbit. */
   selectOrbit(id: string): void
   /** Commit a system-level object position in normalized initial-scene coordinates. */
@@ -211,6 +226,9 @@ export function renderSystemMap({
   const liveOrbitRotations = new Map<string, number>()
   const activeGestures = new Map<Element, () => void>()
   const cancelledGestures = new WeakSet<Element>()
+  const draftBlockedObjectGestures = new WeakSet<SVGGElement>()
+  const draftBlockFeedbackShown = new WeakSet<SVGGElement>()
+  const objectDragStartClient = new WeakMap<SVGGElement, Point>()
   function beginGesture(element: Element, rollback: () => void): void {
     cancelledGestures.delete(element)
     activeGestures.set(element, rollback)
@@ -227,6 +245,14 @@ export function renderSystemMap({
       rollback()
     }
     activeGestures.clear()
+    updateLiveGeometry()
+  }
+  function cancelGesture(element: Element): void {
+    const rollback = activeGestures.get(element)
+    if (!rollback) return
+    cancelledGestures.add(element)
+    activeGestures.delete(element)
+    rollback()
     updateLiveGeometry()
   }
   const currentPositions = () => objectPositions(system, geometry, {
@@ -656,16 +682,34 @@ export function renderSystemMap({
     .clickDistance(6)
     .container(() => content.node()!)
     .subject((_event, object) => requiredPosition(positions, object.id))
-    .on('start', function (_event, object) {
+    .on('start', function (event, object) {
       movedObjects.delete(this)
+      const startPoint = dragClientPoint(event.sourceEvent)
+      if (startPoint) objectDragStartClient.set(this, startPoint)
       beginGesture(this, () => {
         movedObjects.delete(this)
         livePositions.delete(object.id)
         select(this).classed('is-dragging', false)
       })
       select(this).classed('is-dragging', true)
+      if (handlers.isObjectMoveBlocked(object.id)) {
+        draftBlockedObjectGestures.add(this)
+        cancelGesture(this)
+      }
     })
     .on('drag', function (event, object) {
+      if (handlers.isObjectMoveBlocked(object.id)) draftBlockedObjectGestures.add(this)
+      if (draftBlockedObjectGestures.has(this)) {
+        cancelGesture(this)
+        const start = objectDragStartClient.get(this)
+        const current = dragClientPoint(event.sourceEvent)
+        if (start && current && !draftBlockFeedbackShown.has(this)
+          && Math.hypot(current.x - start.x, current.y - start.y) > 6) {
+          draftBlockFeedbackShown.add(this)
+          handlers.objectMoveBlocked(object.id)
+        }
+        return
+      }
       if (cancelledGestures.has(this)) return
       if (event.dx || event.dy) {
         movedObjects.add(this)
@@ -674,6 +718,9 @@ export function renderSystemMap({
       }
     })
     .on('end', function (event, object) {
+      draftBlockedObjectGestures.delete(this)
+      draftBlockFeedbackShown.delete(this)
+      objectDragStartClient.delete(this)
       if (finishGesture(this)) {
         select(this).classed('is-dragging', false)
         movedObjects.delete(this)

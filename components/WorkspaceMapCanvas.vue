@@ -35,11 +35,13 @@
       :object-angles="props.workspace.layout.objectAngles"
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
+      :is-object-move-blocked="props.isObjectMoveBlocked"
       :move-enabled="props.mode === 'move'"
       touch-navigation
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
+      @object-move-blocked="forwardBlockedObjectMove"
       @move-object="forwardMoveObject"
       @move-orbit-center="forwardMoveOrbitCenter"
       @rotate-object="forwardRotateObject"
@@ -55,7 +57,7 @@
 
 <script setup lang="ts">
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
-import { onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
   CatalogueSubtype,
   LocalWorkspace,
@@ -80,6 +82,7 @@ const props = defineProps<{
   selectedOrbitId: string | null
   selectedRouteId: string | null
   mode: MapInteractionMode
+  isObjectMoveBlocked?: (objectId: string) => boolean
 }>()
 
 const emit = defineEmits<{
@@ -92,6 +95,7 @@ const emit = defineEmits<{
   'move-select-object': [id: string]
   'select-orbit': [id: string]
   'move-select-orbit': [id: string]
+  'object-move-blocked': [id: string]
   'move-system': [id: string, position: Point]
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
@@ -150,6 +154,21 @@ function clearPointerLongPress(): void {
 }
 
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
+
+function cancelCanvasGesture(suppressRelease = false): void {
+  clearLongPress()
+  clearPointerLongPress()
+  touchStart = null
+  activePointerPan = null
+  currentMap()?.cancelActiveGesture()
+  if (suppressRelease) holdClickSuppression()
+}
+
+function onWindowBlur(): void { cancelCanvasGesture(true) }
+
+function onDocumentVisibilityChange(): void {
+  if (document.visibilityState === 'hidden') cancelCanvasGesture(true)
+}
 
 function isMapEntityTarget(target: EventTarget | null): boolean {
   return target instanceof Element
@@ -241,11 +260,11 @@ function onWindowPointerMove(event: PointerEvent): void {
 }
 
 function onWindowPointerUp(event: PointerEvent): void {
-  if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
   if (event.type === 'pointercancel') {
-    cancelMapGesture()
-    holdClickSuppression()
+    cancelCanvasGesture(true)
+    return
   }
+  if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
   if (!activePointerPan || event.pointerId !== activePointerPan.id) return
   currentMap()?.endViewPan()
   activePointerPan = null
@@ -261,7 +280,7 @@ function onContextMenuCapture(event: MouseEvent): void {
 }
 
 function onClickCapture(event: MouseEvent): void {
-  if (!suppressNextClick) return
+  if (!suppressNextClick || event.detail === 0) return
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
@@ -274,7 +293,7 @@ function onTouchStartCapture(event: TouchEvent): void {
     clearLongPress()
     touchStart = null
     if (event.touches.length > 1) {
-      cancelMapGesture()
+      cancelCanvasGesture()
       holdClickSuppression()
     }
     return
@@ -311,40 +330,36 @@ function onTouchEndCapture(event: TouchEvent): void {
   clearLongPress()
   touchStart = null
   if (event.type === 'touchcancel') {
-    cancelMapGesture()
-    holdClickSuppression()
+    cancelCanvasGesture(true)
     return
   }
   currentMap()?.endTouchNavigation(event)
 }
 
 function handleSystemActivation(systemId: string): void {
-  if (suppressNextClick) return
   if (props.mode === 'navigate') emit('navigate-system', systemId)
   else if (props.mode === 'select') emit('select-cluster-system', systemId)
   else if (props.mode === 'move') emit('move-select-cluster-system', systemId)
 }
 
 function handleRouteSelection(routeId: string): void {
-  if (suppressNextClick) return
   if (props.mode === 'select') emit('select-route', routeId)
   else if (props.mode === 'move') emit('move-select-route', routeId)
 }
 
 function handleObjectSelection(objectId: string): void {
-  if (suppressNextClick) return
   if (props.mode === 'select') emit('select-object', objectId)
   else if (props.mode === 'move') emit('move-select-object', objectId)
 }
 
 function handleOrbitSelection(orbitId: string): void {
-  if (suppressNextClick) return
   if (props.mode === 'select') emit('select-orbit', orbitId)
   else if (props.mode === 'move') emit('move-select-orbit', orbitId)
 }
 
 function forwardMoveSystem(id: string, position: Point): void { if (props.mode === 'move') emit('move-system', id, position) }
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
+function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
 function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null): void {
   if (props.mode === 'move') emit('move-orbit-center', id, center, hostId)
 }
@@ -364,6 +379,11 @@ function emitViewport(viewport: MapViewport): void {
 }
 
 onMounted(async () => {
+  window.addEventListener('pointermove', onWindowPointerMove, true)
+  window.addEventListener('pointerup', onWindowPointerUp, true)
+  window.addEventListener('pointercancel', onWindowPointerUp, true)
+  window.addEventListener('blur', onWindowBlur)
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   await nextTick()
   const map = currentMap()
   if (!map) return
@@ -372,19 +392,20 @@ onMounted(async () => {
   await nextTick()
   mapReady = true
   emitViewport(map.getViewport())
-  window.addEventListener('pointermove', onWindowPointerMove, true)
-  window.addEventListener('pointerup', onWindowPointerUp, true)
-  window.addEventListener('pointercancel', onWindowPointerUp, true)
 })
 
-onUnmounted(() => {
-  clearLongPress()
-  clearPointerLongPress()
+onBeforeUnmount(() => {
+  cancelCanvasGesture()
   if (suppressClickTimer) clearTimeout(suppressClickTimer)
+  if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
   window.removeEventListener('pointermove', onWindowPointerMove, true)
   window.removeEventListener('pointerup', onWindowPointerUp, true)
   window.removeEventListener('pointercancel', onWindowPointerUp, true)
+  window.removeEventListener('blur', onWindowBlur)
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
 })
+
+watch(() => props.mode, () => cancelCanvasGesture(true), { flush: 'sync' })
 
 defineExpose({
   exportImage: async (format: MapImageFormat) => currentMap()?.exportImage(format)
@@ -394,7 +415,7 @@ defineExpose({
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
   fitMap: () => currentMap()?.fitMap(),
-  cancelActiveGesture: () => currentMap()?.cancelActiveGesture(),
+  cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),
   endViewPan: () => currentMap()?.endViewPan(),

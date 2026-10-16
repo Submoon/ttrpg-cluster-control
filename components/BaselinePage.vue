@@ -243,6 +243,7 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :is-object-move-blocked="isObjectMoveBlocked"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
@@ -253,6 +254,7 @@
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-object="moveMapObject"
+                    @object-move-blocked="handleBlockedObjectMove"
                     @move-orbit-center="moveMapOrbitCenter"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
@@ -400,6 +402,7 @@ const {
   setChartNamesDialogOpen,
   setMapMode,
   togglePanel,
+  requestPanel,
   closePanel,
   zoomActiveMap,
   panActiveMap,
@@ -446,6 +449,16 @@ const {
   saveFieldDefinitionChanges,
   removeFieldDefinition,
 } = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
+
+function isObjectMoveBlocked(objectId: string): boolean {
+  return mapInspectorRef.value?.isEditingObject(objectId) ?? false
+}
+
+function handleBlockedObjectMove(objectId: string): void {
+  if (!isObjectMoveBlocked(objectId)) return
+  editorError.value = 'Save or cancel this object draft before moving it.'
+  requestPanel('inspector')
+}
 
 const headerFilesOpen = ref(false)
 

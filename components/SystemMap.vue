@@ -64,6 +64,7 @@ const props = withDefaults(defineProps<{
   objectAngles: Record<string, number>
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  isObjectMoveBlocked?: (objectId: string) => boolean
   moveEnabled?: boolean
   touchNavigation?: boolean
   showZoomControls?: boolean
@@ -72,6 +73,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'select-object': [id: string]
   'select-orbit': [id: string]
+  'object-move-blocked': [id: string]
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
@@ -102,6 +104,8 @@ let zoomExtentOverride: SvgViewportRect | undefined
 const handlers: SystemMapEventHandlers = {
   selectObject: id => emit('select-object', id),
   selectOrbit: id => emit('select-orbit', id),
+  isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
+  objectMoveBlocked: id => emit('object-move-blocked', id),
   moveObject: (id, position) => emit('move-object', id, position),
   moveOrbitCenter: (id, center, hostId) => emit('move-orbit-center', id, center, hostId),
   rotateObject: (id, angle) => emit('rotate-object', id, angle),
