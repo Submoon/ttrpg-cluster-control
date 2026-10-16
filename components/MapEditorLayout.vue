@@ -6,7 +6,11 @@
     :loop="props.compactModalOpen"
     @mount-auto-focus="focusActivePanel"
   >
-    <div class="map-editor-layout" :class="{ 'compact-modal-open': props.compactModalOpen }">
+    <div
+      class="map-editor-layout"
+      :class="{ 'compact-modal-open': props.compactModalOpen }"
+      @focusin="redirectFocusFromLayoutRoot"
+    >
       <div class="map-editor-header-row" :inert="props.compactModalOpen || undefined">
         <slot name="header" />
       </div>
@@ -136,8 +140,21 @@ function focusReturnTarget(element: Element | null): FocusReturnTarget | null {
 
 function focusActivePanel(event: Event): void {
   event.preventDefault()
+  nextTick(focusFirstActivePanelControl)
+}
+
+function focusFirstActivePanelControl(): void {
   const panel = props.compactPanel === 'hierarchy' ? hierarchyContent.value : inspectorContent.value
-  nextTick(() => panel?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')?.focus())
+  panel?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')?.focus()
+}
+
+function redirectFocusFromLayoutRoot(event: FocusEvent): void {
+  if (!props.compactModalOpen || props.overlayOpen || !props.compactPanel || event.target !== event.currentTarget) return
+  const layoutRoot = event.currentTarget
+  nextTick(() => {
+    if (!props.compactModalOpen || props.overlayOpen || document.activeElement !== layoutRoot) return
+    focusFirstActivePanelControl()
+  })
 }
 
 watch(() => props.compactModalOpen, (open, wasOpen) => {

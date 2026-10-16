@@ -126,6 +126,62 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   await expect(dock).toBeVisible()
 })
 
+test('touch long press keeps focus inside the compact inspector after the touch is released', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await createWorkspace(page, { width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
+
+  const filesToggle = page.getByRole('button', { name: 'Open map file actions for Jump Cluster Kestrel Reach' })
+  await filesToggle.click()
+  await page.keyboard.press('Escape')
+  await expect(filesToggle).toBeFocused()
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const system = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  const bounds = await system.boundingBox()
+  if (!bounds) throw new Error('The system long-press target has no visible bounds.')
+  const touchPoint = { id: 1, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const cdp = await page.context().newCDPSession(page)
+
+  try {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ ...touchPoint, radiusX: 2, radiusY: 2, force: 1 }],
+    })
+
+    const inspector = page.locator('#workspace-inspector-panel')
+    const closeInspector = page.getByRole('button', { name: 'Close inspector panel' })
+    await expect(inspector).toBeVisible()
+    await expect(inspector).toHaveAttribute('role', 'dialog')
+    await expect(inspector).toHaveAttribute('aria-modal', 'true')
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expect(page.locator('#workspace-hierarchy-panel')).toBeHidden()
+    await expect(workspaceNavigation(page)).toBeHidden()
+    await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
+    await expect(closeInspector).toBeFocused()
+
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect.poll(async () => page.evaluate(() => {
+      const active = document.activeElement
+      const layout = document.querySelector('.map-editor-layout')
+      const panel = document.querySelector('#workspace-inspector-panel')
+      return {
+        tag: active?.tagName,
+        id: active?.id,
+        className: active instanceof HTMLElement ? active.className : '',
+        isLayoutRoot: active === layout,
+        insideLayout: !!active && !!layout?.contains(active),
+        insidePanel: !!active && !!panel?.contains(active),
+      }
+    }), { message: 'Touch release must leave focus inside the active inspector panel.' })
+      .toMatchObject({ insidePanel: true })
+    await expect(closeInspector).toBeFocused()
+  } finally {
+    await cdp.detach()
+  }
+})
+
 test('desktop-to-compact reflow retains an invalid chart-name draft and the active map mode', async ({ page }) => {
   await createWorkspace(page)
 

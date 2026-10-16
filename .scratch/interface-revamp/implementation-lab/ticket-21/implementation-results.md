@@ -54,7 +54,7 @@ These principal source/test hashes identify the corrected handoff; independent Q
 | File | SHA-256 |
 | --- | --- |
 | `components/BaselinePage.vue` | `BAFB995BA753F42B3C07EECE33D91EADEA2D6E42FD20F65A6B8879DDC65F6462` |
-| `components/MapEditorLayout.vue` | `521E8BAD0309EFBA3EB7537EDCFEAD1B6FA1609CA4E695A8DA210A4A1062A35F` |
+| `components/MapEditorLayout.vue` | `49891FC334FA83E7E398527EAB77623E15747FED47FEE6FE75FC25C7944EE75E` |
 | `components/WorkspaceFeedback.vue` | `386FF7BCA7B74383A60A6DBDFFA5DF5960ABDADA1FCBFB31103B017A93A90C62` |
 | `components/WorkspaceHeader.vue` | `6E7ABB726BE768F3B79EE361E4862FBA299B2625B7595CF31A7BF0C6D368E850` |
 | `components/WorkspaceDock.vue` | `1738DC5D178FB27B08F416EFF0AA9249DE48A78335A4596B36AC8879D21A526B` |
@@ -68,7 +68,7 @@ These principal source/test hashes identify the corrected handoff; independent Q
 | `composables/editor-workflows/useClusterWorkflows.ts` | `985BE90139165EF20309E37E8BE2088BCB2A490B66A0190A8C9120D3D6252107` |
 | `composables/useWorkspaceFiles.ts` | `B947BC588E8580BCEC2039AAF5D7EB4AAAB6F76A57DA3200EACE75965029E376` |
 | `tests/workspace-navigation.spec.ts` | `DDF47A3F010533D64EC9B9573B9542C2A0C683070652F92A733F803B30B85B12` |
-| `tests/workspace-panels.spec.ts` | `9A6B521D1C9EC89FE1F2D43395D9DACD6612C5477EF42794B69E503DD0583C99` |
+| `tests/workspace-panels.spec.ts` | `20AC3A0AAF9DF66ECBD786B4BD44556B7399A68F5FDCFDE65A83E360BBC0A855` |
 | `tests/workspace-touch-takeover.spec.ts` | `7018DA6D5C48E2889679F021C1287AB9033457A785CC280AECD4C5B55F283569` |
 | `tests/workspace-map-gesture-guards.spec.ts` | `876AC05A5D7E094FA78A304A405546DC426626EAD980D99D36B7AED8A1CCAC46` |
 | `tests/workspace-route-inspection.spec.ts` | `5532A2DA610056293594923622D231152DFB5E322FF27897134C64748402C9E8` |
@@ -76,3 +76,9 @@ These principal source/test hashes identify the corrected handoff; independent Q
 | `tests/helpers.ts` | `FCC5F9883C8506E82AF95F716C601B9F138B6AE76A8F93BB8ECED29731D43702` |
 | `assets/css/map-workspace.css` | `869ED8FC6B9E3BEB8CD033D01EDFF4C22935B7C4981FED5170BFF7346BF0E9A1` |
 | `assets/css/main.css` | `12B2226BED626904C253621C9FD9B5C0AC9E97507B5940DF864D9BBFD47BF093` |
+
+## Compact touch-release focus follow-up
+
+The real-touch regression first reproduces focus moving from Close inspector to the FocusScope layout root after touch release. The minimal correction handles focusin only on that exact root while a compact panel is active and no nested overlay is open. After one Vue tick it rechecks that the root still owns focus, then focuses the active panel's first control. Descendant controls, including recovery actions, remain untouched; the static as-child sizing chain and retained panel trees remain.
+
+The focused panels plus gesture-guard invocation passes 9/9 in 40.9s; typecheck exits 0. Only the verified development launcher 28440 and its descendants are stopped; all eight owned PIDs are absent and port 3100 is free. The two changed source/test hashes above are frozen. Independent follow-up and rebuilt compiled matrix/full-suite validation remain required; previous candidate results are intermediate evidence.
