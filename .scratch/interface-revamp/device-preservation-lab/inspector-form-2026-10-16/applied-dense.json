@@ -1,0 +1,405 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "cluster",
+  "cluster": {
+    "id": "cluster-outer-reach",
+    "name": "The Outer Reach",
+    "systems": [
+      {
+        "id": "sys-vela",
+        "name": "Vela Reach",
+        "objects": [
+          {
+            "id": "obj-vela-star",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-1",
+            "name": "Vela Prime",
+            "description": "A pale gold star with a restless corona.",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.48
+            },
+            "customFieldValues": {
+              "signal": "Intermittent",
+              "threat": 2
+            }
+          },
+          {
+            "id": "obj-vela-planet",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-1",
+            "name": "Aster Applied QA Name",
+            "description": "A broad, tidally locked world with a line of abandoned weather stations along the habitable terminator.\n\nThe night side still carries faint navigation beacons. Surveyors report that the oldest signal repeats after every fourth local dawn.\n\nThe southern landing shelf is stable, although dust storms can cover the access road in less than an hour.",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit-vela-one"
+            },
+            "atmosphere": "Breathable",
+            "customFieldValues": {
+              "signal": "Quiet",
+              "threat": 0,
+              "session-note": "The archive door is beneath the old weather station.\n\nAsk the crew what they left there before the last survey.",
+              "confidence": 0,
+              "hazard-flag": false,
+              "survey-status": "Needs a second pass",
+              "landing-log": "The north ridge is safe in daylight.\nThe lower shelf floods after a storm.\nA beacon repeats on the fourth dawn."
+            }
+          },
+          {
+            "id": "obj-vela-moon",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-1",
+            "name": "Morrow",
+            "description": "A mining settlement went dark six months ago.",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit-vela-two"
+            },
+            "atmosphere": "Thin",
+            "customFieldValues": {
+              "signal": "Strong",
+              "threat": 3
+            }
+          },
+          {
+            "id": "obj-vela-station",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-3",
+            "name": "Pilgrim Anchorage",
+            "description": "A small station at the edge of the charted lane.",
+            "placement": {
+              "kind": "system",
+              "x": 0.79,
+              "y": 0.4
+            },
+            "portClass": "C"
+          },
+          {
+            "id": "jp-vela",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-1",
+            "name": "Vela Gate",
+            "description": "Stable at Jump-4. The signal repeats every 31 hours.",
+            "placement": {
+              "kind": "system",
+              "x": 0.2,
+              "y": 0.72
+            }
+          },
+          {
+            "id": "obj-vela-anomaly",
+            "family": "Phenomenon",
+            "subtype": "anomaly",
+            "locationKey": "AN-1",
+            "name": "Blue Lenticular",
+            "description": "A lens-shaped distortion beyond the third Orbit.",
+            "placement": {
+              "kind": "system",
+              "x": 0.82,
+              "y": 0.76
+            },
+            "customFieldValues": {
+              "signal": "Strong",
+              "threat": 4
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit-vela-one",
+            "order": 1,
+            "hostId": "obj-vela-star"
+          },
+          {
+            "id": "orbit-vela-two",
+            "order": 1,
+            "hostId": "obj-vela-planet"
+          },
+          {
+            "id": "orbit-vela-three",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.8509615384615384,
+              "y": 0.5480769230769231
+            }
+          }
+        ]
+      },
+      {
+        "id": "sys-kestrel",
+        "name": "Kestrel Deep",
+        "objects": [
+          {
+            "id": "obj-kestrel-star",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-1",
+            "name": "Kestrel A",
+            "description": "A white dwarf, unexpectedly bright.",
+            "placement": {
+              "kind": "system",
+              "x": 0.53,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "obj-kestrel-planet",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-1",
+            "name": "Hearth",
+            "description": "Thin atmosphere; abandoned weather array.",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit-kestrel-one"
+            }
+          },
+          {
+            "id": "jp-kestrel",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-2",
+            "name": "The Sill",
+            "description": "A narrow transit window.",
+            "placement": {
+              "kind": "system",
+              "x": 0.19,
+              "y": 0.75
+            }
+          },
+          {
+            "id": "obj-kestrel-belt",
+            "family": "SmallBody/Field",
+            "subtype": "belt",
+            "locationKey": "BELT-1",
+            "name": "Glass Belt",
+            "description": "Fragments scatter radio signals.",
+            "placement": {
+              "kind": "system",
+              "x": 0.83,
+              "y": 0.72
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit-kestrel-one",
+            "order": 1,
+            "hostId": "obj-kestrel-star"
+          },
+          {
+            "id": "orbit-kestrel-two",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.17548076923076922,
+              "y": 0.7764423076923077
+            }
+          }
+        ]
+      },
+      {
+        "id": "sys-vesper",
+        "name": "Vesper Station",
+        "objects": [
+          {
+            "id": "obj-vesper-star",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-1",
+            "name": "Vesper",
+            "description": "Amber flare star.",
+            "placement": {
+              "kind": "system",
+              "x": 0.47,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "obj-vesper-colony",
+            "family": "Installation",
+            "subtype": "colony",
+            "locationKey": "COL-1",
+            "name": "New Alecto",
+            "description": "Colony at the limit of its stores.",
+            "placement": {
+              "kind": "system",
+              "x": 0.74,
+              "y": 0.35
+            }
+          },
+          {
+            "id": "jp-vesper",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-3",
+            "name": "Vesper Crossing",
+            "description": "Quiet since first contact.",
+            "placement": {
+              "kind": "system",
+              "x": 0.16,
+              "y": 0.76
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit-vesper-one",
+            "order": 1,
+            "hostId": "obj-vesper-star"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "id": "route-vela-kestrel",
+        "name": "The Gannet Passage",
+        "jumpLevel": 4,
+        "fromPointId": "jp-vela",
+        "toPointId": "jp-kestrel"
+      },
+      {
+        "id": "route-kestrel-vesper",
+        "jumpLevel": 6,
+        "fromPointId": "jp-kestrel",
+        "toPointId": "jp-vesper"
+      },
+      {
+        "id": "route-vela-unknown",
+        "jumpLevel": 2,
+        "fromPointId": "jp-vela",
+        "toPointId": null,
+        "unresolvedExit": "Beyond the blue veil"
+      },
+      {
+        "id": "route-vesper-vela",
+        "name": "The Pale Return",
+        "jumpLevel": 8,
+        "fromPointId": "jp-vesper",
+        "toPointId": "jp-vela"
+      }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": [
+      "Breathable",
+      "Thin",
+      "Toxic",
+      "None"
+    ],
+    "portClassOptions": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "customFields": [
+      {
+        "id": "signal",
+        "name": "Signal strength",
+        "type": "single-select",
+        "options": [
+          "Quiet",
+          "Intermittent",
+          "Strong"
+        ]
+      },
+      {
+        "id": "threat",
+        "name": "Threat index",
+        "type": "number"
+      },
+      {
+        "id": "session-note",
+        "name": "Session note",
+        "type": "text"
+      },
+      {
+        "id": "confidence",
+        "name": "Survey confidence",
+        "type": "number"
+      },
+      {
+        "id": "hazard-flag",
+        "name": "Confirmed hazard",
+        "type": "boolean"
+      },
+      {
+        "id": "survey-status",
+        "name": "Survey status",
+        "type": "single-select",
+        "options": [
+          "Not started",
+          "Needs a second pass",
+          "Complete"
+        ]
+      },
+      {
+        "id": "landing-log",
+        "name": "Landing and weather log",
+        "type": "text"
+      }
+    ]
+  },
+  "layout": {
+    "version": 1,
+    "systemPositions": {
+      "sys-vela": {
+        "x": 0.21,
+        "y": 0.5
+      },
+      "sys-kestrel": {
+        "x": 0.52,
+        "y": 0.27
+      },
+      "sys-vesper": {
+        "x": 0.79,
+        "y": 0.62
+      }
+    },
+    "orbitRadii": {
+      "orbit-vela-one": {
+        "horizontal": 190,
+        "vertical": 138
+      },
+      "orbit-vela-two": {
+        "horizontal": 66,
+        "vertical": 46
+      },
+      "orbit-vela-three": {
+        "horizontal": 102,
+        "vertical": 146
+      },
+      "orbit-kestrel-one": {
+        "horizontal": 166,
+        "vertical": 118
+      },
+      "orbit-kestrel-two": {
+        "horizontal": 94,
+        "vertical": 74
+      },
+      "orbit-vesper-one": {
+        "horizontal": 210,
+        "vertical": 138
+      }
+    },
+    "orbitRotations": {
+      "orbit-vela-three": -21,
+      "orbit-kestrel-two": 18
+    },
+    "objectAngles": {
+      "obj-vela-planet": 0.25,
+      "obj-vela-moon": 4.3,
+      "obj-kestrel-planet": 2.3
+    }
+  }
+}

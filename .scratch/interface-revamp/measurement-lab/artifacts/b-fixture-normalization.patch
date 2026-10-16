@@ -1,0 +1,23 @@
+diff --git a/.scratch/interface-revamp/prototype-worktree/components/PrototypeWorkbench.vue b/.scratch/interface-revamp/measurement-lab/source-b/components/PrototypeWorkbench.vue
+index c9bb5f54..e8e8fda1 100644
+--- a/.scratch/interface-revamp/prototype-worktree/components/PrototypeWorkbench.vue
++++ b/.scratch/interface-revamp/measurement-lab/source-b/components/PrototypeWorkbench.vue
+@@ -1042,15 +1042,15 @@ function seedWorkspace(): LocalWorkspace {
+   const velaPoint: SystemObject = { id: 'jp-vela', family: 'JumpPoint', subtype: 'jump-point', locationKey: 'JP-1', name: 'Vela Gate', description: 'Stable at Jump-4. The signal repeats every 31 hours.', placement: { kind: 'system', x: 0.2, y: 0.72 } }
+   const anomaly: SystemObject = { id: 'obj-vela-anomaly', family: 'Phenomenon', subtype: 'anomaly', locationKey: 'AN-1', name: 'Blue Lenticular', description: 'A lens-shaped distortion beyond the third Orbit.', placement: { kind: 'system', x: 0.82, y: 0.76 }, customFieldValues: { signal: 'Strong', threat: 4 } }
+   const vela: StarSystem = { id: 'sys-vela', name: 'Vela Reach', objects: [star, planet, moon, station, velaPoint, anomaly], orbits: [
+-    { id: 'orbit-vela-one', order: 1, hostId: star.id }, { id: 'orbit-vela-two', order: 2, hostId: planet.id },
+-    { id: 'orbit-vela-three', order: 3, hostId: null, center: { x: 772, y: 300 } },
++    { id: 'orbit-vela-one', order: 1, hostId: star.id }, { id: 'orbit-vela-two', order: 1, hostId: planet.id },
++    { id: 'orbit-vela-three', order: 1, hostId: null, center: { x: 772, y: 300 } },
+   ] }
+   const kestrel: StarSystem = { id: 'sys-kestrel', name: 'Kestrel Deep', objects: [
+     { id: 'obj-kestrel-star', family: 'CelestialBody', subtype: 'star', locationKey: 'STAR-1', name: 'Kestrel A', description: 'A white dwarf, unexpectedly bright.', placement: { kind: 'system', x: 0.53, y: 0.5 } },
+     { id: 'obj-kestrel-planet', family: 'CelestialBody', subtype: 'planet', locationKey: 'PL-1', name: 'Hearth', description: 'Thin atmosphere; abandoned weather array.', placement: { kind: 'orbit', orbitId: 'orbit-kestrel-one' } },
+     { id: 'jp-kestrel', family: 'JumpPoint', subtype: 'jump-point', locationKey: 'JP-2', name: 'The Sill', description: 'A narrow transit window.', placement: { kind: 'system', x: 0.19, y: 0.75 } },
+     { id: 'obj-kestrel-belt', family: 'SmallBody/Field', subtype: 'belt', locationKey: 'BELT-1', name: 'Glass Belt', description: 'Fragments scatter radio signals.', placement: { kind: 'system', x: 0.83, y: 0.72 } },
+-  ], orbits: [{ id: 'orbit-kestrel-one', order: 1, hostId: 'obj-kestrel-star' }, { id: 'orbit-kestrel-two', order: 2, hostId: null, center: { x: 210, y: 395 } }] }
++  ], orbits: [{ id: 'orbit-kestrel-one', order: 1, hostId: 'obj-kestrel-star' }, { id: 'orbit-kestrel-two', order: 1, hostId: null, center: { x: 210, y: 395 } }] }
+   const vesper: StarSystem = { id: 'sys-vesper', name: 'Vesper Station', objects: [
+     { id: 'obj-vesper-star', family: 'CelestialBody', subtype: 'star', locationKey: 'STAR-1', name: 'Vesper', description: 'Amber flare star.', placement: { kind: 'system', x: 0.47, y: 0.5 } },
+     { id: 'obj-vesper-colony', family: 'Installation', subtype: 'colony', locationKey: 'COL-1', name: 'New Alecto', description: 'Colony at the limit of its stores.', placement: { kind: 'system', x: 0.74, y: 0.35 } },

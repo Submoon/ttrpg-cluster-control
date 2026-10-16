@@ -21,7 +21,7 @@ function errorText(error: unknown): string {
 /**
  * Exposes the hydrated workspace and the only load/save boundary used by the editor page.
  * Call once for the page owner: separate invocations share Nuxt state but not write ordering.
- * @returns Read-only workspace and status views plus hydration and commit operations.
+ * @returns Read-only workspace and status views plus hydration, memory-apply, and save-recovery operations.
  */
 export function useLocalWorkspace() {
   const workspace = useState<LocalWorkspace | null>('local-workspace', () => null)
@@ -55,43 +55,59 @@ export function useLocalWorkspace() {
     }
   }
 
+  /** Enqueues a detached snapshot and lets only its newest revision update visible save feedback. */
+  function enqueueSnapshot(snapshot: LocalWorkspace): Promise<void> {
+    const currentRevision = ++revision
+    saveState.value = 'saving'
+
+    const write = saveQueue.then(() => saveWorkspace(snapshot))
+    saveQueue = write.catch(() => undefined)
+
+    return write.then(
+      () => {
+        if (currentRevision === revision) {
+          saveState.value = 'saved'
+          saveError.value = null
+        }
+      },
+      error => {
+        if (currentRevision === revision) {
+          saveState.value = 'error'
+          saveError.value = errorText(error)
+        }
+        throw error
+      },
+    )
+  }
+
   /**
-   * Publishes a workspace in memory immediately, then serializes its durable write.
-   * A failed write leaves the in-memory workspace intact; only the newest revision controls visible save status.
-   * @param nextWorkspace Complete next workspace snapshot to publish and persist.
-   * @returns A promise that settles when this revision's IndexedDB write completes.
-   * @throws If hydration is incomplete or this revision's durable write fails.
+   * Validates and publishes a workspace in memory once, then enqueues its durable snapshot.
+   * @param nextWorkspace Complete next workspace value to validate, detach, publish, and persist.
+   * @returns The independent durable acknowledgement for this applied snapshot.
+   * @throws Before publication if hydration is incomplete or validation/detachment fails.
    */
-  async function commit(nextWorkspace: LocalWorkspace): Promise<void> {
+  function applyWorkspace(nextWorkspace: LocalWorkspace): { durable: Promise<void> } {
     if (hydrationState.value !== 'ready') {
       throw new Error('The local workspace must finish loading before it can be saved.')
     }
 
     const snapshot = createWorkspaceSnapshot(nextWorkspace)
-
-    const currentRevision = ++revision
-    // Publish only a validated detached snapshot; saveState reports whether it reached IndexedDB.
     workspace.value = snapshot
-    saveState.value = 'saving'
-    saveError.value = null
+    return { durable: enqueueSnapshot(snapshot) }
+  }
 
-    // Chain durable writes in commit order.
-    const write = saveQueue.then(() => saveWorkspace(snapshot))
-    // Keep the queue alive; this commit still awaits its write and rethrows its own failure.
-    saveQueue = write.catch(() => undefined)
+  /** Legacy persistence adapter; callers keep observing the durable rejection through await/catch. */
+  async function commit(nextWorkspace: LocalWorkspace): Promise<void> {
+    const { durable } = applyWorkspace(nextWorkspace)
+    await durable
+  }
 
-    try {
-      await write
-      if (currentRevision === revision) {
-        saveState.value = 'saved'
-      }
-    } catch (error) {
-      if (currentRevision === revision) {
-        saveState.value = 'error'
-        saveError.value = errorText(error)
-      }
-      throw error
+  /** Retries durability for a detached snapshot of current applied memory without publishing it again. */
+  function retrySaveLatest(): Promise<void> {
+    if (hydrationState.value !== 'ready' || !workspace.value) {
+      throw new Error('There is no applied workspace available to save.')
     }
+    return enqueueSnapshot(createWorkspaceSnapshot(workspace.value))
   }
 
   /**
@@ -128,7 +144,9 @@ export function useLocalWorkspace() {
     saveState: readonly(saveState),
     saveError: readonly(saveError),
     hydrate,
+    applyWorkspace,
     commit,
+    retrySaveLatest,
     restoreBackup,
   }
 }

@@ -1,0 +1,1111 @@
+{
+  "baseUrl": "http://127.0.0.1:3137/",
+  "buildRoot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\preview-build",
+  "buildLabel": "Approved local production build after reviewed mobile status CSS correction",
+  "browser": "Chrome 155.0.8059.41 via Playwright",
+  "node": "v24.18.1",
+  "input": "Fresh browser contexts; DOM-derived visible SVG Orbit targets; page.mouse clicks on desktop and Playwright touchscreen taps for outside dismissal on compact viewports; no injected app mutations.",
+  "note": "Viewport emulation only; mobile hasTouch/isMobile flags are enabled at the two compact viewports. No physical device claim.",
+  "sources": {
+    "files": [
+      {
+        "path": "components/ClusterMap.vue",
+        "checkoutSha256": "8D9E6084F7705DB204CFD3FC603EA42A7BB7266714B569D354339CEE11BDB4D7",
+        "buildWorkspaceSha256": "8D9E6084F7705DB204CFD3FC603EA42A7BB7266714B569D354339CEE11BDB4D7"
+      },
+      {
+        "path": "components/PrototypeCataloguePicker.vue",
+        "checkoutSha256": "B867A25140A1AF8DD8589017D4171F5698A9E8C3DD4D2233BE0B25DEE57EB38E",
+        "buildWorkspaceSha256": "B867A25140A1AF8DD8589017D4171F5698A9E8C3DD4D2233BE0B25DEE57EB38E"
+      },
+      {
+        "path": "components/PrototypeCreationPopover.vue",
+        "checkoutSha256": "9690B90669B256E1691AA7521993A388C445AEF701A28009ED5D2AF943A1A4CC",
+        "buildWorkspaceSha256": "9690B90669B256E1691AA7521993A388C445AEF701A28009ED5D2AF943A1A4CC"
+      },
+      {
+        "path": "components/PrototypeMapCanvas.vue",
+        "checkoutSha256": "38C36675C73B68CA79D5A252080123CE472B17EE62C3D631F3C9F9006631E7E5",
+        "buildWorkspaceSha256": "38C36675C73B68CA79D5A252080123CE472B17EE62C3D631F3C9F9006631E7E5"
+      },
+      {
+        "path": "components/PrototypeWorkbench.vue",
+        "checkoutSha256": "6892AD3AC0D150D0D87B80BEFC894555489DBC5AF1A523C36406C58CA26C4D32",
+        "buildWorkspaceSha256": "6892AD3AC0D150D0D87B80BEFC894555489DBC5AF1A523C36406C58CA26C4D32"
+      },
+      {
+        "path": "components/SystemMap.vue",
+        "checkoutSha256": "E0ED02A746A3655AEAE21EA90213E57F40406025191B85DAF64835824F1D2361",
+        "buildWorkspaceSha256": "E0ED02A746A3655AEAE21EA90213E57F40406025191B85DAF64835824F1D2361"
+      },
+      {
+        "path": "components/maps/system-map-renderer.ts",
+        "checkoutSha256": "E50ADD8F66915CE61D44359335DD6EE3FFCC34FBC2709A276C75504618E40AF3",
+        "buildWorkspaceSha256": "E50ADD8F66915CE61D44359335DD6EE3FFCC34FBC2709A276C75504618E40AF3"
+      }
+    ],
+    "expectedManifest": null
+  },
+  "results": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "isMobile": false,
+        "hasTouch": false,
+        "deviceScaleFactor": 1
+      },
+      "defaultLayout": "dock",
+      "commandRow": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 1200.03125,
+            "y": 98.78125,
+            "right": 1273.78125,
+            "bottom": 137.171875,
+            "width": 73.75,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 1276.65625,
+            "y": 98.78125,
+            "right": 1337.96875,
+            "bottom": 137.171875,
+            "width": 61.3125,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 1346.953125,
+            "y": 99.96875,
+            "right": 1411.8125,
+            "bottom": 135.96875,
+            "width": 64.859375,
+            "height": 36,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "commandRowWithAdd": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 1200.03125,
+            "y": 98.78125,
+            "right": 1273.78125,
+            "bottom": 137.171875,
+            "width": 73.75,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 1276.65625,
+            "y": 98.78125,
+            "right": 1337.96875,
+            "bottom": 137.171875,
+            "width": 61.3125,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 1346.953125,
+            "y": 99.96875,
+            "right": 1411.8125,
+            "bottom": 135.96875,
+            "width": 64.859375,
+            "height": 36,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "picker": {
+        "geometry": {
+          "trigger": {
+            "x": 847.6640625,
+            "y": 835.015625,
+            "width": 69.625,
+            "height": 42.390625
+          },
+          "actionMenu": {
+            "x": 479.1330261230469,
+            "y": 739.30322265625,
+            "width": 431.3260803222656,
+            "height": 38.873291015625
+          },
+          "picker": {
+            "x": 475.59375,
+            "y": 600.59375,
+            "width": 434.8125,
+            "height": 219.5
+          }
+        },
+        "anchor": {
+          "trigger": {
+            "x": 847.6640625,
+            "y": 835.015625,
+            "right": 917.2890625,
+            "bottom": 877.40625,
+            "width": 69.625,
+            "height": 42.390625
+          },
+          "picker": {
+            "x": 475.59375,
+            "y": 600.59375,
+            "right": 910.40625,
+            "bottom": 820.09375,
+            "width": 434.8125,
+            "height": 219.5
+          },
+          "horizontalOverlap": true,
+          "verticalGap": 14.921875,
+          "anchored": true
+        }
+      },
+      "orbit": {
+        "orbitId": "orbit-vela-three",
+        "ellipse": {
+          "center": {
+            "x": 772,
+            "y": 300
+          },
+          "radii": {
+            "horizontal": 102,
+            "vertical": 146
+          },
+          "rotationDegrees": -21,
+          "transform": "rotate(-21 772 300)"
+        },
+        "first": {
+          "angle": -1.8325957145940461,
+          "scene": {
+            "x": 696.7967529296875,
+            "y": 177.48680114746094
+          },
+          "ellipseScene": {
+            "x": 696.8150025238449,
+            "y": 177.80241099940451
+          },
+          "client": {
+            "x": 1080,
+            "y": 163
+          }
+        },
+        "second": {
+          "angle": 2.094395102393195,
+          "scene": {
+            "x": 769.6131591796875,
+            "y": 436.30560302734375
+          },
+          "ellipseScene": {
+            "x": 769.6993374870648,
+            "y": 436.31840283689354
+          },
+          "client": {
+            "x": 1273,
+            "y": 849
+          }
+        },
+        "angularDistance": 2.3561944901923453,
+        "pixelDistance": 712.6324438306187,
+        "candidateCount": 18,
+        "contentTransform": "translate(-511.2411711395546,-224.95283390847385) scale(1.767001886978647)"
+      },
+      "objectCountBefore": 6,
+      "placements": [
+        {
+          "target": {
+            "angle": 2.094395102393195,
+            "scene": {
+              "x": 769.6131591796875,
+              "y": 436.30560302734375
+            },
+            "ellipseScene": {
+              "x": 769.6993374870648,
+              "y": 436.31840283689354
+            },
+            "client": {
+              "x": 1273,
+              "y": 849
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lyt6e-1",
+            "transform": "translate(769.6180579692526 436.2910575549014)",
+            "label": "Select MO-2, Moon 2 (CelestialBody / moon)",
+            "point": {
+              "x": 769.6180579692526,
+              "y": 436.2910575549014
+            }
+          },
+          "error": 0.01534825422564047
+        },
+        {
+          "target": {
+            "angle": -0.7853981633974483,
+            "scene": {
+              "x": 802.059814453125,
+              "y": 177.48680114746094
+            },
+            "ellipseScene": {
+              "x": 802.337343673262,
+              "y": 177.77215710464992
+            },
+            "client": {
+              "x": 1359,
+              "y": 163
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lyt8b-2",
+            "transform": "translate(802.01427490829 177.55442993704605)",
+            "label": "Select MO-3, Moon 3 (CelestialBody / moon)",
+            "point": {
+              "x": 802.01427490829,
+              "y": 177.55442993704605
+            }
+          },
+          "error": 0.08153222261492743
+        },
+        {
+          "target": {
+            "angle": -0.39269908169872414,
+            "scene": {
+              "x": 655.2952270507812,
+              "y": 218.61106872558594
+            },
+            "ellipseScene": {
+              "x": 655.5371111771444,
+              "y": 218.8696863336176
+            },
+            "client": {
+              "x": 970,
+              "y": 272
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lytak-3",
+            "transform": "translate(655.3659365759892 218.57052852405286)",
+            "label": "Select MO-4, Moon 4 (CelestialBody / moon)",
+            "point": {
+              "x": 655.3659365759892,
+              "y": 218.57052852405286
+            }
+          },
+          "error": 0.08150671687334433
+        },
+        {
+          "target": {
+            "angle": 0.5235987755982987,
+            "scene": {
+              "x": 644.3538818359375,
+              "y": 340.4747314453125
+            },
+            "ellipseScene": {
+              "x": 644.5448267190434,
+              "y": 340.67999999999995
+            },
+            "client": {
+              "x": 941,
+              "y": 595
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lytcm-4",
+            "transform": "translate(644.5709468666105 340.647130003019)",
+            "label": "Select MO-5, Moon 5 (CelestialBody / moon)",
+            "point": {
+              "x": 644.5709468666105,
+              "y": 340.647130003019
+            }
+          },
+          "error": 0.2771975653579051
+        }
+      ],
+      "distinctPositions": true,
+      "positionsMatchTargets": true,
+      "addRemainsActive": true,
+      "addStatus": {
+        "status": {
+          "x": 336,
+          "y": 758.8125,
+          "right": 1104,
+          "bottom": 830.40625,
+          "width": 768,
+          "height": 71.59375,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        "buttons": {
+          "Change the selected map mark type": {
+            "x": 910.1875,
+            "y": 776.609375,
+            "right": 995.703125,
+            "bottom": 812.609375,
+            "width": 85.515625,
+            "height": 36,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "Quit Add and return to Navigate": {
+            "x": 1003.703125,
+            "y": 776.609375,
+            "right": 1092.609375,
+            "bottom": 812.609375,
+            "width": 88.90625,
+            "height": 36,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "inspectorOpened": false,
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "isMobile": true,
+        "hasTouch": true,
+        "deviceScaleFactor": 1
+      },
+      "defaultLayout": "dock",
+      "commandRow": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 18.78125,
+            "y": 145.96875,
+            "right": 83.4375,
+            "bottom": 180.359375,
+            "width": 64.65625,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 84.234375,
+            "y": 145.96875,
+            "right": 137.109375,
+            "bottom": 180.359375,
+            "width": 52.875,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 315.984375,
+            "y": 145.96875,
+            "right": 373.8125,
+            "bottom": 180.359375,
+            "width": 57.828125,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "commandRowWithAdd": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 18.78125,
+            "y": 145.96875,
+            "right": 83.4375,
+            "bottom": 180.359375,
+            "width": 64.65625,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 84.234375,
+            "y": 145.96875,
+            "right": 137.109375,
+            "bottom": 180.359375,
+            "width": 52.875,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 315.984375,
+            "y": 145.96875,
+            "right": 373.8125,
+            "bottom": 180.359375,
+            "width": 57.828125,
+            "height": 34.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "picker": {
+        "geometry": {
+          "trigger": {
+            "x": 259.0546875,
+            "y": 787.5,
+            "width": 59.578125,
+            "height": 44.796875
+          },
+          "actionMenu": {
+            "x": 17.563194274902344,
+            "y": 691.3088989257812,
+            "width": 357.8963394165039,
+            "height": 38.87078857421875
+          },
+          "picker": {
+            "x": 14.59375,
+            "y": 474.59375,
+            "width": 360.8125,
+            "height": 297.875
+          }
+        },
+        "anchor": {
+          "trigger": {
+            "x": 259.0546875,
+            "y": 787.5,
+            "right": 318.6328125,
+            "bottom": 832.296875,
+            "width": 59.578125,
+            "height": 44.796875
+          },
+          "picker": {
+            "x": 14.59375,
+            "y": 474.59375,
+            "right": 375.40625,
+            "bottom": 772.46875,
+            "width": 360.8125,
+            "height": 297.875
+          },
+          "horizontalOverlap": true,
+          "verticalGap": 15.03125,
+          "anchored": true
+        }
+      },
+      "orbit": {
+        "orbitId": "orbit-vela-three",
+        "ellipse": {
+          "center": {
+            "x": 772,
+            "y": 300
+          },
+          "radii": {
+            "horizontal": 102,
+            "vertical": 146
+          },
+          "rotationDegrees": -21,
+          "transform": "rotate(-21 772 300)"
+        },
+        "first": {
+          "angle": -1.5707963267948966,
+          "scene": {
+            "x": 718.38916015625,
+            "y": 163.1789093017578
+          },
+          "ellipseScene": {
+            "x": 719.6782793663862,
+            "y": 163.69725773140854
+          },
+          "client": {
+            "x": 308,
+            "y": 334
+          }
+        },
+        "second": {
+          "angle": 1.5707963267948966,
+          "scene": {
+            "x": 824.26171875,
+            "y": 436.2185363769531
+          },
+          "ellipseScene": {
+            "x": 824.3217206336138,
+            "y": 436.3027422685915
+          },
+          "client": {
+            "x": 384,
+            "y": 530
+          }
+        },
+        "angularDistance": 3.141592653589793,
+        "pixelDistance": 210.2189334955346,
+        "candidateCount": 28,
+        "contentTransform": "translate(-511.2411711395546,-224.95283390847385) scale(1.767001886978647)"
+      },
+      "objectCountBefore": 6,
+      "placements": [
+        {
+          "target": {
+            "angle": 1.5707963267948966,
+            "scene": {
+              "x": 824.26171875,
+              "y": 436.2185363769531
+            },
+            "ellipseScene": {
+              "x": 824.3217206336138,
+              "y": 436.3027422685915
+            },
+            "client": {
+              "x": 384,
+              "y": 530
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lywi0-1",
+            "transform": "translate(824.2975819282376 436.3120032256095)",
+            "label": "Select MO-2, Moon 2 (CelestialBody / moon)",
+            "point": {
+              "x": 824.2975819282376,
+              "y": 436.3120032256095
+            }
+          },
+          "error": 0.10011103511128819
+        },
+        {
+          "target": {
+            "angle": -1.439896632895322,
+            "scene": {
+              "x": 732.3197631835938,
+              "y": 158.99974060058594
+            },
+            "ellipseScene": {
+              "x": 732.5552821561563,
+              "y": 160.09215339212486
+            },
+            "client": {
+              "x": 318,
+              "y": 331
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lywke-2",
+            "transform": "translate(732.5205613232271 160.09848949106612)",
+            "label": "Select MO-3, Moon 3 (CelestialBody / moon)",
+            "point": {
+              "x": 732.5205613232271,
+              "y": 160.09848949106612
+            }
+          },
+          "error": 1.1169462911042907
+        },
+        {
+          "target": {
+            "angle": -0.39269908169872414,
+            "scene": {
+              "x": 654.3084716796875,
+              "y": 217.5082244873047
+            },
+            "ellipseScene": {
+              "x": 655.5371111771444,
+              "y": 218.8696863336176
+            },
+            "client": {
+              "x": 262,
+              "y": 373
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lywna-3",
+            "transform": "translate(654.6353853713979 217.3154588016984)",
+            "label": "Select MO-4, Moon 4 (CelestialBody / moon)",
+            "point": {
+              "x": 654.6353853713979,
+              "y": 217.3154588016984
+            }
+          },
+          "error": 0.37951438889055567
+        },
+        {
+          "target": {
+            "angle": 0.5235987755982987,
+            "scene": {
+              "x": 643.1640014648438,
+              "y": 340.0974426269531
+            },
+            "ellipseScene": {
+              "x": 644.5448267190434,
+              "y": 340.67999999999995
+            },
+            "client": {
+              "x": 254,
+              "y": 461
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lywpd-4",
+            "transform": "translate(644.2908489151215 340.99852630943286)",
+            "label": "Select MO-5, Moon 5 (CelestialBody / moon)",
+            "point": {
+              "x": 644.2908489151215,
+              "y": 340.99852630943286
+            }
+          },
+          "error": 1.442822573648164
+        }
+      ],
+      "distinctPositions": true,
+      "positionsMatchTargets": true,
+      "addRemainsActive": true,
+      "addStatus": {
+        "status": {
+          "x": 7.1875,
+          "y": 192,
+          "right": 365.1875,
+          "bottom": 330.296875,
+          "width": 358,
+          "height": 138.296875,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        "buttons": {
+          "Change the selected map mark type": {
+            "x": 14.578125,
+            "y": 288.515625,
+            "right": 98.21875,
+            "bottom": 322.90625,
+            "width": 83.640625,
+            "height": 34.390625,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "Quit Add and return to Navigate": {
+            "x": 102.6875,
+            "y": 288.515625,
+            "right": 189.625,
+            "bottom": 322.90625,
+            "width": 86.9375,
+            "height": 34.390625,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "inspectorOpened": false,
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390,
+        "isMobile": true,
+        "hasTouch": true,
+        "deviceScaleFactor": 1
+      },
+      "defaultLayout": "dock",
+      "commandRow": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 604.03125,
+            "y": 125.984375,
+            "right": 677.78125,
+            "bottom": 164.375,
+            "width": 73.75,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 680.65625,
+            "y": 125.984375,
+            "right": 741.96875,
+            "bottom": 164.375,
+            "width": 61.3125,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 750.953125,
+            "y": 127.171875,
+            "right": 815.8125,
+            "bottom": 163.171875,
+            "width": 64.859375,
+            "height": 36,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "commandRowWithAdd": {
+        "rowPresent": true,
+        "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nMap files",
+        "targets": {
+          "hierarchy": {
+            "x": 604.03125,
+            "y": 125.984375,
+            "right": 677.78125,
+            "bottom": 164.375,
+            "width": 73.75,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "inspect": {
+            "x": 680.65625,
+            "y": 125.984375,
+            "right": 741.96875,
+            "bottom": 164.375,
+            "width": 61.3125,
+            "height": 38.390625,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "mapFiles": {
+            "x": 750.953125,
+            "y": 127.171875,
+            "right": 815.8125,
+            "bottom": 163.171875,
+            "width": 64.859375,
+            "height": 36,
+            "visible": true,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "picker": {
+        "geometry": {
+          "trigger": {
+            "x": 549.6640625,
+            "y": 269.828125,
+            "width": 69.625,
+            "height": 42.390625
+          },
+          "actionMenu": {
+            "x": 181.15066528320312,
+            "y": 174.3067626953125,
+            "width": 431.3086853027344,
+            "height": 38.871734619140625
+          },
+          "picker": {
+            "x": 177.59375,
+            "y": 35.59375,
+            "width": 434.8125,
+            "height": 219.5
+          }
+        },
+        "anchor": {
+          "trigger": {
+            "x": 549.6640625,
+            "y": 269.828125,
+            "right": 619.2890625,
+            "bottom": 312.21875,
+            "width": 69.625,
+            "height": 42.390625
+          },
+          "picker": {
+            "x": 177.59375,
+            "y": 35.59375,
+            "right": 612.40625,
+            "bottom": 255.09375,
+            "width": 434.8125,
+            "height": 219.5
+          },
+          "horizontalOverlap": true,
+          "verticalGap": 14.734375,
+          "anchored": true
+        }
+      },
+      "orbit": {
+        "orbitId": "orbit-vela-three",
+        "ellipse": {
+          "center": {
+            "x": 772,
+            "y": 300
+          },
+          "radii": {
+            "horizontal": 102,
+            "vertical": 146
+          },
+          "rotationDegrees": -21,
+          "transform": "rotate(-21 772 300)"
+        },
+        "first": {
+          "angle": -2.2252947962927703,
+          "scene": {
+            "x": 672.3021240234375,
+            "y": 213.4451446533203
+          },
+          "ellipseScene": {
+            "x": 672.5209572035789,
+            "y": 214.1161438081221
+          },
+          "client": {
+            "x": 559,
+            "y": 106
+          }
+        },
+        "second": {
+          "angle": 1.3089969389957465,
+          "scene": {
+            "x": 847.0150146484375,
+            "y": 421.475341796875
+          },
+          "ellipseScene": {
+            "x": 847.1849974761551,
+            "y": 422.1975890005955
+          },
+          "client": {
+            "x": 774,
+            "y": 362
+          }
+        },
+        "angularDistance": 2.74889357189107,
+        "pixelDistance": 334.3067453701765,
+        "candidateCount": 21,
+        "contentTransform": "translate(-511.2411711395546,-224.95283390847385) scale(1.767001886978647)"
+      },
+      "objectCountBefore": 6,
+      "placements": [
+        {
+          "target": {
+            "angle": 1.3089969389957465,
+            "scene": {
+              "x": 847.0150146484375,
+              "y": 421.475341796875
+            },
+            "ellipseScene": {
+              "x": 847.1849974761551,
+              "y": 422.1975890005955
+            },
+            "client": {
+              "x": 774,
+              "y": 362
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lz03s-1",
+            "transform": "translate(847.4519108883096 421.95629482024515)",
+            "label": "Select MO-2, Moon 2 (CelestialBody / moon)",
+            "point": {
+              "x": 847.4519108883096,
+              "y": 421.95629482024515
+            }
+          },
+          "error": 0.6497646767124822
+        },
+        {
+          "target": {
+            "angle": -2.2252947962927703,
+            "scene": {
+              "x": 672.3021240234375,
+              "y": 213.4451446533203
+            },
+            "ellipseScene": {
+              "x": 672.5209572035789,
+              "y": 214.1161438081221
+            },
+            "client": {
+              "x": 559,
+              "y": 106
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lz06l-2",
+            "transform": "translate(672.7197161463226 213.61028985541552)",
+            "label": "Select MO-3, Moon 3 (CelestialBody / moon)",
+            "point": {
+              "x": 672.7197161463226,
+              "y": 213.61028985541552
+            }
+          },
+          "error": 0.44906137539403557
+        },
+        {
+          "target": {
+            "angle": 0.5235987755982987,
+            "scene": {
+              "x": 643.8605346679688,
+              "y": 340.2135314941406
+            },
+            "ellipseScene": {
+              "x": 644.5448267190434,
+              "y": 340.67999999999995
+            },
+            "client": {
+              "x": 524,
+              "y": 262
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lz09m-3",
+            "transform": "translate(644.5069559093535 340.7276201638368)",
+            "label": "Select MO-4, Moon 4 (CelestialBody / moon)",
+            "point": {
+              "x": 644.5069559093535,
+              "y": 340.7276201638368
+            }
+          },
+          "error": 0.825922261246962
+        },
+        {
+          "target": {
+            "angle": 2.617993877991494,
+            "scene": {
+              "x": 314.750244140625,
+              "y": 340.2135314941406
+            },
+            "ellipseScene": {
+              "x": 315.4551732809567,
+              "y": 340.68000000000006
+            },
+            "client": {
+              "x": 119,
+              "y": 262
+            }
+          },
+          "object": {
+            "id": "obj-demo-mv9lz0bt-4",
+            "transform": "translate(314.9577996484007 340.05047870399096)",
+            "label": "Select MO-5, Moon 5 (CelestialBody / moon)",
+            "point": {
+              "x": 314.9577996484007,
+              "y": 340.05047870399096
+            }
+          },
+          "error": 0.26394223076955814
+        }
+      ],
+      "distinctPositions": true,
+      "positionsMatchTargets": true,
+      "addRemainsActive": true,
+      "addStatus": {
+        "status": {
+          "x": 16,
+          "y": 172.796875,
+          "right": 700,
+          "bottom": 244.390625,
+          "width": 684,
+          "height": 71.59375,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        "buttons": {
+          "Change the selected map mark type": {
+            "x": 506.1875,
+            "y": 190.59375,
+            "right": 591.703125,
+            "bottom": 226.59375,
+            "width": 85.515625,
+            "height": 36,
+            "insideViewport": true,
+            "hitTestable": true
+          },
+          "Quit Add and return to Navigate": {
+            "x": 599.703125,
+            "y": 190.59375,
+            "right": 688.609375,
+            "bottom": 226.59375,
+            "width": 88.90625,
+            "height": 36,
+            "insideViewport": true,
+            "hitTestable": true
+          }
+        }
+      },
+      "inspectorOpened": false,
+      "pageErrors": []
+    }
+  ],
+  "groupsReference": {
+    "layout": "groups",
+    "commandRow": {
+      "rowPresent": true,
+      "rowText": "STAR SYSTEM / 1\nVela Reach\n← Jump Cluster\nHierarchy\nInspect\nImport map…\nExport image · PNG\nExport vector · SVG\nShare preview link",
+      "targets": {
+        "hierarchy": {
+          "x": 821.859375,
+          "y": 98.78125,
+          "right": 895.609375,
+          "bottom": 137.171875,
+          "width": 73.75,
+          "height": 38.390625,
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        "inspect": {
+          "x": 898.484375,
+          "y": 98.78125,
+          "right": 959.796875,
+          "bottom": 137.171875,
+          "width": 61.3125,
+          "height": 38.390625,
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        },
+        "mapFiles": {
+          "x": 968.78125,
+          "y": 99.96875,
+          "right": 1055.984375,
+          "bottom": 135.96875,
+          "width": 87.203125,
+          "height": 36,
+          "visible": true,
+          "insideViewport": true,
+          "hitTestable": true
+        }
+      }
+    },
+    "trigger": {
+      "x": 22.109375,
+      "y": 523.87939453125,
+      "width": 99.75,
+      "height": 44.796875
+    },
+    "pickerAnchor": {
+      "trigger": {
+        "x": 22.109375,
+        "y": 523.87939453125,
+        "right": 121.859375,
+        "bottom": 568.67626953125,
+        "width": 99.75,
+        "height": 44.796875
+      },
+      "picker": {
+        "x": 14.59375,
+        "y": 289.59375,
+        "right": 449.40625,
+        "bottom": 509.09375,
+        "width": 434.8125,
+        "height": 219.5
+      },
+      "horizontalOverlap": true,
+      "verticalGap": 14.78564453125,
+      "anchored": true
+    },
+    "pageErrors": []
+  }
+}

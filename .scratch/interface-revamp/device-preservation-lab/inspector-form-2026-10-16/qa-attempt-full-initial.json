@@ -1,0 +1,323 @@
+{
+  "sourceBaselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+  "originMainAtIntake": "629d2a98715c3a16b954e0f77c639b1f0c31212c",
+  "candidateSourceHashes": {
+    "components/PrototypeBInspector.vue": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E",
+    "components/PrototypeWorkbench.vue": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D",
+    "components/prototype-inspector-fixture.ts": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5"
+  },
+  "baseUrl": "http://127.0.0.1:3144/",
+  "runtime": "Compiled local production build from isolated preview-build; headless Chrome through visible UI locators and keyboard input. page.evaluate is read-only DOM inspection.",
+  "browser": "Chrome 155.0.8059.41",
+  "node": "v24.18.1",
+  "viewportLimit": "Responsive viewport emulation is not physical keyboard, touch, or safe-area hardware acceptance.",
+  "inputPolicy": "No app state injection. All edits, selection, dialogs, export, and retry use visible Playwright controls. Downloaded JSON is parsed and passed to the existing prepareJsonImport domain decoder.",
+  "selectedCases": "all cases",
+  "sourceManifest": {
+    "baselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+    "runtimeRoot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\preview-build",
+    "files": [
+      {
+        "path": "components/PrototypeBInspector.vue",
+        "role": "prototype-source",
+        "checkoutSha256": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E",
+        "runtimeSha256": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E"
+      },
+      {
+        "path": "components/PrototypeWorkbench.vue",
+        "role": "prototype-source",
+        "checkoutSha256": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D",
+        "runtimeSha256": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D"
+      },
+      {
+        "path": "components/prototype-inspector-fixture.ts",
+        "role": "prototype-source",
+        "checkoutSha256": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5",
+        "runtimeSha256": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5"
+      },
+      {
+        "path": "components/PrototypeInspector.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17",
+        "runtimeSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17"
+      },
+      {
+        "path": "components/PrototypeFieldDefinitionsDialog.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "17F34EA3F2B9D4020A8C0BAE5690B7564F9091D3C69F510A17C8B45E41900F4A",
+        "runtimeSha256": "17F34EA3F2B9D4020A8C0BAE5690B7564F9091D3C69F510A17C8B45E41900F4A"
+      },
+      {
+        "path": "components/FieldDefinitionsDialog.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272",
+        "runtimeSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionChangeConfirmation.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB",
+        "runtimeSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionEditor.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E",
+        "runtimeSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionList.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E",
+        "runtimeSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionValues.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE",
+        "runtimeSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE"
+      },
+      {
+        "path": "components/field-definitions/model.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E",
+        "runtimeSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E"
+      },
+      {
+        "path": "domain/workspace-model.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "64C89ED0D7E5D3489673E48B67D1A8CEDA7BCE2B370C2B7ED6BA3481177E72E9",
+        "runtimeSha256": "64C89ED0D7E5D3489673E48B67D1A8CEDA7BCE2B370C2B7ED6BA3481177E72E9"
+      },
+      {
+        "path": "domain/workspace.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A",
+        "runtimeSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A"
+      },
+      {
+        "path": "domain/workspace-codec.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11",
+        "runtimeSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11"
+      },
+      {
+        "path": "domain/workspace-fields.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF",
+        "runtimeSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF"
+      },
+      {
+        "path": "domain/workspace-json-import.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6",
+        "runtimeSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6"
+      },
+      {
+        "path": "domain/workspace-schema.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A",
+        "runtimeSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A"
+      },
+      {
+        "path": "utils/workspace-storage.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "00817A03E640FCED61EA9A6F37BCAD0F6A2DDFE4AC1F3683FE0CD5E533A0F5D4",
+        "runtimeSha256": "00817A03E640FCED61EA9A6F37BCAD0F6A2DDFE4AC1F3683FE0CD5E533A0F5D4"
+      }
+    ]
+  },
+  "results": [
+    {
+      "name": "desktop-dense-sections-and-full-width-custom-text",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:43:28.113Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-desktop-dense-inspector.png"
+      ],
+      "details": {
+        "geometry": {
+          "card": {
+            "x": 1105,
+            "y": 151.390625,
+            "right": 1423,
+            "bottom": 833.40625,
+            "width": 318,
+            "height": 682.015625
+          },
+          "header": {
+            "x": 1105,
+            "y": 151.390625,
+            "right": 1423,
+            "bottom": 278.953125,
+            "width": 318,
+            "height": 127.5625
+          },
+          "body": {
+            "x": 1105,
+            "y": 278.953125,
+            "right": 1423,
+            "bottom": 759.140625,
+            "width": 318,
+            "height": 480.1875
+          },
+          "footer": {
+            "x": 1105,
+            "y": 759.140625,
+            "right": 1423,
+            "bottom": 833.40625,
+            "width": 318,
+            "height": 74.265625
+          },
+          "documentScrollWidth": 1440,
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        },
+        "widths": {
+          "name": {
+            "x": 1119.390625,
+            "right": 1408.609375,
+            "width": 289.21875
+          },
+          "description": {
+            "x": 1119.390625,
+            "right": 1408.609375,
+            "width": 289.21875
+          },
+          "customText": {
+            "x": 1119.390625,
+            "right": 1408.609375,
+            "width": 289.21875
+          }
+        },
+        "headerEyebrow": "CELESTIAL BODIES / PLANET"
+      }
+    },
+    {
+      "name": "portrait-hide-theme-resize-and-sticky-actions",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:43:30.840Z",
+      "error": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Switch to light theme', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-slot=\"base\" aria-label=\"Switch to light theme\" class=\"rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 data-v-b16a4ce0=\"\">Aster, Keeper of the Quiet Meridian and Outer Bea…</h2> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <h2 data-v-b16a4ce0=\"\">Aster, Keeper of the Quiet Meridian and Outer Bea…</h2> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <header data-v-b16a4ce0=\"\" class=\"b-inspector-header\">…</header> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m  4 × retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 data-v-b16a4ce0=\"\">Aster, Keeper of the Quiet Meridian and Outer Bea…</h2> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 data-v-b16a4ce0=\"\">Aster, Keeper of the Quiet Meridian and Outer Bea…</h2> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <header data-v-b16a4ce0=\"\" class=\"b-inspector-header\">…</header> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <header data-v-b16a4ce0=\"\" class=\"b-inspector-header\">…</header> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 data-v-b16a4ce0=\"\">Aster, Keeper of the Quiet Meridian and Outer Bea…</h2> from <main class=\"b-map-board\">…</main> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\portrait-hide-theme-resize-and-sticky-actions-failure.png"
+      ]
+    },
+    {
+      "name": "blank-name-feedback-aria-and-focused-arrows",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:43:44.794Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-invalid-name-feedback.png"
+      ],
+      "details": {
+        "accessibility": {
+          "ariaInvalid": "true",
+          "describedBy": [
+            "v-2-error"
+          ],
+          "hasDescribedByTargets": true,
+          "isLabeled": true
+        },
+        "summary": "1 form issue\n\nReview the marked object fields before applying.\n\nObject name is required.",
+        "arrowKeyStayedOnB": true,
+        "draftPreserved": true,
+        "original": "Aster, Keeper of the Quiet Meridian and Outer Beacon"
+      }
+    },
+    {
+      "name": "apply-discard-save-retry-and-dense-applied-json",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:43:47.071Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-save-error-dense-applied.png",
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-save-retry-and-discard.png"
+      ],
+      "details": {
+        "appliedName": "Aster Applied QA Name",
+        "dirtyName": "Aster Dirty Draft Must Not Export",
+        "decodedSummary": {
+          "type": "cluster",
+          "systems": 3,
+          "objects": 13,
+          "orbits": 6,
+          "routes": 4,
+          "customFields": 7,
+          "idCollisions": [],
+          "possibleMatches": []
+        },
+        "retryMessage": "MEMORY-ONLY SAMPLE\n\nPrototype save status\n\nSimulated retry succeeded. No data was written to browser storage."
+      }
+    },
+    {
+      "name": "route-system-edit-and-orbit-read-only-gate",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:43:50.896Z",
+      "error": "AssertionError: The input did not match the regular expression /Orbit radii.*outside this focused prototype/i. Input:\n\n'ORBIT / GEOMETRY\\n' +\n  '\\n' +\n  'Orbit 1\\n' +\n  '\\n' +\n  'Orbit 1 · unoccupied center\\n' +\n  '\\n' +\n  'Hide\\n' +\n  'Read-only in this prototype\\n' +\n  '\\n' +\n  'Orbit radii, unoccupied centers, ordering, and Detach are not implemented in this focused rendering.\\n' +\n  '\\n' +\n  'MEMORY-ONLY SAMPLE\\n' +\n  '\\n' +\n  'Simulated save\\n' +\n  '\\n' +\n  'Simulating a durable write. The prototype bypasses IndexedDB.\\n' +\n  '\\n' +\n  'SEPARATE DESTRUCTIVE ACTION\\n' +\n  '\\n' +\n  'Delete\\n' +\n  '\\n' +\n  'The existing impact review lists everything that will be removed or updated.\\n' +\n  '\\n' +\n  'Delete Orbit…\\n' +\n  'Simulated save running\\n' +\n  'Apply changes\\n' +\n  'Discard changes'\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\route-system-edit-and-orbit-read-only-gate-failure.png"
+      ]
+    },
+    {
+      "name": "fields-conflict-stay-and-resume",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:43:53.095Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-fields-conflict-review.png"
+      ],
+      "details": {
+        "conflictChoicesVisible": true,
+        "stayRetainedDraft": true,
+        "fieldsDraftStateAfterResume": "modified"
+      }
+    },
+    {
+      "name": "delete-review-cancel",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:43:56.177Z",
+      "error": "TimeoutError: locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('heading', { name: 'Remove Aster?', exact: true }) to be visible\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\delete-review-cancel-failure.png"
+      ]
+    },
+    {
+      "name": "delete-review-escape",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:44:07.435Z",
+      "error": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Show map hierarchy', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"panel-command\" aria-expanded=\"false\" aria-label=\"Show map hierarchy\" aria-controls=\"b-hierarchy-panel\">Hierarchy</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-slot=\"root\" data-v-b16a4ce0=\"\" data-orientation=\"vertical\" class=\"text-sm b-inspector-full-row\">…</div> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div data-slot=\"root\" data-v-b16a4ce0=\"\" data-orientation=\"vertical\" class=\"text-sm b-inspector-full-row\">…</div> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h3 data-v-b16a4ce0=\"\" id=\"b-route-details-heading\">Route details</h3> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m  4 × retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-slot=\"root\" data-v-b16a4ce0=\"\" data-orientation=\"vertical\" class=\"text-sm b-inspector-full-row\">…</div> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-slot=\"root\" data-v-b16a4ce0=\"\" data-orientation=\"vertical\" class=\"text-sm b-inspector-full-row\">…</div> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h3 data-v-b16a4ce0=\"\" id=\"b-route-details-heading\">Route details</h3> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h3 data-v-b16a4ce0=\"\" id=\"b-route-details-heading\">Route details</h3> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-slot=\"root\" data-v-b16a4ce0=\"\" data-orientation=\"vertical\" class=\"text-sm b-inspector-full-row\">…</div> from <aside id=\"b-inspector-panel\" class=\"b-inspector-float b-inspector-float--form inspector-open\">…</aside> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\delete-review-escape-failure.png"
+      ]
+    },
+    {
+      "name": "delete-confirm-and-ordinary-json-decode",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:44:18.521Z",
+      "error": "TimeoutError: locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('heading', { name: 'Remove Aster?', exact: true }) to be visible\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\delete-confirm-and-ordinary-json-decode-failure.png"
+      ]
+    }
+  ],
+  "jsonDecodes": [
+    {
+      "label": "dense",
+      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\applied-dense.json",
+      "sha256": "A645BF13B49A874D226085AEAB64B9E44D53689FCEB61B68AF1DDB1160485272",
+      "format": "ttrpg-cluster-control-map",
+      "version": 1,
+      "type": "cluster",
+      "decodedSummary": {
+        "type": "cluster",
+        "systems": 3,
+        "objects": 13,
+        "orbits": 6,
+        "routes": 4,
+        "customFields": 7,
+        "idCollisions": [],
+        "possibleMatches": []
+      }
+    }
+  ]
+}

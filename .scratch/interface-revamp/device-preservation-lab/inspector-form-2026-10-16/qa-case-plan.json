@@ -1,0 +1,123 @@
+{
+  "ticket": 17,
+  "sourceBaselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+  "originMainAtIntake": "629d2a98715c3a16b954e0f77c639b1f0c31212c",
+  "candidate": {
+    "status": "frozen-and-validated",
+    "runtime": "Compiled local production build in .scratch/interface-revamp/preview-build",
+    "sourceHashes": {
+      "components/PrototypeBInspector.vue": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E",
+      "components/PrototypeWorkbench.vue": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D",
+      "components/prototype-inspector-fixture.ts": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5"
+    }
+  },
+  "execution": {
+    "status": "passed",
+    "caseCount": 11,
+    "passed": 11,
+    "failed": 0,
+    "baseUrl": "http://127.0.0.1:3144/",
+    "browser": "Chrome 155.0.8059.41",
+    "node": "v24.18.1",
+    "harness": "qa-inspector-form.mjs",
+    "report": "qa-inspector-form.json",
+    "inputPolicy": "Visible Playwright locators and keyboard input only; page.evaluate is read-only DOM inspection; no app state injection.",
+    "limits": [
+      "Responsive viewport emulation does not establish physical keyboard, touch, or safe-area hardware acceptance.",
+      "The chart fallback was source-reviewed because the visible hierarchy flow did not expose a chart target.",
+      "The prototype is memory-only; the run does not establish schema, durable-storage, or production-interchange changes."
+    ]
+  },
+  "validation": {
+    "typecheck": {
+      "command": "& 'C:\\nodejs\\npm.cmd' run typecheck",
+      "workingDirectory": ".scratch/interface-revamp/preview-build",
+      "finalCandidateExitCode": 0,
+      "note": "An earlier candidate exited 1 with TS2339 before the corrected frozen candidate passed."
+    },
+    "productionBuild": {
+      "command": "& 'C:\\nodejs\\npm.cmd' run build",
+      "workingDirectory": ".scratch/interface-revamp/preview-build",
+      "defaultSandboxAttemptExitCode": 1,
+      "defaultSandboxFailure": "Nitro EPERM while resolving vue/index.mjs",
+      "requireEscalatedRetryExitCode": 0,
+      "toolchain": "Nuxt 4.6.0 / Nitro 2.13.4"
+    },
+    "browserRun": {
+      "command": "& 'C:\\nodejs\\node.exe' '.scratch/interface-revamp/device-preservation-lab/inspector-form-2026-10-16/qa-inspector-form.mjs'",
+      "workingDirectory": "repository root",
+      "requireEscalatedExitCode": 0
+    },
+    "baselineCapture": "Unavailable as product evidence: the 3139 dev runtime remained on the Nuxt build-progress page; baseline-*.png files show that environment state only."
+  },
+  "cases": [
+    {
+      "id": "desktop-dense-sections-and-full-width-custom-text",
+      "status": "passed",
+      "viewport": "1440x900",
+      "checks": ["selection-appropriate sections", "full-width name, description, and custom text", "native/custom labels and readable header", "top Hide and bottom Apply/Discard", "no horizontal overflow"]
+    },
+    {
+      "id": "portrait-hide-theme-resize-and-sticky-actions",
+      "status": "passed",
+      "viewports": ["390x844", "844x390", "390x500"],
+      "checks": ["single-column portrait layout", "Hide/reopen, theme and resize retain draft", "header/footer composition", "sticky actions stay reachable", "no horizontal overflow"]
+    },
+    {
+      "id": "blank-name-feedback-aria-and-focused-arrows",
+      "status": "passed",
+      "viewport": "390x500",
+      "checks": ["inline and summary validation", "aria-invalid and described-by target", "feedback focus reaches the control", "arrow keys in feedback remain in prototype B", "invalid Apply preserves draft and does not report success"]
+    },
+    {
+      "id": "apply-discard-save-retry-and-dense-applied-json",
+      "status": "passed",
+      "checks": ["Apply and Discard behavior", "simulated first-save failure and Retry", "downloaded applied JSON decodes", "dirty draft is absent from recovery JSON"]
+    },
+    {
+      "id": "route-system-edit-and-orbit-read-only-gate",
+      "status": "passed",
+      "checks": ["route and system edits apply", "Orbit remains visibly read-only", "chart fallback source-reviewed where no UI target is exposed"]
+    },
+    {
+      "id": "fields-conflict-stay-and-resume",
+      "status": "passed",
+      "checks": ["production Fields manager", "Stay preserves drafts", "closing/reopening resumes pending object and definition state"]
+    },
+    {
+      "id": "fields-conflict-apply-object-draft-and-renewed-impact",
+      "status": "passed",
+      "checks": ["choose a different visible Survey field 04 value", "initial review excludes Aster's still-draft value", "Apply object draft", "renewed review lists Aster and the exact newly applied value", "confirm and clear renewed impact"]
+    },
+    {
+      "id": "fields-conflict-discard-object-draft-guard",
+      "status": "passed",
+      "checks": ["Discard object draft through the Fields conflict guard", "reviewed field edit commits", "discarded object value restores applied value"]
+    },
+    {
+      "id": "delete-review-cancel",
+      "status": "passed",
+      "checks": ["review exact affected entities before confirmation", "Cancel preserves selection and a dirty name draft"]
+    },
+    {
+      "id": "delete-review-escape",
+      "status": "passed",
+      "checks": ["Escape closes the review without confirming", "dirty draft remains intact"]
+    },
+    {
+      "id": "delete-confirm-and-ordinary-json-decode",
+      "status": "passed",
+      "checks": ["confirm removal of Aster and affected Orbit/Morrow", "verify unrelated entities remain", "download and decode ordinary applied JSON after deletion"]
+    }
+  ],
+  "selectedEvidenceScreenshots": [
+    "qa-desktop-dense-inspector.png",
+    "qa-inspector-portrait.png",
+    "qa-inspector-landscape.png",
+    "qa-inspector-compact.png",
+    "qa-invalid-name-feedback.png",
+    "qa-save-error-dense-applied.png",
+    "qa-fields-renewed-impact-after-object-apply.png",
+    "qa-delete-confirmed-result.png"
+  ]
+}

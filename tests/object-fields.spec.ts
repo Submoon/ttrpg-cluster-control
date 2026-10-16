@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { activeWorkspaceFeedback } from './helpers'
+import { returnToClusterMap, clickDockAction } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
 
@@ -14,15 +16,16 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   const palette = page.getByRole('region', { name: 'Object palette' })
 
   await expect(map).toBeVisible()
+  await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   await expect(palette.getByRole('group', { name: 'Object categories' }).getByRole('button'))
     .toHaveCount(7)
   await expect(palette.getByRole('group', { name: 'Celestial bodies' }).getByRole('button'))
     .toHaveCount(3)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await hierarchy.getByRole('button', { name: /Orbit 2 around Primary Star/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('button', { name: 'Move orbit up' }).click()
@@ -52,7 +55,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await addCatalogueObject(page, 'belt')
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ })).toBeVisible()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'moon')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Nix')
@@ -96,10 +99,10 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await saveMapObject(page)
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await expect(inspector.getByRole('heading', { name: 'Relay Beacon Kestrel' })).toBeVisible()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Nix/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await hierarchy.getByRole('button', { name: /Relay Beacon Kestrel/ }).click()
@@ -139,7 +142,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await expect(systemInspector.getByText('SYSTEM STRUCTURE / SELECTED')).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await chartDetails.press('Enter')
@@ -150,10 +153,10 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
   await saveMapObject(page)
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
-  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await clickDockAction(page, 'Add Jump Route')
   await expect(page.getByRole('button', { name: 'Chart details' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const route = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Exit/ })
@@ -224,13 +227,13 @@ test('the Warden can configure native and reusable custom object fields', async 
   await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await page.getByRole('button', { name: 'Add star system' }).click()
+  await clickDockAction(page, 'Add star system')
   await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await addCatalogueObject(page, 'planet')
   await expect(page.getByLabel('Campaign notes')).toBeVisible()
@@ -247,11 +250,11 @@ test('the Warden can configure native and reusable custom object fields', async 
   await expect(page.getByLabel('Signal class', { exact: true })).toHaveValue('Red')
   await hierarchy.getByRole('button', { name: /New moon 1/ }).click()
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Thin')
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await hierarchy.getByRole('button', { name: /New station/ }).click()
   await expect(page.getByLabel('Port class', { exact: true })).toHaveValue('Class II')
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await restoredClusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
@@ -331,7 +334,7 @@ test('custom field category and subtype scopes hide ineligible objects without d
   await page.getByRole('button', { name: 'Delete Iria' }).click()
   await expect(hierarchy.getByRole('button', { name: /Iria/ })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const cleanupExport = await downloadJson(page, 'Export Jump Cluster JSON')
   const cleanedField = cleanupExport.objectFieldSettings.customFields
     .find(field => field.name === 'Campaign notes')!

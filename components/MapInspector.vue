@@ -2,21 +2,17 @@
   <JumpRouteInspector
     v-if="props.mode === 'cluster'"
     ref="routeInspectorRef"
-    v-model:cluster-name="clusterName"
-    v-model:system-name="systemName"
     :workspace="props.workspace"
     :selected-system="props.selectedSystem"
     :selected-object="props.selectedObject"
     :selected-orbit="props.selectedOrbit"
     :selected-route="props.selectedRoute"
+    :inspected-system="props.inspectedClusterSystem"
     :selected-route-summary="props.selectedRouteSummary"
-    :chart-names-editing="props.chartNamesEditing"
+    :has-chart-name-draft="props.hasChartNameDraft"
     :saving="props.saving"
-    :form-error="props.formError"
     :editor-error="props.editorError"
-    @submit-names="emit('submit-names')"
-    @edit-chart-names="emit('edit-chart-names')"
-    @cancel-chart-names="emit('cancel-chart-names')"
+    @edit-chart-names="emit('edit-chart-names', $event)"
     @show-chart-details="emit('show-chart-details')"
     @request-route-edit="emit('request-route-edit', $event)"
     @save-route="emit('save-route', $event)"
@@ -63,17 +59,11 @@
     />
     <ChartDetailsPanel
       v-else
-      v-model:cluster-name="clusterName"
-      v-model:system-name="systemName"
       mode="system"
       :workspace="props.workspace"
       :selected-system="props.selectedSystem"
-      :chart-names-editing="props.chartNamesEditing"
-      :saving="props.saving"
-      :form-error="props.formError"
-      @submit-names="emit('submit-names')"
-      @edit-chart-names="emit('edit-chart-names')"
-      @cancel-chart-names="emit('cancel-chart-names')"
+      :has-chart-name-draft="props.hasChartNameDraft"
+      @edit-chart-names="emit('edit-chart-names', props.selectedSystem.id)"
     />
   </template>
 </template>
@@ -107,20 +97,18 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
+  inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
   selectedRouteSummary: string
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
   editorError: string
 }>()
 
 const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
   'show-chart-details': []
   'request-object-edit': []
   'save-object': [request: MapObjectSaveRequest]
@@ -137,8 +125,6 @@ const emit = defineEmits<{
   'clear-error': []
 }>()
 
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
 const objectInspectorRef = shallowRef<MapObjectInspectorHandle | null>(null)
 const orbitInspectorRef = shallowRef<OrbitInspectorHandle | null>(null)
 const routeInspectorRef = shallowRef<JumpRouteInspectorHandle | null>(null)

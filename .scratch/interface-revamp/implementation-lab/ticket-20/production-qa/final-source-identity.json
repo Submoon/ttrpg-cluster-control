@@ -1,0 +1,28 @@
+{
+  "candidate": "1f6d7fe2f9760bf3a42cba9f46113a1eddc23734",
+  "capturedAt": "2026-10-16T17:28:46.9577903Z",
+  "identity": {
+    "components/BaselinePage.vue": "30c3dbecdc5935669b055fcd3e859a2909d4b804dc0b569b4006976064ae75c7",
+    "components/ChartNamesDialog.vue": "f7a00d52fedcf98f8e6e73379f7e10c10dda4cc3a92f54e886a3de6233e58236",
+    "components/MapInspector.vue": "775300115e4133e1e82be9b35212a87c684de1153a3599074b35f4267b935461",
+    "components/MapHierarchy.vue": "2d046e728aed64dfde18971ecb251c0b017eb82fa5873d4d52f35bd16e7869fd",
+    "components/inspector/ChartDetailsPanel.vue": "a3147d38e8b440da1448f7412a64d5e6fad37515c2d53af7685dcc632e441173",
+    "components/inspector/JumpRouteInspector.vue": "82abdff2b13d43c829fff9df1d005d652b79ff7965641fb0ccca6bdfbadb58a8",
+    "composables/useLocalWorkspace.ts": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf",
+    "composables/useEditorWorkflows.ts": "063a52c5617806209ed7fede7fddd558094e80f49e494d5e59286b4a5b75edd2",
+    "composables/editor-workflows/useEditorState.ts": "d5f3b472754a7367f072e491c02739a28d67ece5edce2297029560a4c2f8aef8",
+    "composables/editor-workflows/types.ts": "eb607af81e7a69e3770316aef32c6eab3459a4a8d72b71e505b6a39f86e9c4a1",
+    "composables/editor-workflows/useClusterWorkflows.ts": "abcfdeb7e37112b05752cda306859b1abd331b18e807ea2e601d33db2d44da42",
+    "composables/editor-workflows/useMapWorkflows.ts": "cb670e51e3deaddc7241ded1fb6b91018966cf600b5d1901a0f48dd03382e9e3",
+    "composables/editor-workflows/useFieldDefinitionWorkflows.ts": "23398171805c290880e3b517061baea27eb627dcf57c57ad5c7a437e5385f28d",
+    "composables/useWorkspaceFiles.ts": "32f94cb14523335abc33bc5fc089a30838c49a117f1bf4b1c98522e743b8d578",
+    "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "assets/css/map-workspace.css": "91e1629e0ae2dfafce7b2bdaf04412ce03e2e18f8dc9bbfff5b340124b354eab",
+    "nuxt.config.ts": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef",
+    "package-lock.json": "2da66f73cf5a3d11fe25663a51d262372c3dc0a3d8f4c810cfa7bdfd15bec14d",
+    "tests/workspace-chart-drafts.spec.ts": "35a0ff73a1d34e7e7a62847f6f760516daffbe296729f8f00f0ee0a21d55e938",
+    "tests/workspace-theme.spec.ts": "93fe9aa8f98926cd61c7e4f068485282971bf142a23d994fed760dde704741e6",
+    "tests/workspace-launch.spec.ts": "46583520032ce0c649af868179cffa0f7244c0828cbb9e5fac6fc2cdcddc51c6",
+    "tests/helpers.ts": "b8ae760cc44611ef5c2c333dcdeeda7b0966431628a5c32c9058564288f2c32a"
+  }
+}

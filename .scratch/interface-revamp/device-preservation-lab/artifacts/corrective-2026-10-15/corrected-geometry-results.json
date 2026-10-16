@@ -1,0 +1,459 @@
+{
+  "build": "isolated production output from current shared source; no QA hook",
+  "browser": "headless Chrome with Playwright mobile/touch emulation",
+  "physicalDevice": false,
+  "results": [
+    {
+      "name": "portrait-390x844",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "rail": [
+        {
+          "label": "Navigation",
+          "rect": {
+            "x": 12.515625,
+            "y": 763.03125,
+            "right": 102.796875,
+            "bottom": 800.625,
+            "width": 90.28125,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Navigation"
+        },
+        {
+          "label": "Move / Modify",
+          "rect": {
+            "x": 104.0625,
+            "y": 763.03125,
+            "right": 194.359375,
+            "bottom": 800.625,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Move / Modify"
+        },
+        {
+          "label": "Add a system",
+          "rect": {
+            "x": 195.625,
+            "y": 763.03125,
+            "right": 285.921875,
+            "bottom": 800.625,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Add a system"
+        },
+        {
+          "label": "Draw Jump Route",
+          "rect": {
+            "x": 287.1875,
+            "y": 763.03125,
+            "right": 377.484375,
+            "bottom": 800.625,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Draw Jump Route"
+        },
+        {
+          "label": "Show map hierarchy",
+          "rect": {
+            "x": 12.515625,
+            "y": 801.890625,
+            "right": 102.796875,
+            "bottom": 839.484375,
+            "width": 90.28125,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Show map hierarchy"
+        },
+        {
+          "label": "Import map file",
+          "rect": {
+            "x": 104.0625,
+            "y": 801.890625,
+            "right": 194.359375,
+            "bottom": 839.484375,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Import map file"
+        },
+        {
+          "label": "Export map image",
+          "rect": {
+            "x": 195.625,
+            "y": 801.890625,
+            "right": 285.921875,
+            "bottom": 839.484375,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Export map image"
+        },
+        {
+          "label": "Open Inspector panel",
+          "rect": {
+            "x": 287.1875,
+            "y": 801.890625,
+            "right": 377.484375,
+            "bottom": 839.484375,
+            "width": 90.296875,
+            "height": 37.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Open Inspector panel"
+        }
+      ],
+      "zoom": [
+        {
+          "label": "Zoom out",
+          "rect": {
+            "x": 283.140625,
+            "y": 704.9375,
+            "right": 313.53125,
+            "bottom": 734.53125,
+            "width": 30.390625,
+            "height": 29.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Zoom out"
+        },
+        {
+          "label": "Fit map",
+          "rect": {
+            "x": 315.4375,
+            "y": 704.9375,
+            "right": 345.828125,
+            "bottom": 734.53125,
+            "width": 30.390625,
+            "height": 29.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Fit map"
+        },
+        {
+          "label": "Zoom in",
+          "rect": {
+            "x": 347.734375,
+            "y": 704.9375,
+            "right": 378.125,
+            "bottom": 734.53125,
+            "width": 30.390625,
+            "height": 29.59375
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Zoom in"
+        }
+      ],
+      "backBox": {
+        "x": 93.140625,
+        "y": 67.390625,
+        "width": 79.8125,
+        "height": 32
+      },
+      "overlay": {
+        "toastText": "Inspector draft discarded.",
+        "toastRect": {
+          "x": 222.484375,
+          "y": 644.828125,
+          "right": 382,
+          "bottom": 684
+        },
+        "zoom": [
+          {
+            "label": "Zoom out",
+            "rect": {
+              "x": 283.140625,
+              "y": 704.9375,
+              "right": 313.53125,
+              "bottom": 734.53125
+            },
+            "hit": true,
+            "overlapsToast": false
+          },
+          {
+            "label": "Fit map",
+            "rect": {
+              "x": 315.4375,
+              "y": 704.9375,
+              "right": 345.828125,
+              "bottom": 734.53125
+            },
+            "hit": true,
+            "overlapsToast": false
+          },
+          {
+            "label": "Zoom in",
+            "rect": {
+              "x": 347.734375,
+              "y": 704.9375,
+              "right": 378.125,
+              "bottom": 734.53125
+            },
+            "hit": true,
+            "overlapsToast": false
+          }
+        ]
+      },
+      "screenshots": {
+        "mapPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-portrait-390x844-map.png",
+        "systemPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-portrait-390x844-system.png",
+        "toastPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-portrait-390x844-discard-toast.png"
+      },
+      "aria": {
+        "initialLabel": "Open Vela Reach system map",
+        "move": "Select … system",
+        "navigation": "Open … system map"
+      },
+      "errors": []
+    },
+    {
+      "name": "landscape-844x390",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "rail": [
+        {
+          "label": "Navigation",
+          "rect": {
+            "x": 42.90625,
+            "y": 342.296875,
+            "right": 94.09375,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Navigation"
+        },
+        {
+          "label": "Move / Modify",
+          "rect": {
+            "x": 98.890625,
+            "y": 342.296875,
+            "right": 150.078125,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Move / Modify"
+        },
+        {
+          "label": "Add a system",
+          "rect": {
+            "x": 154.875,
+            "y": 342.296875,
+            "right": 206.0625,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Add a system"
+        },
+        {
+          "label": "Draw Jump Route",
+          "rect": {
+            "x": 210.859375,
+            "y": 342.296875,
+            "right": 262.046875,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Draw Jump Route"
+        },
+        {
+          "label": "Show map hierarchy",
+          "rect": {
+            "x": 266.84375,
+            "y": 342.296875,
+            "right": 318.03125,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Show map hierarchy"
+        },
+        {
+          "label": "Import map file",
+          "rect": {
+            "x": 322.828125,
+            "y": 342.296875,
+            "right": 374.015625,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Import map file"
+        },
+        {
+          "label": "Export map image",
+          "rect": {
+            "x": 378.8125,
+            "y": 342.296875,
+            "right": 430,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Export map image"
+        },
+        {
+          "label": "Open Inspector panel",
+          "rect": {
+            "x": 434.796875,
+            "y": 342.296875,
+            "right": 485.984375,
+            "bottom": 385.484375,
+            "width": 51.1875,
+            "height": 43.1875
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Open Inspector panel"
+        }
+      ],
+      "zoom": [
+        {
+          "label": "Zoom out",
+          "rect": {
+            "x": 717.4375,
+            "y": 285.8125,
+            "right": 752.625,
+            "bottom": 317.8125,
+            "width": 35.1875,
+            "height": 32
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Zoom out"
+        },
+        {
+          "label": "Fit map",
+          "rect": {
+            "x": 756.625,
+            "y": 285.8125,
+            "right": 791.8125,
+            "bottom": 317.8125,
+            "width": 35.1875,
+            "height": 32
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Fit map"
+        },
+        {
+          "label": "Zoom in",
+          "rect": {
+            "x": 795.8125,
+            "y": 285.8125,
+            "right": 831,
+            "bottom": 317.8125,
+            "width": 35.1875,
+            "height": 32
+          },
+          "visible": true,
+          "hit": true,
+          "hitButtonLabel": "Zoom in"
+        }
+      ],
+      "backBox": {
+        "x": 199.046875,
+        "y": 81.15625,
+        "width": 79.8125,
+        "height": 32
+      },
+      "overlay": {
+        "toastText": "Inspector draft discarded.",
+        "toastRect": {
+          "x": 676.484375,
+          "y": 190.828125,
+          "right": 836,
+          "bottom": 230
+        },
+        "zoom": [
+          {
+            "label": "Zoom out",
+            "rect": {
+              "x": 717.4375,
+              "y": 285.8125,
+              "right": 752.625,
+              "bottom": 317.8125
+            },
+            "hit": true,
+            "overlapsToast": false
+          },
+          {
+            "label": "Fit map",
+            "rect": {
+              "x": 756.625,
+              "y": 285.8125,
+              "right": 791.8125,
+              "bottom": 317.8125
+            },
+            "hit": true,
+            "overlapsToast": false
+          },
+          {
+            "label": "Zoom in",
+            "rect": {
+              "x": 795.8125,
+              "y": 285.8125,
+              "right": 831,
+              "bottom": 317.8125
+            },
+            "hit": true,
+            "overlapsToast": false
+          }
+        ]
+      },
+      "screenshots": {
+        "mapPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-landscape-844x390-map.png",
+        "systemPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-landscape-844x390-system.png",
+        "toastPath": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\corrective-2026-10-15\\corrected-landscape-844x390-discard-toast.png"
+      },
+      "aria": {
+        "initialLabel": "Open Vela Reach system map",
+        "move": "Select … system",
+        "navigation": "Open … system map"
+      },
+      "errors": []
+    }
+  ]
+}

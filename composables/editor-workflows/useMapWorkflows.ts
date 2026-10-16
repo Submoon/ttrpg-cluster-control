@@ -27,6 +27,7 @@ import type {
   ObjectEditRequest,
   OrbitEditRequest,
   SystemMapHandle,
+  TransitionOptions,
 } from './types'
 
 interface MapWorkflowOptions {
@@ -39,13 +40,13 @@ interface MapWorkflowOptions {
   selectedOrbitId: Ref<string | null>
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   systemMapRef: ShallowRef<SystemMapHandle | null>
-  confirmDiscardInspectorEdits: () => boolean
+  resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   editorError: Ref<string>
 }
 
 /**
  * Builds system-map commands around the page commit and inspector draft-acknowledgement boundaries.
- * @param options Current selection refs, renderer handles, discard guard, and persistence callback.
+ * @param options Current selection refs, renderer handles, draft-transition resolver, and persistence callback.
  * @returns Map edit commands; rejected edits are exposed through editorError rather than thrown to the UI.
  */
 export function useMapWorkflows({
@@ -58,7 +59,7 @@ export function useMapWorkflows({
   selectedOrbitId,
   mapInspectorRef,
   systemMapRef,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
   editorError,
 }: MapWorkflowOptions) {
   const orbitAdjustmentNotice = ref('')
@@ -344,16 +345,19 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt or any early guard; failures populate editorError.
    */
   async function detachSelectedOrbit(): Promise<void> {
-    const currentWorkspace = workspace.value
-    const system = selectedSystem.value
-    const orbit = selectedOrbit.value
+    const systemId = selectedSystem.value?.id
+    const orbitId = selectedOrbit.value?.id
     if (
-      !currentWorkspace
-      || !system
-      || !orbit
-      || orbit.hostId === null
-      || !confirmDiscardInspectorEdits()
+      !systemId
+      || !orbitId
+      || selectedOrbit.value?.hostId === null
+      || !await resolveTransition({ leaveChart: false })
     ) return
+
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+    if (!currentWorkspace || !system || !orbit || selectedSystem.value?.id !== systemId) return
 
     try {
       const map = systemMapRef.value
@@ -384,15 +388,19 @@ export function useMapWorkflows({
   }
 
   /** Starts the selected object draft only after any other inspector draft is accepted or discarded. */
-  function beginObjectEdit(): void {
-    if (!selectedObject.value || !confirmDiscardInspectorEdits()) return
+  async function beginObjectEdit(): Promise<void> {
+    const objectId = selectedObject.value?.id
+    if (!objectId || !await resolveTransition({ leaveChart: false })) return
+    if (selectedObject.value?.id !== objectId) return
     mapInspectorRef.value?.startObjectEdit()
     editorError.value = ''
   }
 
   /** Starts the selected Orbit draft only after any other inspector draft is accepted or discarded. */
-  function beginOrbitEdit(): void {
-    if (!selectedOrbit.value || !confirmDiscardInspectorEdits()) return
+  async function beginOrbitEdit(): Promise<void> {
+    const orbitId = selectedOrbit.value?.id
+    if (!orbitId || !await resolveTransition({ leaveChart: false })) return
+    if (selectedOrbit.value?.id !== orbitId) return
     mapInspectorRef.value?.startOrbitEdit()
     editorError.value = ''
   }
@@ -439,16 +447,19 @@ export function useMapWorkflows({
     dropOrbitId?: string | null,
     dropAngle?: number | null,
   ): Promise<void> {
-    const system = selectedSystem.value
+    const systemId = selectedSystem.value?.id
+    const intendedOrbitId = dropPoint
+      ? dropOrbitId ?? undefined
+      : selectedOrbitId.value ?? undefined
+    if (!systemId || !workspace.value || !await resolveTransition({ leaveChart: false })) return
     const currentWorkspace = workspace.value
-    if (!system || !currentWorkspace || !confirmDiscardInspectorEdits()) return
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!currentWorkspace || !system || selectedSystem.value?.id !== systemId) return
+    if (intendedOrbitId && !system.orbits.some(orbit => orbit.id === intendedOrbitId)) return
 
     try {
-      const orbitId = dropPoint
-        ? dropOrbitId ?? undefined
-        : selectedOrbitId.value ?? undefined
-      let object = createSystemObject(system, subtype, orbitId)
-      if (dropPoint && !orbitId) {
+      let object = createSystemObject(system, subtype, intendedOrbitId)
+      if (dropPoint && !intendedOrbitId) {
         if (!Number.isFinite(dropPoint.x) || !Number.isFinite(dropPoint.y)) {
           throw new Error('The dropped map position must contain finite coordinates.')
         }
@@ -466,7 +477,7 @@ export function useMapWorkflows({
         ...system,
         objects: [...system.objects, object],
       })
-      if (dropPoint && orbitId && dropAngle !== null && dropAngle !== undefined) {
+      if (dropPoint && intendedOrbitId && dropAngle !== null && dropAngle !== undefined) {
         if (!Number.isFinite(dropAngle)) {
           throw new Error('An orbital angle must be finite.')
         }
@@ -502,8 +513,12 @@ export function useMapWorkflows({
     hostId: string | null = selectedObject.value?.id ?? null,
     dropPoint?: Point,
   ): Promise<void> {
-    const system = selectedSystem.value
-    if (!system || !confirmDiscardInspectorEdits()) return
+    const systemId = selectedSystem.value?.id
+    if (!systemId || !await resolveTransition({ leaveChart: false })) return
+    const latestWorkspace = workspace.value
+    const system = latestWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!system || selectedSystem.value?.id !== systemId) return
+    if (hostId !== null && !system.objects.some(object => object.id === hostId)) return
 
     try {
       const orbit = createOrbit(system, hostId)

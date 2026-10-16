@@ -15,10 +15,10 @@
       This browser keeps the last valid workspace snapshot as a backup when one is available.
     </p>
     <div class="flex flex-wrap gap-2">
-      <button class="secondary-button" type="button" @click="emit('retry')">
+      <button class="secondary-button workspace-launch-control launch-action" type="button" @click="emit('retry')">
         Try again
       </button>
-      <button class="secondary-button" type="button" @click="emit('restore-backup')">
+      <button class="secondary-button workspace-launch-control launch-action" type="button" @click="emit('restore-backup')">
         Restore last valid backup
       </button>
     </div>
@@ -43,6 +43,7 @@
         <label for="cluster-name">Jump Cluster</label>
         <input
           id="cluster-name"
+          class="workspace-launch-control"
           v-model="clusterName"
           name="clusterName"
           autocomplete="off"
@@ -52,6 +53,7 @@
         <label for="system-name">First star system</label>
         <input
           id="system-name"
+          class="workspace-launch-control"
           v-model="systemName"
           name="systemName"
           autocomplete="off"
@@ -59,7 +61,7 @@
           required
         >
         <p v-if="formError" class="feedback m-0 error-text" role="alert">{{ formError }}</p>
-        <button class="primary-button mt-[0.65rem]" type="submit">
+        <button class="primary-button launch-action mt-[0.65rem]" type="submit">
           {{ saveState === 'saving' ? 'Saving...' : 'Create local workspace' }}
           <span aria-hidden="true">-&gt;</span>
         </button>
@@ -96,3 +98,20 @@ const emit = defineEmits<{
   submit: []
 }>()
 </script>
+
+<style scoped>
+.workspace-launch-control,
+.workspace-launch-control:hover:not(:disabled) {
+  border-color: var(--text-quiet);
+}
+
+.launch-action {
+  scroll-margin-block: 0.75rem;
+}
+
+@media (max-height: 450px) {
+  .error-panel {
+    padding-block: 1rem;
+  }
+}
+</style>

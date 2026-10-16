@@ -1,8 +1,26 @@
 import { expect } from '@playwright/test'
 
+/** Returns the visible page-level or compact-panel workspace feedback owner. */
+export function activeWorkspaceFeedback(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.locator('.workspace-feedback:not([inert]), .workspace-compact-recovery')
+}
+
 export type WorldPoint = { x: number; y: number }
 
 export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+
+/** Captures real map export blobs so assertions can inspect their serialized contents. */
+export async function captureMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+}
 
 export type ExportedObject = {
   id: string
@@ -78,6 +96,7 @@ export async function beginDragToWorldPoint(
   source: import('@playwright/test').Locator,
   point: WorldPoint,
 ): Promise<void> {
+  await setWorkspaceMapMode(page, 'Move')
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
 
@@ -101,6 +120,9 @@ export async function dragHtmlElementToWorldPoint(
   point: WorldPoint,
   duringDrag?: () => Promise<void>,
 ): Promise<void> {
+  if (!(await source.isVisible())) {
+    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  }
   await source.scrollIntoViewIfNeeded()
   await map.scrollIntoViewIfNeeded()
   const sourceBounds = await source.boundingBox()
@@ -130,6 +152,7 @@ export async function dragOrbitToWorldPoint(
   point: WorldPoint,
   startAngle = 0,
 ): Promise<void> {
+  await setWorkspaceMapMode(page, 'Move')
   await orbit.scrollIntoViewIfNeeded()
   const coordinates = await orbit.evaluate((element, target) => {
     const shape = element as SVGCircleElement | SVGEllipseElement
@@ -175,6 +198,7 @@ export async function dragBy(
   source: import('@playwright/test').Locator,
   delta: WorldPoint,
 ): Promise<void> {
+  await setWorkspaceMapMode(page, 'Move')
   await source.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
@@ -191,9 +215,63 @@ export async function setHeaderMapActionsOpen(
   page: import('@playwright/test').Page,
   open: boolean,
 ): Promise<void> {
-  const toggle = page.locator('.header-map-actions-toggle')
+  const toggle = page.getByRole('button', { name: /^(Open|Close) map file actions for / })
   const isOpen = await toggle.getAttribute('aria-expanded') === 'true'
   if (isOpen !== open) await toggle.click()
+}
+
+/** Finds the single shared map toolbar and its visible zoom readout. */
+export function workspaceNavigation(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('toolbar', { name: 'Workspace navigation' })
+}
+
+export function workspaceZoomOutput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return workspaceNavigation(page).locator('output')
+}
+
+/** Selects a map interaction mode through the shared Dock before a map gesture. */
+export async function setWorkspaceMapMode(
+  page: import('@playwright/test').Page,
+  mode: 'Navigate' | 'Select' | 'Move',
+): Promise<void> {
+  const button = workspaceNavigation(page).getByRole('button', { name: mode, exact: true })
+  if (await button.getAttribute('aria-pressed') !== 'true') await button.click()
+}
+
+/** Returns to the cluster through the real compact-context Back control. */
+export async function returnToClusterMap(page: import('@playwright/test').Page): Promise<void> {
+  const back = page.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  if (await back.count()) {
+    await back.click()
+    return
+  }
+
+  const hierarchyBack = page.locator('#workspace-hierarchy-panel')
+    .getByRole('button', { name: 'Cluster map', exact: true })
+  if (await hierarchyBack.isVisible()) await hierarchyBack.click()
+}
+
+/** Reveals the Dock's legacy action popover only when its requested command is not already visible. */
+export async function dockAction(
+  page: import('@playwright/test').Page,
+  name: string,
+): Promise<import('@playwright/test').Locator> {
+  const action = page.getByRole('button', { name, exact: true })
+  if (!(await action.isVisible())) {
+    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  }
+  return action
+}
+
+export async function clickDockAction(
+  page: import('@playwright/test').Page,
+  name: string,
+): Promise<void> {
+  await (await dockAction(page, name)).click()
+}
+
+export function jsonMapImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByLabel('Import map JSON')
 }
 
 export async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
@@ -384,6 +462,7 @@ export async function setJsonFile(
   name: string,
   content: string,
 ): Promise<void> {
+  await setHeaderMapActionsOpen(input.page(), true)
   await input.evaluate((element, file) => {
     const input = element as HTMLInputElement
     const transfer = new DataTransfer()
@@ -433,10 +512,13 @@ export async function selectCatalogueObjectButton(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
 ): Promise<import('@playwright/test').Locator> {
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  if (!(await palette.isVisible())) {
+    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  }
   const label = subtype.split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
-  const palette = page.getByRole('region', { name: 'Object palette' })
   const category = objectPaletteCategoryBySubtype[subtype]
   await palette.getByRole('group', { name: 'Object categories' })
     .getByRole('button', { name: category, exact: true })

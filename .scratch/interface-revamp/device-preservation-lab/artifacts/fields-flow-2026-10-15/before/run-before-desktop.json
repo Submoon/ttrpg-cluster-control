@@ -1,0 +1,80 @@
+{
+  "viewport": {
+    "name": "desktop",
+    "width": 1440,
+    "height": 900,
+    "isMobile": false,
+    "hasTouch": false,
+    "deviceScaleFactor": 1
+  },
+  "runtime": "Local Nuxt dev in isolated preview-build on localhost:3139",
+  "actualInput": [
+    "Clicked the visible Hide inspector control",
+    "Clicked the visible Open field definitions control"
+  ],
+  "state": {
+    "title": "Field definitions",
+    "dialogOpen": true,
+    "dialogRect": {
+      "x": 240,
+      "y": 137.0625,
+      "right": 1200,
+      "bottom": 762.921875,
+      "width": 960,
+      "height": 625.859375,
+      "display": "block",
+      "visibility": "visible",
+      "overflowY": "auto"
+    },
+    "listRect": {
+      "x": 266,
+      "y": 297.25,
+      "right": 568.65625,
+      "bottom": 736.921875,
+      "width": 302.65625,
+      "height": 439.671875,
+      "display": "grid",
+      "visibility": "visible",
+      "overflowY": "visible"
+    },
+    "editorRect": {
+      "x": 568.65625,
+      "y": 297.25,
+      "right": 1174,
+      "bottom": 736.921875,
+      "width": 605.34375,
+      "height": 439.671875,
+      "display": "grid",
+      "visibility": "visible",
+      "overflowY": "visible"
+    },
+    "definitionChoices": [
+      {
+        "label": "AtmosphereNative / single-select",
+        "selected": true
+      },
+      {
+        "label": "Port classNative / single-select",
+        "selected": false
+      },
+      {
+        "label": "Signal strengthCustom / single-selectAll catalogue objects",
+        "selected": false
+      },
+      {
+        "label": "Threat indexCustom / numberAll catalogue objects",
+        "selected": false
+      },
+      {
+        "label": "Session noteCustom / textAll catalogue objects",
+        "selected": false
+      }
+    ],
+    "createButton": "New custom field",
+    "editButtonVisible": true,
+    "bodyScrollHeight": 900,
+    "viewportHeight": 900
+  },
+  "pageErrors": [],
+  "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\fields-flow-2026-10-15\\before\\fields-before-desktop-1440x900.png"
+}

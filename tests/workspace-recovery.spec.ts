@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { activeWorkspaceFeedback } from './helpers'
+import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
@@ -19,8 +21,11 @@ type StoredWorkspace = {
 
 type WorkspaceRecordKey = 'current' | 'last-valid'
 
-async function readCurrentWorkspace(page: import('@playwright/test').Page): Promise<unknown> {
-  return page.evaluate(async () => {
+async function readWorkspaceRecord(
+  page: import('@playwright/test').Page,
+  key: WorkspaceRecordKey,
+): Promise<unknown> {
+  return page.evaluate(async (recordKey) => {
     const request = indexedDB.open('ttrpg-cluster-control', 1)
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
@@ -30,14 +35,18 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
     try {
       return await new Promise<unknown>((resolve, reject) => {
         const transaction = database.transaction('workspace', 'readonly')
-        const read = transaction.objectStore('workspace').get('current')
+        const read = transaction.objectStore('workspace').get(recordKey)
         read.onsuccess = () => resolve(read.result)
-        read.onerror = () => reject(read.error ?? new Error('Could not read the current workspace.'))
+        read.onerror = () => reject(read.error ?? new Error('Could not read the workspace record.'))
       })
     } finally {
       database.close()
     }
-  })
+  }, key)
+}
+
+async function readCurrentWorkspace(page: import('@playwright/test').Page): Promise<unknown> {
+  return readWorkspaceRecord(page, 'current')
 }
 
 async function overwriteWorkspaceRecord(
@@ -96,7 +105,7 @@ test('an attached Orbit with undersized imported radii is rejected without losin
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const workspace = await readCurrentWorkspace(page) as StoredWorkspace
   const sourceSystem = workspace.cluster.systems[0]
@@ -121,12 +130,12 @@ test('an attached Orbit with undersized imported radii is rejected without losin
       objectAngles: {},
     },
   }
-  const input = page.getByLabel('JSON map file')
+  const input = jsonMapImportInput(page)
   await setJsonFile(input, 'small-orbit.json', JSON.stringify(map))
 
   await expect(page.getByRole('alert')).toContainText('Choose a valid version 1')
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Vesper', level: 1 })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
   const unchanged = await readCurrentWorkspace(page) as StoredWorkspace
   expect(unchanged.cluster.systems.map(system => system.name)).toEqual(['Vesper'])
 
@@ -158,14 +167,15 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details' }).click()
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  await inspector.getByLabel('Jump Cluster').fill('Current Reach')
-  await inspector.getByRole('button', { name: 'Save chart names' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
+  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await page.reload()
@@ -175,14 +185,125 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeVisible()
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Vesper', level: 1 })).toBeVisible()
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Vesper', level: 1 })).toBeVisible()
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
+})
+
+test('a failed backup restore stays unavailable and preserves both records until a retry succeeds', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+
+  const backupBefore = await readWorkspaceRecord(page, 'last-valid')
+  await overwriteWorkspaceRecord(page, 'current', { damaged: true })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
+
+  await page.evaluate(() => {
+    const transactionPrototype = IDBTransaction.prototype
+    const storePrototype = IDBObjectStore.prototype
+    const originalAddEventListener = transactionPrototype.addEventListener
+    const originalPut = storePrototype.put
+    const hooks = window as typeof window & {
+      __restoreFaultHooks?: {
+        originalAddEventListener: typeof originalAddEventListener
+        originalPut: typeof originalPut
+        pending: Array<() => void>
+        released: boolean
+      }
+    }
+
+    hooks.__restoreFaultHooks = { originalAddEventListener, originalPut, pending: [], released: false }
+    transactionPrototype.addEventListener = function (
+      this: IDBTransaction,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ): void {
+      if ((type !== 'abort' && type !== 'error') || this.mode !== 'readwrite') {
+        return originalAddEventListener.call(this, type, listener, options)
+      }
+
+      const transaction = this
+      const deferredListener: EventListener = (event) => {
+        const deliver = () => {
+          if (typeof listener === 'function') listener.call(transaction, event)
+          else listener.handleEvent(event)
+        }
+
+        if (hooks.__restoreFaultHooks?.released) deliver()
+        else hooks.__restoreFaultHooks?.pending.push(deliver)
+      }
+      return originalAddEventListener.call(this, type, deferredListener, options)
+    }
+    storePrototype.put = function (value: unknown, key?: IDBValidKey) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'workspace' && key === 'current' && this.transaction.mode === 'readwrite') {
+        this.transaction.abort()
+      }
+      return request
+    }
+  })
+
+  try {
+    await page.getByRole('button', { name: 'Restore last valid backup' }).click()
+    await expect(page.getByRole('heading', { name: "Opening this browser's workspace..." })).toBeVisible()
+    await expect(page.getByLabel('Jump Cluster')).toHaveCount(0)
+    await expect(page.getByLabel('First star system')).toHaveCount(0)
+    await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    await page.waitForFunction(() => {
+      const hooks = window as typeof window & { __restoreFaultHooks?: { pending: Array<unknown> } }
+      return (hooks.__restoreFaultHooks?.pending.length ?? 0) > 0
+    })
+    await page.evaluate(() => {
+      const hooks = window as typeof window & {
+        __restoreFaultHooks?: { pending: Array<() => void>; released: boolean }
+      }
+      if (!hooks.__restoreFaultHooks) return
+
+      hooks.__restoreFaultHooks.released = true
+      for (const release of hooks.__restoreFaultHooks.pending.splice(0)) release()
+    })
+    await expect(page.getByRole('alert')).toContainText(/abort|transaction failed/i, { timeout: 10_000 })
+  } finally {
+    await page.evaluate(() => {
+      const hooks = window as typeof window & {
+        __restoreFaultHooks?: {
+          originalAddEventListener: typeof IDBTransaction.prototype.addEventListener
+          originalPut: typeof IDBObjectStore.prototype.put
+          pending: Array<() => void>
+          released: boolean
+        }
+      }
+      if (!hooks.__restoreFaultHooks) return
+
+      hooks.__restoreFaultHooks.released = true
+      for (const release of hooks.__restoreFaultHooks.pending.splice(0)) release()
+      IDBTransaction.prototype.addEventListener = hooks.__restoreFaultHooks.originalAddEventListener
+      IDBObjectStore.prototype.put = hooks.__restoreFaultHooks.originalPut
+      delete hooks.__restoreFaultHooks
+    })
+  }
+
+  await expect(readCurrentWorkspace(page)).resolves.toEqual({ damaged: true })
+  await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(backupBefore)
+  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
+  await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Restore last valid backup' }).click()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await page.reload()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
 })
 
 test('the recovery screen explains when no local backup is available', async ({ page }) => {
@@ -190,7 +311,7 @@ test('the recovery screen explains when no local backup is available', async ({ 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await deleteWorkspaceRecord(page, 'last-valid')
@@ -207,7 +328,7 @@ test('a failed IndexedDB save preserves current and backup snapshots', async ({ 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const snapshots = await page.evaluate(async (modulePath) => {
     const storage = await import(modulePath) as {
@@ -274,7 +395,7 @@ test('a damaged backup is rejected without replacing the current record', async 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await overwriteWorkspaceRecord(page, 'last-valid', { damaged: true })
@@ -284,4 +405,38 @@ test('a damaged backup is rejected without replacing the current record', async 
   await expect(page.getByRole('alert')).toContainText('local backup has an unsupported or damaged format')
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
   await expect(readCurrentWorkspace(page)).resolves.toEqual({ damaged: true })
+})
+
+test('a temporary IndexedDB opening failure can be retried without exposing a partial workspace', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.addInitScript(() => {
+    const prototype = IDBFactory.prototype
+    const originalOpen = prototype.open
+    let failFirstOpen = true
+
+    prototype.open = function (databaseName: string, version?: number): IDBOpenDBRequest {
+      if (failFirstOpen) {
+        failFirstOpen = false
+        throw new DOMException('IndexedDB is temporarily unavailable.', 'UnknownError')
+      }
+
+      return originalOpen.call(this, databaseName, version)
+    }
+  })
+  await page.goto('/')
+
+  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('alert')).toContainText('IndexedDB is temporarily unavailable.')
+  await expect(page.getByLabel('Jump Cluster')).toHaveCount(0)
+  await expect(page.getByLabel('First star system')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByLabel('Jump Cluster')).toBeVisible({ timeout: 30_000 })
+  await page.getByLabel('Jump Cluster').fill('Liminal Reach')
+  await page.getByLabel('First star system').fill('Aster')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Aster')
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 })

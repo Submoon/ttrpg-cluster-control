@@ -1,0 +1,1639 @@
+{
+  "baseUrl": "http://127.0.0.1:3131/",
+  "buildLabel": "Final production build after targeted Dock Map files two-column fix; source from shared working tree HEAD 19755c750560723429555a9a92c55a554dbd6360 plus uncommitted changes",
+  "buildRoot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\preview-build",
+  "browser": "Chrome via Playwright/CDP",
+  "note": "Viewport-emulated browser evidence; synthetic two-contact CDP gestures are not a physical-device check.",
+  "results": [
+    {
+      "controls": "groups",
+      "viewport": "390x844",
+      "evidence": {
+        "geometry": {
+          "buttons": [
+            {
+              "label": "Switch to light theme",
+              "rect": {
+                "x": 13.78125,
+                "y": 42.890625,
+                "right": 77.390625,
+                "bottom": 77.28125,
+                "width": 63.609375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Switch to light theme",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open field definitions",
+              "rect": {
+                "x": 332,
+                "y": 42.890625,
+                "right": 376.21875,
+                "bottom": 77.28125,
+                "width": 44.21875,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open field definitions",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Navigate: pan the view or open a system",
+              "rect": {
+                "x": 13,
+                "y": 754.703125,
+                "right": 133.265625,
+                "bottom": 796.296875,
+                "width": 120.265625,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Navigate: pan the view or open a system",
+              "hitPath": [
+                "B",
+                "BUTTON.is-active rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Select: tap a map item to inspect it",
+              "rect": {
+                "x": 134.859375,
+                "y": 754.703125,
+                "right": 255.125,
+                "bottom": 796.296875,
+                "width": 120.265625,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Select: tap a map item to inspect it",
+              "hitPath": [
+                "B",
+                "BUTTON.rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Move: drag existing map geometry",
+              "rect": {
+                "x": 256.71875,
+                "y": 754.703125,
+                "right": 377,
+                "bottom": 796.296875,
+                "width": 120.28125,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Move: drag existing map geometry",
+              "hitPath": [
+                "B",
+                "BUTTON.rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Choose an item to add to the map",
+              "rect": {
+                "x": 13,
+                "y": 797.890625,
+                "right": 133.265625,
+                "bottom": 839.484375,
+                "width": 120.265625,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Choose an item to add to the map",
+              "hitPath": [
+                "B",
+                "BUTTON.rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Show map hierarchy",
+              "rect": {
+                "x": 134.859375,
+                "y": 797.890625,
+                "right": 255.125,
+                "bottom": 839.484375,
+                "width": 120.265625,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Show map hierarchy",
+              "hitPath": [
+                "B",
+                "BUTTON.rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open Inspect panel",
+              "rect": {
+                "x": 256.71875,
+                "y": 797.890625,
+                "right": 377,
+                "bottom": 839.484375,
+                "width": 120.28125,
+                "height": 41.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open Inspect panel",
+              "hitPath": [
+                "B",
+                "BUTTON.rail-button",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Import map…",
+              "rect": {
+                "x": 16.1875,
+                "y": 142.84375,
+                "right": 193.5625,
+                "bottom": 177.234375,
+                "width": 177.375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Import map…",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Export image · PNG",
+              "rect": {
+                "x": 196.4375,
+                "y": 142.84375,
+                "right": 373.8125,
+                "bottom": 177.234375,
+                "width": 177.375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Export image · PNG",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Export vector · SVG",
+              "rect": {
+                "x": 16.1875,
+                "y": 180.109375,
+                "right": 193.5625,
+                "bottom": 214.5,
+                "width": 177.375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Export vector · SVG",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Share preview link",
+              "rect": {
+                "x": 196.4375,
+                "y": 180.109375,
+                "right": 373.8125,
+                "bottom": 214.5,
+                "width": 177.375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Share preview link",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Zoom out",
+              "rect": {
+                "x": 283.140625,
+                "y": 655.34375,
+                "right": 313.53125,
+                "bottom": 684.9375,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom out",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Fit map",
+              "rect": {
+                "x": 315.4375,
+                "y": 655.34375,
+                "right": 345.828125,
+                "bottom": 684.9375,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Fit map",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Zoom in",
+              "rect": {
+                "x": 347.734375,
+                "y": 655.34375,
+                "right": 378.125,
+                "bottom": 684.9375,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom in",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            }
+          ],
+          "groups": {
+            "header": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "width": 377.21875,
+              "height": 76.6875
+            },
+            "hud": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "right": 382.8125,
+              "bottom": 221.890625,
+              "width": 375.625,
+              "height": 123.5
+            },
+            "rail": {
+              "x": 8,
+              "y": 749.703125,
+              "right": 382,
+              "bottom": 844,
+              "width": 374,
+              "height": 94.296875
+            },
+            "dock": null,
+            "zoom": {
+              "x": 279.265625,
+              "y": 651.46875,
+              "right": 382,
+              "bottom": 688.8125,
+              "width": 102.734375,
+              "height": 37.34375
+            },
+            "panels": [],
+            "modeCount": 3,
+            "duplicateZoom": 0,
+            "headerHudOverlap": false,
+            "zoomControlOverlap": false,
+            "hitIssues": []
+          }
+        },
+        "toastClearance": {
+          "layout": {
+            "toast": {
+              "x": 8,
+              "y": 245.60000610351562,
+              "right": 382,
+              "bottom": 301.5687561035156,
+              "width": 374,
+              "height": 55.96875
+            },
+            "header": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "width": 377.21875,
+              "height": 76.6875
+            },
+            "hud": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "right": 382.8125,
+              "bottom": 221.890625,
+              "width": 375.625,
+              "height": 123.5
+            },
+            "addStatus": null,
+            "rail": {
+              "x": 8,
+              "y": 749.703125,
+              "right": 382,
+              "bottom": 844,
+              "width": 374,
+              "height": 94.296875
+            },
+            "dock": null,
+            "zoom": {
+              "x": 279.265625,
+              "y": 651.46875,
+              "right": 382,
+              "bottom": 688.8125,
+              "width": 102.734375,
+              "height": 37.34375
+            }
+          },
+          "hitTestedButtons": 15
+        }
+      },
+      "errors": []
+    },
+    {
+      "controls": "groups",
+      "viewport": "844x390",
+      "evidence": {
+        "geometry": {
+          "buttons": [
+            {
+              "label": "Switch to light theme",
+              "rect": {
+                "x": 407.015625,
+                "y": 49.296875,
+                "right": 479.765625,
+                "bottom": 87.6875,
+                "width": 72.75,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Switch to light theme",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open field definitions",
+              "rect": {
+                "x": 763.53125,
+                "y": 49.296875,
+                "right": 815.8125,
+                "bottom": 87.6875,
+                "width": 52.28125,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open field definitions",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Navigate: pan the view or open a system",
+              "rect": {
+                "x": 15.71875,
+                "y": 342.296875,
+                "right": 95.71875,
+                "bottom": 385.484375,
+                "width": 80,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Navigate: pan the view or open a system",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.is-active rail-button",
+                "DIV.control-group control-group--modes",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Select: tap a map item to inspect it",
+              "rect": {
+                "x": 96.984375,
+                "y": 342.296875,
+                "right": 176.984375,
+                "bottom": 385.484375,
+                "width": 80,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Select: tap a map item to inspect it",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.rail-button",
+                "DIV.control-group control-group--modes",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Move: drag existing map geometry",
+              "rect": {
+                "x": 178.25,
+                "y": 342.296875,
+                "right": 258.25,
+                "bottom": 385.484375,
+                "width": 80,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Move: drag existing map geometry",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.rail-button",
+                "DIV.control-group control-group--modes",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Choose an item to add to the map",
+              "rect": {
+                "x": 264.328125,
+                "y": 342.296875,
+                "right": 344.328125,
+                "bottom": 385.484375,
+                "width": 80,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Choose an item to add to the map",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.rail-button",
+                "DIV.control-group control-group--create",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Show map hierarchy",
+              "rect": {
+                "x": 350.40625,
+                "y": 342.296875,
+                "right": 445.71875,
+                "bottom": 385.484375,
+                "width": 95.3125,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Show map hierarchy",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.rail-button",
+                "DIV.control-group control-group--panels",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Open Inspect panel",
+              "rect": {
+                "x": 446.984375,
+                "y": 342.296875,
+                "right": 526.984375,
+                "bottom": 385.484375,
+                "width": 80,
+                "height": 43.1875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open Inspect panel",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.rail-button",
+                "DIV.control-group control-group--panels",
+                "NAV.b-tool-rail",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Import map…",
+              "rect": {
+                "x": 372.78125,
+                "y": 122.375,
+                "right": 459.984375,
+                "bottom": 158.375,
+                "width": 87.203125,
+                "height": 36
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Import map…",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "rect.cluster-system-card",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Export image · PNG",
+              "rect": {
+                "x": 463.984375,
+                "y": 122.375,
+                "right": 581.484375,
+                "bottom": 158.375,
+                "width": 117.5,
+                "height": 36
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Export image · PNG",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Export vector · SVG",
+              "rect": {
+                "x": 585.484375,
+                "y": 122.375,
+                "right": 701.046875,
+                "bottom": 158.375,
+                "width": 115.5625,
+                "height": 36
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Export vector · SVG",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Share preview link",
+              "rect": {
+                "x": 705.046875,
+                "y": 122.375,
+                "right": 815.8125,
+                "bottom": 158.375,
+                "width": 110.765625,
+                "height": 36
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Share preview link",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-file-actions",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Zoom out",
+              "rect": {
+                "x": 717.4375,
+                "y": 197.8125,
+                "right": 752.625,
+                "bottom": 229.8125,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom out",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Fit map",
+              "rect": {
+                "x": 756.625,
+                "y": 197.8125,
+                "right": 791.8125,
+                "bottom": 229.8125,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Fit map",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Zoom in",
+              "rect": {
+                "x": 795.8125,
+                "y": 197.8125,
+                "right": 831,
+                "bottom": 229.8125,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom in",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            }
+          ],
+          "groups": {
+            "header": {
+              "x": 16,
+              "y": 5.59375,
+              "right": 828,
+              "bottom": 95.875,
+              "width": 812,
+              "height": 90.28125
+            },
+            "hud": {
+              "x": 16,
+              "y": 112,
+              "right": 828,
+              "bottom": 168.75,
+              "width": 812,
+              "height": 56.75
+            },
+            "rail": {
+              "x": 8,
+              "y": 332.5,
+              "right": 836,
+              "bottom": 390,
+              "width": 828,
+              "height": 57.5
+            },
+            "dock": null,
+            "zoom": {
+              "x": 712.4375,
+              "y": 192.8125,
+              "right": 836,
+              "bottom": 234.8125,
+              "width": 123.5625,
+              "height": 42
+            },
+            "panels": [],
+            "modeCount": 3,
+            "duplicateZoom": 0,
+            "headerHudOverlap": false,
+            "zoomControlOverlap": false,
+            "hitIssues": []
+          }
+        },
+        "toastClearance": {
+          "layout": {
+            "toast": {
+              "x": 8,
+              "y": 179.99063110351562,
+              "right": 392,
+              "bottom": 235.95938110351562,
+              "width": 384,
+              "height": 55.96875
+            },
+            "header": {
+              "x": 16,
+              "y": 5.59375,
+              "right": 828,
+              "bottom": 95.875,
+              "width": 812,
+              "height": 90.28125
+            },
+            "hud": {
+              "x": 16,
+              "y": 112,
+              "right": 828,
+              "bottom": 168.75,
+              "width": 812,
+              "height": 56.75
+            },
+            "addStatus": null,
+            "rail": {
+              "x": 8,
+              "y": 332.5,
+              "right": 836,
+              "bottom": 390,
+              "width": 828,
+              "height": 57.5
+            },
+            "dock": null,
+            "zoom": {
+              "x": 712.4375,
+              "y": 192.8125,
+              "right": 836,
+              "bottom": 234.8125,
+              "width": 123.5625,
+              "height": 42
+            }
+          },
+          "hitTestedButtons": 15
+        }
+      },
+      "errors": []
+    },
+    {
+      "controls": "groups",
+      "viewport": "390x844",
+      "evidence": {
+        "selectDragPan": {
+          "beforePan": "translate(0,0) scale(1)",
+          "afterPan": "translate(157.5384521484375,93.5384521484375) scale(1)",
+          "label": "Inspect Vela Reach system details"
+        },
+        "deliberateTapAfterDragOpensInspect": true
+      },
+      "errors": []
+    },
+    {
+      "controls": "dock",
+      "viewport": "390x844",
+      "evidence": {
+        "geometry": {
+          "buttons": [
+            {
+              "label": "Hierarchy",
+              "rect": {
+                "x": 16.375,
+                "y": 45.484375,
+                "right": 81.03125,
+                "bottom": 79.875,
+                "width": 64.65625,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Hierarchy",
+              "hitPath": [
+                "BUTTON.panel-command",
+                "DIV.b-panel-actions",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Inspect",
+              "rect": {
+                "x": 81.828125,
+                "y": 45.484375,
+                "right": 134.703125,
+                "bottom": 79.875,
+                "width": 52.875,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Inspect",
+              "hitPath": [
+                "BUTTON.panel-command",
+                "DIV.b-panel-actions",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Switch to light theme",
+              "rect": {
+                "x": 202.84375,
+                "y": 45.484375,
+                "right": 266.453125,
+                "bottom": 79.875,
+                "width": 63.609375,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Switch to light theme",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open field definitions",
+              "rect": {
+                "x": 332,
+                "y": 45.484375,
+                "right": 376.21875,
+                "bottom": 79.875,
+                "width": 44.21875,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open field definitions",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open map file commands",
+              "rect": {
+                "x": 315.984375,
+                "y": 105.78125,
+                "right": 373.8125,
+                "bottom": 140.171875,
+                "width": 57.828125,
+                "height": 34.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "SUMMARY",
+              "hitPath": [
+                "SUMMARY",
+                "DETAILS.b-files-menu",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Zoom out",
+              "rect": {
+                "x": 283.140625,
+                "y": 701.734375,
+                "right": 313.53125,
+                "bottom": 731.328125,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom out",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Fit map",
+              "rect": {
+                "x": 315.4375,
+                "y": 701.734375,
+                "right": 345.828125,
+                "bottom": 731.328125,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Fit map",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Zoom in",
+              "rect": {
+                "x": 347.734375,
+                "y": 701.734375,
+                "right": 378.125,
+                "bottom": 731.328125,
+                "width": 30.390625,
+                "height": 29.59375
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom in",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Navigate: pan the view or open a system",
+              "rect": {
+                "x": 71.3671875,
+                "y": 787.5,
+                "right": 140.9140625,
+                "bottom": 832.296875,
+                "width": 69.546875,
+                "height": 44.796875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Navigate: pan the view or open a system",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.is-active",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Select: tap a map item to inspect it",
+              "rect": {
+                "x": 141.5390625,
+                "y": 787.5,
+                "right": 196.9765625,
+                "bottom": 832.296875,
+                "width": 55.4375,
+                "height": 44.796875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Select: tap a map item to inspect it",
+              "hitPath": [
+                "SPAN",
+                "BUTTON",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Move: drag existing map geometry",
+              "rect": {
+                "x": 197.6015625,
+                "y": 787.5,
+                "right": 253.2734375,
+                "bottom": 832.296875,
+                "width": 55.671875,
+                "height": 44.796875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Move: drag existing map geometry",
+              "hitPath": [
+                "SPAN",
+                "BUTTON",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Choose an item to add to the map",
+              "rect": {
+                "x": 259.0546875,
+                "y": 787.5,
+                "right": 318.6328125,
+                "bottom": 832.296875,
+                "width": 59.578125,
+                "height": 44.796875
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Choose an item to add to the map",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.dock-add-button",
+                "DIV.dock-create-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            }
+          ],
+          "groups": {
+            "header": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "right": 383.609375,
+              "bottom": 88.265625,
+              "width": 377.21875,
+              "height": 81.875
+            },
+            "hud": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "right": 382.8125,
+              "bottom": 147.5625,
+              "width": 375.625,
+              "height": 49.171875
+            },
+            "rail": null,
+            "dock": {
+              "x": 66.8515625,
+              "y": 782.984375,
+              "right": 323.1484375,
+              "bottom": 836.8125,
+              "width": 256.296875,
+              "height": 53.828125
+            },
+            "zoom": {
+              "x": 279.265625,
+              "y": 697.859375,
+              "right": 382,
+              "bottom": 735.203125,
+              "width": 102.734375,
+              "height": 37.34375
+            },
+            "panels": [
+              "Hierarchy",
+              "Inspect"
+            ],
+            "modeCount": 3,
+            "duplicateZoom": 0,
+            "headerHudOverlap": false,
+            "zoomControlOverlap": false,
+            "hitIssues": []
+          }
+        },
+        "toastClearance": {
+          "layout": {
+            "toast": {
+              "x": 8,
+              "y": 245.60000610351562,
+              "right": 382,
+              "bottom": 301.5687561035156,
+              "width": 374,
+              "height": 55.96875
+            },
+            "header": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "right": 383.609375,
+              "bottom": 88.265625,
+              "width": 377.21875,
+              "height": 81.875
+            },
+            "hud": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "right": 382.8125,
+              "bottom": 147.5625,
+              "width": 375.625,
+              "height": 49.171875
+            },
+            "addStatus": null,
+            "rail": null,
+            "dock": {
+              "x": 66.8515625,
+              "y": 782.984375,
+              "right": 323.1484375,
+              "bottom": 836.8125,
+              "width": 256.296875,
+              "height": 53.828125
+            },
+            "zoom": {
+              "x": 279.265625,
+              "y": 697.859375,
+              "right": 382,
+              "bottom": 735.203125,
+              "width": 102.734375,
+              "height": 37.34375
+            }
+          },
+          "hitTestedButtons": 9
+        }
+      },
+      "errors": []
+    },
+    {
+      "controls": "dock",
+      "viewport": "844x390",
+      "evidence": {
+        "geometry": {
+          "buttons": [
+            {
+              "label": "Hierarchy",
+              "rect": {
+                "x": 267.828125,
+                "y": 53.484375,
+                "right": 341.578125,
+                "bottom": 91.875,
+                "width": 73.75,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Hierarchy",
+              "hitPath": [
+                "BUTTON.panel-command",
+                "DIV.b-panel-actions",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Inspect",
+              "rect": {
+                "x": 344.453125,
+                "y": 53.484375,
+                "right": 405.765625,
+                "bottom": 91.875,
+                "width": 61.3125,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Inspect",
+              "hitPath": [
+                "BUTTON.panel-command",
+                "DIV.b-panel-actions",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Switch to light theme",
+              "rect": {
+                "x": 550.375,
+                "y": 53.484375,
+                "right": 623.125,
+                "bottom": 91.875,
+                "width": 72.75,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Switch to light theme",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open field definitions",
+              "rect": {
+                "x": 763.53125,
+                "y": 53.484375,
+                "right": 815.8125,
+                "bottom": 91.875,
+                "width": 52.28125,
+                "height": 38.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Open field definitions",
+              "hitPath": [
+                "BUTTON.rounded-md font-medium inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75 transition-colors px-2.5 py-1.5 text-xs gap-1.5 ring ring-inset ring-accented text-default bg-default hover:bg-elevated active:bg-elevated disabled:bg-default aria-disabled:bg-default outline-inverted/25 focus-visible:outline-3 focus-visible:ring-inverted",
+                "DIV.b-command-actions",
+                "HEADER.b-commandbar",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Open map file commands",
+              "rect": {
+                "x": 750.953125,
+                "y": 122.375,
+                "right": 815.8125,
+                "bottom": 158.375,
+                "width": 64.859375,
+                "height": 36
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "SUMMARY",
+              "hitPath": [
+                "SUMMARY",
+                "DETAILS.b-files-menu",
+                "DIV.b-map-hud",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col"
+              ]
+            },
+            {
+              "label": "Zoom out",
+              "rect": {
+                "x": 717.4375,
+                "y": 286.609375,
+                "right": 752.625,
+                "bottom": 318.609375,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom out",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Fit map",
+              "rect": {
+                "x": 756.625,
+                "y": 286.609375,
+                "right": 791.8125,
+                "bottom": 318.609375,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Fit map",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Zoom in",
+              "rect": {
+                "x": 795.8125,
+                "y": 286.609375,
+                "right": 831,
+                "bottom": 318.609375,
+                "width": 35.1875,
+                "height": 32
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Zoom in",
+              "hitPath": [
+                "BUTTON",
+                "DIV.b-zoom-controls",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface",
+                "DIV.map-view flex h-full min-h-0 min-w-0 flex-1 flex-col",
+                "DIV.prototype-map-canvas"
+              ]
+            },
+            {
+              "label": "Navigate: pan the view or open a system",
+              "rect": {
+                "x": 266.6015625,
+                "y": 269.828125,
+                "right": 346.9765625,
+                "bottom": 312.21875,
+                "width": 80.375,
+                "height": 42.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Navigate: pan the view or open a system",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.is-active",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Select: tap a map item to inspect it",
+              "rect": {
+                "x": 349.5234375,
+                "y": 269.828125,
+                "right": 414.4609375,
+                "bottom": 312.21875,
+                "width": 64.9375,
+                "height": 42.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Select: tap a map item to inspect it",
+              "hitPath": [
+                "SPAN",
+                "BUTTON",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Move: drag existing map geometry",
+              "rect": {
+                "x": 417.0078125,
+                "y": 269.828125,
+                "right": 482.4140625,
+                "bottom": 312.21875,
+                "width": 65.40625,
+                "height": 42.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Move: drag existing map geometry",
+              "hitPath": [
+                "SPAN",
+                "BUTTON",
+                "DIV.dock-mode-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            },
+            {
+              "label": "Choose an item to add to the map",
+              "rect": {
+                "x": 549.6640625,
+                "y": 269.828125,
+                "right": 619.2890625,
+                "bottom": 312.21875,
+                "width": 69.625,
+                "height": 42.390625
+              },
+              "visible": true,
+              "hit": true,
+              "hitLabel": "Choose an item to add to the map",
+              "hitPath": [
+                "SPAN",
+                "BUTTON.dock-add-button",
+                "DIV.dock-create-group",
+                "DIV.b-control-dock",
+                "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+              ]
+            }
+          ],
+          "groups": {
+            "header": {
+              "x": 16,
+              "y": 5.59375,
+              "right": 828,
+              "bottom": 104.25,
+              "width": 812,
+              "height": 98.65625
+            },
+            "hud": {
+              "x": 16,
+              "y": 112,
+              "right": 828,
+              "bottom": 168.75,
+              "width": 812,
+              "height": 56.75
+            },
+            "rail": null,
+            "dock": {
+              "x": 218.1171875,
+              "y": 263.234375,
+              "right": 625.8828125,
+              "bottom": 318.8125,
+              "width": 407.765625,
+              "height": 55.578125
+            },
+            "zoom": {
+              "x": 712.4375,
+              "y": 281.609375,
+              "right": 836,
+              "bottom": 323.609375,
+              "width": 123.5625,
+              "height": 42
+            },
+            "panels": [
+              "Hierarchy",
+              "Inspect"
+            ],
+            "modeCount": 3,
+            "duplicateZoom": 0,
+            "headerHudOverlap": false,
+            "zoomControlOverlap": false,
+            "hitIssues": []
+          }
+        },
+        "toastClearance": {
+          "layout": {
+            "toast": {
+              "x": 8,
+              "y": 179.99063110351562,
+              "right": 392,
+              "bottom": 235.95938110351562,
+              "width": 384,
+              "height": 55.96875
+            },
+            "header": {
+              "x": 16,
+              "y": 5.59375,
+              "right": 828,
+              "bottom": 104.25,
+              "width": 812,
+              "height": 98.65625
+            },
+            "hud": {
+              "x": 16,
+              "y": 112,
+              "right": 828,
+              "bottom": 168.75,
+              "width": 812,
+              "height": 56.75
+            },
+            "addStatus": null,
+            "rail": null,
+            "dock": {
+              "x": 218.1171875,
+              "y": 263.234375,
+              "right": 625.8828125,
+              "bottom": 318.8125,
+              "width": 407.765625,
+              "height": 55.578125
+            },
+            "zoom": {
+              "x": 712.4375,
+              "y": 281.609375,
+              "right": 836,
+              "bottom": 323.609375,
+              "width": 123.5625,
+              "height": 42
+            }
+          },
+          "hitTestedButtons": 9
+        }
+      },
+      "errors": []
+    },
+    {
+      "controls": "dock",
+      "viewport": "390x844",
+      "evidence": {
+        "selectDragPan": {
+          "beforePan": "translate(0,0) scale(1)",
+          "afterPan": "translate(157.5384521484375,93.5384521484375) scale(1)",
+          "label": "Inspect Vela Reach system details"
+        },
+        "deliberateTapAfterDragOpensInspect": true
+      },
+      "errors": []
+    },
+    {
+      "controls": "groups",
+      "viewport": "390x844",
+      "evidence": {
+        "invalidTargetFeedback": "Add System\nStar system added. The Jump Cluster stays open and Add System remains active.\nAdd star system: choose open space in the Jump Cluster. Each placement leaves the cluster open and Add System ready.\nQuit Add · Esc",
+        "systemCountBefore": 3,
+        "systemCountAfter": 5,
+        "firstEmpty": {
+          "x": 39,
+          "y": 422,
+          "xPart": 0.1,
+          "yPart": 0.5,
+          "hit": "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+        },
+        "secondEmpty": {
+          "x": 167.7,
+          "y": 422,
+          "xPart": 0.43,
+          "yPart": 0.5,
+          "hit": "svg.cluster-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+        },
+        "addStatus": "Add System\nStar system added. The Jump Cluster stays open and Add System remains active.\nAdd star system: choose open space in the Jump Cluster. Each placement leaves the cluster open and Add System ready.\nQuit Add · Esc"
+      },
+      "errors": []
+    },
+    {
+      "controls": "dock",
+      "viewport": "390x844",
+      "evidence": {
+        "objectCountBefore": 6,
+        "objectCountAfter": 8,
+        "firstEmpty": {
+          "x": 202.8,
+          "y": 194.12,
+          "xPart": 0.52,
+          "yPart": 0.23,
+          "hit": "svg.system-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+        },
+        "secondEmpty": {
+          "x": 237.9,
+          "y": 194.12,
+          "xPart": 0.61,
+          "yPart": 0.23,
+          "hit": "svg.system-map-svg block h-full min-h-0 w-full flex-1 prototype-touch-surface"
+        },
+        "addStatus": "Add Star\nStar placed. Add Star remains active; select it later to Inspect.\nAdd Star: choose open space or an Orbit. Successful placement keeps this type ready.\nChange mark\nQuit Add · Esc",
+        "addStatusHudOverlap": false
+      },
+      "errors": []
+    },
+    {
+      "controls": "groups",
+      "viewport": "390x844",
+      "evidence": {
+        "originBefore": "Add Jump Route\nOrigin set to Vela Reach · choose a destination system.\nOrigin: Vela Reach · choose a different system with a Jump Point to finish the route.\nQuit Add · Esc",
+        "rightPan": {
+          "before": "translate(0,0) scale(1)",
+          "after": "translate(187.07693481445312,103.38461303710938) scale(1)"
+        },
+        "twoContactPan": {
+          "before": "translate(187.07693481445312,103.38461303710938) scale(1)",
+          "after": "translate(221.03843867058941,-103.48527366519642) scale(2.1796858603942355)"
+        },
+        "routeCount": 4,
+        "escapeClosedFieldsBeforeCancelingAdd": true
+      },
+      "errors": []
+    }
+  ]
+}

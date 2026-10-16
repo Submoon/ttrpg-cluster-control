@@ -1,0 +1,81 @@
+[
+  {
+    "label": "portrait-390x844",
+    "errors": [],
+    "metrics": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "rail": {
+        "top": 790.96875,
+        "bottom": 844,
+        "height": 53.03125
+      },
+      "railPosition": "fixed",
+      "railBottom": "0px",
+      "hasDevSwitcherClass": false,
+      "switcherCount": 0,
+      "childZoomCount": 0,
+      "shellZoomButtons": 3,
+      "inspectControls": 1,
+      "backBox": {
+        "x": 93.140625,
+        "y": 67.390625,
+        "width": 79.8125,
+        "height": 32
+      }
+    }
+  },
+  {
+    "label": "landscape-844x390",
+    "errors": [],
+    "metrics": {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "rail": {
+        "top": 332.5,
+        "bottom": 390,
+        "height": 57.5
+      },
+      "railPosition": "fixed",
+      "railBottom": "0px",
+      "hasDevSwitcherClass": false,
+      "switcherCount": 0,
+      "childZoomCount": 0,
+      "shellZoomButtons": 3,
+      "inspectControls": 1,
+      "backBox": {
+        "x": 199.046875,
+        "y": 81.15625,
+        "width": 79.8125,
+        "height": 32
+      }
+    }
+  },
+  {
+    "label": "desktop-1440x900",
+    "errors": []
+  },
+  {
+    "label": "interaction-checks",
+    "touchTrace": "CDP-dispatched touch events; non-physical",
+    "evidence": {
+      "beforeGestureTransform": "translate(504.96000000000004 280)",
+      "uncommittedPreview": "translate(544.3446435546875 284.9230651855469)",
+      "rolledBackAtSecondContact": "translate(504.96000000000004 280)",
+      "afterGestureTransform": "translate(504.96000000000004 280)",
+      "beforeViewTransform": "translate(0,0) scale(1)",
+      "afterViewTransform": "translate(-590.1415829360333,-312.8910428850186) scale(2.070416721361047)",
+      "beforeSingleTouch": "translate(504.96000000000004 280)",
+      "afterSingleTouch": "translate(531.1160363769532 285.9445495605469)"
+    },
+    "errors": []
+  },
+  {
+    "label": "baseline-390x844",
+    "outcome": "baseline route loaded without B shell"
+  }
+]

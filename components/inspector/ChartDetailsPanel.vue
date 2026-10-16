@@ -14,32 +14,14 @@
     </p>
   </template>
 
-  <form class="field-stack mt-4 grid gap-3" @submit.prevent="emit('submit-names')">
-    <fieldset class="m-0 grid gap-3 border-0 p-0" :disabled="!props.chartNamesEditing || props.saving">
-      <label :for="clusterNameId">Jump Cluster</label>
-      <input :id="clusterNameId" v-model="clusterName" maxlength="80" required>
-      <label :for="systemNameId">Star system</label>
-      <input :id="systemNameId" v-model="systemName" maxlength="80" required>
-    </fieldset>
-    <p v-if="props.formError" class="feedback m-0 error-text" role="alert">{{ props.formError }}</p>
-    <div class="flex flex-wrap gap-2">
-      <button
-        v-if="!props.chartNamesEditing"
-        class="primary-button"
-        type="button"
-        aria-label="Edit chart names"
-        @click="emit('edit-chart-names')"
-      >
-        Edit
-      </button>
-      <button v-else class="primary-button" type="submit" aria-label="Save chart names" :disabled="props.saving">
-        Save
-      </button>
-      <button v-if="props.chartNamesEditing" class="quiet-button" type="button" @click="emit('cancel-chart-names')">
-        Cancel
-      </button>
-    </div>
-  </form>
+  <div class="mt-4 flex flex-wrap items-center gap-2">
+    <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
+      {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+    </UButton>
+    <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
+      Unapplied chart-name changes
+    </span>
+  </div>
 
   <div
     v-if="props.mode === 'cluster' || props.selectedSystem"
@@ -80,25 +62,12 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
-  chartNamesEditing: boolean
-  saving: boolean
-  formError: string
+  hasChartNameDraft: boolean
   editorError?: string
 }>()
 
 const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
 }>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
-const clusterNameId = computed(() =>
-  props.mode === 'cluster' ? 'cluster-detail-name' : 'detail-cluster-name',
-)
-const systemNameId = computed(() =>
-  props.mode === 'cluster' ? 'system-detail-name' : 'detail-system-name',
-)
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 </script>

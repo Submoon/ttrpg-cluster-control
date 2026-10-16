@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-10-16T09:05:16.997Z",
+  "sourceBaselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+  "runtimeRoot": "C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/preview-build",
+  "url": "http://127.0.0.1:3139/?variant=B&controls=dock",
+  "navigationError": "locator.waitFor: Timeout 25900ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.proto-b') to be visible\u001b[22m\n",
+  "panelOpenedThroughVisibleUI": false,
+  "pageErrors": [],
+  "sourceHashes": {
+    "components/PrototypeInspector.vue": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17",
+    "components/PrototypeWorkbench.vue": "0DC9F3C4D887384EEF0ECA39BB5FD2CC8954641895947454EBB794402BB03FA9",
+    "components/prototype-fields-fixture.ts": "4C9D549935AA1E7786AF50BEE96D8EC4A771D464C79B72BE57CE735BF35B00A1",
+    "pages/index.vue": "D18C692CD3AE077E5E5A067FB3255A57D1D1A23012DDC8136A2D922E444AE5F7"
+  },
+  "results": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900,
+      "mobile": false,
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\baseline-desktop.png",
+      "state": {
+        "title": "83% | Building server | Nuxt",
+        "readyState": "complete",
+        "bodyTextStart": "building server · step 6/7 · 35.8s",
+        "inspectorVisible": false,
+        "inspectorRect": null,
+        "inspectorTextStart": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900,
+          "documentHeight": 900
+        }
+      }
+    },
+    {
+      "name": "portrait",
+      "width": 390,
+      "height": 844,
+      "mobile": true,
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\baseline-portrait.png",
+      "state": {
+        "title": "83% | Building server | Nuxt",
+        "readyState": "complete",
+        "bodyTextStart": "building server · step 6/7 · 36.3s",
+        "inspectorVisible": false,
+        "inspectorRect": null,
+        "inspectorTextStart": null,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentHeight": 844
+        }
+      }
+    },
+    {
+      "name": "landscape",
+      "width": 844,
+      "height": 390,
+      "mobile": true,
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\baseline-landscape.png",
+      "state": {
+        "title": "83% | Building server | Nuxt",
+        "readyState": "complete",
+        "bodyTextStart": "building server · step 6/7 · 36.6s",
+        "inspectorVisible": false,
+        "inspectorRect": null,
+        "inspectorTextStart": null,
+        "viewport": {
+          "width": 844,
+          "height": 390,
+          "documentHeight": 390
+        }
+      }
+    },
+    {
+      "name": "keyboard-reduced",
+      "width": 390,
+      "height": 500,
+      "mobile": true,
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\baseline-keyboard-reduced.png",
+      "state": {
+        "title": "83% | Building server | Nuxt",
+        "readyState": "complete",
+        "bodyTextStart": "building server · step 6/7 · 36.8s",
+        "inspectorVisible": false,
+        "inspectorRect": null,
+        "inspectorTextStart": null,
+        "viewport": {
+          "width": 390,
+          "height": 500,
+          "documentHeight": 500
+        }
+      }
+    }
+  ]
+}

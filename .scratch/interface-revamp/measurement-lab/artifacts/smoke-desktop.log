@@ -1,0 +1,19 @@
+RUN baseline desktop 1/1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('svg.cluster-map-svg [data-system-id="sys-vela"]').first()
+
+    at clickToMap (C:\Git\PERSO\ttrpg-cluster-control\.scratch\interface-revamp\measurement-lab\measure.mjs:129:21)
+    at async runOne (C:\Git\PERSO\ttrpg-cluster-control\.scratch\interface-revamp\measurement-lab\measure.mjs:350:27)
+    at async file:///C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/measurement-lab/measure.mjs:504:22 {
+  log: [
+    `  - waiting for locator('svg.cluster-map-svg [data-system-id="sys-vela"]').first()`
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.1

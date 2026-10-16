@@ -1,0 +1,242 @@
+{
+  "browser": "Google Chrome (Playwright controlled)",
+  "candidate": {
+    "dialogSourceSha256": "17F34EA3F2B9D4020A8C0BAE5690B7564F9091D3C69F510A17C8B45E41900F4A",
+    "workbenchSourceSha256": "0DC9F3C4D887384EEF0ECA39BB5FD2CC8954641895947454EBB794402BB03FA9"
+  },
+  "cases": [
+    {
+      "route": "/?variant=B&controls=dock&fieldsActions=footer",
+      "viewport": {
+        "width": 1137,
+        "height": 1244
+      },
+      "openerCount": 1,
+      "geometry": {
+        "role": "dialog",
+        "title": "prototype-fields-title",
+        "fullscreen": false,
+        "rect": {
+          "x": 25.47369384765625,
+          "y": 294.1269836425781,
+          "width": 1086.052734375,
+          "height": 655.74609375,
+          "right": 1111.5264282226562,
+          "bottom": 949.8730773925781
+        },
+        "computed": {
+          "position": "fixed",
+          "top": "622px",
+          "left": "568.5px",
+          "translate": "-50% -50%",
+          "transform": "matrix(0.99821, 0, 0, 0.99821, 0, 0)"
+        },
+        "layout": {
+          "offsetWidth": 1088,
+          "offsetHeight": 657
+        },
+        "centerDelta": {
+          "x": 0.00006103515625,
+          "y": 0.000030517578125
+        },
+        "withinViewport": true,
+        "centeredWithinTwoPixels": true
+      },
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\modal-position-probe-2026-10-16\\artifacts\\production-repro-1137x1244.png",
+      "pageErrors": [],
+      "assertion": "PASS"
+    },
+    {
+      "route": "/?variant=B&controls=dock",
+      "viewport": {
+        "width": 1137,
+        "height": 1244
+      },
+      "footerCount": 1,
+      "headerCount": 0,
+      "listAddCount": 1,
+      "listAddBounds": {
+        "visible": true,
+        "count": 1,
+        "rect": {
+          "x": 46.43446350097656,
+          "y": 892.9759521484375,
+          "width": 115.23123168945312,
+          "height": 35.9356689453125,
+          "right": 161.6656951904297,
+          "bottom": 928.91162109375
+        }
+      },
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\modal-position-probe-2026-10-16\\artifacts\\production-default-footer-1137x1244.png",
+      "action": "Open Fields, add a new field draft, close/reopen it, verify draft retention, then check the detail-page creation command and Back navigation.",
+      "checks": {
+        "draftMarkedModified": true,
+        "draftRetainedAfterClose": true,
+        "detailEditBounds": {
+          "visible": true,
+          "count": 1,
+          "rect": {
+            "x": 170.28125,
+            "y": 923.125,
+            "width": 100.046875,
+            "height": 36,
+            "right": 270.328125,
+            "bottom": 959.125
+          }
+        },
+        "detailNewFieldCount": 1,
+        "detailNewFieldBounds": {
+          "visible": true,
+          "count": 1,
+          "rect": {
+            "x": 45.5,
+            "y": 923.125,
+            "width": 117.59375,
+            "height": 36,
+            "right": 163.09375,
+            "bottom": 959.125
+          }
+        },
+        "backReturnsToList": true,
+        "pageErrors": []
+      },
+      "pageErrors": [],
+      "assertion": "PASS"
+    },
+    {
+      "route": "/?variant=B&controls=dock&fieldsActions=footer",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "openerCount": 1,
+      "geometry": {
+        "role": "dialog",
+        "title": "prototype-fields-title",
+        "fullscreen": true,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 844,
+          "right": 390,
+          "bottom": 844
+        },
+        "computed": {
+          "position": "fixed",
+          "top": "0px",
+          "left": "0px",
+          "translate": "none",
+          "transform": "none"
+        },
+        "layout": {
+          "offsetWidth": 390,
+          "offsetHeight": 844
+        },
+        "centerDelta": {
+          "x": 0,
+          "y": 0
+        },
+        "withinViewport": true,
+        "centeredWithinTwoPixels": true,
+        "fullscreenGeometry": true
+      },
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\modal-position-probe-2026-10-16\\artifacts\\production-390x844.png",
+      "pageErrors": [],
+      "assertion": "PASS",
+      "addCustomFieldBounds": {
+        "visible": true,
+        "count": 1,
+        "rect": {
+          "x": 9.59375,
+          "y": 574.890625,
+          "width": 115.4375,
+          "height": 36,
+          "right": 125.03125,
+          "bottom": 610.890625
+        }
+      },
+      "detailEditBounds": {
+        "visible": true,
+        "count": 1,
+        "rect": {
+          "x": 134.375,
+          "y": 549.046875,
+          "width": 100.046875,
+          "height": 36,
+          "right": 234.421875,
+          "bottom": 585.046875
+        }
+      },
+      "actionsAssertion": "PASS"
+    },
+    {
+      "route": "/?variant=B&controls=dock&fieldsActions=footer",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "openerCount": 1,
+      "geometry": {
+        "role": "dialog",
+        "title": "prototype-fields-title",
+        "fullscreen": true,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 844,
+          "height": 390,
+          "right": 844,
+          "bottom": 390
+        },
+        "computed": {
+          "position": "fixed",
+          "top": "0px",
+          "left": "0px",
+          "translate": "none",
+          "transform": "none"
+        },
+        "layout": {
+          "offsetWidth": 844,
+          "offsetHeight": 390
+        },
+        "centerDelta": {
+          "x": 0,
+          "y": 0
+        },
+        "withinViewport": true,
+        "centeredWithinTwoPixels": true,
+        "fullscreenGeometry": true
+      },
+      "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\modal-position-probe-2026-10-16\\artifacts\\production-844x390.png",
+      "pageErrors": [],
+      "assertion": "PASS",
+      "addCustomFieldBounds": {
+        "visible": true,
+        "count": 1,
+        "rect": {
+          "x": 9.59375,
+          "y": 344.40625,
+          "width": 115.4375,
+          "height": 36,
+          "right": 125.03125,
+          "bottom": 380.40625
+        }
+      },
+      "detailEditBounds": {
+        "visible": true,
+        "count": 1,
+        "rect": {
+          "x": 134.375,
+          "y": 344.40625,
+          "width": 100.046875,
+          "height": 36,
+          "right": 234.421875,
+          "bottom": 380.40625
+        }
+      },
+      "actionsAssertion": "PASS"
+    }
+  ],
+  "failures": []
+}

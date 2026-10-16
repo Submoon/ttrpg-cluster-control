@@ -1,0 +1,1272 @@
+{
+  "preview": "http://127.0.0.1:3131/?variant=B",
+  "note": "Exploratory DOM bounds and temporary-menu hit tests on the final successful production build; transition settling is awaited; not physical-device coverage.",
+  "results": [
+    {
+      "controls": "groups",
+      "viewport": "390x844",
+      "closed": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "hasActiveAdd": false,
+        "header": {
+          "selector": ".b-commandbar",
+          "x": 6.390625,
+          "y": 6.390625,
+          "right": 383.609375,
+          "bottom": 83.078125,
+          "width": 377.21875,
+          "height": 76.6875
+        },
+        "hud": {
+          "selector": ".b-map-hud",
+          "x": 7.1875,
+          "y": 98.390625,
+          "right": 382.8125,
+          "bottom": 221.890625,
+          "width": 375.625,
+          "height": 123.5
+        },
+        "status": null,
+        "rail": {
+          "selector": ".b-tool-rail",
+          "x": 8,
+          "y": 749.703125,
+          "right": 382,
+          "bottom": 844,
+          "width": 374,
+          "height": 94.296875
+        },
+        "dock": null,
+        "zoom": {
+          "selector": ".b-zoom-controls",
+          "x": 279.265625,
+          "y": 651.46875,
+          "right": 382,
+          "bottom": 688.8125,
+          "width": 102.734375,
+          "height": 37.34375
+        },
+        "menu": null,
+        "files": null,
+        "overlaps": {
+          "headerHud": false,
+          "hudStatus": false,
+          "hudCreateMenu": false,
+          "hudFilesMenu": false,
+          "zoomStatus": false,
+          "zoomCreateMenu": false,
+          "zoomFilesMenu": false,
+          "dockFilesMenu": false,
+          "railStatus": false,
+          "dockStatus": false,
+          "railCreateMenu": false,
+          "dockCreateMenu": false
+        },
+        "openAdd": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 6.390625,
+            "y": 6.390625,
+            "right": 383.609375,
+            "bottom": 83.078125,
+            "width": 377.21875,
+            "height": 76.6875
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 7.1875,
+            "y": 98.390625,
+            "right": 382.8125,
+            "bottom": 221.890625,
+            "width": 375.625,
+            "height": 123.5
+          },
+          "status": null,
+          "rail": {
+            "selector": ".b-tool-rail",
+            "x": 8,
+            "y": 749.703125,
+            "right": 382,
+            "bottom": 844,
+            "width": 374,
+            "height": 94.296875
+          },
+          "dock": null,
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 279.265625,
+            "y": 651.46875,
+            "right": 382,
+            "bottom": 688.8125,
+            "width": 102.734375,
+            "height": 37.34375
+          },
+          "menu": {
+            "selector": ".b-create-menu",
+            "x": 8,
+            "y": 233.59375,
+            "right": 382,
+            "bottom": 326.4375,
+            "width": 374,
+            "height": 92.84375
+          },
+          "files": null,
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": false,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "addStatus": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "hasActiveAdd": true,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 6.390625,
+            "y": 6.390625,
+            "right": 383.609375,
+            "bottom": 83.078125,
+            "width": 377.21875,
+            "height": 76.6875
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 7.1875,
+            "y": 98.390625,
+            "right": 382.8125,
+            "bottom": 221.890625,
+            "width": 375.625,
+            "height": 123.5
+          },
+          "status": {
+            "selector": ".b-add-status",
+            "x": 7.1875,
+            "y": 233.59375,
+            "right": 382.8125,
+            "bottom": 356.359375,
+            "width": 375.625,
+            "height": 122.765625
+          },
+          "rail": {
+            "selector": ".b-tool-rail",
+            "x": 8,
+            "y": 749.703125,
+            "right": 382,
+            "bottom": 844,
+            "width": 374,
+            "height": 94.296875
+          },
+          "dock": null,
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 279.265625,
+            "y": 651.46875,
+            "right": 382,
+            "bottom": 688.8125,
+            "width": 102.734375,
+            "height": 37.34375
+          },
+          "menu": null,
+          "files": null,
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": false,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "menuValidation": {
+          "add": {
+            "actions": [
+              {
+                "label": "Add star system",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 13.796875,
+                  "y": 239.390625,
+                  "right": 376.203125,
+                  "bottom": 278.578125,
+                  "width": 362.40625,
+                  "height": 39.1875
+                }
+              },
+              {
+                "label": "Add Jump Route",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 13.796875,
+                  "y": 281.453125,
+                  "right": 376.203125,
+                  "bottom": 320.640625,
+                  "width": 362.40625,
+                  "height": 39.1875
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 9
+          }
+        }
+      }
+    },
+    {
+      "controls": "groups",
+      "viewport": "844x390",
+      "closed": {
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "hasActiveAdd": false,
+        "header": {
+          "selector": ".b-commandbar",
+          "x": 16,
+          "y": 5.59375,
+          "right": 828,
+          "bottom": 95.875,
+          "width": 812,
+          "height": 90.28125
+        },
+        "hud": {
+          "selector": ".b-map-hud",
+          "x": 16,
+          "y": 112,
+          "right": 828,
+          "bottom": 168.75,
+          "width": 812,
+          "height": 56.75
+        },
+        "status": null,
+        "rail": {
+          "selector": ".b-tool-rail",
+          "x": 8,
+          "y": 332.5,
+          "right": 836,
+          "bottom": 390,
+          "width": 828,
+          "height": 57.5
+        },
+        "dock": null,
+        "zoom": {
+          "selector": ".b-zoom-controls",
+          "x": 712.4375,
+          "y": 192.8125,
+          "right": 836,
+          "bottom": 234.8125,
+          "width": 123.5625,
+          "height": 42
+        },
+        "menu": null,
+        "files": null,
+        "overlaps": {
+          "headerHud": false,
+          "hudStatus": false,
+          "hudCreateMenu": false,
+          "hudFilesMenu": false,
+          "zoomStatus": false,
+          "zoomCreateMenu": false,
+          "zoomFilesMenu": false,
+          "dockFilesMenu": false,
+          "railStatus": false,
+          "dockStatus": false,
+          "railCreateMenu": false,
+          "dockCreateMenu": false
+        },
+        "openAdd": {
+          "viewport": {
+            "width": 844,
+            "height": 390
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 16,
+            "y": 5.59375,
+            "right": 828,
+            "bottom": 95.875,
+            "width": 812,
+            "height": 90.28125
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 16,
+            "y": 112,
+            "right": 828,
+            "bottom": 168.75,
+            "width": 812,
+            "height": 56.75
+          },
+          "status": null,
+          "rail": {
+            "selector": ".b-tool-rail",
+            "x": 8,
+            "y": 332.5,
+            "right": 836,
+            "bottom": 390,
+            "width": 828,
+            "height": 57.5
+          },
+          "dock": null,
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 712.4375,
+            "y": 192.8125,
+            "right": 836,
+            "bottom": 234.8125,
+            "width": 123.5625,
+            "height": 42
+          },
+          "menu": {
+            "selector": ".b-create-menu",
+            "x": 139.1875,
+            "y": 172.796875,
+            "right": 347.1875,
+            "bottom": 265.640625,
+            "width": 208,
+            "height": 92.84375
+          },
+          "files": null,
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": false,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "addStatus": {
+          "viewport": {
+            "width": 844,
+            "height": 390
+          },
+          "hasActiveAdd": true,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 16,
+            "y": 5.59375,
+            "right": 828,
+            "bottom": 95.875,
+            "width": 812,
+            "height": 90.28125
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 16,
+            "y": 112,
+            "right": 828,
+            "bottom": 168.75,
+            "width": 812,
+            "height": 56.75
+          },
+          "status": {
+            "selector": ".b-add-status",
+            "x": 16,
+            "y": 172.796875,
+            "right": 700,
+            "bottom": 244.390625,
+            "width": 684,
+            "height": 71.59375
+          },
+          "rail": {
+            "selector": ".b-tool-rail",
+            "x": 8,
+            "y": 332.5,
+            "right": 836,
+            "bottom": 390,
+            "width": 828,
+            "height": 57.5
+          },
+          "dock": null,
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 712.4375,
+            "y": 192.8125,
+            "right": 836,
+            "bottom": 234.8125,
+            "width": 123.5625,
+            "height": 42
+          },
+          "menu": null,
+          "files": null,
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": false,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "menuValidation": {
+          "add": {
+            "actions": [
+              {
+                "label": "Add star system",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 144.984375,
+                  "y": 178.59375,
+                  "right": 341.390625,
+                  "bottom": 217.78125,
+                  "width": 196.40625,
+                  "height": 39.1875
+                }
+              },
+              {
+                "label": "Add Jump Route",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 144.984375,
+                  "y": 220.65625,
+                  "right": 341.390625,
+                  "bottom": 259.84375,
+                  "width": 196.40625,
+                  "height": 39.1875
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 9
+          }
+        }
+      }
+    },
+    {
+      "controls": "dock",
+      "viewport": "390x844",
+      "closed": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "hasActiveAdd": false,
+        "header": {
+          "selector": ".b-commandbar",
+          "x": 6.390625,
+          "y": 6.390625,
+          "right": 383.609375,
+          "bottom": 88.265625,
+          "width": 377.21875,
+          "height": 81.875
+        },
+        "hud": {
+          "selector": ".b-map-hud",
+          "x": 7.1875,
+          "y": 98.390625,
+          "right": 382.8125,
+          "bottom": 147.5625,
+          "width": 375.625,
+          "height": 49.171875
+        },
+        "status": null,
+        "rail": null,
+        "dock": {
+          "selector": ".b-control-dock",
+          "x": 66.8515625,
+          "y": 782.984375,
+          "right": 323.1484375,
+          "bottom": 836.8125,
+          "width": 256.296875,
+          "height": 53.828125
+        },
+        "zoom": {
+          "selector": ".b-zoom-controls",
+          "x": 279.265625,
+          "y": 697.859375,
+          "right": 382,
+          "bottom": 735.203125,
+          "width": 102.734375,
+          "height": 37.34375
+        },
+        "menu": null,
+        "files": {
+          "selector": ".b-files-menu-items",
+          "x": 165.8125,
+          "y": 144.171875,
+          "right": 373.8125,
+          "bottom": 309.328125,
+          "width": 208,
+          "height": 165.15625
+        },
+        "overlaps": {
+          "headerHud": false,
+          "hudStatus": false,
+          "hudCreateMenu": false,
+          "hudFilesMenu": true,
+          "zoomStatus": false,
+          "zoomCreateMenu": false,
+          "zoomFilesMenu": false,
+          "dockFilesMenu": false,
+          "railStatus": false,
+          "dockStatus": false,
+          "railCreateMenu": false,
+          "dockCreateMenu": false
+        },
+        "openFiles": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 6.390625,
+            "y": 6.390625,
+            "right": 383.609375,
+            "bottom": 88.265625,
+            "width": 377.21875,
+            "height": 81.875
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 7.1875,
+            "y": 98.390625,
+            "right": 382.8125,
+            "bottom": 147.5625,
+            "width": 375.625,
+            "height": 49.171875
+          },
+          "status": null,
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 66.8515625,
+            "y": 782.984375,
+            "right": 323.1484375,
+            "bottom": 836.8125,
+            "width": 256.296875,
+            "height": 53.828125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 279.265625,
+            "y": 697.859375,
+            "right": 382,
+            "bottom": 735.203125,
+            "width": 102.734375,
+            "height": 37.34375
+          },
+          "menu": null,
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 165.8125,
+            "y": 144.171875,
+            "right": 373.8125,
+            "bottom": 309.328125,
+            "width": 208,
+            "height": 165.15625
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "openAdd": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 6.390625,
+            "y": 6.390625,
+            "right": 383.609375,
+            "bottom": 88.265625,
+            "width": 377.21875,
+            "height": 81.875
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 7.1875,
+            "y": 98.390625,
+            "right": 382.8125,
+            "bottom": 147.5625,
+            "width": 375.625,
+            "height": 49.171875
+          },
+          "status": null,
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 66.8515625,
+            "y": 782.984375,
+            "right": 323.1484375,
+            "bottom": 836.8125,
+            "width": 256.296875,
+            "height": 53.828125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 279.265625,
+            "y": 697.859375,
+            "right": 382,
+            "bottom": 735.203125,
+            "width": 102.734375,
+            "height": 37.34375
+          },
+          "menu": {
+            "selector": ".b-create-menu",
+            "x": 59,
+            "y": 651.96875,
+            "right": 331,
+            "bottom": 744.8125,
+            "width": 272,
+            "height": 92.84375
+          },
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 165.8125,
+            "y": 144.171875,
+            "right": 373.8125,
+            "bottom": 309.328125,
+            "width": 208,
+            "height": 165.15625
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": true,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "addStatus": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "hasActiveAdd": true,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 6.390625,
+            "y": 6.390625,
+            "right": 383.609375,
+            "bottom": 88.265625,
+            "width": 377.21875,
+            "height": 81.875
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 7.1875,
+            "y": 98.390625,
+            "right": 382.8125,
+            "bottom": 147.5625,
+            "width": 375.625,
+            "height": 49.171875
+          },
+          "status": {
+            "selector": ".b-add-status",
+            "x": -171.8125,
+            "y": 155.1875,
+            "right": 186.1875,
+            "bottom": 774.40625,
+            "width": 358,
+            "height": 619.21875
+          },
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 66.8515625,
+            "y": 782.984375,
+            "right": 323.1484375,
+            "bottom": 836.8125,
+            "width": 256.296875,
+            "height": 53.828125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 279.265625,
+            "y": 697.859375,
+            "right": 382,
+            "bottom": 735.203125,
+            "width": 102.734375,
+            "height": 37.34375
+          },
+          "menu": null,
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 165.8125,
+            "y": 144.171875,
+            "right": 373.8125,
+            "bottom": 309.328125,
+            "width": 208,
+            "height": 165.15625
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "menuValidation": {
+          "files": {
+            "actions": [
+              {
+                "label": "Import map…",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 171.609375,
+                  "y": 149.96875,
+                  "right": 368.015625,
+                  "bottom": 185.96875,
+                  "width": 196.40625,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Export image · PNG",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 171.609375,
+                  "y": 189.15625,
+                  "right": 368.015625,
+                  "bottom": 225.15625,
+                  "width": 196.40625,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Export vector · SVG",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 171.609375,
+                  "y": 228.34375,
+                  "right": 368.015625,
+                  "bottom": 264.34375,
+                  "width": 196.40625,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Share preview link",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 171.609375,
+                  "y": 267.53125,
+                  "right": 368.015625,
+                  "bottom": 303.53125,
+                  "width": 196.40625,
+                  "height": 36
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 7
+          },
+          "add": {
+            "actions": [
+              {
+                "label": "Add star system",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 64.796875,
+                  "y": 657.765625,
+                  "right": 325.203125,
+                  "bottom": 696.953125,
+                  "width": 260.40625,
+                  "height": 39.1875
+                }
+              },
+              {
+                "label": "Add Jump Route",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 64.796875,
+                  "y": 699.828125,
+                  "right": 325.203125,
+                  "bottom": 739.015625,
+                  "width": 260.40625,
+                  "height": 39.1875
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 7
+          }
+        }
+      }
+    },
+    {
+      "controls": "dock",
+      "viewport": "844x390",
+      "closed": {
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "hasActiveAdd": false,
+        "header": {
+          "selector": ".b-commandbar",
+          "x": 16,
+          "y": 5.59375,
+          "right": 828,
+          "bottom": 104.25,
+          "width": 812,
+          "height": 98.65625
+        },
+        "hud": {
+          "selector": ".b-map-hud",
+          "x": 16,
+          "y": 112,
+          "right": 828,
+          "bottom": 168.75,
+          "width": 812,
+          "height": 56.75
+        },
+        "status": null,
+        "rail": null,
+        "dock": {
+          "selector": ".b-control-dock",
+          "x": 218.1171875,
+          "y": 263.234375,
+          "right": 625.8828125,
+          "bottom": 318.8125,
+          "width": 407.765625,
+          "height": 55.578125
+        },
+        "zoom": {
+          "selector": ".b-zoom-controls",
+          "x": 712.4375,
+          "y": 281.609375,
+          "right": 836,
+          "bottom": 323.609375,
+          "width": 123.5625,
+          "height": 42
+        },
+        "menu": null,
+        "files": {
+          "selector": ".b-files-menu-items",
+          "x": 431.8125,
+          "y": 162.375,
+          "right": 815.8125,
+          "bottom": 249.15625,
+          "width": 384,
+          "height": 86.78125
+        },
+        "overlaps": {
+          "headerHud": false,
+          "hudStatus": false,
+          "hudCreateMenu": false,
+          "hudFilesMenu": true,
+          "zoomStatus": false,
+          "zoomCreateMenu": false,
+          "zoomFilesMenu": false,
+          "dockFilesMenu": false,
+          "railStatus": false,
+          "dockStatus": false,
+          "railCreateMenu": false,
+          "dockCreateMenu": false
+        },
+        "openFiles": {
+          "viewport": {
+            "width": 844,
+            "height": 390
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 16,
+            "y": 5.59375,
+            "right": 828,
+            "bottom": 104.25,
+            "width": 812,
+            "height": 98.65625
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 16,
+            "y": 112,
+            "right": 828,
+            "bottom": 168.75,
+            "width": 812,
+            "height": 56.75
+          },
+          "status": null,
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 218.1171875,
+            "y": 263.234375,
+            "right": 625.8828125,
+            "bottom": 318.8125,
+            "width": 407.765625,
+            "height": 55.578125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 712.4375,
+            "y": 281.609375,
+            "right": 836,
+            "bottom": 323.609375,
+            "width": 123.5625,
+            "height": 42
+          },
+          "menu": null,
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 431.8125,
+            "y": 162.375,
+            "right": 815.8125,
+            "bottom": 249.15625,
+            "width": 384,
+            "height": 86.78125
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "openAdd": {
+          "viewport": {
+            "width": 844,
+            "height": 390
+          },
+          "hasActiveAdd": false,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 16,
+            "y": 5.59375,
+            "right": 828,
+            "bottom": 104.25,
+            "width": 812,
+            "height": 98.65625
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 16,
+            "y": 112,
+            "right": 828,
+            "bottom": 168.75,
+            "width": 812,
+            "height": 56.75
+          },
+          "status": null,
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 218.1171875,
+            "y": 263.234375,
+            "right": 625.8828125,
+            "bottom": 318.8125,
+            "width": 407.765625,
+            "height": 55.578125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 712.4375,
+            "y": 281.609375,
+            "right": 836,
+            "bottom": 323.609375,
+            "width": 123.5625,
+            "height": 42
+          },
+          "menu": {
+            "selector": ".b-create-menu",
+            "x": 139.1875,
+            "y": 172.796875,
+            "right": 347.1875,
+            "bottom": 265.640625,
+            "width": 208,
+            "height": 92.84375
+          },
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 431.8125,
+            "y": 162.375,
+            "right": 815.8125,
+            "bottom": 249.15625,
+            "width": 384,
+            "height": 86.78125
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": true
+          }
+        },
+        "addStatus": {
+          "viewport": {
+            "width": 844,
+            "height": 390
+          },
+          "hasActiveAdd": true,
+          "header": {
+            "selector": ".b-commandbar",
+            "x": 16,
+            "y": 5.59375,
+            "right": 828,
+            "bottom": 104.25,
+            "width": 812,
+            "height": 98.65625
+          },
+          "hud": {
+            "selector": ".b-map-hud",
+            "x": 16,
+            "y": 112,
+            "right": 828,
+            "bottom": 168.75,
+            "width": 812,
+            "height": 56.75
+          },
+          "status": {
+            "selector": ".b-add-status",
+            "x": 16,
+            "y": 172.796875,
+            "right": 700,
+            "bottom": 244.390625,
+            "width": 684,
+            "height": 71.59375
+          },
+          "rail": null,
+          "dock": {
+            "selector": ".b-control-dock",
+            "x": 218.1171875,
+            "y": 263.234375,
+            "right": 625.8828125,
+            "bottom": 318.8125,
+            "width": 407.765625,
+            "height": 55.578125
+          },
+          "zoom": {
+            "selector": ".b-zoom-controls",
+            "x": 712.4375,
+            "y": 281.609375,
+            "right": 836,
+            "bottom": 323.609375,
+            "width": 123.5625,
+            "height": 42
+          },
+          "menu": null,
+          "files": {
+            "selector": ".b-files-menu-items",
+            "x": 431.8125,
+            "y": 162.375,
+            "right": 815.8125,
+            "bottom": 249.15625,
+            "width": 384,
+            "height": 86.78125
+          },
+          "overlaps": {
+            "headerHud": false,
+            "hudStatus": false,
+            "hudCreateMenu": false,
+            "hudFilesMenu": true,
+            "zoomStatus": false,
+            "zoomCreateMenu": false,
+            "zoomFilesMenu": false,
+            "dockFilesMenu": false,
+            "railStatus": false,
+            "dockStatus": false,
+            "railCreateMenu": false,
+            "dockCreateMenu": false
+          }
+        },
+        "menuValidation": {
+          "files": {
+            "actions": [
+              {
+                "label": "Import map…",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 437.609375,
+                  "y": 168.171875,
+                  "right": 622.21875,
+                  "bottom": 204.171875,
+                  "width": 184.609375,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Export image · PNG",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 625.40625,
+                  "y": 168.171875,
+                  "right": 810.015625,
+                  "bottom": 204.171875,
+                  "width": 184.609375,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Export vector · SVG",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 437.609375,
+                  "y": 207.359375,
+                  "right": 622.21875,
+                  "bottom": 243.359375,
+                  "width": 184.609375,
+                  "height": 36
+                }
+              },
+              {
+                "label": "Share preview link",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 625.40625,
+                  "y": 207.359375,
+                  "right": 810.015625,
+                  "bottom": 243.359375,
+                  "width": 184.609375,
+                  "height": 36
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 7
+          },
+          "add": {
+            "actions": [
+              {
+                "label": "Add star system",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 144.984375,
+                  "y": 178.59375,
+                  "right": 341.390625,
+                  "bottom": 217.78125,
+                  "width": 196.40625,
+                  "height": 39.1875
+                }
+              },
+              {
+                "label": "Add Jump Route",
+                "visible": true,
+                "inViewport": true,
+                "hit": true,
+                "rect": {
+                  "x": 144.984375,
+                  "y": 220.65625,
+                  "right": 341.390625,
+                  "bottom": 259.84375,
+                  "width": 196.40625,
+                  "height": 39.1875
+                }
+              }
+            ],
+            "closeBy": "trigger",
+            "restoredControlCount": 7
+          }
+        }
+      }
+    }
+  ]
+}

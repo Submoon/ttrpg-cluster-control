@@ -17,7 +17,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const fieldDefinitions = useFieldDefinitionWorkflows({
     workspace: options.workspace,
     commit: options.commit,
-    confirmDiscardInspectorEdits: editorState.confirmDiscardInspectorEdits,
+    resolveTransition: editorState.resolveTransition,
   })
   const clusterWorkflows = useClusterWorkflows({
     workspace: options.workspace,
@@ -28,14 +28,17 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     selectedObjectId: editorState.selectedObjectId,
     selectedOrbitId: editorState.selectedOrbitId,
     selectedRouteId: editorState.selectedRouteId,
-    chartNamesEditing: editorState.chartNamesEditing,
+    chartNamesDialogOpen: editorState.chartNamesDialogOpen,
     fieldDefinitionDialogOpen: fieldDefinitions.fieldDefinitionDialogOpen,
     selectedSystem: editorState.selectedSystem,
     selectedObject: editorState.selectedObject,
     selectedOrbit: editorState.selectedOrbit,
     selectedRoute: editorState.selectedRoute,
     mapInspectorRef: editorState.mapInspectorRef,
-    confirmDiscardInspectorEdits: editorState.confirmDiscardInspectorEdits,
+    resolveTransition: editorState.resolveTransition,
+    isChartDraftTarget: editorState.isChartDraftTarget,
+    contextStamp: editorState.contextStamp,
+    selectCreatedSystem: editorState.selectCreatedSystem,
     editorError: editorState.editorError,
   })
   const mapWorkflows = useMapWorkflows({
@@ -48,7 +51,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     selectedOrbitId: editorState.selectedOrbitId,
     mapInspectorRef: editorState.mapInspectorRef,
     systemMapRef: editorState.systemMapRef,
-    confirmDiscardInspectorEdits: editorState.confirmDiscardInspectorEdits,
+    resolveTransition: editorState.resolveTransition,
     editorError: editorState.editorError,
   })
 

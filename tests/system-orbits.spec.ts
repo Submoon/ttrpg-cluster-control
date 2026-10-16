@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { activeWorkspaceFeedback } from './helpers'
+import { clickDockAction } from './helpers'
+import { returnToClusterMap, workspaceNavigation, jsonMapImportInput } from './helpers'
 import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 
@@ -187,7 +190,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(async () =>
     Math.abs(Number(await ring.getAttribute('cy')) - movedCenter.y),
   ).toBeLessThan(2)
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByLabel('Horizontal radius').fill('300')
@@ -306,8 +309,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))
     .toBeCloseTo(angleBeforeResize, 2)
 
-  const navigation = page.getByRole('toolbar', { name: 'Map navigation' })
-  const zoomLevel = navigation.getByLabel('Zoom level')
+  const navigation = workspaceNavigation(page)
+  const zoomLevel = navigation.locator('output')
   const zoomBeforeBackgroundWheel = await zoomLevel.textContent()
   await moveToWorldPoint(page, map, { x: 900, y: 100 })
   await page.keyboard.down('Control')
@@ -422,7 +425,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   expect(png.sourceSvgText).not.toContain('orbit-edit-control')
   expect(png.sourceSvgText).not.toContain('class="orbit-label"')
 
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await page.reload()
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
   const restoredOrbit = restoredMap.getByRole('group', { name: orbitLabel })
@@ -435,7 +438,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(() => ellipticalOrbitAngle(restoredMap, orbitLabel, 'Binary A'))
     .toBeCloseTo(angleBeforeResize, 2)
 
-  const input = page.getByLabel('JSON map file')
+  const input = jsonMapImportInput(page)
   const importPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'elliptical-system.json', JSON.stringify(systemExport))
   await (await importPreview).accept()
@@ -493,21 +496,21 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'planet')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'moon')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await expect(hierarchy.getByRole('button', { name: /Orbit 2 around Iria, 0 objects/ }))
     .toBeVisible()
 
@@ -563,7 +566,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     .not.toBe(objectBeforeMove)
   await expect.poll(() => ellipticalOrbitAngle(map, detachedOrbitLabel, 'Nix'))
     .toBeCloseTo(angleBeforeDetach, 2)
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const exportedSystem = exported.system
@@ -604,13 +607,13 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'planet')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'moon')
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
@@ -723,13 +726,16 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const radiusNotice = page.getByRole('status').filter({
     hasText: 'Orbit radii increased to the new host minimum of 39.',
   })
-  await page.getByRole('button', { name: 'Collapse inspector panel' }).click()
-  await expect(page.getByRole('button', { name: 'Show inspector panel' })).toBeVisible()
+  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  const inspectorPanel = page.locator('#workspace-inspector-panel')
+  await inspectorToggle.click()
+  await expect(inspectorPanel).toBeHidden()
   await expect(radiusNotice).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 0 objects/ }))
     .toBeVisible()
 
-  await page.getByRole('button', { name: 'Show inspector panel' }).click()
+  await inspectorToggle.click()
+  await expect(inspectorPanel).toBeVisible()
   await dragHtmlElementToWorldPoint(
     page,
     page.getByRole('button', { name: 'Add orbit' }),
@@ -758,7 +764,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
     .toMatchObject({ id: smallOrbitId, hostId: expect.any(String), order: 2 })
   expect(exported.layout.orbitRadii[smallOrbitId!]).toEqual({ horizontal: 39, vertical: 39 })
 
-  const input = page.getByLabel('JSON map file')
+  const input = jsonMapImportInput(page)
   const importPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'hosted-orbit.json', JSON.stringify(exported))
   const confirmation = await importPreview
@@ -786,7 +792,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await expect(restoredSecondOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
   await expect(restoredSecondOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const exportedCluster = await downloadJson(page, 'Export Jump Cluster JSON')
   const hostedOrbits = exportedCluster.cluster!.systems.flatMap(system =>
     system.orbits.filter(orbit => orbit.hostId !== null),
@@ -853,9 +859,12 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   const palette = page.getByRole('region', { name: 'Object palette' })
   await expect(palette).toBeVisible()
-  expect(await palette.evaluate(element => element.closest('.system-map-tools') !== null)).toBe(true)
+  expect(await palette.evaluate(element => element.closest('[aria-label="Add to map"]') !== null)).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(palette).toBeHidden()
   await setHeaderMapActionsOpen(page, true)
   const fileActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const fileActionsBefore = await fileActions.evaluate(element => {
@@ -895,7 +904,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
     .toHaveText(starPreviewText)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit')
   const addPlanet = await selectCatalogueObjectButton(page, 'planet')
   const planetMark = (await addPlanet.locator('.object-mark').textContent())?.trim() ?? ''
   const objectsBeforePlanetDrop = await mapObjects.count()

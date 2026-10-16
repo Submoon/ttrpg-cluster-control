@@ -1,0 +1,22 @@
+{
+  "confirmedListenersBeforeStop": [
+    {
+      "address": "127.0.0.1:3121",
+      "pid": 43024,
+      "process": "node.exe",
+      "commandLine": "C:\\nodejs\\node.exe .output/server/index.mjs"
+    },
+    {
+      "address": "127.0.0.1:3122",
+      "pid": 26912,
+      "process": "node.exe",
+      "commandLine": "C:\\nodejs\\node.exe .output/server/index.mjs"
+    }
+  ],
+  "stoppedPids": [43024, 26912],
+  "portsAfterStop": {
+    "3121": "no listener",
+    "3122": "no listener"
+  },
+  "prototypePort3113": "not queried or touched"
+}

@@ -1,6 +1,6 @@
 <template>
   <button
-    v-if="!routeFormOpen"
+    v-if="!routeFormOpen && !selectedRoute"
     class="quiet-button chart-details-control mb-4"
     type="button"
     :aria-pressed="chartDetailsActive"
@@ -37,6 +37,16 @@
       </button>
     </div>
   </template>
+
+  <ChartDetailsPanel
+    v-else-if="props.inspectedSystem && !routeFormOpen"
+    mode="system"
+    :workspace="props.workspace"
+    :selected-system="props.inspectedSystem"
+    :has-chart-name-draft="props.hasChartNameDraft"
+    :editor-error="props.editorError"
+    @edit-chart-names="emit('edit-chart-names', props.inspectedSystem?.id)"
+  />
 
   <template v-else-if="routeFormOpen">
     <span class="section-kicker">{{ editingRouteId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
@@ -126,17 +136,11 @@
 
   <ChartDetailsPanel
     v-else
-    v-model:cluster-name="clusterName"
-    v-model:system-name="systemName"
     mode="cluster"
     :workspace="props.workspace"
-    :chart-names-editing="props.chartNamesEditing"
-    :saving="props.saving"
-    :form-error="props.formError"
+    :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
-    @submit-names="emit('submit-names')"
     @edit-chart-names="emit('edit-chart-names')"
-    @cancel-chart-names="emit('cancel-chart-names')"
   />
 </template>
 
@@ -170,17 +174,15 @@ const props = defineProps<{
   selectedObject?: SystemObject
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
+  inspectedSystem?: StarSystem
   selectedRouteSummary: string
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
   editorError: string
 }>()
 
 const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
   'show-chart-details': []
   'request-route-edit': [routeId: string]
   'save-route': [request: JumpRouteSaveRequest]
@@ -190,8 +192,6 @@ const emit = defineEmits<{
   'clear-error': []
 }>()
 
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
 const selectedRoute = computed(() => props.selectedRoute)
 const routeFormOpen = ref(false)
 const editingRouteId = ref<string | null>(null)

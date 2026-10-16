@@ -6,6 +6,8 @@ A local-first campaign cartography app for Wardens to plan and maintain schemati
 
 ## Build a campaign map
 
+The current interface preview opens the accepted map-first B direction at `/`. It uses seeded, memory-only data and does not connect to the saved workspace; reload to restore the sample. Open the existing saved-workspace application at `/?variant=baseline`. See [README-PROTOTYPE.md](README-PROTOTYPE.md) for preview behavior and comparison variants.
+
 Start with a local Jump Cluster and its first star system. Add more systems from the Cluster map as campaign knowledge grows, then connect their Jump Points with routes.
 
 - **Jump Clusters and routes:** Connect logical Jump Points with Jump Routes using positive integer Jump levels (standard levels are 1–9; higher positive levels are supported). A route can lead to another known Jump Point or a named unresolved exit beyond the known Cluster. A Jump Point may optionally reference a separate physical Station object; the route itself remains a logical connection.
