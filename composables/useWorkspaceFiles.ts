@@ -20,7 +20,11 @@ interface WorkspaceFileActionsOptions {
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
-  onImported: (firstAddedSystemId: string | undefined) => Promise<void>
+  captureImportOrigin: () => { navigationStamp: string; selectedSystemId: string | null } | null
+  onImported: (
+    firstAddedSystemId: string | undefined,
+    origin: { navigationStamp: string; selectedSystemId: string | null },
+  ) => Promise<void>
 }
 
 /**
@@ -33,6 +37,7 @@ export function useWorkspaceFiles({
   selectedSystem,
   commit,
   resolveTransition,
+  captureImportOrigin,
   onImported,
 }: WorkspaceFileActionsOptions) {
   const exportError = ref('')
@@ -218,8 +223,10 @@ export function useWorkspaceFiles({
       const prepared = prepareJsonImport(latestWorkspace, content)
       if (!window.confirm(importPreview(prepared.summary))) return
 
+      const origin = captureImportOrigin()
+      if (!origin) return
       await commit(prepared.workspace)
-      await onImported(prepared.addedSystemIds[0])
+      await onImported(prepared.addedSystemIds[0], origin)
     } catch (error) {
       importError.value = errorText(error)
     }

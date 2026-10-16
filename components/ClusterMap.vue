@@ -13,6 +13,8 @@
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${cluster.name} Jump Cluster map`"
+      aria-description="Focus this map and use the arrow keys to pan. Focus a map item to use its keyboard controls."
+      tabindex="0"
       @touchstart.capture="startTouchNavigation"
     />
   </div>
@@ -36,7 +38,17 @@ import {
   clusterSystemPosition,
 } from '../utils/cluster-map-geometry'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
-import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
+import {
+  clampMapViewport,
+  fitMapViewport,
+  getSvgViewportRect,
+  MAP_ZOOM_MAX_SCALE,
+  MAP_ZOOM_MIN_SCALE,
+  normalizeSvgViewportRect,
+  svgViewportExtent,
+  type MapViewport,
+  type SvgViewportRect,
+} from '../utils/map-zoom'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -50,9 +62,11 @@ const props = withDefaults(defineProps<{
 }>(), { moveEnabled: true, systemActivation: 'open', touchNavigation: false, showZoomControls: true })
 
 const emit = defineEmits<{
+  'activate-system': [id: string]
   'open-system': [id: string]
   'select-route': [id: string]
   'move-system': [id: string, position: Point]
+  'viewport-change': [viewport: MapViewport]
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
@@ -63,15 +77,36 @@ type ClusterTouchGesture =
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
+let zoomExtentOverride: SvgViewportRect | undefined
 const activeSystemGestures = new Map<SVGGElement, () => void>()
 const cancelledSystemGestures = new WeakSet<SVGGElement>()
 let refreshLiveRouteGeometry: (() => void) | undefined
 
-/** Applies a relative D3 zoom factor to the mounted SVG. */
+/** Returns the current D3 transform as the map's public viewport state. */
+function getViewport(): MapViewport {
+  const transform = svgElement.value ? zoomTransform(svgElement.value) : zoomIdentity
+  return { x: transform.x, y: transform.y, k: transform.k }
+}
+
+/** Applies a finite viewport through D3 so scene transforms and zoom feedback stay synchronized. */
+function setViewport(viewport: MapViewport): void {
+  const element = svgElement.value
+  const next = clampMapViewport(viewport)
+  if (!element || !zoomBehavior || !next) return
+  select(element).call(zoomBehavior.transform, zoomIdentity.translate(next.x, next.y).scale(next.k))
+}
+
+/** Applies a positive relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
-  if (svgElement.value && zoomBehavior) {
-    select(svgElement.value).call(zoomBehavior.scaleBy, factor)
-  }
+  if (!Number.isFinite(factor) || factor <= 0 || !svgElement.value || !zoomBehavior) return
+  select(svgElement.value).call(zoomBehavior.scaleBy, factor)
+}
+
+/** Pans by a delta in SVG viewport user coordinates. */
+function panBy(dx: number, dy: number): void {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return
+  const viewport = getViewport()
+  setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
 
 /**
@@ -87,28 +122,28 @@ async function exportImage(format: MapImageFormat): Promise<Blob> {
 }
 
 /**
- * Fits route and system-card bounds inside the viewport, clamping to supported zoom limits.
- * Empty geometry resets the view to the identity transform.
+ * Fits route and system-card bounds inside the drawable viewport, clamping to supported zoom limits.
+ * Empty or invalid geometry resets the view to the identity transform.
  */
-function fitMap(): void {
+function fitMap(usableRect?: SvgViewportRect): void {
   const element = svgElement.value
   const features = element?.querySelector<SVGGElement>('.cluster-map-items')
   if (!element || !features || !zoomBehavior) return
 
-  const bounds = features.getBBox()
-  if (!bounds.width || !bounds.height) {
-    select(element).call(zoomBehavior.transform, zoomIdentity)
+  const requestedRect = usableRect ? normalizeSvgViewportRect(usableRect) : undefined
+  const rect = requestedRect ?? getSvgViewportRect(element)
+  zoomExtentOverride = requestedRect
+  zoomBehavior.extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
+
+  let bounds: DOMRect
+  try {
+    bounds = features.getBBox()
+  } catch {
+    setViewport({ x: 0, y: 0, k: 1 })
     return
   }
-
-  const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(
-    MAP_ZOOM_MAX_SCALE,
-    (960 - 80) / bounds.width,
-    (560 - 80) / bounds.height,
-  ))
-  const x = (960 - bounds.width * scale) / 2 - bounds.x * scale
-  const y = (560 - bounds.height * scale) / 2 - bounds.y * scale
-  select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
+  const viewport = fitMapViewport(bounds, rect)
+  setViewport(viewport ?? { x: 0, y: 0, k: 1 })
 }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
@@ -175,6 +210,8 @@ function endTouchNavigation(event: TouchEvent): void {
 }
 
 function cancelActiveGesture(): void {
+  touchGesture = null
+  viewPan = null
   for (const [node, rollback] of activeSystemGestures) {
     cancelledSystemGestures.add(node)
     rollback()
@@ -201,6 +238,12 @@ function moveViewPan(event: MouseEvent): void {
 }
 
 function endViewPan(): void { viewPan = null }
+
+/** Emits both the new explicit activation and the legacy compatibility event. */
+function activateSystem(systemId: string): void {
+  emit('activate-system', systemId)
+  emit('open-system', systemId)
+}
 
 /**
  * Rebuilds D3 route/system nodes while preserving the user's temporary pan and zoom transform.
@@ -320,10 +363,12 @@ function render(): void {
   routeMarks
     .on('click', (event, route) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       emit('select-route', route.id)
     })
     .on('keydown', (event, route) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         emit('select-route', route.id)
       }
@@ -375,16 +420,18 @@ function render(): void {
   systemMarks
     .on('click', (event, system) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       if (movedSystems.has(event.currentTarget as SVGGElement)) {
         movedSystems.delete(event.currentTarget as SVGGElement)
         return
       }
-      emit('open-system', system.id)
+      activateSystem(system.id)
     })
     .on('keydown', (event, system) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
-        emit('open-system', system.id)
+        activateSystem(system.id)
       }
     })
 
@@ -440,7 +487,7 @@ function render(): void {
   }
 
   zoomBehavior = zoom<SVGSVGElement, unknown>()
-    .extent([[0, 0], [960, 560]])
+    .extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
     .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
     .clickDistance(6)
     .filter((event) => {
@@ -457,6 +504,11 @@ function render(): void {
     .on('zoom', (event) => {
       content.attr('transform', event.transform.toString())
       zoomLevel.value = Math.round(event.transform.k * 100)
+      emit('viewport-change', {
+        x: event.transform.x,
+        y: event.transform.y,
+        k: event.transform.k,
+      })
     })
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())
@@ -470,7 +522,7 @@ watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
 watch(() => props.systemActivation, render)
 
-defineExpose({ exportImage, zoomBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+defineExpose({ exportImage, getViewport, setViewport, zoomBy, panBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>

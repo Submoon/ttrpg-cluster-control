@@ -1,22 +1,28 @@
 /**
  * Owns chart names, selection, and navigation guards; workspace persistence remains on the injected commit.
  */
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import {
   createLocalWorkspace,
   jumpPointsInCluster,
   renameLocalWorkspace,
   type JumpRoute,
 } from '../../domain/workspace'
-import type { MapImageExporter } from '../../utils/map-image-export'
 import type {
   EditorWorkflowOptions,
+  MapInteractionMode,
   MapInspectorHandle,
+  MapNavigationHandle,
+  MapVisitMemory,
+  MapVisitSelection,
   SystemMapHandle,
+  TransitionResult,
   TransitionDecision,
   TransitionGuard,
   TransitionOptions,
+  WorkspacePanel,
 } from './types'
+import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
 
 /**
  * Derives editor selections from workspace IDs and keeps navigation coherent as entities change.
@@ -27,12 +33,19 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
   const activeView = ref<'cluster' | 'system'>('system')
+  const mapMode = ref<MapInteractionMode>('navigate')
   const selectedSystemId = ref<string | null>(null)
+  const clusterSelectedSystemId = ref<string | null>(null)
+  const inspectedClusterSystemId = ref<string | null>(null)
   const selectedObjectId = ref<string | null>(null)
   const selectedOrbitId = ref<string | null>(null)
   const selectedRouteId = ref<string | null>(null)
   const chartNamesEditing = ref(false)
   const transitionGuard = ref<TransitionGuard>(null)
+  const hierarchyPanelOpen = ref(true)
+  const inspectorPanelOpen = ref(true)
+  const compactPanel = ref<WorkspacePanel | null>(null)
+  const isCompactViewport = ref(false)
   const formError = ref('')
   const editorError = ref('')
   const chartNamesSession = shallowRef<{
@@ -48,11 +61,70 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     resolve: (accepted: boolean) => void
   } | null = null
   const mapInspectorRef = shallowRef<MapInspectorHandle | null>(null)
-  const clusterMapRef = shallowRef<MapImageExporter | null>(null)
+  const clusterMapRef = shallowRef<MapNavigationHandle | null>(null)
   const systemMapRef = shallowRef<SystemMapHandle | null>(null)
+  const mapVisits = shallowRef(new Map<string, MapVisitMemory>())
+  let lastRequestedPanel: WorkspacePanel = 'inspector'
+
+  const activeMapKey = computed(() => {
+    const clusterId = workspace.value?.cluster.id
+    if (!clusterId) return null
+    if (activeView.value === 'cluster') return `cluster:${clusterId}`
+    return selectedSystemId.value ? `system:${clusterId}:${selectedSystemId.value}` : null
+  })
+  const initialViewport = computed(() => {
+    const key = activeMapKey.value
+    return key ? mapVisits.value.get(key)?.viewport ?? null : null
+  })
+  const zoomLevel = computed(() => Math.round((initialViewport.value?.k ?? 1) * 100))
+  const hierarchyPanelVisible = computed(() => hierarchyPanelOpen.value
+    && (!isCompactViewport.value || compactPanel.value === 'hierarchy'))
+  const inspectorPanelVisible = computed(() => inspectorPanelOpen.value
+    && (!isCompactViewport.value || compactPanel.value === 'inspector'))
+  const compactPanelOpen = computed(() => isCompactViewport.value
+    && (hierarchyPanelVisible.value || inspectorPanelVisible.value))
+
+  function navigationContextStamp(): string {
+    return JSON.stringify([
+      workspace.value?.cluster.id ?? null,
+      activeView.value,
+      selectedSystemId.value,
+      selectedObjectId.value,
+      selectedOrbitId.value,
+      selectedRouteId.value,
+      clusterSelectedSystemId.value,
+      inspectedClusterSystemId.value,
+    ])
+  }
+
+  function contextStamp(): string {
+    return JSON.stringify([navigationContextStamp(), chartNamesSession.value?.id ?? null])
+  }
+
+  /** Captures map state only after the draft guard accepts and before a context mutation begins. */
+  function acceptCurrentContext(expectedStamp: string): boolean {
+    if (contextStamp() !== expectedStamp) return false
+    captureActiveMap()
+    return true
+  }
+
+  /** Accepts guard-driven cleanup of the current draft, while rejecting a changed map or newly-owned draft. */
+  function acceptNavigationTransition(expectedNavigationStamp: string, startingSessionId: number | null): boolean {
+    const currentSessionId = chartNamesSession.value?.id ?? null
+    if (navigationContextStamp() !== expectedNavigationStamp
+      || (currentSessionId !== startingSessionId && currentSessionId !== null)) return false
+    captureActiveMap()
+    return true
+  }
 
   const selectedSystem = computed(() =>
     workspace.value?.cluster.systems.find(system => system.id === selectedSystemId.value),
+  )
+  const clusterSelectedSystem = computed(() =>
+    workspace.value?.cluster.systems.find(system => system.id === clusterSelectedSystemId.value),
+  )
+  const inspectedClusterSystem = computed(() =>
+    workspace.value?.cluster.systems.find(system => system.id === inspectedClusterSystemId.value),
   )
   const selectedObject = computed(() =>
     selectedSystem.value?.objects.find(object => object.id === selectedObjectId.value),
@@ -66,6 +138,198 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const jumpPoints = computed(() =>
     workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [],
   )
+
+  function selectionForActiveMap(): MapVisitSelection {
+    if (activeView.value === 'cluster') {
+      if (clusterSelectedSystemId.value) {
+        return {
+          kind: 'system',
+          id: clusterSelectedSystemId.value,
+          inspect: inspectedClusterSystemId.value === clusterSelectedSystemId.value,
+        }
+      }
+      if (selectedRouteId.value) return { kind: 'route', id: selectedRouteId.value }
+      return { kind: 'none' }
+    }
+    if (selectedObjectId.value) return { kind: 'object', id: selectedObjectId.value }
+    if (selectedOrbitId.value) return { kind: 'orbit', id: selectedOrbitId.value }
+    return { kind: 'none' }
+  }
+
+  function storeVisit(key: string, viewport: MapViewport, selection: MapVisitSelection): void {
+    const next = new Map(mapVisits.value)
+    next.delete(key)
+    next.set(key, { viewport, selection })
+    while (next.size > 24) {
+      const oldest = next.keys().next().value as string | undefined
+      if (!oldest || oldest === activeMapKey.value) break
+      next.delete(oldest)
+    }
+    mapVisits.value = next
+  }
+
+  function activeMapHandle(): MapNavigationHandle | null {
+    return activeView.value === 'cluster' ? clusterMapRef.value : systemMapRef.value
+  }
+
+  function storeCurrentSelection(): void {
+    const key = activeMapKey.value
+    if (!key) return
+    const viewport = activeMapHandle()?.getViewport() ?? mapVisits.value.get(key)?.viewport ?? { x: 0, y: 0, k: 1 }
+    storeVisit(key, viewport, selectionForActiveMap())
+  }
+
+  /** Captures the current camera and selection before any accepted context assignment. */
+  function captureActiveMap(): void {
+    const key = activeMapKey.value
+    if (!key) return
+    const viewport = activeMapHandle()?.getViewport() ?? mapVisits.value.get(key)?.viewport ?? { x: 0, y: 0, k: 1 }
+    storeVisit(key, viewport, selectionForActiveMap())
+  }
+
+  function validVisitSelection(key: string, selection: MapVisitSelection): MapVisitSelection {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) return { kind: 'none' }
+    const systemId = key.startsWith('system:') ? key.slice(key.lastIndexOf(':') + 1) : null
+    if (selection.kind === 'system') {
+      return key.startsWith('cluster:')
+        && currentWorkspace.cluster.systems.some(system => system.id === selection.id)
+        ? selection
+        : { kind: 'none' }
+    }
+    if (selection.kind === 'route') {
+      return key.startsWith('cluster:')
+        && currentWorkspace.cluster.routes.some(route => route.id === selection.id)
+        ? selection
+        : { kind: 'none' }
+    }
+    if (selection.kind === 'object') {
+      const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+      return system?.objects.some(object => object.id === selection.id) ? selection : { kind: 'none' }
+    }
+    if (selection.kind === 'orbit') {
+      const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+      return system?.orbits.some(orbit => orbit.id === selection.id) ? selection : { kind: 'none' }
+    }
+    return selection
+  }
+
+  function restoreActiveSelection(): void {
+    const key = activeMapKey.value
+    const selection = key && mapVisits.value.get(key)
+      ? validVisitSelection(key, mapVisits.value.get(key)!.selection)
+      : { kind: 'none' as const }
+    selectedRouteId.value = null
+    selectedObjectId.value = null
+    selectedOrbitId.value = null
+    clusterSelectedSystemId.value = null
+    inspectedClusterSystemId.value = null
+    if (activeView.value === 'cluster') {
+      if (selection.kind === 'system') {
+        clusterSelectedSystemId.value = selection.id
+        if (selection.inspect) inspectedClusterSystemId.value = selection.id
+      } else if (selection.kind === 'route') {
+        selectedRouteId.value = selection.id
+      }
+    } else if (selection.kind === 'object') {
+      selectedObjectId.value = selection.id
+    } else if (selection.kind === 'orbit') {
+      selectedOrbitId.value = selection.id
+    }
+  }
+
+  /** Accepts viewport feedback only from the map that still owns the active context. */
+  function recordViewport(key: string, viewport: MapViewport): void {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace || key !== activeMapKey.value) return
+    if (key.startsWith('system:')) {
+      const [clusterId, systemId] = key.slice('system:'.length).split(':')
+      if (clusterId !== currentWorkspace.cluster.id
+        || !currentWorkspace.cluster.systems.some(system => system.id === systemId)) return
+    } else if (key !== `cluster:${currentWorkspace.cluster.id}`) {
+      return
+    }
+    if (![viewport.x, viewport.y, viewport.k].every(Number.isFinite)) return
+    storeVisit(key, {
+      x: viewport.x,
+      y: viewport.y,
+      k: Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, viewport.k)),
+    }, selectionForActiveMap())
+  }
+
+  function requestPanel(panel: WorkspacePanel): void {
+    lastRequestedPanel = panel
+    if (panel === 'hierarchy') hierarchyPanelOpen.value = true
+    else inspectorPanelOpen.value = true
+    if (isCompactViewport.value) compactPanel.value = panel
+  }
+
+  function closePanel(panel: WorkspacePanel): void {
+    if (panel === 'hierarchy') hierarchyPanelOpen.value = false
+    else inspectorPanelOpen.value = false
+    if (compactPanel.value === panel) compactPanel.value = null
+  }
+
+  function togglePanel(panel: WorkspacePanel): void {
+    const isVisible = panel === 'hierarchy'
+      ? hierarchyPanelVisible.value
+      : inspectorPanelVisible.value
+    if (isVisible) closePanel(panel)
+    else requestPanel(panel)
+  }
+
+  function setMapMode(mode: MapInteractionMode): void {
+    mapMode.value = mode
+  }
+
+  function setViewportPercentage(percentage: number): void {
+    const map = activeMapHandle()
+    if (!map || !Number.isFinite(percentage)) return
+    const viewport = map.getViewport()
+    map.setViewport({ ...viewport, k: Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
+  }
+
+  function fitActiveMap(): void { activeMapHandle()?.fitMap() }
+  function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
+  function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
+
+  function goBackToCluster(): Promise<void> { return showClusterMap() }
+
+  function updateCompactViewport(isCompact: boolean): void {
+    const wasCompact = isCompactViewport.value
+    isCompactViewport.value = isCompact
+    if (isCompact && !wasCompact) {
+      if (hierarchyPanelOpen.value && inspectorPanelOpen.value) {
+        compactPanel.value = lastRequestedPanel
+      } else if (hierarchyPanelOpen.value) {
+        compactPanel.value = 'hierarchy'
+      } else if (inspectorPanelOpen.value) {
+        compactPanel.value = 'inspector'
+      } else {
+        compactPanel.value = null
+      }
+    } else if (!isCompact) {
+      compactPanel.value = null
+    }
+  }
+
+  let compactMedia: MediaQueryList | undefined
+  const updateCompactFromMedia = (event?: MediaQueryListEvent): void => {
+    updateCompactViewport(event?.matches ?? compactMedia?.matches ?? false)
+  }
+  onMounted(() => {
+    compactMedia = window.matchMedia('(max-width: 760px), (max-height: 600px)')
+    if (compactMedia.matches) {
+      // A compact first visit has no requested panel; default desktop panels are
+      // not evidence that the user asked to open one before this component mounted.
+      isCompactViewport.value = true
+      compactPanel.value = null
+    } else {
+      updateCompactFromMedia()
+    }
+    compactMedia.addEventListener('change', updateCompactFromMedia)
+  })
+  onUnmounted(() => compactMedia?.removeEventListener('change', updateCompactFromMedia))
 
   /**
    * Formats a route's current endpoints, retaining explicit labels for unresolved or dangling references.
@@ -91,6 +355,10 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const hasChartNameDraft = computed(() => chartNamesSession.value !== null)
   const chartNamesDialogOpen = computed(() => chartNamesEditing.value || transitionGuard.value !== null)
   const chartDraftSystemId = computed(() => chartNamesSession.value?.systemId ?? null)
+  const chartDraftSystemName = computed(() => {
+    const targetId = chartNamesSession.value?.systemId
+    return workspace.value?.cluster.systems.find(system => system.id === targetId)?.name ?? ''
+  })
   const hasUncommittedNames = computed(() => {
     const session = chartNamesSession.value
     const currentWorkspace = workspace.value
@@ -119,6 +387,9 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       selectedObjectId.value = null
       selectedOrbitId.value = null
       selectedRouteId.value = null
+      clusterSelectedSystemId.value = null
+      inspectedClusterSystemId.value = null
+      mapVisits.value = new Map()
       return
     }
     if (!currentWorkspace.cluster.systems.some(system => system.id === selectedSystemId.value)) {
@@ -127,6 +398,25 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (!currentWorkspace.cluster.routes.some(route => route.id === selectedRouteId.value)) {
       selectedRouteId.value = null
     }
+    if (!currentWorkspace.cluster.systems.some(system => system.id === clusterSelectedSystemId.value)) {
+      clusterSelectedSystemId.value = null
+    }
+    if (!currentWorkspace.cluster.systems.some(system => system.id === inspectedClusterSystemId.value)) {
+      inspectedClusterSystemId.value = null
+    }
+    const survivingSystemIds = new Set(currentWorkspace.cluster.systems.map(system => system.id))
+    const nextVisits = new Map<string, MapVisitMemory>()
+    const clusterKeyPrefix = `cluster:${currentWorkspace.cluster.id}`
+    const systemKeyPrefix = `system:${currentWorkspace.cluster.id}:`
+    for (const [key, visit] of mapVisits.value) {
+      if (!key.startsWith(clusterKeyPrefix) && !key.startsWith(systemKeyPrefix)) continue
+      if (key.startsWith(systemKeyPrefix)) {
+        const systemId = key.slice(systemKeyPrefix.length)
+        if (!survivingSystemIds.has(systemId)) continue
+      }
+      nextVisits.set(key, { ...visit, selection: validVisitSelection(key, visit.selection) })
+    }
+    mapVisits.value = nextVisits
   }, { immediate: true })
 
   watch(() => selectedSystem.value, currentSystem => {
@@ -185,7 +475,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
         chartNamesSession.value = null
         chartNamesEditing.value = false
         formError.value = ''
-        syncNamesFromSelectedWorkspace()
+        syncNamesFromSelectedWorkspace(session.systemId)
       }
       void durable.catch(() => undefined)
       return true
@@ -209,26 +499,39 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     }
   }
 
-  function syncNamesFromSelectedWorkspace(): void {
+  function syncNamesFromSelectedWorkspace(targetSystemId?: string): void {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === targetSystemId)
+      ?? selectedSystem.value
     if (currentWorkspace) clusterName.value = currentWorkspace.cluster.name
     if (system) systemName.value = system.name
   }
 
-  /** Starts name drafts from committed values after guarding any open inspector edit. */
-  async function beginChartNamesEdit(): Promise<void> {
+  /** Starts or resumes a chart-name draft for its explicit system target without changing map context. */
+  async function beginChartNamesEdit(targetSystemId?: string): Promise<void> {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const targetId = targetSystemId ?? chartNamesSession.value?.systemId ?? selectedSystemId.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === targetId)
     if (!currentWorkspace || !system) return
     if (chartNamesSession.value) {
-      chartNamesEditing.value = true
-      return
+      if (chartNamesSession.value.clusterId === currentWorkspace.cluster.id
+        && chartNamesSession.value.systemId === system.id) {
+        chartNamesEditing.value = true
+        return
+      }
     }
-    if (!await resolveTransition({ leaveChart: false })) return
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
+    const startingClusterId = currentWorkspace.cluster.id
+    if (!await resolveTransition({ leaveChart: chartNamesSession.value !== null })) return
     const latestWorkspace = workspace.value
-    const latestSystem = latestWorkspace?.cluster.systems.find(candidate => candidate.id === system.id)
-    if (!latestWorkspace || !latestSystem) return
+    const latestSystem = latestWorkspace?.cluster.systems.find(candidate => candidate.id === targetId)
+    const latestSessionId = chartNamesSession.value?.id ?? null
+    if (navigationContextStamp() !== startingNavigationStamp
+      || (latestSessionId !== startingSessionId && latestSessionId !== null)
+      || !latestWorkspace
+      || latestWorkspace.cluster.id !== startingClusterId
+      || !latestSystem) return
     chartNamesSession.value = {
       id: ++chartNamesSessionSequence,
       clusterId: latestWorkspace.cluster.id,
@@ -250,7 +553,9 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   /** Restores committed names and closes the name editor without changing workspace data. */
   function cancelChartNamesEdit(): void {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const targetSystemId = chartNamesSession.value?.systemId
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === targetSystemId)
+      ?? selectedSystem.value
     if (currentWorkspace && system) {
       clusterName.value = currentWorkspace.cluster.name
       systemName.value = system.name
@@ -356,29 +661,24 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
    * Selects the first imported system when available and switches to the cluster view.
    * @param firstAddedSystemId First added system from a prepared import, if one was included.
    */
-  async function selectImportedWorkspace(firstAddedSystemId: string | undefined): Promise<void> {
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace) return
-    const startingContext = {
-      clusterId: currentWorkspace.cluster.id,
-      selectedSystemId: selectedSystemId.value,
-      selectedObjectId: selectedObjectId.value,
-      selectedOrbitId: selectedOrbitId.value,
-      selectedRouteId: selectedRouteId.value,
-      activeView: activeView.value,
-    }
-    if (!await resolveTransition()) return
+  function captureImportOrigin(): { navigationStamp: string; selectedSystemId: string | null } | null {
+    if (!workspace.value) return null
+    const origin = { navigationStamp: navigationContextStamp(), selectedSystemId: selectedSystemId.value }
+    captureActiveMap()
+    return origin
+  }
+
+  async function selectImportedWorkspace(
+    firstAddedSystemId: string | undefined,
+    origin?: { navigationStamp: string; selectedSystemId: string | null },
+  ): Promise<void> {
+    if (!origin || navigationContextStamp() !== origin.navigationStamp) return
+    const startingSessionId = chartNamesSession.value?.id ?? null
+    if (!await resolveTransition()
+      || !acceptNavigationTransition(origin.navigationStamp, startingSessionId)) return
 
     const latestWorkspace = workspace.value
-    if (
-      !latestWorkspace
-      || latestWorkspace.cluster.id !== startingContext.clusterId
-      || selectedSystemId.value !== startingContext.selectedSystemId
-      || selectedObjectId.value !== startingContext.selectedObjectId
-      || selectedOrbitId.value !== startingContext.selectedOrbitId
-      || selectedRouteId.value !== startingContext.selectedRouteId
-      || activeView.value !== startingContext.activeView
-    ) return
+    if (!latestWorkspace) return
 
     const importedSystem = firstAddedSystemId
       ? latestWorkspace.cluster.systems.find(system => system.id === firstAddedSystemId)
@@ -386,24 +686,24 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (firstAddedSystemId && !importedSystem) return
 
     const retainedSystemId = latestWorkspace.cluster.systems.some(
-      system => system.id === startingContext.selectedSystemId,
+      system => system.id === origin.selectedSystemId,
     )
-      ? startingContext.selectedSystemId
+      ? origin.selectedSystemId
       : latestWorkspace.cluster.systems[0]?.id ?? null
     selectedSystemId.value = importedSystem?.id ?? retainedSystemId
-    selectedObjectId.value = null
-    selectedOrbitId.value = null
-    selectedRouteId.value = null
     activeView.value = 'cluster'
+    mapMode.value = 'navigate'
+    restoreActiveSelection()
   }
 
   /** Shows the cluster map and clears map-entity selections after the transition guard accepts. */
   async function showClusterMap(): Promise<void> {
-    if (!await resolveTransition()) return
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
+    if (!await resolveTransition() || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)) return
     activeView.value = 'cluster'
-    selectedObjectId.value = null
-    selectedOrbitId.value = null
-    selectedRouteId.value = null
+    mapMode.value = 'navigate'
+    restoreActiveSelection()
     editorError.value = ''
   }
 
@@ -413,13 +713,36 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
    */
   async function selectSystem(systemId: string): Promise<void> {
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
     if (!await resolveTransition()) return
-    if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+    if (!acceptNavigationTransition(startingNavigationStamp, startingSessionId)
+      || !workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     selectedSystemId.value = systemId
     activeView.value = 'system'
-    selectedObjectId.value = null
-    selectedOrbitId.value = null
+    mapMode.value = 'navigate'
+    restoreActiveSelection()
+    editorError.value = ''
+  }
+
+  async function selectCreatedSystem(systemId: string, originStamp: string): Promise<void> {
+    if (contextStamp() !== originStamp || !workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+    await selectSystem(systemId)
+  }
+
+  /** Selects a cluster system and opens its read-only inspector without entering its system map. */
+  async function selectClusterSystem(systemId: string, openInspector = true): Promise<void> {
+    if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
+    if (!await resolveTransition()) return
+    if (!acceptNavigationTransition(startingNavigationStamp, startingSessionId)
+      || !workspace.value?.cluster.systems.some(system => system.id === systemId)) return
+    clusterSelectedSystemId.value = systemId
+    inspectedClusterSystemId.value = systemId
     selectedRouteId.value = null
+    storeCurrentSelection()
+    if (openInspector) requestPanel('inspector')
     editorError.value = ''
   }
 
@@ -427,7 +750,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
    * Selects an object in the current system after the draft guard passes.
    * @param objectId Object to select; unknown or already-selected IDs are ignored.
    */
-  async function selectObject(objectId: string): Promise<void> {
+  async function selectObject(objectId: string, openInspector = true): Promise<void> {
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = selectedSystemId.value
@@ -435,11 +758,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (!clusterId || entryView !== 'system' || !systemId) return
     const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
     if (!entrySystem?.objects.some(object => object.id === objectId)) return
-    if (selectedObjectId.value === objectId) return
+    if (selectedObjectId.value === objectId) {
+      if (openInspector) requestPanel('inspector')
+      return
+    }
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
     if (!await resolveTransition()) return
     const latestWorkspace = workspace.value
     if (
       !latestWorkspace
+      || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)
       || latestWorkspace.cluster.id !== clusterId
       || selectedSystemId.value !== systemId
       || activeView.value !== entryView
@@ -450,6 +779,8 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     selectedObjectId.value = objectId
     selectedOrbitId.value = null
     selectedRouteId.value = null
+    storeCurrentSelection()
+    if (openInspector) requestPanel('inspector')
     editorError.value = ''
   }
 
@@ -457,7 +788,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
    * Selects an Orbit in the current system after the draft guard passes.
    * @param orbitId Orbit to select; unknown or already-selected IDs are ignored.
    */
-  async function selectOrbit(orbitId: string): Promise<void> {
+  async function selectOrbit(orbitId: string, openInspector = true): Promise<void> {
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = selectedSystemId.value
@@ -465,11 +796,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (!clusterId || entryView !== 'system' || !systemId) return
     const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
     if (!entrySystem?.orbits.some(orbit => orbit.id === orbitId)) return
-    if (selectedOrbitId.value === orbitId) return
+    if (selectedOrbitId.value === orbitId) {
+      if (openInspector) requestPanel('inspector')
+      return
+    }
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
     if (!await resolveTransition()) return
     const latestWorkspace = workspace.value
     if (
       !latestWorkspace
+      || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)
       || latestWorkspace.cluster.id !== clusterId
       || selectedSystemId.value !== systemId
       || activeView.value !== entryView
@@ -480,6 +817,8 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     selectedOrbitId.value = orbitId
     selectedObjectId.value = null
     selectedRouteId.value = null
+    storeCurrentSelection()
+    if (openInspector) requestPanel('inspector')
     editorError.value = ''
   }
 
@@ -487,7 +826,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
    * Selects an existing cluster route and clears system-entity selections after the draft guard passes.
    * @param routeId Route to select; unknown or already-selected IDs are ignored.
    */
-  async function selectRoute(routeId: string): Promise<void> {
+  async function selectRoute(routeId: string, openInspector = true): Promise<void> {
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = selectedSystemId.value
@@ -495,11 +834,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (!currentWorkspace || !clusterId || entryView !== 'cluster') return
     const route = currentWorkspace.cluster.routes.find(candidate => candidate.id === routeId)
     if (!route) return
-    if (selectedRouteId.value === routeId) return
+    if (selectedRouteId.value === routeId) {
+      if (openInspector) requestPanel('inspector')
+      return
+    }
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
     if (!await resolveTransition()) return
     const latestWorkspace = workspace.value
     if (
       !latestWorkspace
+      || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)
       || latestWorkspace.cluster.id !== clusterId
       || selectedSystemId.value !== systemId
       || activeView.value !== entryView
@@ -510,15 +855,25 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     selectedRouteId.value = route.id
     selectedObjectId.value = null
     selectedOrbitId.value = null
+    clusterSelectedSystemId.value = null
+    inspectedClusterSystemId.value = null
+    storeCurrentSelection()
+    if (openInspector) requestPanel('inspector')
     editorError.value = ''
   }
 
   /** Clears map-entity selections while leaving a chart-name session attached to its captured target. */
   async function showChartDetails(): Promise<void> {
-    if (!await resolveTransition({ leaveChart: false })) return
+    const startingNavigationStamp = navigationContextStamp()
+    const startingSessionId = chartNamesSession.value?.id ?? null
+    if (!await resolveTransition({ leaveChart: false })
+      || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)) return
     selectedObjectId.value = null
     selectedOrbitId.value = null
     selectedRouteId.value = null
+    clusterSelectedSystemId.value = null
+    inspectedClusterSystemId.value = null
+    storeCurrentSelection()
     editorError.value = ''
   }
 
@@ -526,7 +881,9 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     clusterName,
     systemName,
     activeView,
+    mapMode,
     selectedSystemId,
+    clusterSelectedSystemId,
     selectedObjectId,
     selectedOrbitId,
     selectedRouteId,
@@ -547,6 +904,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     hasUncommittedNames,
     hasChartNameDraft,
     chartDraftSystemId,
+    chartDraftSystemName,
     saveMessage,
     submitNames,
     beginChartNamesEdit,
@@ -557,8 +915,31 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     setChartNamesDialogOpen,
     isChartDraftTarget,
     selectImportedWorkspace,
+    captureImportOrigin,
+    contextStamp,
     showClusterMap,
     selectSystem,
+    selectCreatedSystem,
+    selectClusterSystem,
+    setMapMode,
+    hierarchyPanelVisible,
+    inspectorPanelVisible,
+    compactPanelOpen,
+    isCompactViewport,
+    compactPanel,
+    requestPanel,
+    closePanel,
+    togglePanel,
+    zoomLevel,
+    setViewportPercentage,
+    fitActiveMap,
+    zoomActiveMap,
+    recordViewport,
+    panActiveMap,
+    initialViewport,
+    activeMapKey,
+    clusterSelectedSystem,
+    inspectedClusterSystem,
     selectObject,
     selectOrbit,
     selectRoute,

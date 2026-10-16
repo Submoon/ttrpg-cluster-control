@@ -37,6 +37,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     mapInspectorRef: editorState.mapInspectorRef,
     resolveTransition: editorState.resolveTransition,
     isChartDraftTarget: editorState.isChartDraftTarget,
+    contextStamp: editorState.contextStamp,
+    selectCreatedSystem: editorState.selectCreatedSystem,
     editorError: editorState.editorError,
   })
   const mapWorkflows = useMapWorkflows({

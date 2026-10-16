@@ -1,4 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test'
+import { activeWorkspaceFeedback } from './helpers'
+import { returnToClusterMap } from './helpers'
 
 async function expectFocusRingWithinViewport(locator: Locator): Promise<void> {
   const page = locator.page()
@@ -32,14 +34,14 @@ test('the product root creates and resumes a saved local workspace', async ({ pa
   await page.getByLabel('First star system').fill('Lark')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Lark', level: 1 })).toBeVisible()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Lark')
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'Lark', level: 1 })).toBeVisible()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Lark')
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Halcyon Spur Jump Cluster map' })).toBeVisible()
 })
 
@@ -51,7 +53,7 @@ test('keyboard focus remains visible on launch and recovery actions in a short l
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.evaluate(async () => {
     const request = indexedDB.open('ttrpg-cluster-control', 1)

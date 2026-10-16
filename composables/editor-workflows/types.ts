@@ -11,6 +11,7 @@ import type {
   SystemObjectChanges,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
+import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type TransitionGuard = 'chart' | 'inspector' | null
@@ -57,8 +58,42 @@ export interface MapInspectorHandle {
   routeSaveSucceeded(): void
 }
 
+/** Shared SVG-coordinate view controls exposed by both map wrappers. */
+export interface MapNavigationHandle extends MapImageExporter {
+  getViewport(): MapViewport
+  setViewport(viewport: MapViewport): void
+  zoomBy(factor: number): void
+  panBy(dx: number, dy: number): void
+  fitMap(usableRect?: SvgViewportRect): void
+  cancelActiveGesture(): void
+  startViewPan(event: MouseEvent): void
+  moveViewPan(event: MouseEvent): void
+  endViewPan(): void
+  startTouchNavigation(event: TouchEvent): void
+  moveTouchNavigation(event: TouchEvent): void
+  endTouchNavigation(event: TouchEvent): void
+}
+
+/** Session-only selection saved for one map visit. */
+export type MapInteractionMode = 'navigate' | 'select' | 'move'
+export type WorkspacePanel = 'hierarchy' | 'inspector'
+export type TransitionResult = { accepted: boolean }
+
+export type MapVisitSelection =
+  | { kind: 'system'; id: string; inspect?: boolean }
+  | { kind: 'route'; id: string }
+  | { kind: 'object'; id: string }
+  | { kind: 'orbit'; id: string }
+  | { kind: 'none' }
+
+/** Session-only camera and selection, keyed by the owning cluster or system ID. */
+export interface MapVisitMemory {
+  viewport: MapViewport
+  selection: MapVisitSelection
+}
+
 /** Renderer capabilities needed by system-map workflows. */
-export interface SystemMapHandle extends MapImageExporter {
+export interface SystemMapHandle extends MapNavigationHandle {
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.

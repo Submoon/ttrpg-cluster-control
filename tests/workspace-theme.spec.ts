@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { activeWorkspaceFeedback } from './helpers'
+import { returnToClusterMap, clickDockAction } from './helpers'
 import { addCatalogueObject } from './helpers'
 
 type ThemeWriteGate = {
@@ -206,7 +208,7 @@ test('theme changes recolor both maps without changing workspace drafts or writi
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const systemMap = page.locator('.system-map-svg')
   await expect(systemMap).toBeVisible()
@@ -217,7 +219,7 @@ test('theme changes recolor both maps without changing workspace drafts or writi
   await switchTheme(page, 'dark')
   await expect(systemMap).toBeVisible()
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const clusterMap = page.locator('.cluster-map-svg')
   await expect(clusterMap).toBeVisible()
   const clusterLight = await clusterMap.evaluate(element => getComputedStyle(element).backgroundColor)
@@ -289,16 +291,16 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await addCatalogueObject(page, 'jump-point')
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Cluster map' }).click()
+  await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await page.getByRole('button', { name: 'Add Jump Route' }).click()
+  await clickDockAction(page, 'Add Jump Route')
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   const routeLevel = routeInspector.getByLabel('Jump level')
   const routeFrom = routeInspector.getByLabel('From Jump Point')
@@ -382,7 +384,7 @@ test('keyboard focus stays fully visible on the Fields command in short landscap
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const fieldsTrigger = page.getByRole('button', { name: 'Open field definitions' })
   await fieldsTrigger.focus()

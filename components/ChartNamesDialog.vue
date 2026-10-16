@@ -2,7 +2,7 @@
   <UModal
     v-model:open="open"
     title="Edit chart names"
-    :description="guardMode ? 'Resolve this draft before continuing.' : 'Rename the current Jump Cluster and selected star system.'"
+    :description="guardMode ? 'Resolve this draft before continuing.' : `Rename the current Jump Cluster and ${props.targetSystemName || 'star system'}.`"
     :dismissible="true"
     :content="{ onOpenAutoFocus: focusOnDialogOpen, onCloseAutoFocus: focusAfterDialogClose }"
     :ui="{ content: 'chart-names-dialog-content max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto' }"
@@ -89,6 +89,7 @@ const systemName = defineModel<string>('systemName', { required: true })
 const props = defineProps<{
   formError: string
   guardMode: TransitionGuard
+  targetSystemName?: string
 }>()
 
 const clusterError = computed(() => props.formError.startsWith('Jump Cluster name') ? props.formError : '')

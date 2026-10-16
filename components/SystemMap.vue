@@ -13,6 +13,8 @@
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${system.name} star system map`"
+      aria-description="Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls."
+      tabindex="0"
       @wheel.capture="captureOrbitRotationWheel"
       @touchstart.capture="startTouchNavigation"
       @dragover.prevent
@@ -34,7 +36,17 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
-import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
+import {
+  clampMapViewport,
+  fitMapViewport,
+  getSvgViewportRect,
+  MAP_ZOOM_MAX_SCALE,
+  MAP_ZOOM_MIN_SCALE,
+  normalizeSvgViewportRect,
+  svgViewportExtent,
+  type MapViewport,
+  type SvgViewportRect,
+} from '../utils/map-zoom'
 import {
   getDetachedOrbitCenter as findDetachedOrbitCenter,
   type SystemMapGeometry,
@@ -68,6 +80,7 @@ const emit = defineEmits<{
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
   'drop-orbit': [point: Point, hostId: string | null]
   'drop-object': [subtype: CatalogueSubtype, point: Point, orbitId: string | null, angle: number | null]
+  'viewport-change': [viewport: MapViewport]
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
@@ -84,6 +97,7 @@ type SystemTouchGesture =
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: SystemTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
+let zoomExtentOverride: SvgViewportRect | undefined
 
 const handlers: SystemMapEventHandlers = {
   selectObject: id => emit('select-object', id),
@@ -109,11 +123,34 @@ function handleObjectDrop(event: DragEvent): void {
   mapRenderer?.handleObjectDrop(event)
 }
 
-/** Applies a relative D3 zoom factor to the mounted SVG. */
+/** Returns the current D3 transform as the map's public viewport state. */
+function getViewport(): MapViewport {
+  const transform = svgElement.value ? zoomTransform(svgElement.value) : zoomIdentity
+  return { x: transform.x, y: transform.y, k: transform.k }
+}
+
+/** Applies a finite viewport through D3 so scene transforms and zoom feedback stay synchronized. */
+function setViewport(viewport: MapViewport): void {
+  const element = svgElement.value
+  const next = clampMapViewport(viewport)
+  if (!element || !mapRenderer || !next) return
+  select(element).call(
+    mapRenderer.zoomBehavior.transform,
+    zoomIdentity.translate(next.x, next.y).scale(next.k),
+  )
+}
+
+/** Applies a positive relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
-  if (svgElement.value && mapRenderer) {
-    select(svgElement.value).call(mapRenderer.zoomBehavior.scaleBy, factor)
-  }
+  if (!Number.isFinite(factor) || factor <= 0 || !svgElement.value || !mapRenderer) return
+  select(svgElement.value).call(mapRenderer.zoomBehavior.scaleBy, factor)
+}
+
+/** Pans by a delta in SVG viewport user coordinates. */
+function panBy(dx: number, dy: number): void {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return
+  const viewport = getViewport()
+  setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
@@ -138,7 +175,7 @@ function beginTouchPinch(touches: TouchList): void {
 
 function startTouchNavigation(event: TouchEvent): void {
   if (!props.touchNavigation || event.touches.length < 2) return
-  mapRenderer?.cancelActiveGesture()
+  cancelActiveGesture()
   beginTouchPinch(event.touches)
   event.preventDefault()
   event.stopPropagation()
@@ -178,11 +215,18 @@ function endTouchNavigation(event: TouchEvent): void {
   }
 }
 
+/** Cancels active edits and navigation previews. */
+function cancelActiveGesture(): void {
+  touchGesture = null
+  viewPan = null
+  mapRenderer?.cancelActiveGesture()
+}
+
 /** Starts a view-only pan and rolls back any unfinished object or Orbit preview. */
 function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !mapRenderer) return
-  mapRenderer.cancelActiveGesture()
+  cancelActiveGesture()
   viewPan = { transform: zoomTransform(element), start: pointer(event, element) as [number, number] }
 }
 
@@ -210,19 +254,30 @@ async function exportImage(format: MapImageFormat): Promise<Blob> {
 }
 
 /**
- * Fits both object and Orbit scene bounds inside the viewport, clamping to supported zoom limits.
- * If no map geometry exists, resets the view to the identity transform.
+ * Fits both object and Orbit scene bounds inside the drawable viewport, clamping to supported zoom limits.
+ * If no valid map geometry exists, resets the view to the identity transform.
  */
-function fitMap(): void {
+function fitMap(usableRect?: SvgViewportRect): void {
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
   if (!element || !zoomBehavior) return
 
-  const bounds = ['.system-map-items', '.system-orbits']
-    .map(selector => element.querySelector<SVGGElement>(selector)?.getBBox())
-    .filter((box): box is DOMRect => box !== undefined && (box.width > 0 || box.height > 0))
+  const requestedRect = usableRect ? normalizeSvgViewportRect(usableRect) : undefined
+  const rect = requestedRect ?? getSvgViewportRect(element)
+  zoomExtentOverride = requestedRect
+  zoomBehavior.extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
+
+  let bounds: DOMRect[]
+  try {
+    bounds = ['.system-map-items', '.system-orbits']
+      .map(selector => element.querySelector<SVGGElement>(selector)?.getBBox())
+      .filter((box): box is DOMRect => box !== undefined && (box.width > 0 || box.height > 0))
+  } catch {
+    setViewport({ x: 0, y: 0, k: 1 })
+    return
+  }
   if (!bounds.length) {
-    select(element).call(zoomBehavior.transform, zoomIdentity)
+    setViewport({ x: 0, y: 0, k: 1 })
     return
   }
 
@@ -230,16 +285,8 @@ function fitMap(): void {
   const top = Math.min(...bounds.map(box => box.y))
   const right = Math.max(...bounds.map(box => box.x + box.width))
   const bottom = Math.max(...bounds.map(box => box.y + box.height))
-  const width = right - left
-  const height = bottom - top
-  const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(
-    MAP_ZOOM_MAX_SCALE,
-    (960 - 80) / width,
-    (560 - 80) / height,
-  ))
-  const x = (960 - width * scale) / 2 - left * scale
-  const y = (560 - height * scale) / 2 - top * scale
-  select(element).call(zoomBehavior.transform, zoomIdentity.translate(x, y).scale(scale))
+  const viewport = fitMapViewport({ x: left, y: top, width: right - left, height: bottom - top }, rect)
+  setViewport(viewport ?? { x: 0, y: 0, k: 1 })
 }
 
 /**
@@ -249,7 +296,7 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
-  mapRenderer?.cancelActiveGesture()
+  cancelActiveGesture()
   mapRenderer = renderSystemMap({
     element,
     system: props.system,
@@ -262,7 +309,10 @@ function render(): void {
     setZoomLevel: (value) => {
       zoomLevel.value = value
     },
+    onViewportChange: viewport => emit('viewport-change', viewport),
   })
+  const zoomExtent = zoomExtentOverride
+  if (zoomExtent) mapRenderer.zoomBehavior.extent(() => svgViewportExtent(zoomExtent))
 }
 
 /**
@@ -283,7 +333,7 @@ watch(() => props.selectedObjectId, render)
 watch(() => props.selectedOrbitId, render)
 watch(() => props.moveEnabled, render)
 
-defineExpose({ exportImage, getDetachedOrbitCenter, zoomBy, fitMap, cancelActiveGesture: () => mapRenderer?.cancelActiveGesture(), startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+defineExpose({ exportImage, getDetachedOrbitCenter, getViewport, setViewport, zoomBy, panBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
 </script>
 
 <style>

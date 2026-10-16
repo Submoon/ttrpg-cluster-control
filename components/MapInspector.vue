@@ -7,11 +7,12 @@
     :selected-object="props.selectedObject"
     :selected-orbit="props.selectedOrbit"
     :selected-route="props.selectedRoute"
+    :inspected-system="props.inspectedClusterSystem"
     :selected-route-summary="props.selectedRouteSummary"
     :has-chart-name-draft="props.hasChartNameDraft"
     :saving="props.saving"
     :editor-error="props.editorError"
-    @edit-chart-names="emit('edit-chart-names')"
+    @edit-chart-names="emit('edit-chart-names', $event)"
     @show-chart-details="emit('show-chart-details')"
     @request-route-edit="emit('request-route-edit', $event)"
     @save-route="emit('save-route', $event)"
@@ -62,7 +63,7 @@
       :workspace="props.workspace"
       :selected-system="props.selectedSystem"
       :has-chart-name-draft="props.hasChartNameDraft"
-      @edit-chart-names="emit('edit-chart-names')"
+      @edit-chart-names="emit('edit-chart-names', props.selectedSystem.id)"
     />
   </template>
 </template>
@@ -96,6 +97,7 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
+  inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
@@ -106,7 +108,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
   'show-chart-details': []
   'request-object-edit': []
   'save-object': [request: MapObjectSaveRequest]

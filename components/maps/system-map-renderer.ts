@@ -15,7 +15,13 @@ import {
   type SystemObject,
 } from '../../domain/workspace'
 import { objectMark } from '../../utils/catalogue-marks'
-import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../../utils/map-zoom'
+import {
+  getSvgViewportRect,
+  MAP_ZOOM_MAX_SCALE,
+  MAP_ZOOM_MIN_SCALE,
+  svgViewportExtent,
+  type MapViewport,
+} from '../../utils/map-zoom'
 import {
   orbitAngleAtPoint,
   orbitAtPoint,
@@ -94,6 +100,8 @@ export interface SystemMapRendererOptions {
   handlers: SystemMapEventHandlers
   /** Receives the current percentage zoom for Vue's accessible controls. */
   setZoomLevel(zoomLevel: number): void
+  /** Publishes every D3 viewport change, including changes applied by the Vue wrapper. */
+  onViewportChange(viewport: MapViewport): void
 }
 
 /** Live D3 capabilities exposed to the Vue wrapper. */
@@ -134,6 +142,7 @@ export function renderSystemMap({
   orbitRotationWheelEvents,
   handlers,
   setZoomLevel,
+  onViewportChange,
 }: SystemMapRendererOptions): SystemMapRenderer {
   let rotateOrbitFromWheel: (event: WheelEvent) => boolean = () => false
 
@@ -154,7 +163,6 @@ export function renderSystemMap({
    * @throws If current nested system geometry cannot be resolved.
    */
   function handleObjectDrop(event: DragEvent): void {
-    if (!moveEnabled) return
     const orbitDrag = event.dataTransfer?.getData('application/x-ttrpg-cluster-control-map-orbit')
     if (orbitDrag) {
       const content = element.querySelector<SVGGElement>('.system-map-content')
@@ -374,10 +382,12 @@ export function renderSystemMap({
   orbitSelectors
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', (event, orbit) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
@@ -406,10 +416,12 @@ export function renderSystemMap({
   orbitAxisHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', function (event, orbit) {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
@@ -430,6 +442,7 @@ export function renderSystemMap({
   orbitCenterHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       const handle = event.currentTarget as SVGCircleElement
       if (movedOrbitCenters.has(handle)) {
         movedOrbitCenters.delete(handle)
@@ -439,6 +452,7 @@ export function renderSystemMap({
     })
     .on('keydown', (event, orbit) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
@@ -465,10 +479,12 @@ export function renderSystemMap({
   orbitRotationHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', (event, orbit) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
@@ -620,6 +636,7 @@ export function renderSystemMap({
   objectMarks
     .on('click', (event, object) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       if (movedObjects.has(event.currentTarget as SVGGElement)) {
         movedObjects.delete(event.currentTarget as SVGGElement)
         return
@@ -628,6 +645,7 @@ export function renderSystemMap({
     })
     .on('keydown', (event, object) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectObject(object.id)
       }
@@ -975,7 +993,7 @@ export function renderSystemMap({
   )
 
   const zoomBehavior = zoom<SVGSVGElement, unknown>()
-    .extent([[0, 0], [960, 560]])
+    .extent(() => svgViewportExtent(getSvgViewportRect(element)))
     .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
     .clickDistance(6)
     .filter((event) => {
@@ -995,6 +1013,7 @@ export function renderSystemMap({
     .on('zoom', (event) => {
       content.attr('transform', event.transform.toString())
       setZoomLevel(Math.round(event.transform.k * 100))
+      onViewportChange({ x: event.transform.x, y: event.transform.y, k: event.transform.k })
     })
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())

@@ -15,7 +15,7 @@
   </template>
 
   <div class="mt-4 flex flex-wrap items-center gap-2">
-    <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
+    <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
       {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
     </UButton>
     <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
@@ -67,7 +67,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
 }>()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 </script>

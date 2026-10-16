@@ -4,6 +4,7 @@
     :class="{ 'map-workspace-shell': workspace && (activeView === 'cluster' || selectedSystem) }"
   >
     <WorkspaceHeader
+      v-if="!workspace"
       :workspace="workspace"
       :active-view="activeView"
       :selected-system="selectedSystem"
@@ -42,6 +43,7 @@
       v-model:cluster-name="clusterName"
       v-model:system-name="systemName"
       :form-error="formError"
+      :target-system-name="chartDraftSystemName"
       @update:open="setChartNamesDialogOpen"
       @apply="submitNames"
       @discard="cancelChartNamesEdit"
@@ -66,44 +68,107 @@
         @submit="submitNames"
       />
       <section v-else-if="workspace" class="editor">
-        <div v-if="activeView === 'cluster'" class="cluster-map-header">
-          <div class="map-tools cluster-map-tools">
-            <section class="object-palette cluster-edit-palette" role="region" aria-label="Cluster editing palette">
-              <div class="object-palette-heading">
-                <span class="section-kicker">ADD TO CLUSTER</span>
-              </div>
-              <div class="object-palette-controls">
-                <button class="object-palette-button" type="button" aria-label="Add star system" @click="createSystem">
-                  <span aria-hidden="true">+</span> Add system
-                </button>
-                <button class="object-palette-button" type="button" aria-label="Add Jump Route" @click="beginRoute">
-                  <span aria-hidden="true">+</span> Add Jump Route
-                </button>
-              </div>
-            </section>
-          </div>
-        </div>
-        <div v-else class="system-map-header">
-          <div class="map-tools system-map-tools">
-            <ObjectPalette
-              :selected-orbit="selectedOrbit"
-              :saving="saveState === 'saving'"
-              @add-object="addObject"
-              @add-orbit="addOrbit"
-            />
-          </div>
-        </div>
-
         <MapEditorLayout
           :mode="activeView"
           :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
           :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
+          :hierarchy-visible="hierarchyPanelVisible"
+          :inspector-visible="inspectorPanelVisible"
+          :compact-modal-open="compactPanelOpen"
+          :compact-panel="compactPanel"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen"
+          @close-panel="closePanel"
         >
+          <template #compact-recovery>
+            <section class="workspace-compact-recovery-content" aria-label="Workspace save and recovery">
+              <WorkspaceFeedback
+                :has-chart-name-draft="hasChartNameDraft"
+                :save-state="saveState"
+                :save-message="saveMessage"
+                :export-error="exportError"
+                @resume-chart-draft="beginChartNamesEdit()"
+                @retry-save="retryLatestSave"
+                @export-current-json="downloadClusterJson"
+              />
+            </section>
+          </template>
+          <template #header>
+            <WorkspaceHeader
+              :workspace="workspace"
+              :active-view="activeView"
+              :selected-system="selectedSystem"
+              :jump-point-count="jumpPoints.length"
+              :save-state="saveState"
+              :cluster-map="clusterMapRef"
+              :system-map="systemMapRef"
+              :export-error="exportError"
+              :hierarchy-open="hierarchyPanelVisible"
+              :inspector-open="inspectorPanelVisible"
+              :compact-modal-open="compactPanelOpen"
+              @export-cluster-json="downloadClusterJson"
+              @export-system-json="downloadSystemJson"
+              @export-map-image="downloadMapImage"
+              @import-file="importJsonFile"
+              @show-cluster="showClusterMap"
+              @toggle-hierarchy="togglePanel('hierarchy')"
+              @toggle-inspector="togglePanel('inspector')"
+              @files-open-change="headerFilesOpen = $event"
+            >
+              <template #field-definitions>
+                <FieldDefinitionsDialog
+                  ref="fieldDefinitionsDialog"
+                  v-if="workspace"
+                  :workspace="workspace"
+                  :saving="saveState === 'saving'"
+                  :save-error="fieldDefinitionError"
+                  :save-revision="fieldDefinitionSaveRevision"
+                  @request-open="openFieldDefinitions"
+                  @open-change="fieldDefinitionDialogOpen = $event"
+                  @clear-error="fieldDefinitionError = ''"
+                  @create-custom-field="createCustomField"
+                  @save-field-definition="saveFieldDefinitionChanges"
+                  @remove-field-definition="removeFieldDefinition"
+                />
+              </template>
+            </WorkspaceHeader>
+          </template>
+
+          <template #dock>
+            <WorkspaceDock
+              :mode="mapMode"
+              :zoom-level="zoomLevel"
+              :status="saveMessage"
+              @mode-change="setMapMode"
+              @zoom-by="zoomActiveMap"
+              @zoom-to="setViewportPercentage"
+              @fit-map="fitActiveMap"
+              @pan-by="panActiveMap"
+            >
+              <template #add="{ close }">
+                <template v-if="activeView === 'cluster'">
+                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="createSystem(); close()">
+                    Add star system
+                  </button>
+                  <button class="workspace-control tool-button" type="button" aria-label="Add Jump Route" @click="beginRoute(); close()">
+                    Add Jump Route
+                  </button>
+                </template>
+                <ObjectPalette
+                  v-else
+                  :selected-orbit="selectedOrbit"
+                  :saving="saveState === 'saving'"
+                  @add-object="addObject"
+                  @add-orbit="addOrbit"
+                />
+              </template>
+            </WorkspaceDock>
+          </template>
+
           <template #hierarchy>
             <MapHierarchy
               :mode="activeView"
               :workspace="workspace"
-              :selected-system-id="selectedSystemId"
+              :selected-system-id="activeView === 'cluster' ? clusterSelectedSystemId : selectedSystemId"
               :selected-object-id="selectedObjectId"
               :selected-orbit-id="selectedOrbitId"
               :selected-route-id="selectedRouteId"
@@ -130,28 +195,30 @@
                 :class="{ 'system-map-canvas': activeView === 'system' }"
               >
                 <ClientOnly>
-                  <ClusterMap
+                  <WorkspaceMapCanvas
                     v-if="activeView === 'cluster'"
+                    :key="activeMapKey ?? 'cluster-map'"
                     ref="clusterMapRef"
-                    :cluster="workspace.cluster"
-                    :system-positions="workspace.layout.systemPositions"
-                    :selected-system-id="selectedSystemId"
-                    :selected-route-id="selectedRouteId"
-                    @open-system="selectSystem"
-                    @select-route="selectRoute"
-                    @move-system="moveSystem"
-                  />
-                  <SystemMap
-                    v-else-if="selectedSystem"
-                    ref="systemMapRef"
+                    :active-view="activeView"
+                    :map-key="activeMapKey ?? ''"
+                    :initial-viewport="initialViewport"
+                    :workspace="workspace"
                     :system="selectedSystem"
-                    :orbit-radii="workspace.layout.orbitRadii"
-                    :orbit-rotations="workspace.layout.orbitRotations"
-                    :object-angles="workspace.layout.objectAngles"
+                    :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
                     :selected-orbit-id="selectedOrbitId"
+                    :selected-route-id="selectedRouteId"
+                    :mode="mapMode"
+                    @navigate-system="selectSystem"
+                    @select-cluster-system="selectClusterSystem"
+                    @move-select-cluster-system="selectClusterSystem($event, false)"
+                    @select-route="selectRoute"
+                    @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
+                    @move-select-object="selectObject($event, false)"
                     @select-orbit="selectOrbit"
+                    @move-select-orbit="selectOrbit($event, false)"
+                    @move-system="moveSystem"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
                     @rotate-object="rotateMapObject"
@@ -160,6 +227,40 @@
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @drop-orbit="handleOrbitDrop"
                     @drop-object="addObject"
+                    @viewport-change="recordViewport($event.key, $event.viewport)"
+                  />
+                  <WorkspaceMapCanvas
+                    v-else-if="selectedSystem"
+                    :key="activeMapKey ?? 'system-map'"
+                    ref="systemMapRef"
+                    :active-view="activeView"
+                    :map-key="activeMapKey ?? ''"
+                    :initial-viewport="initialViewport"
+                    :workspace="workspace"
+                    :system="selectedSystem"
+                    :selected-system-id="clusterSelectedSystemId"
+                    :selected-object-id="selectedObjectId"
+                    :selected-orbit-id="selectedOrbitId"
+                    :selected-route-id="selectedRouteId"
+                    :mode="mapMode"
+                    @navigate-system="selectSystem"
+                    @select-cluster-system="selectClusterSystem"
+                    @move-select-cluster-system="selectClusterSystem($event, false)"
+                    @select-route="selectRoute"
+                    @move-select-route="selectRoute($event, false)"
+                    @select-object="selectObject"
+                    @move-select-object="selectObject($event, false)"
+                    @select-orbit="selectOrbit"
+                    @move-select-orbit="selectOrbit($event, false)"
+                    @move-object="moveMapObject"
+                    @move-orbit-center="moveMapOrbitCenter"
+                    @rotate-object="rotateMapObject"
+                    @resize-orbit="resizeMapOrbit"
+                    @rotate-orbit="rotateMapOrbit"
+                    @place-object-in-orbit="placeMapObjectInOrbit"
+                    @drop-orbit="handleOrbitDrop"
+                    @drop-object="addObject"
+                    @viewport-change="recordViewport($event.key, $event.viewport)"
                   />
                   <template #fallback>
                     <div class="map-fallback grid min-h-[31rem] w-full place-items-center max-[760px]:min-h-96" role="status">
@@ -184,6 +285,7 @@
               :mode="activeView"
               :workspace="workspace"
               :selected-system="selectedSystem"
+              :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
               :selected-orbit="selectedOrbit"
               :selected-route="selectedRoute"
@@ -212,29 +314,16 @@
       </section>
     </main>
 
-    <footer v-if="workspace" class="workspace-feedback flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-2.5" aria-label="Workspace feedback and recovery">
-      <div v-if="hasChartNameDraft" class="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
-        <span class="feedback">Unapplied chart-name changes</span>
-        <UButton class="resume-chart-draft" color="neutral" variant="outline" size="sm" @click="beginChartNamesEdit">
-          Resume chart name draft
-        </UButton>
-      </div>
-      <span
-        class="save-feedback p-0 text-sm"
-        :class="{ 'error-text': saveState === 'error', 'saved-text': saveState === 'saved' }"
-        :role="saveState === 'error' ? 'alert' : 'status'"
-        :aria-live="saveState === 'error' ? 'assertive' : 'polite'"
-      >
-        <span class="inline-block size-[0.4rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
-        {{ saveMessage }}
-      </span>
-      <div v-if="saveState === 'error'" class="flex flex-wrap items-center gap-2">
-        <UButton color="primary" variant="outline" size="sm" @click="retryLatestSave">Retry save</UButton>
-        <UButton color="neutral" variant="outline" size="sm" @click="downloadClusterJson">Export current Jump Cluster JSON</UButton>
-      </div>
-      <p v-if="exportError" class="feedback m-0 error-text" role="alert" aria-live="assertive">
-        Export failed: {{ exportError }}
-      </p>
+    <footer v-if="workspace" :inert="compactPanelOpen || undefined" class="workspace-feedback flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-2.5" aria-label="Workspace feedback and recovery">
+      <WorkspaceFeedback
+        :has-chart-name-draft="hasChartNameDraft"
+        :save-state="saveState"
+        :save-message="saveMessage"
+        :export-error="exportError"
+        @resume-chart-draft="beginChartNamesEdit()"
+        @retry-save="retryLatestSave"
+        @export-current-json="downloadClusterJson"
+      />
     </footer>
   </div>
 </template>
@@ -243,11 +332,12 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import ChartNamesDialog from './ChartNamesDialog.vue'
+import WorkspaceFeedback from './WorkspaceFeedback.vue'
 
 const {
   workspace,
@@ -266,8 +356,11 @@ const {
 const {
   clusterName,
   systemName,
+  chartDraftSystemName,
   activeView,
+  mapMode,
   selectedSystemId,
+  clusterSelectedSystemId,
   selectedObjectId,
   selectedOrbitId,
   selectedRouteId,
@@ -283,6 +376,15 @@ const {
   mapInspectorRef,
   clusterMapRef,
   systemMapRef,
+  activeMapKey,
+  initialViewport,
+  clusterSelectedSystem,
+  inspectedClusterSystem,
+  hierarchyPanelVisible,
+  inspectorPanelVisible,
+  compactPanelOpen,
+  compactPanel,
+  zoomLevel,
   selectedSystem,
   selectedObject,
   selectedOrbit,
@@ -296,6 +398,16 @@ const {
   resolveTransition,
   resolveTransitionChoice,
   setChartNamesDialogOpen,
+  setMapMode,
+  togglePanel,
+  closePanel,
+  zoomActiveMap,
+  panActiveMap,
+  setViewportPercentage,
+  fitActiveMap,
+  recordViewport,
+  selectClusterSystem,
+  captureImportOrigin,
   selectImportedWorkspace,
   moveSystem,
   moveMapObject,
@@ -335,6 +447,8 @@ const {
   removeFieldDefinition,
 } = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
 
+const headerFilesOpen = ref(false)
+
 const {
   exportError,
   importError,
@@ -347,6 +461,7 @@ const {
   selectedSystem,
   commit,
   resolveTransition,
+  captureImportOrigin,
   onImported: selectImportedWorkspace,
 })
 

@@ -39,6 +39,8 @@ interface ClusterWorkflowOptions {
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   isChartDraftTarget: (systemId: string) => boolean
+  contextStamp: () => string
+  selectCreatedSystem: (systemId: string, originStamp: string) => Promise<void>
   editorError: Ref<string>
 }
 
@@ -65,6 +67,8 @@ export function useClusterWorkflows({
   mapInspectorRef,
   resolveTransition,
   isChartDraftTarget,
+  contextStamp,
+  selectCreatedSystem,
   editorError,
 }: ClusterWorkflowOptions) {
   function errorText(error: unknown): string {
@@ -79,17 +83,21 @@ export function useClusterWorkflows({
     if (!workspace.value || !await resolveTransition()) return
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
+    const originStamp = contextStamp()
 
+    let createdSystemId: string | null = null
     try {
       const result = addStarSystem(currentWorkspace)
-      selectedSystemId.value = result.system.id
-      selectedObjectId.value = null
-      selectedOrbitId.value = null
-      selectedRouteId.value = null
+      createdSystemId = result.system.id
       editorError.value = ''
       await commit(result.workspace)
     } catch (error) {
       editorError.value = errorText(error)
+    }
+    // Commit publishes memory before waiting for durability. If the user changed context while
+    // that write was pending, the new chart remains saved in the cluster without stealing focus.
+    if (createdSystemId && contextStamp() === originStamp) {
+      await selectCreatedSystem(createdSystemId, originStamp)
     }
   }
 
@@ -127,6 +135,7 @@ export function useClusterWorkflows({
   async function submitRoute(request: JumpRouteSaveRequest): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
+    const originStamp = contextStamp()
 
     try {
       const route = request.routeId
@@ -155,8 +164,10 @@ export function useClusterWorkflows({
           routes,
         },
       })
-      selectedRouteId.value = route.id
-      mapInspectorRef.value?.routeSaveSucceeded()
+      if (contextStamp() === originStamp) {
+        selectedRouteId.value = route.id
+        mapInspectorRef.value?.routeSaveSucceeded()
+      }
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
