@@ -1,6 +1,6 @@
 # Interface revamp: decisions and specification handoff
 
-Start with the [buildable specification](spec.md); the [closed Wayfinder map](map.md) retains the decision trail. All project documentation is in English. GitHub [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) remains the open source request; local Markdown records decisions, specification and later implementation work.
+Start with the [approved implementation plan](implementation-plan.md) and [buildable specification](spec.md); the [closed Wayfinder map](map.md) retains the decision trail. All project documentation is in English. GitHub [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) remains the open source request; local Markdown records decisions, specification and implementation tickets.
 
 ## Current state — 2026-10-16
 
@@ -10,7 +10,13 @@ The [controls presentation Resolution](tickets/12-decide-controls-presentation.m
 
 The [current independent Astra review](research/astra-current-interface-review-2026-10-16.md) covers the whole interface, accumulated decisions and Tools. Its verdict is ready for specification synthesis, with required fixes: Map files/Inspector layering, compact Fields/Add chrome, keyboard action access and usable map space around overlays. The human subsequently limits supported Android browsers to Chrome; keep keyboard/landscape criteria there and retain Firefox observations only as historical evidence. The historical Fit disappearance is absent in its two current sampled systems. Full parity, persistence/recovery, themes/local icons, image exports, accessibility and performance remain mandatory implementation/acceptance work.
 
-The authorized **to-spec** synthesis is complete. Analysis uses SOL 6.1 High; later code implementation belongs to Luna XHIGH subagents. Separate specification/test-seam subagents and independent technical/domain reviews completed the [handoff](research/specification-handoff-2026-10-16.md), with no remaining review blockers after correction. The human confirms automated desktop and mobile-emulated Playwright journeys, with targeted supported-Chrome phone checks for OS keyboard and physical gestures. The specification is locally planned and ready-for-agent. Continue with to-tickets in a subsequent step; no implementation tickets, product implementation, source issue closure or merge are included here.
+The authorized **to-spec** synthesis is complete. Analysis uses SOL 6.1 High; later code implementation belongs to Luna XHIGH subagents. Separate specification/test-seam subagents and independent technical/domain reviews completed the [handoff](research/specification-handoff-2026-10-16.md), with no remaining review blockers after correction. The human confirms automated desktop and mobile-emulated Playwright journeys, with targeted supported-Chrome phone checks for OS keyboard and physical gestures. The specification is locally planned and ready-for-agent. The approved decomposition below is the subsequent handoff. No product implementation, source issue closure or merge is included in this planning publication.
+
+## Implementation decomposition
+
+The human authorizes **to-tickets**, coordinated through SOL 6.1 High subagents, then requests fewer than the [initial twenty-slice proposal](research/ticket-breakdown-20-slices-2026-10-16.md). They explicitly approve the [reduced twelve-ticket scope and dependencies](research/ticket-breakdown-proposal-2026-10-16.md): **"Valider les 12 tickets et leurs dépendances"**. All 120 stories and B1–B10 remain covered; both independent reduced-proposal reviews report no blockers. The [implementation plan](implementation-plan.md) indexes the actual twelve local tickets, IDs 18–29, without hidden extra published subtickets. The [decomposition review](research/ticket-decomposition-review-2026-10-16.md) retains both reviews, dependency corrections and human approval.
+
+The final ticket consolidates all effort documentation, disconnects remaining prototypes/unused experiment material from production after a usage audit, preserves required provenance/tests/user data, and verifies/measures the final product after cleanup. Ticket 18 is initially open/unclaimed; the eleven dependent tickets are blocked/unclaimed. Creation of this backlog starts no implementation. The specification is unchanged; the closed decision map links this subsequent handoff without reopening its decisions.
 
 ## Source and runnable artifact
 

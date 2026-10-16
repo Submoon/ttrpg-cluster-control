@@ -68,6 +68,8 @@ The [local specification](spec.md) now synthesizes these Resolutions, full basel
 
 The specification is locally `open` and `enhancement` / `ready-for-agent`, meaning specified and planned. Continue through to-tickets before implementation. This map's closure does not certify current prototype defects fixed, complete physical/device/export/storage/performance acceptance, merge the preview branch or close GitHub issue 3. Application code and data formats remain unchanged by this handoff.
 
+Subsequent handoff, 2026-10-16: the human requests fewer than the first twenty proposed implementation slices, then explicitly approves twelve tickets and their dependencies. The [implementation plan](implementation-plan.md) indexes local tickets 18–29, preserves all 120 specification stories and keeps the requested documentation/prototype cleanup last. Ticket 18 is the initial available frontier; no implementation starts from publishing the backlog. This links the next phase without reopening the decision map or closing the source issue.
+
 ## Out of scope
 
 - Product implementation, implementation-ticket breakdown, and GitHub closure during this effort.
