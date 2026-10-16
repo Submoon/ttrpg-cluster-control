@@ -1,0 +1,1773 @@
+{
+  "timestamp": "2026-10-16T14:20:36.866Z",
+  "baseline": "3c660a6a2df6c37f392c998c36d72cec1ddbf938",
+  "runtime": "Nuxt compiled .output/server/index.mjs; no development server",
+  "base": "http://127.0.0.1:3118",
+  "identity": {
+    "pages/index.vue": "f918e80a5fd3e3c79eca7c6f5319461bd006a2361a12444518f9c9399bf9de5c",
+    "components/WorkspaceWelcome.vue": "17622d9f1106e96e3f49ac396d9151b44d8a55d75f4e9d34995367d7be383378",
+    "components/BaselinePage.vue": "298229f8a21c13f4feaf077fcacbc9bf4d4d578e5e52dfda5681225f3d446f83",
+    "assets/css/main.css": "157f7f8d4cdb7aa6af2fd08b691f096a06999f63a9c6de35d090da4ccec16407",
+    "assets/css/map-workspace.css": "a46317e34d9aa81d8a9843291d0fb345b7e67baa5e1879c2b14d20f6ae8c8518",
+    "composables/useLocalWorkspace.ts": "a58672176f3daad52876e8d2758458f2779e4f48e2dc7d5c863f0a1a8ad9a66c",
+    "utils/workspace-storage.ts": "00817a03e640fced61ea9a6f37bcad0f6a2ddfe4ac1f3683fe0cd5e533a0f5d4",
+    "nuxt.config.ts": "6e8c60cbc140f06447a30736d20d133b7432b4b5b2c145fcf9f5fcc57cd4e863",
+    "package-lock.json": "d7e4404874bb173bd6076b712bf8047ade041f8835bc5954a7684f880e50e70b",
+    ".output/server/index.mjs": "2441da8e168741b5bf16b27ce66e7056d6499db6ca6a69c2ff150106d377dca1",
+    ".output/nitro.json": "6b5353a223084458c2ed0b3019be33597f24fd9bb947c487f9b9426f1e2d8d3b"
+  },
+  "browser": "Playwright Chromium 156.0.8078.4, headless, deviceScaleFactor=1",
+  "checks": [
+    {
+      "name": "SSR HTTP response has loading shell",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "loadingShell": true,
+        "creationForm": false
+      }
+    },
+    {
+      "name": "same-candidate route sample /?variant=baseline",
+      "passed": true,
+      "detail": {
+        "context": "fresh isolated/no stored workspace",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "input": "mouse",
+        "domContentLoadedMs": 139.3743999999997,
+        "welcomeReadyMs": 316.5093999999999,
+        "savedMapReadyMs": 647.7266,
+        "navigation": {
+          "name": "http://127.0.0.1:3118/?variant=baseline",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 139.90000000596046,
+          "navigationId": 7790,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 0.4000000059604645,
+          "domainLookupStart": 2.800000011920929,
+          "domainLookupEnd": 5.5,
+          "connectStart": 5.5,
+          "secureConnectionStart": 0,
+          "connectEnd": 7,
+          "requestStart": 7.300000011920929,
+          "responseStart": 17.200000002980232,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 17.200000002980232,
+          "responseEnd": 18.5,
+          "transferSize": 120062,
+          "encodedBodySize": 119762,
+          "decodedBodySize": 119762,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 0,
+          "unloadEventEnd": 0,
+          "domInteractive": 64.70000000298023,
+          "domContentLoadedEventStart": 133.90000000596046,
+          "domContentLoadedEventEnd": 134,
+          "domComplete": 139.6000000089407,
+          "loadEventStart": 139.90000000596046,
+          "loadEventEnd": 139.90000000596046,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "low"
+          }
+        }
+      }
+    },
+    {
+      "name": "same-candidate route sample /",
+      "passed": true,
+      "detail": {
+        "context": "fresh isolated/no stored workspace",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "input": "mouse",
+        "domContentLoadedMs": 185.03549999999996,
+        "welcomeReadyMs": 333.29259999999977,
+        "savedMapReadyMs": 565.2896000000001,
+        "navigation": {
+          "name": "http://127.0.0.1:3118/",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 189,
+          "navigationId": 3428,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 0.29999999701976776,
+          "domainLookupStart": 2,
+          "domainLookupEnd": 2,
+          "connectStart": 2,
+          "secureConnectionStart": 0,
+          "connectEnd": 3.7999999970197678,
+          "requestStart": 4,
+          "responseStart": 13.399999991059303,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 13.399999991059303,
+          "responseEnd": 37.20000000298023,
+          "transferSize": 120045,
+          "encodedBodySize": 119745,
+          "decodedBodySize": 119745,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 0,
+          "unloadEventEnd": 0,
+          "domInteractive": 129.29999999701977,
+          "domContentLoadedEventStart": 180,
+          "domContentLoadedEventEnd": 180.09999999403954,
+          "domComplete": 189,
+          "loadEventStart": 189,
+          "loadEventEnd": 189,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "high"
+          }
+        }
+      }
+    },
+    {
+      "name": "1440x900 welcome: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "1440x900: typed creation survives resize",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 1440x900 Reach",
+        "star": "QA 1440x900 Star"
+      }
+    },
+    {
+      "name": "1440x900 creation button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 900,
+        "bounds": {
+          "x": 904.71875,
+          "y": 413.609375,
+          "width": 339.34375,
+          "height": 42.390625,
+          "top": 413.609375,
+          "right": 1244.0625,
+          "bottom": 456,
+          "left": 904.71875
+        }
+      }
+    },
+    {
+      "name": "1440x900: real saved fixture",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 1440x900 Reach",
+        "star": "QA 1440x900 Star",
+        "recordHash": "f1dd61fa88f13c90532d853fb121db25f76a9a69c65ca04e2f3496da82af5529"
+      }
+    },
+    {
+      "name": "1440x900: create/save/reload",
+      "passed": true,
+      "detail": {
+        "input": "keyboard Enter",
+        "context": "isolated"
+      }
+    },
+    {
+      "name": "1440x900 recovery: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "1440x900 retry button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 900,
+        "bounds": {
+          "x": 99.390625,
+          "y": 474.15625,
+          "width": 82.59375,
+          "height": 42.390625,
+          "top": 474.15625,
+          "right": 181.984375,
+          "bottom": 516.546875,
+          "left": 99.390625
+        }
+      }
+    },
+    {
+      "name": "1440x900 restore button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 900,
+        "bounds": {
+          "x": 189.984375,
+          "y": 474.15625,
+          "width": 177.265625,
+          "height": 42.390625,
+          "top": 474.15625,
+          "right": 367.25,
+          "bottom": 516.546875,
+          "left": 189.984375
+        }
+      }
+    },
+    {
+      "name": "1440x900: recovery retry/restore/reload",
+      "passed": true,
+      "detail": {
+        "fixture": "real created valid workspace copied to last-valid; damaged current",
+        "input": "keyboard Tab/ShiftTab and Enter"
+      }
+    },
+    {
+      "name": "390x844 welcome: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "390x844: typed creation survives resize",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 390x844 Reach",
+        "star": "QA 390x844 Star"
+      }
+    },
+    {
+      "name": "390x844 creation button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 844,
+        "bounds": {
+          "x": 33,
+          "y": 661.328125,
+          "width": 324,
+          "height": 42.390625,
+          "top": 661.328125,
+          "right": 357,
+          "bottom": 703.71875,
+          "left": 33
+        }
+      }
+    },
+    {
+      "name": "390x844: real saved fixture",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 390x844 Reach",
+        "star": "QA 390x844 Star",
+        "recordHash": "7ffd9bedc3b225a2808e15fac9e0383c2a8198101e46b151142c05db10559413"
+      }
+    },
+    {
+      "name": "390x844: create/save/reload",
+      "passed": true,
+      "detail": {
+        "input": "touch tap after keyboard focus/scroll",
+        "context": "isolated"
+      }
+    },
+    {
+      "name": "390x844 recovery: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "390x844 retry button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 844,
+        "bounds": {
+          "x": 37,
+          "y": 464.140625,
+          "width": 82.59375,
+          "height": 42.390625,
+          "top": 464.140625,
+          "right": 119.59375,
+          "bottom": 506.53125,
+          "left": 37
+        }
+      }
+    },
+    {
+      "name": "390x844 restore button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 0,
+        "viewportHeight": 844,
+        "bounds": {
+          "x": 127.59375,
+          "y": 464.140625,
+          "width": 177.265625,
+          "height": 42.390625,
+          "top": 464.140625,
+          "right": 304.859375,
+          "bottom": 506.53125,
+          "left": 127.59375
+        }
+      }
+    },
+    {
+      "name": "390x844: recovery retry/restore/reload",
+      "passed": true,
+      "detail": {
+        "fixture": "real created valid workspace copied to last-valid; damaged current",
+        "input": "keyboard Tab/ShiftTab and Enter"
+      }
+    },
+    {
+      "name": "844x390 welcome: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "844x390: typed creation survives resize",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 844x390 Reach",
+        "star": "QA 844x390 Star"
+      }
+    },
+    {
+      "name": "844x390 creation button: focused and unobscured",
+      "passed": false,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 18,
+        "viewportHeight": 390,
+        "bounds": {
+          "x": 536.78125,
+          "y": 347.21875,
+          "width": 251.375,
+          "height": 42.390625,
+          "top": 347.21875,
+          "right": 788.15625,
+          "bottom": 389.609375,
+          "left": 536.78125
+        }
+      }
+    },
+    {
+      "name": "844x390: real saved fixture",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 844x390 Reach",
+        "star": "QA 844x390 Star",
+        "recordHash": "0d1f28de9eede58edc2d82fcb55bcca134d9a9dc63e866345bd1de3114936fb4"
+      }
+    },
+    {
+      "name": "844x390: create/save/reload",
+      "passed": true,
+      "detail": {
+        "input": "touch tap after keyboard focus/scroll",
+        "context": "isolated"
+      }
+    },
+    {
+      "name": "844x390 recovery: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "844x390 retry button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 45,
+        "viewportHeight": 390,
+        "bounds": {
+          "x": 64.28125,
+          "y": 335.875,
+          "width": 82.59375,
+          "height": 42.390625,
+          "top": 335.875,
+          "right": 146.875,
+          "bottom": 378.265625,
+          "left": 64.28125
+        }
+      }
+    },
+    {
+      "name": "844x390 restore button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 45,
+        "viewportHeight": 390,
+        "bounds": {
+          "x": 154.875,
+          "y": 335.875,
+          "width": 177.265625,
+          "height": 42.390625,
+          "top": 335.875,
+          "right": 332.140625,
+          "bottom": 378.265625,
+          "left": 154.875
+        }
+      }
+    },
+    {
+      "name": "844x390: recovery retry/restore/reload",
+      "passed": true,
+      "detail": {
+        "fixture": "real created valid workspace copied to last-valid; damaged current",
+        "input": "keyboard Tab/ShiftTab and Enter"
+      }
+    },
+    {
+      "name": "390x500 welcome: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "390x500: typed creation survives resize",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 390x500 Reach",
+        "star": "QA 390x500 Star"
+      }
+    },
+    {
+      "name": "390x500 creation button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 375,
+        "viewportHeight": 500,
+        "bounds": {
+          "x": 33,
+          "y": 286.328125,
+          "width": 324,
+          "height": 42.390625,
+          "top": 286.328125,
+          "right": 357,
+          "bottom": 328.71875,
+          "left": 33
+        }
+      }
+    },
+    {
+      "name": "390x500: real saved fixture",
+      "passed": true,
+      "detail": {
+        "cluster": "QA 390x500 Reach",
+        "star": "QA 390x500 Star",
+        "recordHash": "9447f240d7329a487bae9c3dbeab06e19f6b918ff21977b4790fe03959c4bb75"
+      }
+    },
+    {
+      "name": "390x500: create/save/reload",
+      "passed": true,
+      "detail": {
+        "input": "touch tap after keyboard focus/scroll",
+        "context": "isolated"
+      }
+    },
+    {
+      "name": "390x500 recovery: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "viewport": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "390x500 retry button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 19,
+        "viewportHeight": 500,
+        "bounds": {
+          "x": 37,
+          "y": 445.140625,
+          "width": 82.59375,
+          "height": 42.390625,
+          "top": 445.140625,
+          "right": 119.59375,
+          "bottom": 487.53125,
+          "left": 37
+        }
+      }
+    },
+    {
+      "name": "390x500 restore button: focused and unobscured",
+      "passed": true,
+      "detail": {
+        "outline": "2px solid rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "scrollY": 19,
+        "viewportHeight": 500,
+        "bounds": {
+          "x": 127.59375,
+          "y": 445.140625,
+          "width": 177.265625,
+          "height": 42.390625,
+          "top": 445.140625,
+          "right": 304.859375,
+          "bottom": 487.53125,
+          "left": 127.59375
+        }
+      }
+    },
+    {
+      "name": "390x500: recovery retry/restore/reload",
+      "passed": true,
+      "detail": {
+        "fixture": "real created valid workspace copied to last-valid; damaged current",
+        "input": "keyboard Tab/ShiftTab and Enter"
+      }
+    },
+    {
+      "name": "No page errors",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "No hydration warnings",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "contrast": [
+    {
+      "label": "welcome dark desktop",
+      "method": "computed foreground with nine actual rendered background samples; control border or fill against actual adjacent pixel; text 4.5, control/focus 3",
+      "measurements": [
+        {
+          "i": 0,
+          "tag": "SPAN",
+          "text": "A PRIVATE CHART FOR YOUR CAMPAIGN",
+          "color": "rgb(239, 161, 111)",
+          "border": "rgb(239, 161, 111)",
+          "borderWidth": "0px",
+          "outline": "rgb(239, 161, 111)",
+          "outlineWidth": "3px",
+          "x": 162.9375,
+          "y": 161,
+          "w": 203.75,
+          "h": 11,
+          "backgrounds": [
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ]
+          ],
+          "textRatio": 9.057364383375226,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 9.057364383375226,
+          "focusPass": true
+        },
+        {
+          "i": 1,
+          "tag": "H1",
+          "text": "Give the unknown a name.",
+          "color": "rgb(232, 238, 231)",
+          "border": "rgb(232, 238, 231)",
+          "borderWidth": "0px",
+          "outline": "rgb(232, 238, 231)",
+          "outlineWidth": "3px",
+          "x": 162.9375,
+          "y": 193,
+          "w": 583.3125,
+          "h": 254.015625,
+          "backgrounds": [
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              20,
+              27,
+              28
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              14,
+              22,
+              23
+            ],
+            [
+              13,
+              20,
+              21
+            ],
+            [
+              12,
+              18,
+              20
+            ]
+          ],
+          "textRatio": 14.805194533138106,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 14.805194533138106,
+          "focusPass": true
+        },
+        {
+          "i": 2,
+          "tag": "P",
+          "text": "Start with a Jump Cluster and its first star system. This workspace stays in this browser; there is ",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(192, 203, 196)",
+          "borderWidth": "0px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 162.9375,
+          "y": 463.015625,
+          "w": 607.984375,
+          "h": 53.1875,
+          "backgrounds": [
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ],
+            [
+              11,
+              17,
+              19
+            ]
+          ],
+          "textRatio": 11.39756337051532,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 11.39756337051532,
+          "focusPass": true
+        },
+        {
+          "i": 3,
+          "tag": "SPAN",
+          "text": "NEW LOCAL WORKSPACE",
+          "color": "rgb(239, 161, 111)",
+          "border": "rgb(239, 161, 111)",
+          "borderWidth": "0px",
+          "outline": "rgb(239, 161, 111)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 191.921875,
+          "w": 125.578125,
+          "h": 14.390625,
+          "backgrounds": [
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 8.258623940381913,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 8.258623940381913,
+          "focusPass": true
+        },
+        {
+          "i": 4,
+          "tag": "SPAN",
+          "text": "01 / 01",
+          "color": "rgb(156, 170, 162)",
+          "border": "rgb(156, 170, 162)",
+          "borderWidth": "0px",
+          "outline": "rgb(156, 170, 162)",
+          "outlineWidth": "3px",
+          "x": 1165.03125,
+          "y": 191.921875,
+          "w": 39.03125,
+          "h": 14.390625,
+          "backgrounds": [
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 7.174480179723202,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 7.174480179723202,
+          "focusPass": true
+        },
+        {
+          "i": 5,
+          "tag": "LABEL",
+          "text": "Jump Cluster",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(192, 203, 196)",
+          "borderWidth": "0px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 238.3125,
+          "w": 339.34375,
+          "h": 16.078125,
+          "backgrounds": [
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.392448148219573,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 10.392448148219573,
+          "focusPass": true
+        },
+        {
+          "i": 6,
+          "tag": "INPUT",
+          "text": "clusterName",
+          "color": "rgb(232, 238, 231)",
+          "border": "rgb(140, 154, 146)",
+          "borderWidth": "1px",
+          "outline": "rgb(232, 238, 231)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 265.578125,
+          "w": 339.34375,
+          "h": 44,
+          "backgrounds": [
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ]
+          ],
+          "textRatio": 13.837754295807098,
+          "textPass": true,
+          "controlRatio": 5.908293248695796,
+          "controlPass": true,
+          "focusRatio": 14.716124529800773,
+          "focusPass": true
+        },
+        {
+          "i": 7,
+          "tag": "LABEL",
+          "text": "First star system",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(192, 203, 196)",
+          "borderWidth": "0px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 320.765625,
+          "w": 339.34375,
+          "h": 16.078125,
+          "backgrounds": [
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.392448148219573,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 10.392448148219573,
+          "focusPass": true
+        },
+        {
+          "i": 8,
+          "tag": "INPUT",
+          "text": "systemName",
+          "color": "rgb(232, 238, 231)",
+          "border": "rgb(140, 154, 146)",
+          "borderWidth": "1px",
+          "outline": "rgb(232, 238, 231)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 348.03125,
+          "w": 339.34375,
+          "h": 44,
+          "backgrounds": [
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ],
+            [
+              21,
+              34,
+              37
+            ]
+          ],
+          "textRatio": 13.837754295807098,
+          "textPass": true,
+          "controlRatio": 5.908293248695796,
+          "controlPass": true,
+          "focusRatio": 14.716124529800773,
+          "focusPass": true
+        },
+        {
+          "i": 9,
+          "tag": "BUTTON",
+          "text": "Create local workspace ->",
+          "color": "rgb(41, 25, 15)",
+          "border": "rgb(239, 161, 111)",
+          "borderWidth": "1px",
+          "outline": "rgb(255, 192, 135)",
+          "outlineWidth": "2px",
+          "x": 904.71875,
+          "y": 413.609375,
+          "w": 339.34375,
+          "h": 42.390625,
+          "backgrounds": [
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ],
+            [
+              239,
+              161,
+              111
+            ]
+          ],
+          "textRatio": 8.06108769259923,
+          "textPass": true,
+          "controlRatio": 8.258623940381913,
+          "controlPass": true,
+          "focusRatio": 10.855814121345832,
+          "focusPass": true
+        },
+        {
+          "i": 10,
+          "tag": "P",
+          "text": "Your archive remains on this device.",
+          "color": "rgb(156, 170, 162)",
+          "border": "rgb(156, 170, 162)",
+          "borderWidth": "0px",
+          "outline": "rgb(156, 170, 162)",
+          "outlineWidth": "3px",
+          "x": 904.71875,
+          "y": 456,
+          "w": 339.34375,
+          "h": 36.453125,
+          "backgrounds": [
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 7.174480179723202,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 7.174480179723202,
+          "focusPass": true
+        }
+      ]
+    },
+    {
+      "label": "recovery dark desktop",
+      "method": "computed foreground with nine actual rendered background samples; control border or fill against actual adjacent pixel; text 4.5, control/focus 3",
+      "measurements": [
+        {
+          "i": 0,
+          "tag": "SPAN",
+          "text": "LOCAL ARCHIVE UNAVAILABLE",
+          "color": "rgb(239, 161, 111)",
+          "border": "rgb(239, 161, 111)",
+          "borderWidth": "0px",
+          "outline": "rgb(239, 161, 111)",
+          "outlineWidth": "3px",
+          "x": 99.390625,
+          "y": 165,
+          "w": 154.15625,
+          "h": 11,
+          "backgrounds": [
+            [
+              29,
+              27,
+              29
+            ],
+            [
+              29,
+              28,
+              30
+            ],
+            [
+              30,
+              28,
+              30
+            ],
+            [
+              28,
+              27,
+              29
+            ],
+            [
+              28,
+              28,
+              30
+            ],
+            [
+              28,
+              28,
+              30
+            ],
+            [
+              28,
+              28,
+              30
+            ],
+            [
+              27,
+              28,
+              30
+            ],
+            [
+              27,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 8.062262118550718,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 8.062262118550718,
+          "focusPass": true
+        },
+        {
+          "i": 1,
+          "tag": "H1",
+          "text": "Your workspace could not be opened.",
+          "color": "rgb(232, 238, 231)",
+          "border": "rgb(232, 238, 231)",
+          "borderWidth": "0px",
+          "outline": "rgb(232, 238, 231)",
+          "outlineWidth": "3px",
+          "x": 99.390625,
+          "y": 197,
+          "w": 606,
+          "h": 177.59375,
+          "backgrounds": [
+            [
+              25,
+              28,
+              30
+            ],
+            [
+              25,
+              28,
+              30
+            ],
+            [
+              23,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              19,
+              28,
+              29
+            ],
+            [
+              18,
+              28,
+              29
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 14.528720336680557,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 14.589000723020506,
+          "focusPass": true
+        },
+        {
+          "i": 2,
+          "tag": "P",
+          "text": "The saved workspace has an unsupported or damaged format.",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(192, 203, 196)",
+          "borderWidth": "0px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 99.390625,
+          "y": 390.59375,
+          "w": 606,
+          "h": 26.59375,
+          "backgrounds": [
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              22,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.320875564457696,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 10.289494696356192,
+          "focusPass": true
+        },
+        {
+          "i": 3,
+          "tag": "P",
+          "text": "This browser keeps the last valid workspace snapshot as a backup when one is available.",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(192, 203, 196)",
+          "borderWidth": "0px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 99.390625,
+          "y": 432.375,
+          "w": 606,
+          "h": 26.59375,
+          "backgrounds": [
+            [
+              20,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.339780642536192,
+          "textPass": true,
+          "controlRatio": null,
+          "controlPass": null,
+          "focusRatio": 10.389205387751291,
+          "focusPass": true
+        },
+        {
+          "i": 4,
+          "tag": "BUTTON",
+          "text": "Try again",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(140, 154, 146)",
+          "borderWidth": "1px",
+          "outline": "rgb(192, 203, 196)",
+          "outlineWidth": "3px",
+          "x": 99.390625,
+          "y": 474.15625,
+          "w": 82.59375,
+          "h": 42.390625,
+          "backgrounds": [
+            [
+              22,
+              28,
+              30
+            ],
+            [
+              22,
+              28,
+              30
+            ],
+            [
+              21,
+              27,
+              29
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ],
+            [
+              20,
+              28,
+              30
+            ],
+            [
+              21,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.320875564457696,
+          "textPass": true,
+          "controlRatio": 5.867602950567683,
+          "controlPass": true,
+          "focusRatio": 10.320875564457696,
+          "focusPass": true
+        },
+        {
+          "i": 5,
+          "tag": "BUTTON",
+          "text": "Restore last valid backup",
+          "color": "rgb(192, 203, 196)",
+          "border": "rgb(140, 154, 146)",
+          "borderWidth": "1px",
+          "outline": "rgb(255, 192, 135)",
+          "outlineWidth": "2px",
+          "x": 189.984375,
+          "y": 474.15625,
+          "w": 177.265625,
+          "h": 42.390625,
+          "backgrounds": [
+            [
+              19,
+              28,
+              30
+            ],
+            [
+              19,
+              28,
+              30
+            ],
+            [
+              19,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ],
+            [
+              18,
+              28,
+              30
+            ]
+          ],
+          "textRatio": 10.375565587897873,
+          "textPass": true,
+          "controlRatio": 5.8887147063140475,
+          "controlPass": true,
+          "focusRatio": 10.8198407855758,
+          "focusPass": true
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "pageerrors": [],
+  "limitations": [
+    "Current dark theme only; light belongs to ticket 19.",
+    "Physical Android Chrome, OS keyboard, safe areas and physical gestures unavailable.",
+    "Route-only timings on one candidate are not source-before/after or library cost measurements."
+  ]
+}

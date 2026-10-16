@@ -1,0 +1,27 @@
+{
+  "source": "3c660a6a2df6c37f392c998c36d72cec1ddbf938",
+  "route": "http://127.0.0.1:3100/?variant=baseline",
+  "runtime": "Nuxt development server on 127.0.0.1:3100",
+  "browser": "Playwright Chromium, headless",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "context": "fresh isolated browser context; no preexisting workspace data",
+  "fixture": {
+    "cluster": "Kestrel Reach",
+    "firstSystem": "Vesper"
+  },
+  "outcomes": {
+    "welcomeVisible": true,
+    "workspaceCreated": true,
+    "savedStatusVisible": true,
+    "reloadRestoredWorkspace": true,
+    "clusterMapOpenedAfterReload": true
+  },
+  "screenshots": [
+    "baseline-welcome-1440x900.png",
+    "baseline-created-1440x900.png",
+    "baseline-reloaded-1440x900.png"
+  ]
+}

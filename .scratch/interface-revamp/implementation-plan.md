@@ -63,4 +63,8 @@ Coordinate and analyze with **SOL 6.1 High**; delegate implementation to **Luna 
 
 Use maximum Nuxt UI reuse, authoritative existing domain/identity/schema, presentation-independent drafts, targeted exclusion and separate validated-memory/durable-save boundaries. Preserve working baseline commands during rollout; do not promote the disposable sample or expose placeholder success. Every relevant workflow owns its accessibility, both-theme, automated mobile and failure-path evidence rather than deferring those to the final ticket. Android targets **Chrome only**, with targeted OS-keyboard/physical-gesture checks supplementing Playwright emulation. The [test-seam report](research/spec-test-seams-2026-10-16.md) provides actual prior art and limits.
 
-No product implementation, test/build/device pass, source issue closure or merge is claimed by this planning publication. Future work closes local tickets only after their own criteria and evidence are satisfied; closing all local tickets does not automatically close the source request.
+The initial planning publication did not implement the product or claim test/build/device passes, source issue closure or merge. Close local tickets only after their own criteria and evidence are satisfied; closing all local tickets does not automatically close the source request.
+
+## Implementation progress
+
+2026-10-16 — Ticket 18 is closed after focused persistence/recovery tests, compiled launch/focus tests, typecheck, 41/41 compiled SSR/responsive checks and independent technical/domain-data reviews. Ticket 19 is the next available unclaimed ticket; implementation 19–21 remains sequential with a commit/push between tickets under the human's explicit instruction. The [execution record](research/implementation-18-21-2026-10-16.md) holds current checkpoint identities, evidence and limits. Other tickets remain blocked by the approved graph. No source-issue completion or physical-device pass is inferred.

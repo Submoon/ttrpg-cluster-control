@@ -1,0 +1,50 @@
+[
+  {
+    "label": "unmodified-candidate",
+    "evidenceType": "unmodified compiled candidate reference",
+    "css": "",
+    "focused": true,
+    "scrollY": 18,
+    "viewport": {
+      "width": 844,
+      "height": 390
+    },
+    "rect": {
+      "x": 536.78125,
+      "y": 347.21875,
+      "width": 251.375,
+      "height": 42.390625,
+      "top": 347.21875,
+      "right": 788.15625,
+      "bottom": 389.609375,
+      "left": 536.78125
+    },
+    "extent": 5,
+    "scrollMarginBlock": "0px",
+    "fullRingVisible": false
+  },
+  {
+    "label": "injected-scroll-margin-only",
+    "evidenceType": "EXPLORATION ONLY: runtime-injected CSS; not candidate acceptance",
+    "css": ".welcome .primary-button { scroll-margin-block: .75rem !important; }",
+    "focused": true,
+    "scrollY": 30,
+    "viewport": {
+      "width": 844,
+      "height": 390
+    },
+    "rect": {
+      "x": 536.78125,
+      "y": 335.21875,
+      "width": 251.375,
+      "height": 42.390625,
+      "top": 335.21875,
+      "right": 788.15625,
+      "bottom": 377.609375,
+      "left": 536.78125
+    },
+    "extent": 5,
+    "scrollMarginBlock": "12px",
+    "fullRingVisible": true
+  }
+]

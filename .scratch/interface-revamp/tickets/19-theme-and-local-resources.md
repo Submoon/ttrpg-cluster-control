@@ -1,6 +1,6 @@
 ---
 title: 'Choose a coherent local light or dark presentation'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

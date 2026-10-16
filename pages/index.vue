@@ -4,7 +4,7 @@ const route = useRoute()
 const variant = computed(() => {
   const value = route.query.variant
   if (value === 'baseline') return null
-  return value === 'A' || value === 'B' || value === 'C' ? value : 'B'
+  return value === 'A' || value === 'B' || value === 'C' ? value : null
 })
 </script>
 
