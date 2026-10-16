@@ -50,3 +50,7 @@ The [focused probe](../device-preservation-lab/modal-position-probe-2026-10-16/p
 The first flow attempt incorrectly targeted the development-only “Return to Fields draft” switcher entry. Correcting the harness to use the production Fields opener passes without another application change. The coordinator independently reads the final report, checks all four assertions and empty failure list, verifies both runtime source hashes against the frozen checkout, and inspects the centered desktop and fullscreen portrait captures. These checks cover the correction; the earlier 26-case development matrix is not rerun or relabeled as production evidence.
 
 The human's Bottom selection is recorded. The prototype ticket stays in progress for the remaining phone/keyboard feedback; this correction does not establish physical-keyboard acceptance, final Nuxt UI adoption or product completion. Publish through the existing draft PR; do not merge or close the source issue.
+
+## Human acceptance
+
+2026-10-16 — After publication of corrected snapshot `9c83edb1915114768cc447890db79b6e0d28e142`, the human says “OK pour ce prototype.” The [prototype decision](../tickets/16-prototype-mobile-fields-flow.md#resolution) is now closed. This supersedes the earlier pending-verdict handoff, while leaving the recorded measurement limits and separate device/preservation investigation unchanged.

@@ -27,7 +27,7 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 - Current prototype, 2026-10-15: [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md) is claimed as `codex-prototype-mobile-fields`. The human explicitly requests the runnable Fields iteration. [The prototype report](research/fields-prototype-2026-10-15.md) records the refreshed `c9ba3f3f` baseline, SOL architecture/reviews, Luna XHIGH implementation and local development evidence as it becomes available. Keep B/Dock and the confirmed Fields flow; compare only command placement within Fields. The saved-workspace editor, Inspector-form decision and Add-banner refinement remain separate.
 
-The human selected **Bottom commands** for Fields after phone testing on 2026-10-16. The [placement follow-up](research/fields-modal-position-2026-10-16.md) corrects the reported production modal position and duplicate creation command; local production build/typecheck and 4/4 focused browser cases pass. The [Fields prototype ticket](tickets/16-prototype-mobile-fields-flow.md) remains in progress for remaining device checks; command placement no longer needs comparison.
+The human accepts the corrected Fields prototype on 2026-10-16; its closed decision is indexed below. Remaining physical-device/preservation checks stay in their dedicated investigation; Inspector-form refinement and final Nuxt UI adoption remain separate.
 
 ## Decisions so far
 
@@ -41,6 +41,7 @@ The human selected **Bottom commands** for Fields after phone testing on 2026-10
 - [Measure Nuxt UI integration, offline resources, and comparative performance](tickets/09-measure-nuxt-ui-integration.md): production desktop costs and targeted SSR/theme/portal/offline behavior are measured; cold control icons and theme coordination fail, mobile/gesture comparisons remain partial, and device/preservation evidence plus human library adoption remain downstream.
 - [Finalize the tools contract after the Astra interface review](tickets/11-finalize-tools-contract.md): contextual Navigate, Select-to-Inspect, persistent Move and same-type Add without automatic Inspect/context entry; right-drag view pan and two-contact navigation preserve a chosen route origin, while explicit Add exit returns to Navigate.
 - [Decide the mobile Fields list-to-editor flow](tickets/13-decide-mobile-fields-flow.md): mobile list → consultation detail → Edit, shared Fields/Manage session resumption, preserved drafts/list position, creation to new detail and deletion to the list; desktop keeps two columns and reachable commands/reviews remain mandatory.
+- [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md): human accepts the corrected prototype with Bottom commands, Nuxt UI centering and one creation entry per screen; remaining device/preservation evidence and final library adoption stay separate.
 
 ## Not yet specified
 

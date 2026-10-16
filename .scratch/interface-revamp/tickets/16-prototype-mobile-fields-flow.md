@@ -1,6 +1,6 @@
 ---
 title: Validate the mobile Fields flow in the B prototype
-status: in-progress
+status: closed
 assignee: codex-prototype-mobile-fields
 label: wayfinder:prototype
 type: prototype
@@ -39,6 +39,14 @@ The separate Inspector-form decision and controls-presentation validation do not
 ## Notes
 
 Claimed on the human's explicit request to continue with the prototype. Apply Wayfinder and prototype. Analysis/coordination: SOL 6.1 High; every code change: Luna XHIGH, with the repository's specialist review workflow. It is a prototype decision, not an implementation ticket for the final product. Keep the device/preservation investigation and final Nuxt UI adoption separate.
+
+## Resolution
+
+2026-10-16 — The human explicitly accepts the published artifact: “OK pour ce prototype.” Close this prototype decision with Bottom commands, mobile list → consultation detail → Edit, resumable session drafts, Nuxt UI modal centering and one guarded creation entry per screen. The accepted application snapshot is `9c83edb1915114768cc447890db79b6e0d28e142`, published in draft PR 28 with a successful Vercel deployment.
+
+The [Fields report](../research/fields-prototype-2026-10-15.md) and [production placement follow-up](../research/fields-modal-position-2026-10-16.md) retain their actual source identities and bounded evidence. Human acceptance settles the prototype question; it does not manufacture additional keyboard, browser, OS or physical-device measurements. Carry the remaining representative-device and preservation checks in [Validate the selected B direction on representative devices and preservation flows](10-validate-b-device-preservation.md). Inspector-form refinement and final Nuxt UI adoption remain separate decisions.
+
+Fresh fetch confirms this intentional feature baseline is 0 main-only / 15 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue 3 was refreshed and remains open, with unchanged requirements and no comments. No product completion, merge, source-issue closure or final library adoption follows from this Resolution.
 
 ## Comments
 
