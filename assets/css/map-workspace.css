@@ -292,9 +292,18 @@ p-note {
 
 
 .map-workspace-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding-inline: 0;
+}
+
+.map-workspace-shell > .workspace-header {
+  flex: 0 0 auto;
+}
+
+.map-workspace-shell > .workspace-feedback {
+  flex: 0 0 auto;
 }
 
 .map-workspace-shell .topbar,
@@ -331,6 +340,7 @@ p-note {
   width: 100%;
   max-width: none;
   min-height: 0;
+  flex: 1 1 0;
   margin-inline: 0;
   padding: 0;
 }
@@ -340,7 +350,7 @@ p-note {
   display: flex;
   width: 100%;
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   flex-direction: column;
 }
 
@@ -813,30 +823,13 @@ p-note {
 
 
 
-@media (max-width: 760px) {
-
-}
-
-/* Ticket 21 workspace rows use measured grid tracks instead of map-covering panel offsets. */
-.map-workspace-shell .main-content {
-  max-width: none;
-  min-height: 0;
-  padding: 0;
-}
-
-.map-workspace-shell .editor {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-}
-
+/* Ticket 21 workspace rows stay within the shell's definite viewport height. */
 .map-editor-layout {
   display: grid;
   width: 100%;
   min-width: 0;
-  min-height: min(78vh, 56rem);
-  min-height: min(78dvh, 56rem);
+  min-height: 0;
+  flex: 1 1 0;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0.6rem;
 }
@@ -852,7 +845,7 @@ p-note {
 .map-workspace-shell .editor-grid {
   display: grid;
   min-width: 0;
-  min-height: 31rem;
+  min-height: 0;
   height: 100%;
   grid-template-columns: minmax(9rem, 0.78fr) minmax(14rem, 3.2fr) minmax(10rem, 0.88fr);
   grid-template-rows: minmax(0, 1fr);
@@ -901,9 +894,10 @@ p-note {
 
 .workspace-control:focus-visible,
 .workspace-map-canvas :focus-visible {
-  outline: 3px solid var(--focus) !important;
-  outline-offset: 3px !important;
+  outline: 2px solid var(--focus) !important;
+  outline-offset: 2px !important;
   box-shadow: none !important;
+  transition: none !important;
 }
 
 .map-workspace-shell .workspace-map-column {
@@ -987,9 +981,10 @@ p-note {
 }
 
 .workspace-dock [role="slider"]:focus-visible {
-  outline: 3px solid var(--focus) !important;
-  outline-offset: 3px !important;
+  outline: 2px solid var(--focus) !important;
+  outline-offset: 2px !important;
   box-shadow: none !important;
+  transition: none !important;
 }
 
 .workspace-zoom-range output {
@@ -1111,17 +1106,7 @@ p-note {
 }
 
 @media (max-width: 760px), (max-height: 600px) {
-  .map-workspace-shell .main-content {
-    padding: 0;
-  }
-
-  .map-editor-layout {
-    min-height: min(75dvh, 44rem);
-    grid-template-rows: auto auto minmax(0, 1fr);
-  }
-
   .map-workspace-shell .editor-grid {
-    min-height: 18rem;
     grid-template-columns: minmax(0, 1fr);
   }
 
