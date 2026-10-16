@@ -1,6 +1,7 @@
 ---
 title: Confirm Nuxt UI adoption from prototype evidence
-status: open
+status: closed
+assignee: codex-wayfinder-nuxt-ui-adoption
 label: wayfinder:grilling
 type: grilling
 mode: HITL
@@ -45,11 +46,11 @@ The [research](../research/nuxt-ui-fit.md) establishes documentary generation co
 
 ### Current readiness after the accepted artifacts
 
-**Open and unclaimed, 2026-10-16.** All three prerequisite investigations/decisions are closed. Resume this ticket as its own HITL session, claim it, and use the dossier below for the actual adoption conversation. No choice has been supplied on the human's behalf. A requirement for additional evidence must identify the exact missing proof and its dependency, rather than infer full technical acceptance or automatically repeat a broad prototype.
+**Resolved, 2026-10-16.** The human confirms using Nuxt UI and its components to the greatest practical extent, limiting other interface implementations to exceptions. The [Resolution](#resolution) is authoritative. The dossier and historical gate boundary below retain the evidence and limitations on which the decision was made; this is library adoption, not passage of all product acceptance gates.
 
 2026-10-16 — The [consolidated validation dossier](../research/b-consolidated-validation-2026-10-16.md) joins the human-selected Dock, accepted Fields and inspector, source-specific runtime checks, historical cost/resource/theme measurements, and a current responsibility/exception inventory. It records actual Android/Firefox feedback: editing actions are hidden with the keyboard open, and Fields has an oversized header in landscape. Closing the keyboard is a reported workaround, not a measured keyboard pass or an automatic change to the existing contract. The separate second-contact physical check is unanswered.
 
-The adoption conversation must explicitly carry compact-header/keyboard reachability, local icon packaging, coherent portal themes and durable preference, layering, complete baseline controls, durable saving and representative performance/accessibility into integration obligations. Historical native Fields measurements do not describe B's later Nuxt UI modal. The evidence task is complete and its bounded retained-baseline pan/zoom probe passes with the source/measurement limits recorded in the dossier. No new full-layout prototype or broad research campaign is implied by the known implementation gaps. This section records no adoption answer.
+The adoption conversation carries compact-header/keyboard reachability, local icon packaging, coherent portal themes and durable preference, layering, complete baseline controls, durable saving and representative performance/accessibility into integration obligations. Historical native Fields measurements do not describe B's later Nuxt UI modal. The evidence task is complete and its bounded retained-baseline pan/zoom probe passes with the source/measurement limits recorded in the dossier. No new full-layout prototype or broad research campaign is implied by the known implementation gaps. The linked Resolution records the subsequent final scope answer; these measurements retain their limits.
 
 ### Historical gate boundary
 
@@ -58,3 +59,37 @@ The adoption conversation must explicitly carry compact-header/keyboard reachabi
 ## Notes
 
 Apply `wayfinder`, `grilling`, and `domain-modeling`; human conversation is French, repository artifacts are English. Analysis uses SOL 6.1 High; eventual implementation uses Luna XHIGH subagents. Claim before work. This is a later HITL session, not a second decision to resolve while closing the adoption-direction ticket.
+
+## Resolution
+
+2026-10-16 — The human's live answer is to use Nuxt UI and its components as much as possible, limiting the rest to exceptions. This confirms Nuxt UI as the primary interface library for the production revamp and strengthens the earlier broad-prototype direction into a **Nuxt UI by default** implementation policy. The scope decision is complete; the prototype is not treated as the finished production implementation.
+
+### Default and exception policy
+
+- Use suitable Nuxt UI components throughout controls, buttons, fields, forms, menus, popovers, dialogs, navigation and panel composition. Evaluate their configuration, slots and application adapters before building an equivalent bespoke interface.
+- Retain the human-selected B/Dock presentation and all closed interaction/preservation contracts. Existing custom dock, hierarchy, catalogue and editor-envelope code in the disposable prototype is an inventory to reassess, not a blanket exception already approved for production.
+- Limit any necessary bespoke implementation to the smallest surface that cannot suitably preserve the required behavior through Nuxt UI adaptation. Document the requirement, why the library adaptation is insufficient or less suitable, the retained Nuxt UI controls, and validation evidence. Keep that rationale reviewable with the implementation; no new per-component human approval workflow is introduced.
+- In particular, desktop editing must retain independent map navigation and compact editing must retain its confirmed fullscreen/exclusive behavior and resumable drafts. Explore appropriate Nuxt UI composition before treating a custom persistent envelope as necessary. Library defaults cannot replace these guarantees.
+- D3/SVG rendering and geometry, authoritative domain commands/validation, draft ownership, persistence and JSON/image interchange remain application responsibilities. Their continued ownership is not a justification to reimplement ordinary interface controls.
+
+### Evidence, costs and integration obligations
+
+The human decides after reviewing the [consolidated validation dossier](../research/b-consolidated-validation-2026-10-16.md): accepted Dock/Fields/Inspector artifacts, source-specific checks, the retained-baseline reachability proof, historical resource/theme evidence and actual Android/Firefox limitations. The question explicitly disclosed the early full prototype's additional 628,307 received JS/CSS bytes, including comparison variants and other differences. This is neither isolated library cost nor a final performance budget; measure the integrated interface without disposable comparison scaffolding.
+
+All existing functional, navigation, gesture, draft/save, theme, accessibility and export requirements remain binding. In particular, carry compact Fields headers and real-keyboard action access on Android/Firefox, packaged local icons, coherent portal palettes and durable theme preference, menu/panel layering, complete baseline controls, real persistence/recovery and representative performance/accessibility into the specification and implementation acceptance criteria. The keyboard-close workaround does not silently waive the established action-access contract.
+
+Adoption does not relabel the prototype's known failures or missing physical/production checks as passed. Adapt and verify the integration against those criteria, preserving the application-owned state/data boundaries. Related features remain coordinated separately. No application code, further layout vote, product merge or source-issue closure follows from this decision.
+
+### Provenance
+
+Fresh origin fetch establishes resumption baseline `6871c46a8aa1365238bd092e919ba88828b9b2ab`, intentionally 0 main-only / 20 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The source request is refreshed, open and unchanged, with no comments. The live scope question, explicit human answer and completed prior evidence settle this decision without inventing an extra library comparison or another confirmation round. No domain term or relationship changes; keep this implementation policy in planning/specification rather than the domain glossary.
+
+## Comments
+
+> *This was generated by AI during triage.*
+
+2026-10-16 — Claimed on the human's explicit request to continue with the next decision. Fresh origin fetch confirms intentionally different preview/planning baseline `6871c46a8aa1365238bd092e919ba88828b9b2ab`, 0 main-only / 20 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue 3 is refreshed, open and unchanged, with no comments. The consolidated dossier supplies facts; this session requests the human's final scope decision. The first frontier is broad adoption versus targeted use versus retaining bespoke controls, with explicit current exceptions and mandatory integration corrections. No new measurements, application changes or library decision are inferred from the claim.
+
+> *This was generated by AI during triage.*
+
+2026-10-16 — The complete first-round proposal offers broad Nuxt UI use with adaptation-first exceptions, unchanged application-owned maps/data/drafts/save/export, mandatory integration corrections and disclosed historical resource cost. The human answers that Nuxt UI and its components should be used to the maximum, with other implementations limited to exceptions. Record this as the final scope confirmation, including its stronger default-library policy. No remaining adoption branch requires another question; do not grandfather the prototype's bespoke UI surfaces as automatically approved exceptions.

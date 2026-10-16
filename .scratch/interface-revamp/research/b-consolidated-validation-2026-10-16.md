@@ -2,7 +2,7 @@
 
 ## Purpose and baseline
 
-This is the decision dossier for [Validate the selected B direction on representative devices and preservation flows](../tickets/10-validate-b-device-preservation.md). It consolidates evidence; it neither adopts Nuxt UI nor implements the product. The human has selected Dock and accepted Fields and the focused inspector. Those choices are not reopened.
+This is the decision dossier for [Validate the selected B direction on representative devices and preservation flows](../tickets/10-validate-b-device-preservation.md). It consolidates evidence; its investigation itself neither adopted Nuxt UI nor implemented the product. The human has selected Dock and accepted Fields and the focused inspector. The subsequent [final library Resolution](../tickets/08-confirm-nuxt-ui-adoption.md#resolution) now confirms maximum Nuxt UI component reuse with limited justified exceptions. The measurements and integration obligations below remain unchanged.
 
 Fresh origin fetch on 2026-10-16 confirms intentionally different planning/preview baseline `7ef3757b26eee3c270f1aaacee4df26ae62b1823`, 0 main-only / 19 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Application source remains the inspector candidate published at `be8bef3e9efaea76b986480a40de6bd260e59d18`; the later commit records acceptance only. [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) is refreshed, open, unchanged, with no comments. SOL 6.1 High owns analysis; Luna XHIGH owns the bounded measurement code. Existing user storage, tabs, unrelated files and runtime processes are preserved.
 
@@ -53,6 +53,8 @@ The old integration report explicitly places known icon, theme and persistence g
 
 Adapt the library first and document targeted exceptions as already agreed. This dossier recommends preserving that responsibility boundary; it does not substitute for the later human adoption decision.
 
+The subsequent human decision makes the final interface **Nuxt UI by default**. The bespoke surfaces above describe the prototype, not automatically approved production exceptions: reassess dock, hierarchy, catalogue and persistent editor envelopes against suitable Nuxt UI components/configuration/slots. Keep only the smallest justified exception and retain compatible Nuxt UI controls. Maps, domain state and persistence remain application responsibilities; ordinary interface controls do not acquire an exception merely by presenting domain data.
+
 ## Bounded reachability follow-up
 
 The Luna probe is narrowed to one remaining case: hit-tested SVG pan/zoom for both maps on the retained baseline route in the current build. It **passes** in a fresh ephemeral Chrome 155 context at 1440×960, with a disclosed valid fixture and no forced clicks or application fixes. Current B's Vela/Aster/Inspect/Manage/Fields route is already exercised by the final inspector suite; the earlier controls suite supplies Hide/map/Back and view-navigation evidence on its own source. Reuse those results with their source limits rather than rebuild another combined B journey or benchmark.
@@ -63,10 +65,10 @@ The [probe README](../device-preservation-lab/consolidation-2026-10-16/README.md
 
 The retained `variant=baseline` route shares the current PR's provider/styles/shared-renderer changes. It is not pristine `origin/main`, does not replace an archived performance arm, and cannot retroactively fill historical n=0 timing measurements. Phone keyboard observations remain separate from this fixed-viewport Chrome probe.
 
-## Conclusion and next decision
+## Investigation conclusion and subsequent adoption
 
 The evidence investigation is complete. This records a consolidated, reviewable result with known failures and unmeasured requirements; it is not blanket physical-device, accessibility, performance or product acceptance. The human's Android/Firefox keyboard and landscape findings remain open integration obligations, alongside icons, themes, layering, full controls, saving and exports.
 
-[Confirm Nuxt UI adoption from prototype evidence](../tickets/08-confirm-nuxt-ui-adoption.md) becomes open and unclaimed, with this dossier as input. That live human decision can confirm broad adoption with explicit integration obligations and targeted exceptions, revise scope, reject the library, or identify a precise proof required before choosing. No adoption answer is supplied here. Existing presentation/tools tickets retain their own states and already-selected Dock; a bookkeeping or validation follow-up must not reopen the visual vote or automatically generate another broad prototype.
+At investigation closure, [Confirm Nuxt UI adoption from prototype evidence](../tickets/08-confirm-nuxt-ui-adoption.md) became open and unclaimed with this dossier as input. The subsequent live human answer confirms maximum Nuxt UI component reuse, limiting other interface implementations to justified exceptions. Its [Resolution](../tickets/08-confirm-nuxt-ui-adoption.md#resolution) owns the adoption answer; this dossier retains source evidence and mandatory integration obligations. Existing presentation/tools tickets retain their own states and already-selected Dock; a bookkeeping or validation follow-up must not reopen the visual vote or automatically generate another broad prototype.
 
 After the remaining decisions make the route buildable, use to-spec to synthesize the accepted behavior and acceptance gates, then to-tickets to prepare implementation slices. No specification, implementation tickets, product merge, GitHub comment or source-issue closure is produced by this investigation.
