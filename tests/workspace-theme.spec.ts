@@ -170,6 +170,7 @@ async function controlBorderContrastRatio(
 test('the shell follows the OS until an explicit theme choice persists across reloads', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' })
   await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
 
   const themeControl = page.getByRole('group', { name: 'Theme' })
   await expect(themeControl).toBeVisible()
@@ -232,8 +233,9 @@ test('theme changes recolor both maps without changing workspace drafts or writi
   await page.getByRole('button', { name: 'Chart details' }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
+  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
   const draftName = 'Unapplied Reach'
-  const draftInput = inspector.getByLabel('Jump Cluster')
+  const draftInput = chartNamesDialog.getByLabel('Jump Cluster')
   await draftInput.fill(draftName)
   expect(await controlBorderContrastRatio(draftInput)).toBeGreaterThanOrEqual(3)
 
@@ -257,12 +259,23 @@ test('theme changes recolor both maps without changing workspace drafts or writi
     }
   })
 
+  await page.keyboard.press('Escape')
+  await expect(chartNamesDialog).toBeHidden()
   await switchTheme(page, 'light')
+  await expect(page.locator('.workspace-feedback').getByRole('button', { name: 'Resume chart name draft' }))
+    .toBeVisible()
+  await page.locator('.workspace-feedback').getByRole('button', { name: 'Resume chart name draft' }).click()
   expect(await controlBorderContrastRatio(draftInput)).toBeGreaterThanOrEqual(3)
+  await expect(chartNamesDialog.getByLabel('Jump Cluster')).toHaveValue(draftName)
+  await page.keyboard.press('Escape')
   await switchTheme(page, 'dark')
-  await expect(inspector.getByLabel('Jump Cluster')).toHaveValue(draftName)
+  await expect(page.locator('.workspace-feedback').getByRole('button', { name: 'Resume chart name draft' }))
+    .toBeVisible()
+  await page.locator('.workspace-feedback').getByRole('button', { name: 'Resume chart name draft' }).click()
+  await expect(chartNamesDialog.getByLabel('Jump Cluster')).toHaveValue(draftName)
+  await page.keyboard.press('Escape')
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByText('Chart name edits are not committed.')).toBeVisible()
+  await expect(page.locator('.workspace-feedback').getByText('Unapplied chart-name changes')).toBeVisible()
   const writes = await page.evaluate(() =>
     (window as Window & { __themeWorkspaceWriteCount?: number }).__themeWorkspaceWriteCount ?? -1,
   )

@@ -1,0 +1,2354 @@
+{
+  "candidate": "1f6d7fe2f9760bf3a42cba9f46113a1eddc23734",
+  "baseline": "e014a549e405bb283acb4368d45bdf484ca68d0a",
+  "timestamp": "2026-10-16T17:32:33.312Z",
+  "build": {
+    "outcome": "passed",
+    "elapsed": "1m53s",
+    "entry": ".output/server/index.mjs",
+    "identity": {
+      "components/BaselinePage.vue": "30c3dbecdc5935669b055fcd3e859a2909d4b804dc0b569b4006976064ae75c7",
+      "components/ChartNamesDialog.vue": "f7a00d52fedcf98f8e6e73379f7e10c10dda4cc3a92f54e886a3de6233e58236",
+      "components/MapInspector.vue": "775300115e4133e1e82be9b35212a87c684de1153a3599074b35f4267b935461",
+      "components/MapHierarchy.vue": "2d046e728aed64dfde18971ecb251c0b017eb82fa5873d4d52f35bd16e7869fd",
+      "components/inspector/ChartDetailsPanel.vue": "a3147d38e8b440da1448f7412a64d5e6fad37515c2d53af7685dcc632e441173",
+      "components/inspector/JumpRouteInspector.vue": "82abdff2b13d43c829fff9df1d005d652b79ff7965641fb0ccca6bdfbadb58a8",
+      "composables/useLocalWorkspace.ts": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf",
+      "composables/useEditorWorkflows.ts": "063a52c5617806209ed7fede7fddd558094e80f49e494d5e59286b4a5b75edd2",
+      "composables/editor-workflows/useEditorState.ts": "d5f3b472754a7367f072e491c02739a28d67ece5edce2297029560a4c2f8aef8",
+      "composables/editor-workflows/types.ts": "eb607af81e7a69e3770316aef32c6eab3459a4a8d72b71e505b6a39f86e9c4a1",
+      "composables/editor-workflows/useClusterWorkflows.ts": "abcfdeb7e37112b05752cda306859b1abd331b18e807ea2e601d33db2d44da42",
+      "composables/editor-workflows/useMapWorkflows.ts": "cb670e51e3deaddc7241ded1fb6b91018966cf600b5d1901a0f48dd03382e9e3",
+      "composables/editor-workflows/useFieldDefinitionWorkflows.ts": "23398171805c290880e3b517061baea27eb627dcf57c57ad5c7a437e5385f28d",
+      "composables/useWorkspaceFiles.ts": "32f94cb14523335abc33bc5fc089a30838c49a117f1bf4b1c98522e743b8d578",
+      "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+      "assets/css/map-workspace.css": "91e1629e0ae2dfafce7b2bdaf04412ce03e2e18f8dc9bbfff5b340124b354eab",
+      "nuxt.config.ts": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef",
+      "package-lock.json": "2da66f73cf5a3d11fe25663a51d262372c3dc0a3d8f4c810cfa7bdfd15bec14d",
+      "tests/workspace-chart-drafts.spec.ts": "35a0ff73a1d34e7e7a62847f6f760516daffbe296729f8f00f0ee0a21d55e938",
+      "tests/workspace-theme.spec.ts": "93fe9aa8f98926cd61c7e4f068485282971bf142a23d994fed760dde704741e6",
+      "tests/workspace-launch.spec.ts": "46583520032ce0c649af868179cffa0f7244c0828cbb9e5fac6fc2cdcddc51c6",
+      "tests/helpers.ts": "b8ae760cc44611ef5c2c333dcdeeda7b0966431628a5c32c9058564288f2c32a",
+      ".output/nitro.json": "1f16687c08cc3655a744c607ca97fa61ff8c2cc01e8590b9a4e7ddfe2db62f6c",
+      ".output/server/index.mjs": "2441da8e168741b5bf16b27ce66e7056d6499db6ca6a69c2ff150106d377dca1"
+    }
+  },
+  "runtime": {
+    "base": "http://127.0.0.1:3120",
+    "route": "/",
+    "browser": "Playwright Chromium 156.0.8078.4, headless, scale 1",
+    "stopped": true,
+    "port3120Free": true
+  },
+  "matrix": {
+    "viewports": [
+      "1440x900",
+      "390x844",
+      "844x390",
+      "390x500"
+    ],
+    "palettes": [
+      "light",
+      "dark"
+    ],
+    "observations": 287,
+    "passed": 287,
+    "contrastSamples": 149
+  },
+  "portable": {
+    "passed": 25,
+    "failed": 0,
+    "chart": 19,
+    "theme": 4,
+    "launch": 2,
+    "elapsed": "52.8s",
+    "config": "playwright.compiled.config.ts"
+  },
+  "minima": {
+    "text": {
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5,
+      "label": "1440x900-light Apply names text"
+    },
+    "control": {
+      "minimum": 5.848612917830424,
+      "threshold": 3,
+      "label": "1440x900-dark resting cluster input"
+    },
+    "focus": {
+      "minimum": 6.1119232353230695,
+      "threshold": 3,
+      "label": "desktop-light recovery Retry"
+    },
+    "glyph": {
+      "minimum": 13.498720803969642,
+      "threshold": 3,
+      "label": "1440x900-light Close meaningful glyph"
+    }
+  },
+  "fixtures": [
+    {
+      "label": "1440x900-light",
+      "hash": "a443049a64ab02d698979cd046e4b5635e9dbd2facb2744a2015908f8eca8fa5",
+      "cluster": "QA 1440x900-light Reach",
+      "systemId": "f6350c4d-23f5-4a75-ad47-c95e04982bc2",
+      "star": "QA 1440x900-light Star"
+    },
+    {
+      "label": "1440x900-dark",
+      "hash": "6e2d11f118431f8039f7b70447f124bfe029d4d37f174cfb478f04265d0d7603",
+      "cluster": "QA 1440x900-dark Reach",
+      "systemId": "30f01f4b-c36b-469c-8b95-8ca5291e4578",
+      "star": "QA 1440x900-dark Star"
+    },
+    {
+      "label": "390x844-light",
+      "hash": "e4c357e950184a675f13e7ae191e21c1777c9637a7fa85e0a5b00eef5a26ee54",
+      "cluster": "QA 390x844-light Reach",
+      "systemId": "8f708aac-d398-4754-b6cd-37a6096ee9ff",
+      "star": "QA 390x844-light Star"
+    },
+    {
+      "label": "390x844-dark",
+      "hash": "26db3a76b7c9e1b03b98dd451e48abd287fbc1bd905eb5003bbc6b9d636a6b0f",
+      "cluster": "QA 390x844-dark Reach",
+      "systemId": "69ddb2f3-74d1-4b19-8793-044ec8ec8a78",
+      "star": "QA 390x844-dark Star"
+    },
+    {
+      "label": "844x390-light",
+      "hash": "336eeafd9f1886efc6b9eb65d74028dd8631800db462fe3fa062bf22e32c6ea0",
+      "cluster": "QA 844x390-light Reach",
+      "systemId": "ebacb51c-8ccf-4e3a-ac18-26aa1c074cf2",
+      "star": "QA 844x390-light Star"
+    },
+    {
+      "label": "844x390-dark",
+      "hash": "90e0993d2b4c8a76729cd7baaa0c90014bf6fe44c29fd7ed9fca3f37e3f08aa6",
+      "cluster": "QA 844x390-dark Reach",
+      "systemId": "b875cb67-ba47-4485-8849-ce266656007f",
+      "star": "QA 844x390-dark Star"
+    },
+    {
+      "label": "390x500-light",
+      "hash": "055cf832e99b6a7578482d02053839826e5a87992c8e23993e5bfe377b83b934",
+      "cluster": "QA 390x500-light Reach",
+      "systemId": "ead96b45-78b7-4384-952f-b5d396b3dab1",
+      "star": "QA 390x500-light Star"
+    },
+    {
+      "label": "390x500-dark",
+      "hash": "318430f2e525b6481d4ae1d95641146d4235ce51042fbe90ab099ad30410edef",
+      "cluster": "QA 390x500-dark Reach",
+      "systemId": "6fe9e32d-289e-4725-8b73-18612d592f8b",
+      "star": "QA 390x500-dark Star"
+    }
+  ],
+  "downloads": [
+    {
+      "label": "desktop-light recovery",
+      "filename": "QA Applied Recovery Reach-jump-cluster.json",
+      "sha256": "66654256abc46ad4fa22d409ed7db60693f1de821648de43a2e977357180a1a7",
+      "format": "ttrpg-cluster-control-map",
+      "version": 1,
+      "type": "cluster"
+    }
+  ],
+  "errors": {
+    "console": [],
+    "page": [],
+    "externalRequests": []
+  },
+  "observations": [
+    {
+      "name": "1440x900-light: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light invalid guard Apply correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light retained guard validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light: invalid Apply refuses transition and preserves camera",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-light: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery: ended chart form and requested transition survive real write abort",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery: failed transaction preserves both stored records",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery: actual recovery JSON includes applied data and excludes draft",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery persistent save error: contrast",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery Retry: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery Retry: contrast",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery Retry text: contrast",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery current JSON: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery current JSON: contrast",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery current JSON text: contrast",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery: Retry saves current applied names without duplicate commands",
+      "passed": true
+    },
+    {
+      "name": "desktop-light recovery: durable reload retains applied chart",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark invalid guard Apply correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark retained guard validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark: invalid Apply refuses transition and preserves camera",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "1440x900-dark: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "390x844-light: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "390x844-light modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x844-light chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "390x844-light named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-light named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-light resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x844-light: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-light modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-light feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-light: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x844-dark: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "844x390-light modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-light chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "844x390-light named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-light modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light guard Stay correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: Stay retains actual camera/context",
+      "passed": true
+    },
+    {
+      "name": "844x390-light invalid guard Apply correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-light retained guard validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: invalid Apply refuses transition and preserves camera",
+      "passed": true
+    },
+    {
+      "name": "844x390-light feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-light: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark guard Stay correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: Stay retains actual camera/context",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark invalid guard Apply correction: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark retained guard validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: invalid Apply refuses transition and preserves camera",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "844x390-dark: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "390x500-light: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "390x500-light modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x500-light chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "390x500-light named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x500-light: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-light modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-light: accepted Apply continues real context",
+      "passed": true
+    },
+    {
+      "name": "390x500-light feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-light: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark: actual portaled modal and entry focus",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark modal heading: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark resting cluster input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark resting system input: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Apply names: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Apply names: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Apply names text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Discard draft: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Discard draft: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Discard draft text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Close: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Close: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark Close meaningful glyph: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark initial validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark chart validation: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark: hide returns to actual opener",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark named resume: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark named resume: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark named resume text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark distinct durable status: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark resumed validation: error identifies and focuses only affected input",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark: exact invalid draft/error survives hide theme reflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark modal: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Stay: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Stay: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Stay text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Apply: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Apply: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Apply text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Discard: full focused cue visible",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Discard: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark guard Discard text: contrast",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark: accepted Apply continues real context",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark feedback: no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "390x500-dark: decorative footer copy removed",
+      "passed": true
+    },
+    {
+      "name": "no product console/hydration warnings",
+      "passed": true
+    },
+    {
+      "name": "no page errors",
+      "passed": true
+    },
+    {
+      "name": "no unexpected browser external requests",
+      "passed": true
+    }
+  ],
+  "contrast": [
+    {
+      "label": "1440x900-light modal heading",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light resting cluster input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light resting system input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light Apply names",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light Apply names text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light Discard draft",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light Discard draft text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light Close",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light chart validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light named resume",
+      "kind": "focus",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light named resume text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light distinct durable status",
+      "kind": "text",
+      "minimum": 6.647652117009634,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light guard Stay",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light guard Stay text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light guard Apply",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light guard Apply text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light guard Discard",
+      "kind": "focus",
+      "minimum": 7.52331217628743,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-light guard Discard text",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-light retained guard validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "desktop-light recovery persistent save error",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "desktop-light recovery Retry",
+      "kind": "focus",
+      "minimum": 6.1119232353230695,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-light recovery Retry text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "desktop-light recovery current JSON",
+      "kind": "focus",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-light recovery current JSON text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark modal heading",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark resting cluster input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark resting system input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark Apply names",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark Apply names text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark Discard draft",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark Discard draft text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark Close",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark chart validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark named resume",
+      "kind": "focus",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark named resume text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark distinct durable status",
+      "kind": "text",
+      "minimum": 9.371915841481306,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark guard Stay",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark guard Stay text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark guard Apply",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark guard Apply text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark guard Discard",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "1440x900-dark guard Discard text",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "1440x900-dark retained guard validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light modal heading",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light resting cluster input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light resting system input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light Apply names",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light Apply names text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light Discard draft",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light Discard draft text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light Close",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light chart validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light named resume",
+      "kind": "focus",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-light named resume text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-light distinct durable status",
+      "kind": "text",
+      "minimum": 6.647652117009634,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark modal heading",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark resting cluster input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark resting system input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark Apply names",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark Apply names text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark Discard draft",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark Discard draft text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark Close",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark chart validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark named resume",
+      "kind": "focus",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "390x844-dark named resume text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x844-dark distinct durable status",
+      "kind": "text",
+      "minimum": 9.371915841481306,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light modal heading",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light resting cluster input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light resting system input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light Apply names",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light Apply names text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light Discard draft",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light Discard draft text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light Close",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light chart validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light named resume",
+      "kind": "focus",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light named resume text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light distinct durable status",
+      "kind": "text",
+      "minimum": 6.647652117009634,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light guard Stay",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light guard Stay text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light guard Apply",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light guard Apply text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light guard Discard",
+      "kind": "focus",
+      "minimum": 7.52331217628743,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-light guard Discard text",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-light retained guard validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark modal heading",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark resting cluster input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark resting system input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark Apply names",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark Apply names text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark Discard draft",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark Discard draft text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark Close",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark chart validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark named resume",
+      "kind": "focus",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark named resume text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark distinct durable status",
+      "kind": "text",
+      "minimum": 9.371915841481306,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark guard Stay",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark guard Stay text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark guard Apply",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark guard Apply text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark guard Discard",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "844x390-dark guard Discard text",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "844x390-dark retained guard validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light modal heading",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light resting cluster input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light resting system input",
+      "kind": "control",
+      "minimum": 8.435949669891867,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light Apply names",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light Apply names text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light Discard draft",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light Discard draft text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light Close",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light chart validation",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light named resume",
+      "kind": "focus",
+      "minimum": 13.498720803969642,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light named resume text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light distinct durable status",
+      "kind": "text",
+      "minimum": 6.647652117009634,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light guard Stay",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light guard Stay text",
+      "kind": "text",
+      "minimum": 13.498720803969642,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light guard Apply",
+      "kind": "focus",
+      "minimum": 6.702434402886352,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light guard Apply text",
+      "kind": "text",
+      "minimum": 6.1119232353230695,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-light guard Discard",
+      "kind": "focus",
+      "minimum": 7.52331217628743,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-light guard Discard text",
+      "kind": "text",
+      "minimum": 7.52331217628743,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark modal heading",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark resting cluster input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark resting system input",
+      "kind": "control",
+      "minimum": 5.848612917830424,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark Apply names",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark Apply names text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark Discard draft",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark Discard draft text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark Close",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark Close meaningful glyph",
+      "kind": "glyph",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark chart validation",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark named resume",
+      "kind": "focus",
+      "minimum": 14.716124529800773,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark named resume text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark distinct durable status",
+      "kind": "text",
+      "minimum": 9.371915841481306,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark guard Stay",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark guard Stay text",
+      "kind": "text",
+      "minimum": 14.716124529800773,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark guard Apply",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark guard Apply text",
+      "kind": "text",
+      "minimum": 8.258623940381913,
+      "threshold": 4.5
+    },
+    {
+      "label": "390x500-dark guard Discard",
+      "kind": "focus",
+      "minimum": 10.855814121345832,
+      "threshold": 3
+    },
+    {
+      "label": "390x500-dark guard Discard text",
+      "kind": "text",
+      "minimum": 8.966130952323278,
+      "threshold": 4.5
+    }
+  ],
+  "representativeFocus": [
+    {
+      "name": "1440x900-light Apply names: full focused cue visible",
+      "passed": true,
+      "detail": {
+        "before": {
+          "outline": "none 3px oklab(0.505175 0.0837485 0.0932321 / 0.25)",
+          "shadow": "none"
+        },
+        "immediate": {
+          "outlineColor": "rgb(155, 63, 0)",
+          "outlineStyle": "solid",
+          "transition": "none",
+          "focused": true
+        },
+        "outline": "solid 2px rgb(155, 63, 0)",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "shadow": "none",
+        "extent": 4,
+        "bounds": {
+          "x": 852.953125,
+          "y": 599.5078125,
+          "width": 99.046875,
+          "height": 32,
+          "top": 599.5078125,
+          "right": 952,
+          "bottom": 631.5078125,
+          "left": 852.953125
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "focused": true,
+        "hit": true,
+        "clippedBy": [],
+        "ringFits": true
+      }
+    },
+    {
+      "name": "1440x900-light Discard draft: full focused cue visible",
+      "passed": true,
+      "detail": {
+        "before": {
+          "outline": "none 3px oklab(0.298327 -0.0151894 0.00294757 / 0.25)",
+          "shadow": "none"
+        },
+        "immediate": {
+          "outlineColor": "rgb(155, 63, 0)",
+          "outlineStyle": "solid",
+          "transition": "none",
+          "focused": true
+        },
+        "outline": "solid 2px rgb(155, 63, 0)",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "shadow": "none",
+        "extent": 4,
+        "bounds": {
+          "x": 743.625,
+          "y": 599.5078125,
+          "width": 101.328125,
+          "height": 32,
+          "top": 599.5078125,
+          "right": 844.953125,
+          "bottom": 631.5078125,
+          "left": 743.625
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "focused": true,
+        "hit": true,
+        "clippedBy": [],
+        "ringFits": true
+      }
+    },
+    {
+      "name": "1440x900-light Close: full focused cue visible",
+      "passed": true,
+      "detail": {
+        "before": {
+          "outline": "none 3px oklab(0.298327 -0.0151894 0.00294757 / 0.25)",
+          "shadow": "none"
+        },
+        "immediate": {
+          "outlineColor": "rgb(155, 63, 0)",
+          "outlineStyle": "solid",
+          "transition": "none",
+          "focused": true
+        },
+        "outline": "solid 2px rgb(155, 63, 0)",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "shadow": "none",
+        "extent": 4,
+        "bounds": {
+          "x": 928,
+          "y": 268.4921875,
+          "width": 32,
+          "height": 32,
+          "top": 268.4921875,
+          "right": 960,
+          "bottom": 300.4921875,
+          "left": 928
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "focused": true,
+        "hit": true,
+        "clippedBy": [],
+        "ringFits": true
+      }
+    }
+  ],
+  "screenshotFollowUp": {
+    "reason": "The first reduced-height invalid-modal screenshot caught a finite opening animation. Only this case was rerun on unchanged compiled output after explicit settlement; its observations are not added to the matrix totals.",
+    "observations": 39,
+    "failed": 0,
+    "settledModal": {
+      "name": "390x500-dark: curated invalid modal settled and opaque",
+      "passed": true,
+      "detail": {
+        "opacity": 1,
+        "backgroundColor": "rgb(18, 28, 30)",
+        "finiteAnimations": 0
+      }
+    }
+  },
+  "diagnostics": {
+    "rawFinalSha256": "c2c9b2dd249e127ec546fcac16cce8188482e5ef05c5c25e3873b24b60d6d8e0",
+    "firstFinalAttempt": "Modal-close inert/animation timing in requestCluster caused four harness execution failures. Preserved locally as final-attempt-transition-diagnostic.json; excluded from final acceptance totals.",
+    "oldCandidate": "b9d51ba27510427e31da780e1777a642a4499b28 had weak modal focus outlines; old-candidate-findings.md and candidate-source-identity.json remain separate."
+  },
+  "limitations": [
+    "Physical Android Chrome, real OS keyboard, safe areas and physical gestures unavailable.",
+    "Canonical revision races, full conflict matrix and native departure-warning lifecycle belong to implementation tests; not repeated here.",
+    "Eight representative viewport/theme cases plus one desktop recovery supplement; no repeated cold icon inventory."
+  ]
+}

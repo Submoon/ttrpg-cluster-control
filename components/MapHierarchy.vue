@@ -7,6 +7,12 @@
       </div>
       <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
     </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Unapplied chart-name changes</span>
+    </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
@@ -74,45 +80,12 @@
       </div>
     </div>
 
-    <details class="chart-names my-4 border-y border-[var(--line-soft)]">
-      <summary class="cursor-pointer py-[0.7rem]">Chart names</summary>
-      <form class="name-form grid gap-2 pb-[0.9rem]" @submit.prevent="emit('submit-names')">
-        <fieldset class="m-0 grid gap-2 border-0 p-0" :disabled="!props.chartNamesEditing || props.saving">
-          <label for="edit-cluster-name">Jump Cluster</label>
-          <input
-            id="edit-cluster-name"
-            v-model="clusterName"
-            maxlength="80"
-            required
-          >
-          <label for="edit-system-name">Star system</label>
-          <input
-            id="edit-system-name"
-            v-model="systemName"
-            maxlength="80"
-            required
-          >
-        </fieldset>
-        <p v-if="props.formError" class="feedback m-0 error-text" role="alert">{{ props.formError }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-if="!props.chartNamesEditing"
-            class="secondary-button mt-[0.3rem] min-h-[2.25rem] justify-center"
-            type="button"
-            aria-label="Edit chart names"
-            @click="emit('edit-chart-names')"
-          >
-            Edit
-          </button>
-          <button v-else class="primary-button mt-[0.3rem]" type="submit" aria-label="Save chart names" :disabled="props.saving">
-            Save
-          </button>
-          <button v-if="props.chartNamesEditing" class="quiet-button mt-[0.3rem]" type="button" @click="emit('cancel-chart-names')">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </details>
+    <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
+      <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Unapplied chart-name changes</span>
+    </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
@@ -195,9 +168,8 @@ const props = defineProps<{
   selectedObjectId: string | null
   selectedOrbitId: string | null
   selectedRouteId: string | null
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
   routeSummary: (route: JumpRoute) => string
 }>()
 
@@ -207,14 +179,9 @@ const emit = defineEmits<{
   'select-object': [objectId: string]
   'select-orbit': [orbitId: string]
   'select-route': [routeId: string]
-  'submit-names': []
   'edit-chart-names': []
-  'cancel-chart-names': []
   'show-cluster': []
 }>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
 
 const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),

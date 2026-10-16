@@ -14,11 +14,12 @@ import {
   type LocalWorkspace,
 } from '../../domain/workspace'
 import type { FieldDefinitionUpdateRequest, CustomFieldCreateRequest } from './types'
+import type { TransitionOptions } from './types'
 
 interface FieldDefinitionWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
-  confirmDiscardInspectorEdits: () => boolean
+  resolveTransition: (options?: TransitionOptions) => Promise<boolean>
 }
 
 /**
@@ -29,7 +30,7 @@ interface FieldDefinitionWorkflowOptions {
 export function useFieldDefinitionWorkflows({
   workspace,
   commit,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
 }: FieldDefinitionWorkflowOptions) {
   const fieldDefinitionDialogOpen = ref(false)
   const fieldDefinitionError = ref('')
@@ -42,8 +43,10 @@ export function useFieldDefinitionWorkflows({
   }
 
   /** Opens the dialog only for an existing workspace and after the inspector-draft guard passes. */
-  function openFieldDefinitions(): void {
-    if (!workspace.value || fieldDefinitionDialogOpen.value || !confirmDiscardInspectorEdits()) return
+  async function openFieldDefinitions(): Promise<void> {
+    if (!workspace.value || fieldDefinitionDialogOpen.value) return
+    if (!await resolveTransition({ leaveChart: false })) return
+    if (!workspace.value || fieldDefinitionDialogOpen.value) return
     fieldDefinitionError.value = ''
     fieldDefinitionsDialog.value?.open()
   }

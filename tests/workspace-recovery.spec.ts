@@ -170,8 +170,9 @@ test('the last valid workspace can be restored after the current snapshot fails 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details' }).click()
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  await inspector.getByLabel('Jump Cluster').fill('Current Reach')
-  await inspector.getByRole('button', { name: 'Save chart names' }).click()
+  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
+  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
   await expect(page.getByText('Saved on this device')).toBeVisible()
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })

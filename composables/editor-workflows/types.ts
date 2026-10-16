@@ -13,6 +13,12 @@ import type {
 import type { MapImageExporter } from '../../utils/map-image-export'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+export type TransitionGuard = 'chart' | 'inspector' | null
+export type TransitionDecision = 'apply' | 'discard' | 'stay'
+export interface TransitionOptions {
+  /** Keeps a resumable chart-name session open for a command independent of its captured chart target. */
+  leaveChart?: boolean
+}
 
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
@@ -23,6 +29,8 @@ export interface EditorWorkflowOptions {
   saveError: Readonly<Ref<string | null>>
   /** Page-owned ordered persistence operation. */
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
+  /** Synchronously validates and publishes applied memory, returning its independent durable write. */
+  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
 }
 
 /** Imperative bridge from workflow commands to inspector-local draft state. */

@@ -9,14 +9,21 @@ import {
   type JumpRoute,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
-import type { EditorWorkflowOptions, MapInspectorHandle, SystemMapHandle } from './types'
+import type {
+  EditorWorkflowOptions,
+  MapInspectorHandle,
+  SystemMapHandle,
+  TransitionDecision,
+  TransitionGuard,
+  TransitionOptions,
+} from './types'
 
 /**
  * Derives editor selections from workspace IDs and keeps navigation coherent as entities change.
  * @param options Shared workspace/save refs and the page-owned persistence callback.
  * @returns Name drafts, selection refs/computeds, map handles, status text, and guarded navigation actions.
  */
-export function useEditorState({ workspace, saveState, saveError, commit }: EditorWorkflowOptions) {
+export function useEditorState({ workspace, saveState, saveError, commit, applyWorkspace }: EditorWorkflowOptions) {
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
   const activeView = ref<'cluster' | 'system'>('system')
@@ -25,8 +32,21 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
   const selectedOrbitId = ref<string | null>(null)
   const selectedRouteId = ref<string | null>(null)
   const chartNamesEditing = ref(false)
+  const transitionGuard = ref<TransitionGuard>(null)
   const formError = ref('')
   const editorError = ref('')
+  const chartNamesSession = shallowRef<{
+    id: number
+    clusterId: string
+    systemId: string
+    initialClusterName: string
+    initialSystemName: string
+  } | null>(null)
+  let chartNamesSessionSequence = 0
+  let pendingTransition: {
+    leaveChart: boolean
+    resolve: (accepted: boolean) => void
+  } | null = null
   const mapInspectorRef = shallowRef<MapInspectorHandle | null>(null)
   const clusterMapRef = shallowRef<MapImageExporter | null>(null)
   const systemMapRef = shallowRef<SystemMapHandle | null>(null)
@@ -68,18 +88,27 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     return `${originName} -> ${destination}`
   }
 
+  const hasChartNameDraft = computed(() => chartNamesSession.value !== null)
+  const chartNamesDialogOpen = computed(() => chartNamesEditing.value || transitionGuard.value !== null)
+  const chartDraftSystemId = computed(() => chartNamesSession.value?.systemId ?? null)
   const hasUncommittedNames = computed(() => {
+    const session = chartNamesSession.value
     const currentWorkspace = workspace.value
-    const currentSystem = selectedSystem.value
-    return !!currentWorkspace && !!currentSystem && (
-      clusterName.value.trim() !== currentWorkspace.cluster.name
-      || systemName.value.trim() !== currentSystem.name
-    )
+    const targetStillExists = !!session
+      && currentWorkspace?.cluster.id === session.clusterId
+      && currentWorkspace.cluster.systems.some(system => system.id === session.systemId)
+    return !!session && (!targetStillExists || (
+      clusterName.value.trim() !== session.initialClusterName
+      || systemName.value.trim() !== session.initialSystemName
+    ))
   })
   const saveMessage = computed(() => {
-    if (saveState.value === 'saving') return 'Saving to this browser...'
+    if (saveState.value === 'saving') {
+      return saveError.value
+        ? `Saving to this browser. A previous write failed: ${saveError.value}`
+        : 'Saving to this browser...'
+    }
     if (saveState.value === 'error') return `Not saved. ${saveError.value ?? ''}`
-    if (hasUncommittedNames.value) return 'Chart name edits are not committed.'
     if (saveState.value === 'saved') return 'Saved on this device'
     return 'No workspace is stored yet'
   })
@@ -115,10 +144,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
   })
 
   watch(() => workspace.value?.cluster.name, value => {
-    if (value !== undefined) clusterName.value = value
+    if (chartNamesSession.value === null && value !== undefined) clusterName.value = value
   }, { immediate: true })
   watch(() => selectedSystem.value?.name, value => {
-    if (value !== undefined) systemName.value = value
+    if (chartNamesSession.value === null && value !== undefined) systemName.value = value
   }, { immediate: true })
 
   function errorText(error: unknown): string {
@@ -127,35 +156,95 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
 
   /**
    * Creates the first workspace or renames the current cluster and selected system.
-   * Name drafts leave edit mode only after the injected commit succeeds.
-   * @returns A promise that resolves after the attempt; errors populate formError.
+   * An applied chart-name draft ends after synchronous domain validation and memory publication; durability is tracked separately.
+   * @returns True when validated names publish to memory; false when validation or publication fails and the draft stays open.
    */
+  function applyChartNames(): boolean {
+    const currentWorkspace = workspace.value
+    const session = chartNamesSession.value
+    if (!currentWorkspace || !session) {
+      formError.value = 'Start a chart-name edit before applying these names.'
+      return false
+    }
+
+    try {
+      if (currentWorkspace.cluster.id !== session.clusterId) {
+        throw new Error('The Jump Cluster for this draft no longer exists.')
+      }
+      if (!currentWorkspace.cluster.systems.some(system => system.id === session.systemId)) {
+        throw new Error('The star system for this draft no longer exists.')
+      }
+      const nextWorkspace = renameLocalWorkspace(
+        currentWorkspace,
+        clusterName.value,
+        systemName.value,
+        session.systemId,
+      )
+      const { durable } = applyWorkspace(nextWorkspace)
+      if (chartNamesSession.value?.id === session.id) {
+        chartNamesSession.value = null
+        chartNamesEditing.value = false
+        formError.value = ''
+        syncNamesFromSelectedWorkspace()
+      }
+      void durable.catch(() => undefined)
+      return true
+    } catch (error) {
+      formError.value = errorText(error)
+      chartNamesEditing.value = true
+      return false
+    }
+  }
+
   async function submitNames(): Promise<void> {
     formError.value = ''
+    if (workspace.value) {
+      applyChartNames()
+      return
+    }
     try {
-      const currentWorkspace = workspace.value
-      const nextWorkspace = currentWorkspace
-        ? renameLocalWorkspace(
-            currentWorkspace,
-            clusterName.value,
-            systemName.value,
-            selectedSystemId.value ?? undefined,
-          )
-        : createLocalWorkspace(clusterName.value, systemName.value)
-      await commit(nextWorkspace)
-      chartNamesEditing.value = false
+      await commit(createLocalWorkspace(clusterName.value, systemName.value))
     } catch (error) {
       formError.value = errorText(error)
     }
   }
 
+  function syncNamesFromSelectedWorkspace(): void {
+    const currentWorkspace = workspace.value
+    const system = selectedSystem.value
+    if (currentWorkspace) clusterName.value = currentWorkspace.cluster.name
+    if (system) systemName.value = system.name
+  }
+
   /** Starts name drafts from committed values after guarding any open inspector edit. */
-  function beginChartNamesEdit(): void {
-    if (!workspace.value || !selectedSystem.value || !confirmDiscardInspectorEdits()) return
-    clusterName.value = workspace.value.cluster.name
-    systemName.value = selectedSystem.value.name
+  async function beginChartNamesEdit(): Promise<void> {
+    const currentWorkspace = workspace.value
+    const system = selectedSystem.value
+    if (!currentWorkspace || !system) return
+    if (chartNamesSession.value) {
+      chartNamesEditing.value = true
+      return
+    }
+    if (!await resolveTransition({ leaveChart: false })) return
+    const latestWorkspace = workspace.value
+    const latestSystem = latestWorkspace?.cluster.systems.find(candidate => candidate.id === system.id)
+    if (!latestWorkspace || !latestSystem) return
+    chartNamesSession.value = {
+      id: ++chartNamesSessionSequence,
+      clusterId: latestWorkspace.cluster.id,
+      systemId: latestSystem.id,
+      initialClusterName: latestWorkspace.cluster.name,
+      initialSystemName: latestSystem.name,
+    }
+    clusterName.value = latestWorkspace.cluster.name
+    systemName.value = latestSystem.name
     chartNamesEditing.value = true
     formError.value = ''
+  }
+
+  /** Hides the chart-name modal while leaving its exact parent-owned session available to resume. */
+  function hideChartNamesEdit(): void {
+    chartNamesEditing.value = false
   }
 
   /** Restores committed names and closes the name editor without changing workspace data. */
@@ -168,38 +257,149 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     }
     chartNamesEditing.value = false
     formError.value = ''
+    chartNamesSession.value = null
   }
 
   /**
-   * Guards navigation across inspector and chart-name drafts with one confirmation.
-   * @returns True when no draft is open or the user accepted discarding all guarded drafts.
+   * Resolves drafts affected by a transition through Apply, Discard, or Stay.
+   * Independent commands may preserve the chart-name session while resolving legacy inspector edits.
+   * @returns True when no affected draft remains or the user accepted Apply or Discard; false for Stay or invalid Apply.
    */
-  function confirmDiscardInspectorEdits(): boolean {
-    const hasOpenEdit = (mapInspectorRef.value?.hasUnsavedEdits() ?? false)
-      || chartNamesEditing.value
-    if (!hasOpenEdit) return true
-    if (!window.confirm('Discard unsaved edits?')) return false
+  function resolveTransition(options: TransitionOptions = {}): Promise<boolean> {
+    if (pendingTransition) return Promise.resolve(false)
+
+    const leaveChart = options.leaveChart !== false
+    const hasChartDraft = leaveChart && chartNamesSession.value !== null
+    const hasInspectorDraft = mapInspectorRef.value?.hasUnsavedEdits() ?? false
+    const chartNeedsResolution = hasChartDraft && hasUncommittedNames.value
+    if (!chartNeedsResolution && !hasInspectorDraft) {
+      if (hasChartDraft) cancelChartNamesEdit()
+      return Promise.resolve(true)
+    }
+
+    return new Promise(resolve => {
+      pendingTransition = { leaveChart, resolve }
+      transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
+    })
+  }
+
+  function finishPendingTransition(accepted: boolean): void {
+    const pending = pendingTransition
+    if (!pending) return
+    pendingTransition = null
+    transitionGuard.value = null
+    pending.resolve(accepted)
+  }
+
+  function advancePendingTransition(): void {
+    const pending = pendingTransition
+    if (!pending) return
+
+    if (pending.leaveChart && chartNamesSession.value && hasUncommittedNames.value) {
+      transitionGuard.value = 'chart'
+      return
+    }
+    if (mapInspectorRef.value?.hasUnsavedEdits()) {
+      transitionGuard.value = 'inspector'
+      return
+    }
+    if (pending.leaveChart && chartNamesSession.value) cancelChartNamesEdit()
+    finishPendingTransition(true)
+  }
+
+  function resolveTransitionChoice(decision: TransitionDecision): void {
+    const guard = transitionGuard.value
+    if (!pendingTransition || !guard) return
+
+    if (decision === 'stay') {
+      if (guard === 'chart') chartNamesEditing.value = true
+      finishPendingTransition(false)
+      return
+    }
+
+    if (guard === 'chart') {
+      if (decision === 'apply') {
+        if (!applyChartNames()) {
+          finishPendingTransition(false)
+          return
+        }
+      } else {
+        cancelChartNamesEdit()
+      }
+      advancePendingTransition()
+      return
+    }
 
     mapInspectorRef.value?.cancelEdits()
-    cancelChartNamesEdit()
-    return true
+    advancePendingTransition()
+  }
+
+  /** Returns whether a system removal would invalidate the chart-name session's captured target. */
+  function isChartDraftTarget(systemId: string): boolean {
+    return chartNamesSession.value?.systemId === systemId
+  }
+
+  /** Closes the visible dialog; closing a guard means Stay, while closing an editor only hides it. */
+  function setChartNamesDialogOpen(open: boolean): void {
+    if (open) {
+      chartNamesEditing.value = true
+      return
+    }
+    if (transitionGuard.value) {
+      resolveTransitionChoice('stay')
+    } else {
+      hideChartNamesEdit()
+    }
   }
 
   /**
    * Selects the first imported system when available and switches to the cluster view.
    * @param firstAddedSystemId First added system from a prepared import, if one was included.
    */
-  function selectImportedWorkspace(firstAddedSystemId: string | undefined): void {
-    selectedSystemId.value = firstAddedSystemId ?? selectedSystemId.value
+  async function selectImportedWorkspace(firstAddedSystemId: string | undefined): Promise<void> {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) return
+    const startingContext = {
+      clusterId: currentWorkspace.cluster.id,
+      selectedSystemId: selectedSystemId.value,
+      selectedObjectId: selectedObjectId.value,
+      selectedOrbitId: selectedOrbitId.value,
+      selectedRouteId: selectedRouteId.value,
+      activeView: activeView.value,
+    }
+    if (!await resolveTransition()) return
+
+    const latestWorkspace = workspace.value
+    if (
+      !latestWorkspace
+      || latestWorkspace.cluster.id !== startingContext.clusterId
+      || selectedSystemId.value !== startingContext.selectedSystemId
+      || selectedObjectId.value !== startingContext.selectedObjectId
+      || selectedOrbitId.value !== startingContext.selectedOrbitId
+      || selectedRouteId.value !== startingContext.selectedRouteId
+      || activeView.value !== startingContext.activeView
+    ) return
+
+    const importedSystem = firstAddedSystemId
+      ? latestWorkspace.cluster.systems.find(system => system.id === firstAddedSystemId)
+      : undefined
+    if (firstAddedSystemId && !importedSystem) return
+
+    const retainedSystemId = latestWorkspace.cluster.systems.some(
+      system => system.id === startingContext.selectedSystemId,
+    )
+      ? startingContext.selectedSystemId
+      : latestWorkspace.cluster.systems[0]?.id ?? null
+    selectedSystemId.value = importedSystem?.id ?? retainedSystemId
     selectedObjectId.value = null
     selectedOrbitId.value = null
     selectedRouteId.value = null
     activeView.value = 'cluster'
   }
 
-  /** Shows the cluster map and clears map-entity selections after the draft guard passes. */
-  function showClusterMap(): void {
-    if (!confirmDiscardInspectorEdits()) return
+  /** Shows the cluster map and clears map-entity selections after the transition guard accepts. */
+  async function showClusterMap(): Promise<void> {
+    if (!await resolveTransition()) return
     activeView.value = 'cluster'
     selectedObjectId.value = null
     selectedOrbitId.value = null
@@ -211,9 +411,10 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
    * Selects an existing system and opens its map after the draft guard passes.
    * @param systemId System to select; unknown IDs are ignored.
    */
-  function selectSystem(systemId: string): void {
+  async function selectSystem(systemId: string): Promise<void> {
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
-    if (!confirmDiscardInspectorEdits()) return
+    if (!await resolveTransition()) return
+    if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     selectedSystemId.value = systemId
     activeView.value = 'system'
     selectedObjectId.value = null
@@ -226,10 +427,26 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
    * Selects an object in the current system after the draft guard passes.
    * @param objectId Object to select; unknown or already-selected IDs are ignored.
    */
-  function selectObject(objectId: string): void {
-    if (!selectedSystem.value?.objects.some(object => object.id === objectId)) return
+  async function selectObject(objectId: string): Promise<void> {
+    const currentWorkspace = workspace.value
+    const clusterId = currentWorkspace?.cluster.id
+    const systemId = selectedSystemId.value
+    const entryView = activeView.value
+    if (!clusterId || entryView !== 'system' || !systemId) return
+    const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!entrySystem?.objects.some(object => object.id === objectId)) return
     if (selectedObjectId.value === objectId) return
-    if (!confirmDiscardInspectorEdits()) return
+    if (!await resolveTransition()) return
+    const latestWorkspace = workspace.value
+    if (
+      !latestWorkspace
+      || latestWorkspace.cluster.id !== clusterId
+      || selectedSystemId.value !== systemId
+      || activeView.value !== entryView
+      || activeView.value !== 'system'
+    ) return
+    const currentSystem = latestWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!currentSystem?.objects.some(object => object.id === objectId)) return
     selectedObjectId.value = objectId
     selectedOrbitId.value = null
     selectedRouteId.value = null
@@ -240,10 +457,26 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
    * Selects an Orbit in the current system after the draft guard passes.
    * @param orbitId Orbit to select; unknown or already-selected IDs are ignored.
    */
-  function selectOrbit(orbitId: string): void {
-    if (!selectedSystem.value?.orbits.some(orbit => orbit.id === orbitId)) return
+  async function selectOrbit(orbitId: string): Promise<void> {
+    const currentWorkspace = workspace.value
+    const clusterId = currentWorkspace?.cluster.id
+    const systemId = selectedSystemId.value
+    const entryView = activeView.value
+    if (!clusterId || entryView !== 'system' || !systemId) return
+    const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!entrySystem?.orbits.some(orbit => orbit.id === orbitId)) return
     if (selectedOrbitId.value === orbitId) return
-    if (!confirmDiscardInspectorEdits()) return
+    if (!await resolveTransition()) return
+    const latestWorkspace = workspace.value
+    if (
+      !latestWorkspace
+      || latestWorkspace.cluster.id !== clusterId
+      || selectedSystemId.value !== systemId
+      || activeView.value !== entryView
+      || activeView.value !== 'system'
+    ) return
+    const currentSystem = latestWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!currentSystem?.orbits.some(orbit => orbit.id === orbitId)) return
     selectedOrbitId.value = orbitId
     selectedObjectId.value = null
     selectedRouteId.value = null
@@ -254,11 +487,25 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
    * Selects an existing cluster route and clears system-entity selections after the draft guard passes.
    * @param routeId Route to select; unknown or already-selected IDs are ignored.
    */
-  function selectRoute(routeId: string): void {
-    const route = workspace.value?.cluster.routes.find(candidate => candidate.id === routeId)
+  async function selectRoute(routeId: string): Promise<void> {
+    const currentWorkspace = workspace.value
+    const clusterId = currentWorkspace?.cluster.id
+    const systemId = selectedSystemId.value
+    const entryView = activeView.value
+    if (!currentWorkspace || !clusterId || entryView !== 'cluster') return
+    const route = currentWorkspace.cluster.routes.find(candidate => candidate.id === routeId)
     if (!route) return
     if (selectedRouteId.value === routeId) return
-    if (!confirmDiscardInspectorEdits()) return
+    if (!await resolveTransition()) return
+    const latestWorkspace = workspace.value
+    if (
+      !latestWorkspace
+      || latestWorkspace.cluster.id !== clusterId
+      || selectedSystemId.value !== systemId
+      || activeView.value !== entryView
+      || activeView.value !== 'cluster'
+      || !latestWorkspace.cluster.routes.some(candidate => candidate.id === routeId)
+    ) return
 
     selectedRouteId.value = route.id
     selectedObjectId.value = null
@@ -266,9 +513,9 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     editorError.value = ''
   }
 
-  /** Clears map-entity selections so the chart-details panel can be shown after the draft guard passes. */
-  function showChartDetails(): void {
-    if (!confirmDiscardInspectorEdits()) return
+  /** Clears map-entity selections while leaving a chart-name session attached to its captured target. */
+  async function showChartDetails(): Promise<void> {
+    if (!await resolveTransition({ leaveChart: false })) return
     selectedObjectId.value = null
     selectedOrbitId.value = null
     selectedRouteId.value = null
@@ -284,6 +531,8 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     selectedOrbitId,
     selectedRouteId,
     chartNamesEditing,
+    chartNamesDialogOpen,
+    transitionGuard,
     formError,
     editorError,
     mapInspectorRef,
@@ -296,11 +545,17 @@ export function useEditorState({ workspace, saveState, saveError, commit }: Edit
     jumpPoints,
     routeEndpointSummary,
     hasUncommittedNames,
+    hasChartNameDraft,
+    chartDraftSystemId,
     saveMessage,
     submitNames,
     beginChartNamesEdit,
+    hideChartNamesEdit,
     cancelChartNamesEdit,
-    confirmDiscardInspectorEdits,
+    resolveTransition,
+    resolveTransitionChoice,
+    setChartNamesDialogOpen,
+    isChartDraftTarget,
     selectImportedWorkspace,
     showClusterMap,
     selectSystem,

@@ -14,7 +14,12 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
-import type { MapInspectorHandle, SaveState, JumpRouteSaveRequest } from './types'
+import type {
+  MapInspectorHandle,
+  SaveState,
+  JumpRouteSaveRequest,
+  TransitionOptions,
+} from './types'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
@@ -25,20 +30,21 @@ interface ClusterWorkflowOptions {
   selectedObjectId: Ref<string | null>
   selectedOrbitId: Ref<string | null>
   selectedRouteId: Ref<string | null>
-  chartNamesEditing: Ref<boolean>
+  chartNamesDialogOpen: Readonly<ComputedRef<boolean>>
   fieldDefinitionDialogOpen: Ref<boolean>
   selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
   selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
   selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
   selectedRoute: Readonly<ComputedRef<JumpRoute | undefined>>
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
-  confirmDiscardInspectorEdits: () => boolean
+  resolveTransition: (options?: TransitionOptions) => Promise<boolean>
+  isChartDraftTarget: (systemId: string) => boolean
   editorError: Ref<string>
 }
 
 /**
  * Composes cluster/system creation, route editing, dependent deletion, and keyboard-delete behavior.
- * @param options Editor refs, inspector bridge, discard guard, and page-owned commit.
+ * @param options Editor refs, inspector bridge, draft-transition resolver, and page-owned commit.
  * @returns Cluster commands; commit and validation failures are surfaced through editorError.
  */
 export function useClusterWorkflows({
@@ -50,14 +56,15 @@ export function useClusterWorkflows({
   selectedObjectId,
   selectedOrbitId,
   selectedRouteId,
-  chartNamesEditing,
+  chartNamesDialogOpen,
   fieldDefinitionDialogOpen,
   selectedSystem,
   selectedObject,
   selectedOrbit,
   selectedRoute,
   mapInspectorRef,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
+  isChartDraftTarget,
   editorError,
 }: ClusterWorkflowOptions) {
   function errorText(error: unknown): string {
@@ -69,8 +76,9 @@ export function useClusterWorkflows({
    * @returns A promise that resolves after the attempt; commit failures populate editorError.
    */
   async function createSystem(): Promise<void> {
+    if (!workspace.value || !await resolveTransition()) return
     const currentWorkspace = workspace.value
-    if (!currentWorkspace || !confirmDiscardInspectorEdits()) return
+    if (!currentWorkspace) return
 
     try {
       const result = addStarSystem(currentWorkspace)
@@ -86,8 +94,9 @@ export function useClusterWorkflows({
   }
 
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
-  function beginRoute(): void {
-    if (!confirmDiscardInspectorEdits()) return
+  async function beginRoute(): Promise<void> {
+    if (!await resolveTransition({ leaveChart: false })) return
+    if (!workspace.value || activeView.value !== 'cluster') return
     selectedRouteId.value = null
     mapInspectorRef.value?.beginRoute()
     editorError.value = ''
@@ -97,8 +106,10 @@ export function useClusterWorkflows({
    * Starts an edit draft only if routeId is still selected and other inspector edits are resolved.
    * @param routeId Route expected to own the edit draft.
    */
-  function beginRouteEdit(routeId: string): void {
-    if (selectedRoute.value?.id !== routeId || !confirmDiscardInspectorEdits()) return
+  async function beginRouteEdit(routeId: string): Promise<void> {
+    if (selectedRoute.value?.id !== routeId) return
+    if (!await resolveTransition({ leaveChart: false })) return
+    if (selectedRoute.value?.id !== routeId) return
     mapInspectorRef.value?.startRouteEdit()
     editorError.value = ''
   }
@@ -158,30 +169,46 @@ export function useClusterWorkflows({
    * @param target Object, Orbit, route, or system selected for removal.
    * @returns A promise that resolves after cancellation or the commit attempt; failures populate editorError.
    */
-  async function deleteMapEntity(target: MapDeletionTarget): Promise<void> {
+  async function deleteMapEntity(
+    target: MapDeletionTarget,
+    resolveBeforeCommit?: () => Promise<boolean>,
+  ): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace || saveState.value === 'saving') return
 
     try {
-      const plan = planMapEntityDeletion(currentWorkspace, target)
-      const confirmation = plan.affectedEntities.length
+      const confirmationFor = (plan: ReturnType<typeof planMapEntityDeletion>) => plan.affectedEntities.length
         ? `Delete ${plan.entityLabel}?\n\nThis also removes or updates:\n${plan.affectedEntities.map(entity => `- ${entity}`).join('\n')}`
         : `Delete ${plan.entityLabel}?`
-      if (!window.confirm(confirmation)) {
-        return
+      const initialPlan = planMapEntityDeletion(currentWorkspace, target)
+      if (!window.confirm(confirmationFor(initialPlan))) return
+
+      let acceptedPlan = initialPlan
+      if (resolveBeforeCommit) {
+        if (!await resolveBeforeCommit()) return
+        const latestWorkspace = workspace.value
+        if (!latestWorkspace) return
+        const refreshedPlan = planMapEntityDeletion(latestWorkspace, target)
+        if (
+          latestWorkspace !== currentWorkspace
+          && !window.confirm(confirmationFor(refreshedPlan))
+        ) return
+        acceptedPlan = refreshedPlan
       }
+
       editorError.value = ''
-      await commit(plan.workspace)
+      await commit(acceptedPlan.workspace)
     } catch (error) {
       editorError.value = errorText(error)
     }
   }
 
-  /** Guards unsaved inspector edits before delegating a system cascade to the shared deletion planner. */
-  function deleteSystem(systemId: string): Promise<void> {
-    return confirmDiscardInspectorEdits()
-      ? deleteMapEntity({ kind: 'system', systemId })
-      : Promise.resolve()
+  /** Reviews a system cascade before resolving any draft that targets the system being removed. */
+  async function deleteSystem(systemId: string): Promise<void> {
+    await deleteMapEntity(
+      { kind: 'system', systemId },
+      () => resolveTransition({ leaveChart: isChartDraftTarget(systemId) }),
+    )
   }
 
   function deleteSelectedObject(): Promise<void> {
@@ -227,7 +254,7 @@ export function useClusterWorkflows({
       ))
       || saveState.value === 'saving'
       || (mapInspectorRef.value?.hasUnsavedEdits() ?? false)
-      || chartNamesEditing.value
+      || chartNamesDialogOpen.value
       || fieldDefinitionDialogOpen.value
     ) return
 

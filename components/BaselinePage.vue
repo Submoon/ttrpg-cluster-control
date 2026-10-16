@@ -35,7 +35,20 @@
       </template>
     </WorkspaceHeader>
 
-    <main class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
+    <ChartNamesDialog
+      v-if="workspace"
+      :open="chartNamesDialogOpen"
+      :guard-mode="transitionGuard"
+      v-model:cluster-name="clusterName"
+      v-model:system-name="systemName"
+      :form-error="formError"
+      @update:open="setChartNamesDialogOpen"
+      @apply="submitNames"
+      @discard="cancelChartNamesEdit"
+      @resolve-transition="resolveTransitionChoice"
+    />
+
+    <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
       <WorkspaceWelcome
@@ -88,26 +101,21 @@
         >
           <template #hierarchy>
             <MapHierarchy
-              v-model:cluster-name="clusterName"
-              v-model:system-name="systemName"
               :mode="activeView"
               :workspace="workspace"
               :selected-system-id="selectedSystemId"
               :selected-object-id="selectedObjectId"
               :selected-orbit-id="selectedOrbitId"
               :selected-route-id="selectedRouteId"
-              :chart-names-editing="chartNamesEditing"
+              :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
-              :form-error="formError"
               :route-summary="routeEndpointSummary"
               @select-system="selectSystem"
               @delete-system="deleteSystem"
               @select-object="selectObject"
               @select-orbit="selectOrbit"
               @select-route="selectRoute"
-              @submit-names="submitNames"
               @edit-chart-names="beginChartNamesEdit"
-              @cancel-chart-names="cancelChartNamesEdit"
               @show-cluster="showClusterMap"
             />
           </template>
@@ -173,8 +181,6 @@
           <template #inspector>
             <MapInspector
               ref="mapInspectorRef"
-              v-model:cluster-name="clusterName"
-              v-model:system-name="systemName"
               :mode="activeView"
               :workspace="workspace"
               :selected-system="selectedSystem"
@@ -182,13 +188,10 @@
               :selected-orbit="selectedOrbit"
               :selected-route="selectedRoute"
               :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
-              :chart-names-editing="chartNamesEditing"
+              :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
-              :form-error="formError"
               :editor-error="editorError"
-              @submit-names="submitNames"
               @edit-chart-names="beginChartNamesEdit"
-              @cancel-chart-names="cancelChartNamesEdit"
               @show-chart-details="showChartDetails"
               @request-object-edit="beginObjectEdit"
               @save-object="saveObjectEdit"
@@ -209,18 +212,29 @@
       </section>
     </main>
 
-    <footer class="footer flex min-h-14 items-center justify-between gap-4 border-t border-[var(--line-soft)] border-b-0 text-[var(--text-quiet)] text-[0.52rem] tracking-[0.12em] uppercase max-[760px]:gap-2 max-[760px]:text-[0.43rem]">
-      <span>WARDEN'S FIELD DESK</span>
+    <footer v-if="workspace" class="workspace-feedback flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-2.5" aria-label="Workspace feedback and recovery">
+      <div v-if="hasChartNameDraft" class="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
+        <span class="feedback">Unapplied chart-name changes</span>
+        <UButton class="resume-chart-draft" color="neutral" variant="outline" size="sm" @click="beginChartNamesEdit">
+          Resume chart name draft
+        </UButton>
+      </div>
       <span
-        class="save-feedback p-0 text-[0.65rem] normal-case"
-        :class="{ 'error-text': saveState === 'error', 'saved-text': saveState === 'saved' && !hasUncommittedNames }"
+        class="save-feedback p-0 text-sm"
+        :class="{ 'error-text': saveState === 'error', 'saved-text': saveState === 'saved' }"
         :role="saveState === 'error' ? 'alert' : 'status'"
         :aria-live="saveState === 'error' ? 'assertive' : 'polite'"
       >
         <span class="inline-block size-[0.4rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
         {{ saveMessage }}
       </span>
-      <span>LOCAL STORAGE / NO ACCOUNT</span>
+      <div v-if="saveState === 'error'" class="flex flex-wrap items-center gap-2">
+        <UButton color="primary" variant="outline" size="sm" @click="retryLatestSave">Retry save</UButton>
+        <UButton color="neutral" variant="outline" size="sm" @click="downloadClusterJson">Export current Jump Cluster JSON</UButton>
+      </div>
+      <p v-if="exportError" class="feedback m-0 error-text" role="alert" aria-live="assertive">
+        Export failed: {{ exportError }}
+      </p>
     </footer>
   </div>
 </template>
@@ -229,10 +243,11 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+import ChartNamesDialog from './ChartNamesDialog.vue'
 
 const {
   workspace,
@@ -242,7 +257,9 @@ const {
   saveState,
   saveError,
   hydrate,
+  applyWorkspace,
   commit,
+  retrySaveLatest,
   restoreBackup,
 } = useLocalWorkspace()
 
@@ -254,7 +271,8 @@ const {
   selectedObjectId,
   selectedOrbitId,
   selectedRouteId,
-  chartNamesEditing,
+  chartNamesDialogOpen,
+  transitionGuard,
   fieldDefinitionDialogOpen,
   fieldDefinitionError,
   fieldDefinitionSaveRevision,
@@ -272,9 +290,12 @@ const {
   jumpPoints,
   routeEndpointSummary,
   hasUncommittedNames,
+  hasChartNameDraft,
   saveMessage,
   openFieldDefinitions,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
+  resolveTransitionChoice,
+  setChartNamesDialogOpen,
   selectImportedWorkspace,
   moveSystem,
   moveMapObject,
@@ -312,7 +333,7 @@ const {
   createCustomField,
   saveFieldDefinitionChanges,
   removeFieldDefinition,
-} = useEditorWorkflows({ workspace, saveState, saveError, commit })
+} = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
 
 const {
   exportError,
@@ -325,11 +346,33 @@ const {
   workspace,
   selectedSystem,
   commit,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
   onImported: selectImportedWorkspace,
 })
 
-onMounted(hydrate)
+function warnBeforeLeaving(event: BeforeUnloadEvent): void {
+  const changedWelcomeDraft = !workspace.value
+    && (clusterName.value.trim() !== 'New Jump Cluster' || systemName.value.trim() !== 'First System')
+  const appliedWorkspaceIsNotDurable = !!workspace.value && (saveState.value === 'saving' || saveState.value === 'error')
+  if (!changedWelcomeDraft && !hasUncommittedNames.value && !appliedWorkspaceIsNotDurable) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', warnBeforeLeaving)
+  void hydrate()
+})
+
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeLeaving))
+
+async function retryLatestSave(): Promise<void> {
+  try {
+    await retrySaveLatest()
+  } catch {
+    // The persistence owner already exposes the current failure through saveError/saveState.
+  }
+}
 </script>
 
 <style src="../assets/css/map-workspace.css"></style>

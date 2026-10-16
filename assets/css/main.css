@@ -61,6 +61,7 @@
   --ui-border-accented: var(--line-strong);
   --ui-border-inverted: var(--text-primary);
   --ui-primary: var(--accent);
+  --ui-error: var(--error);
 }
 
 :root.dark {

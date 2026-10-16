@@ -11,6 +11,7 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
+import type { TransitionOptions } from './editor-workflows/types'
 
 type MapKind = 'jump-cluster' | 'star-system'
 
@@ -18,20 +19,20 @@ interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
-  confirmDiscardInspectorEdits: () => boolean
-  onImported: (firstAddedSystemId: string | undefined) => void
+  resolveTransition: (options?: TransitionOptions) => Promise<boolean>
+  onImported: (firstAddedSystemId: string | undefined) => Promise<void>
 }
 
 /**
  * Composes local JSON/image export and copy-import actions around the page's commit and selection callbacks.
- * @param options Current workspace/selection refs and page-owned persistence, discard, and import callbacks.
+ * @param options Current workspace/selection refs and page-owned persistence, transition, and import callbacks.
  * @returns Export/import status refs and event handlers; failures are exposed through those status refs.
  */
 export function useWorkspaceFiles({
   workspace,
   selectedSystem,
   commit,
-  confirmDiscardInspectorEdits,
+  resolveTransition,
   onImported,
 }: WorkspaceFileActionsOptions) {
   const exportError = ref('')
@@ -198,7 +199,7 @@ export function useWorkspaceFiles({
     if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
-    if (!file || !workspace.value || !confirmDiscardInspectorEdits()) return
+    if (!file || !workspace.value) return
 
     importError.value = ''
     try {
@@ -208,11 +209,17 @@ export function useWorkspaceFiles({
       } catch (error) {
         throw new Error(`The selected file is not valid JSON: ${errorText(error)}`)
       }
-      const prepared = prepareJsonImport(workspace.value, content)
+      // Validate the selected data before asking to resolve any inspector draft. This is read-only;
+      // the actual candidate is rebuilt from current applied memory after the guard completes.
+      prepareJsonImport(workspace.value, content)
+      if (!await resolveTransition({ leaveChart: false })) return
+      const latestWorkspace = workspace.value
+      if (!latestWorkspace) return
+      const prepared = prepareJsonImport(latestWorkspace, content)
       if (!window.confirm(importPreview(prepared.summary))) return
 
       await commit(prepared.workspace)
-      onImported(prepared.addedSystemIds[0])
+      await onImported(prepared.addedSystemIds[0])
     } catch (error) {
       importError.value = errorText(error)
     }
