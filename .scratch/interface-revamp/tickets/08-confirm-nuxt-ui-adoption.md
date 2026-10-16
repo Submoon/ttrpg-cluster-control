@@ -1,6 +1,6 @@
 ---
 title: Confirm Nuxt UI adoption from prototype evidence
-status: blocked
+status: open
 label: wayfinder:grilling
 type: grilling
 mode: HITL
@@ -39,9 +39,19 @@ The [research](../research/nuxt-ui-fit.md) establishes documentary generation co
 
 - [Choose a map-first UI direction through desktop and mobile prototypes](04-map-first-ui-direction.md) — **closed**, supplies the accepted B presentation, actual final human reaction and captured disposable artifacts. The human's direction acceptance is already recorded; it is not final library adoption.
 - [Measure Nuxt UI integration, offline resources, and comparative performance](09-measure-nuxt-ui-integration.md) — **closed**, supplies executed technical evidence, known integration failures and explicit limits in its [artifact](../research/nuxt-ui-integration-evidence.md). Closure is investigation completion, not acceptance of every gate.
-- [Validate the selected B direction on representative devices and preservation flows](10-validate-b-device-preservation.md) — **open**, collect physical-device/accessibility/preservation evidence and distinguish remaining production-acceptance requirements from prototype simulations.
+- [Validate the selected B direction on representative devices and preservation flows](10-validate-b-device-preservation.md) — **closed**, supplies the [consolidated dossier](../research/b-consolidated-validation-2026-10-16.md), actual Android/Firefox limitations, bounded reachability proof, known failures and explicit later-product acceptance. Investigation closure does not mean every gate passes.
 
 ## Current decision boundary
+
+### Current readiness after the accepted artifacts
+
+**Open and unclaimed, 2026-10-16.** All three prerequisite investigations/decisions are closed. Resume this ticket as its own HITL session, claim it, and use the dossier below for the actual adoption conversation. No choice has been supplied on the human's behalf. A requirement for additional evidence must identify the exact missing proof and its dependency, rather than infer full technical acceptance or automatically repeat a broad prototype.
+
+2026-10-16 — The [consolidated validation dossier](../research/b-consolidated-validation-2026-10-16.md) joins the human-selected Dock, accepted Fields and inspector, source-specific runtime checks, historical cost/resource/theme measurements, and a current responsibility/exception inventory. It records actual Android/Firefox feedback: editing actions are hidden with the keyboard open, and Fields has an oversized header in landscape. Closing the keyboard is a reported workaround, not a measured keyboard pass or an automatic change to the existing contract. The separate second-contact physical check is unanswered.
+
+The adoption conversation must explicitly carry compact-header/keyboard reachability, local icon packaging, coherent portal themes and durable preference, layering, complete baseline controls, durable saving and representative performance/accessibility into integration obligations. Historical native Fields measurements do not describe B's later Nuxt UI modal. The evidence task is complete and its bounded retained-baseline pan/zoom probe passes with the source/measurement limits recorded in the dossier. No new full-layout prototype or broad research campaign is implied by the known implementation gaps. This section records no adoption answer.
+
+### Historical gate boundary
 
 2026-10-14, claim status refreshed 2026-10-15 — The human accepted a B-style UI direction and specified the mobile/presentation adjustments. This settles the visual HITL question, with no redundant visual-approval round after routine authorized changes. The integration investigation is now complete; its failures and measured costs remain part of this review. Final Nuxt UI adoption stays blocked on the claimed, in-progress device/preservation task, including the precise incomplete baseline/mobile gesture and overlay paths referenced by the integration artifact, and requires the later live library decision originally agreed in [Decide Nuxt UI adoption and scope](07-nuxt-ui-adoption.md). Technical evidence-task closure does not pass its unsupported gates or authorize starting the next task automatically.
 

@@ -1,6 +1,6 @@
 ---
 title: Validate the selected B direction on representative devices and preservation flows
-status: in-progress
+status: closed
 label: wayfinder:task
 type: task
 mode: HITL
@@ -28,7 +28,7 @@ Write `../research/b-device-preservation-evidence.md`. Record exact capture, phy
 
 - Use dense populated Jump Cluster and star system scenes on representative desktop and a modest physical phone. Cover portrait, landscape/short viewport, virtual keyboard and safe areas in both themes. Measure the actually visible map area in map mode and full-height editor geometry in Inspect mode; verify internal scroll, Hide, close/reopen and reachable actions/status.
 - Exercise every mobile Inspect/Hierarchy opening path, accepted selection/context transitions and desktop-to-mobile reflow. Demonstrate exclusivity, same-target reopening, dirty-draft Apply/Discard/Stay, refusal/invalid Apply preserving the prior panel and draft, and no stale selection. Keep hierarchy initially closed and placement-type catalogue distinct from existing-entity selection.
-- Demonstrate touch/pinch/second-contact cancellation, keyboard and single-pointer alternatives, target indication/ambiguity/invalid rejection, targeted one-shot Add and persistent Move/Modify under the resolved interaction contract. Desktop pan/zoom while editing and mobile hide-to-map navigation must preserve session work and prior applied data.
+- Demonstrate touch/pinch/second-contact cancellation, keyboard and single-pointer alternatives, target indication/ambiguity/invalid rejection, and the resolved Navigate/Select/Move modes with persistent same-type Add under the final [tools contract](11-finalize-tools-contract.md#resolution). Desktop pan/zoom while editing and mobile hide-to-map navigation must preserve session work and prior applied data. The final tools Resolution supersedes the original one-shot Add assumption.
 - Review focus/scroll restoration, modal confirmation containment/return, icon names/help, non-color states, measured contrast/focus/target criteria, and screen-reader/color-blindness observations. Coordinate the separate accessibility request; do not claim a full audit or conformance from a small representative sample.
 - Cover object/Orbit/Jump Route/chart/field drafts, hidden ownership and dependency conflict guards; native/custom definition types/options/applicability and affected-value review; cancellation and renewed destructive review after Apply; import/cascade-deletion previews and validation refusal. Record unsupported stubbed flows separately from domain command evidence.
 - Exercise clean full-scene SVG/PNG for both maps, active/print palettes, dense/off-viewport geometry and active draft/gesture conditions: output excludes temporary decoration/unapplied work and preserves live context/view/tool/theme/draft. Capture actual files and visually inspect them.
@@ -46,7 +46,27 @@ The artifact distinguishes executed representative checks, observed failures, un
 
 Apply `wayfinder` and suitable browser/accessibility tools; claim before work. Claimed on 2026-10-14 by the dedicated device/preservation analysis session after publishing the chantier checkpoint. Browser resizing is not physical touch or a virtual-keyboard test. Preserve application data and existing contracts; all project documentation is English. No GitHub writes or production implementation.
 
+## Resolution
+
+2026-10-16 — Investigation completed through consolidation of the actual source-specific evidence and live human phone observations. The authoritative result is the [consolidated B validation and integration dossier](../research/b-consolidated-validation-2026-10-16.md), linked from the [original evidence record](../research/b-device-preservation-evidence.md). Existing controls, Fields and inspector results are reused with their own identities; there is no combined current-head pass count.
+
+The final bounded [retained-baseline probe](../device-preservation-lab/consolidation-2026-10-16/README.md) establishes unobstructed SVG targets and actual pan/wheel transform changes on both maps, in an ephemeral valid fixture. The coordinator verifies all five source hashes against checkout and runtime and inspects the capture. This is the current PR's retained baseline route, not a pristine-main performance arm; historical missing comparative timings remain missing. No application or storage migration is implemented.
+
+The human identifies Android/Firefox on their previously named phone and reports keyboard-hidden editing actions and a Fields header that impairs landscape use. Closing the keyboard is a workaround. These are known usability limitations, not a physical-keyboard pass, an implicit waiver of existing guarantees or a reversal of the accepted layout. Physical second-contact behavior, OS/browser versions and complete device/accessibility coverage remain unmeasured. Mandatory correction and acceptance work is explicitly carried forward for compact headers, real-keyboard reachability, local icons, coherent theme/portals, layering, complete baseline controls, real persistence, exports and integrated performance.
+
+Known integration failures and documented later-product scenarios do not require extending this disposable prototype merely to restate them. [Confirm Nuxt UI adoption from prototype evidence](08-confirm-nuxt-ui-adoption.md) is now unblocked for its separate live human decision; it must judge the disclosed risks and cannot treat this closure as passage of every technical gate. If a particular missing proof is essential to that choice, define its precise follow-up dependency there. No library adoption, other ticket Resolution, product merge or source-issue closure is inferred here.
+
+Resumption baseline is `7ef3757b26eee3c270f1aaacee4df26ae62b1823`, intentionally 0 main-only / 19 feature-only versus freshly fetched `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue 3 is refreshed again before closure: open, unchanged, no comments. All project artifacts are English; existing unrelated files and the verified runtime remain intact.
+
 ## Comments
+
+> *This was generated by AI during triage.*
+
+2026-10-16 — Resumed under the existing `codex-wayfinder-device-preservation` claim after the human accepts the inspector artifact and explicitly requests Wayfinder continuation. Analysis remains SOL 6.1 High. Fresh origin fetch confirms intentionally different preview/planning baseline `7ef3757b26eee3c270f1aaacee4df26ae62b1823`, 0 main-only / 19 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`; source issue 3 is refreshed, open and unchanged. Consolidate existing source-specific measurements, controls/Fields/inspector results and human observations; distinguish actual adoption blockers, bounded unknowns and mandatory later product acceptance. A concise human question requests missing physical-input/keyboard observations while independent analysis continues. No new layout vote, application change or complete retest is implied. Close at most this evidence task in this session; final library adoption remains its own later human decision.
+
+> *This was generated by AI during triage.*
+
+2026-10-16 — The human identifies Android and Firefox on the previously named phone; versions are unspecified. Editing action buttons are not visible with the virtual keyboard open, with closing the keyboard reported as a workaround. Fields in landscape is reported as not very usable because its header is too large. These are actual physical usability limitations after general artifact acceptance, not new complete acceptance claims. The second-contact Move question remains unanswered. The [consolidated validation dossier](../research/b-consolidated-validation-2026-10-16.md) retains the observation, recommended compact-header correction and later physical acceptance. Luna XHIGH receives only a bounded old SVG-target/mobile-path probe; application correction and a broad test rerun are outside that probe's scope.
 
 > *This was generated by AI during triage.*
 

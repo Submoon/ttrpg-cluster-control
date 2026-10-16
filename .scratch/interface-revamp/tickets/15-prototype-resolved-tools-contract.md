@@ -33,7 +33,7 @@ Fields and form redesign remain separate decisions. Do not absorb their recommen
 ## Blocked by
 
 - [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md) — closed; supplies human-resolved semantics, including persistent Add and route-origin retention while panning.
-- [Decide readable control grouping and accessible operation labels within B](12-decide-controls-presentation.md) — in progress and claimed; its explicitly authorized two-variant prototype exploration supplies the human presentation choice. This ticket's final validation remains blocked until that choice is resolved.
+- [Decide readable control grouping and accessible operation labels within B](12-decide-controls-presentation.md) — in progress and claimed; Dock is already human-selected. Remaining presentation criteria and the formal Resolution still gate this ticket; this dependency must not be interpreted as an unanswered Grouped rail versus Dock vote.
 
 ## Evidence and next handoff
 
@@ -41,7 +41,7 @@ Link the captured artifact and bounded checks here when actually produced. Prese
 
 The later explicitly authorized presentation exploration is tracked in the [focused B control-presentation report](../research/b-controls-prototype-2026-10-15.md). Its preparation and bounded checks support the presentation ticket; they do not resolve this ticket's human-choice dependency or establish final validation.
 
-Continue the existing [device/preservation investigation](10-validate-b-device-preservation.md) with the identity of any later tested build; it remains in progress. [Final Nuxt UI adoption](08-confirm-nuxt-ui-adoption.md) remains blocked and requires its own human decision. When all relevant decisions and essential evidence are clear, a later session may use to-spec, then to-tickets; do not produce implementation tickets or close the map merely because this prototype is captured.
+The [device/preservation investigation](10-validate-b-device-preservation.md#resolution) is now closed as a completed evidence task; its [dossier](../research/b-consolidated-validation-2026-10-16.md) retains actual Android/Firefox limitations and the independent scope of this tools validation. [Final Nuxt UI adoption](08-confirm-nuxt-ui-adoption.md) is open and unclaimed for its own human decision. Reuse the existing selected-Dock artifact and scoped checks when this ticket becomes available; a new broad prototype is not automatic. When all relevant decisions make the route clear, a later session may use to-spec, then to-tickets. This dependency update resolves neither this ticket nor the map.
 
 ## Comments
 
