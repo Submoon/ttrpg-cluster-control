@@ -1,6 +1,7 @@
 ---
 title: Test the resolved tools contract in a focused B prototype iteration
-status: blocked
+status: closed
+assignee: codex-controls-evidence-consolidation
 label: wayfinder:prototype
 type: prototype
 mode: HITL
@@ -15,9 +16,9 @@ parent: ../map.md
 
 Does a focused iteration of the accepted disposable B prototype make the human-resolved tools contract and readable control grouping understandable and usable across map contexts and screen shapes?
 
-## Provisional handoff scope
+## Historical prototype scope
 
-This is a future HITL prototype decision, not authorization to start product implementation. Read the final Resolutions of its blockers before preparing code; unanswered candidate details must not be filled in by the implementation agent. Analysis uses SOL 6.1 High; delegate every prototype code/iteration task to Luna XHIGH subagents and apply the prototype skill when this ticket is worked.
+This section preserves the original HITL prototype scope. The consolidated Resolution below now governs its outcome; it does not authorize product implementation. Analysis uses SOL 6.1 High; prototype code/iteration tasks belong to Luna XHIGH subagents.
 
 - Exercise the resolved camera/selection/manipulation intentions over systems, catalogue objects, Orbits and Jump Routes; show the actual active mode and distinct panel states.
 - Demonstrate persistent same-type Add after each successful creation, cancelled/refused placement, chooser dismissal versus cancellation, chosen type/target/progress, and the resolved exit behavior without accidental creation or lost drafts. Read the final tools Resolution before implementing the remaining branches.
@@ -33,9 +34,19 @@ Fields and form redesign remain separate decisions. Do not absorb their recommen
 ## Blocked by
 
 - [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md) — closed; supplies human-resolved semantics, including persistent Add and route-origin retention while panning.
-- [Decide readable control grouping and accessible operation labels within B](12-decide-controls-presentation.md) — in progress and claimed; Dock is already human-selected. Remaining presentation criteria and the formal Resolution still gate this ticket; this dependency must not be interpreted as an unanswered Grouped rail versus Dock vote.
+- [Decide readable control grouping and accessible operation labels within B](12-decide-controls-presentation.md) — now closed through its consolidated Resolution; Dock remains the human-selected presentation.
 
-## Evidence and next handoff
+## Resolution
+
+2026-10-16 — The human explicitly requests updating the remaining records and coordinating to-spec. Resolve this prototype question by reusing the existing selected-Dock artifact and checks, rather than creating another broad prototype. Fresh baseline and source refresh are recorded in the [presentation Resolution](12-decide-controls-presentation.md#resolution). This is a bounded design conclusion with required implementation gates, not an all-tests or physical-device pass.
+
+The focused [nine-case controls exercise](../research/b-controls-prototype-2026-10-15.md#executed-validation) covers repeated same-type creation without automatic Inspect or context entry, Select versus Navigate, right-button and synthetic two-contact view navigation retaining route origin, layered Escape, and compact exclusive panels. The [Dock correction](../research/dock-feedback-2026-10-15.md) separately verifies click-targeted Orbit placement, anchored chooser and dismissal/layering. Human Dock preference and phone follow-up establish the presentation choice. The [new global Astra review](../research/astra-current-interface-review-2026-10-16.md#tools-sub-verdict) independently finds the current Tools model coherent and ready to specify; it samples current Select/Inspect, chooser Escape/Quit, named Move controls, both-map navigation and Fit, without rerunning placement repetition or physical gestures.
+
+**Conclusion:** the resolved Navigate / Select / Move and persistent same-type Add contract is sufficiently demonstrated to specify. Carry that contract, the chosen Dock and all preservation guarantees into the product specification. Do not revive one-shot Add or automatic inspection/system entry. Prototype source remains disposable and must not become the saved-workspace product by promotion.
+
+**Outstanding acceptance:** physical second-contact retest is unanswered. Earlier Android/Firefox feedback identifies keyboard-action and landscape failures, but the human subsequently limits Android support to Chrome during to-spec. Retain keyboard/landscape/gesture usability criteria for Chrome; the old observations neither require Firefox acceptance nor certify Chrome. Full keyboard/screen-reader behavior, usable map space, theme/icon completeness, full baseline control parity, actual persistence/recovery and complete image exports remain obligations. Context-banner Add compaction remains to implement. Evidence comes from distinct source snapshots and must not be summed into a current-version score. These requirements move forward explicitly; no product readiness, merge or source-issue closure follows from this decision closure.
+
+## Historical evidence and handoff notes
 
 Link the captured artifact and bounded checks here when actually produced. Preserve the original Astra review on `4d90f97`, the two-centre fixture correction on `3111a19`, and the parent-attributed Vela/Kestrel Fit check as distinct historical evidence. No new artifact, test or validation is claimed by this ticket.
 

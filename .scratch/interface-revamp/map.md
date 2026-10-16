@@ -1,7 +1,7 @@
 ---
 title: "Revamp the interface: make the map central on desktop and mobile"
 label: wayfinder:map
-status: open
+status: closed
 ---
 
 ## Destination
@@ -37,6 +37,9 @@ Independent review, 2026-10-16: [Astra's current whole-interface and decision re
 
 ## Decisions so far
 
+- [Decide readable control grouping and accessible operation labels within B](tickets/12-decide-controls-presentation.md#resolution): consolidate the human-selected Dock, anchored creation chooser, separate panel/file commands, context-banner Add feedback and named/readable controls; known composition/device defects remain mandatory implementation criteria.
+- [Test the resolved tools contract in a focused B prototype iteration](tickets/15-prototype-resolved-tools-contract.md#resolution): existing controls/Dock evidence and current Astra review establish a sufficiently demonstrated design for specification; physical-device failures and unverified preservation/accessibility/export gates remain explicit, without another broad prototype.
+
 - [Set the revamp's navigation boundary against future semantic zoom](tickets/01-map-navigation-boundary.md): retain separate maps, open systems directly outside a drag, show context and explicit return, and restore each view's temporary zoom/pan and valid selection; unified-map implementation remains separate.
 - [Evaluate Nuxt UI for the revamp without destabilizing map rendering](tickets/02-nuxt-ui-fit.md): documentary Nuxt 4/Tailwind 4 compatibility and integration trade-offs established; application behavior, weight, and performance remain unmeasured by this research.
 - [Decide touch, mouse, and keyboard map gestures and controls](tickets/03-touch-keyboard-interactions.md): original safe-navigation/editing, targeting, attachment, cancellation and accessible-alternative guarantees; Add lifetime and the mode set are amended by the later tools decision below.
@@ -46,18 +49,24 @@ Independent review, 2026-10-16: [Astra's current whole-interface and decision re
 - [Confirm Nuxt UI adoption from prototype evidence](tickets/08-confirm-nuxt-ui-adoption.md): human confirms Nuxt UI by default with maximum component reuse, adaptation before limited justified exceptions, unchanged application-owned maps/data and mandatory integration corrections; prototype custom UI is reassessed rather than grandfathered.
 - [Choose a map-first UI direction through desktop and mobile prototypes](tickets/04-map-first-ui-direction.md): human accepts B with the main tool rail, optional nested hierarchy and icon catalogue; mobile Inspect is full-height and exclusive with Hierarchy, the pictured utility toolbar and LIVE MAP badge are removed, and missing library-adoption evidence remains downstream.
 - [Measure Nuxt UI integration, offline resources, and comparative performance](tickets/09-measure-nuxt-ui-integration.md): production desktop costs and targeted SSR/theme/portal/offline behavior are measured; cold control icons and theme coordination fail, mobile/gesture comparisons remain partial, and device/preservation evidence plus human library adoption remain downstream.
-- [Validate the selected B direction on representative devices and preservation flows](tickets/10-validate-b-device-preservation.md): evidence is consolidated with accepted Dock/Fields/Inspector, a bounded current retained-baseline pan/zoom proof, actual Android/Firefox keyboard/header limitations and explicit integration obligations; final library adoption remains a separate live decision.
+- [Validate the selected B direction on representative devices and preservation flows](tickets/10-validate-b-device-preservation.md): evidence is consolidated with accepted Dock/Fields/Inspector, a bounded current retained-baseline pan/zoom proof, actual Android/Firefox keyboard/header limitations and explicit integration obligations; final library adoption is recorded separately in its later closed decision.
 - [Finalize the tools contract after the Astra interface review](tickets/11-finalize-tools-contract.md): contextual Navigate, Select-to-Inspect, persistent Move and same-type Add without automatic Inspect/context entry; right-drag view pan and two-contact navigation preserve a chosen route origin, while explicit Add exit returns to Navigate.
 - [Decide the mobile Fields list-to-editor flow](tickets/13-decide-mobile-fields-flow.md): mobile list → consultation detail → Edit, shared Fields/Manage session resumption, preserved drafts/list position, creation to new detail and deletion to the list; desktop keeps two columns and reachable commands/reviews remain mandatory.
-- [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md): human accepts the corrected prototype with Bottom commands, Nuxt UI centering and one creation entry per screen; remaining device/preservation evidence and final library adoption stay separate.
+- [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md): human accepts the corrected prototype with Bottom commands, Nuxt UI centering and one creation entry per screen; source-specific evidence and device limits remain distinct from the later closed investigation and library decision.
 - [Decide inspector form density and domain-facing display labels](tickets/14-decide-inspector-form-refinements.md): visible responsive sections and full-width name/description; persistent bottom ordinary actions/status/error access, top Hide, separate Delete, Description and native/custom distinction without data changes.
-- [Validate the responsive inspector form in the B prototype](tickets/17-prototype-inspector-form.md): human accepts the published B inspector; independent reviews, typecheck/build and 11 focused production-browser cases support the artifact, while full parity, physical-device evidence and final library adoption remain separate.
+- [Validate the responsive inspector form in the B prototype](tickets/17-prototype-inspector-form.md): human accepts the published B inspector; independent reviews, typecheck/build and 11 focused production-browser cases support the artifact, while full parity and physical-device acceptance remain implementation obligations; the later library decision is recorded separately.
 
-## Not yet specified
+## Specification handoff
 
-- Remaining detailed dialogs beyond the confirmed Fields and inspector-form decisions, within accepted B and its full-height mobile Inspect amendment; their focused prototype and separate tools validation retain their own tickets.
-- Exact palette values and status placement beyond pending-placement guidance, plus usability measures within the resolved theme, contrast, focus and state-preservation contracts.
-- Specification assembly, criteria for the map area that is actually available, representative data volumes, and coordination conditions with separate fixes, once prototype feedback is known.
+2026-10-16 — The human authorizes consolidating the remaining records and coordinating to-spec subagents. The presentation and focused-tools Resolutions above complete the decision frontier using existing human choices, scoped evidence and current Astra review. This does not change the applied prototype or claim physical acceptance. Fresh baseline: `52b3e7aa2946824826ec41071b0d530cc88f38ed`, matching the remote feature, 0 main-only / 22 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`; source issue 3 remains unchanged and open.
+
+The [local specification](spec.md) now synthesizes these Resolutions, full baseline functionality and mandatory corrections. The human confirms Playwright desktop and mobile-emulated portrait/landscape/touch journeys, supplemented by targeted phone checks for OS keyboard and physical gestures. They subsequently explicitly limit Android support to **Chrome**; Android Firefox is no longer an acceptance target. Preserve earlier Firefox observations as historical evidence without claiming they prove supported-Chrome outcomes. Exact palette/composition details stay within the accepted measurable accessibility and state-preservation contracts; do not reopen settled layout decisions or invent new numerical performance budgets. Use representative dense/long data, real available map space and explicit physical-device acceptance limits. Implementation-ticket breakdown and product implementation remain subsequent work.
+
+## Resolution
+
+2026-10-16 — Decision mapping and specification handoff are complete under the human's explicit continuation request. All seventeen decision/investigation tickets have bounded Resolutions. SOL 6.1 High subagents produced the [specification](spec.md) and [test-seam investigation](research/spec-test-seams-2026-10-16.md), followed by independent technical/testability and domain/data-preservation reviews. One publication-versus-save-failure ambiguity was corrected; both correction reviews report no remaining blockers. The [handoff record](research/specification-handoff-2026-10-16.md) retains exact source/candidate identities, human test/browser decisions, review outcomes and limits.
+
+The specification is locally `open` and `enhancement` / `ready-for-agent`, meaning specified and planned. Continue through to-tickets before implementation. This map's closure does not certify current prototype defects fixed, complete physical/device/export/storage/performance acceptance, merge the preview branch or close GitHub issue 3. Application code and data formats remain unchanged by this handoff.
 
 ## Out of scope
 

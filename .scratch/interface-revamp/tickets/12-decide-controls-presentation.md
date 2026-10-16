@@ -1,6 +1,6 @@
 ---
 title: Decide readable control grouping and accessible operation labels within B
-status: in-progress
+status: closed
 assignee: codex-wayfinder-controls-presentation
 label: wayfinder:prototype
 type: prototype
@@ -32,6 +32,18 @@ The [Astra global review](../research/astra-interface-review-2026-10-15.md) iden
 ## Blocked by
 
 - [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md) — closed; supplies the authoritative resolved mode semantics. The current prototype exploration works this presentation question directly; it does not depend on final validation of the later prototype ticket.
+
+## Resolution
+
+2026-10-16 — Consolidated on the human's explicit request to update the remaining planning records and proceed to to-spec. Freshly fetched baseline: `codex/interface-revamp` at `52b3e7aa2946824826ec41071b0d530cc88f38ed`, matching its remote, 0 main-only / 22 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue 3 remains unchanged and open. This resolves the presentation question from existing human choices and evidence; it does not certify every physical-device criterion.
+
+- **Chosen composition:** retain B's selected Dock with distinct Navigate / Select / Move modes and creation entry; put Hierarchy / Inspect beside Map files, and keep one zoom set and explicit context/Back. The human selected Dock, tried its refinement on their phone, and later accepted Fields and Inspector. Map files groups document commands; a preview link must be labeled as a fresh preview rather than sharing an unsaved workspace. The anchored Nuxt UI creation chooser is part of this direction.
+- **Compact composition:** Inspect and Hierarchy remain full-height and mutually exclusive, hiding dock/zoom. While Add is active, reuse the context banner for chosen type, next target/progress and Quit Add; preserve current context and Back, then restore the ordinary summary on exit. The human delegated this placement and the coordinator chose it. Its implementation remains outstanding, without requiring another layout vote.
+- **States and readable controls:** distinguish mode, creation intent/progress, panel expansion and immediate commands without hover or color alone. Use readable action/target labels and accessible names on every Orbit operation. Current controls/chooser evidence and the [current Astra review](../research/astra-current-interface-review-2026-10-16.md) support the direction; they do not establish complete contrast, focus, screen-reader or device compliance.
+- **Pointer guidance:** right-button drag pans only and suppresses the pan's browser context menu/publication. Preserve stationary right-click's native behavior outside a recognized pan as the existing prototype trial; do not add an application context-menu feature. Specify and test deterministic release/cancellation across supported browsers rather than infer it from D3 defaults.
+- **Library policy:** maximize Nuxt UI components and adaptation. Custom prototype composition is evidence of appearance/behavior, not an approved implementation exception.
+
+The [controls prototype](../research/b-controls-prototype-2026-10-15.md), [Dock refinement](../research/dock-feedback-2026-10-15.md), actual human feedback, [validation dossier](../research/b-consolidated-validation-2026-10-16.md) and independent current Astra review are retained with separate provenance. Required implementation/acceptance work includes Map files/Inspector layering, compact Fields/Add chrome, keyboard-open action access, usable unobstructed map area, named/focusable controls and full feature preservation. During the specification handoff the human explicitly limits Android support to Chrome; test these criteria there. Earlier Android/Firefox findings remain historical observations, without requiring Firefox acceptance or proving Chrome failure/success. Closing this decision transfers the supported-browser obligations to the specification; it neither claims them fixed nor waives them.
 
 ## Notes
 
