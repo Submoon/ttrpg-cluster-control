@@ -2,18 +2,80 @@
 @import "@nuxt/ui";
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --app-bg: #f3f2ed;
+  --app-glow: rgba(86, 137, 108, 0.12);
+  --app-dots: rgba(66, 83, 72, 0.07);
+  --panel-bg: #fffefa;
+  --panel-raised: #f5f2e9;
+  --control-bg: #ffffff;
+  --control-hover: #f1eadc;
+  --line-soft: #ded8ca;
+  --line: #796e5d;
+  --line-strong: #554b40;
+  --control-border: #796e5d;
+  --text-primary: #26302c;
+  --text-secondary: #45504a;
+  --text-muted: #59645d;
+  --text-quiet: #59645d;
+  --accent: #9c4a16;
+  --accent-hover: #7e390f;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(156, 74, 22, 0.12);
+  --focus: #9b3f00;
+  --status-good: #2e6740;
+  --error: #982f23;
+  --error-bg: #fff0ed;
+  --error-border: #b34c3e;
+  --add-bg: #deebdf;
+  --add-bg-hover: #cfe1d1;
+  --map-bg: #f5f4ee;
+  --map-card: #fffefa;
+  --map-grid-line: #dedbd0;
+  --map-text: #26302c;
+  --map-muted: #53615a;
+  --map-route: #315e48;
+  --map-orbit: #596a60;
+  --map-unresolved: #9a3d11;
+  --map-label-bg: #fffefa;
+  --map-label-border: #718077;
+  --map-selected: #8f4a18;
+  --map-star-halo: #946719;
+  --map-installation: #2e674b;
+  --ui-bg: var(--panel-bg);
+  --ui-bg-muted: var(--app-bg);
+  --ui-bg-elevated: var(--panel-raised);
+  --ui-bg-accented: var(--control-hover);
+  --ui-bg-inverted: var(--text-primary);
+  --ui-text: var(--text-primary);
+  --ui-text-dimmed: var(--text-muted);
+  --ui-text-muted: var(--text-muted);
+  --ui-text-toned: var(--text-secondary);
+  --ui-text-highlighted: var(--text-primary);
+  --ui-text-inverted: var(--panel-bg);
+  --ui-border: var(--control-border);
+  --ui-border-muted: var(--line-soft);
+  --ui-border-accented: var(--line-strong);
+  --ui-border-inverted: var(--text-primary);
+  --ui-primary: var(--accent);
+}
+
+:root.dark {
+  color-scheme: dark;
   --app-bg: #0b1113;
+  --app-glow: rgba(78, 129, 115, 0.18);
+  --app-dots: rgba(186, 208, 199, 0.07);
   --panel-bg: #121c1e;
   --panel-raised: #192629;
   --control-bg: #152225;
   --control-hover: #202f32;
   --line-soft: #293a3d;
-  --line: #394c4f;
-  --line-strong: #56696b;
+  --line: #65787a;
+  --line-strong: #899999;
+  --control-border: #65787a;
   --text-primary: #e8eee7;
   --text-secondary: #c0cbc4;
   --text-muted: #9caaa2;
@@ -44,6 +106,53 @@
   --map-installation: #81b19a;
 }
 
+.theme-control {
+  display: inline-flex;
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.2rem 0.35rem 0.2rem 0.55rem;
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+}
+
+.theme-control-label {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.theme-control-status {
+  min-width: 2.5rem;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.theme-control-toggle {
+  min-width: 2.4rem;
+  min-height: 2.25rem;
+  border-color: var(--line-strong);
+  background: var(--control-bg);
+  color: var(--text-primary);
+}
+
+.theme-control-toggle:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--text-primary);
+}
+
+.theme-control-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 @layer base {
   body {
     @apply min-h-screen min-w-[320px];
@@ -65,7 +174,7 @@
   input,
   select,
   textarea {
-    @apply w-full min-h-[2.75rem] rounded-[2px] border border-[var(--line)] bg-[var(--control-bg)] px-[0.7rem] py-[0.65rem] text-[0.85rem] text-[var(--text-primary)] tracking-normal normal-case;
+    @apply w-full min-h-[2.75rem] rounded-[2px] border border-[var(--control-border)] bg-[var(--control-bg)] px-[0.7rem] py-[0.65rem] text-[0.85rem] text-[var(--text-primary)] tracking-normal normal-case;
   }
 
   input::placeholder,

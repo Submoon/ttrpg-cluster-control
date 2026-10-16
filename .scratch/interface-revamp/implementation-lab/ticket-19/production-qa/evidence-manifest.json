@@ -1,0 +1,23 @@
+{
+  "note": "Minimal curated Git evidence; raw logs and exploratory artifacts remain local. final-summary.md is written after this manifest generation.",
+  "files": {
+    "README.md": "8c15f6849c4be36e5e8189d67c285297f15570b498e1bdaaf22f52f7175f6ce9",
+    "final-summary.md": "dd743c658ef296ab76c4ac36deb0977fdda981ec50130f881dceca2be2b36654",
+    "results.json": "23e869cbddeae1e7fecadef3ed86609758172b6a07ad585e3e82172f0bd950cf",
+    "network-guard.cjs": "d908ab4f48f73cf032e4db52e2916becba0242ec827196faec961e215503edea",
+    "check-production.mjs": "5eb07d5a19d1e5641de457cf42009a88e57c10aba3c7c6898ab3321a09c0404e",
+    "verify-settled-focus.mjs": "cc094fd2f7b05fc5b3ec2e03247e42cfc08a55754aebe41f11085c28bca49129",
+    "curate-evidence.mjs": "b063bc928800f08619d7b02a43e86e434c0bba6d5f3625be9fb96b5b1a46d8b8",
+    "playwright.compiled.config.ts": "42c9c5b66068246225c1d54a48af63eb0ced5ac94564ab6b52801a329d52aee1",
+    "rich-fixture.json": "f10327c57a4fb071a22564f43e587b7631a48c7d48c76e2a2ad2ef2388936a6e",
+    "final-844x390-light-Fields-trigger-viewport.png": "a767a2860da825c22e1b6cd79bc6203191ddc19fe5041a6e4d7eae99c94cad35",
+    "final-844x390-dark-Fields-trigger-viewport.png": "9d1cba254fff54a575a01068534cad219dae862b1b1186643e3ebc8f7125642d",
+    "final-390x844-light-Fields-trigger-viewport.png": "657e2ec6b44448ea1db4321f45b515967b21f75b8da10891c957c25ab8078f1f",
+    "final-390x500-dark-native-select-viewport.png": "72b2d716eaace62556a25f87f01203567488de4a030ff40b61076f9ddef3964f",
+    "final-1440x900-light-welcome-viewport.png": "0b5d480900a3cbba97c6c96f65b7cba6ae308c63b9983e5ff1b67cfef9cdd76c",
+    "rich-light-cluster-unselected-viewport.png": "ad6b13491582ead7423e0a02103c9764327d003b45c2f300b82d430eff3ea362",
+    "rich-dark-system-selected-viewport.png": "9f533068ec0b184af495d8e2159d64d19b1be9e64f3e144d49f189be00ed4e0f",
+    "1440x900-light-initial-theme-control.png": "934bd683b0bf798607263693c2a26d15aa7551f92e6c7880aa5fe08c1e231673",
+    "1440x900-dark-initial-theme-control.png": "9cefd4a9db4c49a590a28e6f8006cba78f210a29f05f9fa105b0763620de9c4c"
+  }
+}

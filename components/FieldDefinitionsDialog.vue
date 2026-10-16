@@ -359,6 +359,7 @@ defineExpose({
 .field-definitions-trigger {
   display: grid;
   min-height: 2.45rem;
+  scroll-margin-block: 0.5rem;
   gap: 0.12rem;
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -520,7 +521,7 @@ defineExpose({
 .field-definition-create-form select:focus,
 .field-definition-create-form textarea:focus {
   border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 

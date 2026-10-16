@@ -3,6 +3,19 @@ export default defineNuxtConfig({
   ssr: true,
   modules: ['@nuxt/ui'],
   ui: { fonts: false },
+  colorMode: {
+    preference: 'system',
+    fallback: 'light',
+    classSuffix: '',
+    storage: 'localStorage',
+    storageKey: 'nuxt-color-mode',
+    disableTransition: true,
+  },
+  icon: {
+    provider: 'server',
+    serverBundle: { collections: ['lucide'], remote: false },
+    fallbackToApi: false,
+  },
   app: {
     head: {
       title: 'TTRPG Cluster Control',

@@ -41,9 +41,19 @@
         </div>
       </div>
     </div>
-    <div v-if="props.workspace" class="topbar-actions flex shrink-0 items-center gap-2">
-      <slot name="field-definitions" />
-      <div class="header-map-actions" @keydown.esc.stop.prevent="closeHeaderMapActions">
+    <div class="topbar-actions flex shrink-0 items-center gap-2">
+      <div class="theme-control" role="group" aria-label="Theme">
+        <span class="theme-control-label">Theme</span>
+        <ColorScheme placeholder="System">
+          <span class="theme-control-status" aria-live="polite">
+            {{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}
+          </span>
+        </ColorScheme>
+        <UColorModeButton class="theme-control-toggle" color="neutral" variant="outline" size="sm" square />
+      </div>
+      <template v-if="props.workspace">
+        <slot name="field-definitions" />
+        <div class="header-map-actions" @keydown.esc.stop.prevent="closeHeaderMapActions">
         <button
           ref="headerMapActionsToggle"
           class="header-map-actions-toggle"
@@ -147,15 +157,16 @@
           </button>
           <p v-if="props.exportError" class="feedback m-0 error-text" role="alert">{{ props.exportError }}</p>
         </div>
-      </div>
-      <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
+        </div>
+        <div class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
+          <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
+          LOCAL ONLY
+        </div>
+      </template>
+      <div v-else class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
         <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
         LOCAL ONLY
       </div>
-    </div>
-    <div v-else class="local-badge inline-flex items-center gap-[0.45rem] whitespace-nowrap text-[var(--status-good)]">
-      <span class="inline-block size-[0.45rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
-      LOCAL ONLY
     </div>
     <input
       v-if="props.workspace"
@@ -174,6 +185,7 @@
  * Shows shared chart summaries and dispatches file actions supplied by the page.
  */
 import { computed, ref } from 'vue'
+import { useColorMode } from '#imports'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
 
@@ -191,6 +203,8 @@ const props = defineProps<{
   systemMap: MapImageExporter | null
   exportError: string
 }>()
+
+const colorMode = useColorMode()
 
 const emit = defineEmits<{
   'export-cluster-json': []
