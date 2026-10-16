@@ -10,7 +10,7 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 ## Source issue
 
-[Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3), refreshed read-only on 2026-10-15 before closing the mobile Fields decision, open, `enhancement`, `priority:P1`, no comments; requirements unchanged. Requirements: research a considered modern design, responsiveness, a touch-usable map that is prominent on mobile, and preservation of functionality; an explicit, remembered light/dark control, coherent UI/map palettes, readable states, and legible SVG/PNG exports. A tool-based approach, compact icons, and Nuxt UI are to be evaluated. Resolved choices follow the indexed contracts; the Nuxt UI prototype direction is conditional, with final adoption awaiting actual evidence and a later human decision.
+[Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3), refreshed read-only on 2026-10-16 before closing the inspector-form decision, open, `enhancement`, `priority:P1`, no comments; requirements unchanged. Requirements: research a considered modern design, responsiveness, a touch-usable map that is prominent on mobile, and preservation of functionality; an explicit, remembered light/dark control, coherent UI/map palettes, readable states, and legible SVG/PNG exports. A tool-based approach, compact icons, and Nuxt UI are to be evaluated. Resolved choices follow the indexed contracts; the Nuxt UI prototype direction is conditional, with final adoption awaiting actual evidence and a later human decision.
 
 ## Notes
 
@@ -29,6 +29,8 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 The human accepts the corrected Fields prototype on 2026-10-16; its closed decision is indexed below. Remaining physical-device/preservation checks stay in their dedicated investigation; Inspector-form refinement and final Nuxt UI adoption remain separate.
 
+The inspector-form decision is now closed on the human's explicit answers. The [focused inspector prototype](tickets/17-prototype-inspector-form.md) is prepared, open and unclaimed; no code starts from this analysis. Its source audit records baseline controls and unsupported prototype edits, preserving the requirement to retain all existing functionality.
+
 ## Decisions so far
 
 - [Set the revamp's navigation boundary against future semantic zoom](tickets/01-map-navigation-boundary.md): retain separate maps, open systems directly outside a drag, show context and explicit return, and restore each view's temporary zoom/pan and valid selection; unified-map implementation remains separate.
@@ -42,10 +44,11 @@ The human accepts the corrected Fields prototype on 2026-10-16; its closed decis
 - [Finalize the tools contract after the Astra interface review](tickets/11-finalize-tools-contract.md): contextual Navigate, Select-to-Inspect, persistent Move and same-type Add without automatic Inspect/context entry; right-drag view pan and two-contact navigation preserve a chosen route origin, while explicit Add exit returns to Navigate.
 - [Decide the mobile Fields list-to-editor flow](tickets/13-decide-mobile-fields-flow.md): mobile list → consultation detail → Edit, shared Fields/Manage session resumption, preserved drafts/list position, creation to new detail and deletion to the list; desktop keeps two columns and reachable commands/reviews remain mandatory.
 - [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md): human accepts the corrected prototype with Bottom commands, Nuxt UI centering and one creation entry per screen; remaining device/preservation evidence and final library adoption stay separate.
+- [Decide inspector form density and domain-facing display labels](tickets/14-decide-inspector-form-refinements.md): visible responsive sections and full-width name/description; persistent bottom ordinary actions/status/error access, top Hide, separate Delete, Description and native/custom distinction without data changes.
 
 ## Not yet specified
 
-- Remaining detailed dialogs beyond the confirmed Fields flow and separately ticketed tools presentation/inspector-form decisions, within accepted B and its full-height mobile Inspect amendment. Fields uses the human-selected Bottom commands.
+- Remaining detailed dialogs beyond the confirmed Fields and inspector-form decisions, within accepted B and its full-height mobile Inspect amendment; their focused prototype and separate tools validation retain their own tickets.
 - Exact palette values and status placement beyond pending-placement guidance, plus usability measures within the resolved theme, contrast, focus and state-preservation contracts.
 - Specification assembly, criteria for the map area that is actually available, representative data volumes, and coordination conditions with separate fixes, once prototype feedback is known.
 
