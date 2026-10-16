@@ -55,6 +55,20 @@ On 2026-10-15, the earlier phone-feedback revision was checked in a local produc
 
 The 2026-10-15 seed-fixture correction converts the Vela Reach and Kestrel Deep free-Orbit center scene points to normalized points when `seedWorkspace()` creates those sample records. This is an explicit fixture correction, not runtime normalization or a migration of existing workspace data. Astra reproduced the Fit failure on published commit `4d90f9774ea14b49fe6f99f1c72becacfd8454ed`; the phone-feedback build and its screenshots above predate this correction. The parent subsequently verified Fit for the corrected Vela and Kestrel samples in the published preview through the connected in-app browser. That confirms browser behavior, not physical-device behavior.
 
+## B inspector form
+
+The focused B inspector follows the human-confirmed design: visible sections, full-width Name and object Description, multiline custom text, and distinct catalogue/native versus custom fields. Its content scrolls between a reachable Hide header and persistent Apply / Discard changes footer. Validation appears beside controls and is reachable from compact footer feedback. Delete stays in its own final section and reviews the actual affected entities before confirmation.
+
+Supported memory edits cover object Name/Description/native/custom values, route name/Jump level/unresolved exit, and system name. Orbit and Jump Cluster fallback summaries are read-only; unsupported controls cannot report a successful Apply. Other production controls remain documented prototype gaps in the [source audit](.scratch/interface-revamp/research/inspector-form-refinements-2026-10-16.md), rather than feature cuts for the eventual refactor. A/C and the saved-workspace inspector are unchanged.
+
+Open `/?variant=B&controls=dock&inspectorSample=dense` on initial load for long object text and additional applicable custom values. This separate memory fixture does not alter the ordinary seed or the accepted Fields fixture. The footer's JSON download uses the existing codec to export applied sample data, excluding any uncommitted inspector draft. Save status remains explicitly simulated; Retry retains the sample.
+
+The [inspector execution report](.scratch/interface-revamp/research/inspector-prototype-2026-10-16.md) records frozen source identities, independent reviews, corrections and actual runtime results. Human inspection of the artifact and physical-keyboard acceptance remain separate from automated viewport checks.
+
+For the phone review, open the dense sample, then Inspect. Scroll through Description and Custom fields while checking the bottom actions; edit text, Hide and reopen to check resumption. With the phone keyboard visible, check access to Apply / Discard changes in portrait and landscape. Reloading resets the sample.
+
+Local typecheck and production build pass for the corrected frozen candidate. All 11 focused production-browser cases pass, including responsive draft retention, accessible validation, Fields conflicts, reviewed deletion and two real JSON downloads decoded by the existing codec. See the execution report for source identities, earlier harness attempts and the limits of viewport emulation.
+
 ## Prototype-only behavior
 
 There is no IndexedDB write, backend, account, sync, or durable workspace state in these variants. The seed, edits, route and field changes, import candidate, and confirmed deletions are held in memory and reset on reload. Apply updates the sample; its simulated save deliberately fails once and then succeeds when Retry is pressed. Import uses the existing JSON preparation helper for a preview, but does not replace a saved workspace. The delete dialog applies the domain deletion plan to the sample only.

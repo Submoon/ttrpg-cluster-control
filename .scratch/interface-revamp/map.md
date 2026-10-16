@@ -29,7 +29,7 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 The human accepts the corrected Fields prototype on 2026-10-16; its closed decision is indexed below. Remaining physical-device/preservation checks stay in their dedicated investigation; Inspector-form refinement and final Nuxt UI adoption remain separate.
 
-The inspector-form decision is now closed on the human's explicit answers. The [focused inspector prototype](tickets/17-prototype-inspector-form.md) is prepared, open and unclaimed; no code starts from this analysis. Its source audit records baseline controls and unsupported prototype edits, preserving the requirement to retain all existing functionality.
+The inspector-form decision is closed on the human's explicit answers. The [focused inspector prototype](tickets/17-prototype-inspector-form.md) is implemented in B only and remains in progress for the human's artifact review. Its [execution report](research/inspector-prototype-2026-10-16.md) records the bounded design, independent reviews and actual validation evidence. The source audit retains baseline controls and prototype gaps, preserving the requirement to retain all existing functionality.
 
 ## Decisions so far
 

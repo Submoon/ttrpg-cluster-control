@@ -1,0 +1,376 @@
+{
+  "sourceBaselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+  "originMainAtIntake": "629d2a98715c3a16b954e0f77c639b1f0c31212c",
+  "candidateSourceHashes": {
+    "components/PrototypeBInspector.vue": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E",
+    "components/PrototypeWorkbench.vue": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D",
+    "components/prototype-inspector-fixture.ts": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5"
+  },
+  "baseUrl": "http://127.0.0.1:3144/",
+  "runtime": "Compiled local production build from isolated preview-build; headless Chrome through visible UI locators and keyboard input. page.evaluate is read-only DOM inspection.",
+  "browser": "Chrome 155.0.8059.41",
+  "node": "v24.18.1",
+  "viewportLimit": "Responsive viewport emulation is not physical keyboard, touch, or safe-area hardware acceptance.",
+  "inputPolicy": "No app state injection. All edits, selection, dialogs, export, and retry use visible Playwright controls. Downloaded JSON is parsed and passed to the existing prepareJsonImport domain decoder.",
+  "selectedCases": [
+    "portrait-hide-theme-resize-and-sticky-actions",
+    "route-system-edit-and-orbit-read-only-gate",
+    "fields-conflict-apply-object-draft-and-renewed-impact",
+    "fields-conflict-discard-object-draft-guard",
+    "delete-review-cancel",
+    "delete-review-escape",
+    "delete-confirm-and-ordinary-json-decode"
+  ],
+  "sourceManifest": {
+    "baselineCommit": "8ff3d47a6e6bbfc957c7b3fec19ec856b49225ae",
+    "runtimeRoot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\preview-build",
+    "files": [
+      {
+        "path": "components/PrototypeBInspector.vue",
+        "role": "prototype-source",
+        "checkoutSha256": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E",
+        "runtimeSha256": "010D58FEDEED2780BEE57223E950B7BDD5D5233C2054DC20E18BAF7FCB24DF3E"
+      },
+      {
+        "path": "components/PrototypeWorkbench.vue",
+        "role": "prototype-source",
+        "checkoutSha256": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D",
+        "runtimeSha256": "B102BD8230E2D4E819D68B0B516DF9A3E39D34751AB8A3D9EA7CA090A6BB7D7D"
+      },
+      {
+        "path": "components/prototype-inspector-fixture.ts",
+        "role": "prototype-source",
+        "checkoutSha256": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5",
+        "runtimeSha256": "971DA11D6FE447B4CAF454FEAAB0954BD4CD4644B5A0E7E85D0DEC565CBE3CE5"
+      },
+      {
+        "path": "components/PrototypeInspector.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17",
+        "runtimeSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17"
+      },
+      {
+        "path": "components/PrototypeFieldDefinitionsDialog.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "17F34EA3F2B9D4020A8C0BAE5690B7564F9091D3C69F510A17C8B45E41900F4A",
+        "runtimeSha256": "17F34EA3F2B9D4020A8C0BAE5690B7564F9091D3C69F510A17C8B45E41900F4A"
+      },
+      {
+        "path": "components/FieldDefinitionsDialog.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272",
+        "runtimeSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionChangeConfirmation.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB",
+        "runtimeSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionEditor.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E",
+        "runtimeSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionList.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E",
+        "runtimeSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E"
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionValues.vue",
+        "role": "preservation-boundary",
+        "checkoutSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE",
+        "runtimeSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE"
+      },
+      {
+        "path": "components/field-definitions/model.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E",
+        "runtimeSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E"
+      },
+      {
+        "path": "domain/workspace-model.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "64C89ED0D7E5D3489673E48B67D1A8CEDA7BCE2B370C2B7ED6BA3481177E72E9",
+        "runtimeSha256": "64C89ED0D7E5D3489673E48B67D1A8CEDA7BCE2B370C2B7ED6BA3481177E72E9"
+      },
+      {
+        "path": "domain/workspace.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A",
+        "runtimeSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A"
+      },
+      {
+        "path": "domain/workspace-codec.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11",
+        "runtimeSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11"
+      },
+      {
+        "path": "domain/workspace-fields.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF",
+        "runtimeSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF"
+      },
+      {
+        "path": "domain/workspace-json-import.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6",
+        "runtimeSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6"
+      },
+      {
+        "path": "domain/workspace-schema.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A",
+        "runtimeSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A"
+      },
+      {
+        "path": "utils/workspace-storage.ts",
+        "role": "preservation-boundary",
+        "checkoutSha256": "00817A03E640FCED61EA9A6F37BCAD0F6A2DDFE4AC1F3683FE0CD5E533A0F5D4",
+        "runtimeSha256": "00817A03E640FCED61EA9A6F37BCAD0F6A2DDFE4AC1F3683FE0CD5E533A0F5D4"
+      }
+    ]
+  },
+  "results": [
+    {
+      "name": "portrait-hide-theme-resize-and-sticky-actions",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:48:12.224Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-inspector-portrait.png",
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-inspector-landscape.png",
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-inspector-compact.png"
+      ],
+      "details": {
+        "portraitGeometry": {
+          "card": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 377.203125,
+            "bottom": 831.203125,
+            "width": 364.40625,
+            "height": 820.015625
+          },
+          "header": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 377.203125,
+            "bottom": 113.046875,
+            "width": 364.40625,
+            "height": 101.859375
+          },
+          "body": {
+            "x": 12.796875,
+            "y": 113.046875,
+            "right": 377.203125,
+            "bottom": 760.953125,
+            "width": 364.40625,
+            "height": 647.90625
+          },
+          "footer": {
+            "x": 12.796875,
+            "y": 760.953125,
+            "right": 377.203125,
+            "bottom": 831.203125,
+            "width": 364.40625,
+            "height": 70.25
+          },
+          "documentScrollWidth": 390,
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        "landscapeGeometry": {
+          "card": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 831.203125,
+            "bottom": 377.203125,
+            "width": 818.40625,
+            "height": 366.015625
+          },
+          "header": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 831.203125,
+            "bottom": 91.34375,
+            "width": 818.40625,
+            "height": 80.15625
+          },
+          "body": {
+            "x": 12.796875,
+            "y": 91.34375,
+            "right": 831.203125,
+            "bottom": 306.953125,
+            "width": 818.40625,
+            "height": 215.609375
+          },
+          "footer": {
+            "x": 12.796875,
+            "y": 306.953125,
+            "right": 831.203125,
+            "bottom": 377.203125,
+            "width": 818.40625,
+            "height": 70.25
+          },
+          "documentScrollWidth": 844,
+          "viewport": {
+            "width": 844,
+            "height": 390
+          }
+        },
+        "compactGeometry": {
+          "card": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 377.203125,
+            "bottom": 487.203125,
+            "width": 364.40625,
+            "height": 476.015625
+          },
+          "header": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "right": 377.203125,
+            "bottom": 113.046875,
+            "width": 364.40625,
+            "height": 101.859375
+          },
+          "body": {
+            "x": 12.796875,
+            "y": 113.046875,
+            "right": 377.203125,
+            "bottom": 416.953125,
+            "width": 364.40625,
+            "height": 303.90625
+          },
+          "footer": {
+            "x": 12.796875,
+            "y": 416.953125,
+            "right": 377.203125,
+            "bottom": 487.203125,
+            "width": 364.40625,
+            "height": 70.25
+          },
+          "documentScrollWidth": 390,
+          "viewport": {
+            "width": 390,
+            "height": 500
+          }
+        },
+        "draftRetained": true,
+        "themeRetained": "light"
+      }
+    },
+    {
+      "name": "route-system-edit-and-orbit-read-only-gate",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:48:17.498Z",
+      "error": "AssertionError: The input did not match the regular expression /Orbit radii.*outside this focused rendering/i. Input:\n\n'ORBIT / GEOMETRY\\n' +\n  '\\n' +\n  'Orbit 1\\n' +\n  '\\n' +\n  'Orbit 1 · unoccupied center\\n' +\n  '\\n' +\n  'Hide\\n' +\n  'Read-only in this prototype\\n' +\n  '\\n' +\n  'Orbit radii, unoccupied centers, ordering, and Detach are not implemented in this focused rendering.\\n' +\n  '\\n' +\n  'MEMORY-ONLY SAMPLE\\n' +\n  '\\n' +\n  'Simulated save error\\n' +\n  '\\n' +\n  'Simulated IndexedDB failure. The applied chart remains in memory.\\n' +\n  '\\n' +\n  'Retry simulated save\\n' +\n  'Export applied JSON\\n' +\n  '\\n' +\n  'SEPARATE DESTRUCTIVE ACTION\\n' +\n  '\\n' +\n  'Delete\\n' +\n  '\\n' +\n  'The existing impact review lists everything that will be removed or updated.\\n' +\n  '\\n' +\n  'Delete Orbit…\\n' +\n  'Save needs attention\\n' +\n  'Details\\n' +\n  'Retry\\n' +\n  'Export applied JSON\\n' +\n  'Apply changes\\n' +\n  'Discard changes'\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\route-system-edit-and-orbit-read-only-gate-failure.png"
+      ]
+    },
+    {
+      "name": "fields-conflict-apply-object-draft-and-renewed-impact",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:48:20.441Z",
+      "error": "TimeoutError: locator.textContent: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('combobox', { name: 'Survey status', exact: true })\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\fields-conflict-apply-object-draft-and-renewed-impact-failure.png"
+      ]
+    },
+    {
+      "name": "fields-conflict-discard-object-draft-guard",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:48:33.578Z",
+      "error": "TimeoutError: locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-prototype-fields]').locator('[aria-label=\"Field change confirmation\"]') to be visible\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\fields-conflict-discard-object-draft-guard-failure.png"
+      ]
+    },
+    {
+      "name": "delete-review-cancel",
+      "status": "failed",
+      "startedAt": "2026-10-16T09:48:46.414Z",
+      "error": "TimeoutError: locator.innerText: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.b-delete-review-effects')\u001b[22m\n",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\delete-review-cancel-failure.png"
+      ]
+    },
+    {
+      "name": "delete-review-escape",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:48:58.872Z",
+      "screenshots": [],
+      "details": {}
+    },
+    {
+      "name": "delete-confirm-and-ordinary-json-decode",
+      "status": "passed",
+      "startedAt": "2026-10-16T09:49:03.992Z",
+      "screenshots": [
+        "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\qa-delete-confirmed-result.png"
+      ],
+      "details": {
+        "affectedBeforeConfirm": "Also affected\nOrbit 1 around Aster\nMorrow (Moon, MO-1)",
+        "remainingEntityNames": [
+          "Vela Prime",
+          "Pilgrim Anchorage",
+          "Vela Gate",
+          "Blue Lenticular",
+          "Kestrel A",
+          "Hearth",
+          "The Sill",
+          "Glass Belt",
+          "Vesper",
+          "New Alecto",
+          "Vesper Crossing"
+        ],
+        "ordinaryJson": {
+          "label": "ordinary-after-delete",
+          "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\applied-ordinary-after-delete.json",
+          "sha256": "E36F0243F1B437180837635145250F3606CDA1AE5F80869B7C62B8B002D95145",
+          "format": "ttrpg-cluster-control-map",
+          "version": 1,
+          "type": "cluster",
+          "decodedSummary": {
+            "type": "cluster",
+            "systems": 3,
+            "objects": 11,
+            "orbits": 5,
+            "routes": 4,
+            "customFields": 3,
+            "idCollisions": [],
+            "possibleMatches": []
+          }
+        }
+      }
+    }
+  ],
+  "jsonDecodes": [
+    {
+      "label": "ordinary-after-delete",
+      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\inspector-form-2026-10-16\\applied-ordinary-after-delete.json",
+      "sha256": "E36F0243F1B437180837635145250F3606CDA1AE5F80869B7C62B8B002D95145",
+      "format": "ttrpg-cluster-control-map",
+      "version": 1,
+      "type": "cluster",
+      "decodedSummary": {
+        "type": "cluster",
+        "systems": 3,
+        "objects": 11,
+        "orbits": 5,
+        "routes": 4,
+        "customFields": 3,
+        "idCollisions": [],
+        "possibleMatches": []
+      }
+    }
+  ]
+}

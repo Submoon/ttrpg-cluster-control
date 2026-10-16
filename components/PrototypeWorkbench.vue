@@ -143,8 +143,8 @@
           <div class="b-map-footer"><span>{{ visibleState.selection }}</span><span>{{ zoomNote }}</span><span>DRAG ORBIT/OBJECT WITH MOVE · DRAG VIEW OR USE TWO FINGERS / RIGHT BUTTON · WHEEL TO ZOOM</span></div>
         </section>
         <Transition name="b-mobile-panel">
-          <aside id="b-inspector-panel" v-show="inspectorOpen" class="b-inspector-float inspector-open">
-            <PrototypeInspector v-bind="inspectorBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" />
+          <aside id="b-inspector-panel" v-show="inspectorOpen" class="b-inspector-float b-inspector-float--form inspector-open">
+            <PrototypeBInspector v-bind="inspectorBBindings" v-model:name="draft.name" v-model:description="draft.description" v-model:jump-level="draft.jumpLevel" v-model:unresolved-exit="draft.unresolvedExit" v-model:field-values="draft.fieldValues" v-model:native-values="draft.nativeValues" @hide="inspectorOpen = false" @apply="applyDraft" @discard="discardDraft" @delete="requestDelete" @manage-fields="openFieldManager" @retry-save="retrySave" @export-json="exportAppliedJson" />
           </aside>
         </Transition>
       </main>
@@ -200,7 +200,28 @@
 
     <UModal v-model:open="deleteOpen" title="Confirm map deletion" description="Deletion is simulated in this prototype.">
       <template #content>
-        <div class="proto-modal-body"><p class="proto-eyebrow">DESTRUCTIVE ACTION</p><h2>Remove {{ deleteLabel }}?</h2><p>This changes only the in-memory sample map. You can reload the page to restore the seed.</p><div class="proto-modal-actions"><UButton color="error" @click="confirmDelete">Delete from sample</UButton><UButton color="neutral" variant="outline" @click="deleteOpen = false">Keep it</UButton></div></div>
+        <div class="proto-modal-body" :class="{ 'b-delete-review': variant === 'B', 'is-light': variant === 'B' && theme === 'light' }">
+          <p class="proto-eyebrow">DESTRUCTIVE ACTION</p>
+          <h2>Remove {{ variant === 'B' ? deleteReviewPlan?.entityLabel ?? 'this map item' : deleteLabel }}?</h2>
+          <p v-if="variant === 'B' && deleteReviewChanged" class="b-delete-review-changed" role="alert">The sample map changed after this review. The impact list has been refreshed. Read it again and confirm once more.</p>
+          <p v-if="variant === 'B' && deleteReviewError" class="b-delete-review-changed" role="alert">{{ deleteReviewError }}</p>
+          <template v-if="variant === 'B'">
+            <p>This review is for the current in-memory sample. Nothing changes until you confirm it.</p>
+            <p v-if="deleteDraftWillBeAbandoned" class="b-delete-draft-notice">Confirming will delete the selected target and discard its unsaved inspector draft.</p>
+            <div class="b-delete-review-effects">
+              <strong>Also affected</strong>
+              <p v-if="!deleteReviewPlan?.affectedEntities.length">No dependent map entities will be removed or updated.</p>
+              <ul v-else>
+                <li v-for="(entity, index) in deleteReviewPlan.affectedEntities" :key="`${index}-${entity}`">{{ entity }}</li>
+              </ul>
+            </div>
+          </template>
+          <p v-else>This changes only the in-memory sample map. You can reload the page to restore the seed.</p>
+          <div class="proto-modal-actions b-delete-review-actions">
+            <UButton color="error" :disabled="variant === 'B' && (!deleteReviewPlan || !!deleteReviewError)" @click="confirmDelete">{{ variant === 'B' && deleteReviewChanged ? 'Confirm refreshed review' : 'Delete from sample' }}</UButton>
+            <UButton color="neutral" variant="outline" @click="cancelDeleteReview">Keep it</UButton>
+          </div>
+        </div>
       </template>
     </UModal>
 
@@ -219,11 +240,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { catalogueTypes, isCustomFieldApplicableToObject, planMapEntityDeletion, updateSystemObject, type CatalogueSubtype, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionTarget, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
+import { catalogueTypes, exportJumpCluster, isCustomFieldApplicableToObject, planMapEntityDeletion, updateJumpRoute, updateSystemObject, type CatalogueSubtype, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionPlan, type MapDeletionTarget, type ObjectFamily, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
+import { isJumpLevel, maxNameLength, validName, validText } from '../domain/workspace-validation'
 import { addCustomFieldDefinition, removeCustomFieldDefinition, renameCustomFieldDefinition, updateCustomFieldApplicability, updateCustomFieldOptions, updateNativeFieldOptions } from '../domain/workspace-fields'
 import { sameCustomFieldApplicability, type CustomFieldCreate, type FieldDefinitionUpdate } from './field-definitions/model'
 import PrototypeFieldDefinitionsDialog from './PrototypeFieldDefinitionsDialog.vue'
+import PrototypeBInspector from './PrototypeBInspector.vue'
 import { createDenseFieldsFixture } from './prototype-fields-fixture'
+import { createDenseInspectorFixture } from './prototype-inspector-fixture'
 import type { MapImageFormat } from '../utils/map-image-export'
 import { toNormalizedMapPoint } from '../utils/system-map-geometry'
 
@@ -239,6 +263,7 @@ const route = useRoute()
 const router = useRouter()
 const variant = ref<Variant>(props.initialVariant)
 watch(() => props.initialVariant, value => { variant.value = value })
+const hasDenseInspectorFixture = props.initialVariant === 'B' && route.query.inspectorSample === 'dense'
 const controlLayout = computed<ControlLayout>(() => route.query.controls === 'groups' ? 'groups' : 'dock')
 const fieldActionLayout = computed<'header' | 'footer'>(() => route.query.fieldsActions === 'header' ? 'header' : 'footer')
 
@@ -247,10 +272,14 @@ const controlLayoutLabel = computed(() => controlLayout.value === 'groups' ? 'Gr
 const controlLayoutShortLabel = computed(() => controlLayout.value === 'groups' ? 'Rail' : 'Dock')
 const isDev = import.meta.dev
 const theme = ref<'dark' | 'light'>('dark')
-const workspace = ref<LocalWorkspace>(props.initialVariant === 'B' && route.query.fieldsSample === 'dense' ? createDenseFieldsFixture(seedWorkspace()) : seedWorkspace())
-const activeView = ref<'cluster' | 'system'>('cluster')
+const workspace = ref<LocalWorkspace>(hasDenseInspectorFixture
+  ? createDenseInspectorFixture(seedWorkspace())
+  : props.initialVariant === 'B' && route.query.fieldsSample === 'dense'
+    ? createDenseFieldsFixture(seedWorkspace())
+    : seedWorkspace())
+const activeView = ref<'cluster' | 'system'>(hasDenseInspectorFixture ? 'system' : 'cluster')
 const activeSystemId = ref('sys-vela')
-const selection = ref<Selection>({ kind: 'route', id: 'route-vela-kestrel' })
+const selection = ref<Selection>(hasDenseInspectorFixture ? { kind: 'object', id: 'obj-vela-planet' } : { kind: 'route', id: 'route-vela-kestrel' })
 const clusterSelection = ref<Selection>({ kind: 'route', id: 'route-vela-kestrel' })
 const systemSelections = reactive<Record<string, Selection>>({})
 const activeTool = ref<Tool>('navigation')
@@ -267,6 +296,12 @@ const guardReason = ref<'navigation' | 'field'>('navigation')
 const pendingAction = ref<PendingAction | null>(null)
 const deleteOpen = ref(false)
 const deleteTarget = ref<Selection | null>(null)
+const deleteSystemId = ref<string | null>(null)
+const deleteReviewTarget = ref<MapDeletionTarget | null>(null)
+const deleteReviewPlan = ref<MapDeletionPlan | null>(null)
+const deleteReviewSnapshot = ref('')
+const deleteReviewChanged = ref(false)
+const deleteReviewError = ref('')
 const importOpen = ref(false)
 const importSummary = ref<ReturnType<typeof prepareJsonImport>['summary'] | null>(null)
 const importCandidate = ref<LocalWorkspace | null>(null)
@@ -284,6 +319,7 @@ const fieldDefinitionSaveRevision = ref(0)
 const prototypeFieldDefinitionRejectionRevision = ref(0)
 const fieldDefinitionError = ref('')
 const inspectorError = ref('')
+const bFieldErrors = ref<Record<string, string>>({})
 const inspectorConflictError = ref('')
 const routeOriginPoint = ref<string | null>(null)
 const toastIsAddFeedback = ref(false)
@@ -332,11 +368,61 @@ const inspectorBindings = computed(() => ({
   saveMessage: saveMessage.value,
   validationError: inspectorError.value,
 }))
+const inspectorBBindings = computed(() => ({
+  ...inspectorDescriptor.value,
+  eyebrow: currentObject.value
+    ? `${familyLabel(currentObject.value.family)} / ${subtypeLabel(currentObject.value)}`
+    : inspectorDescriptor.value.eyebrow,
+  dirty: hasDirtyDraft.value,
+  customFields: currentObject.value
+    ? workspace.value.objectFieldSettings.customFields.filter(field => isCustomFieldApplicableToObject(field, currentObject.value!))
+    : [],
+  object: currentObject.value,
+  atmosphereOptions: workspace.value.objectFieldSettings.atmosphereOptions,
+  portClassOptions: workspace.value.objectFieldSettings.portClassOptions,
+  saveState: saveState.value,
+  saveMessage: saveMessage.value,
+  validationError: inspectorError.value,
+  editable: bInspectorEditable.value,
+  readOnlyReason: bInspectorReadOnlyReason.value,
+  coverageNote: bInspectorCoverageNote.value,
+  fieldErrors: bFieldErrors.value,
+  objectFamilyLabel: currentObject.value ? familyLabel(currentObject.value.family) : '',
+  objectSubtypeLabel: currentObject.value ? subtypeLabel(currentObject.value) : '',
+}))
+const bInspectorTargetExists = computed(() => {
+  if (selection.value.kind === 'route') return !!currentRoute.value
+  if (selection.value.kind === 'object') return !!currentObject.value
+  if (selection.value.kind === 'orbit') return !!currentOrbit.value
+  return !!currentSystemSelection.value
+})
+const bInspectorEditable = computed(() => bInspectorTargetExists.value
+  && (selection.value.kind === 'route' || selection.value.kind === 'object' || selection.value.kind === 'system'))
+const bInspectorReadOnlyReason = computed(() => {
+  if (!bInspectorTargetExists.value) return 'This selection no longer exists in the current sample.'
+  if (selection.value.kind === 'orbit') return 'Orbit radii, unoccupied centers, ordering, and Detach are not implemented in this focused rendering.'
+  if (selection.value.kind === 'system') return 'This prototype edits a star system name only. The Jump Cluster overview has no editable inspector here.'
+  return 'This Jump Cluster overview is read-only in this focused prototype.'
+})
+const bInspectorCoverageNote = computed(() => {
+  if (selection.value.kind === 'object' && currentObject.value) {
+    return 'The baseline also edits Other type labels, Location key, Placement, coordinates, and physical Jump Station links. Those controls remain outside this representative form.'
+  }
+  if (selection.value.kind === 'route' && currentRoute.value) {
+    return 'The From and To Jump Point endpoints and destination kind are shown as a summary and remain outside this representative form.'
+  }
+  return ''
+})
 const deleteLabel = computed(() => {
   if (deleteTarget.value?.kind === 'route') return 'this Jump Route'
   if (deleteTarget.value?.kind === 'system') return 'this star system'
   return 'this map mark'
 })
+const deleteDraftWillBeAbandoned = computed(() => variant.value === 'B'
+  && hasDirtyDraft.value
+  && !!deleteTarget.value
+  && selection.value.kind === deleteTarget.value.kind
+  && selection.value.id === deleteTarget.value.id)
 const routeOriginSystem = computed(() => routeOriginPoint.value
   ? workspace.value.cluster.systems.find(system => system.objects.some(object => object.id === routeOriginPoint.value)) ?? null
   : null)
@@ -414,7 +500,7 @@ function syncDraft(): void {
 
 watch(selection, syncDraft, { deep: true, immediate: true })
 watch(() => workspace.value.cluster.name, () => { if (selection.value.kind === 'route') return; if (!hasDirtyDraft.value) syncDraft() })
-watch(() => serializeDraft(), () => { inspectorError.value = '' })
+watch(() => serializeDraft(), () => { inspectorError.value = ''; bFieldErrors.value = {} })
 
 function showToast(message: string, options: { addFeedback?: boolean } = {}): void {
   toast.value = message
@@ -672,6 +758,8 @@ function resolveGuard(choice: 'apply' | 'discard' | 'stay'): void {
 }
 
 function applyDraft(): boolean {
+  if (variant.value === 'B') return applyBDraft()
+
   if (currentRoute.value) {
     const next: JumpRoute = currentRoute.value.toPointId === null
       ? { ...currentRoute.value, name: draft.name, jumpLevel: Math.max(1, draft.jumpLevel), unresolvedExit: draft.unresolvedExit || 'Uncharted exit' }
@@ -699,6 +787,159 @@ function applyDraft(): boolean {
   }
   syncDraft()
   inspectorError.value = ''
+  beginSimulatedSave()
+  showToast('Applied to the in-memory map; simulated save started.')
+  return true
+}
+
+function applyBDraft(): boolean {
+  bFieldErrors.value = {}
+  if (!bInspectorTargetExists.value) {
+    inspectorError.value = 'This selection no longer exists in the current sample. The draft was kept.'
+    return false
+  }
+  if (!bInspectorEditable.value) {
+    inspectorError.value = bInspectorReadOnlyReason.value
+    return false
+  }
+
+  const errors: Record<string, string> = {}
+  let validatedName: string | undefined
+  try {
+    const label = selection.value.kind === 'object'
+      ? 'Object name'
+      : selection.value.kind === 'route'
+        ? 'Route name'
+        : 'Star system name'
+    validatedName = validName(draft.name, label)
+  } catch (error) {
+    errors.name = error instanceof Error ? error.message : 'Enter a valid name.'
+  }
+
+  if (selection.value.kind === 'route') {
+    if (!isJumpLevel(draft.jumpLevel)) errors.jumpLevel = 'Jump level must be a positive integer.'
+    if (currentRoute.value?.toPointId === null) {
+      try {
+        validText(draft.unresolvedExit, 'Unresolved exit', maxNameLength)
+      } catch (error) {
+        errors.unresolvedExit = error instanceof Error ? error.message : 'Enter a valid unresolved exit.'
+      }
+    }
+    if (Object.keys(errors).length) {
+      bFieldErrors.value = errors
+      inspectorError.value = 'Review the marked route fields before applying.'
+      return false
+    }
+    if (!currentRoute.value || !validatedName) {
+      inspectorError.value = 'The selected Jump Route changed before it could be applied. The draft was kept.'
+      return false
+    }
+    try {
+      const next = updateJumpRoute(
+        workspace.value.cluster,
+        currentRoute.value.id,
+        draft.jumpLevel,
+        currentRoute.value.fromPointId,
+        currentRoute.value.toPointId,
+        draft.unresolvedExit,
+      )
+      replaceRoute({ ...next, name: validatedName })
+    } catch (error) {
+      inspectorError.value = error instanceof Error ? error.message : 'The Jump Route changes could not be applied.'
+      return false
+    }
+  } else if (selection.value.kind === 'object') {
+    const object = currentObject.value
+    const system = activeSystem.value
+    if (!object || !system) {
+      inspectorError.value = 'The selected map object changed before it could be applied. The draft was kept.'
+      return false
+    }
+
+    const definitions = workspace.value.objectFieldSettings.customFields
+    const customValues: Record<string, CustomFieldValue> = {}
+    for (const [fieldId, value] of Object.entries(draft.fieldValues)) {
+      const definition = definitions.find(field => field.id === fieldId)
+      if (!definition) {
+        if (object.customFieldValues && fieldId in object.customFieldValues) {
+          errors[`custom:${fieldId}`] = 'This custom field no longer exists. Reopen Manage fields and review the draft.'
+        }
+        continue
+      }
+      if (value === undefined) continue
+      if (value === '') {
+        if (definition.type === 'text' && object.customFieldValues?.[fieldId] === '') customValues[fieldId] = ''
+        continue
+      }
+      if (definition.type === 'number') {
+        const numericValue = typeof value === 'number' ? value : Number(value)
+        if (!Number.isFinite(numericValue)) {
+          errors[`custom:${fieldId}`] = `${definition.name} must be a finite number.`
+          continue
+        }
+        customValues[fieldId] = numericValue
+      } else if (definition.type === 'text') {
+        if (typeof value !== 'string') errors[`custom:${fieldId}`] = `${definition.name} must be text.`
+        else customValues[fieldId] = value
+      } else if (definition.type === 'boolean') {
+        if (typeof value !== 'boolean') errors[`custom:${fieldId}`] = `Choose Yes or No for ${definition.name}.`
+        else customValues[fieldId] = value
+      } else if (definition.type === 'single-select') {
+        if (typeof value !== 'string' || !definition.options.includes(value)) errors[`custom:${fieldId}`] = `Choose an available ${definition.name} option.`
+        else customValues[fieldId] = value
+      }
+    }
+
+    if (Object.keys(errors).length) {
+      bFieldErrors.value = errors
+      inspectorError.value = 'Review the marked object fields before applying.'
+      return false
+    }
+    if (!validatedName) {
+      bFieldErrors.value = { name: 'Enter a valid object name.' }
+      inspectorError.value = 'Review the marked object fields before applying.'
+      return false
+    }
+
+    try {
+      replaceSystem(updateSystemObject(system, object.id, {
+        name: validatedName,
+        description: draft.description,
+        customFieldValues: customValues,
+        atmosphere: draft.nativeValues.atmosphere || undefined,
+        portClass: draft.nativeValues.portClass || undefined,
+      }, workspace.value.objectFieldSettings))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The object changes could not be applied.'
+      inspectorError.value = message
+      if (message.includes('Atmosphere')) bFieldErrors.value = { 'native:atmosphere': message }
+      else if (message.includes('Port class')) bFieldErrors.value = { 'native:portClass': message }
+      else {
+        const customField = definitions.find(field => message.includes(`"${field.name}"`))
+        if (customField) bFieldErrors.value = { [`custom:${customField.id}`]: message }
+        else if (message.includes('name')) bFieldErrors.value = { name: message }
+      }
+      return false
+    }
+  } else if (selection.value.kind === 'system') {
+    if (Object.keys(errors).length) {
+      bFieldErrors.value = errors
+      inspectorError.value = 'Review the star system name before applying.'
+      return false
+    }
+    if (!currentSystemSelection.value || !validatedName) {
+      inspectorError.value = 'The selected star system changed before it could be applied. The draft was kept.'
+      return false
+    }
+    renameSystem(currentSystemSelection.value.id, validatedName)
+  } else {
+    inspectorError.value = bInspectorReadOnlyReason.value
+    return false
+  }
+
+  syncDraft()
+  inspectorError.value = ''
+  bFieldErrors.value = {}
   beginSimulatedSave()
   showToast('Applied to the in-memory map; simulated save started.')
   return true
@@ -886,11 +1127,32 @@ function chooseRouteSystem(systemId: string): void {
 
 function requestDelete(): void {
   if (!inspectorDescriptor.value.canDelete) return
-  deleteTarget.value = { ...selection.value }
+  const targetSelection = { ...selection.value }
+  deleteTarget.value = targetSelection
+  deleteSystemId.value = activeSystemId.value
+  if (variant.value === 'B') {
+    const target = toMapDeletionTarget(targetSelection, activeSystemId.value)
+    try {
+      deleteReviewTarget.value = target
+      deleteReviewPlan.value = planMapEntityDeletion(workspace.value, target)
+      deleteReviewSnapshot.value = workspaceSnapshotKey()
+      deleteReviewChanged.value = false
+      deleteReviewError.value = ''
+      deleteOpen.value = true
+    } catch (error) {
+      clearDeleteReview()
+      showToast(error instanceof Error ? error.message : 'This sample map item could not be reviewed.')
+    }
+    return
+  }
   deleteOpen.value = true
 }
 
 function confirmDelete(): void {
+  if (variant.value === 'B') {
+    confirmBDelete()
+    return
+  }
   const target = deleteTarget.value
   deleteOpen.value = false
   if (!target) return
@@ -925,6 +1187,102 @@ function confirmDelete(): void {
     showToast(error instanceof Error ? error.message : 'This sample map item could not be removed.')
   }
 }
+
+function toMapDeletionTarget(target: Selection, systemId: string | null): MapDeletionTarget {
+  if (target.kind === 'route') return { kind: 'route', routeId: target.id }
+  if (target.kind === 'system') return { kind: 'system', systemId: target.id }
+  if (!systemId) throw new Error('The selected star system no longer exists.')
+  return target.kind === 'object'
+    ? { kind: 'object', systemId, objectId: target.id }
+    : { kind: 'orbit', systemId, orbitId: target.id }
+}
+
+function workspaceSnapshotKey(): string {
+  return JSON.stringify(workspace.value)
+}
+
+function clearDeleteReview(): void {
+  deleteTarget.value = null
+  deleteSystemId.value = null
+  deleteReviewTarget.value = null
+  deleteReviewPlan.value = null
+  deleteReviewSnapshot.value = ''
+  deleteReviewChanged.value = false
+  deleteReviewError.value = ''
+}
+
+function cancelDeleteReview(): void {
+  deleteOpen.value = false
+  clearDeleteReview()
+}
+
+function confirmBDelete(): void {
+  const target = deleteReviewTarget.value
+  const reviewedPlan = deleteReviewPlan.value
+  if (!target || !reviewedPlan) return
+
+  if (workspaceSnapshotKey() !== deleteReviewSnapshot.value) {
+    try {
+      deleteReviewPlan.value = planMapEntityDeletion(workspace.value, target)
+      deleteReviewSnapshot.value = workspaceSnapshotKey()
+      deleteReviewChanged.value = true
+      deleteReviewError.value = ''
+    } catch (error) {
+      deleteReviewPlan.value = null
+      deleteReviewError.value = error instanceof Error ? error.message : 'The selected map item can no longer be reviewed.'
+    }
+    return
+  }
+
+  const abandonedDraft = deleteDraftWillBeAbandoned.value
+  const targetLabel = reviewedPlan.entityLabel
+  deleteOpen.value = false
+  workspace.value = reviewedPlan.workspace
+  clusterSelection.value = { kind: 'route', id: workspace.value.cluster.routes[0]?.id ?? '' }
+  if (target.kind === 'system') {
+    if (!workspace.value.cluster.systems.some(system => system.id === target.systemId)) {
+      activeSystemId.value = workspace.value.cluster.systems[0]?.id ?? ''
+      activeView.value = 'cluster'
+    }
+    selection.value = clusterSelection.value
+  } else if (target.kind === 'route') {
+    selection.value = clusterSelection.value
+  } else {
+    activeSystemId.value = target.systemId
+    const selectedSystem = workspace.value.cluster.systems.find(system => system.id === target.systemId)
+    selection.value = { kind: 'object', id: selectedSystem?.objects[0]?.id ?? '' }
+    systemSelections[activeSystemId.value] = selection.value
+  }
+  syncDraft()
+  inspectorError.value = ''
+  bFieldErrors.value = {}
+  beginSimulatedSave()
+  showToast(abandonedDraft
+    ? `Removed ${targetLabel} and updated its dependent map marks in memory. The unsaved inspector draft was discarded with its target.`
+    : `Removed ${targetLabel} and updated its dependent map marks in memory.`)
+  clearDeleteReview()
+}
+
+watch(deleteOpen, open => { if (!open) clearDeleteReview() })
+watch(
+  () => deleteOpen.value && variant.value === 'B' ? workspaceSnapshotKey() : '',
+  snapshot => {
+    const target = deleteReviewTarget.value
+    if (!snapshot || !target || snapshot === deleteReviewSnapshot.value) return
+    try {
+      deleteReviewPlan.value = planMapEntityDeletion(workspace.value, target)
+      deleteReviewSnapshot.value = snapshot
+      deleteReviewChanged.value = true
+      deleteReviewError.value = ''
+    } catch (error) {
+      deleteReviewPlan.value = null
+      deleteReviewSnapshot.value = snapshot
+      deleteReviewChanged.value = true
+      deleteReviewError.value = error instanceof Error ? error.message : 'The selected map item can no longer be reviewed.'
+    }
+  },
+  { flush: 'sync' },
+)
 
 function openFieldManager(source?: MouseEvent | HTMLElement): void {
   const opener = source instanceof HTMLElement
@@ -1120,6 +1478,27 @@ async function exportMap(format: MapImageFormat): Promise<void> {
   }
 }
 
+function exportAppliedJson(): void {
+  try {
+    const json = JSON.stringify(exportJumpCluster(workspace.value), null, 2)
+    if (json === undefined) throw new Error('Could not serialize the applied sample as JSON.')
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+    const anchor = document.createElement('a')
+    try {
+      anchor.href = url
+      anchor.download = `${slug(workspace.value.cluster.name)}-prototype-applied-jump-cluster.json`
+      document.body.append(anchor)
+      anchor.click()
+    } finally {
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    }
+    showToast('Exported the currently applied sample. The inspector draft was excluded.')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The applied sample could not be exported as JSON.')
+  }
+}
+
 async function rasterizePrintSvg(source: Blob): Promise<Blob> {
   const url = URL.createObjectURL(source)
   try {
@@ -1230,7 +1609,7 @@ function onVariantKeydown(event: KeyboardEvent): void {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
   if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || hasOpenDialog()) return
   const target = event.target instanceof Element ? event.target : null
-  if (target?.closest('input, textarea, select, button, [contenteditable="true"], .map-view, [role="slider"], [role="button"]')) return
+  if (target?.closest('input, textarea, select, button, [contenteditable="true"], .map-view, .b-inspector-card, [role="slider"], [role="button"]')) return
   event.preventDefault()
   void cycleVariant(event.key === 'ArrowRight' ? 1 : -1)
 }
@@ -1302,6 +1681,23 @@ function placementLabel(object: SystemObject): string {
   const placement = object.placement
   if (placement.kind === 'system') return `free placement · ${Math.round(placement.x * 100)} / ${Math.round(placement.y * 100)}`
   return orbitLabel(activeSystem.value, activeSystem.value?.orbits.find(orbit => orbit.id === placement.orbitId) ?? { id: placement.orbitId, order: 0, hostId: null, center: { x: 0, y: 0 } })
+}
+
+function familyLabel(family: ObjectFamily): string {
+  return ({
+    CelestialBody: 'Celestial bodies',
+    'SmallBody/Field': 'Small bodies & fields',
+    Installation: 'Installations',
+    Vessel: 'Vessels',
+    JumpPoint: 'Jump Points',
+    Phenomenon: 'Phenomena',
+    Other: 'Other',
+  })[family]
+}
+
+function subtypeLabel(object: SystemObject): string {
+  if (object.family === 'Other') return object.subtype
+  return catalogueTypes.find(type => type.family === object.family && type.value === object.subtype)?.label ?? object.subtype
 }
 
 function orbitLabel(system: StarSystem | null, orbit: Orbit): string {
@@ -1797,8 +2193,48 @@ function seedWorkspace(): LocalWorkspace {
 .proto-b.has-active-add:not(.has-open-add-menu):not(.has-open-inspector):not(.has-open-side-panel) ~ .prototype-toast { display: none; }
 .proto-b.has-open-add-menu ~ .prototype-toast.is-add-feedback { display: none; }
 
+.proto-b .b-inspector-float--form { display: flex; min-height: 0; overflow: hidden; padding: 0; }
+.b-delete-review {
+  --proto-bg: #0d1715;
+  --proto-surface: #14211e;
+  --proto-ink: #e8ede4;
+  --proto-muted: #a2b0a5;
+  --proto-line: rgba(188, 202, 188, .24);
+  --proto-accent: #e8b879;
+  --proto-danger: #df897c;
+  max-height: min(76dvh, 44rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--proto-ink);
+  background: var(--proto-surface);
+}
+.b-delete-review.is-light {
+  --proto-bg: #ebe8dd;
+  --proto-surface: #f6f3e9;
+  --proto-ink: #28382f;
+  --proto-muted: #69786b;
+  --proto-line: rgba(47, 67, 53, .24);
+  --proto-accent: #a26c35;
+  --proto-danger: #a24b3c;
+}
+.proto-modal-body.b-delete-review > p:not(.proto-eyebrow) { color: var(--proto-muted); }
+.b-delete-review .proto-eyebrow { color: var(--proto-accent); }
+.b-delete-review h2 { color: var(--proto-ink); }
+.b-delete-review-changed,
+.b-delete-draft-notice { border-left: 2px solid var(--proto-danger); padding: .5rem .65rem; background: color-mix(in srgb, var(--proto-danger) 10%, transparent); color: var(--proto-ink) !important; }
+.b-delete-review-effects { display: grid; gap: .3rem; border-top: 1px solid var(--proto-line); padding-top: .65rem; }
+.b-delete-review-effects strong { font-size: .75rem; }
+.b-delete-review-effects p,
+.b-delete-review-effects li { margin: 0; color: var(--proto-muted); font-size: .74rem; line-height: 1.45; overflow-wrap: anywhere; }
+.b-delete-review-effects ul { display: grid; gap: .28rem; margin: 0; padding-left: 1.2rem; }
+.proto-modal-actions.b-delete-review-actions { position: sticky; bottom: -1.35rem; margin: 0 -1.35rem -1.35rem; border-top: 1px solid var(--proto-line); padding: .75rem 1.35rem 1.35rem; background: var(--proto-surface); }
+
 @media (max-width: 760px) and (prefers-reduced-motion: reduce), (max-width: 1024px) and (max-height: 600px) and (prefers-reduced-motion: reduce) {
   .b-mobile-panel-enter-active,
   .b-mobile-panel-leave-active { transition: none; }
+}
+
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {
+  .proto-b .b-inspector-float--form.inspector-open { overflow: hidden; padding: calc(.7rem + env(safe-area-inset-top)) .8rem .8rem; }
 }
 </style>
