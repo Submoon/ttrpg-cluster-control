@@ -29,7 +29,7 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 The human accepts the corrected Fields prototype on 2026-10-16; its closed decision is indexed below. Remaining physical-device/preservation checks stay in their dedicated investigation; Inspector-form refinement and final Nuxt UI adoption remain separate.
 
-The inspector-form decision is closed on the human's explicit answers. The [focused inspector prototype](tickets/17-prototype-inspector-form.md) is implemented in B only and remains in progress for the human's artifact review. Its [execution report](research/inspector-prototype-2026-10-16.md) records the bounded design, independent reviews and actual validation evidence. The source audit retains baseline controls and prototype gaps, preserving the requirement to retain all existing functionality.
+The inspector-form decision and the [focused inspector prototype](tickets/17-prototype-inspector-form.md) are closed on the human's explicit answers and subsequent artifact acceptance. The accepted B artifact is published at `be8bef3e9efaea76b986480a40de6bd260e59d18`; a fresh origin fetch confirms 0 main-only / 18 feature-only against unchanged `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The source issue remains open and unchanged. Its [execution report](research/inspector-prototype-2026-10-16.md) retains actual validation evidence and the acceptance boundary. The source audit preserves all baseline controls as eventual product requirements.
 
 ## Decisions so far
 
@@ -45,6 +45,7 @@ The inspector-form decision is closed on the human's explicit answers. The [focu
 - [Decide the mobile Fields list-to-editor flow](tickets/13-decide-mobile-fields-flow.md): mobile list → consultation detail → Edit, shared Fields/Manage session resumption, preserved drafts/list position, creation to new detail and deletion to the list; desktop keeps two columns and reachable commands/reviews remain mandatory.
 - [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md): human accepts the corrected prototype with Bottom commands, Nuxt UI centering and one creation entry per screen; remaining device/preservation evidence and final library adoption stay separate.
 - [Decide inspector form density and domain-facing display labels](tickets/14-decide-inspector-form-refinements.md): visible responsive sections and full-width name/description; persistent bottom ordinary actions/status/error access, top Hide, separate Delete, Description and native/custom distinction without data changes.
+- [Validate the responsive inspector form in the B prototype](tickets/17-prototype-inspector-form.md): human accepts the published B inspector; independent reviews, typecheck/build and 11 focused production-browser cases support the artifact, while full parity, physical-device evidence and final library adoption remain separate.
 
 ## Not yet specified
 

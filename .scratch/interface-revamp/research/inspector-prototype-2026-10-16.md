@@ -106,3 +106,7 @@ The coordinator also inspects desktop, compact validation, light short-landscape
 ### Artifact handoff
 
 The existing preview branch and draft PR carry this focused inspector refinement. Ticket 17 remains in progress for the human's reaction to the artifact. On a phone, open the dense sample and Inspect; review scrolling and bottom actions with the keyboard visible in portrait and landscape, then Hide/reopen a modified draft. Reload resets the sample. No product merge or source-issue closure follows from delivery.
+
+### Human acceptance
+
+2026-10-16 — After delivery, the human explicitly accepts this prototype. [The ticket Resolution](../tickets/17-prototype-inspector-form.md#resolution) closes the artifact decision and records published commit `be8bef3e9efaea76b986480a40de6bd260e59d18`, fresh origin comparison and the unchanged source request. The earlier handoff paragraph describes delivery-time status. This acceptance adds no scenario-specific physical-device claims and does not decide final Nuxt UI adoption. The next planning step consolidates current evidence and concrete integration risks before that separate adoption decision and specification.

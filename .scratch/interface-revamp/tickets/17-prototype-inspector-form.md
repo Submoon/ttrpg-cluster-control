@@ -1,6 +1,6 @@
 ---
 title: Validate the responsive inspector form in the B prototype
-status: in-progress
+status: closed
 assignee: codex-inspector-prototype
 label: wayfinder:prototype
 type: prototype
@@ -39,6 +39,14 @@ Read the complete [inspector-form Resolution](14-decide-inspector-form-refinemen
 ## Notes
 
 Claimed on the human's explicit continuation request. Apply the prototype skill and the repository development workflow. Analysis/review: SOL 6.1 High; all prototype code/QA changes: Luna XHIGH subagents. The coordinator owns planning, shared Git operations and publication. Keep Fields, map tools, Add-status refinement and final product implementation outside this iteration unless separately authorized. Keep this prototype ticket in progress until the human reacts to the actual artifact.
+
+## Resolution
+
+2026-10-16 — The human explicitly accepts the delivered inspector prototype. Retain the focused B rendering: visible responsive sections, full-width Name/Description and multiline custom text, distinct catalogue/custom values, persistent bottom ordinary actions and error access, top Hide, and a separate reviewed deletion action. This resolves the prototype question; no further visual approval round is required for this artifact.
+
+Accepted artifact: [dense B inspector preview](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=dock&inspectorSample=dense), published at `be8bef3e9efaea76b986480a40de6bd260e59d18` through [the preview PR](https://github.com/Submoon/ttrpg-cluster-control/pull/28), with Vercel SUCCESS on that exact head. The [execution report](../research/inspector-prototype-2026-10-16.md) retains independent reviews, corrected source identities, passing typecheck/build and the final 11/11 production-browser cases.
+
+A fresh origin fetch before recording acceptance confirms the intentionally different preview baseline above, 0 main-only / 18 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The refreshed source issue remains open and unchanged. The human's general acceptance does not supply new device/OS/browser or scenario-specific keyboard/gesture observations; retain these distinctions in the device/preservation investigation. Missing baseline controls remain product implementation requirements. Final Nuxt UI adoption, product implementation, merge and source-issue closure remain separate.
 
 ## Comments
 
