@@ -1,7 +1,6 @@
 ---
 title: 'Choose a coherent local light or dark presentation'
-status: closed
-assignee: codex-interface-19
+status: blocked
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -18,17 +17,23 @@ triage_labels:
 
 The human approved the twelve-ticket breakdown and exact dependencies on 2026-10-16. Approved planning baseline: `f4aa1b4438217412c308e61733d862f3d71597ca`, intentionally above `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. See the [approved proposal](../research/ticket-breakdown-proposal-2026-10-16.md).
 
+## Acceptance reassessment - 2026-10-16
+
+The human rejects the integrated composition at published source `b37c1abd512c6f47a59774ae3824965e420744b7` and withdraws acceptance of the 18-21 batch. Earlier technical results remain historical, scope-specific evidence; they do not establish conformity to the accepted B/Dock interface or a passing full preservation suite. Reassess this ticket against the corrected specification and [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md) before closing it again. Preserve usable application code and evidence rather than assuming everything must be rewritten.
+
+Ticket 18 is reopened and unclaimed for reassessment; tickets 19-21 are blocked by the same approved dependency chain. Later tickets remain blocked. The human explicitly instructs planning corrections only, then a stop; do not resume implementation or tests until asked.
+
 ## What to build
 
 One named theme control updates shell, maps, native controls and portals; the explicit device/browser preference survives sessions/workspaces and overrides later OS changes.
 
 ## Acceptance criteria
 
-1. [x] Follow OS preference until explicit choice, then persist that separate preference.
-2. [x] Apply common tokens and actual contrast/non-color/focus states throughout existing surfaces.
-3. [x] Preserve all data, drafts/errors, placements, selection, view/tool and saving state without a workspace save.
-4. [x] Package every static/dynamic icon locally and prove cold glyph rendering with external Internet denied to both browser and server while the app remains reachable.
-5. [x] Verify hydrated SSR and keyboard/touch/mobile portals.
+1. [ ] Follow OS preference until explicit choice, then persist that separate preference.
+2. [ ] Apply common tokens and actual contrast/non-color/focus states throughout existing surfaces.
+3. [ ] Preserve all data, drafts/errors, placements, selection, view/tool and saving state without a workspace save.
+4. [ ] Package every static/dynamic icon locally and prove cold glyph rendering with external Internet denied to both browser and server while the app remains reachable.
+5. [ ] Verify hydrated SSR and keyboard/touch/mobile portals.
 
 ## Scope and exclusions
 
@@ -47,6 +52,8 @@ primary 103–111; checks 82, 89–90, 119–120. **B:** B4, B9.
 Story numbers refer to the [specification user stories](../spec.md#user-stories). B1–B10 refer to the [behavioral acceptance families](../research/spec-test-seams-2026-10-16.md#smallest-useful-high-level-acceptance-suite). Required checks extend crosscutting contracts; primary ownership alone does not certify other owners or the whole product.
 
 ## Required product constraints
+
+- Preserve the accepted B/Dock composition for every UI surface changed by this ticket: bottom mode/creation Dock, full map board, optional desktop overlay panels and a compact header. Nuxt UI may change control appearance, spacing and typography; pixel identity is not required. Compare the actual integrated result with the accepted reference at comparable viewport/theme/state, recording structural differences, ordinary hit testing and focus. Behavioral passes do not certify visual fidelity. Follow the [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md); technical contracts cannot silently replace the approved composition.
 
 - Deliver the real persisted-workspace product, never the memory-only sample. Preserve working baseline commands until their replacements work. Use Nuxt UI to the greatest practical extent: evaluate configuration, slots and adapters before bespoke equivalents and document the smallest justified exception. Keep the SSR shell/client maps and one provider/CSS integration.
 - Preserve domain vocabulary, authoritative validation, references, host/recovery corrections, database `ttrpg-cluster-control`, marker `ttrpg-cluster-control-map`, schema/version and applicable drag identities. Support accepted older shapes inside that marker/version boundary; add no migration or previous-marker fallback, durable drafts, renderer or unrelated feature.
@@ -72,7 +79,7 @@ The initial planning publication left this ticket unclaimed. Work blockers-first
 
 2026-10-16 — Claimed only after completed ticket 18 is committed/pushed as `006a245134ad06baaf0f56333d2722428b0df367`, equal to the remote feature branch. Fresh origin comparison remains 0 main-only / 25 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. SOL 6.1 High defines the bounded preference/resource/state-preservation contract before Luna XHIGH implementation. Use Sensitive routing for durable preference and preservation boundaries, with independent technical and domain/data reviews. No workspace persistence/schema redesign is authorized. See the [sequential execution record](../research/implementation-18-21-2026-10-16.md).
 
-## Resolution
+## Previous implementation evidence - acceptance withdrawn
 
 2026-10-16 — Implemented on the real persisted product at `/`. Nuxt UI's existing color-mode owner supplies OS-first presentation and a named explicit browser preference, without another provider or workspace save. Shared light/dark tokens cover the shell, both maps, native controls and Fields portals. Locally packaged Lucide supplies static and dynamic icons with external fallback disabled. Data/schema/codec and the single ordered persistence owner remain unchanged.
 

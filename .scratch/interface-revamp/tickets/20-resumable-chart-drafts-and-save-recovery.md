@@ -1,7 +1,6 @@
 ---
 title: 'Rename charts with resumable drafts and trustworthy Apply/save recovery'
-status: closed
-assignee: codex-interface-20
+status: blocked
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -18,19 +17,25 @@ triage_labels:
 
 The human approved the twelve-ticket breakdown and exact dependencies on 2026-10-16. Approved planning baseline: `f4aa1b4438217412c308e61733d862f3d71597ca`, intentionally above `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. See the [approved proposal](../research/ticket-breakdown-proposal-2026-10-16.md).
 
+## Acceptance reassessment - 2026-10-16
+
+The human rejects the integrated composition at published source `b37c1abd512c6f47a59774ae3824965e420744b7` and withdraws acceptance of the 18-21 batch. Earlier technical results remain historical, scope-specific evidence; they do not establish conformity to the accepted B/Dock interface or a passing full preservation suite. Reassess this ticket against the corrected specification and [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md) before closing it again. Preserve usable application code and evidence rather than assuming everything must be rewritten.
+
+Ticket 18 is reopened and unclaimed for reassessment; tickets 19-21 are blocked by the same approved dependency chain. Later tickets remain blocked. The human explicitly instructs planning corrections only, then a stop; do not resume implementation or tests until asked.
+
 ## What to build
 
 Edit/hide/resume chart names, safely resolve transitions and distinguish an applied name from durable saving under failure.
 
 ## Acceptance criteria
 
-1. [x] Parent-owned chart draft/errors/reopening survive hide/theme/reflow; clean transitions do not prompt, while Apply/Discard/Stay and invalid Apply preserve/reset the exact designated target/context/view/tool.
-2. [x] Validate latest memory, publish once and end the form/continue transition before durable acknowledgement.
-3. [x] Fault real writes: retain memory and persistent Not saved/error, latest-memory Retry and current applied JSON excluding drafts/previews.
-4. [x] Later edits/older completion cannot falsely claim Saved or replay commands.
-5. [x] Keep draft/tool/save/export feedback distinct, scoped cancellation and supported departure warnings.
-6. [x] Remove decorative footer only while relocating useful continuously reachable feedback.
-7. [x] Preserve existing names/summaries, without descriptions.
+1. [ ] Parent-owned chart draft/errors/reopening survive hide/theme/reflow; clean transitions do not prompt, while Apply/Discard/Stay and invalid Apply preserve/reset the exact designated target/context/view/tool.
+2. [ ] Validate latest memory, publish once and end the form/continue transition before durable acknowledgement.
+3. [ ] Fault real writes: retain memory and persistent Not saved/error, latest-memory Retry and current applied JSON excluding drafts/previews.
+4. [ ] Later edits/older completion cannot falsely claim Saved or replay commands.
+5. [ ] Keep draft/tool/save/export feedback distinct, scoped cancellation and supported departure warnings.
+6. [ ] Remove decorative footer only while relocating useful continuously reachable feedback.
+7. [ ] Preserve existing names/summaries, without descriptions.
 
 ## Scope and exclusions
 
@@ -49,6 +54,8 @@ primary 66, 82–93, 99, 117; checks 7, 14, 23, 54–57, 100, 106, 109–110, 12
 Story numbers refer to the [specification user stories](../spec.md#user-stories). B1–B10 refer to the [behavioral acceptance families](../research/spec-test-seams-2026-10-16.md#smallest-useful-high-level-acceptance-suite). Required checks extend crosscutting contracts; primary ownership alone does not certify other owners or the whole product.
 
 ## Required product constraints
+
+- Preserve the accepted B/Dock composition for every UI surface changed by this ticket: bottom mode/creation Dock, full map board, optional desktop overlay panels and a compact header. Nuxt UI may change control appearance, spacing and typography; pixel identity is not required. Compare the actual integrated result with the accepted reference at comparable viewport/theme/state, recording structural differences, ordinary hit testing and focus. Behavioral passes do not certify visual fidelity. Follow the [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md); technical contracts cannot silently replace the approved composition.
 
 - Deliver the real persisted-workspace product, never the memory-only sample. Preserve working baseline commands until their replacements work. Use Nuxt UI to the greatest practical extent: evaluate configuration, slots and adapters before bespoke equivalents and document the smallest justified exception. Keep the SSR shell/client maps and one provider/CSS integration.
 - Preserve domain vocabulary, authoritative validation, references, host/recovery corrections, database `ttrpg-cluster-control`, marker `ttrpg-cluster-control-map`, schema/version and applicable drag identities. Support accepted older shapes inside that marker/version boundary; add no migration or previous-marker fallback, durable drafts, renderer or unrelated feature.
@@ -74,7 +81,7 @@ Work blockers-first; preserve other agents' work. Return changed behavior, evide
 
 2026-10-16 — Claimed after completed ticket 19 is committed/pushed as `e014a549e405bb283acb4368d45bdf484ca68d0a`, equal to the remote feature branch. Fresh fetch confirms 0 main-only / 26 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. This is the intentional implementation/review baseline. Sensitive routing requires a SOL 6.1 High contract, Luna XHIGH implementation and independent technical plus domain/data reviews. Chart drafts and ordinary memory-first saving are the scope; backup restoration remains durable-first, and later entity adapters retain their approved owners. See the [execution record](../research/implementation-18-21-2026-10-16.md).
 
-## Resolution
+## Previous implementation evidence - acceptance withdrawn
 
 Implemented and verified against fixed baseline `e014a549e405bb283acb4368d45bdf484ca68d0a`. Final independently reviewed source candidate: `1f6d7fe2f9760bf3a42cba9f46113a1eddc23734`; subsequent checkpoint edits contain lifecycle/evidence only. Chart sessions retain exact targets, values and errors independently of visibility. The Nuxt UI modal supports scoped Apply/Discard/Stay and focus return; ordinary Apply publishes validated memory once and continues before durability. Ordered newest-revision feedback, latest-memory Retry and actual current JSON recovery retain applied work. Backup restoration remains durable-first. Deletion preparation remains read-only, and guarded continuations revalidate latest context, including delayed import completion.
 

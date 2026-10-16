@@ -31,6 +31,7 @@ The real product ships no disposable comparison behavior, and maintainers receiv
 6. [ ] After cleanup run integrated parity/browser, typecheck/build, compiled SSR/portal/local-resource and codec/storage/export regressions.
 7. [ ] Reconcile B1–B10, targeted Chrome OS-keyboard/physical gestures and keyboard/screen-reader evidence honestly.
 8. [ ] Measure final production initial/deferred JS/CSS/resources/startup/mount/overlays/pan/zoom **after comparison removal**, using comparable baseline arms only, reporting missing arms and investigating material regressions without invented budgets/library-only claims.
+9. [ ] Obtain the human-requested independent Astra review of the complete implemented interface, including desktop/mobile journeys and the meaning/grouping of Tools. Explicitly assess selection/data editing, view-only pan, movement and creation, using Foundry VTT as the requested conceptual comparison. Record findings and their adjudication against the accepted decisions; the review is not limited to Tools, and the earlier prototype review does not certify this final product.
 
 ## Scope and exclusions
 
@@ -52,6 +53,8 @@ Story numbers refer to the [specification user stories](../spec.md#user-stories)
 
 ## Required product constraints
 
+- Preserve the accepted B/Dock composition for every UI surface changed by this ticket: bottom mode/creation Dock, full map board, optional desktop overlay panels and a compact header. Nuxt UI may change control appearance, spacing and typography; pixel identity is not required. Compare the actual integrated result with the accepted reference at comparable viewport/theme/state, recording structural differences, ordinary hit testing and focus. Behavioral passes do not certify visual fidelity. Follow the [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md); technical contracts cannot silently replace the approved composition.
+
 - Deliver the real persisted-workspace product, never the memory-only sample. Preserve working baseline commands until their replacements work. Use Nuxt UI to the greatest practical extent: evaluate configuration, slots and adapters before bespoke equivalents and document the smallest justified exception. Keep the SSR shell/client maps and one provider/CSS integration.
 - Preserve domain vocabulary, authoritative validation, references, host/recovery corrections, database `ttrpg-cluster-control`, marker `ttrpg-cluster-control-map`, schema/version and applicable drag identities. Support accepted older shapes inside that marker/version boundary; add no migration or previous-marker fallback, durable drafts, renderer or unrelated feature.
 - At affected seams, own session draft identity/content/errors above presentation lifetime; hide/theme/reflow retain work. Refuse actual target/dependency conflicts before preview while allowing independent commands. Apply validates latest committed memory and ends its designated session before durable saving; failure retains applied data with truthful recovery. Scoped Cancel never undoes committed work. Preparation is read-only, and changed destructive effects require renewed review. Backup restoration retains its distinct durable-before-publication guarantee.
@@ -61,6 +64,8 @@ Story numbers refer to the [specification user stories](../spec.md#user-stories)
 ## Validation strategy
 
 After usage-audited cleanup, run the integrated preserved-capability/browser suite, typecheck/build, compiled SSR/portal/local-resource and relevant codec/storage/export checks. Reconcile B1–B10 with actual Chrome keyboard/physical and assistive evidence. Measure comparable production resources/startup/overlays/map interaction after experimental code removal; report missing arms and no invented numerical budget.
+
+The human explicitly requested a later Astra opinion on the whole interface, including Tools, and clarified that “movement only” means moving the view. Preserve that review gate here while this ticket remains blocked. Treat the [earlier Astra prototype review](../research/astra-current-interface-review-2026-10-16.md) as prior art; distinguish confirmed product defects from suggestions that would reopen an approved design decision.
 
 The primary seam is the real integrated product through the existing Playwright browser suite, with narrow codec/domain/storage tests only for the relevant invariant. Use actual downloads and durable reload where applicable. Run affected checks and appropriate typecheck/build; compiled-production presentation checks supplement development iteration. No new application test API or separate component harness is required.
 

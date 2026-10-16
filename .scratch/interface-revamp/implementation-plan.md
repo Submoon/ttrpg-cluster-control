@@ -12,6 +12,10 @@ triage_labels:
 
 Implement the [complete specification](spec.md), retaining the [closed decision map](map.md) as rationale. The human explicitly approves **twelve local tickets and their dependencies** on 2026-10-16 after requesting fewer than the first twenty-slice proposal. The [decomposition review](research/ticket-decomposition-review-2026-10-16.md) records both candidate identities, independent reviews and approval. The human separately requires the last ticket to clean up all effort documentation, disconnect prototypes and perform other necessary cleanup.
 
+That approval covers the breakdown and dependencies, not permission to replace the accepted B/Dock composition. After inspecting the integrated product, the human rejects the structural drift and withdraws acceptance of the 18–21 delivery batch. The [presentation acceptance reset](research/interface-fidelity-reset-2026-10-16.md) and corrected specification govern the reassessment. Nuxt UI may change component details; bottom Dock, map priority, overlay panels and compact header remain required.
+
+Corrected specification SHA-256: `EE5A92BC565933541233F06BC0607F5F6384F0A925A53677985A9F97A32FB1A0`. The earlier hash below identifies the original planning snapshot, whose presentation wording proved insufficient; it is not the current acceptance reference.
+
 Source [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) remains open and unchanged, with no issue comments/labels/closure included in this planning step. Freshly fetched intake is `codex/interface-revamp` at `f4aa1b4438217412c308e61733d862f3d71597ca`, equal to its remote, 0 main-only / 23 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The specification SHA-256 remains `DF58B9D8715140A8F18D9F808FF83A2B1EBEC3F2596A2B23F37F1E51778E212F`. These are recorded intake identities, not a demand to reset later work.
 
 ## Approved delivery graph
@@ -57,6 +61,8 @@ After 21, image export 28 can proceed independently of Fields, deletion and impo
 
 Ticket 29 must remain last: its three direct blockers transitively include every ticket 18–28. Start it only after every preceding implementation ticket is closed. The final cleanup classifies all documentation as canonical/archive/remove, preserves useful decision/evidence provenance and user data, audits usage before removal, keeps necessary valid fixtures tests-only, and measures the compiled product after comparison/sample removal. It is not a deferred implementation catch-all.
 
+The human-requested final Astra review covers the whole implemented interface, including Tools semantics/grouping and the conceptual comparison with Foundry VTT. Ticket 29 explicitly retains this gate; an earlier prototype review is not final product certification.
+
 ## Execution and evidence
 
 Coordinate and analyze with **SOL 6.1 High**; delegate implementation to **Luna XHIGH** as requested. Follow the repository's project-development routing for contract design, bounded ownership, risk-appropriate independent reviews, correction and validation. Every ticket is self-contained with its approved scope, acceptance checklist, specification stories, B1–B10 families and blockers. No implementation has started from creating this backlog.
@@ -67,4 +73,8 @@ The initial planning publication did not implement the product or claim test/bui
 
 ## Implementation progress
 
-2026-10-16 — Tickets 18 (`006a2451`), 19 (`e014a549`) and 20 (`338cc138`) are closed and pushed after their scoped tests, typecheck, compiled responsive/focus checks and independent technical/domain-data reviews. Ticket 21 is claimed only after that third publication, under the human's explicit sequential instruction; its SOL contract precedes Luna implementation. The [execution record](research/implementation-18-21-2026-10-16.md) holds exact checkpoint identities, evidence and limits. Other tickets remain blocked by the approved graph. No source-issue completion or physical-device pass is inferred.
+Historical technical checkpoints 18 (`006a2451`), 19 (`e014a549`), 20 (`338cc138`) and the partial 21 product (`b37c1abd`) were pushed. Their scoped technical results remain evidence, but the human rejects the integrated visual result. Earlier closure statements for 18–20 are superseded; none of the four is currently accepted as a completed delivery batch.
+
+Current frontier: **18 is open and unclaimed for reassessment; 19–21 are blocked and unclaimed by their existing dependency chain. Tickets 22–29 remain blocked and unclaimed.** Reassess what can be retained before changing code; do not assume the functional foundations must be rewritten. The [execution record](research/implementation-18-21-2026-10-16.md) preserves actual passes, failures and source identities. The 405/405 presentation observations do not establish prototype fidelity; the full 93-test suite was interrupted and never passed. Two focused preservation failures remain unclassified.
+
+The human explicitly requests documentation/criteria correction, then a stop. **Implementation and testing are stopped until an explicit request to resume.** The next implementation must follow the corrected visual contract and paired comparison gate before claiming closure. No source-issue completion, merge, complete test-suite success or physical-device pass is inferred.
