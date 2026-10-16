@@ -33,7 +33,7 @@
       <section v-if="kind === 'object'" class="custom-field-stack">
         <div class="section-row">
           <p class="proto-eyebrow">OBJECT FIELDS</p>
-          <UButton size="xs" color="neutral" variant="ghost" @click="emit('manage-fields')">Manage</UButton>
+          <UButton size="xs" color="neutral" variant="ghost" @click="emitManageFields">Manage</UButton>
         </div>
         <UFormField v-if="object?.family === 'CelestialBody' && (object.subtype === 'planet' || object.subtype === 'moon')" label="Atmosphere">
           <USelect :model-value="nativeValues.atmosphere || unsetFieldValue" :items="[{ label: 'Not recorded', value: unsetFieldValue }, ...atmosphereOptions.map(option => ({ label: option, value: option }))]" @update:model-value="value => nativeValues.atmosphere = value === unsetFieldValue ? '' : value" />
@@ -115,9 +115,13 @@ const emit = defineEmits<{
   apply: []
   discard: []
   delete: []
-  'manage-fields': []
+  'manage-fields': [opener: HTMLElement]
   'retry-save': []
 }>()
+
+function emitManageFields(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) emit('manage-fields', event.currentTarget)
+}
 
 function setCustomValue(field: CustomFieldDefinition, value: string | number): void {
   if (field.type === 'number') {

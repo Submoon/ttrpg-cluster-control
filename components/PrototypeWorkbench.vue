@@ -72,7 +72,8 @@
         <div class="b-command-actions">
           <span class="command-save"><i :class="`state-${saveState}`"></i>{{ saveState === 'error' ? 'SIMULATED ERROR' : 'LOCAL · PROTOTYPE' }}</span>
           <UButton size="sm" color="neutral" variant="outline" :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleTheme">{{ theme === 'dark' ? '☼' : '☾' }} Theme</UButton>
-          <UButton size="sm" color="neutral" variant="outline" aria-label="Open field definitions" @click="openFieldManager">Fields</UButton>
+          <UButton size="sm" color="neutral" variant="outline" aria-label="Open field definitions" @click="openFieldManager">Fields<span v-if="prototypeFieldsState.hasModifiedDraft && !prototypeFieldsState.open" class="b-fields-draft-mark"> · draft</span></UButton>
+          <UButton v-if="importCandidate && !prototypeFieldsState.hasModifiedDraft" size="sm" color="neutral" variant="outline" @click="importOpen = true">Review import retry</UButton>
         </div>
       </header>
       <main class="b-map-board">
@@ -183,6 +184,7 @@
       <div class="switcher-current"><span>{{ variant }}</span><div><strong>{{ variantNames[variant] }}</strong><small>DISPOSABLE UI PROTOTYPE</small></div></div>
       <button aria-label="Next interface" title="Next interface · →" @click="cycleVariant(1)">→</button>
       <button v-if="variant === 'B'" class="control-layout-switch" :aria-label="`Switch control presentation; current: ${controlLayoutLabel}`" :title="`Switch control presentation; current: ${controlLayoutLabel}`" @click="cycleControlLayout">Layout: {{ controlLayoutShortLabel }}</button>
+      <button v-if="prototypeFieldsState.hasModifiedDraft && (!prototypeFieldsState.open || variant !== 'B')" class="fields-draft-return" @click="returnToFieldsDraft">Return to Fields draft</button>
       <UButton class="switcher-share" size="xs" color="neutral" variant="ghost" @click="copyShareLink">Copy link</UButton>
     </div>
 
@@ -202,7 +204,8 @@
       </template>
     </UModal>
 
-    <FieldDefinitionsDialog ref="fieldDefinitionsDialog" hide-trigger :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :inspector-conflict="guardOpen && guardReason === 'field'" :inspector-conflict-error="inspectorConflictError" @request-open="openFieldManager" @create-custom-field="createFieldDefinition" @save-field-definition="saveFieldDefinition" @remove-field-definition="removeFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" />
+    <FieldDefinitionsDialog ref="fieldDefinitionsDialog" hide-trigger :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :inspector-conflict="guardOpen && guardReason === 'field' && fieldReviewOwner === 'legacy'" :inspector-conflict-error="inspectorConflictError" @request-open="openFieldManager" @create-custom-field="createFieldDefinition" @save-field-definition="saveLegacyFieldDefinition" @remove-field-definition="removeLegacyFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" />
+    <PrototypeFieldDefinitionsDialog ref="prototypeFieldDefinitionsDialog" :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :rejection-revision="prototypeFieldDefinitionRejectionRevision" :enabled="variant === 'B'" :action-layout="fieldActionLayout" :theme="theme" :inspector-conflict="guardOpen && guardReason === 'field' && fieldReviewOwner === 'prototype'" :inspector-conflict-error="inspectorConflictError" :is-dev="isDev" @create-custom-field="createPrototypeFieldDefinition" @save-field-definition="savePrototypeFieldDefinition" @remove-field-definition="removePrototypeFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" @toggle-action-layout="toggleFieldActionLayout" @state-change="prototypeFieldsState = $event" />
 
     <UModal v-model:open="importOpen" title="Review imported map" description="The file is validated before replacing the in-memory sample.">
       <template #content>
@@ -219,6 +222,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { catalogueTypes, isCustomFieldApplicableToObject, planMapEntityDeletion, updateSystemObject, type CatalogueSubtype, type CustomFieldValue, type JumpRoute, type LocalWorkspace, type MapDeletionTarget, type Orbit, type Point, type StarSystem, type SystemObject, prepareJsonImport } from '../domain/workspace'
 import { addCustomFieldDefinition, removeCustomFieldDefinition, renameCustomFieldDefinition, updateCustomFieldApplicability, updateCustomFieldOptions, updateNativeFieldOptions } from '../domain/workspace-fields'
 import { sameCustomFieldApplicability, type CustomFieldCreate, type FieldDefinitionUpdate } from './field-definitions/model'
+import PrototypeFieldDefinitionsDialog from './PrototypeFieldDefinitionsDialog.vue'
+import { createDenseFieldsFixture } from './prototype-fields-fixture'
 import type { MapImageFormat } from '../utils/map-image-export'
 import { toNormalizedMapPoint } from '../utils/system-map-geometry'
 
@@ -235,13 +240,14 @@ const router = useRouter()
 const variant = ref<Variant>(props.initialVariant)
 watch(() => props.initialVariant, value => { variant.value = value })
 const controlLayout = computed<ControlLayout>(() => route.query.controls === 'groups' ? 'groups' : 'dock')
+const fieldActionLayout = computed<'header' | 'footer'>(() => route.query.fieldsActions === 'footer' ? 'footer' : 'header')
 
 const variantNames: Record<Variant, string> = { A: 'Cartographer’s workbench', B: 'Map-first field console', C: 'Atlas folio' }
 const controlLayoutLabel = computed(() => controlLayout.value === 'groups' ? 'Grouped rail' : 'Mode dock')
 const controlLayoutShortLabel = computed(() => controlLayout.value === 'groups' ? 'Rail' : 'Dock')
 const isDev = import.meta.dev
 const theme = ref<'dark' | 'light'>('dark')
-const workspace = ref<LocalWorkspace>(seedWorkspace())
+const workspace = ref<LocalWorkspace>(props.initialVariant === 'B' && route.query.fieldsSample === 'dense' ? createDenseFieldsFixture(seedWorkspace()) : seedWorkspace())
 const activeView = ref<'cluster' | 'system'>('cluster')
 const activeSystemId = ref('sys-vela')
 const selection = ref<Selection>({ kind: 'route', id: 'route-vela-kestrel' })
@@ -268,10 +274,14 @@ const importError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const mapCanvas = ref<{ exportImage(format: MapImageFormat): Promise<Blob>; zoomBy(factor: number): void; fitMap(): void } | null>(null)
 const fieldDefinitionsDialog = ref<{ open(): void; cancelImpactReview(): void } | null>(null)
+const prototypeFieldDefinitionsDialog = ref<{ open(opener?: HTMLElement): void; isOpen(): boolean; cancelImpactReview(clearTransition?: boolean): void; hasModifiedDraft(): boolean } | null>(null)
+const fieldReviewOwner = ref<'legacy' | 'prototype'>('legacy')
+const prototypeFieldsState = ref({ open: false, screen: 'list' as 'list' | 'detail' | 'create', selectedId: null as string | null, hasModifiedDraft: false, reviewOpen: false })
 const toast = ref('')
 const draft = reactive({ name: '', description: '', jumpLevel: 1, unresolvedExit: '', fieldValues: {} as Record<string, CustomFieldValue>, nativeValues: { atmosphere: '', portClass: '' } })
 const draftBaseline = ref('')
 const fieldDefinitionSaveRevision = ref(0)
+const prototypeFieldDefinitionRejectionRevision = ref(0)
 const fieldDefinitionError = ref('')
 const inspectorError = ref('')
 const inspectorConflictError = ref('')
@@ -366,6 +376,7 @@ const visibleState = computed(() => ({
   tool: activeTool.value,
   draft: hasDirtyDraft.value ? 'unsaved inspector edits' : 'clean',
   save: saveState.value === 'error' ? 'simulated error; retry available' : saveState.value === 'saving' ? 'simulated save running' : 'memory only',
+  fields: prototypeFieldsState.value.hasModifiedDraft ? `unsaved Fields ${prototypeFieldsState.value.screen} draft` : `Fields ${prototypeFieldsState.value.screen}`,
   theme: theme.value,
 }))
 
@@ -632,7 +643,10 @@ function resolveGuard(choice: 'apply' | 'discard' | 'stay'): void {
   const action = pendingAction.value
   guardOpen.value = false
   pendingAction.value = null
-  if (choice === 'stay' || !action) return
+  if (choice === 'stay' || !action) {
+    if (guardReason.value === 'field') cancelActiveFieldReview(true)
+    return
+  }
   if (action.kind === 'field-conflict') {
     if (choice === 'discard') {
       discardDraft(false)
@@ -644,7 +658,7 @@ function resolveGuard(choice: 'apply' | 'discard' | 'stay'): void {
         pendingAction.value = action
         return
       }
-      fieldDefinitionsDialog.value?.cancelImpactReview()
+      cancelActiveFieldReview(true)
       inspectorConflictError.value = ''
       showToast('Object draft applied. Save the field change again to refresh its affected-values review.')
     }
@@ -912,7 +926,31 @@ function confirmDelete(): void {
   }
 }
 
-function openFieldManager(): void { fieldDefinitionsDialog.value?.open() }
+function openFieldManager(source?: MouseEvent | HTMLElement): void {
+  const opener = source instanceof HTMLElement
+    ? source
+    : source instanceof MouseEvent && source.currentTarget instanceof HTMLElement
+      ? source.currentTarget
+      : undefined
+  if (variant.value === 'B') {
+    fieldReviewOwner.value = 'prototype'
+    prototypeFieldDefinitionsDialog.value?.open(opener)
+  } else {
+    fieldReviewOwner.value = 'legacy'
+    fieldDefinitionsDialog.value?.open()
+  }
+}
+
+function cancelActiveFieldReview(clearTransition: boolean): void {
+  if (fieldReviewOwner.value === 'prototype') prototypeFieldDefinitionsDialog.value?.cancelImpactReview(clearTransition)
+  else fieldDefinitionsDialog.value?.cancelImpactReview()
+}
+
+function saveLegacyFieldDefinition(request: FieldDefinitionUpdate): void { fieldReviewOwner.value = 'legacy'; saveFieldDefinition(request) }
+function removeLegacyFieldDefinition(fieldId: string): void { fieldReviewOwner.value = 'legacy'; removeFieldDefinition(fieldId) }
+function createPrototypeFieldDefinition(request: CustomFieldCreate): void { fieldReviewOwner.value = 'prototype'; createFieldDefinition(request) }
+function savePrototypeFieldDefinition(request: FieldDefinitionUpdate): void { fieldReviewOwner.value = 'prototype'; saveFieldDefinition(request) }
+function removePrototypeFieldDefinition(fieldId: string): void { fieldReviewOwner.value = 'prototype'; removeFieldDefinition(fieldId) }
 
 function clearFieldDefinitionError(): void { fieldDefinitionError.value = '' }
 
@@ -927,6 +965,7 @@ function acceptFieldWorkspace(next: LocalWorkspace, message: string): void {
 }
 
 function reportFieldError(error: unknown): void {
+  if (fieldReviewOwner.value === 'prototype') prototypeFieldDefinitionRejectionRevision.value += 1
   fieldDefinitionError.value = error instanceof Error ? error.message : 'The field definition could not be changed.'
 }
 
@@ -1031,8 +1070,24 @@ async function previewImport(event: Event): Promise<void> {
   }
 }
 
-function confirmImport(): void {
+async function confirmImport(): Promise<void> {
   if (!importCandidate.value) return
+  const fields = prototypeFieldDefinitionsDialog.value
+  if (fields?.hasModifiedDraft() && !fields.isOpen()) {
+    const message = 'Import paused because the hidden Fields draft has unsaved changes. Resolve that draft, then use Review import retry to confirm the preserved preview.'
+    importError.value = message
+    fieldDefinitionError.value = message
+    importOpen.value = false
+    if (variant.value !== 'B') {
+      await router.replace({ query: { ...route.query, variant: 'B' } })
+      variant.value = 'B'
+    }
+    await nextTick()
+    const opener = document.querySelector<HTMLElement>('.proto-b [aria-label="Open field definitions"]') ?? undefined
+    fields.open(opener)
+    showToast(message)
+    return
+  }
   workspace.value = importCandidate.value
   activeView.value = 'cluster'
   activeSystemId.value = workspace.value.cluster.systems[0]?.id ?? ''
@@ -1040,6 +1095,8 @@ function confirmImport(): void {
   clusterSelection.value = selection.value
   setNavigation()
   importOpen.value = false
+  importError.value = ''
+  importCandidate.value = null
   syncDraft()
   beginSimulatedSave()
   showToast('Import preview accepted into memory. No browser storage was changed.')
@@ -1138,9 +1195,24 @@ async function cycleControlLayout(): Promise<void> {
   showToast(`B control presentation changed to ${next === 'groups' ? 'Grouped rail' : 'Mode dock'}. Map state and drafts remain in memory.`)
 }
 
+async function toggleFieldActionLayout(): Promise<void> {
+  const next = fieldActionLayout.value === 'header' ? 'footer' : 'header'
+  await router.replace({ query: { ...route.query, variant: 'B', fieldsActions: next } })
+}
+
+async function returnToFieldsDraft(event: MouseEvent): Promise<void> {
+  const opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
+  if (variant.value !== 'B') {
+    await router.replace({ query: { ...route.query, variant: 'B' } })
+    variant.value = 'B'
+    await nextTick()
+  }
+  prototypeFieldDefinitionsDialog.value?.open(opener)
+}
+
 function onVariantKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && variant.value === 'B') {
-    if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return
+    if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || hasOpenDialog()) return
     const target = event.target instanceof Element ? event.target : null
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
     if (creationChooserOpen.value) {
@@ -1156,10 +1228,15 @@ function onVariantKeydown(event: KeyboardEvent): void {
     }
   }
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  if (event.defaultPrevented || guardOpen.value || deleteOpen.value || importOpen.value || hasOpenDialog()) return
   const target = event.target instanceof Element ? event.target : null
   if (target?.closest('input, textarea, select, button, [contenteditable="true"], .map-view, [role="slider"], [role="button"]')) return
   event.preventDefault()
   void cycleVariant(event.key === 'ArrowRight' ? 1 : -1)
+}
+
+function hasOpenDialog(): boolean {
+  return !!document.querySelector('dialog[open], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')
 }
 
 function applyPageTheme(): void {
@@ -1248,15 +1325,15 @@ function seedWorkspace(): LocalWorkspace {
   const anomaly: SystemObject = { id: 'obj-vela-anomaly', family: 'Phenomenon', subtype: 'anomaly', locationKey: 'AN-1', name: 'Blue Lenticular', description: 'A lens-shaped distortion beyond the third Orbit.', placement: { kind: 'system', x: 0.82, y: 0.76 }, customFieldValues: { signal: 'Strong', threat: 4 } }
   // The free Orbit centers in this seed are authored as scene points and converted to normalized stored points.
   const vela: StarSystem = { id: 'sys-vela', name: 'Vela Reach', objects: [star, planet, moon, station, velaPoint, anomaly], orbits: [
-    { id: 'orbit-vela-one', order: 1, hostId: star.id }, { id: 'orbit-vela-two', order: 2, hostId: planet.id },
-    { id: 'orbit-vela-three', order: 3, hostId: null, center: toNormalizedMapPoint({ x: 772, y: 300 }) },
+    { id: 'orbit-vela-one', order: 1, hostId: star.id }, { id: 'orbit-vela-two', order: 1, hostId: planet.id },
+    { id: 'orbit-vela-three', order: 1, hostId: null, center: toNormalizedMapPoint({ x: 772, y: 300 }) },
   ] }
   const kestrel: StarSystem = { id: 'sys-kestrel', name: 'Kestrel Deep', objects: [
     { id: 'obj-kestrel-star', family: 'CelestialBody', subtype: 'star', locationKey: 'STAR-1', name: 'Kestrel A', description: 'A white dwarf, unexpectedly bright.', placement: { kind: 'system', x: 0.53, y: 0.5 } },
     { id: 'obj-kestrel-planet', family: 'CelestialBody', subtype: 'planet', locationKey: 'PL-1', name: 'Hearth', description: 'Thin atmosphere; abandoned weather array.', placement: { kind: 'orbit', orbitId: 'orbit-kestrel-one' } },
     { id: 'jp-kestrel', family: 'JumpPoint', subtype: 'jump-point', locationKey: 'JP-2', name: 'The Sill', description: 'A narrow transit window.', placement: { kind: 'system', x: 0.19, y: 0.75 } },
     { id: 'obj-kestrel-belt', family: 'SmallBody/Field', subtype: 'belt', locationKey: 'BELT-1', name: 'Glass Belt', description: 'Fragments scatter radio signals.', placement: { kind: 'system', x: 0.83, y: 0.72 } },
-  ], orbits: [{ id: 'orbit-kestrel-one', order: 1, hostId: 'obj-kestrel-star' }, { id: 'orbit-kestrel-two', order: 2, hostId: null, center: toNormalizedMapPoint({ x: 210, y: 395 }) }] }
+  ], orbits: [{ id: 'orbit-kestrel-one', order: 1, hostId: 'obj-kestrel-star' }, { id: 'orbit-kestrel-two', order: 1, hostId: null, center: toNormalizedMapPoint({ x: 210, y: 395 }) }] }
   const vesper: StarSystem = { id: 'sys-vesper', name: 'Vesper Station', objects: [
     { id: 'obj-vesper-star', family: 'CelestialBody', subtype: 'star', locationKey: 'STAR-1', name: 'Vesper', description: 'Amber flare star.', placement: { kind: 'system', x: 0.47, y: 0.5 } },
     { id: 'obj-vesper-colony', family: 'Installation', subtype: 'colony', locationKey: 'COL-1', name: 'New Alecto', description: 'Colony at the limit of its stores.', placement: { kind: 'system', x: 0.74, y: 0.35 } },
@@ -1484,9 +1561,11 @@ function seedWorkspace(): LocalWorkspace {
 .c-index-bottom { margin-top: auto; }
 
 .prototype-switcher { position: fixed; z-index: 30; bottom: .85rem; left: 50%; display: flex; min-height: 3.25rem; align-items: center; gap: .5rem; padding: .3rem .45rem; border: 1px solid rgba(232, 184, 121, .54); border-radius: 999px; background: #13211e; color: #edf0e7; box-shadow: 0 .7rem 2.5rem rgba(0, 0, 0, .35); transform: translateX(-50%); }
-.prototype-switcher > button:not(.switcher-share):not(.control-layout-switch) { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .07); color: #f2c98d; font-size: 1.1rem; cursor: pointer; }
+.prototype-switcher > button:not(.switcher-share):not(.control-layout-switch):not(.fields-draft-return) { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .07); color: #f2c98d; font-size: 1.1rem; cursor: pointer; }
 .prototype-switcher > button:hover { background: rgba(232, 184, 121, .17); }
 .control-layout-switch { min-height: 2.1rem; padding: .3rem .55rem; border: 1px solid rgba(232, 184, 121, .5); border-radius: 999px; background: rgba(255,255,255,.06); color: #f2c98d; font-family: var(--proto-ui-font); font-size: .68rem; white-space: nowrap; cursor: pointer; }
+.fields-draft-return { min-height: 2.1rem; border: 1px solid rgba(232,184,121,.5); border-radius: 999px; padding: .3rem .6rem; background: rgba(255,255,255,.06); color: #f2c98d; font-family: var(--proto-ui-font); font-size: .68rem; white-space: nowrap; cursor: pointer; }
+.b-fields-draft-mark { color: var(--proto-accent); font-size: .68rem; }
 .switcher-current { display: flex; min-width: 13.2rem; align-items: center; gap: .55rem; }
 .switcher-current > span { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border: 1px solid #e8b879; border-radius: 50%; color: #f2c98d; font: 600 .75rem var(--proto-display-font); }
 .switcher-current > div { display: grid; gap: .13rem; }

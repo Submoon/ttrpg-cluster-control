@@ -1,0 +1,374 @@
+{
+  "baselineCommit": "c9ba3f3f41eb54c63ba2645e1c06b569ab485157",
+  "originMain": "629d2a98715c3a16b954e0f77c639b1f0c31212c",
+  "baseUrl": "http://127.0.0.1:3139/?variant=B&controls=dock",
+  "runtime": "Local Nuxt dev in isolated preview-build; current checkout/runtime source hashes verified before browser launch.",
+  "browser": "Chrome 155.0.8059.41 via Playwright",
+  "node": "v24.18.1",
+  "inputPolicy": "Visible UI locators, keyboard input, file-input selection, and viewport changes only. page.evaluate is read-only DOM inspection; no app state is injected or mutated.",
+  "caseSelection": [
+    "hidden-draft-blocks-workspace-import"
+  ],
+  "viewportLimit": "Viewport resizing does not emulate a physical phone keyboard or safe-area hardware.",
+  "sourceManifest": {
+    "candidateHead": "c9ba3f3f41eb54c63ba2645e1c06b569ab485157",
+    "candidateLabel": "Frozen final fixture repair 5381B59E",
+    "branch": "codex/interface-revamp",
+    "baselineCommit": "c9ba3f3f41eb54c63ba2645e1c06b569ab485157",
+    "sourceStatus": "M .scratch/interface-revamp/README.md\n M .scratch/interface-revamp/map.md\n M .scratch/interface-revamp/tickets/10-validate-b-device-preservation.md\n M .scratch/interface-revamp/tickets/16-prototype-mobile-fields-flow.md\n M README-PROTOTYPE.md\n M components/PrototypeInspector.vue\n M components/PrototypeWorkbench.vue",
+    "runtimeRoot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\preview-build",
+    "files": [
+      {
+        "path": "components/PrototypeFieldDefinitionsDialog.vue",
+        "classification": "prototype-source",
+        "baselineGitBlobSha1": null,
+        "checkoutGitBlobSha1": "56ce6181fce27a05b16aa3ab90b057733dfdeef2",
+        "runtimeGitBlobSha1": "56ce6181fce27a05b16aa3ab90b057733dfdeef2",
+        "checkoutSha256": "0C2FB832A373AE28B3E94DE24EE048E3417B410A2ACE1305BF306E09CC2D5148",
+        "runtimeSha256": "0C2FB832A373AE28B3E94DE24EE048E3417B410A2ACE1305BF306E09CC2D5148",
+        "existsAtBaseline": false,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": false
+      },
+      {
+        "path": "components/PrototypeWorkbench.vue",
+        "classification": "prototype-source",
+        "baselineGitBlobSha1": "da6e0cc9dedc6f390d9603bceb36c14d764ef55e",
+        "checkoutGitBlobSha1": "5604fbf6e7350e04e6222a9101b91b31b447e807",
+        "runtimeGitBlobSha1": "5604fbf6e7350e04e6222a9101b91b31b447e807",
+        "checkoutSha256": "5381B59E8DB1529B741DE03FBFC50391FE4FE7335DB445362E1B107B6285A686",
+        "runtimeSha256": "5381B59E8DB1529B741DE03FBFC50391FE4FE7335DB445362E1B107B6285A686",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": false
+      },
+      {
+        "path": "components/PrototypeInspector.vue",
+        "classification": "prototype-source",
+        "baselineGitBlobSha1": "a2d04c1f0decae94af948c79905e76dee8b6f27f",
+        "checkoutGitBlobSha1": "a3ff254d7a9a4eab609a04c35e3183afabdfef5c",
+        "runtimeGitBlobSha1": "a3ff254d7a9a4eab609a04c35e3183afabdfef5c",
+        "checkoutSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17",
+        "runtimeSha256": "9F4655A59D58267FDCE020B7443BD9EB73FFC802FB025CFAEEDC2692304C7A17",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": false
+      },
+      {
+        "path": "components/prototype-fields-fixture.ts",
+        "classification": "prototype-source",
+        "baselineGitBlobSha1": null,
+        "checkoutGitBlobSha1": "44b92cc94c3928887aee0d8d85a7bd40c91f607b",
+        "runtimeGitBlobSha1": "44b92cc94c3928887aee0d8d85a7bd40c91f607b",
+        "checkoutSha256": "4C9D549935AA1E7786AF50BEE96D8EC4A771D464C79B72BE57CE735BF35B00A1",
+        "runtimeSha256": "4C9D549935AA1E7786AF50BEE96D8EC4A771D464C79B72BE57CE735BF35B00A1",
+        "existsAtBaseline": false,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": false
+      },
+      {
+        "path": "pages/index.vue",
+        "classification": "prototype-source",
+        "baselineGitBlobSha1": "9ee63fb7d794b0c3d56bf40bc04d014efdff1018",
+        "checkoutGitBlobSha1": "9ee63fb7d794b0c3d56bf40bc04d014efdff1018",
+        "runtimeGitBlobSha1": "9ee63fb7d794b0c3d56bf40bc04d014efdff1018",
+        "checkoutSha256": "D18C692CD3AE077E5E5A067FB3255A57D1D1A23012DDC8136A2D922E444AE5F7",
+        "runtimeSha256": "D18C692CD3AE077E5E5A067FB3255A57D1D1A23012DDC8136A2D922E444AE5F7",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/FieldDefinitionsDialog.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "3fbb690df1d28ff74d7bf5fe6bee52efb53f85fd",
+        "checkoutGitBlobSha1": "3fbb690df1d28ff74d7bf5fe6bee52efb53f85fd",
+        "runtimeGitBlobSha1": "3fbb690df1d28ff74d7bf5fe6bee52efb53f85fd",
+        "checkoutSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272",
+        "runtimeSha256": "15183EA315BC41372EDE7BFDF3D3B1BE11ED065DED28657BD045138AEEC01272",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionEditor.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "4327f6a5eaedb2c4d6761e6b0812434b4c2815e5",
+        "checkoutGitBlobSha1": "4327f6a5eaedb2c4d6761e6b0812434b4c2815e5",
+        "runtimeGitBlobSha1": "4327f6a5eaedb2c4d6761e6b0812434b4c2815e5",
+        "checkoutSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E",
+        "runtimeSha256": "07E1EABF85BADFEC5AAC1846D5D1C300939B586640C07B236A7DB4E87775173E",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionList.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "e156a4c74a1ebb0f634bfbb95f2f704f3d8332b4",
+        "checkoutGitBlobSha1": "e156a4c74a1ebb0f634bfbb95f2f704f3d8332b4",
+        "runtimeGitBlobSha1": "e156a4c74a1ebb0f634bfbb95f2f704f3d8332b4",
+        "checkoutSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E",
+        "runtimeSha256": "815E2C0B8EC40A66CB333FDF182528CF7130DF7863C0A56B0334158C78540E7E",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionValues.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "833449b9ed2bd768dce6d912a37368b1ff4c616f",
+        "checkoutGitBlobSha1": "833449b9ed2bd768dce6d912a37368b1ff4c616f",
+        "runtimeGitBlobSha1": "833449b9ed2bd768dce6d912a37368b1ff4c616f",
+        "checkoutSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE",
+        "runtimeSha256": "5A6ED3A7F2017278D354EBCE8DD3111C52C3EB264C5C6822EA500C783E319BDE",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/field-definitions/FieldDefinitionChangeConfirmation.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "d02f9e749a627099b940f3fa09a7abe81b676f11",
+        "checkoutGitBlobSha1": "d02f9e749a627099b940f3fa09a7abe81b676f11",
+        "runtimeGitBlobSha1": "d02f9e749a627099b940f3fa09a7abe81b676f11",
+        "checkoutSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB",
+        "runtimeSha256": "3803BBEF1D826F9FB604294DBA81DCE92F31BF7F2FDD9462C99E35C114855CEB",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/field-definitions/model.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "21c94769a93ac0027c212b2a1028f7362a341cd8",
+        "checkoutGitBlobSha1": "21c94769a93ac0027c212b2a1028f7362a341cd8",
+        "runtimeGitBlobSha1": "21c94769a93ac0027c212b2a1028f7362a341cd8",
+        "checkoutSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E",
+        "runtimeSha256": "F36B1DFF3D5551A583D89A50A42C7217B00E9359E7C8FC123CE43A1FFCB99B8E",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "components/BaselinePage.vue",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "2f1c44ce8ced45878e2a2dbedeb64e9a61b883d0",
+        "checkoutGitBlobSha1": "2f1c44ce8ced45878e2a2dbedeb64e9a61b883d0",
+        "runtimeGitBlobSha1": "2f1c44ce8ced45878e2a2dbedeb64e9a61b883d0",
+        "checkoutSha256": "298229F8A21C13F4FEAF077FCACBC9BF4D4D578E5E52DFDA5681225F3D446F83",
+        "runtimeSha256": "298229F8A21C13F4FEAF077FCACBC9BF4D4D578E5E52DFDA5681225F3D446F83",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "domain/workspace.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "7d4069473930471749cfcdfb048877314c5a2d4e",
+        "checkoutGitBlobSha1": "7d4069473930471749cfcdfb048877314c5a2d4e",
+        "runtimeGitBlobSha1": "7d4069473930471749cfcdfb048877314c5a2d4e",
+        "checkoutSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A",
+        "runtimeSha256": "241ADB48BE3D12F9BB0DD049BEF4F1333FE7139786E7B439255B6BEFC974282A",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "domain/workspace-fields.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "b20bd26052e611aa4ff423ee3cd4ff93e35cd74c",
+        "checkoutGitBlobSha1": "b20bd26052e611aa4ff423ee3cd4ff93e35cd74c",
+        "runtimeGitBlobSha1": "b20bd26052e611aa4ff423ee3cd4ff93e35cd74c",
+        "checkoutSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF",
+        "runtimeSha256": "2992C06EDA7973BDDD852F1CF935F6174695C6499956E3735C4C0641D5FDD5EF",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "domain/workspace-json-import.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "eb348bdda3b8dd4a390985fc83f8609d67a79c6d",
+        "checkoutGitBlobSha1": "eb348bdda3b8dd4a390985fc83f8609d67a79c6d",
+        "runtimeGitBlobSha1": "eb348bdda3b8dd4a390985fc83f8609d67a79c6d",
+        "checkoutSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6",
+        "runtimeSha256": "19FEF79BCA1AD5A91D65F6224FAE9665D7A24B08262D87DE5B936A3B262A9EC6",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "domain/workspace-schema.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "e9c1153cf3d71a81fadf78b362f96a4c04768c69",
+        "checkoutGitBlobSha1": "e9c1153cf3d71a81fadf78b362f96a4c04768c69",
+        "runtimeGitBlobSha1": "e9c1153cf3d71a81fadf78b362f96a4c04768c69",
+        "checkoutSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A",
+        "runtimeSha256": "91DDE3C88A0AD2A189F3EC4553A5367358D6887B33D08C6025575A40BEA5969A",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      },
+      {
+        "path": "domain/workspace-codec.ts",
+        "classification": "preservation-boundary",
+        "baselineGitBlobSha1": "24263bcc0107dfc8af2f4442e1342eff2a9ae437",
+        "checkoutGitBlobSha1": "24263bcc0107dfc8af2f4442e1342eff2a9ae437",
+        "runtimeGitBlobSha1": "24263bcc0107dfc8af2f4442e1342eff2a9ae437",
+        "checkoutSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11",
+        "runtimeSha256": "1DF963A8F441681517F911D7FF613D5B74DC60F0A43D15E6056D1D90B000FB11",
+        "existsAtBaseline": true,
+        "checkoutMatchesRuntime": true,
+        "checkoutMatchesBaseline": true
+      }
+    ]
+  },
+  "importFixture": {
+    "path": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\fields-flow-2026-10-16\\final-fixture\\ui-import-check\\valid-replacement-map.json",
+    "sha256": "8C3F9ACF20F148B185D773A2E5567E6E6925C21E1241054247BA8CC693FB1B94"
+  },
+  "results": [
+    {
+      "name": "hidden-draft-blocks-workspace-import",
+      "status": "passed",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900,
+        "isMobile": false,
+        "hasTouch": false
+      },
+      "query": {
+        "fieldsSample": "dense"
+      },
+      "actualInput": [
+        "Applied a clean definition edit, created a modified new-field draft through the visible form, then confirmed a valid replacement while Fields was hidden."
+      ],
+      "pageErrors": [],
+      "evidence": [
+        {
+          "label": "replacement-refused-and-fields-reopened",
+          "screenshot": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\device-preservation-lab\\artifacts\\fields-flow-2026-10-16\\final-fixture\\ui-import-check\\hidden-draft-blocks-workspace-import-replacement-refused-and-fields-reopened.png",
+          "state": {
+            "visible": true,
+            "screen": "create",
+            "actions": "header",
+            "draftState": "modified",
+            "reviewOpen": "false",
+            "title": "Field definitions",
+            "modalRole": "dialog",
+            "modalAriaModal": "true",
+            "rootTag": "DIV",
+            "rootRect": {
+              "x": 176,
+              "y": 24.0625,
+              "right": 1264,
+              "bottom": 875.9375,
+              "width": 1088,
+              "height": 851.875,
+              "display": "flex",
+              "visibility": "visible",
+              "overflowY": "hidden"
+            },
+            "rootClass": "bg-default divide-y divide-default flex flex-col focus:outline-none data-[state=open]:animate-[scale-in_200ms_var(--ease-out)] data-[state=closed]:animate-[scale-out_200ms_var(--ease-out)] w-[calc(100vw-2rem)] max-w-lg rounded-lg shadow-lg ring ring-default fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden prototype-fields-dialog fields-theme-dark",
+            "rootStyle": {
+              "backgroundColor": "rgb(20, 33, 30)",
+              "color": "rgb(232, 237, 228)",
+              "borderColor": "rgba(188, 202, 188, 0.17)",
+              "panelBackground": "#14211e",
+              "softLine": "rgba(188,202,188,.17)",
+              "mutedText": "#a2b0a5",
+              "accentHover": "#e8ede4"
+            },
+            "rootPanelToken": "#14211e",
+            "list": {
+              "visible": true,
+              "rect": {
+                "x": 198,
+                "y": 295.9375,
+                "right": 536.59375,
+                "bottom": 853.9375,
+                "width": 338.59375,
+                "height": 558,
+                "display": "grid",
+                "visibility": "visible",
+                "overflowY": "auto"
+              },
+              "scrollTop": 0,
+              "scrollHeight": 3187,
+              "clientHeight": 558
+            },
+            "detail": {
+              "visible": false,
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "right": 0,
+                "bottom": 0,
+                "width": 0,
+                "height": 0,
+                "display": "none",
+                "visibility": "visible",
+                "overflowY": "auto"
+              },
+              "scrollTop": 0,
+              "scrollHeight": 0,
+              "clientHeight": 0
+            },
+            "create": {
+              "visible": true,
+              "rect": {
+                "x": 536.59375,
+                "y": 295.9375,
+                "right": 1242,
+                "bottom": 853.9375,
+                "width": 705.40625,
+                "height": 558,
+                "display": "grid",
+                "visibility": "visible",
+                "overflowY": "auto"
+              },
+              "scrollTop": 0,
+              "scrollHeight": 558,
+              "clientHeight": 558
+            },
+            "customChoiceCount": 35,
+            "definitionChoiceCount": 37,
+            "selectedChoice": "QA clean before create 1792137933579Custom · single-selectAll catalogue objects",
+            "assignmentCount": 4,
+            "assignmentTheme": {
+              "region": {
+                "backgroundColor": "rgb(20, 33, 30)",
+                "color": "rgb(232, 237, 228)",
+                "borderColor": "rgba(188, 202, 188, 0.17)",
+                "panelBackground": "#14211e",
+                "softLine": "rgba(188,202,188,.17)",
+                "mutedText": "#a2b0a5",
+                "accentHover": "#e8ede4"
+              },
+              "firstValueColor": "rgb(232, 237, 228)"
+            },
+            "applicabilityControls": [],
+            "affectedCount": 0,
+            "status": "The field change is applied to the in-memory chart.",
+            "alerts": [
+              "Import paused because the hidden Fields draft has unsaved changes. Resolve that draft, then use Review import retry to confirm the preserved preview."
+            ],
+            "activeElement": {
+              "tag": "FORM",
+              "ariaLabel": null,
+              "text": "NEW REUSABLE FIELDAdd custom fieldCustom field labelValue typeTextNumberBooleanSingle-selectThe new ",
+              "insideRoot": true
+            },
+            "viewport": {
+              "width": 1440,
+              "height": 900,
+              "scrollHeight": 944
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
