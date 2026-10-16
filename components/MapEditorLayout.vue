@@ -1,5 +1,6 @@
 <template>
   <FocusScope
+    as-child
     :present="props.compactModalOpen"
     :trapped="props.compactModalOpen && !props.overlayOpen"
     :loop="props.compactModalOpen"
