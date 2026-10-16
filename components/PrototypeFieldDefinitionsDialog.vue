@@ -34,8 +34,9 @@
         </div>
 
         <div v-if="props.actionLayout === 'header'" class="fields-actions fields-actions-header" aria-label="Field actions">
-          <template v-if="screen === 'list'"><button type="button" class="fields-primary" @click="requestTransition({ kind: 'create' })">Add custom field</button></template>
+          <template v-if="screen === 'list'"><button type="button" class="fields-primary" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'create' })">Add custom field</button></template>
           <template v-else-if="screen === 'detail' && selectedDefinition">
+            <button type="button" class="fields-primary" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'create' })">New custom field</button>
             <button v-if="!editing" type="button" class="fields-primary" aria-label="Edit field definition" @click="beginEdit">Edit definition</button>
             <button v-else type="button" class="fields-primary" aria-label="Apply field changes" :disabled="props.saving || !!pendingCommand || !!pendingReview" @click="applyEdit">Apply field changes</button>
             <button v-if="editing" type="button" class="fields-secondary" aria-label="Cancel field edits" :disabled="!!pendingReview" @click="cancelEdit">Cancel edits</button>
@@ -57,7 +58,6 @@
             </section>
             <section class="fields-list-group">
               <div class="fields-list-heading"><h2>Custom fields</h2><span>{{ customFields.length }}</span></div>
-              <button type="button" class="fields-new" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'create' })">＋ New custom field</button>
               <button v-for="field in customFields" :key="field.id" type="button" class="fields-choice" :data-field-id="field.id" :aria-pressed="selectedId === field.id" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'select', id: field.id })">
                 <span>{{ field.name }}</span><small>Custom · {{ field.type }}</small><small>{{ fieldApplicabilitySummary(field) }}</small>
               </button>
@@ -132,8 +132,9 @@
         </section>
 
         <div v-if="props.actionLayout === 'footer'" class="fields-actions fields-actions-footer" aria-label="Field actions">
-          <template v-if="screen === 'list'"><button type="button" class="fields-primary" @click="requestTransition({ kind: 'create' })">Add custom field</button></template>
+          <template v-if="screen === 'list'"><button type="button" class="fields-primary" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'create' })">Add custom field</button></template>
           <template v-else-if="screen === 'detail' && selectedDefinition">
+            <button type="button" class="fields-primary" :disabled="!!pendingReview || !!pendingCommand" @click="requestTransition({ kind: 'create' })">New custom field</button>
             <button v-if="!editing" type="button" class="fields-primary" aria-label="Edit field definition" @click="beginEdit">Edit definition</button>
             <button v-else type="button" class="fields-primary" aria-label="Apply field changes" :disabled="props.saving || !!pendingCommand || !!pendingReview" @click="applyEdit">Apply field changes</button>
             <button v-if="editing" type="button" class="fields-secondary" aria-label="Cancel field edits" :disabled="!!pendingReview" @click="cancelEdit">Cancel edits</button>
@@ -651,7 +652,7 @@ defineExpose({ open: show, isOpen, cancelImpactReview, hasModifiedDraft: () => h
 </script>
 
 <style>
-.prototype-fields-dialog { position: fixed; top: 50%; left: 50%; translate: none; transform: translate(-50%,-50%); display: flex; width: min(68rem,calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); overflow: hidden; border: 1px solid var(--proto-line); border-radius: .45rem; padding: 0; background: var(--proto-panel); color: var(--proto-ink); box-shadow: 0 1.8rem 5rem rgba(0,0,0,.55); font-family: "Aptos","Segoe UI",sans-serif; }
+.prototype-fields-dialog { display: flex; width: min(68rem,calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); overflow: hidden; border: 1px solid var(--proto-line); border-radius: .45rem; padding: 0; background: var(--proto-panel); color: var(--proto-ink); box-shadow: 0 1.8rem 5rem rgba(0,0,0,.55); font-family: "Aptos","Segoe UI",sans-serif; }
 .prototype-fields-dialog.fields-theme-dark { --proto-ink: #e8ede4; --proto-muted: #a2b0a5; --proto-line: rgba(188,202,188,.17); --proto-accent: #e8b879; --proto-panel: #14211e; --proto-panel-raised: #1c2c27; --proto-control: #1a2823; --proto-display-font: "Palatino Linotype","Book Antiqua",Georgia,serif; --error-border: #a96b5e; --line: rgba(188,202,188,.23); --line-soft: rgba(188,202,188,.17); --panel-bg: #14211e; --text-primary: #e8ede4; --text-muted: #a2b0a5; --accent: #e8b879; --accent-hover: var(--proto-ink); --error-bg: #33201e; }
 .prototype-fields-dialog.fields-theme-light { --proto-ink: #28382f; --proto-muted: #69786b; --proto-line: rgba(47,67,53,.17); --proto-accent: #a26c35; --proto-panel: #f6f3e9; --proto-panel-raised: #fffdf7; --proto-control: #fbf8ef; --proto-display-font: "Palatino Linotype","Book Antiqua",Georgia,serif; --error-border: #b96d5c; --line: rgba(47,67,53,.25); --line-soft: rgba(47,67,53,.17); --panel-bg: #f6f3e9; --text-primary: #28382f; --text-muted: #69786b; --accent: #a26c35; --accent-hover: var(--proto-ink); --error-bg: #f4e7e2; }
 .prototype-fields-dialog[data-fullscreen="true"] { inset: 0 !important; top: 0 !important; left: 0 !important; translate: none !important; transform: none !important; width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; border: 0 !important; border-radius: 0 !important; }
@@ -663,7 +664,7 @@ defineExpose({ open: show, isOpen, cancelImpactReview, hasModifiedDraft: () => h
 .prototype-fields-title .proto-eyebrow,.prototype-fields-create .proto-eyebrow,.fields-guard .proto-eyebrow,.fields-conflict .proto-eyebrow { margin: 0; }
 .fields-header-actions,.fields-actions,.fields-guard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
 .fields-header-actions { flex-shrink: 0; }
-.fields-back,.fields-layout-toggle,.fields-close,.fields-primary,.fields-secondary,.fields-danger,.fields-new { min-height: 2.25rem; border: 1px solid var(--proto-line, var(--line)); border-radius: .25rem; padding: .42rem .65rem; background: var(--proto-panel, var(--control-bg)); color: var(--proto-ink, var(--text-primary)); font: inherit; font-size: .72rem; cursor: pointer; }
+.fields-back,.fields-layout-toggle,.fields-close,.fields-primary,.fields-secondary,.fields-danger { min-height: 2.25rem; border: 1px solid var(--proto-line, var(--line)); border-radius: .25rem; padding: .42rem .65rem; background: var(--proto-panel, var(--control-bg)); color: var(--proto-ink, var(--text-primary)); font: inherit; font-size: .72rem; cursor: pointer; }
 .fields-back { margin: 0 0 .4rem; border: 0; padding: 0; background: transparent; color: var(--proto-muted, var(--text-muted)); }
 .fields-primary { border-color: var(--proto-accent, var(--accent)); background: var(--proto-accent, var(--accent)); color: #101719; font-weight: 650; }
 .fields-danger { border-color: var(--error-border); color: var(--proto-ink, var(--text-primary)); }
@@ -679,7 +680,6 @@ defineExpose({ open: show, isOpen, cancelImpactReview, hasModifiedDraft: () => h
 .fields-choice { display: grid; gap: .18rem; width: 100%; border: 1px solid transparent; border-radius: .2rem; padding: .48rem; background: transparent; color: var(--proto-ink, var(--text-primary)); text-align: left; cursor: pointer; }
 .fields-choice:hover,.fields-choice[aria-pressed="true"] { border-color: var(--proto-accent, var(--accent)); background: color-mix(in srgb,var(--proto-accent, var(--accent)) 12%,transparent); }
 .fields-choice small { color: var(--proto-muted, var(--text-muted)); font-size: .59rem; overflow-wrap: anywhere; }
-.fields-new { min-height: 1.9rem; text-align: left; }
 .fields-empty,.fields-empty-detail,.fields-readonly,.fields-hint { margin: .25rem 0; color: var(--proto-muted, var(--text-muted)); font-size: .75rem; }
 .prototype-fields-detail { display: grid; align-content: start; gap: .75rem; }
 .fields-detail-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .7rem; border-bottom: 1px solid var(--proto-line, var(--line)); padding-bottom: .55rem; }

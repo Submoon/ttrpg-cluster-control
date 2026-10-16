@@ -240,7 +240,7 @@ const router = useRouter()
 const variant = ref<Variant>(props.initialVariant)
 watch(() => props.initialVariant, value => { variant.value = value })
 const controlLayout = computed<ControlLayout>(() => route.query.controls === 'groups' ? 'groups' : 'dock')
-const fieldActionLayout = computed<'header' | 'footer'>(() => route.query.fieldsActions === 'footer' ? 'footer' : 'header')
+const fieldActionLayout = computed<'header' | 'footer'>(() => route.query.fieldsActions === 'header' ? 'header' : 'footer')
 
 const variantNames: Record<Variant, string> = { A: 'Cartographer’s workbench', B: 'Map-first field console', C: 'Atlas folio' }
 const controlLayoutLabel = computed(() => controlLayout.value === 'groups' ? 'Grouped rail' : 'Mode dock')

@@ -27,6 +27,8 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 - Current prototype, 2026-10-15: [Validate the mobile Fields flow in the B prototype](tickets/16-prototype-mobile-fields-flow.md) is claimed as `codex-prototype-mobile-fields`. The human explicitly requests the runnable Fields iteration. [The prototype report](research/fields-prototype-2026-10-15.md) records the refreshed `c9ba3f3f` baseline, SOL architecture/reviews, Luna XHIGH implementation and local development evidence as it becomes available. Keep B/Dock and the confirmed Fields flow; compare only command placement within Fields. The saved-workspace editor, Inspector-form decision and Add-banner refinement remain separate.
 
+The human selected **Bottom commands** for Fields after phone testing on 2026-10-16. The [placement follow-up](research/fields-modal-position-2026-10-16.md) corrects the reported production modal position and duplicate creation command; local production build/typecheck and 4/4 focused browser cases pass. The [Fields prototype ticket](tickets/16-prototype-mobile-fields-flow.md) remains in progress for remaining device checks; command placement no longer needs comparison.
+
 ## Decisions so far
 
 - [Set the revamp's navigation boundary against future semantic zoom](tickets/01-map-navigation-boundary.md): retain separate maps, open systems directly outside a drag, show context and explicit return, and restore each view's temporary zoom/pan and valid selection; unified-map implementation remains separate.
@@ -42,7 +44,7 @@ An analysis, decisions, and a UI redesign specification ready to prepare impleme
 
 ## Not yet specified
 
-- Remaining detailed dialogs beyond the confirmed Fields flow and separately ticketed tools presentation/inspector-form decisions, within accepted B and its full-height mobile Inspect amendment. Exact Fields action placement is now an explicit prototype question, not unspecified fog.
+- Remaining detailed dialogs beyond the confirmed Fields flow and separately ticketed tools presentation/inspector-form decisions, within accepted B and its full-height mobile Inspect amendment. Fields uses the human-selected Bottom commands.
 - Exact palette values and status placement beyond pending-placement guidance, plus usability measures within the resolved theme, contrast, focus and state-preservation contracts.
 - Specification assembly, criteria for the map area that is actually available, representative data volumes, and coordination conditions with separate fixes, once prototype feedback is known.
 
