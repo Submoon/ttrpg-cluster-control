@@ -1,0 +1,1726 @@
+{
+  "timestamp": "2026-10-19T08:22:08.743Z",
+  "baseline": "28278d90c462fcc0542088513ebd8cf07c7eeaa4",
+  "route": "/",
+  "baseURL": "http://127.0.0.1:3180",
+  "runtime": "compiled .output/server/index.mjs",
+  "browser": {
+    "version": "155.0.8059.80",
+    "channel": "chrome",
+    "headless": true,
+    "deviceScaleFactor": 1,
+    "profile": "fresh isolated contexts"
+  },
+  "source": {
+    "components/WorkspaceWelcome.vue": "c9d9209bbaea340b2080e9f2441afd19adf87d37e99749667bcf163ca2a05707",
+    "components/WorkspaceHeader.vue": "6e7abb726be768f3b79ee361e4862fba299b2625b7595cf31a7bf0c6d368e850",
+    "components/BaselinePage.vue": "bafb995ba753f42b3c07eece33d91eadea2d6e42fd20f65a6b8879ddc65f6462",
+    "pages/index.vue": "f918e80a5fd3e3c79eca7c6f5319461bd006a2361a12444518f9c9399bf9de5c",
+    "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "assets/css/map-workspace.css": "869ed8fc6b9e3beb8cd033d01edff4c22935b7c4981fed5170bff7346bf0e9a1",
+    "composables/useLocalWorkspace.ts": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf",
+    "utils/workspace-storage.ts": "00817a03e640fced61ea9a6f37bcad0f6a2ddfe4ac1f3683fe0cd5e533a0f5d4",
+    "tests/workspace-launch.spec.ts": "ed02e5cc9f2c23d474b904a04a30d27af2decaf42c7d9b590a7b28c0cdefba61",
+    "tests/workspace-recovery.spec.ts": "ff152eadc750b3e13ef9526626388e815d09eb9c54c507492b8649cb126e9f19",
+    ".output/server/index.mjs": "2441da8e168741b5bf16b27ce66e7056d6499db6ca6a69c2ff150106d377dca1"
+  },
+  "checks": [
+    {
+      "name": "SSR returns loading shell without editable creation/map data",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "loadingShell": true,
+        "creationInput": false
+      }
+    },
+    {
+      "name": "light 1440x900: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "theme": "light",
+        "input": "keyboard/mouse"
+      }
+    },
+    {
+      "name": "light 1440x900: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "light 1440x900: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "light 1440x900: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "light 1440x900: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 337.109375,
+          "width": 425.390625,
+          "height": 42.390625,
+          "top": 337.109375,
+          "right": 1226.984375,
+          "bottom": 379.5,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 1440x900: input focus for contrast",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 195.796875,
+          "width": 425.390625,
+          "height": 44,
+          "top": 195.796875,
+          "right": 1226.984375,
+          "bottom": 239.796875,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "oklab(0.502829 0.0852306 0.0938283 / 0.274713)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(156, 74, 22) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 1440x900: input: text >=4.5",
+      "passed": true,
+      "detail": 13.622523648681028
+    },
+    {
+      "name": "light 1440x900: input: control >=3",
+      "passed": true,
+      "detail": 8.435949669891867
+    },
+    {
+      "name": "light 1440x900: input: focus >=3",
+      "passed": true,
+      "detail": 6.702434402886352
+    },
+    {
+      "name": "light 1440x900: Create focus for contrast",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 337.109375,
+          "width": 425.390625,
+          "height": 42.390625,
+          "top": 337.109375,
+          "right": 1226.984375,
+          "bottom": 379.5,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 1440x900: Create button: text >=4.5",
+      "passed": true,
+      "detail": 8.470225387672897
+    },
+    {
+      "name": "light 1440x900: Create button: control >=3",
+      "passed": true,
+      "detail": 8.393247140074697
+    },
+    {
+      "name": "light 1440x900: Create button: focus >=3",
+      "passed": true,
+      "detail": 6.702434402886352
+    },
+    {
+      "name": "light 1440x900: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "light 1440x900: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 389,
+          "y": 284.3125,
+          "width": 86.09375,
+          "height": 42.390625,
+          "top": 284.3125,
+          "right": 475.09375,
+          "bottom": 326.703125,
+          "left": 389
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 1440x900: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 483.09375,
+          "y": 284.3125,
+          "width": 200.125,
+          "height": 42.390625,
+          "top": 284.3125,
+          "right": 683.21875,
+          "bottom": 326.703125,
+          "left": 483.09375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 1440x900: recovery action: text >=4.5",
+      "passed": true,
+      "detail": 6.566017767198975
+    },
+    {
+      "name": "light 1440x900: recovery action: control >=3",
+      "passed": true,
+      "detail": 5.586857123096853
+    },
+    {
+      "name": "light 1440x900: recovery action: focus >=3",
+      "passed": true,
+      "detail": 6.12663836637269
+    },
+    {
+      "name": "light 1440x900: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "light 1440x900: error text: text >=4.5",
+      "passed": true,
+      "detail": 5.7401366151130375
+    },
+    {
+      "name": "light 390x844: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "light",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "light 390x844: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "light 390x844: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "light 390x844: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "light 390x844: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 532.5,
+          "width": 332,
+          "height": 42.390625,
+          "top": 532.5,
+          "right": 361,
+          "bottom": 574.890625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x844: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "light 390x844: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 345.765625,
+          "width": 86.09375,
+          "height": 42.390625,
+          "top": 345.765625,
+          "right": 115.09375,
+          "bottom": 388.15625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x844: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 123.09375,
+          "y": 345.765625,
+          "width": 200.125,
+          "height": 42.390625,
+          "top": 345.765625,
+          "right": 323.21875,
+          "bottom": 388.15625,
+          "left": 123.09375
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x844: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "light 844x390: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "theme": "light",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "light 844x390: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "light 844x390: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "light 844x390: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "light 844x390: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 468.6875,
+          "y": 278.46875,
+          "width": 324.765625,
+          "height": 37.59375,
+          "top": 278.46875,
+          "right": 793.453125,
+          "bottom": 316.0625,
+          "left": 468.6875
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 844x390: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "light 844x390: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 91,
+          "y": 255.015625,
+          "width": 72.59375,
+          "height": 40,
+          "top": 255.015625,
+          "right": 163.59375,
+          "bottom": 295.015625,
+          "left": 91
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 844x390: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 171.59375,
+          "y": 255.015625,
+          "width": 161.203125,
+          "height": 40,
+          "top": 255.015625,
+          "right": 332.796875,
+          "bottom": 295.015625,
+          "left": 171.59375
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 844x390: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "light 844x390: failed restore retains reachable action",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 171.59375,
+          "y": 275.015625,
+          "width": 161.203125,
+          "height": 40,
+          "top": 275.015625,
+          "right": 332.796875,
+          "bottom": 315.015625,
+          "left": 171.59375
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x500: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "theme": "light",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "light 390x500: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "light 390x500: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "light 390x500: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "light 390x500: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 358.5,
+          "width": 332,
+          "height": 42.390625,
+          "top": 358.5,
+          "right": 361,
+          "bottom": 400.890625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x500: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "light 390x500: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 314.8125,
+          "width": 72.59375,
+          "height": 40,
+          "top": 314.8125,
+          "right": 101.59375,
+          "bottom": 354.8125,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x500: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 109.59375,
+          "y": 314.8125,
+          "width": 161.203125,
+          "height": 40,
+          "top": 314.8125,
+          "right": 270.796875,
+          "bottom": 354.8125,
+          "left": 109.59375
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(38, 48, 44) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "light 390x500: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 1440x900: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "theme": "dark",
+        "input": "keyboard/mouse"
+      }
+    },
+    {
+      "name": "dark 1440x900: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "dark 1440x900: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dark 1440x900: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "dark 1440x900: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 337.109375,
+          "width": 425.390625,
+          "height": 42.390625,
+          "top": 337.109375,
+          "right": 1226.984375,
+          "bottom": 379.5,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 1440x900: input focus for contrast",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 195.796875,
+          "width": 425.390625,
+          "height": 44,
+          "top": 195.796875,
+          "right": 1226.984375,
+          "bottom": 239.796875,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "oklab(0.784414 0.0659618 0.0909199 / 0.274713)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(239, 161, 111) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 1440x900: input: text >=4.5",
+      "passed": true,
+      "detail": 13.837754295807098
+    },
+    {
+      "name": "dark 1440x900: input: control >=3",
+      "passed": true,
+      "detail": 5.848612917830424
+    },
+    {
+      "name": "dark 1440x900: input: focus >=3",
+      "passed": true,
+      "detail": 10.855814121345832
+    },
+    {
+      "name": "dark 1440x900: Create focus for contrast",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 801.59375,
+          "y": 337.109375,
+          "width": 425.390625,
+          "height": 42.390625,
+          "top": 337.109375,
+          "right": 1226.984375,
+          "bottom": 379.5,
+          "left": 801.59375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 1440x900: Create button: text >=4.5",
+      "passed": true,
+      "detail": 9.604001528741726
+    },
+    {
+      "name": "dark 1440x900: Create button: control >=3",
+      "passed": true,
+      "detail": 9.839346744924962
+    },
+    {
+      "name": "dark 1440x900: Create button: focus >=3",
+      "passed": true,
+      "detail": 10.855814121345832
+    },
+    {
+      "name": "dark 1440x900: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "dark 1440x900: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 389,
+          "y": 284.3125,
+          "width": 86.09375,
+          "height": 42.390625,
+          "top": 284.3125,
+          "right": 475.09375,
+          "bottom": 326.703125,
+          "left": 389
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 1440x900: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 483.09375,
+          "y": 284.3125,
+          "width": 200.125,
+          "height": 42.390625,
+          "top": 284.3125,
+          "right": 683.21875,
+          "bottom": 326.703125,
+          "left": 483.09375
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 1440x900: recovery action: text >=4.5",
+      "passed": true,
+      "detail": 7.8079708638191745
+    },
+    {
+      "name": "dark 1440x900: recovery action: control >=3",
+      "passed": true,
+      "detail": 8.186186340128438
+    },
+    {
+      "name": "dark 1440x900: recovery action: focus >=3",
+      "passed": true,
+      "detail": 10.760596185594698
+    },
+    {
+      "name": "dark 1440x900: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "dark 1440x900: error text: text >=4.5",
+      "passed": true,
+      "detail": 7.283201218274319
+    },
+    {
+      "name": "dark 390x844: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "dark 390x844: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 390x844: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dark 390x844: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "dark 390x844: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 532.5,
+          "width": 332,
+          "height": 42.390625,
+          "top": 532.5,
+          "right": 361,
+          "bottom": 574.890625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x844: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 390x844: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 345.765625,
+          "width": 86.09375,
+          "height": 42.390625,
+          "top": 345.765625,
+          "right": 115.09375,
+          "bottom": 388.15625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x844: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 123.09375,
+          "y": 345.765625,
+          "width": 200.125,
+          "height": 42.390625,
+          "top": 345.765625,
+          "right": 323.21875,
+          "bottom": 388.15625,
+          "left": 123.09375
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x844: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 844x390: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "theme": "dark",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "dark 844x390: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "dark 844x390: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dark 844x390: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "dark 844x390: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 468.6875,
+          "y": 278.46875,
+          "width": 324.765625,
+          "height": 37.59375,
+          "top": 278.46875,
+          "right": 793.453125,
+          "bottom": 316.0625,
+          "left": 468.6875
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 844x390: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "dark 844x390: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 91,
+          "y": 255.015625,
+          "width": 72.59375,
+          "height": 40,
+          "top": 255.015625,
+          "right": 163.59375,
+          "bottom": 295.015625,
+          "left": 91
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 844x390: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 171.59375,
+          "y": 255.015625,
+          "width": 161.203125,
+          "height": 40,
+          "top": 255.015625,
+          "right": 332.796875,
+          "bottom": 295.015625,
+          "left": 171.59375
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 844x390: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "dark 390x500: client welcome and intended theme",
+      "passed": true,
+      "detail": {
+        "fixture": "empty isolated IndexedDB",
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "theme": "dark",
+        "input": "keyboard/touch emulation"
+      }
+    },
+    {
+      "name": "dark 390x500: welcome no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 390x500: native validation focuses required name",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dark 390x500: theme action retains entered names",
+      "passed": true,
+      "detail": {
+        "input": "ordinary hit-tested theme clicks"
+      }
+    },
+    {
+      "name": "dark 390x500: Create keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 358.5,
+          "width": 332,
+          "height": 42.390625,
+          "top": 358.5,
+          "right": 361,
+          "bottom": 400.890625,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "none",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x500: recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "dark 390x500: Try again keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 29,
+          "y": 314.8125,
+          "width": 72.59375,
+          "height": 40,
+          "top": 314.8125,
+          "right": 101.59375,
+          "bottom": 354.8125,
+          "left": 29
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x500: Restore keyboard focus/hit test",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "bounds": {
+          "x": 109.59375,
+          "y": 314.8125,
+          "width": 161.203125,
+          "height": 40,
+          "top": 314.8125,
+          "right": 270.796875,
+          "bottom": 354.8125,
+          "left": 109.59375
+        },
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "unobscured": true,
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "outlineOffset": "3px",
+        "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(232, 238, 231) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "fullyVisible": true
+      }
+    },
+    {
+      "name": "dark 390x500: failed recovery no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "No application page errors",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "No application console warnings/errors including hydration",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "contrast": [
+    {
+      "label": "light 1440x900: input",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(38, 48, 44)",
+        "border": "rgb(85, 75, 64)",
+        "borderWidth": "1px",
+        "outline": "rgb(155, 63, 0)",
+        "outlineWidth": "2px",
+        "outlineOffset": "3px",
+        "tag": "INPUT",
+        "text": "clusterName",
+        "x": 801.59375,
+        "y": 195.796875,
+        "width": 425.390625,
+        "height": 44
+      },
+      "backgrounds": [
+        [
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255
+        ]
+      ],
+      "adjacent": [
+        255,
+        254,
+        250
+      ],
+      "textRatio": 13.622523648681028,
+      "borderRatio": 8.435949669891867,
+      "fillRatio": 1.0091714501328881,
+      "controlRatio": 8.435949669891867,
+      "focusRatio": 6.702434402886352
+    },
+    {
+      "label": "light 1440x900: Create button",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(255, 255, 255)",
+        "border": "rgb(126, 57, 15)",
+        "borderWidth": "1px",
+        "outline": "rgb(155, 63, 0)",
+        "outlineWidth": "3px",
+        "outlineOffset": "3px",
+        "tag": "BUTTON",
+        "text": "Create local workspace ->",
+        "x": 801.59375,
+        "y": 337.109375,
+        "width": 425.390625,
+        "height": 42.390625
+      },
+      "backgrounds": [
+        [
+          126,
+          57,
+          15
+        ],
+        [
+          126,
+          57,
+          15
+        ],
+        [
+          126,
+          57,
+          15
+        ]
+      ],
+      "adjacent": [
+        255,
+        254,
+        250
+      ],
+      "textRatio": 8.470225387672897,
+      "borderRatio": 8.393247140074697,
+      "fillRatio": 8.393247140074697,
+      "controlRatio": 8.393247140074697,
+      "focusRatio": 6.702434402886352
+    },
+    {
+      "label": "light 1440x900: recovery action",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(126, 57, 15)",
+        "border": "rgb(156, 74, 22)",
+        "borderWidth": "1px",
+        "outline": "rgb(155, 63, 0)",
+        "outlineWidth": "3px",
+        "outlineOffset": "3px",
+        "tag": "BUTTON",
+        "text": "Restore last valid backup",
+        "x": 483.09375,
+        "y": 284.3125,
+        "width": 200.125,
+        "height": 42.390625
+      },
+      "backgrounds": [
+        [
+          238,
+          224,
+          215
+        ],
+        [
+          239,
+          228,
+          218
+        ],
+        [
+          242,
+          231,
+          222
+        ]
+      ],
+      "adjacent": [
+        247,
+        243,
+        239
+      ],
+      "textRatio": 6.566017767198975,
+      "borderRatio": 5.586857123096853,
+      "fillRatio": 1.1020165723806872,
+      "controlRatio": 5.586857123096853,
+      "focusRatio": 6.12663836637269
+    },
+    {
+      "label": "light 1440x900: error text",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(152, 47, 35)",
+        "border": "rgb(152, 47, 35)",
+        "borderWidth": "0px",
+        "outline": "rgb(152, 47, 35)",
+        "outlineWidth": "3px",
+        "outlineOffset": "0px",
+        "tag": "DIV",
+        "text": "The saved workspace has an unsupported or damaged format. No local backup is available to restore.",
+        "x": 401,
+        "y": 205.984375,
+        "width": 638,
+        "height": 40
+      },
+      "backgrounds": [
+        [
+          235,
+          221,
+          217
+        ],
+        [
+          243,
+          232,
+          227
+        ],
+        [
+          244,
+          233,
+          228
+        ]
+      ],
+      "adjacent": [
+        231,
+        212,
+        208
+      ],
+      "textRatio": 5.7401366151130375,
+      "borderRatio": null,
+      "fillRatio": null,
+      "controlRatio": null,
+      "focusRatio": null
+    },
+    {
+      "label": "dark 1440x900: input",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(137, 153, 153)",
+        "borderWidth": "1px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "3px",
+        "tag": "INPUT",
+        "text": "clusterName",
+        "x": 801.59375,
+        "y": 195.796875,
+        "width": 425.390625,
+        "height": 44
+      },
+      "backgrounds": [
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ]
+      ],
+      "adjacent": [
+        18,
+        28,
+        30
+      ],
+      "textRatio": 13.837754295807098,
+      "borderRatio": 5.848612917830424,
+      "fillRatio": 1.0634763571614958,
+      "controlRatio": 5.848612917830424,
+      "focusRatio": 10.855814121345832
+    },
+    {
+      "label": "dark 1440x900: Create button",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(41, 25, 15)",
+        "border": "rgb(255, 178, 124)",
+        "borderWidth": "1px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "3px",
+        "outlineOffset": "3px",
+        "tag": "BUTTON",
+        "text": "Create local workspace ->",
+        "x": 801.59375,
+        "y": 337.109375,
+        "width": 425.390625,
+        "height": 42.390625
+      },
+      "backgrounds": [
+        [
+          255,
+          178,
+          124
+        ],
+        [
+          255,
+          178,
+          124
+        ],
+        [
+          255,
+          178,
+          124
+        ]
+      ],
+      "adjacent": [
+        18,
+        28,
+        30
+      ],
+      "textRatio": 9.604001528741726,
+      "borderRatio": 9.839346744924962,
+      "fillRatio": 9.839346744924962,
+      "controlRatio": 9.839346744924962,
+      "focusRatio": 10.855814121345832
+    },
+    {
+      "label": "dark 1440x900: recovery action",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(255, 178, 124)",
+        "border": "rgb(239, 161, 111)",
+        "borderWidth": "1px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "3px",
+        "outlineOffset": "3px",
+        "tag": "BUTTON",
+        "text": "Restore last valid backup",
+        "x": 483.09375,
+        "y": 284.3125,
+        "width": 200.125,
+        "height": 42.390625
+      },
+      "backgrounds": [
+        [
+          47,
+          45,
+          39
+        ],
+        [
+          47,
+          45,
+          39
+        ],
+        [
+          45,
+          45,
+          39
+        ]
+      ],
+      "adjacent": [
+        23,
+        28,
+        30
+      ],
+      "textRatio": 7.8079708638191745,
+      "borderRatio": 8.186186340128438,
+      "fillRatio": 1.2415071890401426,
+      "controlRatio": 8.186186340128438,
+      "focusRatio": 10.760596185594698
+    },
+    {
+      "label": "dark 1440x900: error text",
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(255, 162, 149)",
+        "border": "rgb(255, 162, 149)",
+        "borderWidth": "0px",
+        "outline": "rgb(255, 162, 149)",
+        "outlineWidth": "3px",
+        "outlineOffset": "0px",
+        "tag": "DIV",
+        "text": "The saved workspace has an unsupported or damaged format. No local backup is available to restore.",
+        "x": 401,
+        "y": 205.984375,
+        "width": 638,
+        "height": 40
+      },
+      "backgrounds": [
+        [
+          48,
+          42,
+          42
+        ],
+        [
+          44,
+          42,
+          43
+        ],
+        [
+          42,
+          41,
+          42
+        ]
+      ],
+      "adjacent": [
+        51,
+        41,
+        42
+      ],
+      "textRatio": 7.283201218274319,
+      "borderRatio": null,
+      "fillRatio": null,
+      "controlRatio": null,
+      "focusRatio": null
+    }
+  ],
+  "console": [],
+  "pageerrors": [],
+  "screenshots": [
+    "compiled-recovery-light-844x390.png",
+    "compiled-welcome-dark-1440x900.png"
+  ],
+  "limits": [
+    "B has no matching welcome/loading/recovery fixture; only applicable brand, palette and density are compared.",
+    "Loaded map/Dock fidelity, historic Orbit resize and unresolved-exit failures remain outside ticket 18.",
+    "Touch and viewport emulation do not prove physical Android Chrome keyboard, safe-area or gesture behavior.",
+    "Contrast is a bounded sample of changed launch input/button/error/focus, not an application-wide audit."
+  ]
+}

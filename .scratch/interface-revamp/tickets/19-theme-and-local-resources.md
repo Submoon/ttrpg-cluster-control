@@ -1,6 +1,6 @@
 ---
 title: 'Choose a coherent local light or dark presentation'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -26,6 +26,10 @@ Ticket 18 is reopened and unclaimed for reassessment; tickets 19-21 are blocked 
 ## What to build
 
 One named theme control updates shell, maps, native controls and portals; the explicit device/browser preference survives sessions/workspaces and overrides later OS changes.
+
+## Current availability - 2026-10-19
+
+Ticket 18 completes its scoped reassessment with fresh launch/recovery evidence. This ticket is now available and unclaimed; its own previous acceptance remains withdrawn. The human resumes ticket 18 only, so no implementation or tests for this ticket are started. Follow the corrected presentation contract and current prerequisite Resolution when explicitly resumed.
 
 ## Acceptance criteria
 

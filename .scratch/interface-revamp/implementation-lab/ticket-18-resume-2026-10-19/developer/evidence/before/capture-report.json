@@ -1,0 +1,267 @@
+{
+  "mode": "before",
+  "source": "components/WorkspaceWelcome.vue",
+  "sourceSha256": "c6bb0ca07460fa3bb57a3fe8feb8d2422bea8af5c781d0cc777f7a246eacd21e",
+  "route": "/?variant=baseline",
+  "baseUrl": "http://127.0.0.1:3100",
+  "browser": "155.0.8059.80",
+  "screenshots": [
+    {
+      "profile": {
+        "name": "desktop-light",
+        "width": 1440,
+        "height": 900,
+        "theme": "light",
+        "recovery": false
+      },
+      "responseStatus": 200,
+      "screenshot": ".scratch\\interface-revamp\\implementation-lab\\ticket-18-resume-2026-10-19\\developer\\evidence\\before\\desktop-light-before.png",
+      "layout": {
+        "className": "light",
+        "theme": "light",
+        "headings": [
+          "Give the unknown a name."
+        ],
+        "formName": null,
+        "formRect": {
+          "x": 871.71875,
+          "y": 138.515625,
+          "width": 405.34375,
+          "height": 366.53125
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "document": {
+          "width": 1440,
+          "height": 900
+        },
+        "controls": [
+          {
+            "name": "",
+            "disabled": false,
+            "inViewport": true,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(38, 48, 44)"
+          },
+          {
+            "name": "Create local workspace\n->",
+            "disabled": false,
+            "inViewport": true,
+            "height": 42.390625,
+            "background": "rgb(156, 74, 22)",
+            "foreground": "rgb(255, 255, 255)"
+          }
+        ],
+        "inputs": [
+          {
+            "name": "clusterName",
+            "required": true,
+            "maxLength": 80,
+            "label": "Jump Cluster"
+          },
+          {
+            "name": "systemName",
+            "required": true,
+            "maxLength": 80,
+            "label": "First star system"
+          }
+        ]
+      }
+    },
+    {
+      "profile": {
+        "name": "portrait-dark",
+        "width": 390,
+        "height": 844,
+        "theme": "dark",
+        "recovery": false
+      },
+      "responseStatus": 200,
+      "screenshot": ".scratch\\interface-revamp\\implementation-lab\\ticket-18-resume-2026-10-19\\developer\\evidence\\before\\portrait-dark-before.png",
+      "layout": {
+        "className": "dark",
+        "theme": "dark",
+        "headings": [
+          "Give the unknown a name."
+        ],
+        "formName": null,
+        "formRect": {
+          "x": 12,
+          "y": 422.03125,
+          "width": 366,
+          "height": 352
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "document": {
+          "width": 390,
+          "height": 844
+        },
+        "controls": [
+          {
+            "name": "",
+            "disabled": false,
+            "inViewport": true,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(232, 238, 231)"
+          },
+          {
+            "name": "Create local workspace\n->",
+            "disabled": false,
+            "inViewport": true,
+            "height": 42.390625,
+            "background": "rgb(239, 161, 111)",
+            "foreground": "rgb(41, 25, 15)"
+          }
+        ],
+        "inputs": [
+          {
+            "name": "clusterName",
+            "required": true,
+            "maxLength": 80,
+            "label": "Jump Cluster"
+          },
+          {
+            "name": "systemName",
+            "required": true,
+            "maxLength": 80,
+            "label": "First star system"
+          }
+        ]
+      }
+    },
+    {
+      "profile": {
+        "name": "short-landscape-light",
+        "width": 844,
+        "height": 390,
+        "theme": "light",
+        "recovery": false
+      },
+      "responseStatus": 200,
+      "screenshot": ".scratch\\interface-revamp\\implementation-lab\\ticket-18-resume-2026-10-19\\developer\\evidence\\before\\short-landscape-light-before.png",
+      "layout": {
+        "className": "light",
+        "theme": "light",
+        "headings": [
+          "Give the unknown a name."
+        ],
+        "formName": null,
+        "formRect": {
+          "x": 510.46875,
+          "y": 112.609375,
+          "width": 304,
+          "height": 353.15625
+        },
+        "viewport": {
+          "width": 844,
+          "height": 390
+        },
+        "document": {
+          "width": 844,
+          "height": 517
+        },
+        "controls": [
+          {
+            "name": "",
+            "disabled": false,
+            "inViewport": true,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(38, 48, 44)"
+          },
+          {
+            "name": "Create local workspace\n->",
+            "disabled": false,
+            "inViewport": false,
+            "height": 42.390625,
+            "background": "rgb(156, 74, 22)",
+            "foreground": "rgb(255, 255, 255)"
+          }
+        ],
+        "inputs": [
+          {
+            "name": "clusterName",
+            "required": true,
+            "maxLength": 80,
+            "label": "Jump Cluster"
+          },
+          {
+            "name": "systemName",
+            "required": true,
+            "maxLength": 80,
+            "label": "First star system"
+          }
+        ]
+      }
+    },
+    {
+      "profile": {
+        "name": "reduced-height-dark-recovery",
+        "width": 390,
+        "height": 500,
+        "theme": "dark",
+        "recovery": true
+      },
+      "responseStatus": 200,
+      "screenshot": ".scratch\\interface-revamp\\implementation-lab\\ticket-18-resume-2026-10-19\\developer\\evidence\\before\\reduced-height-dark-recovery-before.png",
+      "layout": {
+        "className": "dark",
+        "theme": "dark",
+        "headings": [
+          "Your workspace could not be opened."
+        ],
+        "formName": null,
+        "formRect": null,
+        "viewport": {
+          "width": 390,
+          "height": 500
+        },
+        "document": {
+          "width": 390,
+          "height": 567
+        },
+        "controls": [
+          {
+            "name": "",
+            "disabled": false,
+            "inViewport": true,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(232, 238, 231)"
+          },
+          {
+            "name": "Try again",
+            "disabled": false,
+            "inViewport": false,
+            "height": 42.390625,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(192, 203, 196)"
+          },
+          {
+            "name": "Restore last valid backup",
+            "disabled": false,
+            "inViewport": false,
+            "height": 42.390625,
+            "background": "rgba(0, 0, 0, 0)",
+            "foreground": "rgb(192, 203, 196)"
+          }
+        ],
+        "inputs": []
+      }
+    }
+  ],
+  "errors": [],
+  "prototypeReference": {
+    "route": "/?variant=B&controls=dock",
+    "responseStatus": 200,
+    "screenshot": ".scratch\\interface-revamp\\implementation-lab\\ticket-18-resume-2026-10-19\\developer\\evidence\\prototype-B-desktop-light-reference.png",
+    "note": "Seeded prototype map used for visual-language context; it has no equivalent empty-workspace or recovery form."
+  }
+}

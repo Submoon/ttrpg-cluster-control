@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-10-19T08:23:13.4462439Z",
+  "stoppedProcessId": 23916,
+  "verifiedCommandLine": "\"C:\\nodejs\\node.exe\" .output/server/index.mjs",
+  "verifiedCreationDate": "2026-10-19T10:20:52.056604+02:00",
+  "port3100Free": true,
+  "port3180Free": true
+}

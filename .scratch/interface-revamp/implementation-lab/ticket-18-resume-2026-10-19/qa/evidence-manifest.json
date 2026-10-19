@@ -1,0 +1,142 @@
+{
+  "description": "Curated referenced evidence only; raw logs and abandoned helper attempts intentionally excluded.",
+  "finalCandidate": "06997ef73fe9f722f458f491b50dafab32d9c6a7",
+  "entries": [
+    {
+      "path": "final-summary.md",
+      "sha256": "6AF1E88E137B01E845907970B442F7C1BB849DD40C50C2E70794F5390931601E"
+    },
+    {
+      "path": "results-summary.json",
+      "sha256": "AF9A1526E3DD7532764FAE61C80C0E9594F631087F0A8C70ADA764475147CE4D"
+    },
+    {
+      "path": "full-suite.json",
+      "sha256": "220651380A101F5E6660A73FCA7E4FC537201458C115BB47D8E0B4A64EB89F8B"
+    },
+    {
+      "path": "full-suite-artifacts/cluster-map-the-Warden-can-navigate-and-arrange-both-maps/error-context.md",
+      "sha256": "B5EF45D6C0F492ADA4521E515031DA03D1ED936859E7B0BE58B331D51EBB4F06"
+    },
+    {
+      "path": "compiled-results.json",
+      "sha256": "DE54E219656A340295EB0FFBC844E5CD5E43D48816A2F7BB2C8D1B8232DE6E45"
+    },
+    {
+      "path": "presentation-results.json",
+      "sha256": "22295448D664B5BD3A52101D897ED9D0091FC435616979B6866CC31E47018156"
+    },
+    {
+      "path": "focus-contrast-red.json",
+      "sha256": "89166352F35826017EE9978CB1D706B12A1022077C2F7B62108BAD519646AE4D"
+    },
+    {
+      "path": "source-before-build.json",
+      "sha256": "969FEA001057AC24F6C8A1C1C34B881AAF5E502717C5675B4AF734B89E527A58"
+    },
+    {
+      "path": "source-after-build.json",
+      "sha256": "F2F12C60B2E7DCC2F20685324FF33BE9A59671FCAD744F76ED29153AAC8B933C"
+    },
+    {
+      "path": "preserved-check.json",
+      "sha256": "BA65727024F0A3C9A05C2F2617834CFA0DDDBE2CF560348B60656DA2B2A70495"
+    },
+    {
+      "path": "compiled-identity.json",
+      "sha256": "5835283BC80BFF2036E1CB23C8C7334C450FA0FAAECDA31AFE5BC29C24190846"
+    },
+    {
+      "path": "compiled-style-identity.json",
+      "sha256": "A71A0CB7C4B79EECD9B9231FA0D594B456AA5425B75181A0FAED84A64974C7EB"
+    },
+    {
+      "path": "dev-process-identity.json",
+      "sha256": "9BF94D231BD2E22262B90D193D8DCC8BFFA615FFDF2B36E67DBBD83B61B23404"
+    },
+    {
+      "path": "initial-compiled-process-identity.json",
+      "sha256": "BA549578EFDD457BAC877557ADA074240C893D11928210F8C0C02D042F22CF15"
+    },
+    {
+      "path": "compiled-process-identity.json",
+      "sha256": "86A651F9D51AC7F1DE13468EB13D6018ABD7FC0201038031E8743FAA6F0EA36A"
+    },
+    {
+      "path": "cleanup.json",
+      "sha256": "AC239503C0A9F96B5530132A767ED17A7A9F1ABE36390EE6F429B96C2DD89A22"
+    },
+    {
+      "path": "compiled-welcome-dark-1440x900.png",
+      "sha256": "D173D62AF441477ACD18BC0A6A15B810617577F259F3198C766832D729928604"
+    },
+    {
+      "path": "compiled-recovery-light-844x390.png",
+      "sha256": "435061E8C646009AB8E67149BB038FB44B358ED2262F5A7F6087E4D0091CE0C6"
+    },
+    {
+      "path": "ssr-root.html",
+      "sha256": "91999183F2296E54410889A2E51234FA5DDA222408FC40567A2B642A50D8F3E2"
+    },
+    {
+      "path": "playwright.full.config.ts",
+      "sha256": "D8EB9E68797A4FE5F7365BDAAB0EF1D31363A2E3050E866D873D06CF6B10CD45"
+    },
+    {
+      "path": "playwright.compiled.config.ts",
+      "sha256": "C4A9AFC194EA0CAC21F5B17FCF1337477D94FF9D0A7E9BC7ABDCC8BBEF9CB933"
+    },
+    {
+      "path": "check-presentation.mjs",
+      "sha256": "433A10D8DAD59B4946096A15F691181FDED8C167750BC2CC2D90D019276CDDEA"
+    },
+    {
+      "path": "../developer/handoff.md",
+      "sha256": "8DBC41A9ADAA2C25943803EF954BDECBA40F18828D24770DB1C8FF6CB1024C81"
+    },
+    {
+      "path": "../developer/evidence/before/capture-report.json",
+      "sha256": "D7C53A1E899D475CC91C60E40056C1E4740CBAF49806B5EC012C6B6D820C50E7"
+    },
+    {
+      "path": "../developer/evidence/after/capture-report.json",
+      "sha256": "32E58CE8626ACB1A910D232E1A42B1E047FF9F676E1FE6EDF2FF16451710BADE"
+    },
+    {
+      "path": "../developer/evidence/before/desktop-light-before.png",
+      "sha256": "B47CD1EA8DEBF92ED3325FAE9291D7442D3D0D55C3614FAA426FADB9884A9B14"
+    },
+    {
+      "path": "../developer/evidence/after/desktop-light-after.png",
+      "sha256": "7B58EFC787626F5C8C5B48C3BF5C23DCBAFE8B2F686B5A7F59BCC037EBBB225B"
+    },
+    {
+      "path": "../developer/evidence/before/portrait-dark-before.png",
+      "sha256": "893D438A6984BB110774CAA9A0E995204FB651C30781E27C6C577435A738A0B2"
+    },
+    {
+      "path": "../developer/evidence/after/portrait-dark-after.png",
+      "sha256": "39644CA74BC749C6F70602326E9D32D21991A0370ADA03D9C73571E1D4218712"
+    },
+    {
+      "path": "../developer/evidence/before/short-landscape-light-before.png",
+      "sha256": "3AB4DCA165D04F06ED3F00014FFC177DCFE0FF9C5A33636C39C076AAF1D3CF2E"
+    },
+    {
+      "path": "../developer/evidence/after/short-landscape-light-after.png",
+      "sha256": "B07654817381DF433AE289CBDFA15061A0B328A34D9217FC5A2E4D41C187CB4C"
+    },
+    {
+      "path": "../developer/evidence/before/reduced-height-dark-recovery-before.png",
+      "sha256": "4075DCE0FEE99AE35EEB3A5C67D1BA6F8D4FB0BD91BD823DE0DD767808CB702E"
+    },
+    {
+      "path": "../developer/evidence/after/reduced-height-dark-recovery-after.png",
+      "sha256": "F5BD1F423E141DC1510A652EF73D3C25E35C8C50A7DF55941BF0382E48A24746"
+    },
+    {
+      "path": "../../../device-preservation-lab/artifacts/dock-feedback-2026-10-15/after/final/dock-feedback-1440x900.png",
+      "sha256": "DBC89E5910E443D23E76B62DFE75282690968EF15F82D5B0B9F8262CD96A054F"
+    }
+  ]
+}

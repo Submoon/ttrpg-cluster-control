@@ -1,0 +1,14 @@
+[
+  {
+    "ProcessId": 36912,
+    "ParentProcessId": 51968,
+    "CreationDate": "2026-10-19T09:52:09.53918+02:00",
+    "CommandLine": "\"node\"   \"C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\.bin\\\\..\\@nuxt\\cli\\bin\\nuxi.mjs\" dev --host 127.0.0.1 --port 3100"
+  },
+  {
+    "ProcessId": 53364,
+    "ParentProcessId": 36912,
+    "CreationDate": "2026-10-19T09:54:48.331508+02:00",
+    "CommandLine": "C:\\nodejs\\node.exe --enable-source-maps C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@nuxt\\cli\\dist\\dev\\index.mjs --host 127.0.0.1 --port 3100"
+  }
+]
