@@ -1,0 +1,137 @@
+{
+  "candidate": "dc7861d736a12f545f6c2c16ddd4b53bcccc7b89",
+  "focus": {
+    "before": {
+      "outline": "none 3px oklab(0.94261 -0.00875136 0.00707364 / 0.25)",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(137, 153, 153) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    },
+    "immediate": {
+      "outlineColor": "rgb(255, 192, 135)",
+      "outlineStyle": "solid",
+      "transition": "none",
+      "focused": true
+    },
+    "outline": "solid 2px rgb(255, 192, 135)",
+    "outlineColor": "rgb(255, 192, 135)",
+    "outlineWidth": "2px",
+    "outlineOffset": "2px",
+    "shadow": "none",
+    "extent": 4,
+    "bounds": {
+      "x": 120.1875,
+      "y": 445.21875,
+      "width": 32,
+      "height": 32,
+      "top": 445.21875,
+      "right": 152.1875,
+      "bottom": 477.21875,
+      "left": 120.1875
+    },
+    "viewport": {
+      "width": 390,
+      "height": 500
+    },
+    "focused": true,
+    "hit": true,
+    "clippedBy": [],
+    "ringFits": true
+  },
+  "neighbor": {
+    "bounds": {
+      "x": 156.1875,
+      "y": 445.21875,
+      "width": 32,
+      "height": 32,
+      "top": 445.21875,
+      "right": 188.1875,
+      "bottom": 477.21875,
+      "left": 156.1875
+    },
+    "border": "rgb(232, 238, 231)",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(137, 153, 153) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+  },
+  "gap": 4,
+  "ringToNeighborGap": 0,
+  "pixels": [
+    {
+      "name": "left ring midpoint",
+      "x": 117.1875,
+      "y": 461.21875,
+      "before": [
+        18,
+        28,
+        30
+      ],
+      "after": [
+        255,
+        192,
+        135
+      ],
+      "samePixelChangeRatio": 10.855814121345832
+    },
+    {
+      "name": "right ring midpoint",
+      "x": 155.1875,
+      "y": 461.21875,
+      "before": [
+        18,
+        28,
+        30
+      ],
+      "after": [
+        255,
+        192,
+        135
+      ],
+      "samePixelChangeRatio": 10.855814121345832
+    },
+    {
+      "name": "right adjacent outer pixel",
+      "x": 156.9375,
+      "y": 461.21875,
+      "before": [
+        137,
+        153,
+        153
+      ],
+      "after": [
+        137,
+        153,
+        153
+      ],
+      "samePixelChangeRatio": 1
+    },
+    {
+      "name": "top ring midpoint",
+      "x": 136.1875,
+      "y": 442.21875,
+      "before": [
+        18,
+        28,
+        30
+      ],
+      "after": [
+        255,
+        192,
+        135
+      ],
+      "samePixelChangeRatio": 10.855814121345832
+    },
+    {
+      "name": "bottom ring midpoint",
+      "x": 136.1875,
+      "y": 480.21875,
+      "before": [
+        18,
+        28,
+        30
+      ],
+      "after": [
+        255,
+        192,
+        135
+      ],
+      "samePixelChangeRatio": 10.855814121345832
+    }
+  ]
+}

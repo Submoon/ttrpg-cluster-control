@@ -1,0 +1,36 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+Running 28 tests using 1 worker
+
+(node:19780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\workspace-chart-drafts.spec.ts:377:1 › hiding the chart-name dialog keeps the draft available to resume (2.3s)
+  ok  2 tests\workspace-chart-drafts.spec.ts:408:1 › dismissing Chromium beforeunload keeps a modified hidden chart draft (1.2s)
+  ok  3 tests\workspace-chart-drafts.spec.ts:433:1 › Add system applies dirty chart names before building from the latest workspace (2.3s)
+  ok  4 tests\workspace-chart-drafts.spec.ts:469:1 › a hidden invalid chart draft survives an unrelated object placement and stays out of export (2.8s)
+  ok  5 tests\workspace-chart-drafts.spec.ts:514:1 › restoring both committed names makes a stale validation error a clean transition (1.5s)
+  ok  6 tests\workspace-chart-drafts.spec.ts:545:1 › a guarded transition can stay with the draft or discard it and continue (2.4s)
+  ok  7 tests\workspace-chart-drafts.spec.ts:574:1 › export failures stay separate from chart draft and workspace save feedback (1.9s)
+  ok  8 tests\workspace-chart-drafts.spec.ts:619:1 › failed chart writes keep applied memory and Retry saves the latest workspace without replaying placement (2.5s)
+  ok  9 tests\workspace-chart-drafts.spec.ts:690:1 › an older successful write cannot mark a newer applied workspace saved or end its draft (2.4s)
+  ok 10 tests\workspace-chart-drafts.spec.ts:739:1 › an older failed write cannot replace newer saving feedback or clear a draft (2.0s)
+  ok 11 tests\workspace-chart-drafts.spec.ts:784:1 › canceling the initial system-delete review leaves a hidden chart draft and error untouched (1.5s)
+  ok 12 tests\workspace-chart-drafts.spec.ts:858:1 › system deletion resolves its chart target after review and asks again for the refreshed plan (2.3s)
+  ok 13 tests\workspace-chart-drafts.spec.ts:904:1 › chart-name dialog buttons show the semantic keyboard focus outline (658ms)
+  ok 14 tests\workspace-chart-drafts.spec.ts:965:3 › a delayed import acknowledgement does not take ownership of a pending object guard (2.8s)
+  ok 15 tests\workspace-chart-drafts.spec.ts:965:3 › a delayed import acknowledgement does not take ownership of a pending orbit guard (3.2s)
+  ok 16 tests\workspace-chart-drafts.spec.ts:965:3 › a delayed import acknowledgement does not take ownership of a pending route guard (2.4s)
+  ok 17 tests\workspace-chart-drafts.spec.ts:1030:1 › a delayed import navigation that meets an invalid new draft stays with its exact values and error (2.2s)
+  ok 18 tests\workspace-chart-drafts.spec.ts:1067:3 › an import completion with a new chart draft honors apply before navigation (2.3s)
+  ok 19 tests\workspace-chart-drafts.spec.ts:1067:3 › an import completion with a new chart draft honors discard before navigation (2.2s)
+  ok 20 tests\workspace-chart-feedback.spec.ts:57:1 › a hidden clean chart-name session remains resumable without claiming unapplied changes (912ms)
+  ok 21 tests\workspace-chart-feedback.spec.ts:79:1 › save feedback has one compact bottom owner and leaves map controls hit-testable (1.3s)
+  ok 22 tests\workspace-chart-feedback.spec.ts:177:1 › explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft (3.5s)
+  ok 23 tests\workspace-launch.spec.ts:29:1 › the product root creates and resumes a saved local workspace (954ms)
+  ok 24 tests\workspace-launch.spec.ts:48:1 › keyboard focus remains visible on launch and recovery actions in a short landscape viewport (938ms)
+  ok 25 tests\workspace-theme.spec.ts:172:1 › the shell follows the OS until an explicit theme choice persists across reloads (765ms)
+  ok 26 tests\workspace-theme.spec.ts:202:1 › theme changes recolor both maps without changing workspace drafts or writing IndexedDB (2.1s)
+  ok 27 tests\workspace-theme.spec.ts:288:1 › theme changes preserve object and route drafts plus pending and failed save status (2.5s)
+  ok 28 tests\workspace-theme.spec.ts:384:1 › keyboard focus stays fully visible on the Fields command in short landscape view (1.0s)
+
+  28 passed (57.8s)

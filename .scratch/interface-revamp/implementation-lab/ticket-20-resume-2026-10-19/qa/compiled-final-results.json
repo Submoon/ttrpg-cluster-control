@@ -1,0 +1,1098 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nodejs\\node.exe",
+      "C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      ".scratch/interface-revamp/implementation-lab/ticket-20-resume-2026-10-19/qa/playwright.compiled.config.ts",
+      "--max-failures",
+      "0"
+    ],
+    "configFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-20-resume-2026-10-19\\qa\\playwright.compiled.config.ts",
+    "rootDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/implementation-lab/ticket-20-resume-2026-10-19/qa/compiled-final-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "workspace-chart-drafts.spec.ts",
+          "workspace-chart-feedback.spec.ts",
+          "workspace-theme.spec.ts",
+          "workspace-launch.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-20-resume-2026-10-19\\qa\\compiled-final-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": [
+          "workspace-chart-drafts.spec.ts",
+          "workspace-chart-feedback.spec.ts",
+          "workspace-theme.spec.ts",
+          "workspace-launch.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3180",
+          "channel": "chrome"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": ""
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-20-resume-2026-10-19\\qa\\compiled-final-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "workspace-chart-drafts.spec.ts",
+      "file": "workspace-chart-drafts.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "hiding the chart-name dialog keeps the draft available to resume",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2348,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:40:52.797Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-f69c1959858c4d94b2f0",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 377,
+          "column": 1
+        },
+        {
+          "title": "dismissing Chromium beforeunload keeps a modified hidden chart draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1186,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:40:55.630Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-1eb7b22d0fa02034ea27",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 408,
+          "column": 1
+        },
+        {
+          "title": "Add system applies dirty chart names before building from the latest workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2309,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:40:56.833Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-5e8960ea1506d684463d",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 433,
+          "column": 1
+        },
+        {
+          "title": "a hidden invalid chart draft survives an unrelated object placement and stays out of export",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2802,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:40:59.161Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-73b702a4df84b0d6db6d",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 469,
+          "column": 1
+        },
+        {
+          "title": "restoring both committed names makes a stale validation error a clean transition",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1457,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:01.980Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-26760732311ef47fbfed",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 514,
+          "column": 1
+        },
+        {
+          "title": "a guarded transition can stay with the draft or discard it and continue",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2422,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:03.455Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-ccab585ffd7742ff0638",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 545,
+          "column": 1
+        },
+        {
+          "title": "export failures stay separate from chart draft and workspace save feedback",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1927,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:05.895Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-431fbe788f217a5ec163",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 574,
+          "column": 1
+        },
+        {
+          "title": "failed chart writes keep applied memory and Retry saves the latest workspace without replaying placement",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2524,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:07.840Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-c9ac3169ab75cd5c6ff1",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 619,
+          "column": 1
+        },
+        {
+          "title": "an older successful write cannot mark a newer applied workspace saved or end its draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2429,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:10.383Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-8fed1a2bc59e8fe167f9",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 690,
+          "column": 1
+        },
+        {
+          "title": "an older failed write cannot replace newer saving feedback or clear a draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:12.829Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-f9e1824435d24af27459",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 739,
+          "column": 1
+        },
+        {
+          "title": "canceling the initial system-delete review leaves a hidden chart draft and error untouched",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1542,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:14.862Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-c952867012f7ab3f75d7",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 784,
+          "column": 1
+        },
+        {
+          "title": "system deletion resolves its chart target after review and asks again for the refreshed plan",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2253,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:16.417Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-ff41c5ee546fdcd93edd",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 858,
+          "column": 1
+        },
+        {
+          "title": "chart-name dialog buttons show the semantic keyboard focus outline",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 658,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:18.683Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-2f4d2bb23d2abd797ab5",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 904,
+          "column": 1
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending object guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2814,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:19.355Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-b5ba9f808c967d65f631",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 965,
+          "column": 3
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending orbit guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3165,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:22.184Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-74248142124ad4900d21",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 965,
+          "column": 3
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending route guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2444,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:25.362Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-84b5541357caee818e38",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 965,
+          "column": 3
+        },
+        {
+          "title": "a delayed import navigation that meets an invalid new draft stays with its exact values and error",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2184,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:27.822Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-77e67f0ee393ff1e1c4f",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1030,
+          "column": 1
+        },
+        {
+          "title": "an import completion with a new chart draft honors apply before navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2288,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:30.021Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-0383a6010823d9637943",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1067,
+          "column": 3
+        },
+        {
+          "title": "an import completion with a new chart draft honors discard before navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2207,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:32.324Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-da2184dfd59e86ad2603",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1067,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "workspace-chart-feedback.spec.ts",
+      "file": "workspace-chart-feedback.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a hidden clean chart-name session remains resumable without claiming unapplied changes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 912,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:34.560Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-9ca337c1f4376f849306",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 57,
+          "column": 1
+        },
+        {
+          "title": "save feedback has one compact bottom owner and leaves map controls hit-testable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1287,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:35.485Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-053dfa30b6e80de0eaf0",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 79,
+          "column": 1
+        },
+        {
+          "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3455,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:36.785Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-601e071827bf346f8b16",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 177,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-launch.spec.ts",
+      "file": "workspace-launch.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the product root creates and resumes a saved local workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 954,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:40.273Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6408914ca40b6d84b23f-54862c2e35873670914f",
+          "file": "workspace-launch.spec.ts",
+          "line": 29,
+          "column": 1
+        },
+        {
+          "title": "keyboard focus remains visible on launch and recovery actions in a short landscape viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 938,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:41.246Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6408914ca40b6d84b23f-32feaa0423be6f890454",
+          "file": "workspace-launch.spec.ts",
+          "line": 48,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-theme.spec.ts",
+      "file": "workspace-theme.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the shell follows the OS until an explicit theme choice persists across reloads",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 765,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:42.227Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-61ef4f0587ecbcc378f8",
+          "file": "workspace-theme.spec.ts",
+          "line": 172,
+          "column": 1
+        },
+        {
+          "title": "theme changes recolor both maps without changing workspace drafts or writing IndexedDB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2064,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:43.007Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-6c82c514979bb2f994f4",
+          "file": "workspace-theme.spec.ts",
+          "line": 202,
+          "column": 1
+        },
+        {
+          "title": "theme changes preserve object and route drafts plus pending and failed save status",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2498,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:45.086Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-71804664113c0405050b",
+          "file": "workspace-theme.spec.ts",
+          "line": 288,
+          "column": 1
+        },
+        {
+          "title": "keyboard focus stays fully visible on the Fields command in short landscape view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1034,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:41:47.603Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-78b17280eb1288a8e1f7",
+          "file": "workspace-theme.spec.ts",
+          "line": 384,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-19T10:40:51.276Z",
+    "duration": 57809.861,
+    "expected": 28,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

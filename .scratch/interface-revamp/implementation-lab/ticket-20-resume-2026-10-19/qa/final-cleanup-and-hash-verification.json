@@ -1,0 +1,88 @@
+{
+  "protectedFive": [
+    {
+      "expected": "439CEDC61DF436DB6995A03FBEBCDD8DC93D29952071E38C7027A8FC5422E59F",
+      "path": "tests/cluster-map.spec.ts",
+      "actual": "439CEDC61DF436DB6995A03FBEBCDD8DC93D29952071E38C7027A8FC5422E59F"
+    },
+    {
+      "expected": "B48CF06D12BFFD7CA7C494CF1544587702B506687E03A0BA6F1AD0A73F764B6F",
+      "path": "tests/helpers.ts",
+      "actual": "B48CF06D12BFFD7CA7C494CF1544587702B506687E03A0BA6F1AD0A73F764B6F"
+    },
+    {
+      "expected": "D4D791744D4BF5511565E38B88048478F5C4DEE5D55C9F7D7E8FC894A1383AE2",
+      "path": "tests/object-fields.spec.ts",
+      "actual": "D4D791744D4BF5511565E38B88048478F5C4DEE5D55C9F7D7E8FC894A1383AE2"
+    },
+    {
+      "expected": "F9AA7AB5F4871B98421BFC5884B6BE0D28FDA1649AB0F087C07F4B0D92356D5E",
+      "path": "tests/workspace-data.spec.ts",
+      "actual": "F9AA7AB5F4871B98421BFC5884B6BE0D28FDA1649AB0F087C07F4B0D92356D5E"
+    },
+    {
+      "expected": "CC8046C216C95A12417F644FCE67AB5742EAD93BA5B8878C7E6313221A4576EF",
+      "path": "tests/workspace-ui.spec.ts",
+      "actual": "CC8046C216C95A12417F644FCE67AB5742EAD93BA5B8878C7E6313221A4576EF"
+    }
+  ],
+  "port3100Free": true,
+  "candidate": "65f6cc2cd910e4e05644dbc1e304ae2055f78106",
+  "chartTestAdoption": "Original sixth protected file was explicitly adopted with the approved navigation/setup/region/closed-popover/export-details corrections; preserved original hash and chronology are in compiled-final-source-identity.json.",
+  "timestamp": "2026-10-19T10:48:29.5969399Z",
+  "frozenSource": [
+    {
+      "expected": "3B517307F74AC7382D6C40FE55FBCA553D5894CC439ED0C7E777DDEB516BA63A",
+      "path": "components/WorkspaceFeedback.vue",
+      "actual": "3B517307F74AC7382D6C40FE55FBCA553D5894CC439ED0C7E777DDEB516BA63A"
+    },
+    {
+      "expected": "EF27F9AB5A61F2727C2C6806586BDCC733AD204235C633495F8004702596604A",
+      "path": "components/BaselinePage.vue",
+      "actual": "EF27F9AB5A61F2727C2C6806586BDCC733AD204235C633495F8004702596604A"
+    },
+    {
+      "expected": "64745F00DDC3E90448C26DD2A136E819C177C6B0811B3C9EDFAF4272A8386ABE",
+      "path": "components/WorkspaceHeader.vue",
+      "actual": "64745F00DDC3E90448C26DD2A136E819C177C6B0811B3C9EDFAF4272A8386ABE"
+    },
+    {
+      "expected": "2D87A2C1A0D01C9BA0504776241C5BDBC79FDF7FD5399CAC5D6032A68E9171DB",
+      "path": "components/WorkspaceDock.vue",
+      "actual": "2D87A2C1A0D01C9BA0504776241C5BDBC79FDF7FD5399CAC5D6032A68E9171DB"
+    },
+    {
+      "expected": "79AC410E1F85607FFE20145E79D005789AFB7EAAE41FC28BC0E4B3742CFFA902",
+      "path": "components/MapHierarchy.vue",
+      "actual": "79AC410E1F85607FFE20145E79D005789AFB7EAAE41FC28BC0E4B3742CFFA902"
+    },
+    {
+      "expected": "9AE300F7B6B9434F1B3900624A926794277A8B16B81818FB2D013686302EDA7F",
+      "path": "components/inspector/ChartDetailsPanel.vue",
+      "actual": "9AE300F7B6B9434F1B3900624A926794277A8B16B81818FB2D013686302EDA7F"
+    },
+    {
+      "expected": "C072CA329361D651EBC8E1CF4F49221A1E1F5FB3575CA6F9E6A6749B064F22ED",
+      "path": "components/WorkspaceMapCanvas.vue",
+      "actual": "C072CA329361D651EBC8E1CF4F49221A1E1F5FB3575CA6F9E6A6749B064F22ED"
+    },
+    {
+      "expected": "92415DFEA4134F907A5DF08A0E6D7AA6242E1D35B843409F26145FB6ECB85267",
+      "path": "assets/css/map-workspace.css",
+      "actual": "92415DFEA4134F907A5DF08A0E6D7AA6242E1D35B843409F26145FB6ECB85267"
+    },
+    {
+      "expected": "92322A38234DB12BE899439D8EF3CF30326C5D552CAE285A0DB8E065EB39E6E4",
+      "path": "tests/workspace-chart-feedback.spec.ts",
+      "actual": "92322A38234DB12BE899439D8EF3CF30326C5D552CAE285A0DB8E065EB39E6E4"
+    },
+    {
+      "expected": "C0A02672CCCA5BB010F09425DBCD43A8445C4520CC5A409C956BA0C2D731BE51",
+      "path": "tests/workspace-chart-drafts.spec.ts",
+      "actual": "C0A02672CCCA5BB010F09425DBCD43A8445C4520CC5A409C956BA0C2D731BE51"
+    }
+  ],
+  "commandLine": "\"C:\\nodejs\\node.exe\" .output/server/index.mjs",
+  "port3180Free": true,
+  "stoppedProcessId": 22836
+}

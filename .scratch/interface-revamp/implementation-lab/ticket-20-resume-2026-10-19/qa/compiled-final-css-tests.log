@@ -1,0 +1,11 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+Running 3 tests using 1 worker
+
+(node:17008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\workspace-chart-feedback.spec.ts:57:1 › a hidden clean chart-name session remains resumable without claiming unapplied changes (1.3s)
+  ok 2 tests\workspace-chart-feedback.spec.ts:79:1 › save feedback has one compact bottom owner and leaves map controls hit-testable (1.4s)
+  ok 3 tests\workspace-chart-feedback.spec.ts:177:1 › explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft (3.8s)
+
+  3 passed (7.7s)

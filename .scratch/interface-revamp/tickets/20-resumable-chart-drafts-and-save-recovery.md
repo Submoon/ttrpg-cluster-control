@@ -1,6 +1,6 @@
 ---
 title: 'Rename charts with resumable drafts and trustworthy Apply/save recovery'
-status: open
+status: closed
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -33,13 +33,13 @@ Ticket 19 completes its scoped theme/resource reassessment with current source a
 
 ## Acceptance criteria
 
-1. [ ] Parent-owned chart draft/errors/reopening survive hide/theme/reflow; clean transitions do not prompt, while Apply/Discard/Stay and invalid Apply preserve/reset the exact designated target/context/view/tool.
-2. [ ] Validate latest memory, publish once and end the form/continue transition before durable acknowledgement.
-3. [ ] Fault real writes: retain memory and persistent Not saved/error, latest-memory Retry and current applied JSON excluding drafts/previews.
-4. [ ] Later edits/older completion cannot falsely claim Saved or replay commands.
-5. [ ] Keep draft/tool/save/export feedback distinct, scoped cancellation and supported departure warnings.
-6. [ ] Remove decorative footer only while relocating useful continuously reachable feedback.
-7. [ ] Preserve existing names/summaries, without descriptions.
+1. [x] Parent-owned chart draft/errors/reopening survive hide/theme/reflow; clean transitions do not prompt, while Apply/Discard/Stay and invalid Apply preserve/reset the exact designated target/context/view/tool.
+2. [x] Validate latest memory, publish once and end the form/continue transition before durable acknowledgement.
+3. [x] Fault real writes: retain memory and persistent Not saved/error, latest-memory Retry and current applied JSON excluding drafts/previews.
+4. [x] Later edits/older completion cannot falsely claim Saved or replay commands.
+5. [x] Keep draft/tool/save/export feedback distinct, scoped cancellation and supported departure warnings.
+6. [x] Remove decorative footer only while relocating useful continuously reachable feedback.
+7. [x] Preserve existing names/summaries, without descriptions.
 
 ## Scope and exclusions
 
@@ -94,3 +94,17 @@ Typecheck passes. Development chart/theme tests pass 23/23. Final production bui
 Independent Standards/technical and Spec/domain-data follow-ups report zero blockers. One confirmed asynchronous selection-context defect was fixed and causally regressed; repeated context checks remain an optional duplication observation. See [implementation results](../implementation-lab/ticket-20/implementation-results.md), [compiled QA](../implementation-lab/ticket-20/production-qa/acceptance-results.json) and the [execution record](../research/implementation-18-21-2026-10-16.md).
 
 Physical Android Chrome/OS-keyboard/safe-area/gesture proof remains unavailable; emulation is not a physical pass. Full preservation testing remains scheduled after 21. Legacy full entity Apply adapters and later import/export/deletion UI retain their approved ticket owners; this closure does not complete the whole source request.
+
+## Resumption - 2026-10-19
+
+The human explicitly resumes this ticket. Intentional implementation baseline: 92c4bd85a2891bb1144c01e19d2b6088a93d5a7b, equal to origin/codex/interface-revamp after a fresh fetch; origin/main remains 629d2a98715c3a16b954e0f77c639b1f0c31212c (0 main-only / 38 feature-only). Source issue 3 is refreshed and unchanged. Sensitive routing uses SOL 6.1 High contracts and independent reviews, with Luna XHigh implementation. Existing behavior and prior evidence must be reassessed against the corrected specification; no historical pass is treated as current acceptance. Six pre-existing modified test/helper files are preserved separately.
+
+## Resolution - resumed acceptance, 2026-10-19
+
+Scoped reassessment is complete against the corrected specification. Final source is `65f6cc2cd910e4e05644dbc1e304ae2055f78106`, following chart-feedback source candidates `ffa10250` and `dc7861d7`. Existing parent-owned chart sessions, guard/target checks, memory-first Apply, revision-ordered saving, latest-memory Retry, applied-only JSON and durable-first backup restoration remain intact. Compact bottom feedback replaces the reserved decorative footer and duplicate Header/Dock save announcements; clean sessions are named truthfully. Nuxt UI supplies the direct recovery controls and details popover. Explicit Fit measures the current feedback obstruction; no feedback/theme change resets the camera.
+
+The confirmed short-screen fitted-target obstruction and adjacent-control focus contrast defect are fixed and causally checked. Typecheck passes. The corrected shared-interface build passes 28/28 scoped compiled tests; the final CSS-only candidate builds successfully and passes 3/3 affected feedback tests, 27/27 causal compact observations and 37/37 details/focus observations. Final contrast/focus, held-Retry prior failure, real aborted writes/current JSON/durable reload and actual ordinary touch pass their scoped gates. Independent Standards and Spec/domain-data reviews have no blocking source findings; one optional coordinate-conversion duplication heuristic is deferred. The coordinator inspects final screenshots.
+
+All original failed attempts remain attributed. The single repository-suite invocation exits 1 but its ephemeral TEMP report cannot be recovered: counts/cause are unavailable, and no passing full-suite or clean-checkout preservation result is claimed. The shared working tree retains five unrelated modified tests/helpers; the relevant pre-existing chart-test setup hunk is deliberately reviewed/adopted with its assertions preserved. Physical Android Chrome keyboard/safe-area/gestures remain unavailable. Final servers are stopped, ports free and frozen/protected hashes verified.
+
+See the [resumption execution record](../research/implementation-20-resume-2026-10-19.md) and [final QA summary](../implementation-lab/ticket-20-resume-2026-10-19/qa/final-summary.md). This closes only ticket 20, superseding its withdrawn historical acceptance within scope. The inherited top Dock, column panels, framed map and dense Header remain unaccepted ticket-21 work. Source issue 3 stays open and the existing PR stays draft. The human authorizes ticket 21 only after this ticket is finished and committed/pushed; no ticket-21 implementation is started by this Resolution.

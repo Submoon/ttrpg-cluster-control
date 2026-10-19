@@ -1,0 +1,183 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nodejs\\node.exe",
+      "C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "tests/workspace-chart-feedback.spec.ts",
+      "--config",
+      ".scratch/interface-revamp/implementation-lab/ticket-20-resume-2026-10-19/qa/playwright.full.config.ts",
+      "--grep",
+      "hidden clean chart-name session"
+    ],
+    "configFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-20-resume-2026-10-19\\qa\\playwright.full.config.ts",
+    "rootDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 1,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/FBAL-F~1/AppData/Local/Temp/codex-ticket20-feedback-red-20261019/full-suite-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\FBAL-F~1\\AppData\\Local\\Temp\\codex-ticket20-feedback-red-20261019\\full-suite-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3100",
+          "channel": "chrome"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": ""
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\FBAL-F~1\\AppData\\Local\\Temp\\codex-ticket20-feedback-red-20261019\\full-suite.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "workspace-chart-feedback.spec.ts",
+      "file": "workspace-chart-feedback.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a hidden clean chart-name session remains resumable without claiming unapplied changes",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 9594,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\u001b[22m\n\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts:26:67",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts",
+                      "column": 67,
+                      "line": 26
+                    },
+                    "snippet": "  24 |   await expect(dialog).toBeHidden()\n  25 |   await expect(feedback.getByRole('button', { name: 'Resume chart name draft' })).toBeVisible()\n> 26 |   await expect(feedback.getByText('Chart names ready to resume')).toBeVisible()\n     |                                                                   ^\n  27 |   await expect(feedback.getByText('Unapplied chart-name changes')).toHaveCount(0)\n  28 |\n  29 |   await feedback.getByRole('button', { name: 'Resume chart name draft' }).click()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts",
+                        "column": 67,
+                        "line": 26
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Chart names ready to resume')\u001b[22m\n\n\n  24 |   await expect(dialog).toBeHidden()\n  25 |   await expect(feedback.getByRole('button', { name: 'Resume chart name draft' })).toBeVisible()\n> 26 |   await expect(feedback.getByText('Chart names ready to resume')).toBeVisible()\n     |                                                                   ^\n  27 |   await expect(feedback.getByText('Unapplied chart-name changes')).toHaveCount(0)\n  28 |\n  29 |   await feedback.getByRole('button', { name: 'Resume chart name draft' }).click()\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts:26:67"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T10:12:12.108Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\FBAL-F~1\\AppData\\Local\\Temp\\codex-ticket20-feedback-red-20261019\\full-suite-artifacts\\workspace-chart-feedback-a-7eb1f--claiming-unapplied-changes\\error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts",
+                    "column": 67,
+                    "line": 26
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-9ca337c1f4376f849306",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 13,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "message": "\u001b[31mTesting stopped early after 1 maximum allowed failures.\u001b[39m"
+    }
+  ],
+  "stats": {
+    "startTime": "2026-10-19T10:12:11.591Z",
+    "duration": 10672.676000000001,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

@@ -1,0 +1,31 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+Running 1 test using 1 worker
+
+(node:18268) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 tests\workspace-chart-feedback.spec.ts:177:1 › explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft (2.8s)
+Testing stopped early after 1 maximum allowed failures.
+
+
+  1) tests\workspace-chart-feedback.spec.ts:177:1 › explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      244 |     return hit === element || element.contains(hit)
+      245 |   })
+    > 246 |   expect(ordinaryHit).toBe(true)
+          |                       ^
+      247 |
+      248 |   await planet.click()
+      249 |   const guard = page.getByRole('dialog', { name: 'Unsaved chart-name changes' })
+        at C:\Git\PERSO\ttrpg-cluster-control\tests\workspace-chart-feedback.spec.ts:246:23
+
+    Error Context: ..\..\..\Users\fbal-fontaine\AppData\Local\Temp\ticket20-feedback-red-artifacts\workspace-chart-feedback-e-88a74-ck-and-a-hidden-chart-draft\error-context.md
+
+  1 failed
+    tests\workspace-chart-feedback.spec.ts:177:1 › explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft 
+  1 error was not a part of any test, see above for details
