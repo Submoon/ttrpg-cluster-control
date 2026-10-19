@@ -307,6 +307,7 @@ test('a failed backup restore stays unavailable and preserves both records until
 })
 
 test('the recovery screen explains when no local backup is available', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 500 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -318,6 +319,8 @@ test('the recovery screen explains when no local backup is available', async ({ 
   await page.reload()
 
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeInViewport({ ratio: 1 })
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
   await expect(page.getByRole('alert')).toContainText('No local backup is available to restore.')
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
