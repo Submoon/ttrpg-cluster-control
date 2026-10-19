@@ -1,0 +1,3092 @@
+{
+  "timestamp": "2026-10-19T09:49:59.859Z",
+  "baseline": "f64d00dbaf9cee569a8a62db0005b4ffe7f00ca7",
+  "candidate": "aeeae7a6e0ec9e9f7df3161f4b5a7a00833edf1b",
+  "route": "/",
+  "base": "http://127.0.0.1:3180",
+  "runtime": "warm guarded compiled server; bounded harness continuation, no new cold-resource claim",
+  "browser": {
+    "channel": "chrome",
+    "version": "155.0.8059.80",
+    "headless": true,
+    "profile": "fresh isolated contexts",
+    "deviceScaleFactor": 1
+  },
+  "identity": {
+    "components/WorkspaceHeader.vue": "caecc1b6dad070949cf84ac863140f80c11eb1add36e5f788e611833f58f1185",
+    "components/WorkspaceWelcome.vue": "c9d9209bbaea340b2080e9f2441afd19adf87d37e99749667bcf163ca2a05707",
+    "components/FieldDefinitionsDialog.vue": "ea9024c6c8ef73c0cd47a8ffaae3941e381bd97698740028522b240c0a764061",
+    "components/ClusterMap.vue": "330beac78097c78e9c57bd836b05ab6191bfe6692fec0d14dae33180bd24c8eb",
+    "components/SystemMap.vue": "88dbb2861aedef3df315d232a2f40c2eed5eb55b2082d584589e824eee0e976b",
+    "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "assets/css/map-workspace.css": "869ed8fc6b9e3beb8cd033d01edff4c22935b7c4981fed5170bff7346bf0e9a1",
+    "nuxt.config.ts": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef",
+    "app.config.ts": "87432bce311cee9758e5bf3e6cd34648269e51d152e3d113236b88d44d3813b3",
+    "package.json": "cc5e0346863efe9470804de26bf78b8790ef694cbb73a86dd8e0e7aea0240f65",
+    "package-lock.json": "ceacd4b69e6dd6cd375947960cd93264191f3b475e317418f0d4caacce7a8bf7",
+    "tests/workspace-theme.spec.ts": "4ec11f4a4008bdb07ac3afa0063dac9c7abd379bdb9b9b5a01b56693184ef7dc",
+    ".output/server/index.mjs": "2441da8e168741b5bf16b27ce66e7056d6499db6ca6a69c2ff150106d377dca1",
+    ".output/nitro.json": "c6f532f55d43d901f2933393415b446d7746c1c1fec32651a51b627cfdd81c3f",
+    ".nuxt/icon-client-bundle.mjs": {
+      "unavailable": "ENOENT"
+    },
+    "qa/rich-fixture.json": "f10327c57a4fb071a22564f43e587b7631a48c7d48c76e2a2ad2ef2388936a6e"
+  },
+  "checks": [
+    {
+      "name": "actual compiled server preload and separate negative canary",
+      "passed": true,
+      "detail": [
+        {
+          "time": "2026-10-19T09:49:38.215Z",
+          "pid": 22692,
+          "event": "guard-installed",
+          "policy": "deny external hostnames and addresses; permit loopback and local pipes"
+        },
+        {
+          "time": "2026-10-19T09:49:38.219Z",
+          "pid": 22692,
+          "event": "denied",
+          "label": "server-guard-canary",
+          "api": "net.Socket.connect",
+          "host": "example.com"
+        },
+        {
+          "time": "2026-10-19T09:49:38.219Z",
+          "pid": 22692,
+          "event": "canary-passed",
+          "label": "server-guard-canary",
+          "code": "QA_EXTERNAL_NETWORK_DENIED"
+        }
+      ]
+    },
+    {
+      "name": "separate browser negative canary aborts external navigation",
+      "passed": true,
+      "detail": [
+        {
+          "label": "browser-guard-canary",
+          "event": "denied",
+          "api": "request",
+          "url": "https://example.com/qa-ticket19-negative-canary",
+          "type": "document"
+        }
+      ]
+    },
+    {
+      "name": "validated independent imported rich workspace renders",
+      "passed": true,
+      "detail": {
+        "fixtureHash": "ba3e3c7c18d22cf89c99a3e55a499ef973dbd9041077e88ec9b00e9177858ac8",
+        "allNames": [
+          "QA Host",
+          "QA Alpha",
+          "QA Beta"
+        ],
+        "preview": "Import this Jump Cluster as an independent copy?\n\nStar systems: 2\nMap objects: 4\nOrbits: 1\nJump Routes: 2\nCustom fields: 0\n\nOriginal-ID collisions (0):\n- None\n\nPossible existing matches by name or location key (0):\n- None\n\nMap entities remain separate copies and receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined."
+      }
+    },
+    {
+      "name": "desktop-dark: seeded workspace with no explicit preference",
+      "passed": true,
+      "detail": {
+        "classes": "dark",
+        "native": "dark",
+        "preference": "system"
+      }
+    },
+    {
+      "name": "desktop-dark: Orbit/camera toggle light",
+      "passed": true,
+      "detail": {
+        "classes": "light",
+        "native": "light",
+        "preference": "light"
+      }
+    },
+    {
+      "name": "desktop-dark: Orbit selection/camera/tool/save survive theme",
+      "passed": true,
+      "detail": {
+        "before": {
+          "camera": "translate(-978.9475837734662,-436.5789281757066) scale(2.529748868949637)",
+          "selected": "cf439fa4-6151-4af9-99c8-5272400a387a",
+          "tool": [
+            "Navigate"
+          ],
+          "save": [
+            " Saved on this device"
+          ]
+        },
+        "after": {
+          "camera": "translate(-978.9475837734662,-436.5789281757066) scale(2.529748868949637)",
+          "selected": "cf439fa4-6151-4af9-99c8-5272400a387a",
+          "tool": [
+            "Navigate"
+          ],
+          "save": [
+            " Saved on this device"
+          ]
+        },
+        "recordsSha256": "ba3e3c7c18d22cf89c99a3e55a499ef973dbd9041077e88ec9b00e9177858ac8"
+      }
+    },
+    {
+      "name": "desktop-dark: Orbit/camera toggle dark",
+      "passed": true,
+      "detail": {
+        "classes": "dark",
+        "native": "dark",
+        "preference": "dark"
+      }
+    },
+    {
+      "name": "desktop-dark selected Orbit: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 8.023947349984478,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(255, 192, 135)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            35,
+            53,
+            56
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark theme action: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 1254.984375,
+          "y": 21.109375,
+          "width": 38.390625,
+          "height": 36,
+          "top": 21.109375,
+          "right": 1293.375,
+          "bottom": 57.109375,
+          "left": 1254.984375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark theme button: focus >=3",
+      "passed": true,
+      "detail": 10.665705630503235
+    },
+    {
+      "name": "desktop-dark theme state text: text >=4.5",
+      "passed": true,
+      "detail": 10.100779583615642
+    },
+    {
+      "name": "desktop-dark meaningful theme icon: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 11.766148062700351,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(232, 238, 231)",
+        "backgrounds": [
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ],
+          [
+            32,
+            47,
+            50
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark Map files trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 982.4375,
+          "y": 20.3125,
+          "width": 82.3125,
+          "height": 37.59375,
+          "top": 20.3125,
+          "right": 1064.75,
+          "bottom": 57.90625,
+          "left": 982.4375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark: Map files teleported outside header",
+      "passed": true,
+      "detail": {
+        "parent": "DIV",
+        "colorScheme": "dark",
+        "background": "rgb(25, 38, 41)"
+      }
+    },
+    {
+      "name": "desktop-dark Map files action: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 726.796875,
+          "y": 142.578125,
+          "width": 324.40625,
+          "height": 28,
+          "top": 142.578125,
+          "right": 1051.203125,
+          "bottom": 170.578125,
+          "left": 726.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark portal action: text >=4.5",
+      "passed": true,
+      "detail": 14.716124529800773
+    },
+    {
+      "name": "desktop-dark portal action: focus >=3",
+      "passed": true,
+      "detail": 9.730281697175942
+    },
+    {
+      "name": "desktop-dark: Map files Escape returns focus",
+      "passed": true,
+      "detail": "<button data-v-d840d2bb=\"\" type=\"button\" data-slot=\"base\" id=\"reka-popover-trigger-v-0\" aria-haspopup=\"dialog\" aria-expanded=\"false\" aria-controls=\"workspace-header-map-files-panel\" data-state=\"closed\" aria-label=\"Open map file actions for star system QA Alpha\" title=\"Map file actions for star syste"
+    },
+    {
+      "name": "desktop-dark Fields trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 1299.765625,
+          "y": 18.28125,
+          "width": 115.234375,
+          "height": 41.65625,
+          "top": 18.28125,
+          "right": 1415,
+          "bottom": 59.9375,
+          "left": 1299.765625
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark: Fields body portal and modal entry focus",
+      "passed": true,
+      "detail": {
+        "parent": "BODY",
+        "native": true,
+        "scheme": "dark",
+        "active": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+      }
+    },
+    {
+      "name": "desktop-dark: reverse Tab does not focus an interactive background app control",
+      "passed": true,
+      "detail": {
+        "contained": false,
+        "body": true,
+        "active": "<body><div id=\"__nuxt\" class=\"isolate\"><!--[--><!--[--><!--[--><!--[--><!--[--><div class=\"app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3 map-workspace-shell\"><!----><!----><!----><main id=\"workspace-main\" tabindex=\"-1\" class=\"main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]\"><!----><!----><section ",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "name": "desktop-dark: native modal prevents background activation at BODY boundary",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "desktop-dark: ordinary Tab re-enters Fields",
+      "passed": true,
+      "detail": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+    },
+    {
+      "name": "desktop-dark native input: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 3,
+        "bounds": {
+          "x": 278.796875,
+          "y": 695.578125,
+          "width": 882.40625,
+          "height": 44,
+          "top": 695.578125,
+          "right": 1161.203125,
+          "bottom": 739.578125,
+          "left": 278.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark native input: text >=4.5",
+      "passed": true,
+      "detail": 13.837754295807098
+    },
+    {
+      "name": "desktop-dark native input: control >=3",
+      "passed": true,
+      "detail": 8.258623940381913
+    },
+    {
+      "name": "desktop-dark native input: focus >=3",
+      "passed": true,
+      "detail": 10.855814121345832
+    },
+    {
+      "name": "desktop-dark native select: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 3,
+        "bounds": {
+          "x": 278.796875,
+          "y": 773.671875,
+          "width": 882.40625,
+          "height": 44,
+          "top": 773.671875,
+          "right": 1161.203125,
+          "bottom": 817.671875,
+          "left": 278.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "desktop-dark native select: text >=4.5",
+      "passed": true,
+      "detail": 13.837754295807098
+    },
+    {
+      "name": "desktop-dark native select: control >=3",
+      "passed": true,
+      "detail": 8.258623940381913
+    },
+    {
+      "name": "desktop-dark native select: focus >=3",
+      "passed": true,
+      "detail": 10.855814121345832
+    },
+    {
+      "name": "desktop-dark portal heading: text >=4.5",
+      "passed": true,
+      "detail": 14.716124529800773
+    },
+    {
+      "name": "desktop-dark portal: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "desktop-dark: Fields returns focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "desktop-dark system map label: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 15.461239608162789,
+        "threshold": 4.5,
+        "disabled": false,
+        "foreground": "rgb(232, 238, 231)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark system meaningful mark: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 15.461239608162789,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(232, 238, 231)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark cluster map label: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 13.860809509022118,
+        "threshold": 4.5,
+        "disabled": false,
+        "foreground": "rgb(232, 238, 231)",
+        "backgrounds": [
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            20,
+            34,
+            37
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark: selected/unknown route has non-color cues and a name",
+      "passed": true,
+      "detail": {
+        "normalWidth": "2.4px",
+        "selectedWidth": "3.5px",
+        "dash": "8px, 7px",
+        "name": "Select Jump Level 2 route from QA Alpha Gate (QA Alpha) to QA Beta Gate (QA Beta)"
+      }
+    },
+    {
+      "name": "desktop-dark selected route: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 11.405471796050191,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(255, 192, 135)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark unresolved route: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 8.36739636233999,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(240, 155, 115)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            12,
+            23,
+            25
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark unknown exit mark: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 7.501267039652367,
+        "threshold": 3,
+        "disabled": false,
+        "foreground": "rgb(240, 155, 115)",
+        "backgrounds": [
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ],
+          [
+            12,
+            23,
+            25
+          ],
+          [
+            20,
+            34,
+            37
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark route label: contrast",
+      "passed": true,
+      "detail": {
+        "minimum": 13.214782231254643,
+        "threshold": 4.5,
+        "disabled": false,
+        "foreground": "rgb(232, 238, 231)",
+        "backgrounds": [
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ],
+          [
+            24,
+            38,
+            41
+          ]
+        ]
+      }
+    },
+    {
+      "name": "desktop-dark product: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "compact-landscape-light: intended palette",
+      "passed": true,
+      "detail": {
+        "classes": "light",
+        "native": "light",
+        "preference": "system"
+      }
+    },
+    {
+      "name": "compact-landscape-light: actual touch theme activation",
+      "passed": true,
+      "detail": {
+        "classes": "dark",
+        "native": "dark",
+        "preference": "dark"
+      }
+    },
+    {
+      "name": "compact-landscape-light: touch restores palette",
+      "passed": true,
+      "detail": {
+        "classes": "light",
+        "native": "light",
+        "preference": "light"
+      }
+    },
+    {
+      "name": "compact-landscape-light theme focus: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 674.984375,
+          "y": 12.625,
+          "width": 38.390625,
+          "height": 36,
+          "top": 12.625,
+          "right": 713.375,
+          "bottom": 48.625,
+          "left": 674.984375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-landscape-light theme: focus >=3",
+      "passed": true,
+      "detail": 5.352509821624122
+    },
+    {
+      "name": "compact-landscape-light Map files trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 592.703125,
+          "y": 13.421875,
+          "width": 76.6875,
+          "height": 34.390625,
+          "top": 13.421875,
+          "right": 669.390625,
+          "bottom": 47.8125,
+          "left": 592.703125
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-landscape-light: Map files teleported outside header",
+      "passed": true,
+      "detail": {
+        "parent": "DIV",
+        "colorScheme": "light",
+        "background": "rgb(245, 242, 233)"
+      }
+    },
+    {
+      "name": "compact-landscape-light Map files action: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 330.796875,
+          "y": 132.578125,
+          "width": 324.40625,
+          "height": 28,
+          "top": 132.578125,
+          "right": 655.203125,
+          "bottom": 160.578125,
+          "left": 330.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-landscape-light: Map files Escape returns focus",
+      "passed": true,
+      "detail": "<button data-v-d840d2bb=\"\" type=\"button\" data-slot=\"base\" id=\"reka-popover-trigger-v-0\" aria-haspopup=\"dialog\" aria-expanded=\"false\" aria-controls=\"workspace-header-map-files-panel\" data-state=\"closed\" aria-label=\"Open map file actions for star system QA Host\" title=\"Map file actions for star system"
+    },
+    {
+      "name": "compact-landscape-light Fields trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 717.375,
+          "y": 9.796875,
+          "width": 115.234375,
+          "height": 41.65625,
+          "top": 9.796875,
+          "right": 832.609375,
+          "bottom": 51.453125,
+          "left": 717.375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-landscape-light: Fields body portal and modal entry focus",
+      "passed": true,
+      "detail": {
+        "parent": "BODY",
+        "native": true,
+        "scheme": "light",
+        "active": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+      }
+    },
+    {
+      "name": "compact-landscape-light: reverse Tab does not focus an interactive background app control",
+      "passed": true,
+      "detail": {
+        "contained": true,
+        "body": false,
+        "active": "<dialog id=\"field-definitions-dialog\" class=\"field-definitions-dialog\" aria-labelledby=\"field-definitions-title\" aria-modal=\"true\" open=\"\"><div class=\"field-definitions-content\"><header class=\"field-definitions-header\"><div><span class=\"section-kicker\">MAP DATA / REUSABLE DEFINITIONS</span><h2 id=\"field-definitions-title\">Field definitions</h2><p>Manage values available across this map without cha",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "name": "compact-landscape-light: ordinary Tab re-enters Fields",
+      "passed": true,
+      "detail": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+    },
+    {
+      "name": "compact-landscape-light Fields close: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 759.796875,
+          "y": 41,
+          "width": 43.203125,
+          "height": 32,
+          "top": 41,
+          "right": 803,
+          "bottom": 73,
+          "left": 759.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(155, 63, 0)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-landscape-light Fields: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "compact-landscape-light: Fields returns focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "compact-landscape-light product: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 844,
+        "scrollWidth": 844
+      }
+    },
+    {
+      "name": "compact-portrait-dark: intended palette",
+      "passed": true,
+      "detail": {
+        "classes": "dark",
+        "native": "dark",
+        "preference": "dark"
+      }
+    },
+    {
+      "name": "compact-portrait-dark: actual touch theme activation",
+      "passed": true,
+      "detail": {
+        "classes": "light",
+        "native": "light",
+        "preference": "light"
+      }
+    },
+    {
+      "name": "compact-portrait-dark: touch restores palette",
+      "passed": true,
+      "detail": {
+        "classes": "dark",
+        "native": "dark",
+        "preference": "dark"
+      }
+    },
+    {
+      "name": "compact-portrait-dark theme focus: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 243.359375,
+          "y": 66.984375,
+          "width": 38.390625,
+          "height": 36,
+          "top": 66.984375,
+          "right": 281.75,
+          "bottom": 102.984375,
+          "left": 243.359375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-portrait-dark theme: focus >=3",
+      "passed": true,
+      "detail": 10.026213428132028
+    },
+    {
+      "name": "compact-portrait-dark Map files trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 11.390625,
+          "y": 86.984375,
+          "width": 76.6875,
+          "height": 34.390625,
+          "top": 86.984375,
+          "right": 88.078125,
+          "bottom": 121.375,
+          "left": 11.390625
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-portrait-dark: Map files teleported outside header",
+      "passed": true,
+      "detail": {
+        "parent": "DIV",
+        "colorScheme": "dark",
+        "background": "rgb(25, 38, 41)"
+      }
+    },
+    {
+      "name": "compact-portrait-dark Map files action: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 25.796875,
+          "y": 205.578125,
+          "width": 324.40625,
+          "height": 28,
+          "top": 205.578125,
+          "right": 350.203125,
+          "bottom": 233.578125,
+          "left": 25.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-portrait-dark: Map files Escape returns focus",
+      "passed": true,
+      "detail": "<button data-v-d840d2bb=\"\" type=\"button\" data-slot=\"base\" id=\"reka-popover-trigger-v-0\" aria-haspopup=\"dialog\" aria-expanded=\"false\" aria-controls=\"workspace-header-map-files-panel\" data-state=\"closed\" aria-label=\"Open map file actions for star system QA Host\" title=\"Map file actions for star system"
+    },
+    {
+      "name": "compact-portrait-dark Fields trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 279.34375,
+          "y": 56.71875,
+          "width": 99.265625,
+          "height": 56.53125,
+          "top": 56.71875,
+          "right": 378.609375,
+          "bottom": 113.25,
+          "left": 279.34375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-portrait-dark: Fields body portal and modal entry focus",
+      "passed": true,
+      "detail": {
+        "parent": "BODY",
+        "native": true,
+        "scheme": "dark",
+        "active": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+      }
+    },
+    {
+      "name": "compact-portrait-dark: reverse Tab does not focus an interactive background app control",
+      "passed": true,
+      "detail": {
+        "contained": false,
+        "body": true,
+        "active": "<body><div id=\"__nuxt\" class=\"isolate\"><!--[--><!--[--><!--[--><!--[--><!--[--><div class=\"app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3 map-workspace-shell\"><!----><!----><!----><main id=\"workspace-main\" tabindex=\"-1\" class=\"main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]\"><!----><!----><section ",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "name": "compact-portrait-dark: native modal prevents background activation at BODY boundary",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "compact-portrait-dark: ordinary Tab re-enters Fields",
+      "passed": true,
+      "detail": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+    },
+    {
+      "name": "compact-portrait-dark Fields close: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 325.796875,
+          "y": 38.859375,
+          "width": 43.203125,
+          "height": 32,
+          "top": 38.859375,
+          "right": 369,
+          "bottom": 70.859375,
+          "left": 325.796875
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact-portrait-dark Fields: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "compact-portrait-dark: Fields returns focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "compact reduced-height theme: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 4,
+        "bounds": {
+          "x": 243.359375,
+          "y": 66.984375,
+          "width": 38.390625,
+          "height": 36,
+          "top": 66.984375,
+          "right": 281.75,
+          "bottom": 102.984375,
+          "left": 243.359375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact reduced-height Fields trigger: complete unobscured keyboard focus",
+      "passed": true,
+      "detail": {
+        "focused": true,
+        "hit": true,
+        "extent": 5,
+        "bounds": {
+          "x": 279.34375,
+          "y": 56.71875,
+          "width": 99.265625,
+          "height": 56.53125,
+          "top": 56.71875,
+          "right": 378.609375,
+          "bottom": 113.25,
+          "left": 279.34375
+        },
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "outlineColor": "rgb(255, 192, 135)",
+        "clippedBy": [],
+        "fits": true
+      }
+    },
+    {
+      "name": "compact reduced-height: Fields body portal and modal entry focus",
+      "passed": true,
+      "detail": {
+        "parent": "BODY",
+        "native": true,
+        "scheme": "dark",
+        "active": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+      }
+    },
+    {
+      "name": "compact reduced-height: reverse Tab does not focus an interactive background app control",
+      "passed": true,
+      "detail": {
+        "contained": true,
+        "body": false,
+        "active": "<dialog id=\"field-definitions-dialog\" class=\"field-definitions-dialog\" aria-labelledby=\"field-definitions-title\" aria-modal=\"true\" open=\"\"><div class=\"field-definitions-content\"><header class=\"field-definitions-header\"><div><span class=\"section-kicker\">MAP DATA / REUSABLE DEFINITIONS</span><h2 id=\"field-definitions-title\">Field definitions</h2><p>Manage values available across this map without cha",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "name": "compact reduced-height: ordinary Tab re-enters Fields",
+      "passed": true,
+      "detail": "<button class=\"quiet-button field-definitions-close\" type=\"button\" aria-label=\"Close field definitions\" autofocus=\"\"> Close </button>"
+    },
+    {
+      "name": "compact reduced-height: Fields returns focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "compact reduced-height: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "compact-portrait-dark product: no horizontal overflow",
+      "passed": true,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "no normal product server egress attempts",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no normal product browser egress attempts",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no product console/hydration warnings or errors",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no product page errors",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "contrast": [
+    {
+      "label": "desktop-dark selected Orbit",
+      "kind": "graphic",
+      "prop": "stroke",
+      "foreground": "rgb(255, 192, 135)",
+      "rgba": [
+        255,
+        192,
+        135,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [
+        {
+          "x": 741.5170825802213,
+          "y": 543.5719467059052
+        },
+        {
+          "x": 733.6588207400912,
+          "y": 542.0727066144073
+        },
+        {
+          "x": 369.80339863683275,
+          "y": 747.9351507992366
+        },
+        {
+          "x": 372.74726054285475,
+          "y": 740.4964898257634
+        },
+        {
+          "x": 282.71700759325705,
+          "y": 291.3058184069681
+        },
+        {
+          "x": 288.1930876215867,
+          "y": 297.13784614381314
+        },
+        {
+          "x": 539.5184698901219,
+          "y": 225.35657950506658
+        },
+        {
+          "x": 537.5308465161281,
+          "y": 233.10573128594905
+        },
+        {
+          "x": 720.228608831537,
+          "y": 374.86195662652943
+        },
+        {
+          "x": 712.988920465338,
+          "y": 378.2659120258143
+        }
+      ],
+      "contourSamples": [],
+      "bounds": {
+        "x": 199.8562774658203,
+        "y": 220.72450256347656,
+        "width": 542.5363159179688,
+        "height": 542.5362548828125,
+        "top": 220.72450256347656,
+        "right": 742.3925933837891,
+        "bottom": 763.2607574462891,
+        "left": 199.8562774658203
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          35,
+          53,
+          56
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ]
+      ],
+      "ratios": [
+        11.405471796050191,
+        8.023947349984478,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191,
+        11.405471796050191
+      ],
+      "minimum": 8.023947349984478,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark theme button",
+      "boundaryRequired": false,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(239, 161, 111)",
+        "borderWidth": "0px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "tag": "BUTTON",
+        "text": "",
+        "x": 1254.984375,
+        "y": 21.109375,
+        "width": 38.390625,
+        "height": 36
+      },
+      "backgrounds": [
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          232,
+          238,
+          231
+        ],
+        [
+          32,
+          47,
+          50
+        ]
+      ],
+      "adjacent": [
+        19,
+        30,
+        30
+      ],
+      "textRatio": 1,
+      "borderRatio": null,
+      "fillRatio": 1.2288145348761594,
+      "controlRatio": 1.2288145348761594,
+      "focusRatio": 10.665705630503235
+    },
+    {
+      "label": "desktop-dark theme state text",
+      "boundaryRequired": true,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(192, 203, 196)",
+        "border": "rgb(192, 203, 196)",
+        "borderWidth": "0px",
+        "outline": "rgb(192, 203, 196)",
+        "outlineWidth": "3px",
+        "outlineOffset": "0px",
+        "tag": "SPAN",
+        "text": "Dark",
+        "x": 1225,
+        "y": 30.109375,
+        "width": 24.390625,
+        "height": 18
+      },
+      "backgrounds": [
+        [
+          20,
+          31,
+          31
+        ],
+        [
+          19,
+          30,
+          31
+        ],
+        [
+          19,
+          30,
+          31
+        ]
+      ],
+      "adjacent": [
+        20,
+        31,
+        31
+      ],
+      "textRatio": 10.100779583615642,
+      "borderRatio": null,
+      "fillRatio": null,
+      "controlRatio": null,
+      "focusRatio": null
+    },
+    {
+      "label": "desktop-dark meaningful theme icon",
+      "kind": "graphic",
+      "prop": "color",
+      "foreground": "rgb(232, 238, 231)",
+      "rgba": [
+        232,
+        238,
+        231,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [],
+      "contourSamples": [],
+      "bounds": {
+        "x": 1260.984375,
+        "y": 29.109375,
+        "width": 20,
+        "height": 20,
+        "top": 29.109375,
+        "right": 1280.984375,
+        "bottom": 49.109375,
+        "left": 1260.984375
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "",
+      "disabled": false,
+      "backgrounds": [
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          32,
+          47,
+          50
+        ]
+      ],
+      "ratios": [
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351,
+        11.766148062700351
+      ],
+      "minimum": 11.766148062700351,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark portal action",
+      "boundaryRequired": false,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(232, 238, 231)",
+        "borderWidth": "0px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "tag": "BUTTON",
+        "text": "Import JSON copy",
+        "x": 726.796875,
+        "y": 142.578125,
+        "width": 324.40625,
+        "height": 28
+      },
+      "backgrounds": [
+        [
+          18,
+          28,
+          30
+        ],
+        [
+          18,
+          28,
+          30
+        ],
+        [
+          18,
+          28,
+          30
+        ]
+      ],
+      "adjacent": [
+        25,
+        38,
+        41
+      ],
+      "textRatio": 14.716124529800773,
+      "borderRatio": null,
+      "fillRatio": 1.115673159236136,
+      "controlRatio": 1.115673159236136,
+      "focusRatio": 9.730281697175942
+    },
+    {
+      "label": "desktop-dark native input",
+      "boundaryRequired": true,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(239, 161, 111)",
+        "borderWidth": "1px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "1px",
+        "tag": "INPUT",
+        "text": "",
+        "x": 278.796875,
+        "y": 695.578125,
+        "width": 882.40625,
+        "height": 44
+      },
+      "backgrounds": [
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ]
+      ],
+      "adjacent": [
+        18,
+        28,
+        30
+      ],
+      "textRatio": 13.837754295807098,
+      "borderRatio": 8.258623940381913,
+      "fillRatio": 1.0634763571614958,
+      "controlRatio": 8.258623940381913,
+      "focusRatio": 10.855814121345832
+    },
+    {
+      "label": "desktop-dark native select",
+      "boundaryRequired": true,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(239, 161, 111)",
+        "borderWidth": "1px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "1px",
+        "tag": "SELECT",
+        "text": "TextNumberBooleanSingle-select",
+        "x": 278.796875,
+        "y": 773.671875,
+        "width": 882.40625,
+        "height": 44
+      },
+      "backgrounds": [
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ],
+        [
+          21,
+          34,
+          37
+        ]
+      ],
+      "adjacent": [
+        18,
+        28,
+        30
+      ],
+      "textRatio": 13.837754295807098,
+      "borderRatio": 8.258623940381913,
+      "fillRatio": 1.0634763571614958,
+      "controlRatio": 8.258623940381913,
+      "focusRatio": 10.855814121345832
+    },
+    {
+      "label": "desktop-dark portal heading",
+      "boundaryRequired": true,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(232, 238, 231)",
+        "borderWidth": "0px",
+        "outline": "rgb(232, 238, 231)",
+        "outlineWidth": "3px",
+        "outlineOffset": "0px",
+        "tag": "H2",
+        "text": "Field definitions",
+        "x": 265,
+        "y": 64.390625,
+        "width": 481.96875,
+        "height": 45.609375
+      },
+      "backgrounds": [
+        [
+          18,
+          28,
+          30
+        ],
+        [
+          18,
+          28,
+          30
+        ],
+        [
+          18,
+          28,
+          30
+        ]
+      ],
+      "adjacent": [
+        18,
+        28,
+        30
+      ],
+      "textRatio": 14.716124529800773,
+      "borderRatio": null,
+      "fillRatio": null,
+      "controlRatio": null,
+      "focusRatio": null
+    },
+    {
+      "label": "desktop-dark system map label",
+      "kind": "text",
+      "prop": "fill",
+      "foreground": "rgb(232, 238, 231)",
+      "rgba": [
+        232,
+        238,
+        231,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [],
+      "contourSamples": [],
+      "bounds": {
+        "x": 394.7572326660156,
+        "y": 576.4063720703125,
+        "width": 153.41806030273438,
+        "height": 32.99993896484375,
+        "top": 576.4063720703125,
+        "right": 548.17529296875,
+        "bottom": 609.4063110351562,
+        "left": 394.7572326660156
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "QA Primary",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ]
+      ],
+      "ratios": [
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789
+      ],
+      "minimum": 15.461239608162789,
+      "threshold": 4.5
+    },
+    {
+      "label": "desktop-dark system meaningful mark",
+      "kind": "graphic",
+      "prop": "fill",
+      "foreground": "rgb(232, 238, 231)",
+      "rgba": [
+        232,
+        238,
+        231,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [],
+      "contourSamples": [],
+      "bounds": {
+        "x": 451.35882568359375,
+        "y": 466.3689270019531,
+        "width": 39.53118896484375,
+        "height": 56.999969482421875,
+        "top": 466.3689270019531,
+        "right": 490.8900146484375,
+        "bottom": 523.368896484375,
+        "left": 451.35882568359375
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "✦",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ]
+      ],
+      "ratios": [
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789,
+        15.461239608162789
+      ],
+      "minimum": 15.461239608162789,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark cluster map label",
+      "kind": "text",
+      "prop": "fill",
+      "foreground": "rgb(232, 238, 231)",
+      "rgba": [
+        232,
+        238,
+        231,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [],
+      "contourSamples": [],
+      "bounds": {
+        "x": 257.24615478515625,
+        "y": 383.81201171875,
+        "width": 83.62908935546875,
+        "height": 25,
+        "top": 383.81201171875,
+        "right": 340.875244140625,
+        "bottom": 408.81201171875,
+        "left": 257.24615478515625
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "QA Host",
+      "disabled": false,
+      "backgrounds": [
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          20,
+          34,
+          37
+        ]
+      ],
+      "ratios": [
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118,
+        13.860809509022118
+      ],
+      "minimum": 13.860809509022118,
+      "threshold": 4.5
+    },
+    {
+      "label": "desktop-dark selected route",
+      "kind": "graphic",
+      "prop": "stroke",
+      "foreground": "rgb(255, 192, 135)",
+      "rgba": [
+        255,
+        192,
+        135,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": true,
+      "adjacentPoints": [
+        {
+          "x": 278.9784640704296,
+          "y": 541.8600033173367
+        },
+        {
+          "x": 281.59496122253915,
+          "y": 549.4200259795383
+        }
+      ],
+      "contourSamples": [
+        {
+          "fraction": 0.17,
+          "center": {
+            "x": 280.2867126464844,
+            "y": 545.6400146484375
+          },
+          "points": [
+            {
+              "x": 278.9784640704296,
+              "y": 541.8600033173367
+            },
+            {
+              "x": 281.59496122253915,
+              "y": 549.4200259795383
+            }
+          ],
+          "method": "one actual exposed contour segment; map background on both sides; six-pixel clearance from label/card/mark/text bounds"
+        }
+      ],
+      "bounds": {
+        "x": 241.36024475097656,
+        "y": 442.66326904296875,
+        "width": 206.54075622558594,
+        "height": 114.4547119140625,
+        "top": 442.66326904296875,
+        "right": 447.9010009765625,
+        "bottom": 557.1179809570312,
+        "left": 241.36024475097656
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ]
+      ],
+      "ratios": [
+        11.405471796050191,
+        11.405471796050191
+      ],
+      "minimum": 11.405471796050191,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark unresolved route",
+      "kind": "graphic",
+      "prop": "stroke",
+      "foreground": "rgb(240, 155, 115)",
+      "rgba": [
+        240,
+        155,
+        115,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": true,
+      "adjacentPoints": [
+        {
+          "x": 609.639679008049,
+          "y": 474.00773601553533
+        },
+        {
+          "x": 603.3484801716385,
+          "y": 478.9494783399334
+        }
+      ],
+      "contourSamples": [
+        {
+          "fraction": 0.17,
+          "center": {
+            "x": 606.4940795898438,
+            "y": 476.4786071777344
+          },
+          "points": [
+            {
+              "x": 609.639679008049,
+              "y": 474.00773601553533
+            },
+            {
+              "x": 603.3484801716385,
+              "y": 478.9494783399334
+            }
+          ],
+          "method": "one actual exposed contour segment; map background on both sides; six-pixel clearance from label/card/mark/text bounds"
+        }
+      ],
+      "bounds": {
+        "x": 588.5433349609375,
+        "y": 452.0711975097656,
+        "width": 126.27410888671875,
+        "height": 124.19479370117188,
+        "top": 452.0711975097656,
+        "right": 714.8174438476562,
+        "bottom": 576.2659912109375,
+        "left": 588.5433349609375
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          12,
+          23,
+          25
+        ]
+      ],
+      "ratios": [
+        8.36739636233999,
+        8.36739636233999
+      ],
+      "minimum": 8.36739636233999,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark unknown exit mark",
+      "kind": "graphic",
+      "prop": "stroke",
+      "foreground": "rgb(240, 155, 115)",
+      "rgba": [
+        240,
+        155,
+        115,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [
+        {
+          "x": 725.4565052548336,
+          "y": 578.2323285695996
+        },
+        {
+          "x": 717.5893931826664,
+          "y": 576.7802446725879
+        },
+        {
+          "x": 720.0093595327476,
+          "y": 585.7581009191772
+        },
+        {
+          "x": 716.1695955453774,
+          "y": 578.7398238855103
+        },
+        {
+          "x": 710.8400853139646,
+          "y": 586.3276038685594
+        },
+        {
+          "x": 713.7768580454104,
+          "y": 578.8861412486281
+        },
+        {
+          "x": 704.1784434756352,
+          "y": 578.2322675344434
+        },
+        {
+          "x": 712.0455555478023,
+          "y": 576.7801836374316
+        },
+        {
+          "x": 707.4148874264481,
+          "y": 568.3756548434308
+        },
+        {
+          "x": 712.8884573001144,
+          "y": 574.2100385159442
+        },
+        {
+          "x": 717.4559799801738,
+          "y": 565.7734243695248
+        },
+        {
+          "x": 715.5059340823262,
+          "y": 573.5321176226627
+        },
+        {
+          "x": 724.613977401342,
+          "y": 571.6743061838123
+        },
+        {
+          "x": 717.3702755283455,
+          "y": 575.0697123708752
+        }
+      ],
+      "contourSamples": [],
+      "bounds": {
+        "x": 707.9982299804688,
+        "y": 569.44677734375,
+        "width": 13.638427734375,
+        "height": 13.638427734375,
+        "top": 569.44677734375,
+        "right": 721.6366577148438,
+        "bottom": 583.085205078125,
+        "left": 707.9982299804688
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "",
+      "disabled": false,
+      "backgrounds": [
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ],
+        [
+          12,
+          23,
+          25
+        ],
+        [
+          20,
+          34,
+          37
+        ]
+      ],
+      "ratios": [
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367,
+        8.36739636233999,
+        7.501267039652367
+      ],
+      "minimum": 7.501267039652367,
+      "threshold": 3
+    },
+    {
+      "label": "desktop-dark route label",
+      "kind": "text",
+      "prop": "fill",
+      "foreground": "rgb(232, 238, 231)",
+      "rgba": [
+        232,
+        238,
+        231,
+        1
+      ],
+      "effectiveOpacity": 1,
+      "fillOpacity": "1",
+      "strokeOpacity": "1",
+      "opacityChain": [],
+      "isRoute": false,
+      "adjacentPoints": [],
+      "contourSamples": [],
+      "bounds": {
+        "x": 334.3491516113281,
+        "y": 499.5175476074219,
+        "width": 32.77545166015625,
+        "height": 11,
+        "top": 499.5175476074219,
+        "right": 367.1246032714844,
+        "bottom": 510.5175476074219,
+        "left": 334.3491516113281
+      },
+      "borderWidth": "0px",
+      "outlineWidth": "3px",
+      "outlineOffset": "0px",
+      "text": "Jump-2",
+      "disabled": false,
+      "backgrounds": [
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ],
+        [
+          24,
+          38,
+          41
+        ]
+      ],
+      "ratios": [
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643,
+        13.214782231254643
+      ],
+      "minimum": 13.214782231254643,
+      "threshold": 4.5
+    },
+    {
+      "label": "compact-landscape-light theme",
+      "boundaryRequired": false,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(38, 48, 44)",
+        "border": "rgb(156, 74, 22)",
+        "borderWidth": "0px",
+        "outline": "rgb(155, 63, 0)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "tag": "BUTTON",
+        "text": "",
+        "x": 674.984375,
+        "y": 12.625,
+        "width": 38.390625,
+        "height": 36
+      },
+      "backgrounds": [
+        [
+          235,
+          229,
+          215
+        ],
+        [
+          38,
+          48,
+          44
+        ],
+        [
+          241,
+          234,
+          220
+        ]
+      ],
+      "adjacent": [
+        226,
+        230,
+        223
+      ],
+      "textRatio": 1,
+      "borderRatio": null,
+      "fillRatio": 1.0062220925516283,
+      "controlRatio": 1.0062220925516283,
+      "focusRatio": 5.352509821624122
+    },
+    {
+      "label": "compact-portrait-dark theme",
+      "boundaryRequired": false,
+      "method": "computed foreground composited against three glyph-suppressed rendered pixels; border or fill against adjacent rendered pixel; focus outline against outside rendered pixel",
+      "computed": {
+        "color": "rgb(232, 238, 231)",
+        "border": "rgb(239, 161, 111)",
+        "borderWidth": "0px",
+        "outline": "rgb(255, 192, 135)",
+        "outlineWidth": "2px",
+        "outlineOffset": "2px",
+        "tag": "BUTTON",
+        "text": "",
+        "x": 243.359375,
+        "y": 66.984375,
+        "width": 38.390625,
+        "height": 36
+      },
+      "backgrounds": [
+        [
+          32,
+          47,
+          50
+        ],
+        [
+          232,
+          238,
+          231
+        ],
+        [
+          32,
+          47,
+          50
+        ]
+      ],
+      "adjacent": [
+        22,
+        36,
+        35
+      ],
+      "textRatio": 1,
+      "borderRatio": null,
+      "fillRatio": 1.155137523674358,
+      "controlRatio": 1.155137523674358,
+      "focusRatio": 10.026213428132028
+    }
+  ],
+  "glyphs": [],
+  "network": [
+    {
+      "label": "browser-guard-canary",
+      "event": "denied",
+      "api": "request",
+      "url": "https://example.com/qa-ticket19-negative-canary",
+      "type": "document"
+    }
+  ],
+  "coldChecks": false,
+  "coldProvenance": "offline-and-presentation-results.json + server-network.jsonl from the original cold attempt",
+  "completedProvenance": "presentation-continuation-results.json owns completed desktop-light, fresh-session preference and Fields OS-change/Stay observations",
+  "serverNetwork": [
+    {
+      "time": "2026-10-19T09:49:38.215Z",
+      "pid": 22692,
+      "event": "guard-installed",
+      "policy": "deny external hostnames and addresses; permit loopback and local pipes"
+    },
+    {
+      "time": "2026-10-19T09:49:38.219Z",
+      "pid": 22692,
+      "event": "denied",
+      "label": "server-guard-canary",
+      "api": "net.Socket.connect",
+      "host": "example.com"
+    },
+    {
+      "time": "2026-10-19T09:49:38.219Z",
+      "pid": 22692,
+      "event": "canary-passed",
+      "label": "server-guard-canary",
+      "code": "QA_EXTERNAL_NETWORK_DENIED"
+    }
+  ],
+  "console": [],
+  "pageerrors": [],
+  "fixtures": [
+    {
+      "label": "imported rich workspace",
+      "sha256": "ba3e3c7c18d22cf89c99a3e55a499ef973dbd9041077e88ec9b00e9177858ac8",
+      "systems": [
+        "QA Host",
+        "QA Alpha",
+        "QA Beta"
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "compiled-fields-dark-1440x900.png",
+      "sha256": "28a5bcd75610d31b42c4e8a586ebc255015aa67b71725008865451ded7b613dd",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "file": "compiled-compact-landscape-light-844x390.png",
+      "sha256": "ab5db07f34bd7e7b8f487e5873a4701cbee5be18998bf147047639d49d665318",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      }
+    },
+    {
+      "file": "compiled-compact-portrait-dark-390x844.png",
+      "sha256": "ab59862e200c75f217868bcc0049423541a994c8d50b21e8c9ca2ecfc63a272f",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "label": "desktop-dark selected Orbit",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark theme action",
+      "observedBeforeSettlement": [
+        {
+          "state": "running",
+          "timing": {
+            "delay": 0,
+            "direction": "normal",
+            "duration": 150,
+            "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+            "endDelay": 0,
+            "fill": "backwards",
+            "iterationStart": 0,
+            "iterations": 1,
+            "activeDuration": 150,
+            "currentIteration": 0,
+            "endTime": 150,
+            "localTime": 0,
+            "progress": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "desktop-dark theme button",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark theme state text",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark meaningful theme icon",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark Map files trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark Map files action",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark portal action",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark Fields trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark native input",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark native input",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark native select",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark native select",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark portal heading",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark system map label",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark system meaningful mark",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark cluster map label",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark selected route",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark unresolved route",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark unknown exit mark",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "desktop-dark route label",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-landscape-light theme focus",
+      "observedBeforeSettlement": [
+        {
+          "state": "running",
+          "timing": {
+            "delay": 0,
+            "direction": "normal",
+            "duration": 150,
+            "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+            "endDelay": 0,
+            "fill": "backwards",
+            "iterationStart": 0,
+            "iterations": 1,
+            "activeDuration": 150,
+            "currentIteration": 0,
+            "endTime": 150,
+            "localTime": 0,
+            "progress": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "compact-landscape-light theme",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-landscape-light Map files trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-landscape-light Map files action",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-landscape-light Fields trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-landscape-light Fields close",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-portrait-dark theme focus",
+      "observedBeforeSettlement": [
+        {
+          "state": "running",
+          "timing": {
+            "delay": 0,
+            "direction": "normal",
+            "duration": 150,
+            "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+            "endDelay": 0,
+            "fill": "backwards",
+            "iterationStart": 0,
+            "iterations": 1,
+            "activeDuration": 150,
+            "currentIteration": 0,
+            "endTime": 150,
+            "localTime": 0,
+            "progress": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "compact-portrait-dark theme",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-portrait-dark Map files trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-portrait-dark Map files action",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-portrait-dark Fields trigger",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact-portrait-dark Fields close",
+      "observedBeforeSettlement": []
+    },
+    {
+      "label": "compact reduced-height theme",
+      "observedBeforeSettlement": [
+        {
+          "state": "running",
+          "timing": {
+            "delay": 0,
+            "direction": "normal",
+            "duration": 150,
+            "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+            "endDelay": 0,
+            "fill": "backwards",
+            "iterationStart": 0,
+            "iterations": 1,
+            "activeDuration": 150,
+            "currentIteration": 0,
+            "endTime": 150,
+            "localTime": 0,
+            "progress": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "compact reduced-height Fields trigger",
+      "observedBeforeSettlement": []
+    }
+  ],
+  "limits": [
+    "Four representative cases, not the historical 98/405 matrix or a complete accessibility audit.",
+    "Physical Android Chrome, OS keyboard, safe area and physical gestures unavailable; touch is emulated.",
+    "Loaded-map B/Dock structural correction belongs to ticket 21; palette results do not certify its fidelity.",
+    "Server denial covers Node socket/TLS/DNS paths, not native add-ons, subprocesses or an OS firewall.",
+    "Fresh-session persistence uses a new isolated context carrying saved storage, never a personal profile.",
+    "Installed Nuxt UI literal glyph names are an inventory superset, not a count of actual application consumption.",
+    "desktop-dark: reverse Tab observed BODY; strict DOM containment was not established at that native/browser boundary.",
+    "compact-portrait-dark: reverse Tab observed BODY; strict DOM containment was not established at that native/browser boundary."
+  ],
+  "qaHelperSha256": "56deaae287ed91843dc540f2c13408d326a015e55bace8542044ab9101a5c96a",
+  "guardSha256": "d908ab4f48f73cf032e4db52e2916becba0242ec827196faec961e215503edea",
+  "importPreview": "Import this Jump Cluster as an independent copy?\n\nStar systems: 2\nMap objects: 4\nOrbits: 1\nJump Routes: 2\nCustom fields: 0\n\nOriginal-ID collisions (0):\n- None\n\nPossible existing matches by name or location key (0):\n- None\n\nMap entities remain separate copies and receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.",
+  "nativeModalFocus": [
+    {
+      "label": "desktop-dark",
+      "reverse": {
+        "contained": false,
+        "body": true,
+        "active": "<body><div id=\"__nuxt\" class=\"isolate\"><!--[--><!--[--><!--[--><!--[--><!--[--><div class=\"app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3 map-workspace-shell\"><!----><!----><!----><main id=\"workspace-main\" tabindex=\"-1\" class=\"main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]\"><!----><!----><section ",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "label": "compact-landscape-light",
+      "reverse": {
+        "contained": true,
+        "body": false,
+        "active": "<dialog id=\"field-definitions-dialog\" class=\"field-definitions-dialog\" aria-labelledby=\"field-definitions-title\" aria-modal=\"true\" open=\"\"><div class=\"field-definitions-content\"><header class=\"field-definitions-header\"><div><span class=\"section-kicker\">MAP DATA / REUSABLE DEFINITIONS</span><h2 id=\"field-definitions-title\">Field definitions</h2><p>Manage values available across this map without cha",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "label": "compact-portrait-dark",
+      "reverse": {
+        "contained": false,
+        "body": true,
+        "active": "<body><div id=\"__nuxt\" class=\"isolate\"><!--[--><!--[--><!--[--><!--[--><!--[--><div class=\"app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3 map-workspace-shell\"><!----><!----><!----><main id=\"workspace-main\" tabindex=\"-1\" class=\"main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]\"><!----><!----><section ",
+        "interactiveBackground": false
+      }
+    },
+    {
+      "label": "compact reduced-height",
+      "reverse": {
+        "contained": true,
+        "body": false,
+        "active": "<dialog id=\"field-definitions-dialog\" class=\"field-definitions-dialog\" aria-labelledby=\"field-definitions-title\" aria-modal=\"true\" open=\"\"><div class=\"field-definitions-content\"><header class=\"field-definitions-header\"><div><span class=\"section-kicker\">MAP DATA / REUSABLE DEFINITIONS</span><h2 id=\"field-definitions-title\">Field definitions</h2><p>Manage values available across this map without cha",
+        "interactiveBackground": false
+      }
+    }
+  ]
+}

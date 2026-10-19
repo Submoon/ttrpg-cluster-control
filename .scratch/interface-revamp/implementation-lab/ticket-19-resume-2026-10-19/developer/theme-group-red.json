@@ -1,0 +1,18 @@
+{
+  "evidenceKind": "Initial public-seam Playwright RED recorded from the first focused invocation",
+  "baseline": "f64d00dbaf9cee569a8a62db0005b4ffe7f00ca7",
+  "route": "/",
+  "runtime": "Existing warm Nuxt development server at http://127.0.0.1:3100",
+  "browser": "Installed Chrome channel, Playwright 1.64.0",
+  "test": {
+    "file": "tests/workspace-theme.spec.ts",
+    "name": "the shell follows the OS until an explicit theme choice persists across reloads",
+    "failingLine": 178,
+    "assertion": "getByRole('group', { name: 'Theme' }).toBeVisible()",
+    "expected": "A visible group named Theme",
+    "actual": "No matching element"
+  },
+  "setupEvidence": "The same run first observed the actual Welcome heading 'Give the unknown a name.'; this was a product assertion failure after successful navigation, not a cold-server or runner setup failure.",
+  "sourceObservation": "WorkspaceHeader.vue wrapped UColorModeButton in a generic div with aria-label=\"Theme controls\" and no semantic group role.",
+  "classification": "Expected product RED for the missing accessible Theme group."
+}

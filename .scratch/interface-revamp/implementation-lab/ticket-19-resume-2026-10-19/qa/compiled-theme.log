@@ -1,0 +1,11 @@
+
+Running 4 tests using 1 worker
+
+(node:8708) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\workspace-theme.spec.ts:172:1 › the shell follows the OS until an explicit theme choice persists across reloads (1.0s)
+  ok 2 tests\workspace-theme.spec.ts:202:1 › theme changes recolor both maps without changing workspace drafts or writing IndexedDB (2.5s)
+  ok 3 tests\workspace-theme.spec.ts:288:1 › theme changes preserve object and route drafts plus pending and failed save status (3.6s)
+  ok 4 tests\workspace-theme.spec.ts:384:1 › keyboard focus stays fully visible on the Fields command in short landscape view (872ms)
+
+  4 passed (9.5s)

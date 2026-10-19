@@ -1,0 +1,254 @@
+{
+  "baseline": "f64d00dbaf9cee569a8a62db0005b4ffe7f00ca7",
+  "route": "/",
+  "baseURL": "http://127.0.0.1:3100",
+  "fixture": "Fresh isolated browser storage; a local workspace is created only to reveal the existing Fields header command.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": {
+    "components/WorkspaceHeader.vue": "caecc1b6dad070949cf84ac863140f80c11eb1add36e5f788e611833f58f1185",
+    "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "tests/workspace-theme.spec.ts": "d73b8ec138f76a4e5193b93bc14ff7729977671704435d74e9e1a030ae6dfaf6",
+    "nuxt.config.ts": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef"
+  },
+  "browser": {
+    "name": "Google Chrome channel",
+    "version": "155.0.8059.80",
+    "headless": true,
+    "deviceScaleFactor": 1
+  },
+  "samples": [
+    {
+      "label": "light Theme button",
+      "method": "Computed keyboard-focus outline, alpha-composited against four adjacent pixels from the rendered screenshot; minimum WCAG non-text contrast ratio.",
+      "active": true,
+      "bounds": {
+        "x": 1326.21875,
+        "y": 13.796875,
+        "width": 38.390625,
+        "height": 36,
+        "top": 13.796875,
+        "right": 1364.609375,
+        "bottom": 49.796875,
+        "left": 1326.21875
+      },
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineOffset": "2px",
+      "outlineColor": "rgb(155, 63, 0)",
+      "outlineRgba": [
+        155,
+        63,
+        0,
+        1
+      ],
+      "outsideOffset": 4.75,
+      "backgrounds": [
+        [
+          234,
+          236,
+          229
+        ],
+        [
+          235,
+          237,
+          230
+        ],
+        [
+          235,
+          237,
+          230
+        ],
+        [
+          233,
+          235,
+          229
+        ]
+      ],
+      "ratios": [
+        5.677845975575486,
+        5.729589138098322,
+        5.729589138098322,
+        5.629981311682668
+      ],
+      "minimum": 5.629981311682668,
+      "threshold": 3,
+      "passes": true
+    },
+    {
+      "label": "light Fields header button",
+      "method": "Computed keyboard-focus outline, alpha-composited against four adjacent pixels from the rendered screenshot; minimum WCAG non-text contrast ratio.",
+      "active": true,
+      "bounds": {
+        "x": 1299.765625,
+        "y": 18.28125,
+        "width": 115.234375,
+        "height": 41.65625,
+        "top": 18.28125,
+        "right": 1415,
+        "bottom": 59.9375,
+        "left": 1299.765625
+      },
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineOffset": "3px",
+      "outlineColor": "rgb(155, 63, 0)",
+      "outlineRgba": [
+        155,
+        63,
+        0,
+        1
+      ],
+      "outsideOffset": 5.75,
+      "backgrounds": [
+        [
+          232,
+          235,
+          228
+        ],
+        [
+          236,
+          237,
+          231
+        ],
+        [
+          234,
+          236,
+          230
+        ],
+        [
+          234,
+          237,
+          230
+        ]
+      ],
+      "ratios": [
+        5.615581307047547,
+        5.744215281531376,
+        5.681455213196565,
+        5.71865464451519
+      ],
+      "minimum": 5.615581307047547,
+      "threshold": 3,
+      "passes": true
+    },
+    {
+      "label": "dark Theme button",
+      "method": "Computed keyboard-focus outline, alpha-composited against four adjacent pixels from the rendered screenshot; minimum WCAG non-text contrast ratio.",
+      "active": true,
+      "bounds": {
+        "x": 1326.21875,
+        "y": 13.796875,
+        "width": 38.390625,
+        "height": 36,
+        "top": 13.796875,
+        "right": 1364.609375,
+        "bottom": 49.796875,
+        "left": 1326.21875
+      },
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineOffset": "2px",
+      "outlineColor": "rgb(255, 192, 135)",
+      "outlineRgba": [
+        255,
+        192,
+        135,
+        1
+      ],
+      "outsideOffset": 4.75,
+      "backgrounds": [
+        [
+          18,
+          27,
+          28
+        ],
+        [
+          17,
+          27,
+          27
+        ],
+        [
+          17,
+          27,
+          27
+        ],
+        [
+          17,
+          27,
+          27
+        ]
+      ],
+      "ratios": [
+        10.958173194170417,
+        10.984067781694579,
+        10.984067781694579,
+        10.984067781694579
+      ],
+      "minimum": 10.958173194170417,
+      "threshold": 3,
+      "passes": true
+    },
+    {
+      "label": "dark Fields header button",
+      "method": "Computed keyboard-focus outline, alpha-composited against four adjacent pixels from the rendered screenshot; minimum WCAG non-text contrast ratio.",
+      "active": true,
+      "bounds": {
+        "x": 1299.765625,
+        "y": 18.28125,
+        "width": 115.234375,
+        "height": 41.65625,
+        "top": 18.28125,
+        "right": 1415,
+        "bottom": 59.9375,
+        "left": 1299.765625
+      },
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineOffset": "3px",
+      "outlineColor": "rgb(255, 192, 135)",
+      "outlineRgba": [
+        255,
+        192,
+        135,
+        1
+      ],
+      "outsideOffset": 5.75,
+      "backgrounds": [
+        [
+          18,
+          28,
+          29
+        ],
+        [
+          15,
+          25,
+          26
+        ],
+        [
+          16,
+          26,
+          27
+        ],
+        [
+          17,
+          27,
+          28
+        ]
+      ],
+      "ratios": [
+        10.864841251140739,
+        11.19128902176661,
+        11.084287825067767,
+        10.975429082556651
+      ],
+      "minimum": 10.864841251140739,
+      "threshold": 3,
+      "passes": true
+    }
+  ],
+  "pageErrors": [],
+  "consoleWarningsOrErrors": []
+}

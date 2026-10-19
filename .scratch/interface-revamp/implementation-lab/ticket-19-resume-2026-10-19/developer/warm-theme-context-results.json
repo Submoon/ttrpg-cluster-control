@@ -1,0 +1,283 @@
+{
+  "baseURL": "http://127.0.0.1:3100",
+  "route": "/",
+  "expectedHeading": "Give the unknown a name.",
+  "timeoutMs": 180000,
+  "fixture": "Fresh isolated Chrome context, no storage state.",
+  "source": {
+    "components/WorkspaceHeader.vue": "caecc1b6dad070949cf84ac863140f80c11eb1add36e5f788e611833f58f1185",
+    "tests/workspace-theme.spec.ts": "4ec11f4a4008bdb07ac3afa0063dac9c7abd379bdb9b9b5a01b56693184ef7dc"
+  },
+  "browser": {
+    "name": "Google Chrome channel",
+    "version": "155.0.8059.80",
+    "headless": true
+  },
+  "response": {
+    "status": 200,
+    "url": "http://127.0.0.1:3100/"
+  },
+  "hydrated": true,
+  "pageTextAtEnd": "✦\nTTRPG Cluster Control\nLOCAL ONLY\n\nA local map workspace\n\nLocal workspace\nTHEME\nLight\nA PRIVATE CHART FOR YOUR CAMPAIGN\nGive the unknown a name.\n\nStart with a Jump Cluster and its first star system. This workspace stays in this browser; there is no account and no remote workspace.\n\nNEW LOCAL WORKSPACE\n01 / 01\nJUMP CLUSTER\nFIRST STAR SYSTEM\nCreate local workspace\n->\n\nYour archive remains on this device.",
+  "consoleWarningsOrErrors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: net::ERR_NETWORK_CHANGED"
+    }
+  ],
+  "pageErrors": [
+    "Failed to fetch dynamically imported module: http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/entry.js?t=1792402073232&v=8633f6e3"
+  ],
+  "failedRequests": [
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/iron-webcrypto/dist/index.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/node-mock-http/dist/index.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/app.vue",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/components/nuxt-error-page.vue",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/legacy.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/unhead/dist/client.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/shared/vue.DKb5ZKVl.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/shared/vue.Cw0CUS2b.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/shared/vue.BHyNcdic.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/unhead/dist/plugins.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/unhead/dist/utils.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/shared/vue.D2XR8FqS.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/compat/idle-callback.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/internal/prefetch.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@unhead/vue/dist/index.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/devalue/src/index.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/diagnostics/head.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/pages/runtime/router.options.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/diagnostics/manifest.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/pages/runtime/validate.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/nuxt/dist/app/middleware/route-rules.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/vue-router/dist/devtools-CxgSYwGp.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/vue-router/dist/useApi-CUWMwLLw.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/klona/dist/index.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/@id/virtual:nuxt:.nuxt%2Fapp.config.mjs",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/@vue/reactivity/dist/reactivity.esm-bundler.js?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/cookie-es/dist/index.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    },
+    {
+      "url": "http://127.0.0.1:3100/_nuxt/node_modules/ohash/dist/index.mjs?v=8633f6e3",
+      "resourceType": "script",
+      "error": "net::ERR_NETWORK_CHANGED"
+    }
+  ],
+  "pendingRequestsAtEnd": [],
+  "result": "welcome-rendered"
+}

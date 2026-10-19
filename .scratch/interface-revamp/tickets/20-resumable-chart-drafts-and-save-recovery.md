@@ -1,6 +1,6 @@
 ---
 title: 'Rename charts with resumable drafts and trustworthy Apply/save recovery'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -26,6 +26,10 @@ Ticket 18 is reopened and unclaimed for reassessment; tickets 19-21 are blocked 
 ## What to build
 
 Edit/hide/resume chart names, safely resolve transitions and distinguish an applied name from durable saving under failure.
+
+## Current availability - 2026-10-19
+
+Ticket 19 completes its scoped theme/resource reassessment with current source and runtime evidence. This ticket is now available and unclaimed; its previous acceptance remains withdrawn. The human resumes ticket 19 only, so no implementation or tests for this ticket are started here. Use the corrected presentation contract and current prerequisite Resolution when explicitly resumed.
 
 ## Acceptance criteria
 

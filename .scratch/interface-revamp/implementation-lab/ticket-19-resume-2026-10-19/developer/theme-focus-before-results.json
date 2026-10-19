@@ -1,0 +1,54 @@
+{
+  "baseline": "f64d00dbaf9cee569a8a62db0005b4ffe7f00ca7",
+  "route": "/",
+  "baseURL": "http://127.0.0.1:3100",
+  "fixture": "Fresh isolated browser storage; a local workspace is created only to reveal the existing Fields header command.",
+  "viewport": { "width": 1440, "height": 900 },
+  "browser": { "name": "Google Chrome channel", "version": "155.0.8059.80", "headless": true, "deviceScaleFactor": 1 },
+  "method": "Keyboard-focus outline alpha-composited against four adjacent pixels sampled from the rendered screenshot; report the minimum contrast ratio.",
+  "threshold": 3,
+  "samples": [
+    {
+      "label": "light Theme button",
+      "outlineColor": "oklab(0.298327 -0.0151894 0.00294757 / 0.25)",
+      "outlineWidth": "3px",
+      "outlineOffset": "3px",
+      "backgrounds": [[234, 236, 229], [235, 237, 230], [235, 237, 230], [234, 236, 229]],
+      "ratios": [1.6005238230319472, 1.6020918861332, 1.6020918861332, 1.6005238230319472],
+      "minimum": 1.6005238230319472,
+      "passes": false
+    },
+    {
+      "label": "light Fields header button",
+      "outlineColor": "rgb(155, 63, 0)",
+      "outlineWidth": "2px",
+      "outlineOffset": "3px",
+      "backgrounds": [[232, 235, 228], [236, 237, 231], [234, 236, 230], [234, 237, 230]],
+      "ratios": [5.615581307047547, 5.744215281531376, 5.681455213196565, 5.71865464451519],
+      "minimum": 5.615581307047547,
+      "passes": true
+    },
+    {
+      "label": "dark Theme button",
+      "outlineColor": "oklab(0.94261 -0.00875136 0.00707364 / 0.25)",
+      "outlineWidth": "3px",
+      "outlineOffset": "3px",
+      "backgrounds": [[158, 125, 28], [17, 27, 28], [17, 27, 27], [17, 26, 27]],
+      "ratios": [1.3994972763365634, 2.1146623831418454, 2.114514925244004, 2.112139533116859],
+      "minimum": 1.3994972763365634,
+      "passes": false
+    },
+    {
+      "label": "dark Fields header button",
+      "outlineColor": "rgb(255, 192, 135)",
+      "outlineWidth": "2px",
+      "outlineOffset": "3px",
+      "backgrounds": [[18, 28, 29], [15, 25, 26], [16, 26, 27], [17, 27, 28]],
+      "ratios": [10.864841251140739, 11.19128902176661, 11.084287825067767, 10.975429082556651],
+      "minimum": 10.864841251140739,
+      "passes": true
+    }
+  ],
+  "pageErrors": [],
+  "consoleWarningsOrErrors": []
+}

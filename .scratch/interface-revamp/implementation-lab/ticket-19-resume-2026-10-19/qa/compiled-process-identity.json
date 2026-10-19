@@ -1,0 +1,6 @@
+{
+  "ProcessId": 40964,
+  "ParentProcessId": 45064,
+  "CreationDate": "2026-10-19T11:39:23.970697+02:00",
+  "CommandLine": "\"C:\\nodejs\\node.exe\" --require C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-19-resume-2026-10-19\\qa\\network-guard.cjs .output/server/index.mjs"
+}

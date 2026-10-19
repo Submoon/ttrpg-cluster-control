@@ -1,0 +1,39 @@
+{
+  "phase": "after",
+  "route": "/",
+  "baseURL": "http://127.0.0.1:3100",
+  "fixture": "Empty isolated browser storage at the real product root.",
+  "input": "Keyboard-focused real Theme button.",
+  "source": {
+    "components/WorkspaceHeader.vue": "caecc1b6dad070949cf84ac863140f80c11eb1add36e5f788e611833f58f1185",
+    "assets/css/main.css": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "tests/workspace-theme.spec.ts": "d73b8ec138f76a4e5193b93bc14ff7729977671704435d74e9e1a030ae6dfaf6",
+    "nuxt.config.ts": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef"
+  },
+  "browser": {
+    "name": "Google Chrome channel",
+    "version": "155.0.8059.80",
+    "headless": true,
+    "deviceScaleFactor": 1
+  },
+  "captures": [
+    {
+      "file": "theme-control-after-desktop-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "theme": "light",
+      "focusedButton": "Switch to dark mode"
+    },
+    {
+      "file": "theme-control-after-short-landscape-dark.png",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "theme": "dark",
+      "focusedButton": "Switch to dark mode"
+    }
+  ]
+}
