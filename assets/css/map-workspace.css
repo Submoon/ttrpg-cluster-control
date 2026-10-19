@@ -142,8 +142,16 @@ textarea[aria-invalid="true"] {
 
 
 .save-feedback {
+  display: flex;
+  min-width: 0;
+  max-width: min(100%, 18rem);
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .workspace-feedback {
@@ -153,11 +161,10 @@ textarea[aria-invalid="true"] {
   z-index: 8;
   width: max-content;
   max-width: calc(100% - 1rem);
-  max-height: min(34dvh, 12rem);
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 3px;
-  padding: 0.5rem 0.7rem;
+  padding: 0.35rem 0.45rem;
   background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
   box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--map-bg) 65%, transparent);
 }
@@ -165,38 +172,87 @@ textarea[aria-invalid="true"] {
 .workspace-feedback-content {
   display: grid;
   min-width: 0;
-  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.35rem;
 }
 
-.workspace-feedback-draft,
-.workspace-feedback .save-feedback,
-.workspace-feedback-content > div:not(.workspace-feedback-draft) {
+.workspace-feedback-draft {
+  display: flex;
+  grid-column: 1 / -1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.workspace-feedback-draft .feedback {
+  max-width: min(12rem, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-feedback-actions,
+.workspace-feedback-direct-actions,
+.workspace-recovery-actions {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
+}
+
+.workspace-feedback-actions,
+.workspace-feedback-direct-actions {
+  flex: 0 1 auto;
+}
+
+.workspace-feedback-actions {
+  max-width: 100%;
+}
+
+.workspace-feedback-icon-button {
+  display: inline-grid;
+  min-width: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  padding: 0.25rem;
 }
 
 .workspace-save-indicator {
-  display: inline-block;
-  width: 0.4rem;
-  height: 0.4rem;
+  display: inline-grid;
+  width: 0.9rem;
+  height: 0.9rem;
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--text-muted);
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
-.workspace-save-indicator.is-saving {
-  background: var(--accent);
+.workspace-save-indicator::before {
+  content: '•';
 }
 
-.workspace-save-indicator.is-saved {
-  background: var(--status-good);
+.workspace-save-indicator.is-saving::before {
+  content: '…';
+  color: var(--accent);
 }
 
-.workspace-save-indicator.is-error {
-  background: var(--error);
+.workspace-save-indicator.is-saved::before {
+  content: '✓';
+  color: var(--status-good);
+}
+
+.workspace-save-indicator.is-error::before {
+  content: '!';
+  color: var(--error);
+}
+
+.workspace-save-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .saved-text {
@@ -1134,7 +1190,26 @@ p-note {
 .workspace-compact-recovery-content {
   display: grid;
   min-width: 0;
-  gap: 0.45rem;
+  gap: 0.3rem;
+}
+
+.workspace-recovery-popover-content {
+  display: grid;
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-height: min(50dvh, 18rem);
+  gap: 0.55rem;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  padding: 0.65rem;
+  background: var(--panel-raised);
+  color: var(--text-primary);
+  box-shadow: 0 0.6rem 1.6rem rgba(0, 0, 0, 0.35);
+  overscroll-behavior: contain;
+}
+
+.workspace-recovery-actions {
+  justify-content: flex-start;
 }
 
 @media (max-width: 1000px) and (min-width: 761px) and (min-height: 601px) {

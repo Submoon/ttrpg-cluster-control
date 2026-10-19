@@ -67,7 +67,7 @@
         @submit="submitNames"
       />
       <section v-else-if="workspace" class="editor">
-        <MapEditorLayout
+          <MapEditorLayout
           :mode="activeView"
           :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
           :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
@@ -75,20 +75,23 @@
           :inspector-visible="inspectorPanelVisible"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen"
+            :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
           @close-panel="closePanel"
         >
           <template #compact-recovery>
             <section class="workspace-compact-recovery-content" aria-label="Workspace save and recovery">
               <WorkspaceFeedback
+                :active="true"
                 :has-chart-name-draft="hasChartNameDraft"
                 :has-uncommitted-names="hasUncommittedNames"
                 :save-state="saveState"
                 :save-message="saveMessage"
+                :save-error="saveError"
                 :export-error="exportError"
                 @resume-chart-draft="beginChartNamesEdit()"
                 @retry-save="retryLatestSave"
                 @export-current-json="downloadClusterJson"
+                @recovery-details-open-change="recoveryDetailsOpen = $event"
               />
             </section>
           </template>
@@ -207,6 +210,7 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
@@ -241,6 +245,7 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :feedback-element="workspaceFeedbackRef"
                     :is-object-move-blocked="isObjectMoveBlocked"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -277,16 +282,26 @@
                 Select a mark or Orbit to inspect it.
               </p>
             </section>
-            <section v-if="workspace" :inert="compactPanelOpen || undefined" class="workspace-feedback" role="region" aria-label="Workspace feedback and recovery">
+            <section
+              v-if="workspace"
+              ref="workspaceFeedbackRef"
+              :inert="compactPanelOpen || undefined"
+              class="workspace-feedback"
+              role="region"
+              aria-label="Workspace feedback and recovery"
+            >
               <WorkspaceFeedback
+                :active="!compactPanelOpen"
                 :has-chart-name-draft="hasChartNameDraft"
                 :has-uncommitted-names="hasUncommittedNames"
                 :save-state="saveState"
                 :save-message="saveMessage"
+                :save-error="saveError"
                 :export-error="exportError"
                 @resume-chart-draft="beginChartNamesEdit()"
                 @retry-save="retryLatestSave"
                 @export-current-json="downloadClusterJson"
+                @recovery-details-open-change="recoveryDetailsOpen = $event"
               />
             </section>
           </template>
@@ -460,6 +475,8 @@ function handleBlockedObjectMove(objectId: string): void {
 }
 
 const headerFilesOpen = ref(false)
+const recoveryDetailsOpen = ref(false)
+const workspaceFeedbackRef = ref<HTMLElement | null>(null)
 
 const {
   exportError,

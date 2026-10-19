@@ -1,6 +1,50 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback } from './helpers'
 
+async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
+  for (const name of ['Close inspector panel', 'Close hierarchy panel']) {
+    const close = page.getByRole('button', { name, exact: true })
+    if (await close.isVisible()) await close.click()
+  }
+}
+
+async function abortNextWorkspaceWrite(
+  page: import('@playwright/test').Page,
+  operation: () => Promise<void>,
+): Promise<void> {
+  await page.evaluate(() => {
+    const original = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')
+    if (!original) throw new Error('IndexedDB put is unavailable.')
+    const state = { original, aborted: 0 }
+    ;(window as Window & { __feedbackAbort?: typeof state }).__feedbackAbort = state
+    Object.defineProperty(IDBObjectStore.prototype, 'put', {
+      ...original,
+      value: function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
+        const request = original.value!.apply(this, args)
+        if (!state.aborted && this.transaction.db.name === 'ttrpg-cluster-control'
+          && this.name === 'workspace' && this.transaction.mode === 'readwrite' && args[1] === 'current') {
+          state.aborted += 1
+          this.transaction.abort()
+        }
+        return request
+      },
+    })
+  })
+
+  try {
+    await operation()
+    const aborted = await page.evaluate(() => (window as Window & { __feedbackAbort?: { aborted: number } }).__feedbackAbort?.aborted ?? 0)
+    expect(aborted).toBe(1)
+  } finally {
+    await page.evaluate(() => {
+      const state = (window as Window & { __feedbackAbort?: { original: PropertyDescriptor } }).__feedbackAbort
+      if (!state) return
+      Object.defineProperty(IDBObjectStore.prototype, 'put', state.original)
+      delete (window as Window & { __feedbackAbort?: unknown }).__feedbackAbort
+    })
+  }
+}
+
 async function createWorkspace(page: import('@playwright/test').Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
@@ -128,4 +172,107 @@ test('save feedback has one compact bottom owner and leaves map controls hit-tes
       await dialog.getByRole('button', { name: 'Close' }).click()
     }
   }
+})
+
+test('explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 500 })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
+  await page.getByLabel('First star system', { exact: true }).fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  await palette.getByRole('group', { name: 'Object categories' })
+    .getByRole('button', { name: 'Celestial bodies', exact: true }).click()
+  await palette.getByRole('button', { name: 'Add Planet', exact: true }).click()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await closeCompactPanels(page)
+
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+  const hierarchy = page.locator('#workspace-hierarchy-panel')
+  await hierarchy.getByRole('button', { name: /^Select PL-01, New planet 1/ }).click()
+  await closeCompactPanels(page)
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
+  await inspector.getByLabel('Schematic X', { exact: true }).fill('0.9')
+  await inspector.getByLabel('Schematic Y', { exact: true }).fill('0.9')
+  await inspector.getByRole('button', { name: 'Save map object', exact: true }).click()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await closeCompactPanels(page)
+
+  const systemMap = page.locator('.system-map-content')
+  const cameraBeforeFeedback = await systemMap.getAttribute('transform')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const chartInspector = page.locator('#workspace-inspector-panel')
+  await chartInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await chartInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
+  const appliedDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await appliedDialog.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
+  await appliedDialog.getByLabel('Star system', { exact: true }).fill('Applied recovery star')
+  await abortNextWorkspaceWrite(page, async () => {
+    await appliedDialog.getByRole('button', { name: 'Apply names', exact: true }).click()
+    await expect(appliedDialog).toBeHidden()
+  })
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Not saved.')
+
+  await closeCompactPanels(page)
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const draftInspector = page.locator('#workspace-inspector-panel')
+  await draftInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await draftInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
+  const draftDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await draftDialog.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')
+  await draftDialog.getByLabel('Star system', { exact: true }).fill('Hidden unapplied draft star')
+  await page.keyboard.press('Escape')
+  await expect(draftDialog).toBeHidden()
+  await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })).toBeVisible()
+  await expect(systemMap).toHaveAttribute('transform', cameraBeforeFeedback!)
+
+  const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
+  const compactDetailsTrigger = compactRecovery.getByRole('button', { name: 'Recovery details', exact: true })
+  await compactDetailsTrigger.click()
+  let details = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
+  await expect(details).toBeVisible()
+  await expect(details.getByRole('alert')).toContainText('Save failed:')
+  await expect(details.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible()
+  const pendingDownload = page.waitForEvent('download')
+  await details.getByRole('button', { name: 'Export current Jump Cluster JSON', exact: true }).click()
+  const download = await pendingDownload
+  expect(download.suggestedFilename()).toMatch(/\.json$/i)
+  await page.keyboard.press('Escape')
+  await expect(compactDetailsTrigger).toBeFocused()
+
+  await closeCompactPanels(page)
+  const normalFeedback = activeWorkspaceFeedback(page)
+  const normalDetailsTrigger = normalFeedback.getByRole('button', { name: 'Recovery details', exact: true })
+  await normalDetailsTrigger.click()
+  details = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
+  await expect(details.getByRole('alert')).toContainText('Save failed:')
+  await expect(details.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible()
+  await expect(details.getByRole('button', { name: 'Export current Jump Cluster JSON', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(normalDetailsTrigger).toBeFocused()
+
+  await page.getByRole('button', { name: 'Select', exact: true }).click()
+  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+  const planet = page.getByRole('button', { name: /^Select PL-01, New planet 1 \(/ })
+  await expect(planet).toBeVisible()
+  const ordinaryHit = await planet.evaluate(element => {
+    const bounds = element.getBoundingClientRect()
+    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+    return hit === element || element.contains(hit)
+  })
+  expect(ordinaryHit).toBe(true)
+
+  await planet.click()
+  const guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
+  await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Edit chart names' })).toBeHidden()
 })

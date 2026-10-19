@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="canvasRoot"
     class="workspace-map-canvas"
     @pointerdown.capture="onPointerDownCapture"
     @contextmenu.capture="onContextMenuCapture"
@@ -68,6 +69,7 @@ import type {
 import type { MapInteractionMode, SystemMapHandle } from '../composables/editor-workflows/types'
 import type { MapImageFormat } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
+import { normalizeSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
 
@@ -83,6 +85,7 @@ const props = defineProps<{
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
+  feedbackElement?: HTMLElement | null
 }>()
 
 const emit = defineEmits<{
@@ -112,6 +115,7 @@ type ClusterMapHandle = InstanceType<typeof ClusterMap>
 type SystemMapInstance = InstanceType<typeof SystemMap>
 const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
+const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let pointerLongPress: { id: number; x: number; y: number; target: EventTarget | null; timer: ReturnType<typeof setTimeout> } | null = null
@@ -378,6 +382,74 @@ function emitViewport(viewport: MapViewport): void {
   if (mapReady) emit('viewport-change', { key: sourceMapKey, viewport })
 }
 
+function fitMap(usableRect?: SvgViewportRect): void {
+  const map = currentMap()
+  if (!map) return
+  if (usableRect !== undefined) {
+    map.fitMap(usableRect)
+    return
+  }
+
+  const feedback = props.feedbackElement
+  if (!feedback || !feedback.isConnected || feedback.closest('[inert]')) {
+    map.fitMap()
+    return
+  }
+
+  const feedbackStyle = window.getComputedStyle(feedback)
+  if (feedbackStyle.display === 'none' || feedbackStyle.visibility === 'hidden'
+    || feedbackStyle.opacity === '0' || feedback.getClientRects().length === 0) {
+    map.fitMap()
+    return
+  }
+
+  const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
+  if (!svg) return
+
+  const svgBounds = svg.getBoundingClientRect()
+  const feedbackBounds = feedback.getBoundingClientRect()
+  const boundsAreUsable = (bounds: DOMRect): boolean => [
+    bounds.left, bounds.top, bounds.right, bounds.bottom, bounds.width, bounds.height,
+  ].every(Number.isFinite) && bounds.width > 0 && bounds.height > 0
+  if (!boundsAreUsable(svgBounds) || !boundsAreUsable(feedbackBounds)) return
+
+  const intersects = feedbackBounds.left < svgBounds.right
+    && feedbackBounds.right > svgBounds.left
+    && feedbackBounds.top < svgBounds.bottom
+    && feedbackBounds.bottom > svgBounds.top
+  if (!intersects) {
+    map.fitMap()
+    return
+  }
+
+  const usableClientBottom = Math.max(svgBounds.top, feedbackBounds.top)
+  if (!(usableClientBottom > svgBounds.top)) return
+
+  const screenMatrix = svg.getScreenCTM()
+  if (!screenMatrix) return
+
+  try {
+    const inverse = screenMatrix.inverse()
+    const corners = [
+      [svgBounds.left, svgBounds.top],
+      [svgBounds.right, svgBounds.top],
+      [svgBounds.left, usableClientBottom],
+      [svgBounds.right, usableClientBottom],
+    ].map(([x, y]) => ({
+      x: inverse.a * x! + inverse.c * y! + inverse.e,
+      y: inverse.b * x! + inverse.d * y! + inverse.f,
+    }))
+    const left = Math.min(...corners.map(point => point.x))
+    const top = Math.min(...corners.map(point => point.y))
+    const right = Math.max(...corners.map(point => point.x))
+    const bottom = Math.max(...corners.map(point => point.y))
+    const measuredRect = normalizeSvgViewportRect({ x: left, y: top, width: right - left, height: bottom - top })
+    if (measuredRect) map.fitMap(measuredRect)
+  } catch {
+    // If the visible obstruction cannot be measured safely, keep the existing camera.
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerUp, true)
@@ -414,7 +486,7 @@ defineExpose({
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
-  fitMap: () => currentMap()?.fitMap(),
+  fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),

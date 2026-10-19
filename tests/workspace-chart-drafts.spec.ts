@@ -449,10 +449,11 @@ test('Add system applies dirty chart names before building from the latest works
   await clickDockAction(page, 'Add star system')
   await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Apply and continue' }).click()
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
   await expect(clusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.name).toBe('Kestrel Reach Prime')
@@ -591,12 +592,18 @@ test('export failures stay separate from chart draft and workspace save feedback
   try {
     await setHeaderMapActionsOpen(page, true)
     await page.getByRole('button', { name: 'Export star system JSON' }).click()
-    await expect(activeWorkspaceFeedback(page).getByRole('alert'))
+    const feedback = activeWorkspaceFeedback(page)
+    const detailsTrigger = feedback.getByRole('button', { name: 'Recovery details', exact: true })
+    await detailsTrigger.click()
+    const recoveryDetails = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
+    await expect(recoveryDetails.getByRole('alert'))
       .toContainText('Export failed: Synthetic export failure.')
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-    await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }))
+    await page.keyboard.press('Escape')
+    await expect(detailsTrigger).toBeFocused()
+    await expect(feedback.locator('.save-feedback')).toHaveText('Saved on this device')
+    await expect(feedback.getByRole('button', { name: 'Resume chart name draft' }))
       .toBeVisible()
-    await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
+    await feedback.getByRole('button', { name: 'Resume chart name draft' }).click()
     await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Unapplied Reach')
   } finally {
     await page.evaluate(() => {
@@ -782,6 +789,7 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await returnToClusterMap(page)
   await clickDockAction(page, 'Add star system')
+  await returnToClusterMap(page)
   const deleteSystemButton = page.getByRole('button', { name: 'Delete New System 2 system' })
   await expect(deleteSystemButton).toBeVisible()
   await expect(deleteSystemButton).toBeEnabled()
@@ -856,6 +864,7 @@ test('system deletion resolves its chart target after review and asks again for 
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await returnToClusterMap(page)
   await clickDockAction(page, 'Add star system')
+  await returnToClusterMap(page)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 
   const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents' })
@@ -967,6 +976,8 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
       await clickDockAction(page, 'Add orbit')
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
       await hierarchy.getByRole('button', { name: /Select PL-01, New planet 1/ }).click()
+      await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-expanded', 'false')
+      await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
       await clickDockAction(page, 'Add orbit')
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
     } else {
@@ -1002,8 +1013,9 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
       await resolveSelectionGuard(page, 'apply')
       await expect(dialog).toBeHidden()
       await expect(target).toHaveAttribute('aria-current', 'true')
-      await expect(page.getByRole('region', { name: 'Active Star System summary' }))
-        .toContainText('Vesper Prime')
+      await expect(page.getByRole('region', {
+        name: entryView === 'cluster' ? 'Selected Star System summary' : 'Active Star System summary',
+      })).toContainText('Vesper Prime')
       await finishHeldImportAndVerifyExport(page, 'Kestrel Reach Prime', 'Vesper Prime')
       await page.reload()
       await returnToClusterMap(page)
