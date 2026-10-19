@@ -298,8 +298,11 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await addCatalogueObject(page, 'jump-point')
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await expect(clusterMap).toBeVisible()
   await clickDockAction(page, 'Add Jump Route')
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   const routeLevel = routeInspector.getByLabel('Jump level')

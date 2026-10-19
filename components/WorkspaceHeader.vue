@@ -190,12 +190,12 @@
         <span class="workspace-header-save-state" :class="`is-${saveState}`" role="status" aria-live="polite">
           {{ saveStatusLabel }}
         </span>
-        <div class="workspace-header-theme" aria-label="Theme controls">
+        <div class="workspace-header-theme" role="group" aria-label="Theme">
           <span class="workspace-header-theme-label">THEME</span>
           <ColorScheme>
             <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
           </ColorScheme>
-          <UColorModeButton />
+          <UColorModeButton class="theme-control-toggle" />
         </div>
         <slot name="field-definitions" />
       </div>
