@@ -187,9 +187,6 @@
       </nav>
 
       <div class="workspace-header-utilities">
-        <span class="workspace-header-save-state" :class="`is-${saveState}`" role="status" aria-live="polite">
-          {{ saveStatusLabel }}
-        </span>
         <div class="workspace-header-theme" role="group" aria-label="Theme">
           <span class="workspace-header-theme-label">THEME</span>
           <ColorScheme>
@@ -207,14 +204,12 @@
 import { computed, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
-import type { SaveState } from '../composables/editor-workflows/types'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
   activeView: 'cluster' | 'system'
   selectedSystem: StarSystem | null | undefined
   jumpPointCount: number
-  saveState: SaveState
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
@@ -251,15 +246,6 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
   : `star system ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
 const starCount = computed(() => selectedSystem.value?.objects.filter(object => object.subtype === 'star').length ?? 0)
-const saveStatusLabel = computed(() => {
-  switch (props.saveState) {
-    case 'saving': return 'Saving locally'
-    case 'saved': return 'Saved on this device'
-    case 'error': return 'Save needs attention'
-    default: return 'Local workspace'
-  }
-})
-
 watch(headerMapActionsOpen, open => emit('files-open-change', open))
 watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false

@@ -9,7 +9,6 @@
       :active-view="activeView"
       :selected-system="selectedSystem"
       :jump-point-count="jumpPoints.length"
-      :save-state="saveState"
       :cluster-map="clusterMapRef"
       :system-map="systemMapRef"
       :export-error="exportError"
@@ -83,6 +82,7 @@
             <section class="workspace-compact-recovery-content" aria-label="Workspace save and recovery">
               <WorkspaceFeedback
                 :has-chart-name-draft="hasChartNameDraft"
+                :has-uncommitted-names="hasUncommittedNames"
                 :save-state="saveState"
                 :save-message="saveMessage"
                 :export-error="exportError"
@@ -98,7 +98,6 @@
               :active-view="activeView"
               :selected-system="selectedSystem"
               :jump-point-count="jumpPoints.length"
-              :save-state="saveState"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
@@ -137,7 +136,6 @@
             <WorkspaceDock
               :mode="mapMode"
               :zoom-level="zoomLevel"
-              :status="saveMessage"
               @mode-change="setMapMode"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
@@ -279,6 +277,18 @@
                 Select a mark or Orbit to inspect it.
               </p>
             </section>
+            <section v-if="workspace" :inert="compactPanelOpen || undefined" class="workspace-feedback" role="region" aria-label="Workspace feedback and recovery">
+              <WorkspaceFeedback
+                :has-chart-name-draft="hasChartNameDraft"
+                :has-uncommitted-names="hasUncommittedNames"
+                :save-state="saveState"
+                :save-message="saveMessage"
+                :export-error="exportError"
+                @resume-chart-draft="beginChartNamesEdit()"
+                @retry-save="retryLatestSave"
+                @export-current-json="downloadClusterJson"
+              />
+            </section>
           </template>
 
           <template #inspector>
@@ -316,17 +326,6 @@
       </section>
     </main>
 
-    <footer v-if="workspace" :inert="compactPanelOpen || undefined" class="workspace-feedback flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-2.5" aria-label="Workspace feedback and recovery">
-      <WorkspaceFeedback
-        :has-chart-name-draft="hasChartNameDraft"
-        :save-state="saveState"
-        :save-message="saveMessage"
-        :export-error="exportError"
-        @resume-chart-draft="beginChartNamesEdit()"
-        @retry-save="retryLatestSave"
-        @export-current-json="downloadClusterJson"
-      />
-    </footer>
   </div>
 </template>
 

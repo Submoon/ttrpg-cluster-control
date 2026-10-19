@@ -59,7 +59,6 @@
         <UButton class="workspace-control" color="neutral" variant="outline" size="sm" aria-label="Pan map right" @click="emit('pan-by', 80, 0)">→</UButton>
       </div>
     </div>
-    <span class="sr-only" role="status" aria-live="polite">{{ props.status }}</span>
   </nav>
 </template>
 
@@ -70,7 +69,6 @@ import type { MapInteractionMode } from '../composables/editor-workflows/types'
 const props = defineProps<{
   mode: MapInteractionMode
   zoomLevel: number
-  status: string
 }>()
 
 const emit = defineEmits<{

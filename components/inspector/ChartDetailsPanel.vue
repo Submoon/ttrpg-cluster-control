@@ -19,7 +19,7 @@
       {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
     </UButton>
     <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
-      Unapplied chart-name changes
+      Chart-name editing session
     </span>
   </div>
 

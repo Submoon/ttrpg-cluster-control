@@ -147,11 +147,56 @@ textarea[aria-invalid="true"] {
 }
 
 .workspace-feedback {
-  position: sticky;
-  bottom: 0;
+  position: absolute;
+  right: clamp(0.5rem, 2vw, 1.5rem);
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
   z-index: 8;
-  background: var(--panel-bg);
-  box-shadow: 0 -0.35rem 1rem color-mix(in srgb, var(--map-bg) 65%, transparent);
+  width: max-content;
+  max-width: calc(100% - 1rem);
+  max-height: min(34dvh, 12rem);
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.5rem 0.7rem;
+  background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--map-bg) 65%, transparent);
+}
+
+.workspace-feedback-content {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+}
+
+.workspace-feedback-draft,
+.workspace-feedback .save-feedback,
+.workspace-feedback-content > div:not(.workspace-feedback-draft) {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.workspace-save-indicator {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.workspace-save-indicator.is-saving {
+  background: var(--accent);
+}
+
+.workspace-save-indicator.is-saved {
+  background: var(--status-good);
+}
+
+.workspace-save-indicator.is-error {
+  background: var(--error);
 }
 
 .saved-text {
@@ -292,6 +337,7 @@ p-note {
 
 
 .map-workspace-shell {
+  position: relative;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
@@ -299,10 +345,6 @@ p-note {
 }
 
 .map-workspace-shell > .workspace-header {
-  flex: 0 0 auto;
-}
-
-.map-workspace-shell > .workspace-feedback {
   flex: 0 0 auto;
 }
 
@@ -901,6 +943,7 @@ p-note {
 }
 
 .map-workspace-shell .workspace-map-column {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;

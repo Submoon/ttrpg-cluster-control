@@ -1,7 +1,7 @@
 <template>
-  <div class="contents">
-    <div v-if="props.hasChartNameDraft" class="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
-      <span class="feedback">Unapplied chart-name changes</span>
+  <div class="workspace-feedback-content">
+    <div v-if="props.hasChartNameDraft" class="workspace-feedback-draft" role="status" aria-live="polite">
+      <span class="feedback">{{ props.hasUncommittedNames ? 'Unapplied chart-name changes' : 'Chart names ready to resume' }}</span>
       <UButton
         class="workspace-control resume-chart-draft"
         color="neutral"
@@ -19,7 +19,7 @@
       :role="props.saveState === 'error' ? 'alert' : 'status'"
       :aria-live="props.saveState === 'error' ? 'assertive' : 'polite'"
     >
-      <span class="inline-block size-[0.4rem] shrink-0 rounded-full bg-[var(--status-good)]" aria-hidden="true"></span>
+      <span class="workspace-save-indicator" :class="`is-${props.saveState}`" aria-hidden="true"></span>
       {{ props.saveMessage }}
     </span>
 
@@ -43,6 +43,7 @@ import type { SaveState } from '../composables/editor-workflows/types'
 
 const props = defineProps<{
   hasChartNameDraft: boolean
+  hasUncommittedNames: boolean
   saveState: SaveState
   saveMessage: string
   exportError: string

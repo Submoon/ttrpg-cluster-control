@@ -11,7 +11,7 @@
       <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
         {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Unapplied chart-name changes</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -84,7 +84,7 @@
       <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
         {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Unapplied chart-name changes</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
