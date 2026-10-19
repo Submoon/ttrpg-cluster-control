@@ -189,6 +189,11 @@ const emit = defineEmits<{
 </script>
 
 <style scoped>
+.workspace-welcome :deep(:is(button, input):focus-visible),
+.workspace-message :deep(button:focus-visible) {
+  outline-color: var(--focus) !important;
+}
+
 .launch-action {
   scroll-margin-block: 0.75rem;
 }
