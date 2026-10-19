@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { activeWorkspaceFeedback, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceZoomNavigation, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -41,12 +41,15 @@ test('desktop panels remain independent and the portaled Map files menu stays hi
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const inspector = page.locator('#workspace-inspector-panel')
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await expect(hierarchy).toBeVisible()
+  await expect(hierarchy).toBeHidden()
   await expect(inspector).toBeVisible()
 
+  await hierarchyToggle.click()
+  await expect(hierarchy).toBeVisible()
+  await expect(inspector).toBeVisible()
   await hierarchyToggle.click()
   await expect(hierarchy).toBeHidden()
   await expect(inspector).toBeVisible()
@@ -63,9 +66,7 @@ test('desktop panels remain independent and the portaled Map files menu stays hi
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
 
-  const filesToggle = page.getByRole('button', {
-    name: 'Open map file actions for star system Vesper',
-  })
+  const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
   await filesToggle.click()
   const files = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const exportButton = files.getByRole('button', { name: 'Export star system JSON' })
@@ -92,7 +93,7 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   const inspector = page.locator('#workspace-inspector-panel')
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   await expect(dock).toBeVisible()
-  await expect(page.getByRole('slider', { name: 'Map zoom level' })).toBeVisible()
+  await expect((await openWorkspaceZoomNavigation(page)).getByRole('slider', { name: 'Map zoom level' })).toBeVisible()
 
   await expect(inspector).toBeHidden()
   await expect(hierarchy).toBeHidden()
@@ -131,7 +132,7 @@ test('touch long press keeps focus inside the compact inspector after the touch 
   await createWorkspace(page, { width: 390, height: 844 })
   await page.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
 
-  const filesToggle = page.getByRole('button', { name: 'Open map file actions for Jump Cluster Kestrel Reach' })
+  const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
   await filesToggle.click()
   await page.keyboard.press('Escape')
   await expect(filesToggle).toBeFocused()
@@ -191,6 +192,7 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
   const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
   await chartDialog.getByLabel('Jump Cluster').fill('')
@@ -211,7 +213,8 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await page.setViewportSize({ width: 844, height: 390 })
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
-  await hierarchy.locator('.map-dashboard-panel').getByRole('button', { name: 'Resume chart name draft' }).click()
+  await hierarchy.locator('.workspace-side-panel-content')
+    .getByRole('button', { name: 'Resume chart name draft' }).click()
   await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
   await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
@@ -225,7 +228,7 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
   await hierarchyToggle.click()
   await expect(hierarchy).toBeVisible()
-  await hierarchy
+  await hierarchy.locator('.workspace-side-panel-content')
     .getByRole('button', { name: 'Resume chart name draft' }).click()
   await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
@@ -239,8 +242,9 @@ test('a nested chart dialog pauses the compact panel focus trap and returns focu
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
   const hierarchy = page.locator('#workspace-hierarchy-panel')
-  const chartNamesControl = hierarchy.locator('.map-dashboard-panel').getByRole('button', { name: /Edit chart names|Resume chart name draft/ })
-  const editNames = hierarchy.locator('.map-dashboard-panel').getByRole('button', { name: 'Edit chart names' })
+  const chartNamesControl = hierarchy.locator('.workspace-side-panel-content')
+    .getByRole('button', { name: /Edit chart names|Resume chart name draft/ })
+  const editNames = hierarchy.getByRole('button', { name: 'Edit chart names' })
   await editNames.click()
 
   const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })

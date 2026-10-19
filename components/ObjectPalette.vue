@@ -66,11 +66,13 @@ import {
 import { catalogueMarks } from '../utils/catalogue-marks'
 
 const props = defineProps<{
+  activeFamily?: ObjectFamily
   selectedOrbit?: Orbit | null
   saving: boolean
 }>()
 
 const emit = defineEmits<{
+  'update:activeFamily': [family: ObjectFamily]
   'add-object': [subtype: CatalogueSubtype]
   'add-orbit': []
 }>()
@@ -88,7 +90,14 @@ const groups = ([
   types: catalogueTypes.filter(type => type.family === group.family),
 }))
 
-const activeFamily = ref(groups[0]!.family)
+const localActiveFamily = ref(groups[0]!.family)
+const activeFamily = computed({
+  get: () => props.activeFamily ?? localActiveFamily.value,
+  set: (family: ObjectFamily) => {
+    if (props.activeFamily === undefined) localActiveFamily.value = family
+    emit('update:activeFamily', family)
+  },
+})
 const activeGroup = computed(() => groups.find(group => group.family === activeFamily.value)!)
 
 /**

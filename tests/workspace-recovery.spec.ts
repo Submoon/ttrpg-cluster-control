@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
 
@@ -135,7 +135,7 @@ test('an attached Orbit with undersized imported radii is rejected without losin
 
   await expect(page.getByRole('alert')).toContainText('Choose a valid version 1')
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
   const unchanged = await readCurrentWorkspace(page) as StoredWorkspace
   expect(unchanged.cluster.systems.map(system => system.name)).toEqual(['Vesper'])
 
@@ -152,14 +152,16 @@ test('an attached Orbit with undersized imported radii is rejected without losin
   expect(preview.message()).toContain('star system')
   await preview.accept()
 
+  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systems = page.getByRole('navigation', { name: 'Star systems' })
-  await expect(systems.getByRole('button', { name: /Small Orbit Test/ })).toBeVisible()
+  await expect(systems.getByRole('button', { name: 'Open Small Orbit Test system map' })).toBeVisible()
   await expect.poll(async () =>
     (await readCurrentWorkspace(page) as StoredWorkspace).cluster.systems.map(system => system.name),
   ).toContain('Small Orbit Test')
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await expect(page.getByRole('navigation', { name: 'Star systems' })
-    .getByRole('button', { name: /Small Orbit Test/ })).toBeVisible()
+    .getByRole('button', { name: 'SY Small Orbit Test 1 map objects' })).toBeVisible()
 })
 
 test('the last valid workspace can be restored after the current snapshot fails to load', async ({ page }) => {
@@ -185,12 +187,12 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeVisible()
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
 
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
   await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
   await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
 })
@@ -301,9 +303,9 @@ test('a failed backup restore stays unavailable and preserves both records until
   await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
   await expect(page.getByRole('complementary')).toHaveCount(0)
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
   await page.reload()
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
 })
 
 test('the recovery screen explains when no local backup is available', async ({ page }) => {
@@ -440,6 +442,6 @@ test('a temporary IndexedDB opening failure can be retried without exposing a pa
   await page.getByLabel('First star system').fill('Aster')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Aster')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Aster')
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 })

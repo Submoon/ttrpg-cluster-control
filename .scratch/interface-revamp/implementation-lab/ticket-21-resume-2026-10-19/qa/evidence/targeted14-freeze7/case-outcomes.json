@@ -1,0 +1,72 @@
+[
+  {
+    "file": "object-fields.spec.ts",
+    "title": "Chart details is an active, keyboard-accessible inspector view",
+    "status": "expected"
+  },
+  {
+    "file": "system-orbits.spec.ts",
+    "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+    "status": "unexpected"
+  },
+  {
+    "file": "system-orbits.spec.ts",
+    "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+    "status": "unexpected"
+  },
+  {
+    "file": "system-orbits.spec.ts",
+    "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-composition.spec.ts",
+    "title": "a first workspace visit keeps the full map board open with a bottom mode Dock",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-composition.spec.ts",
+    "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-composition.spec.ts",
+    "title": "a second touch cannot take over an active panel-resize pointer",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "custom field category and subtype scopes are united on independent system import",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can review and safely confirm dependent map deletions",
+    "status": "unexpected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can export a cluster and standalone system as versioned JSON",
+    "status": "unexpected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can validate and import an independent JSON copy",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can import a standalone system without adding cluster routes",
+    "status": "expected"
+  },
+  {
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can complete the local campaign workflow end to end",
+    "status": "unexpected"
+  },
+  {
+    "file": "workspace-recovery.spec.ts",
+    "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+    "status": "unexpected"
+  }
+]

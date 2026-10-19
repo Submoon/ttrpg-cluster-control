@@ -1,0 +1,542 @@
+[
+  {
+    "path": "app.vue",
+    "expected": "aee5b86e15b74f99536912dbe721d8d19dc1371e69f5c36e4c10cf995e2b4f4f",
+    "actual": "aee5b86e15b74f99536912dbe721d8d19dc1371e69f5c36e4c10cf995e2b4f4f",
+    "unchanged": true
+  },
+  {
+    "path": "assets/css/main.css",
+    "expected": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "actual": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093",
+    "unchanged": true
+  },
+  {
+    "path": "assets/css/map-workspace.css",
+    "expected": "6490e91162f5a285a043721c13e76e92b90e424d35c68e5d70f9e3f05ca46314",
+    "actual": "6490e91162f5a285a043721c13e76e92b90e424d35c68e5d70f9e3f05ca46314",
+    "unchanged": true
+  },
+  {
+    "path": "components/BaselinePage.vue",
+    "expected": "5d148f4dbb3cd2c621fe226d15982bd84cd09e5c2d8ebd1b9c3126cf1cdeec4c",
+    "actual": "5d148f4dbb3cd2c621fe226d15982bd84cd09e5c2d8ebd1b9c3126cf1cdeec4c",
+    "unchanged": true
+  },
+  {
+    "path": "components/ChartNamesDialog.vue",
+    "expected": "49eea8c9be522bcffd28db67ed6c9ef888e2ddc62f7efc9c532fbdb562cb038f",
+    "actual": "49eea8c9be522bcffd28db67ed6c9ef888e2ddc62f7efc9c532fbdb562cb038f",
+    "unchanged": true
+  },
+  {
+    "path": "components/ClusterMap.vue",
+    "expected": "330beac78097c78e9c57bd836b05ab6191bfe6692fec0d14dae33180bd24c8eb",
+    "actual": "330beac78097c78e9c57bd836b05ab6191bfe6692fec0d14dae33180bd24c8eb",
+    "unchanged": true
+  },
+  {
+    "path": "components/field-definitions/FieldDefinitionChangeConfirmation.vue",
+    "expected": "3803bbef1d826f9fb604294dba81dce92f31bf7f2fdd9462c99e35c114855ceb",
+    "actual": "3803bbef1d826f9fb604294dba81dce92f31bf7f2fdd9462c99e35c114855ceb",
+    "unchanged": true
+  },
+  {
+    "path": "components/field-definitions/FieldDefinitionEditor.vue",
+    "expected": "07e1eabf85badfec5aac1846d5d1c300939b586640c07b236a7db4e87775173e",
+    "actual": "07e1eabf85badfec5aac1846d5d1c300939b586640c07b236a7db4e87775173e",
+    "unchanged": true
+  },
+  {
+    "path": "components/field-definitions/FieldDefinitionList.vue",
+    "expected": "815e2c0b8ec40a66cb333fdf182528cf7130df7863c0a56b0334158c78540e7e",
+    "actual": "815e2c0b8ec40a66cb333fdf182528cf7130df7863c0a56b0334158c78540e7e",
+    "unchanged": true
+  },
+  {
+    "path": "components/field-definitions/FieldDefinitionValues.vue",
+    "expected": "5a6ed3a7f2017278d354ebce8dd3111c52c3eb264c5c6822ea500c783e319bde",
+    "actual": "5a6ed3a7f2017278d354ebce8dd3111c52c3eb264c5c6822ea500c783e319bde",
+    "unchanged": true
+  },
+  {
+    "path": "components/field-definitions/model.ts",
+    "expected": "f36b1dff3d5551a583d89a50a42c7217b00e9359e7c8fc123ce43a1ffcb99b8e",
+    "actual": "f36b1dff3d5551a583d89a50a42c7217b00e9359e7c8fc123ce43a1ffcb99b8e",
+    "unchanged": true
+  },
+  {
+    "path": "components/FieldDefinitionsDialog.vue",
+    "expected": "1fdd77effaf2c94ed9f44f3de911d2efe15a227e84bf185b7133851b2649e448",
+    "actual": "1fdd77effaf2c94ed9f44f3de911d2efe15a227e84bf185b7133851b2649e448",
+    "unchanged": true
+  },
+  {
+    "path": "components/inspector/ChartDetailsPanel.vue",
+    "expected": "45838ddb2ed583b0f9cbae69c54b1a4da9121d2c9fd08cfd1107ef5f047d28f8",
+    "actual": "45838ddb2ed583b0f9cbae69c54b1a4da9121d2c9fd08cfd1107ef5f047d28f8",
+    "unchanged": true
+  },
+  {
+    "path": "components/inspector/contracts.ts",
+    "expected": "ea1b6eff17ee5f316f1a540b3754bcc3df383d38b090f7d57584bcb10f2934c5",
+    "actual": "ea1b6eff17ee5f316f1a540b3754bcc3df383d38b090f7d57584bcb10f2934c5",
+    "unchanged": true
+  },
+  {
+    "path": "components/inspector/JumpRouteInspector.vue",
+    "expected": "06c26cf91b931de7ccbd369ad3c593196ed212e4b05b43eecf8d606f6a01537a",
+    "actual": "06c26cf91b931de7ccbd369ad3c593196ed212e4b05b43eecf8d606f6a01537a",
+    "unchanged": true
+  },
+  {
+    "path": "components/inspector/MapObjectInspector.vue",
+    "expected": "69aa6a54753361785644be12c6cd57394cf81ee749346a97459370f4f610bac8",
+    "actual": "69aa6a54753361785644be12c6cd57394cf81ee749346a97459370f4f610bac8",
+    "unchanged": true
+  },
+  {
+    "path": "components/inspector/OrbitInspector.vue",
+    "expected": "7455d3f7205b670e322b6c923cf9594d080b89b499b69993521c7f2aef72c7c6",
+    "actual": "7455d3f7205b670e322b6c923cf9594d080b89b499b69993521c7f2aef72c7c6",
+    "unchanged": true
+  },
+  {
+    "path": "components/MapEditorLayout.vue",
+    "expected": "060f5ec5d5d6539be7793c693eb4557f74a65ab05c7d043d5e41308ce17df436",
+    "actual": "060f5ec5d5d6539be7793c693eb4557f74a65ab05c7d043d5e41308ce17df436",
+    "unchanged": true
+  },
+  {
+    "path": "components/MapHierarchy.vue",
+    "expected": "79ac410e1f85607ffe20145e79d005789afb7eaae41fc28bc0e4b3742cffa902",
+    "actual": "79ac410e1f85607ffe20145e79d005789afb7eaae41fc28bc0e4b3742cffa902",
+    "unchanged": true
+  },
+  {
+    "path": "components/MapInspector.vue",
+    "expected": "79f835c1ffc55255944410c580242afe667f87e714b0e6a23452792879f55ea1",
+    "actual": "79f835c1ffc55255944410c580242afe667f87e714b0e6a23452792879f55ea1",
+    "unchanged": true
+  },
+  {
+    "path": "components/maps/system-map-renderer.ts",
+    "expected": "4a1c0340d3d92622cc657b654434a35e361ac088b56ab25f3337f2bb0f4b335e",
+    "actual": "4a1c0340d3d92622cc657b654434a35e361ac088b56ab25f3337f2bb0f4b335e",
+    "unchanged": true
+  },
+  {
+    "path": "components/ObjectPalette.vue",
+    "expected": "e3555cfcc0a0d8a114d833a166931ab9ab3724ae6319c2ff888cc521c6c67092",
+    "actual": "e3555cfcc0a0d8a114d833a166931ab9ab3724ae6319c2ff888cc521c6c67092",
+    "unchanged": true
+  },
+  {
+    "path": "components/prototype-fields-fixture.ts",
+    "expected": "4c9d549935aa1e7786af50bee96d8ec4a771d464c79b72be57ce735bf35b00a1",
+    "actual": "4c9d549935aa1e7786af50bee96d8ec4a771d464c79b72be57ce735bf35b00a1",
+    "unchanged": true
+  },
+  {
+    "path": "components/prototype-inspector-fixture.ts",
+    "expected": "971da11d6fe447b4caf454feaab0954bd4cd4644b5a0e7e85d0dec565cbe3ce5",
+    "actual": "971da11d6fe447b4caf454feaab0954bd4cd4644b5a0e7e85d0dec565cbe3ce5",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeBInspector.vue",
+    "expected": "010d58fedeed2780bee57223e950b7bdd5d5233c2054dc20e18baf7fcb24df3e",
+    "actual": "010d58fedeed2780bee57223e950b7bdd5d5233c2054dc20e18baf7fcb24df3e",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeCataloguePicker.vue",
+    "expected": "b867a25140a1af8dd8589017d4171f5698a9e8c3dd4d2233be0b25dee57eb38e",
+    "actual": "b867a25140a1af8dd8589017d4171f5698a9e8c3dd4d2233be0b25dee57eb38e",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeCreationPopover.vue",
+    "expected": "2e2600db14d492764c4fce6e34a27be2962d354db0fe7561a782d21ed9b79d47",
+    "actual": "2e2600db14d492764c4fce6e34a27be2962d354db0fe7561a782d21ed9b79d47",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeFieldDefinitionsDialog.vue",
+    "expected": "17f34ea3f2b9d4020a8c0bae5690b7564f9091d3c69f510a17c8b45e41900f4a",
+    "actual": "17f34ea3f2b9d4020a8c0bae5690b7564f9091d3c69f510a17c8b45e41900f4a",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeHierarchy.vue",
+    "expected": "53277f2fa7cecd727513b9a6ad9e6c6dff89cc118f45ddad74ade849c338e833",
+    "actual": "53277f2fa7cecd727513b9a6ad9e6c6dff89cc118f45ddad74ade849c338e833",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeInspector.vue",
+    "expected": "9f4655a59d58267fdce020b7443bd9eb73ffc802fb025cfaeedc2692304c7a17",
+    "actual": "9f4655a59d58267fdce020b7443bd9eb73ffc802fb025cfaeedc2692304c7a17",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeMapCanvas.vue",
+    "expected": "38c36675c73b68ca79d5a252080123ce472b17ee62c3d631f3c9f9006631e7e5",
+    "actual": "38c36675c73b68ca79d5a252080123ce472b17ee62c3d631f3c9f9006631e7e5",
+    "unchanged": true
+  },
+  {
+    "path": "components/PrototypeWorkbench.vue",
+    "expected": "b102bd8230e2d4e819d68b0b516df9a3e39d34751ab8a3d9ea7ca090a6bb7d7d",
+    "actual": "b102bd8230e2d4e819d68b0b516df9a3e39d34751ab8a3d9ea7ca090a6bb7d7d",
+    "unchanged": true
+  },
+  {
+    "path": "components/StatePeek.vue",
+    "expected": "a1e6b3211f5afc538689e7bee04f912c3386362cb4ccf14ec71fdbc84a54979c",
+    "actual": "a1e6b3211f5afc538689e7bee04f912c3386362cb4ccf14ec71fdbc84a54979c",
+    "unchanged": true
+  },
+  {
+    "path": "components/SystemMap.vue",
+    "expected": "88dbb2861aedef3df315d232a2f40c2eed5eb55b2082d584589e824eee0e976b",
+    "actual": "88dbb2861aedef3df315d232a2f40c2eed5eb55b2082d584589e824eee0e976b",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceDock.vue",
+    "expected": "e0620829956e35478cc317045736f2d7212e3e41330361780ad6d7eea2378c70",
+    "actual": "e0620829956e35478cc317045736f2d7212e3e41330361780ad6d7eea2378c70",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceFeedback.vue",
+    "expected": "3b517307f74ac7382d6c40fe55fbca553d5894cc439ed0c7e777ddeb516ba63a",
+    "actual": "3b517307f74ac7382d6c40fe55fbca553d5894cc439ed0c7e777ddeb516ba63a",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceHeader.vue",
+    "expected": "5fd6c216c48a6bc42a60f0ab52a3e1b91b42d08dd832b49209ecf560ded91b66",
+    "actual": "5fd6c216c48a6bc42a60f0ab52a3e1b91b42d08dd832b49209ecf560ded91b66",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceMapCanvas.vue",
+    "expected": "b36dabf0d9a43862657ed4c73dfdc0e48e7042135002f55d398a10615feeaa9d",
+    "actual": "b36dabf0d9a43862657ed4c73dfdc0e48e7042135002f55d398a10615feeaa9d",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceMapChrome.vue",
+    "expected": "2cb0e7edcf65a4e93db04b1956adaa4f5744e278795226fdbd43b533a57cee8e",
+    "actual": "2cb0e7edcf65a4e93db04b1956adaa4f5744e278795226fdbd43b533a57cee8e",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceResizablePanel.vue",
+    "expected": "c43850dd87be6bde0a594df45545d66e51e439581a69d3f905705800ea8a3704",
+    "actual": "c43850dd87be6bde0a594df45545d66e51e439581a69d3f905705800ea8a3704",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceWelcome.vue",
+    "expected": "c9d9209bbaea340b2080e9f2441afd19adf87d37e99749667bcf163ca2a05707",
+    "actual": "c9d9209bbaea340b2080e9f2441afd19adf87d37e99749667bcf163ca2a05707",
+    "unchanged": true
+  },
+  {
+    "path": "components/WorkspaceZoomControls.vue",
+    "expected": "2ad86cfd2d4f2548ed3328b5c01439da145d5f09fe138b55ad7f29f9de513fc2",
+    "actual": "2ad86cfd2d4f2548ed3328b5c01439da145d5f09fe138b55ad7f29f9de513fc2",
+    "unchanged": true
+  },
+  {
+    "path": "composables/editor-workflows/types.ts",
+    "expected": "202d3fbe85f97ad5f8ca5c5670e3f96e702b9765e2320f0142e5b4813c76866c",
+    "actual": "202d3fbe85f97ad5f8ca5c5670e3f96e702b9765e2320f0142e5b4813c76866c",
+    "unchanged": true
+  },
+  {
+    "path": "composables/editor-workflows/useClusterWorkflows.ts",
+    "expected": "985be90139165ef20309e37e8be2088bcb2a490b66a0190a8c9120d3d6252107",
+    "actual": "985be90139165ef20309e37e8be2088bcb2a490b66a0190a8c9120d3d6252107",
+    "unchanged": true
+  },
+  {
+    "path": "composables/editor-workflows/useEditorState.ts",
+    "expected": "a0995d25032df47cf10b6fd1a8b6d1a6d7aa6dcf99093fc4ed436563cb6fe486",
+    "actual": "a0995d25032df47cf10b6fd1a8b6d1a6d7aa6dcf99093fc4ed436563cb6fe486",
+    "unchanged": true
+  },
+  {
+    "path": "composables/editor-workflows/useFieldDefinitionWorkflows.ts",
+    "expected": "23398171805c290880e3b517061baea27eb627dcf57c57ad5c7a437e5385f28d",
+    "actual": "23398171805c290880e3b517061baea27eb627dcf57c57ad5c7a437e5385f28d",
+    "unchanged": true
+  },
+  {
+    "path": "composables/editor-workflows/useMapWorkflows.ts",
+    "expected": "cb670e51e3deaddc7241ded1fb6b91018966cf600b5d1901a0f48dd03382e9e3",
+    "actual": "cb670e51e3deaddc7241ded1fb6b91018966cf600b5d1901a0f48dd03382e9e3",
+    "unchanged": true
+  },
+  {
+    "path": "composables/useEditorWorkflows.ts",
+    "expected": "87cc18cb20e52e8a58f9d1f0e743e8bad4659db1f942a77dd2f152c87ae6ca0c",
+    "actual": "87cc18cb20e52e8a58f9d1f0e743e8bad4659db1f942a77dd2f152c87ae6ca0c",
+    "unchanged": true
+  },
+  {
+    "path": "composables/useLocalWorkspace.ts",
+    "expected": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf",
+    "actual": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf",
+    "unchanged": true
+  },
+  {
+    "path": "composables/useWorkspaceFiles.ts",
+    "expected": "b947bc588e8580bcec2039aaf5d7eb4aaab6f76a57da3200eace75965029e376",
+    "actual": "b947bc588e8580bcec2039aaf5d7eb4aaab6f76a57da3200eace75965029e376",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-cluster.ts",
+    "expected": "00fd3f3f452e1d0662c024355bdb0637c2ea90fbf1d8a40f5c36d9614874a4dc",
+    "actual": "00fd3f3f452e1d0662c024355bdb0637c2ea90fbf1d8a40f5c36d9614874a4dc",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-codec.ts",
+    "expected": "1df963a8f441681517f911d7ff613d5b74dc60f0a43d15e6056d1d90b000fb11",
+    "actual": "1df963a8f441681517f911d7ff613d5b74dc60f0a43d15e6056d1d90b000fb11",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-deletion.ts",
+    "expected": "8048ad77785957fc72e859eb9f4680057128af7e440b413863d91519bddb423d",
+    "actual": "8048ad77785957fc72e859eb9f4680057128af7e440b413863d91519bddb423d",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-fields.ts",
+    "expected": "2992c06eda7973bddd852f1cf935f6174695c6499956e3735c4c0641d5fdd5ef",
+    "actual": "2992c06eda7973bddd852f1cf935f6174695c6499956e3735c4c0641d5fdd5ef",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-json-import.ts",
+    "expected": "19fef79bca1ad5a91d65f6224fae9665d7a24b08262d87de5b936a3b262a9ec6",
+    "actual": "19fef79bca1ad5a91d65f6224fae9665d7a24b08262d87de5b936a3b262a9ec6",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-model.ts",
+    "expected": "64c89ed0d7e5d3489673e48b67d1a8ceda7bce2b370c2b7ed6ba3481177e72e9",
+    "actual": "64c89ed0d7e5d3489673e48b67d1a8ceda7bce2b370c2b7ed6ba3481177e72e9",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-orbits.ts",
+    "expected": "7842bd00df38c9055029ba55bc5dcd574ed92c0047563ca83353c1a40bc23357",
+    "actual": "7842bd00df38c9055029ba55bc5dcd574ed92c0047563ca83353c1a40bc23357",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-schema.ts",
+    "expected": "91dde3c88a0ad2a189f3ec4553a5367358d6887b33d08c6025575a40bea5969a",
+    "actual": "91dde3c88a0ad2a189f3ec4553a5367358d6887b33d08c6025575a40bea5969a",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-system-objects.ts",
+    "expected": "4152340d99124584a01471999e52f032b8b4563a2cec33193f6e81031cbc4e4a",
+    "actual": "4152340d99124584a01471999e52f032b8b4563a2cec33193f6e81031cbc4e4a",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace-validation.ts",
+    "expected": "5dec0055e5dba0c580f57076451b71f4130e711fe4cf9b12c6db52088470f588",
+    "actual": "5dec0055e5dba0c580f57076451b71f4130e711fe4cf9b12c6db52088470f588",
+    "unchanged": true
+  },
+  {
+    "path": "domain/workspace.ts",
+    "expected": "241adb48be3d12f9bb0dd049bef4f1333fe7139786e7b439255b6befc974282a",
+    "actual": "241adb48be3d12f9bb0dd049bef4f1333fe7139786e7b439255b6befc974282a",
+    "unchanged": true
+  },
+  {
+    "path": "nuxt.config.ts",
+    "expected": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef",
+    "actual": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef",
+    "unchanged": true
+  },
+  {
+    "path": "package-lock.json",
+    "expected": "ceacd4b69e6dd6cd375947960cd93264191f3b475e317418f0d4caacce7a8bf7",
+    "actual": "ceacd4b69e6dd6cd375947960cd93264191f3b475e317418f0d4caacce7a8bf7",
+    "unchanged": true
+  },
+  {
+    "path": "package.json",
+    "expected": "cc5e0346863efe9470804de26bf78b8790ef694cbb73a86dd8e0e7aea0240f65",
+    "actual": "cc5e0346863efe9470804de26bf78b8790ef694cbb73a86dd8e0e7aea0240f65",
+    "unchanged": true
+  },
+  {
+    "path": "tests/cluster-map.spec.ts",
+    "expected": "947f946eed7bcc51880d72468a0441328049b3f476021cf66a7a680b88c14288",
+    "actual": "947f946eed7bcc51880d72468a0441328049b3f476021cf66a7a680b88c14288",
+    "unchanged": true
+  },
+  {
+    "path": "tests/helpers.ts",
+    "expected": "abf499543c18d42f522f45044c6973d1487899868fbf5173bacbca301dbc62b1",
+    "actual": "abf499543c18d42f522f45044c6973d1487899868fbf5173bacbca301dbc62b1",
+    "unchanged": true
+  },
+  {
+    "path": "tests/object-fields.spec.ts",
+    "expected": "b66b197ee69b5db586b7ba5dbc57028b4050fc233c9c9d5b9466bfe10881d587",
+    "actual": "b66b197ee69b5db586b7ba5dbc57028b4050fc233c9c9d5b9466bfe10881d587",
+    "unchanged": true
+  },
+  {
+    "path": "tests/system-map.spec.ts",
+    "expected": "6f358dc20c5ea9006b2588830842ad5f5b1860d357ff4cd54e00dfc417e6447c",
+    "actual": "6f358dc20c5ea9006b2588830842ad5f5b1860d357ff4cd54e00dfc417e6447c",
+    "unchanged": true
+  },
+  {
+    "path": "tests/system-orbits.spec.ts",
+    "expected": "133b69b81fa0fc3d3e6d3e3c4eda680fbf9ccc411a03ea1649e72fa8eeab8dbb",
+    "actual": "133b69b81fa0fc3d3e6d3e3c4eda680fbf9ccc411a03ea1649e72fa8eeab8dbb",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-chart-drafts.spec.ts",
+    "expected": "4332c6b452ecfbdef333962c128f8a2283108a8d1ee7631df7e91d2eeed602ea",
+    "actual": "4332c6b452ecfbdef333962c128f8a2283108a8d1ee7631df7e91d2eeed602ea",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-chart-feedback.spec.ts",
+    "expected": "41e00fb8790fbe4eabf0a15524d43030cbf154f41fb662b8c148563b963e55fd",
+    "actual": "41e00fb8790fbe4eabf0a15524d43030cbf154f41fb662b8c148563b963e55fd",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-composition.spec.ts",
+    "expected": "dcb91a515d1ef41583e5535a8524bacb325d200101f0dc68d0a54a33e1cd53b1",
+    "actual": "dcb91a515d1ef41583e5535a8524bacb325d200101f0dc68d0a54a33e1cd53b1",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-data.spec.ts",
+    "expected": "29feab3124bd8106af6a6716778d596f5c9e62f98571985e193b553b5c7c23dd",
+    "actual": "29feab3124bd8106af6a6716778d596f5c9e62f98571985e193b553b5c7c23dd",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-launch.spec.ts",
+    "expected": "a04c43af38e2519195d4843c19673f71950675e88f92b735efc1fe6809dec5e1",
+    "actual": "a04c43af38e2519195d4843c19673f71950675e88f92b735efc1fe6809dec5e1",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-map-gesture-guards.spec.ts",
+    "expected": "cdac1b83a4de36736c3fad6610907ffb801e51efa68c5772b74613b9d99f50de",
+    "actual": "cdac1b83a4de36736c3fad6610907ffb801e51efa68c5772b74613b9d99f50de",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-navigation.spec.ts",
+    "expected": "24b72e8f69e364595798666e6b0dbbf0a17a253cae751248535429541f8aad58",
+    "actual": "24b72e8f69e364595798666e6b0dbbf0a17a253cae751248535429541f8aad58",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-panels.spec.ts",
+    "expected": "cfdb4c18e7a7d0943814e41463d28b7654c827932539115ee5ffa8755b88b3bf",
+    "actual": "cfdb4c18e7a7d0943814e41463d28b7654c827932539115ee5ffa8755b88b3bf",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-recovery.spec.ts",
+    "expected": "94a23e0384c4794059df296f767d2198e6abfd7b3da275ca2ea8e13d1d771632",
+    "actual": "94a23e0384c4794059df296f767d2198e6abfd7b3da275ca2ea8e13d1d771632",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-route-inspection.spec.ts",
+    "expected": "5532a2da610056293594923622d231152dfb5e322ff27897134c64748402c9e8",
+    "actual": "5532a2da610056293594923622d231152dfb5e322ff27897134c64748402c9e8",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-theme.spec.ts",
+    "expected": "779e9753e5172c7fdbf360a1b3bc518724c1f98655b8a71ec2223fd1539896c3",
+    "actual": "779e9753e5172c7fdbf360a1b3bc518724c1f98655b8a71ec2223fd1539896c3",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-touch-takeover.spec.ts",
+    "expected": "5d5d1eea7b5588e7542b26710be451c85a17a46450de67cddf9e2c344b8b0aef",
+    "actual": "5d5d1eea7b5588e7542b26710be451c85a17a46450de67cddf9e2c344b8b0aef",
+    "unchanged": true
+  },
+  {
+    "path": "tests/workspace-ui.spec.ts",
+    "expected": "08c2c9a5454d1e51223b68f44960e70cad87aff897c3f30cfc1f15e9a2e67262",
+    "actual": "08c2c9a5454d1e51223b68f44960e70cad87aff897c3f30cfc1f15e9a2e67262",
+    "unchanged": true
+  },
+  {
+    "path": "utils/catalogue-marks.ts",
+    "expected": "303519ba76e275edc0d1f1461d27d988fef06442634ccc91442716d68abe894d",
+    "actual": "303519ba76e275edc0d1f1461d27d988fef06442634ccc91442716d68abe894d",
+    "unchanged": true
+  },
+  {
+    "path": "utils/cluster-map-geometry.ts",
+    "expected": "1423315d60edb2b42700e3fca14779a3b5b50a8f8831106281f1721d7a2d683d",
+    "actual": "1423315d60edb2b42700e3fca14779a3b5b50a8f8831106281f1721d7a2d683d",
+    "unchanged": true
+  },
+  {
+    "path": "utils/map-hierarchy.ts",
+    "expected": "f4707f3649affad75bbb26a0b88e9df56cc2cd5035a824f00bc932c9ade5d060",
+    "actual": "f4707f3649affad75bbb26a0b88e9df56cc2cd5035a824f00bc932c9ade5d060",
+    "unchanged": true
+  },
+  {
+    "path": "utils/map-image-export.ts",
+    "expected": "e7c3b8423e5456745965754634157ab70e790bf880697df8e44402b3a30ecb60",
+    "actual": "e7c3b8423e5456745965754634157ab70e790bf880697df8e44402b3a30ecb60",
+    "unchanged": true
+  },
+  {
+    "path": "utils/map-usable-area.ts",
+    "expected": "b70b3e7addb4af33a525e1ff93c7912eba748961d5cae3816266be9b46208803",
+    "actual": "b70b3e7addb4af33a525e1ff93c7912eba748961d5cae3816266be9b46208803",
+    "unchanged": true
+  },
+  {
+    "path": "utils/map-zoom.ts",
+    "expected": "40dc3c646f5ca672a41685224d4182ad5169341db5a2a447fd632ac71e71785a",
+    "actual": "40dc3c646f5ca672a41685224d4182ad5169341db5a2a447fd632ac71e71785a",
+    "unchanged": true
+  },
+  {
+    "path": "utils/system-map-geometry.ts",
+    "expected": "8d28677a3e311fadce9079e5d6d8ad1c4f1ea63ab8b555b47c68c8f679549641",
+    "actual": "8d28677a3e311fadce9079e5d6d8ad1c4f1ea63ab8b555b47c68c8f679549641",
+    "unchanged": true
+  },
+  {
+    "path": "utils/workspace-storage.ts",
+    "expected": "00817a03e640fced61ea9a6f37bcad0f6a2ddfe4ac1f3683fe0cd5e533a0f5d4",
+    "actual": "00817a03e640fced61ea9a6f37bcad0f6a2ddfe4ac1f3683fe0cd5e533a0f5d4",
+    "unchanged": true
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "started": "2026-10-19T15:38:05.5243277+02:00",
+  "exitCode": 0,
+  "finished": "2026-10-19T15:38:33.4629531+02:00",
+  "reason": "Final test-only SVG helper and public-precondition changes since freeze8 typecheck",
+  "candidate": "ticket21-resume-source-freeze-10"
+}

@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
-import { captureMapExportBlobs, downloadJson } from './helpers'
+import {
+  captureMapExportBlobs,
+  downloadJson,
+  openWorkspaceHierarchy,
+  openWorkspaceZoomNavigation,
+  workspaceNavigation,
+  workspaceZoomControls,
+} from './helpers'
 
 async function createWorkspace(page: Page): Promise<void> {
   await page.goto('/')
@@ -26,14 +33,19 @@ test('a fresh compact workspace starts on the map without opening a panel', asyn
   await expect(page.getByRole('button', { name: 'Inspect', exact: true })).toHaveAttribute('aria-expanded', 'false')
 })
 
-test('the workspace exposes one explicit navigation and view toolbar', async ({ page }) => {
+test('the Dock and zoom controls expose separate map toolbars', async ({ page }) => {
   await createWorkspace(page)
 
-  await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
+  const dock = workspaceNavigation(page)
+  const zoom = workspaceZoomControls(page)
+  await expect(dock).toBeVisible()
+  await expect(zoom).toBeVisible()
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('group', { name: 'Map zoom' }).getByRole('slider', { name: 'Map zoom level' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Pan map left' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Pan map right' })).toBeVisible()
+  await expect(dock.getByRole('button', { name: 'Fit map' })).toHaveCount(0)
+  const zoomNavigation = await openWorkspaceZoomNavigation(page)
+  await expect(zoomNavigation.getByRole('slider', { name: 'Map zoom level' })).toBeVisible()
+  await expect(zoomNavigation.getByRole('button', { name: 'Pan map left' })).toBeVisible()
+  await expect(zoomNavigation.getByRole('button', { name: 'Pan map right' })).toBeVisible()
 })
 
 test('reselecting the current object or Orbit reopens Inspect without changing the selection', async ({ page }) => {
@@ -60,7 +72,7 @@ test('reselecting the current object or Orbit reopens Inspect without changing t
   await page.getByRole('button', { name: 'Add to map' }).click()
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
-  const hierarchy = page.getByRole('navigation', { name: 'Map object and Orbit hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const orbit = hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ })
   await orbit.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'true')
@@ -191,11 +203,13 @@ test('A to B to A restores each system camera and the selected map object', asyn
   const hierarchyStarLabel = 'Select A, Primary Star'
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await page.getByRole('group', { name: 'Vesper star system map' }).getByRole('button', { name: starLabel }).click()
-  const firstStar = page.getByRole('navigation', { name: 'Map object and Orbit hierarchy' }).getByRole('button', { name: hierarchyStarLabel })
+  const firstHierarchy = await openWorkspaceHierarchy(page)
+  const firstStar = firstHierarchy.getByRole('button', { name: hierarchyStarLabel })
   await expect(firstStar).toHaveAttribute('aria-current', 'true')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   const scene = page.locator('.system-map-svg .system-map-content')
-  await page.getByRole('button', { name: 'Pan map right' }).click()
+  await (await openWorkspaceZoomNavigation(page)).getByRole('button', { name: 'Pan map right' }).click()
   await expect.poll(() => scene.getAttribute('transform')).not.toBe('translate(0,0) scale(1)')
   const firstSystemViewport = await scene.getAttribute('transform')
 
@@ -207,7 +221,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await page.getByRole('group', { name: 'New System 2 star system map' }).getByRole('button', { name: starLabel }).click()
 
   const secondSystemScene = page.locator('.system-map-svg .system-map-content')
-  await page.getByRole('button', { name: 'Pan map left' }).click()
+  await (await openWorkspaceZoomNavigation(page)).getByRole('button', { name: 'Pan map left' }).click()
   const secondSystemViewport = await secondSystemScene.getAttribute('transform')
   expect(secondSystemViewport).not.toBe(firstSystemViewport)
 
@@ -216,7 +230,9 @@ test('A to B to A restores each system camera and the selected map object', asyn
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Map object and Orbit hierarchy' }).getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  const restoredFirstHierarchy = await openWorkspaceHierarchy(page)
+  await expect(restoredFirstHierarchy.getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', firstSystemViewport!)
 
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
@@ -224,7 +240,8 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await page.getByRole('button', { name: 'Fit map' }).click()
   await clusterMapAfterReturn.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Map object and Orbit hierarchy' }).getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  const restoredSecondHierarchy = await openWorkspaceHierarchy(page)
+  await expect(restoredSecondHierarchy.getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', secondSystemViewport!)
 })
 
@@ -245,7 +262,7 @@ test('deleting the inspected cluster system clears its current selection', async
 
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
-  const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents' })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteSystem = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
   page.once('dialog', async dialog => { await dialog.accept() })
   await deleteSystem.click()
@@ -287,7 +304,11 @@ test('Select can rename system B from its inspector while keeping system A activ
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true')
   await expect(inspector.getByRole('heading', { name: 'Renamed B' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Selected Star System summary' }).getByRole('heading', { name: 'Vesper' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+    .getByRole('heading', { name: 'Kestrel Reach' })).toBeVisible()
+  const clusterContents = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await expect(clusterContents.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Renamed B'])
@@ -295,6 +316,8 @@ test('Select can rename system B from its inspector while keeping system A activ
   await expect(clusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+    .getByRole('heading', { name: 'Vesper' })).toBeVisible()
 })
 
 test('a held mouse press inspects an entity without navigating or publishing a click', async ({ page }) => {
@@ -327,8 +350,10 @@ test('Move selects map entities without opening Inspect or entering a system', a
   await expect(systemMap.locator('.orbit-mark')).toHaveCount(1)
   await page.getByRole('button', { name: 'Add to map' }).click()
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
+  if (await inspectorToggle.getAttribute('aria-expanded') === 'true') await inspectorToggle.click()
   await expect(page.getByRole('button', { name: 'Hierarchy', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('button', { name: 'Inspect', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await page.setViewportSize({ width: 844, height: 390 })

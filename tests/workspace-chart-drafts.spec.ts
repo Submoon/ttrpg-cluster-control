@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, returnToClusterMap, clickDockAction, jsonMapImportInput } from './helpers'
+import { activeWorkspaceFeedback, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput } from './helpers'
 import {
   createJumpRoute,
   createLocalWorkspace,
@@ -282,7 +282,7 @@ async function beginHiddenChartDraft(
   options: { clusterName?: string; systemName?: string; view?: 'cluster' | 'system' } = {},
 ): Promise<import('@playwright/test').Locator> {
   const hierarchyName = options.view === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'
-  const hierarchy = page.getByRole('complementary', { name: hierarchyName })
+  const hierarchy = await openWorkspaceHierarchy(page, hierarchyName)
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
   if (options.clusterName !== undefined) await dialog.getByLabel('Jump Cluster').fill(options.clusterName)
@@ -295,6 +295,7 @@ async function beginHiddenChartDraft(
 async function acceptImportWithHeldAcknowledgement(
   page: import('@playwright/test').Page,
   fixture = incomingClusterJson(),
+  hierarchyName: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
 ): Promise<void> {
   await setHeaderMapActionsOpen(page, true)
   await page.getByRole('button', { name: 'Import JSON copy' }).click()
@@ -308,6 +309,7 @@ async function acceptImportWithHeldAcknowledgement(
   await preview.accept()
   await setHeaderMapActionsOpen(page, false)
   await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
+  await openWorkspaceHierarchy(page, hierarchyName)
   await expect(page.getByRole('navigation', { name: 'Star systems' })
     .getByRole('button', { name: /Incoming Vesper/ }).first()).toBeVisible()
 }
@@ -332,10 +334,7 @@ async function finishHeldImportAndVerifyExport(
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
   await expectImportedWorkspace(page, expectedClusterName, expectedFirstSystemName)
 
-  const systemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
-  if (await systemHierarchy.count()) {
-    await systemHierarchy.getByRole('button', { name: 'Cluster map' }).click()
-  }
+  await returnToClusterMap(page)
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.name).toBe(expectedClusterName)
   expect(exported.cluster?.systems).toHaveLength(2)
@@ -439,7 +438,7 @@ test('Add system applies dirty chart names before building from the latest works
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await returnToClusterMap(page)
-  const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents' })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
   await dialog.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
@@ -495,7 +494,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  await page.getByRole('complementary', { name: 'System hierarchy' })
+  await (await openWorkspaceHierarchy(page))
     .getByRole('button', { name: 'Cluster map' }).click()
   await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Apply and continue' }).click()
@@ -534,7 +533,7 @@ test('restoring both committed names makes a stale validation error a clean tran
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  await page.getByRole('complementary', { name: 'System hierarchy' })
+  await (await openWorkspaceHierarchy(page))
     .getByRole('button', { name: 'Cluster map' }).click()
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
   await expect(dialog).toBeHidden()
@@ -555,7 +554,7 @@ test('a guarded transition can stay with the draft or discard it and continue', 
   await dialog.getByLabel('Jump Cluster').fill('Draft Reach')
   await page.keyboard.press('Escape')
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Cluster map' }).click()
   await expect(dialog.getByText('Continue without this draft?')).toBeVisible()
   await dialog.getByRole('button', { name: 'Stay here' }).click()
@@ -654,8 +653,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(await beforeUnloadIsPrevented(page)).toBe(false)
 
     await page.getByRole('button', { name: 'Close inspector panel' }).click()
-    await expect(page.getByRole('region', { name: 'Active Jump Cluster summary' })).toContainText('Current Reach')
-    await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper Prime')
+    await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
     await page.setViewportSize({ width: 1440, height: 960 })
 
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
@@ -679,8 +677,8 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(saved.cluster.systems.map(system => system.name)).toEqual(['Vesper Prime'])
     expect(saved.cluster.systems[0]?.objects.filter(object => object.name.startsWith('New jump point'))).toHaveLength(1)
     await page.reload()
-    await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper Prime')
-    await expect(page.getByRole('navigation', { name: 'Map object and Orbit hierarchy' })
+    await openWorkspaceHierarchy(page)
+    await expect(page.getByRole('complementary', { name: 'System hierarchy' })
       .getByRole('button', { name: /New jump point/ })).toBeVisible()
   } finally {
     await releaseChartWriteGate(page)
@@ -790,12 +788,12 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   await returnToClusterMap(page)
   await clickDockAction(page, 'Add star system')
   await returnToClusterMap(page)
-  const deleteSystemButton = page.getByRole('button', { name: 'Delete New System 2 system' })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const deleteSystemButton = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
   await expect(deleteSystemButton).toBeVisible()
   await expect(deleteSystemButton).toBeEnabled()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 
-  const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents' })
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
   const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
   await chartDialog.getByLabel('Jump Cluster').fill('Draft Reach')
@@ -867,7 +865,7 @@ test('system deletion resolves its chart target after review and asks again for 
   await returnToClusterMap(page)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 
-  const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents' })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteSystemButton = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
   await expect(deleteSystemButton).toBeEnabled()
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
@@ -903,7 +901,7 @@ test('system deletion resolves its chart target after review and asks again for 
 
 test('chart-name dialog buttons show the semantic keyboard focus outline', async ({ page }) => {
   await createWorkspace(page)
-  await page.getByRole('complementary', { name: 'System hierarchy' })
+  await (await openWorkspaceHierarchy(page))
     .getByRole('button', { name: 'Edit chart names' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
   await expect(dialog.getByLabel('Jump Cluster')).toBeFocused()
@@ -966,7 +964,7 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
     await captureExportedJson(page)
     await createWorkspace(page)
 
-    const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+    const hierarchy = await openWorkspaceHierarchy(page)
     if (selectionKind === 'object') {
       await addCatalogueObject(page, 'planet')
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
@@ -986,7 +984,11 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
 
     await installChartWriteGate(page)
     try {
-      await acceptImportWithHeldAcknowledgement(page)
+      await acceptImportWithHeldAcknowledgement(
+        page,
+        incomingClusterJson(),
+        selectionKind === 'route' ? 'Jump Cluster contents' : 'System hierarchy',
+      )
       const entryView = selectionKind === 'route' ? 'cluster' : 'system'
       const dialog = await beginHiddenChartDraft(page, {
         clusterName: 'Kestrel Reach Prime',
@@ -1013,13 +1015,14 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
       await resolveSelectionGuard(page, 'apply')
       await expect(dialog).toBeHidden()
       await expect(target).toHaveAttribute('aria-current', 'true')
-      await expect(page.getByRole('region', {
-        name: entryView === 'cluster' ? 'Selected Star System summary' : 'Active Star System summary',
-      })).toContainText('Vesper Prime')
+      await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', {
+        name: entryView === 'cluster' ? 'Kestrel Reach Prime' : 'Vesper Prime',
+      })).toBeVisible()
       await finishHeldImportAndVerifyExport(page, 'Kestrel Reach Prime', 'Vesper Prime')
       await page.reload()
       await returnToClusterMap(page)
-      await expect(page.getByRole('heading', { name: 'Kestrel Reach Prime', level: 1 })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+        .getByRole('heading', { name: 'Kestrel Reach Prime', level: 2 })).toBeVisible()
       await expectImportedWorkspace(page, 'Kestrel Reach Prime', 'Vesper Prime')
     } finally {
       await releaseChartWriteGate(page)
@@ -1032,7 +1035,7 @@ test('a delayed import navigation that meets an invalid new draft stays with its
   await installChartWriteGate(page)
   try {
     await acceptImportWithHeldAcknowledgement(page)
-    const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+    const hierarchy = await openWorkspaceHierarchy(page)
     await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
     const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
     await dialog.getByLabel('Jump Cluster').fill('')
@@ -1051,7 +1054,7 @@ test('a delayed import navigation that meets an invalid new draft stays with its
     await expect(dialog.getByLabel('Jump Cluster')).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
-    await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Vesper')
+    await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Vesper' })).toBeVisible()
     await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }))
       .toBeVisible()
 
@@ -1084,15 +1087,16 @@ for (const decision of ['apply', 'discard'] as const) {
       const importedClusterMap = page.getByRole('group', { name: `${expectedClusterName} Jump Cluster map` })
       await expect(importedClusterMap).toBeVisible()
       await expect(importedClusterMap.getByRole('button', { name: 'Open Incoming Vesper system map' })).toBeVisible()
-      await expect(page.getByRole('region', { name: 'Active Jump Cluster summary' }))
-        .toContainText(expectedClusterName)
+      await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+        .getByRole('heading', { name: expectedClusterName })).toBeVisible()
 
       await releaseChartWriteGate(page)
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
       await expectImportedWorkspace(page, expectedClusterName, expectedSystemName)
       await page.reload()
       await returnToClusterMap(page)
-      await expect(page.getByRole('heading', { name: expectedClusterName, level: 1 })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+        .getByRole('heading', { name: expectedClusterName, level: 2 })).toBeVisible()
       await expectImportedWorkspace(page, expectedClusterName, expectedSystemName)
     } finally {
       await releaseChartWriteGate(page)

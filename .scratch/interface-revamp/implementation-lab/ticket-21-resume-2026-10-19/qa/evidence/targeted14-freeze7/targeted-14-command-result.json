@@ -1,0 +1,13 @@
+{
+  "finished": "2026-10-19T15:07:23.3692235+02:00",
+  "trace": "retain-on-failure",
+  "invocations": 1,
+  "scope": "Exact 14-case compiled subset: 11 freeze-5 failures plus 3 composition",
+  "screenshot": "only-on-failure",
+  "workers": 1,
+  "started": "2026-10-19T15:04:30.3823934+02:00",
+  "retries": 0,
+  "exitCode": 1,
+  "maxFailures": 0,
+  "candidate": "ticket21-resume-source-freeze-7"
+}

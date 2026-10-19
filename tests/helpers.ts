@@ -80,13 +80,100 @@ export type ExportedMap = {
   }
 }
 
-export async function dragToWorldPoint(
+type ScreenPoint = { x: number; y: number }
+
+async function worldPointOnScreen(
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<ScreenPoint> {
+  return map.evaluate((element, target) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const transform = content?.getScreenCTM()
+    if (!transform) throw new Error('The system map content is not attached to the document.')
+    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, point)
+}
+
+/** Recovers a measured native drag through public Fit and bounded Zoom out controls. */
+export async function ensureMapDragPointsReachable(
   page: import('@playwright/test').Page,
   map: import('@playwright/test').Locator,
   source: import('@playwright/test').Locator,
   point: WorldPoint,
 ): Promise<void> {
-  await beginDragToWorldPoint(page, map, source, point)
+  const sourceCount = await source.count()
+  if (sourceCount === 0) {
+    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true })
+    await expect(addToggle).toBeVisible()
+    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
+    await expect(source).toBeVisible()
+  }
+  const paletteSource = await source.getAttribute('draggable') === 'true'
+  const ensureSourceVisible = async (): Promise<void> => {
+    if (!paletteSource) return
+    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true })
+    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
+    await expect(source).toBeVisible()
+    await source.scrollIntoViewIfNeeded()
+  }
+  await ensureSourceVisible()
+  await source.scrollIntoViewIfNeeded()
+
+  const isReachable = async (): Promise<boolean> => {
+    await ensureSourceVisible()
+    const sourceBox = await source.boundingBox()
+    if (!sourceBox) throw new Error('Could not find the map element to drag.')
+    const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 }
+    const end = await worldPointOnScreen(map, point)
+    const sourceReachable = await source.evaluate((element, point) => {
+      const hit = document.elementFromPoint(point.x, point.y)
+      return point.x >= 0 && point.y >= 0
+        && point.x < window.innerWidth && point.y < window.innerHeight
+        && !!hit && (hit === element || element.contains(hit))
+    }, start)
+    const targetReachable = await map.evaluate((element, point) => {
+      const bounds = element.getBoundingClientRect()
+      const hit = document.elementFromPoint(point.x, point.y)
+      return point.x >= Math.max(0, bounds.left) && point.y >= Math.max(0, bounds.top)
+        && point.x < Math.min(window.innerWidth, bounds.right)
+        && point.y < Math.min(window.innerHeight, bounds.bottom)
+        && !!hit && (hit === element || element.contains(hit))
+    }, end)
+    return sourceReachable && targetReachable
+  }
+
+  const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
+  if (await isReachable()) return
+
+  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+  await ensureSourceVisible()
+  if (initialZoom === '25%') {
+    await zoomOutMapToMinimum(page)
+    if (!(await isReachable())) {
+      throw new Error('Map drag points are unreachable at the required 25% zoom after Fit.')
+    }
+    return
+  }
+
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    if (await isReachable()) return
+    if (await zoomOut.isDisabled()) break
+    await zoomOut.click()
+  }
+
+  throw new Error('Map drag points are still unreachable after public Fit and bounded Zoom out recovery.')
+}
+
+export async function dragToWorldPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  source: import('@playwright/test').Locator,
+  point: WorldPoint,
+  roundEndpoint = false,
+): Promise<void> {
+  await beginDragToWorldPoint(page, map, source, point, roundEndpoint)
   await page.mouse.up()
 }
 
@@ -95,18 +182,15 @@ export async function beginDragToWorldPoint(
   map: import('@playwright/test').Locator,
   source: import('@playwright/test').Locator,
   point: WorldPoint,
+  roundEndpoint = false,
 ): Promise<void> {
   await setWorkspaceMapMode(page, 'Move')
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
-
-  const destination = await map.evaluate((element, target) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!transform) throw new Error('The system map content is not attached to the document.')
-    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
-    return { x: screenPoint.x, y: screenPoint.y }
-  }, point)
+  const screenPoint = await worldPointOnScreen(map, point)
+  const destination = roundEndpoint
+    ? { x: Math.round(screenPoint.x), y: Math.round(screenPoint.y) }
+    : screenPoint
 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
@@ -129,19 +213,10 @@ export async function dragHtmlElementToWorldPoint(
   const bounds = await map.boundingBox()
   if (!sourceBounds || !bounds) throw new Error('Could not find the map or palette object to drag.')
 
-  const destination = await map.evaluate((element, target) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!transform) throw new Error('The system map content is not attached to the document.')
-    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
-    return { x: screenPoint.x - target.boundsX, y: screenPoint.y - target.boundsY }
-  }, { x: point.x, y: point.y, boundsX: bounds.x, boundsY: bounds.y })
-  await page.mouse.move(
-    sourceBounds.x + sourceBounds.width / 2,
-    sourceBounds.y + sourceBounds.height / 2,
-  )
+  const destination = await worldPointOnScreen(map, point)
+  await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2)
   await page.mouse.down()
-  await page.mouse.move(bounds.x + destination.x, bounds.y + destination.y, { steps: 12 })
+  await page.mouse.move(destination.x, destination.y, { steps: 12 })
   if (duringDrag) await duringDrag()
   await page.mouse.up()
 }
@@ -198,11 +273,13 @@ export async function dragBy(
   source: import('@playwright/test').Locator,
   delta: WorldPoint,
 ): Promise<void> {
-  await setWorkspaceMapMode(page, 'Move')
   await source.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
 
+  // Capture the source while its Navigate-mode accessible name is still current.
+  // Switching to Move changes map-entity labels to their Select action names.
+  await setWorkspaceMapMode(page, 'Move')
   const x = sourceBox.x + sourceBox.width / 2
   const y = sourceBox.y + sourceBox.height / 2
   await page.mouse.move(x, y)
@@ -215,18 +292,70 @@ export async function setHeaderMapActionsOpen(
   page: import('@playwright/test').Page,
   open: boolean,
 ): Promise<void> {
-  const toggle = page.getByRole('button', { name: /^(Open|Close) map file actions for / })
+  const toggle = page.getByRole('button', { name: 'Map files', exact: true })
+  await expect(toggle).toBeVisible()
   const isOpen = await toggle.getAttribute('aria-expanded') === 'true'
   if (isOpen !== open) await toggle.click()
 }
 
-/** Finds the single shared map toolbar and its visible zoom readout. */
+/** Finds the shared Dock containing map interaction modes and Add. */
 export function workspaceNavigation(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   return page.getByRole('toolbar', { name: 'Workspace navigation' })
 }
 
+/** Finds the separate bottom-right map zoom controls. */
+export function workspaceZoomControls(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('toolbar', { name: 'Map zoom controls' })
+}
+
 export function workspaceZoomOutput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
-  return workspaceNavigation(page).locator('output')
+  return workspaceZoomControls(page).locator('output').first()
+}
+
+/** Reaches the public minimum zoom without assuming a particular starting level. */
+export async function zoomOutMapToMinimum(page: import('@playwright/test').Page): Promise<void> {
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  for (let step = 0; step < 64 && !(await zoomOut.isDisabled()); step += 1) {
+    await zoomOut.click()
+  }
+  await expect(workspaceZoomOutput(page)).toHaveText('25%')
+}
+
+/** Opens the compact popover that contains the zoom slider and named pan controls. */
+export async function openWorkspaceZoomNavigation(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  const toggle = workspaceZoomControls(page).getByRole('button', { name: 'Open map navigation controls' })
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  const controls = page.getByRole('group', { name: 'Map zoom' })
+  await expect(controls).toBeVisible()
+  return controls
+}
+
+/** Opens Hierarchy through its public Map chrome control when a test needs its contents. */
+export async function openWorkspaceHierarchy(
+  page: import('@playwright/test').Page,
+  name: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
+): Promise<import('@playwright/test').Locator> {
+  const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  await expect(toggle).toBeVisible()
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  const hierarchy = page.getByRole('complementary', { name })
+  await expect(hierarchy).toBeVisible()
+  return hierarchy
+}
+
+/** Shows the consultation summary in the inspector without changing map selection. */
+export async function openChartDetails(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  await expect(inspectToggle).toBeVisible()
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
+  await expect(chartDetails).toBeVisible()
+  if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
+  return page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
 }
 
 /** Selects a map interaction mode through the shared Dock before a map gesture. */
@@ -240,15 +369,17 @@ export async function setWorkspaceMapMode(
 
 /** Returns to the cluster through the real compact-context Back control. */
 export async function returnToClusterMap(page: import('@playwright/test').Page): Promise<void> {
-  const back = page.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
-  if (await back.count()) {
+  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  await expect(context).toBeVisible()
+  const contextKind = context.locator('.workspace-map-context > span')
+  await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
+  const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  if (await back.isVisible()) {
     await back.click()
-    return
+  } else {
+    await expect(contextKind).toHaveText('Jump Cluster')
   }
-
-  const hierarchyBack = page.locator('#workspace-hierarchy-panel')
-    .getByRole('button', { name: 'Cluster map', exact: true })
-  if (await hierarchyBack.isVisible()) await hierarchyBack.click()
+  await expect(contextKind).toHaveText('Jump Cluster')
 }
 
 /** Reveals the Dock's legacy action popover only when its requested command is not already visible. */
@@ -256,10 +387,13 @@ export async function dockAction(
   page: import('@playwright/test').Page,
   name: string,
 ): Promise<import('@playwright/test').Locator> {
-  const action = page.getByRole('button', { name, exact: true })
-  if (!(await action.isVisible())) {
-    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
-  }
+  const toggle = page.getByRole('button', { name: 'Add to map', exact: true })
+  await expect(toggle).toBeVisible()
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  const actions = page.getByRole('group', { name: 'Add to map', exact: true })
+  await expect(actions).toBeVisible()
+  const action = actions.getByRole('button', { name, exact: true })
+  await expect(action).toBeVisible()
   return action
 }
 
@@ -303,6 +437,11 @@ export async function editFieldDefinition(dialog: import('@playwright/test').Loc
 }
 
 export async function editMapObject(page: import('@playwright/test').Page): Promise<void> {
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') {
+    await addToggle.click()
+    await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
+  }
   await page.getByRole('button', { name: 'Edit map object' }).click()
 }
 
@@ -512,10 +651,13 @@ export async function selectCatalogueObjectButton(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
 ): Promise<import('@playwright/test').Locator> {
+  const addMenu = page.getByRole('button', { name: 'Add to map', exact: true })
   const palette = page.getByRole('region', { name: 'Object palette' })
-  if (!(await palette.isVisible())) {
-    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  if (await addMenu.getAttribute('aria-expanded') !== 'true') {
+    await addMenu.click()
   }
+  await expect(addMenu).toHaveAttribute('aria-expanded', 'true')
+  await expect(palette).toBeVisible()
   const label = subtype.split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')

@@ -1,0 +1,232 @@
+{
+  "candidate": "ticket21-resume-source-freeze-8",
+  "cases": [
+    {
+      "file": "cluster-map.spec.ts",
+      "line": 27,
+      "title": "the Warden can navigate and arrange both maps",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 9343
+        }
+      ]
+    },
+    {
+      "file": "cluster-map.spec.ts",
+      "line": 182,
+      "title": "the Jump Route line follows a system while it is being dragged",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 4495
+        }
+      ]
+    },
+    {
+      "file": "cluster-map.spec.ts",
+      "line": 232,
+      "title": "the Warden can connect Jump Points across a cluster and record an unresolved exit",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 7513
+        }
+      ]
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "line": 205,
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "status": "unexpected",
+      "results": [
+        {
+          "attachments": [
+            {
+              "name": "screenshot",
+              "contentType": "image/png",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\test-failed-1.png"
+            },
+            {
+              "name": "error-context",
+              "contentType": "text/markdown",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\error-context.md"
+            },
+            {
+              "name": "trace",
+              "contentType": "application/zip",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\trace.zip"
+            }
+          ],
+          "errors": [
+            {
+              "location": {
+                "file": "eval at evaluate (:370:30), <anonymous>",
+                "column": 48,
+                "line": 3
+              },
+              "message": "Error: locator.evaluate: Error: The system map SVG is not available.\n    at eval (eval at evaluate (:370:30), <anonymous>:3:48)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at eval (eval at evaluate (:370:30), <anonymous>:3:48)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at moveToVisibleMapBackground (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:43:27)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:389:9"
+            }
+          ],
+          "status": "failed",
+          "duration": 11592
+        }
+      ]
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "line": 750,
+      "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 12064
+        }
+      ]
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "line": 77,
+      "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 3034
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 320,
+      "title": "the Warden can review and safely confirm dependent map deletions",
+      "status": "unexpected",
+      "results": [
+        {
+          "attachments": [
+            {
+              "name": "screenshot",
+              "contentType": "image/png",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\test-failed-1.png"
+            },
+            {
+              "name": "error-context",
+              "contentType": "text/markdown",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\error-context.md"
+            },
+            {
+              "name": "trace",
+              "contentType": "application/zip",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\trace.zip"
+            }
+          ],
+          "errors": [
+            {
+              "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+            },
+            {
+              "location": {
+                "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                "column": 74,
+                "line": 451
+              },
+              "message": "Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Delete New System 2 system' })\u001b[22m\n\n\n  449 |     await dialog.accept()\n  450 |   })\n> 451 |   await page.getByRole('button', { name: 'Delete New System 2 system' }).click()\n      |                                                                          ^\n  452 |   expect(deletionPreview).toContain('Harrow Entry')\n  453 |   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toHaveCount(0)\n  454 |   await expect(reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:451:74"
+            }
+          ],
+          "status": "timedOut",
+          "duration": 30945
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 489,
+      "title": "the Warden can export a cluster and standalone system as versioned JSON",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 11544
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 982,
+      "title": "the Warden can complete the local campaign workflow end to end",
+      "status": "expected",
+      "results": [
+        {
+          "attachments": [],
+          "errors": [],
+          "status": "passed",
+          "duration": 14763
+        }
+      ]
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "line": 103,
+      "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+      "status": "unexpected",
+      "results": [
+        {
+          "attachments": [
+            {
+              "name": "screenshot",
+              "contentType": "image/png",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\test-failed-1.png"
+            },
+            {
+              "name": "error-context",
+              "contentType": "text/markdown",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\error-context.md"
+            },
+            {
+              "name": "trace",
+              "contentType": "application/zip",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze8-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\trace.zip"
+            }
+          ],
+          "errors": [
+            {
+              "location": {
+                "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-recovery.spec.ts",
+                "column": 73,
+                "line": 164
+              },
+              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('navigation', { name: 'Star systems' }).getByRole('button', { name: 'Open Small Orbit Test system map' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('navigation', { name: 'Star systems' }).getByRole('button', { name: 'Open Small Orbit Test system map' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('navigation', { name: 'Star systems' }).getByRole('button', { name: 'Open Small Orbit Test system map' })\u001b[22m\n\n\n  162 |   await openWorkspaceHierarchy(page)\n  163 |   await expect(page.getByRole('navigation', { name: 'Star systems' })\n> 164 |     .getByRole('button', { name: 'Open Small Orbit Test system map' })).toBeVisible()\n      |                                                                         ^\n  165 | })\n  166 |\n  167 | test('the last valid workspace can be restored after the current snapshot fails to load', async ({ page }) => {\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-recovery.spec.ts:164:73"
+            }
+          ],
+          "status": "failed",
+          "duration": 7217
+        }
+      ]
+    }
+  ],
+  "scope": "10 targeted cases, not a full-suite rerun",
+  "stats": {
+    "startTime": "2026-10-19T13:27:13.214Z",
+    "duration": 120230.8,
+    "expected": 7,
+    "skipped": 0,
+    "unexpected": 3,
+    "flaky": 0
+  }
+}

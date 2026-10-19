@@ -1,0 +1,227 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "cluster",
+  "cluster": {
+    "id": "6a827833-47b4-4499-bbb2-91ff54551817",
+    "name": "QA Navigation Reach",
+    "systems": [
+      {
+        "id": "6a704b06-6353-4c79-8718-ebeb2e72333f",
+        "name": "QA Amber Lantern",
+        "objects": [
+          {
+            "id": "91cd20bd-39a7-4d6a-8450-41312a617c88",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "a6b33496-7803-4870-b622-5b526b647e6c",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "QA Copper World",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "fe8e479e-1568-427f-a81a-0ea12f68525b"
+            }
+          },
+          {
+            "id": "f6768a27-2999-44f7-8b07-f81db7ab15c8",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "QA Nested Moon",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "44f66168-006c-491c-a5a8-72023ad9f5ee"
+            }
+          },
+          {
+            "id": "731cb8f4-5029-4b9e-8da2-0c0e46b0199b",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-01",
+            "name": "QA Unoccupied Orbit Marker",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "2bb71c45-c23e-482f-8bde-48d68201aaba"
+            }
+          },
+          {
+            "id": "6d3c5ff0-2979-421b-984c-bd17b136a8c1",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "QA Far Beacon With A Useful Long Label",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 1.45,
+              "y": -0.25
+            }
+          },
+          {
+            "id": "5309abdf-404c-40bd-9336-5223b069270c",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-02",
+            "name": "QA Removable Waypoint",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": -0.35,
+              "y": 1.25
+            }
+          },
+          {
+            "id": "64b3acf9-485d-4e43-9e8b-b1d5de1aa9f9",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "QA Amber Gate",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.83,
+              "y": 0.7
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "fe8e479e-1568-427f-a81a-0ea12f68525b",
+            "hostId": "91cd20bd-39a7-4d6a-8450-41312a617c88",
+            "order": 1
+          },
+          {
+            "id": "44f66168-006c-491c-a5a8-72023ad9f5ee",
+            "hostId": "a6b33496-7803-4870-b622-5b526b647e6c",
+            "order": 1
+          },
+          {
+            "id": "2bb71c45-c23e-482f-8bde-48d68201aaba",
+            "hostId": null,
+            "center": {
+              "x": 0.18,
+              "y": 0.22
+            },
+            "order": 1
+          }
+        ]
+      },
+      {
+        "id": "ed6adc80-6244-40ae-9dc9-ddc0b93f8ae6",
+        "name": "QA Blue Compass",
+        "objects": [
+          {
+            "id": "3f2e8670-1b54-43d6-815e-a5973f8c7f78",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "a2c1d667-f415-4502-ab7c-8c5451911c35",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "QA Blue Gate",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.72,
+              "y": 0.22
+            }
+          },
+          {
+            "id": "9c939403-5418-45ab-b0b4-bd60bffd1c69",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "QA Blue Outpost",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.12,
+              "y": 0.8
+            }
+          }
+        ],
+        "orbits": []
+      }
+    ],
+    "routes": [
+      {
+        "id": "5b631123-9d34-4238-b89d-1c99a88896cb",
+        "jumpLevel": 4,
+        "fromPointId": "64b3acf9-485d-4e43-9e8b-b1d5de1aa9f9",
+        "toPointId": "a2c1d667-f415-4502-ab7c-8c5451911c35",
+        "name": "QA Amber Blue Route"
+      }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": [
+      "Breathable",
+      "Unbreathable",
+      "Vacuum"
+    ],
+    "portClassOptions": [
+      "Class I",
+      "Class II",
+      "Class III"
+    ],
+    "customFields": []
+  },
+  "layout": {
+    "version": 1,
+    "systemPositions": {
+      "6a704b06-6353-4c79-8718-ebeb2e72333f": {
+        "x": 0.13,
+        "y": 0.22
+      },
+      "ed6adc80-6244-40ae-9dc9-ddc0b93f8ae6": {
+        "x": 0.87,
+        "y": 0.77
+      }
+    },
+    "orbitRadii": {
+      "fe8e479e-1568-427f-a81a-0ea12f68525b": {
+        "horizontal": 240,
+        "vertical": 180
+      },
+      "44f66168-006c-491c-a5a8-72023ad9f5ee": {
+        "horizontal": 80,
+        "vertical": 60
+      },
+      "2bb71c45-c23e-482f-8bde-48d68201aaba": {
+        "horizontal": 110,
+        "vertical": 75
+      }
+    },
+    "orbitRotations": {
+      "fe8e479e-1568-427f-a81a-0ea12f68525b": 18
+    },
+    "objectAngles": {
+      "a6b33496-7803-4870-b622-5b526b647e6c": 0.42
+    }
+  }
+}

@@ -1,13 +1,16 @@
 <template>
-  <button
-    v-if="!routeFormOpen && !selectedRoute"
-    class="quiet-button chart-details-control mb-4"
+  <UButton
+    v-if="!routeFormOpen"
+    color="neutral"
+    variant="ghost"
+    size="sm"
+    class="chart-details-control mb-4"
     type="button"
     :aria-pressed="chartDetailsActive"
     @click="emit('show-chart-details')"
   >
     Chart details
-  </button>
+  </UButton>
   <template v-if="selectedRoute">
     <span class="section-kicker">JUMP ROUTE / SELECTED</span>
     <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>

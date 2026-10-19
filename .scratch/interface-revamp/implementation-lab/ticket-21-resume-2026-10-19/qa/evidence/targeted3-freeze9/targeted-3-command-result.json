@@ -1,0 +1,13 @@
+{
+  "retries": 0,
+  "invocations": 1,
+  "scope": "Only three remaining freeze8 failures; existing application-equivalent compiled server reused, no build",
+  "maxFailures": 0,
+  "started": "2026-10-19T15:33:39.3864171+02:00",
+  "workers": 1,
+  "exitCode": 1,
+  "candidate": "ticket21-resume-source-freeze-9",
+  "finished": "2026-10-19T15:34:38.6843973+02:00",
+  "screenshot": "only-on-failure",
+  "trace": "retain-on-failure"
+}

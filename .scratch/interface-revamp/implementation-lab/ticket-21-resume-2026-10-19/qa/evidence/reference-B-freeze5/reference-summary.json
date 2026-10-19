@@ -1,0 +1,5899 @@
+{
+  "referenceRoute": "/?variant=B&controls=dock",
+  "cases": [
+    {
+      "id": "desktop-mapfirst",
+      "height": 900,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 1440,
+      "palette": "light"
+    },
+    {
+      "id": "desktop-overlays",
+      "height": 900,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 1440,
+      "palette": "light"
+    },
+    {
+      "id": "portrait-map",
+      "height": 844,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 390,
+      "palette": "dark"
+    },
+    {
+      "id": "portrait-panels",
+      "height": 844,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 390,
+      "palette": "dark"
+    },
+    {
+      "id": "short-landscape",
+      "height": 390,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 844,
+      "palette": "light"
+    },
+    {
+      "id": "reduced-recovery",
+      "height": 500,
+      "arms": [
+        {
+          "arm": "B",
+          "status": "completed",
+          "route": "http://127.0.0.1:3180/?variant=B&controls=dock"
+        }
+      ],
+      "width": 390,
+      "palette": "dark"
+    }
+  ],
+  "screenshots": [
+    {
+      "caseId": "desktop-mapfirst",
+      "state": "map",
+      "arm": "B",
+      "file": "desktop-mapfirst-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 1440,
+          "height": 900,
+          "scrollWidth": 1440
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900,
+            "top": 0,
+            "right": 1440,
+            "bottom": 900,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 516.1171875,
+              "y": 828.421875,
+              "width": 407.765625,
+              "height": 55.578125,
+              "top": 828.421875,
+              "right": 923.8828125,
+              "bottom": 884,
+              "left": 516.1171875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 1300.4375,
+              "y": 842,
+              "width": 123.5625,
+              "height": 42,
+              "top": 842,
+              "right": 1424,
+              "bottom": 884,
+              "left": 1300.4375
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 12.796875,
+              "width": 1408,
+              "height": 56,
+              "top": 12.796875,
+              "right": 1424,
+              "bottom": 68.796875,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 83.1875,
+              "y": 84.796875,
+              "width": 1340.8125,
+              "height": 66.359375,
+              "top": 84.796875,
+              "right": 1424,
+              "bottom": 151.15625,
+              "left": 83.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 60.000022888183594,
+              "y": 298.214111328125,
+              "width": 303.5198669433594,
+              "height": 147.86865234375,
+              "top": 298.214111328125,
+              "right": 363.51988983154297,
+              "bottom": 446.082763671875,
+              "left": 60.000022888183594
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 503.91729736328125,
+              "y": 133.53514099121094,
+              "width": 303.519775390625,
+              "height": 147.86863708496094,
+              "top": 133.53514099121094,
+              "right": 807.4370727539062,
+              "bottom": 281.4037780761719,
+              "left": 503.91729736328125
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 890.5548706054688,
+              "y": 384.13360595703125,
+              "width": 303.51983642578125,
+              "height": 147.86859130859375,
+              "top": 384.13360595703125,
+              "right": 1194.07470703125,
+              "bottom": 532.002197265625,
+              "left": 890.5548706054688
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-135.0871827341868) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 1344.625,
+              "y": 847,
+              "width": 35.1875,
+              "height": 32,
+              "top": 847,
+              "right": 1379.8125,
+              "bottom": 879,
+              "left": 1344.625
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "4px 7.2px",
+            "background": "rgb(255, 253, 247)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(162, 108, 53)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "desktop-overlays",
+      "state": "map",
+      "arm": "B",
+      "file": "desktop-overlays-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 1440,
+          "height": 900,
+          "scrollWidth": 1440
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900,
+            "top": 0,
+            "right": 1440,
+            "bottom": 900,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 516.1171875,
+              "y": 828.421875,
+              "width": 407.765625,
+              "height": 55.578125,
+              "top": 828.421875,
+              "right": 923.8828125,
+              "bottom": 884,
+              "left": 516.1171875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 1300.4375,
+              "y": 842,
+              "width": 123.5625,
+              "height": 42,
+              "top": 842,
+              "right": 1424,
+              "bottom": 884,
+              "left": 1300.4375
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 12.796875,
+              "width": 1408,
+              "height": 56,
+              "top": 12.796875,
+              "right": 1424,
+              "bottom": 68.796875,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 83.1875,
+              "y": 84.796875,
+              "width": 1340.8125,
+              "height": 66.359375,
+              "top": 84.796875,
+              "right": 1424,
+              "bottom": 151.15625,
+              "left": 83.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 60.000022888183594,
+              "y": 298.214111328125,
+              "width": 303.5198669433594,
+              "height": 147.86865234375,
+              "top": 298.214111328125,
+              "right": 363.51988983154297,
+              "bottom": 446.082763671875,
+              "left": 60.000022888183594
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 503.91729736328125,
+              "y": 133.53514099121094,
+              "width": 303.519775390625,
+              "height": 147.86863708496094,
+              "top": 133.53514099121094,
+              "right": 807.4370727539062,
+              "bottom": 281.4037780761719,
+              "left": 503.91729736328125
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 890.5548706054688,
+              "y": 384.13360595703125,
+              "width": 303.51983642578125,
+              "height": 147.86859130859375,
+              "top": 384.13360595703125,
+              "right": 1194.07470703125,
+              "bottom": 532.002197265625,
+              "left": 890.5548706054688
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-135.0871827341868) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 1344.625,
+              "y": 847,
+              "width": 35.1875,
+              "height": 32,
+              "top": 847,
+              "right": 1379.8125,
+              "bottom": 879,
+              "left": 1344.625
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "4px 7.2px",
+            "background": "rgb(255, 253, 247)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(162, 108, 53)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "desktop-overlays",
+      "state": "inspect-overlay",
+      "arm": "B",
+      "file": "desktop-overlays-inspect-overlay-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 1440,
+          "height": 900,
+          "scrollWidth": 1440
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900,
+            "top": 0,
+            "right": 1440,
+            "bottom": 900,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 1104,
+              "y": 150.390625,
+              "width": 320,
+              "height": 684.015625,
+              "top": 150.390625,
+              "right": 1424,
+              "bottom": 834.40625,
+              "left": 1104
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 516.1171875,
+              "y": 828.421875,
+              "width": 407.765625,
+              "height": 55.578125,
+              "top": 828.421875,
+              "right": 923.8828125,
+              "bottom": 884,
+              "left": 516.1171875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 1300.4375,
+              "y": 842,
+              "width": 123.5625,
+              "height": 42,
+              "top": 842,
+              "right": 1424,
+              "bottom": 884,
+              "left": 1300.4375
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 12.796875,
+              "width": 1408,
+              "height": 56,
+              "top": 12.796875,
+              "right": 1424,
+              "bottom": 68.796875,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 83.1875,
+              "y": 84.796875,
+              "width": 1340.8125,
+              "height": 66.359375,
+              "top": 84.796875,
+              "right": 1424,
+              "bottom": 151.15625,
+              "left": 83.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 60.000022888183594,
+              "y": 298.214111328125,
+              "width": 303.5198669433594,
+              "height": 147.86865234375,
+              "top": 298.214111328125,
+              "right": 363.51988983154297,
+              "bottom": 446.082763671875,
+              "left": 60.000022888183594
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 503.91729736328125,
+              "y": 133.53514099121094,
+              "width": 303.519775390625,
+              "height": 147.86863708496094,
+              "top": 133.53514099121094,
+              "right": 807.4370727539062,
+              "bottom": 281.4037780761719,
+              "left": 503.91729736328125
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 890.5548706054688,
+              "y": 384.13360595703125,
+              "width": 303.51983642578125,
+              "height": 147.86859130859375,
+              "top": 384.13360595703125,
+              "right": 1194.07470703125,
+              "bottom": 532.002197265625,
+              "left": 890.5548706054688
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-135.0871827341868) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Hide Inspect panel",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 1276.65625,
+              "y": 98.78125,
+              "width": 61.3125,
+              "height": 38.390625,
+              "top": 98.78125,
+              "right": 1337.96875,
+              "bottom": 137.171875,
+              "left": 1276.65625
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "6.4px 10.4px",
+            "background": "color(srgb 0.925177 0.889412 0.82902)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(40, 56, 47)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Hide Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          },
+          {
+            "name": "Hide inspector",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Delete Jump Route…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Apply changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Discard changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "desktop-overlays",
+      "state": "both-overlays",
+      "arm": "B",
+      "file": "desktop-overlays-both-overlays-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 1440,
+          "height": 900,
+          "scrollWidth": 1440
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900,
+            "top": 0,
+            "right": 1440,
+            "bottom": 900,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 1104,
+              "y": 150.390625,
+              "width": 320,
+              "height": 684.015625,
+              "top": 150.390625,
+              "right": 1424,
+              "bottom": 834.40625,
+              "left": 1104
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 88,
+              "y": 84.796875,
+              "width": 352,
+              "height": 760.8125,
+              "top": 84.796875,
+              "right": 440,
+              "bottom": 845.609375,
+              "left": 88
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "0px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "dock": {
+            "bounds": {
+              "x": 516.1171875,
+              "y": 828.421875,
+              "width": 407.765625,
+              "height": 55.578125,
+              "top": 828.421875,
+              "right": 923.8828125,
+              "bottom": 884,
+              "left": 516.1171875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 1300.4375,
+              "y": 842,
+              "width": 123.5625,
+              "height": 42,
+              "top": 842,
+              "right": 1424,
+              "bottom": 884,
+              "left": 1300.4375
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 12.796875,
+              "width": 1408,
+              "height": 56,
+              "top": 12.796875,
+              "right": 1424,
+              "bottom": 68.796875,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 83.1875,
+              "y": 84.796875,
+              "width": 1340.8125,
+              "height": 66.359375,
+              "top": 84.796875,
+              "right": 1424,
+              "bottom": 151.15625,
+              "left": 83.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 60.000022888183594,
+              "y": 298.214111328125,
+              "width": 303.5198669433594,
+              "height": 147.86865234375,
+              "top": 298.214111328125,
+              "right": 363.51988983154297,
+              "bottom": 446.082763671875,
+              "left": 60.000022888183594
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 503.91729736328125,
+              "y": 133.53514099121094,
+              "width": 303.519775390625,
+              "height": 147.86863708496094,
+              "top": 133.53514099121094,
+              "right": 807.4370727539062,
+              "bottom": 281.4037780761719,
+              "left": 503.91729736328125
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 890.5548706054688,
+              "y": 384.13360595703125,
+              "width": 303.51983642578125,
+              "height": 147.86859130859375,
+              "top": 384.13360595703125,
+              "right": 1194.07470703125,
+              "bottom": 532.002197265625,
+              "left": 890.5548706054688
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-135.0871827341868) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Show map hierarchy",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 1200.03125,
+              "y": 98.78125,
+              "width": 73.75,
+              "height": 38.390625,
+              "top": 98.78125,
+              "right": 1273.78125,
+              "bottom": 137.171875,
+              "left": 1200.03125
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "6.4px 10.4px",
+            "background": "color(srgb 0.925177 0.889412 0.82902)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(40, 56, 47)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Hide Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Close map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "⌘The Outer ReachJump Cluster",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vela Reach6 objects · 3 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Kestrel Deep4 objects · 2 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vesper Station3 objects · 1 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 4, Vela Reach · JP-1 → Kestrel Deep · JP-2",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 6, Kestrel Deep · JP-2 → Vesper Station · JP-3",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 2, Vela Reach · JP-1 → Beyond the blue veil",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 8, Vesper Station · JP-3 → Vela Reach · JP-1",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          },
+          {
+            "name": "Hide inspector",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Delete Jump Route…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Apply changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Discard changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "portrait-map",
+      "state": "map",
+      "arm": "B",
+      "file": "portrait-map-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 844,
+            "top": 0,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 66.8515625,
+              "y": 782.984375,
+              "width": 256.296875,
+              "height": 53.828125,
+              "top": 782.984375,
+              "right": 323.1484375,
+              "bottom": 836.8125,
+              "left": 66.8515625
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 279.265625,
+              "y": 697.859375,
+              "width": 102.734375,
+              "height": 37.34375,
+              "top": 697.859375,
+              "right": 382,
+              "bottom": 735.203125,
+              "left": 279.265625
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 380.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 380.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 420.9931335449219,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 336.3448181152344,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 336.3448181152344,
+              "right": 218.68087768554688,
+              "bottom": 376.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 404.2152404785156,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 404.2152404785156,
+              "right": 323.3952331542969,
+              "bottom": 444.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630465) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 315.4375,
+              "y": 701.734375,
+              "width": 30.390625,
+              "height": 29.59375,
+              "top": 701.734375,
+              "right": 345.828125,
+              "bottom": 731.328125,
+              "left": 315.4375
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "3.2px 5.6px",
+            "background": "rgb(28, 44, 39)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 184, 121)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "portrait-panels",
+      "state": "map",
+      "arm": "B",
+      "file": "portrait-panels-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 844,
+            "top": 0,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 66.8515625,
+              "y": 782.984375,
+              "width": 256.296875,
+              "height": 53.828125,
+              "top": 782.984375,
+              "right": 323.1484375,
+              "bottom": 836.8125,
+              "left": 66.8515625
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 279.265625,
+              "y": 697.859375,
+              "width": 102.734375,
+              "height": 37.34375,
+              "top": 697.859375,
+              "right": 382,
+              "bottom": 735.203125,
+              "left": 279.265625
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 380.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 380.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 420.9931335449219,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 336.3448181152344,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 336.3448181152344,
+              "right": 218.68087768554688,
+              "bottom": 376.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 404.2152404785156,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 404.2152404785156,
+              "right": 323.3952331542969,
+              "bottom": 444.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630465) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 315.4375,
+              "y": 701.734375,
+              "width": 30.390625,
+              "height": 29.59375,
+              "top": 701.734375,
+              "right": 345.828125,
+              "bottom": 731.328125,
+              "left": 315.4375
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "3.2px 5.6px",
+            "background": "rgb(28, 44, 39)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 184, 121)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "portrait-panels",
+      "state": "inspect-panel",
+      "arm": "B",
+      "file": "portrait-panels-inspect-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 844,
+            "top": 0,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 380.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 380.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 420.9931335449219,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 336.3448181152344,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 336.3448181152344,
+              "right": 218.68087768554688,
+              "bottom": 376.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 404.2152404785156,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 404.2152404785156,
+              "right": 323.3952331542969,
+              "bottom": 444.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630465) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Hide Inspect panel",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 84.234375,
+              "y": 145.4375,
+              "width": 52.875,
+              "height": 34.390625,
+              "top": 145.4375,
+              "right": 137.109375,
+              "bottom": 179.828125,
+              "left": 84.234375
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "4.8px 7.2px",
+            "background": "color(srgb 0.178196 0.200471 0.160471)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 237, 228)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Hide Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Hide inspector",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Delete Jump Route…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Apply changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Discard changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "portrait-panels",
+      "state": "hierarchy-panel",
+      "arm": "B",
+      "file": "portrait-panels-hierarchy-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 844,
+            "top": 0,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 380.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 380.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 420.9931335449219,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 336.3448181152344,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 336.3448181152344,
+              "right": 218.68087768554688,
+              "bottom": 376.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 404.2152404785156,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 404.2152404785156,
+              "right": 323.3952331542969,
+              "bottom": 444.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630465) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Show map hierarchy",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 18.78125,
+              "y": 145.4375,
+              "width": 64.65625,
+              "height": 34.390625,
+              "top": 145.4375,
+              "right": 83.4375,
+              "bottom": 179.828125,
+              "left": 18.78125
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "4.8px 7.2px",
+            "background": "color(srgb 0.178196 0.200471 0.160471)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 237, 228)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Close map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "⌘The Outer ReachJump Cluster",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vela Reach6 objects · 3 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Kestrel Deep4 objects · 2 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vesper Station3 objects · 1 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 4, Vela Reach · JP-1 → Kestrel Deep · JP-2",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 6, Kestrel Deep · JP-2 → Vesper Station · JP-3",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 2, Vela Reach · JP-1 → Beyond the blue veil",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 8, Vesper Station · JP-3 → Vela Reach · JP-1",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "short-landscape",
+      "state": "map",
+      "arm": "B",
+      "file": "short-landscape-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 844,
+          "height": 390,
+          "scrollWidth": 844
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 844,
+            "height": 390,
+            "top": 0,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(246, 243, 233)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 218.1171875,
+              "y": 263.234375,
+              "width": 407.765625,
+              "height": 55.578125,
+              "top": 263.234375,
+              "right": 625.8828125,
+              "bottom": 318.8125,
+              "left": 218.1171875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 712.4375,
+              "y": 281.609375,
+              "width": 123.5625,
+              "height": 42,
+              "top": 281.609375,
+              "right": 836,
+              "bottom": 323.609375,
+              "left": 712.4375
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 5.59375,
+              "width": 812,
+              "height": 90.28125,
+              "top": 5.59375,
+              "right": 828,
+              "bottom": 95.875,
+              "left": 16
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "647.156px 130.875px",
+            "gridRows": "32px 38.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 16,
+              "y": 112,
+              "width": 812,
+              "height": 66.359375,
+              "top": 112,
+              "right": 828,
+              "bottom": 178.359375,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 73.63664245605469,
+              "y": 114.77854919433594,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 114.77854919433594,
+              "right": 233.8414764404297,
+              "bottom": 192.82705688476562,
+              "left": 73.63664245605469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 307.9465026855469,
+              "y": 27.857152938842773,
+              "width": 160.20480346679688,
+              "height": 78.04850769042969,
+              "top": 27.857152938842773,
+              "right": 468.15130615234375,
+              "bottom": 105.90566062927246,
+              "left": 307.9465026855469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 512.0228271484375,
+              "y": 160.12884521484375,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 160.12884521484375,
+              "right": 672.2276611328125,
+              "bottom": 238.17735290527344,
+              "left": 512.0228271484375
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-298.26477456439744,-192.04317269264564) scale(1.4746007358453277)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 756.625,
+              "y": 286.609375,
+              "width": 35.1875,
+              "height": 32,
+              "top": 286.609375,
+              "right": 791.8125,
+              "bottom": 318.609375,
+              "left": 756.625
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "4px 7.2px",
+            "background": "rgb(255, 253, 247)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(162, 108, 53)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "short-landscape",
+      "state": "inspect-panel",
+      "arm": "B",
+      "file": "short-landscape-inspect-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 844,
+          "height": 390,
+          "scrollWidth": 844
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 844,
+            "height": 390,
+            "top": 0,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(246, 243, 233)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 5.59375,
+              "width": 812,
+              "height": 90.28125,
+              "top": 5.59375,
+              "right": 828,
+              "bottom": 95.875,
+              "left": 16
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "647.156px 130.875px",
+            "gridRows": "32px 38.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 16,
+              "y": 112,
+              "width": 812,
+              "height": 66.359375,
+              "top": 112,
+              "right": 828,
+              "bottom": 178.359375,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 73.63664245605469,
+              "y": 114.77854919433594,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 114.77854919433594,
+              "right": 233.8414764404297,
+              "bottom": 192.82705688476562,
+              "left": 73.63664245605469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 307.9465026855469,
+              "y": 27.857152938842773,
+              "width": 160.20480346679688,
+              "height": 78.04850769042969,
+              "top": 27.857152938842773,
+              "right": 468.15130615234375,
+              "bottom": 105.90566062927246,
+              "left": 307.9465026855469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 512.0228271484375,
+              "y": 160.12884521484375,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 160.12884521484375,
+              "right": 672.2276611328125,
+              "bottom": 238.17735290527344,
+              "left": 512.0228271484375
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-298.26477456439744,-192.04317269264564) scale(1.4746007358453277)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Hide Inspect panel",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 680.65625,
+              "y": 125.984375,
+              "width": 61.3125,
+              "height": 38.390625,
+              "top": 125.984375,
+              "right": 741.96875,
+              "bottom": 164.375,
+              "left": 680.65625
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "6.4px 10.4px",
+            "background": "color(srgb 0.925177 0.889412 0.82902)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(40, 56, 47)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Hide Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Hide inspector",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Delete Jump Route…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Apply changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Discard changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "short-landscape",
+      "state": "hierarchy-panel",
+      "arm": "B",
+      "file": "short-landscape-hierarchy-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 844,
+          "height": 390,
+          "scrollWidth": 844
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 844,
+            "height": 390,
+            "top": 0,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(40, 56, 47)",
+          "padding": "0px",
+          "background": "rgb(247, 243, 231)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(246, 243, 233)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "5.6px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "4px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 16,
+              "y": 5.59375,
+              "width": 812,
+              "height": 90.28125,
+              "top": 5.59375,
+              "right": 828,
+              "bottom": 95.875,
+              "left": 16
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "7.2px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "647.156px 130.875px",
+            "gridRows": "32px 38.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 16,
+              "y": 112,
+              "width": 812,
+              "height": 66.359375,
+              "top": 112,
+              "right": 828,
+              "bottom": 178.359375,
+              "left": 16
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(47, 67, 53, 0.17)",
+            "padding": "8.8px 11.2px",
+            "background": "color(srgb 0.964706 0.952941 0.913725 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 844,
+              "height": 390,
+              "top": 0,
+              "right": 844,
+              "bottom": 390,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(40, 56, 47)",
+            "padding": "0px",
+            "background": "rgb(247, 243, 231)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 73.63664245605469,
+              "y": 114.77854919433594,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 114.77854919433594,
+              "right": 233.8414764404297,
+              "bottom": 192.82705688476562,
+              "left": 73.63664245605469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 307.9465026855469,
+              "y": 27.857152938842773,
+              "width": 160.20480346679688,
+              "height": 78.04850769042969,
+              "top": 27.857152938842773,
+              "right": 468.15130615234375,
+              "bottom": 105.90566062927246,
+              "left": 307.9465026855469
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 512.0228271484375,
+              "y": 160.12884521484375,
+              "width": 160.204833984375,
+              "height": 78.04850769042969,
+              "top": 160.12884521484375,
+              "right": 672.2276611328125,
+              "bottom": 238.17735290527344,
+              "left": 512.0228271484375
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-298.26477456439744,-192.04317269264564) scale(1.4746007358453277)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Show map hierarchy",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 604.03125,
+              "y": 125.984375,
+              "width": 73.75,
+              "height": 38.390625,
+              "top": 125.984375,
+              "right": 677.78125,
+              "bottom": 164.375,
+              "left": 604.03125
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(162, 108, 53)",
+            "padding": "6.4px 10.4px",
+            "background": "color(srgb 0.925177 0.889412 0.82902)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(40, 56, 47)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to dark theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Close map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "⌘The Outer ReachJump Cluster",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vela Reach6 objects · 3 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Kestrel Deep4 objects · 2 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vesper Station3 objects · 1 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 4, Vela Reach · JP-1 → Kestrel Deep · JP-2",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 6, Kestrel Deep · JP-2 → Vesper Station · JP-3",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 2, Vela Reach · JP-1 → Beyond the blue veil",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 8, Vesper Station · JP-3 → Vela Reach · JP-1",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "reduced-recovery",
+      "state": "map",
+      "arm": "B",
+      "file": "reduced-recovery-map-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 500,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 500,
+            "top": 0,
+            "right": 390,
+            "bottom": 500,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 66.8515625,
+              "y": 438.984375,
+              "width": 256.296875,
+              "height": 53.828125,
+              "top": 438.984375,
+              "right": 323.1484375,
+              "bottom": 492.8125,
+              "left": 66.8515625
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "zoom": {
+            "bounds": {
+              "x": 279.265625,
+              "y": 353.859375,
+              "width": 102.734375,
+              "height": 37.34375,
+              "top": 353.859375,
+              "right": 382,
+              "bottom": 391.203125,
+              "left": 279.265625
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 208.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 208.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 248.99313354492188,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": true
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 164.34481811523438,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 164.34481811523438,
+              "right": 218.68087768554688,
+              "bottom": 204.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 232.21522521972656,
+              "width": 82.20329284667969,
+              "height": 40.04777526855469,
+              "top": 232.21522521972656,
+              "right": 323.3952331542969,
+              "bottom": 272.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": true
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630454) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Fit map",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 315.4375,
+              "y": 357.734375,
+              "width": 30.390625,
+              "height": 29.59375,
+              "top": 357.734375,
+              "right": 345.828125,
+              "bottom": 387.328125,
+              "left": 315.4375
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "3.2px 5.6px",
+            "background": "rgb(28, 44, 39)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 184, 121)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": true,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom out",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Fit map",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Zoom in",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Navigate: pan the view or open a system",
+            "role": null,
+            "pressed": "true",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select: tap a map item to inspect it",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Move: drag existing map geometry",
+            "role": null,
+            "pressed": "false",
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Choose an item to add to the map",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "reduced-recovery",
+      "state": "inspect-panel",
+      "arm": "B",
+      "file": "reduced-recovery-inspect-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 500,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 500,
+            "top": 0,
+            "right": 390,
+            "bottom": 500,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 208.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 208.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 248.99313354492188,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 164.34481811523438,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 164.34481811523438,
+              "right": 218.68087768554688,
+              "bottom": 204.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 232.21522521972656,
+              "width": 82.20329284667969,
+              "height": 40.04777526855469,
+              "top": 232.21522521972656,
+              "right": 323.3952331542969,
+              "bottom": 272.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630454) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Hide Inspect panel",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 84.234375,
+              "y": 145.4375,
+              "width": 52.875,
+              "height": 34.390625,
+              "top": 145.4375,
+              "right": 137.109375,
+              "bottom": 179.828125,
+              "left": 84.234375
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "4.8px 7.2px",
+            "background": "color(srgb 0.178196 0.200471 0.160471)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 237, 228)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Hide Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Hide inspector",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Delete Jump Route…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Apply changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Discard changes",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "reduced-recovery",
+      "state": "hierarchy-panel",
+      "arm": "B",
+      "file": "reduced-recovery-hierarchy-panel-B.png",
+      "geometry": {
+        "viewport": {
+          "width": 390,
+          "height": 500,
+          "scrollWidth": 390
+        },
+        "svg": {
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 500,
+            "top": 0,
+            "right": 390,
+            "bottom": 500,
+            "left": 0
+          },
+          "display": "block",
+          "position": "static",
+          "border": "0px solid rgb(232, 237, 228)",
+          "padding": "0px",
+          "background": "rgb(16, 32, 29)",
+          "gridColumns": "none",
+          "gridRows": "none",
+          "chromeClearance": "",
+          "bottomClearance": "",
+          "visible": true
+        },
+        "surfaces": {
+          "inspector": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "rgb(20, 33, 30)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "hierarchy": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "flex",
+            "position": "fixed",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "11.2px 12.8px 12.8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.96)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "dock": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "fixed",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "3.52px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.95)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "zoom": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            },
+            "display": "none",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "2.88px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.94)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": false
+          },
+          "header": {
+            "bounds": {
+              "x": 6.390625,
+              "y": 6.390625,
+              "width": 377.21875,
+              "height": 76.6875,
+              "top": 6.390625,
+              "right": 383.609375,
+              "bottom": 83.078125,
+              "left": 6.390625
+            },
+            "display": "grid",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "4.8px 6.4px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "258.484px 97.5625px",
+            "gridRows": "27.1875px 34.3906px",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "chrome": {
+            "bounds": {
+              "x": 7.1875,
+              "y": 98.390625,
+              "width": 375.625,
+              "height": 91.421875,
+              "top": 98.390625,
+              "right": 382.8125,
+              "bottom": 189.8125,
+              "left": 7.1875
+            },
+            "display": "flex",
+            "position": "absolute",
+            "border": "1px solid rgba(188, 202, 188, 0.17)",
+            "padding": "6.4px 8px",
+            "background": "color(srgb 0.0784314 0.129412 0.117647 / 0.92)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "board": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px solid rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgba(0, 0, 0, 0)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "canvas": {
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 500,
+              "top": 0,
+              "right": 390,
+              "bottom": 500,
+              "left": 0
+            },
+            "display": "block",
+            "position": "relative",
+            "border": "0px none rgb(232, 237, 228)",
+            "padding": "0px",
+            "background": "rgb(16, 32, 29)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          }
+        },
+        "footprint": [],
+        "marks": [
+          {
+            "label": "Open Vela Reach system map",
+            "id": "sys-vela",
+            "bounds": {
+              "x": 16.2500057220459,
+              "y": 208.94537353515625,
+              "width": 82.20329284667969,
+              "height": 40.047760009765625,
+              "top": 208.94537353515625,
+              "right": 98.45329856872559,
+              "bottom": 248.99313354492188,
+              "left": 16.2500057220459
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Kestrel Deep system map",
+            "id": "sys-kestrel",
+            "bounds": {
+              "x": 136.47760009765625,
+              "y": 164.34481811523438,
+              "width": 82.20327758789062,
+              "height": 40.047760009765625,
+              "top": 164.34481811523438,
+              "right": 218.68087768554688,
+              "bottom": 204.392578125,
+              "left": 136.47760009765625
+            },
+            "ordinaryHit": false
+          },
+          {
+            "label": "Open Vesper Station system map",
+            "id": "sys-vesper",
+            "bounds": {
+              "x": 241.1919403076172,
+              "y": 232.21522521972656,
+              "width": 82.20329284667969,
+              "height": 40.04777526855469,
+              "top": 232.21522521972656,
+              "right": 323.3952331542969,
+              "bottom": 272.26300048828125,
+              "left": 241.1919403076172
+            },
+            "ordinaryHit": false
+          }
+        ],
+        "camera": "translate(-204.57991459000584,-134.95414041630454) scale(1.2970933270934324)",
+        "selection": [
+          {
+            "label": "Select Jump Level 4 route from Vela Gate (Vela Reach) to The Sill (Kestrel Deep)",
+            "id": "route-vela-kestrel"
+          }
+        ],
+        "focus": {
+          "name": "Show map hierarchy",
+          "tag": "BUTTON",
+          "bounds": {
+            "bounds": {
+              "x": 18.78125,
+              "y": 145.4375,
+              "width": 64.65625,
+              "height": 34.390625,
+              "top": 145.4375,
+              "right": 83.4375,
+              "bottom": 179.828125,
+              "left": 18.78125
+            },
+            "display": "block",
+            "position": "static",
+            "border": "1px solid rgb(232, 184, 121)",
+            "padding": "4.8px 7.2px",
+            "background": "color(srgb 0.178196 0.200471 0.160471)",
+            "gridColumns": "none",
+            "gridRows": "none",
+            "chromeClearance": "",
+            "bottomClearance": "",
+            "visible": true
+          },
+          "outline": "3px none rgb(232, 237, 228)",
+          "boxShadow": "none",
+          "outlineExtent": 0,
+          "focusVisible": false,
+          "ordinaryHit": false,
+          "ringFits": true,
+          "clippedBy": []
+        },
+        "controls": [
+          {
+            "name": "Switch to light theme",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Open field definitions",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Show map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": "true",
+            "controls": "b-hierarchy-panel"
+          },
+          {
+            "name": "Open Inspect panel",
+            "role": null,
+            "pressed": null,
+            "expanded": "false",
+            "controls": "b-inspector-panel"
+          },
+          {
+            "name": "Import map…",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export image · PNG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Export vector · SVG",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Share preview link",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Close map hierarchy",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "⌘The Outer ReachJump Cluster",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vela Reach6 objects · 3 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Kestrel Deep4 objects · 2 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "✦Vesper Station3 objects · 1 Orbits",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 4, Vela Reach · JP-1 → Kestrel Deep · JP-2",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 6, Kestrel Deep · JP-2 → Vesper Station · JP-3",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 2, Vela Reach · JP-1 → Beyond the blue veil",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          },
+          {
+            "name": "Select Jump Level 8, Vesper Station · JP-3 → Vela Reach · JP-1",
+            "role": null,
+            "pressed": null,
+            "expanded": null,
+            "controls": null
+          }
+        ]
+      }
+    }
+  ],
+  "sourceSha256": "20edb1f71fcfeae44122abe6c986b8a95b687c1f3577a700eeeb8812dddd4efa",
+  "candidate": "ticket21-resume-source-freeze-5",
+  "note": "Only unchanged B reference arms are positive reference evidence. Earlier uncontrolled root consultation images are not curated.",
+  "source": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/paired-composition-results.json"
+}

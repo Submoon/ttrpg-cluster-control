@@ -69,7 +69,8 @@ import type {
 import type { MapInteractionMode, SystemMapHandle } from '../composables/editor-workflows/types'
 import type { MapImageFormat } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
-import { normalizeSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
 
@@ -390,64 +391,51 @@ function fitMap(usableRect?: SvgViewportRect): void {
     return
   }
 
-  const feedback = props.feedbackElement
-  if (!feedback || !feedback.isConnected || feedback.closest('[inert]')) {
-    map.fitMap()
-    return
-  }
-
-  const feedbackStyle = window.getComputedStyle(feedback)
-  if (feedbackStyle.display === 'none' || feedbackStyle.visibility === 'hidden'
-    || feedbackStyle.opacity === '0' || feedback.getClientRects().length === 0) {
-    map.fitMap()
-    return
-  }
-
   const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
   if (!svg) return
-
   const svgBounds = svg.getBoundingClientRect()
-  const feedbackBounds = feedback.getBoundingClientRect()
-  const boundsAreUsable = (bounds: DOMRect): boolean => [
-    bounds.left, bounds.top, bounds.right, bounds.bottom, bounds.width, bounds.height,
-  ].every(Number.isFinite) && bounds.width > 0 && bounds.height > 0
-  if (!boundsAreUsable(svgBounds) || !boundsAreUsable(feedbackBounds)) return
+  const board = svg.closest<HTMLElement>('[data-map-board]')
+  const dashboard = svg.closest<HTMLElement>('[data-workspace-dashboard]')
+  if (!board || !dashboard || !isUsableClientRect(svgBounds)) return
 
-  const intersects = feedbackBounds.left < svgBounds.right
-    && feedbackBounds.right > svgBounds.left
-    && feedbackBounds.top < svgBounds.bottom
-    && feedbackBounds.bottom > svgBounds.top
-  if (!intersects) {
-    map.fitMap()
-    return
+  const svgRect: ClientRectBounds = {
+    left: svgBounds.left,
+    top: svgBounds.top,
+    right: svgBounds.right,
+    bottom: svgBounds.bottom,
   }
-
-  const usableClientBottom = Math.max(svgBounds.top, feedbackBounds.top)
-  if (!(usableClientBottom > svgBounds.top)) return
-
-  const screenMatrix = svg.getScreenCTM()
-  if (!screenMatrix) return
-
-  try {
-    const inverse = screenMatrix.inverse()
-    const corners = [
-      [svgBounds.left, svgBounds.top],
-      [svgBounds.right, svgBounds.top],
-      [svgBounds.left, usableClientBottom],
-      [svgBounds.right, usableClientBottom],
-    ].map(([x, y]) => ({
-      x: inverse.a * x! + inverse.c * y! + inverse.e,
-      y: inverse.b * x! + inverse.d * y! + inverse.f,
-    }))
-    const left = Math.min(...corners.map(point => point.x))
-    const top = Math.min(...corners.map(point => point.y))
-    const right = Math.max(...corners.map(point => point.x))
-    const bottom = Math.max(...corners.map(point => point.y))
-    const measuredRect = normalizeSvgViewportRect({ x: left, y: top, width: right - left, height: bottom - top })
-    if (measuredRect) map.fitMap(measuredRect)
-  } catch {
-    // If the visible obstruction cannot be measured safely, keep the existing camera.
+  const markerNodes = new Set<Element>(dashboard.querySelectorAll('[data-map-obstruction]'))
+  for (const element of document.querySelectorAll('[data-map-obstruction]')) {
+    // These named popovers are teleported to body, outside the stable DashboardGroup subtree.
+    if (!dashboard.contains(element)
+      && element.matches('.workspace-map-files-content, .workspace-add-menu, .workspace-zoom-navigation')) {
+      markerNodes.add(element)
+    }
   }
+  const feedback = props.feedbackElement
+  if (feedback && dashboard.contains(feedback) && !feedback.hasAttribute('data-map-obstruction')) markerNodes.add(feedback)
+
+  const obstructions = [...markerNodes]
+    .filter(isVisibleObstruction)
+    .map(element => element.getBoundingClientRect())
+    .filter(isUsableClientRect)
+    .map(rect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }))
+  const usableClientRect = largestUnobstructedClientRect(svgRect, obstructions)
+  if (!usableClientRect) return
+  const measuredRect = clientRectToSvgViewportRect(svg, usableClientRect)
+  if (measuredRect) map.fitMap(measuredRect)
+}
+
+function isUsableClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'>): boolean {
+  return [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height].every(Number.isFinite)
+    && rect.width > 0 && rect.height > 0
+}
+
+function isVisibleObstruction(element: Element): boolean {
+  if (!element.isConnected || element.closest('[inert]') || element.closest('[aria-hidden="true"]')) return false
+  if (element.getClientRects().length === 0) return false
+  const style = window.getComputedStyle(element)
+  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'
 }
 
 onMounted(async () => {
@@ -460,7 +448,11 @@ onMounted(async () => {
   const map = currentMap()
   if (!map) return
   if (props.initialViewport) map.setViewport(props.initialViewport)
-  else map.fitMap()
+  else {
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    await nextTick()
+    fitMap()
+  }
   await nextTick()
   mapReady = true
   emitViewport(map.getViewport())

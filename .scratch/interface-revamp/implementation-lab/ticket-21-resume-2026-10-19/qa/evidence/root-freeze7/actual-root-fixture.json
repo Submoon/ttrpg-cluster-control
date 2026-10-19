@@ -1,0 +1,248 @@
+{
+  "id": "9dfc883a-24c2-481a-87f0-53103e649daa",
+  "cluster": {
+    "id": "459ce4c1-be2d-406e-ab08-143ee8d0460b",
+    "name": "QA Paired Reach",
+    "systems": [
+      {
+        "id": "30f539ce-c703-412c-b7ac-56225900a6fc",
+        "name": "QA Bootstrap",
+        "objects": [
+          {
+            "id": "23a4050e-e364-4264-9803-bcfab529b178",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          }
+        ],
+        "orbits": []
+      },
+      {
+        "id": "3551a175-684b-4a0a-bf8a-4c7a6d68de33",
+        "name": "QA Amber Lantern",
+        "objects": [
+          {
+            "id": "e9e99530-268d-4b3b-b212-ec71e0924c8f",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "3377363a-982a-4195-9a8e-497c403c435b",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "QA Copper World",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "d6905376-8b78-458e-8328-5d88a1d72dee"
+            }
+          },
+          {
+            "id": "99891b09-c901-4558-926d-671e95bd78c1",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "QA Nested Moon",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "e8048736-1437-45c0-9996-2b114aeb9b36"
+            }
+          },
+          {
+            "id": "344aee73-bd3b-4f2b-9aa0-a1c3836d65b5",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-01",
+            "name": "QA Unoccupied Orbit Marker",
+            "description": "",
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "dfdafb53-d10e-4985-93d2-b56a6c3954bf"
+            }
+          },
+          {
+            "id": "ac841393-91ea-46ee-b46e-e3a80e27bbd7",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "QA Far Beacon With A Useful Long Label",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 1.45,
+              "y": -0.25
+            }
+          },
+          {
+            "id": "0c9498c1-0d37-4fa1-b901-9d9b5ed42c10",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-02",
+            "name": "QA Removable Waypoint",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": -0.35,
+              "y": 1.25
+            }
+          },
+          {
+            "id": "482fe731-3da7-4fbd-ae10-b2da02d3e208",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "QA Amber Gate",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.83,
+              "y": 0.7
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "d6905376-8b78-458e-8328-5d88a1d72dee",
+            "hostId": "e9e99530-268d-4b3b-b212-ec71e0924c8f",
+            "order": 1
+          },
+          {
+            "id": "e8048736-1437-45c0-9996-2b114aeb9b36",
+            "hostId": "3377363a-982a-4195-9a8e-497c403c435b",
+            "order": 1
+          },
+          {
+            "id": "dfdafb53-d10e-4985-93d2-b56a6c3954bf",
+            "hostId": null,
+            "center": {
+              "x": 0.18,
+              "y": 0.22
+            },
+            "order": 1
+          }
+        ]
+      },
+      {
+        "id": "66d9b228-f17e-4bc7-a170-12d06785e075",
+        "name": "QA Blue Compass",
+        "objects": [
+          {
+            "id": "7bb8f14b-fdfd-4497-8850-af02d871cafb",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "88d0ab39-a9cd-442b-96f5-189089eac612",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "QA Blue Gate",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.72,
+              "y": 0.22
+            }
+          },
+          {
+            "id": "4b5743c7-3713-4e5d-a656-50e12de06200",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "QA Blue Outpost",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.12,
+              "y": 0.8
+            }
+          }
+        ],
+        "orbits": []
+      }
+    ],
+    "routes": [
+      {
+        "id": "5f74844b-44de-44cb-9573-b06ad4f60e8b",
+        "name": "QA Amber Blue Route",
+        "jumpLevel": 4,
+        "fromPointId": "482fe731-3da7-4fbd-ae10-b2da02d3e208",
+        "toPointId": "88d0ab39-a9cd-442b-96f5-189089eac612"
+      }
+    ]
+  },
+  "layout": {
+    "systemPositions": {
+      "30f539ce-c703-412c-b7ac-56225900a6fc": {
+        "x": 0.18,
+        "y": 0.35
+      },
+      "3551a175-684b-4a0a-bf8a-4c7a6d68de33": {
+        "x": 0.13,
+        "y": 0.22
+      },
+      "66d9b228-f17e-4bc7-a170-12d06785e075": {
+        "x": 0.87,
+        "y": 0.77
+      }
+    },
+    "orbitRadii": {
+      "d6905376-8b78-458e-8328-5d88a1d72dee": {
+        "horizontal": 240,
+        "vertical": 180
+      },
+      "e8048736-1437-45c0-9996-2b114aeb9b36": {
+        "horizontal": 80,
+        "vertical": 60
+      },
+      "dfdafb53-d10e-4985-93d2-b56a6c3954bf": {
+        "horizontal": 110,
+        "vertical": 75
+      }
+    },
+    "orbitRotations": {
+      "d6905376-8b78-458e-8328-5d88a1d72dee": 18
+    },
+    "objectAngles": {
+      "3377363a-982a-4195-9a8e-497c403c435b": 0.42
+    }
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": [
+      "Breathable",
+      "Unbreathable",
+      "Vacuum"
+    ],
+    "portClassOptions": [
+      "Class I",
+      "Class II",
+      "Class III"
+    ],
+    "customFields": []
+  }
+}

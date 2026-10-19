@@ -4,11 +4,14 @@ import {
   catalogueSubtypes,
   clickDockAction,
   editMapObject,
+  openChartDetails,
   returnToClusterMap,
   selectCatalogueObjectButton,
   setHeaderMapActionsOpen,
   setWorkspaceMapMode,
+  openWorkspaceZoomNavigation,
   workspaceNavigation,
+  workspaceZoomControls,
 } from './helpers'
 
 async function createWorkspace(page: import('@playwright/test').Page): Promise<void> {
@@ -22,40 +25,47 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
 test('the application exposes its generic brand visibly and accessibly', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('link', { name: 'TTRPG Cluster Control home' })).toBeVisible()
+  await expect(page.getByRole('banner')).toContainText('TTRPG Cluster Control')
   await expect(page.getByText('TTRPG Cluster Control', { exact: true })).toBeVisible()
   await expect(page).toHaveTitle('TTRPG Cluster Control')
 })
 
-test('desktop panels coexist and compact panels become exclusive fullscreen dialogs', async ({ page }) => {
+test('Hierarchy starts closed, desktop panels overlay the map, and compact panels stay exclusive', async ({ page }) => {
   await createWorkspace(page)
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const hierarchy = page.locator('#workspace-hierarchy-panel')
+  const inspector = page.locator('#workspace-inspector-panel')
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await expect(hierarchy).toBeVisible()
+  const zoomControls = workspaceZoomControls(page)
+  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  await expect(hierarchy).toBeHidden()
   await expect(inspector).toBeVisible()
   await expect(workspaceNavigation(page)).toBeVisible()
-  await expect(workspaceNavigation(page).getByRole('button', { name: 'Fit map' })).toBeVisible()
+  await expect(zoomControls.getByRole('button', { name: 'Fit map' })).toBeVisible()
 
-  const desktopColumns = await page.evaluate(() => {
+  const boardBounds = await page.locator('[data-map-board]').boundingBox()
+  const mapBounds = await map.boundingBox()
+  if (!boardBounds || !mapBounds) throw new Error('The full-map board did not render.')
+  expect(boardBounds.x).toBeLessThanOrEqual(1)
+  expect(boardBounds.width).toBeGreaterThanOrEqual(1400)
+  expect(mapBounds.width).toBeGreaterThan(900)
+
+  await hierarchyToggle.click()
+  await expect(hierarchy).toBeVisible()
+  await expect(inspector).toBeVisible()
+  const overlayHitTest = await page.evaluate(() => {
     const hierarchy = document.querySelector<HTMLElement>('#workspace-hierarchy-panel')
-    const map = document.querySelector<HTMLElement>('.workspace-map-column')
     const inspector = document.querySelector<HTMLElement>('#workspace-inspector-panel')
-    if (!hierarchy || !map || !inspector) throw new Error('The three workspace columns are incomplete.')
-    const rects = [hierarchy, map, inspector].map(element => element.getBoundingClientRect())
-    return {
-      hierarchyWidth: rects[0]!.width,
-      mapWidth: rects[1]!.width,
-      inspectorWidth: rects[2]!.width,
-      ordered: rects[0]!.right <= rects[1]!.left && rects[1]!.right <= rects[2]!.left,
+    if (!hierarchy || !inspector) throw new Error('The visible workspace panels are missing.')
+    const hitIsInside = (panel: HTMLElement) => {
+      const bounds = panel.getBoundingClientRect()
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+      return !!hit && panel.contains(hit)
     }
+    return { hierarchyHit: hitIsInside(hierarchy), inspectorHit: hitIsInside(inspector) }
   })
-  expect(desktopColumns.ordered).toBe(true)
-  expect(desktopColumns.hierarchyWidth).toBeGreaterThan(0)
-  expect(desktopColumns.mapWidth).toBeGreaterThan(0)
-  expect(desktopColumns.inspectorWidth).toBeGreaterThan(0)
+  expect(overlayHitTest).toEqual({ hierarchyHit: true, inspectorHit: true })
 
   await hierarchyToggle.click()
   await expect(hierarchy).toBeHidden()
@@ -69,13 +79,23 @@ test('desktop panels coexist and compact panels become exclusive fullscreen dial
   await inspectorToggle.click()
   await expect(inspector).toBeVisible()
 
+  await hierarchyToggle.click()
+  await inspectorToggle.click()
+  await expect(hierarchy).toBeHidden()
+  await expect(inspector).toBeHidden()
   await page.setViewportSize({ width: 390, height: 844 })
+
+  const zoomNavigation = await openWorkspaceZoomNavigation(page)
+  const zoomToggle = page.getByRole('toolbar', { name: 'Map zoom controls', includeHidden: true })
+    .getByRole('button', { name: 'Open map navigation controls', includeHidden: true })
+  await expect(zoomNavigation.getByRole('slider', { name: 'Map zoom level' })).toBeVisible()
   await hierarchyToggle.click()
   await expect(hierarchy).toHaveAttribute('role', 'dialog')
   await expect(hierarchy).toHaveAttribute('aria-modal', 'true')
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeHidden()
   await expect(workspaceNavigation(page)).toBeHidden()
+  await expect(zoomToggle).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('slider', { name: 'Map zoom level' })).toBeHidden()
   const hierarchyBounds = await hierarchy.boundingBox()
   if (!hierarchyBounds) throw new Error('The compact Hierarchy panel has no visible bounds.')
@@ -87,12 +107,14 @@ test('desktop panels coexist and compact panels become exclusive fullscreen dial
   await expect(hierarchyToggle).toBeFocused()
   await expect(workspaceNavigation(page)).toBeVisible()
 
+  await openWorkspaceZoomNavigation(page)
   await inspectorToggle.click()
   await expect(inspector).toHaveAttribute('role', 'dialog')
   await expect(inspector).toHaveAttribute('aria-modal', 'true')
   await expect(inspector).toBeVisible()
   await expect(hierarchy).toBeHidden()
   await expect(workspaceNavigation(page)).toBeHidden()
+  await expect(zoomToggle).toHaveAttribute('aria-expanded', 'false')
   await page.getByRole('button', { name: 'Close inspector panel' }).click()
   await expect(inspectorToggle).toBeFocused()
   await expect(workspaceNavigation(page)).toBeVisible()
@@ -128,10 +150,17 @@ test('the Add to map palette stays reachable inside its Dock popover at desktop 
   await assertReachable(palette)
   await page.keyboard.press('Escape')
   await expect(palette).toBeHidden()
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  await hierarchyToggle.click()
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
+  await inspectorToggle.click()
+  await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
+  await hierarchyToggle.click()
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
 
   await page.setViewportSize({ width: 479, height: 720 })
+  await expect(workspaceNavigation(page)).toBeVisible()
   palette = await openPalette()
   await assertReachable(palette)
   const menuBounds = await palette.boundingBox()
@@ -166,9 +195,16 @@ test('object categories reveal their matching catalogue actions on narrow screen
   await expect(palette.getByRole('button', { name: 'Add Star' })).toHaveCount(0)
 
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  await hierarchyToggle.click()
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
+  await inspectorToggle.click()
+  await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
+  await hierarchyToggle.click()
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
   await page.setViewportSize({ width: 390, height: 500 })
+  await expect(workspaceNavigation(page)).toBeVisible()
   await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   await expect(categories.getByRole('button', { name: 'Small bodies and fields' }))
     .toHaveAttribute('aria-pressed', 'true')
@@ -188,15 +224,15 @@ test('cluster creation actions and Map files follow the active map context', asy
   await createWorkspace(page)
   await returnToClusterMap(page)
 
-  const clusterSummary = page.getByRole('region', { name: 'Active Jump Cluster summary' })
-  const clusterContents = page.locator('[aria-label="Jump Cluster contents"]')
-  const selectedSystemSummary = page.getByRole('region', { name: 'Selected Star System summary' })
-  await expect(clusterSummary).toContainText('Kestrel Reach')
-  await expect(clusterContents).toContainText('1 SYSTEMS')
-  await expect(clusterContents).toContainText('0 ROUTES')
-  await expect(clusterContents).toContainText('0 JUMP POINTS')
-  await expect(selectedSystemSummary).toContainText('Vesper')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kestrel Reach')
+  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  await expect(context.getByRole('heading', { name: 'Kestrel Reach' })).toBeVisible()
+  const clusterDetails = await openChartDetails(page)
+  const clusterStats = clusterDetails.getByRole('region', { name: 'Jump Cluster statistics' })
+  await expect(clusterStats.getByText('Star systems', { exact: true })).toBeVisible()
+  await expect(clusterStats.locator('strong').nth(0)).toHaveText('1')
+  await expect(clusterStats.locator('strong').nth(1)).toHaveText('0')
+  await expect(clusterStats.locator('strong').nth(2)).toHaveText('0')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
 
   await setHeaderMapActionsOpen(page, true)
   const clusterFiles = page.getByRole('group', { name: 'Map file actions for Jump Cluster Kestrel Reach' })
@@ -207,14 +243,14 @@ test('cluster creation actions and Map files follow the active map context', asy
   await expect(clusterFiles).toContainText('Import JSON creates a separate copy in the current Jump Cluster: Kestrel Reach.')
   expect(await clusterFiles.evaluate(element => element.closest('.workspace-header'))).toBeNull()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: /Open map file actions for Jump Cluster Kestrel Reach/ }))
-    .toBeFocused()
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await clickDockAction(page, 'Add star system')
-  await expect(clusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await returnToClusterMap(page)
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  await expect(page.getByRole('button', { name: 'Back to Jump Cluster' })).toBeVisible()
+  await expect(context.getByRole('heading', { name: 'Vesper' })).toBeVisible()
   await setHeaderMapActionsOpen(page, true)
   const systemFiles = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   await expect(systemFiles.getByRole('button', { name: 'Export star system JSON' })).toBeVisible()
@@ -222,54 +258,41 @@ test('cluster creation actions and Map files follow the active map context', asy
   await expect(systemFiles.getByRole('button', { name: 'Export star system SVG' })).toBeVisible()
 })
 
-test('cluster and system names and summaries stay in the header instead of the SVG scene', async ({ page }) => {
+test('Map context and consultation details retain chart names and counts outside the SVG', async ({ page }) => {
   await createWorkspace(page)
 
-  const clusterSummary = page.getByRole('region', { name: 'Active Jump Cluster summary' })
-  const clusterContents = page.locator('[aria-label="Jump Cluster contents"]')
-  const systemSummary = page.getByRole('region', { name: 'Active Star System summary' })
-  const systemContents = page.locator('[aria-label="Star System contents"]')
-  await expect(clusterSummary).toContainText('Kestrel Reach')
-  await expect(clusterContents).toContainText('1 SYSTEMS')
-  await expect(systemSummary).toContainText('Vesper')
-  await expect(systemContents).toContainText('1 STARS')
-  await expect(systemContents).toContainText('1 OBJECTS')
-  await expect(systemContents).toContainText('0 ORBITS')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kestrel Reach')
-  await expect(systemSummary.getByRole('heading', { level: 2 })).toHaveText('Vesper')
+  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
+  await expect(context.getByRole('heading', { name: 'Vesper' })).toBeVisible()
+  const systemDetails = await openChartDetails(page)
+  await expect(systemDetails.getByRole('heading', { name: 'Vesper', level: 2 })).toBeVisible()
+  const systemStats = systemDetails.getByRole('region', { name: 'Star System statistics' })
+  await expect(systemStats.getByText('Map objects', { exact: true })).toBeVisible()
+  await expect(systemStats.locator('strong').nth(0)).toHaveText('1')
+  await expect(systemStats.locator('strong').nth(1)).toHaveText('1')
+  await expect(systemStats.locator('strong').nth(2)).toHaveText('0')
+  const svgLabels = await systemMap.locator('text').allTextContents()
+  expect(svgLabels).not.toContain('Kestrel Reach')
+  expect(svgLabels).not.toContain('Vesper')
 
-  const summaryPlacement = await page.evaluate(() => {
-    const header = document.querySelector<HTMLElement>('.workspace-header')
-    const cluster = document.querySelector<HTMLElement>('[aria-label="Active Jump Cluster summary"]')
-    const system = document.querySelector<HTMLElement>('[aria-label="Active Star System summary"]')
-    const clusterStats = document.querySelector<HTMLElement>('[aria-label="Jump Cluster contents"]')
-    const systemStats = document.querySelector<HTMLElement>('[aria-label="Star System contents"]')
-    const map = document.querySelector<SVGSVGElement>('.system-map-svg')
-    if (!header || !cluster || !system || !clusterStats || !systemStats || !map) {
-      throw new Error('The active summaries or system map are missing.')
-    }
-    const mapText = Array.from(map.querySelectorAll('text'), element => element.textContent?.trim() ?? '')
-    return {
-      summariesInHeader: header.contains(cluster) && header.contains(system),
-      statsInHeader: header.contains(clusterStats) && header.contains(systemStats),
-      statsOutsideScene: !map.contains(clusterStats) && !map.contains(systemStats),
-      clusterNameInScene: mapText.includes('Kestrel Reach'),
-      systemNameInScene: mapText.includes('Vesper'),
-      duplicateSummary: document.querySelectorAll('.editor-heading').length,
-    }
-  })
-  expect(summaryPlacement).toEqual({
-    summariesInHeader: true,
-    statsInHeader: true,
-    statsOutsideScene: true,
-    clusterNameInScene: false,
-    systemNameInScene: false,
-    duplicateSummary: 0,
-  })
+  await returnToClusterMap(page)
+  await expect(context.getByRole('heading', { name: 'Kestrel Reach' })).toBeVisible()
+  const clusterDetails = await openChartDetails(page)
+  await expect(clusterDetails.getByRole('heading', { name: 'Kestrel Reach', level: 2 })).toBeVisible()
+  const clusterStats = clusterDetails.getByRole('region', { name: 'Jump Cluster statistics' })
+  await expect(clusterStats.locator('strong').nth(0)).toHaveText('1')
+  await expect(clusterStats.locator('strong').nth(1)).toHaveText('0')
+  await expect(clusterStats.locator('strong').nth(2)).toHaveText('0')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
 
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await addCatalogueObject(page, 'star')
-  await expect(systemContents).toContainText('2 STARS')
-  await expect(systemContents).toContainText('2 OBJECTS')
+  const updatedDetails = await openChartDetails(page)
+  const updatedStats = updatedDetails.getByRole('region', { name: 'Star System statistics' })
+  await expect(updatedStats.locator('strong').nth(0)).toHaveText('2')
+  await expect(updatedStats.locator('strong').nth(1)).toHaveText('2')
+  await expect(updatedStats.locator('strong').nth(2)).toHaveText('0')
 })
 
 test('panel toggles preserve the active mode and Delete remains safe while editing', async ({ page }) => {
@@ -285,10 +308,9 @@ test('panel toggles preserve the active mode and Delete remains safe while editi
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const inspector = page.locator('#workspace-inspector-panel')
   await hierarchyToggle.click()
-  await expect(hierarchy).toBeHidden()
+  await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
   await expect(move).toHaveAttribute('aria-pressed', 'true')
-  await hierarchyToggle.click()
   await inspectorToggle.click()
   await expect(inspector).toBeHidden()
   await expect(hierarchy).toBeVisible()

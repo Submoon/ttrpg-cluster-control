@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
-import { returnToClusterMap, clickDockAction } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
+import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
 
@@ -10,7 +10,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const palette = page.getByRole('region', { name: 'Object palette' })
@@ -102,6 +102,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Nix/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
@@ -118,7 +119,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const chartDetails = page.getByRole('button', { name: 'Chart details' })
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const systemInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
   await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
@@ -161,6 +162,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const route = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Exit/ })
   await expect(route).toBeVisible()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await route.click()
   await expect(routeInspector.getByText('JUMP ROUTE / SELECTED')).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
@@ -175,7 +177,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
 
   await addCatalogueObject(page, 'planet')
   await editMapObject(page)
@@ -234,7 +236,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await clickDockAction(page, 'Add star system')
-  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'planet')
   await expect(page.getByLabel('Campaign notes')).toBeVisible()
   await editMapObject(page)
@@ -242,6 +244,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await saveMapObject(page)
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Chlorine')
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Relay station under the ice.')
@@ -257,7 +260,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await returnToClusterMap(page)
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await restoredClusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  const secondSystemHierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const secondSystemHierarchy = await openWorkspaceHierarchy(page)
   await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Reusable in the next system.')
 })
@@ -277,7 +280,7 @@ test('custom field category and subtype scopes hide ineligible objects without d
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
 
   await addCatalogueObject(page, 'planet')
@@ -324,6 +327,7 @@ test('custom field category and subtype scopes hide ineligible objects without d
   await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Planet survey.')
   await hierarchy.getByRole('button', { name: /Relay Station/ }).click()
@@ -351,6 +355,9 @@ test('field definitions dialog stays centered on desktop and narrow viewports', 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await inspectToggle.getAttribute('aria-expanded') === 'true') await inspectToggle.click()
 
   for (const viewport of [{ width: 1440, height: 960 }, { width: 390, height: 720 }]) {
     await page.setViewportSize(viewport)
@@ -386,7 +393,7 @@ test('field definition management previews destructive changes in a map-bound di
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await addCatalogueObject(page, 'planet')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
@@ -478,6 +485,7 @@ test('field definition management previews destructive changes in a map-bound di
   })
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('Amber')
   const deleteDialog = await openFieldDefinitionDialog(page)
@@ -497,6 +505,7 @@ test('field definition management previews destructive changes in a map-bound di
   await deleteDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await expect(page.getByLabel('Signal designation', { exact: true })).toHaveCount(0)
 })

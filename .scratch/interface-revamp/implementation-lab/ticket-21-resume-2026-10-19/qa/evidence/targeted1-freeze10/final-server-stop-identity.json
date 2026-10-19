@@ -1,0 +1,14 @@
+[
+  {
+    "ProcessId": 25840,
+    "ParentProcessId": 46652,
+    "Name": "node.exe",
+    "CommandLine": "\"C:\\nodejs\\node.exe\" --title=ticket21-final-compiled-freeze8 .output/server/index.mjs"
+  },
+  {
+    "ProcessId": 43052,
+    "ParentProcessId": 25840,
+    "Name": "conhost.exe",
+    "CommandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+  }
+]

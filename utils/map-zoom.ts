@@ -47,6 +47,36 @@ export function normalizeSvgViewportRect(rect: SvgViewportRect): SvgViewportRect
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
 }
 
+/** Converts measured client-space bounds through the SVG's inverse screen CTM. */
+export function clientRectToSvgViewportRect(
+  element: SVGSVGElement,
+  screenRect: { left: number; top: number; right: number; bottom: number },
+): SvgViewportRect | undefined {
+  if (![screenRect.left, screenRect.top, screenRect.right, screenRect.bottom].every(Number.isFinite)
+    || screenRect.right <= screenRect.left || screenRect.bottom <= screenRect.top) return undefined
+  const matrix = element.getScreenCTM()
+  if (!matrix) return undefined
+  try {
+    const inverse = matrix.inverse()
+    const corners = [
+      [screenRect.left, screenRect.top],
+      [screenRect.right, screenRect.top],
+      [screenRect.left, screenRect.bottom],
+      [screenRect.right, screenRect.bottom],
+    ].map(([x, y]) => ({
+      x: inverse.a * x! + inverse.c * y! + inverse.e,
+      y: inverse.b * x! + inverse.d * y! + inverse.f,
+    }))
+    const left = Math.min(...corners.map(point => point.x))
+    const top = Math.min(...corners.map(point => point.y))
+    const right = Math.max(...corners.map(point => point.x))
+    const bottom = Math.max(...corners.map(point => point.y))
+    return normalizeSvgViewportRect({ x: left, y: top, width: right - left, height: bottom - top })
+  } catch {
+    return undefined
+  }
+}
+
 /** Converts a rectangle to the extent shape expected by D3 zoom. */
 export function svgViewportExtent(rect: SvgViewportRect): [[number, number], [number, number]] {
   return [[rect.x, rect.y], [rect.x + rect.width, rect.y + rect.height]]
@@ -66,29 +96,7 @@ export function getSvgViewportRect(element: SVGSVGElement): SvgViewportRect {
     height: viewBox?.height ?? DEFAULT_VIEWBOX.height,
   }) ?? DEFAULT_VIEWBOX
   const clientRect = element.getBoundingClientRect()
-  const matrix = element.getScreenCTM()
-
-  if (!matrix || clientRect.width <= 0 || clientRect.height <= 0) return fallback
-
-  try {
-    const inverse = matrix.inverse()
-    const corners = [
-      [clientRect.left, clientRect.top],
-      [clientRect.right, clientRect.top],
-      [clientRect.left, clientRect.bottom],
-      [clientRect.right, clientRect.bottom],
-    ].map(([x, y]) => ({
-      x: inverse.a * x! + inverse.c * y! + inverse.e,
-      y: inverse.b * x! + inverse.d * y! + inverse.f,
-    }))
-    const left = Math.min(...corners.map(point => point.x))
-    const top = Math.min(...corners.map(point => point.y))
-    const right = Math.max(...corners.map(point => point.x))
-    const bottom = Math.max(...corners.map(point => point.y))
-    return normalizeSvgViewportRect({ x: left, y: top, width: right - left, height: bottom - top }) ?? fallback
-  } catch {
-    return fallback
-  }
+  return clientRectToSvgViewportRect(element, clientRect) ?? fallback
 }
 
 /**

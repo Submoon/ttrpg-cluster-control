@@ -1,0 +1,204 @@
+[
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "the Warden can build and edit a nested star-system map",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "Chart details is an active, keyboard-accessible inspector view",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted14-freeze7/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "the Warden can configure native and reusable custom object fields",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "custom field category and subtype scopes hide ineligible objects without deleting values",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "field definitions dialog stays centered on desktop and narrow viewports",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "object-fields.spec.ts",
+    "title": "field definition management previews destructive changes in a map-bound dialog",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-map.spec.ts",
+    "title": "the system map expands beyond its initial bounds and exports the full layout",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-system-seven-retest-20261019-03/results.json",
+    "sourceQualification": "Coordinator-qualified freeze3 focused seven-case run: aggregate2 passed/5 failed; only these two actual matching passed/expected titles support this ledger. Other failures remain preserved.",
+    "curatedPassingEvidence": "evidence/focused-preservation/system-seven-results.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "dragging an Orbit ring scales both axes and the system caption stays concise",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-system-five-retest-20261019-04/results.json",
+    "curatedPassingEvidence": "evidence/focused-preservation/ring-five-results.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze9-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted3-freeze9/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "the Warden can detach a hosted Orbit and move its unoccupied center",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "an object drag keeps its hosted Orbit with it before release",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-system-seven-retest-20261019-03/results.json",
+    "sourceQualification": "Coordinator-qualified freeze3 focused seven-case run: aggregate2 passed/5 failed; only these two actual matching passed/expected titles support this ledger. Other failures remain preserved.",
+    "curatedPassingEvidence": "evidence/focused-preservation/system-seven-results.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze8-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted10-freeze8/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "system-orbits.spec.ts",
+    "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted14-freeze7/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-chart-drafts.spec.ts",
+    "title": "canceling the initial system-delete review leaves a hidden chart draft and error untouched",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-chart-drafts.spec.ts",
+    "title": "a delayed import acknowledgement does not take ownership of a pending route guard",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "custom field category and subtype scopes are united on independent system import",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted14-freeze7/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can review and safely confirm dependent map deletions",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze10-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted1-freeze10/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can export a cluster and standalone system as versioned JSON",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze8-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted10-freeze8/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can validate and import an independent JSON copy",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted14-freeze7/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can import a standalone system without adding cluster routes",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted14-freeze7/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-data.spec.ts",
+    "title": "the Warden can complete the local campaign workflow end to end",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze8-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted10-freeze8/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-navigation.spec.ts",
+    "title": "Move selects map entities without opening Inspect or entering a system",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-panels.spec.ts",
+    "title": "desktop-to-compact reflow retains an invalid chart-name draft and the active map mode",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-panels.spec.ts",
+    "title": "a nested chart dialog pauses the compact panel focus trap and returns focus to its opener",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-targeted-compiled-freeze5-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted30-freeze5/full-suite.json"
+  },
+  {
+    "resolved": true,
+    "file": "workspace-recovery.spec.ts",
+    "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+    "originalStatus": "unexpected",
+    "passingEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze9-run1/full-suite.json",
+    "curatedPassingEvidence": "evidence/targeted3-freeze9/full-suite.json"
+  }
+]

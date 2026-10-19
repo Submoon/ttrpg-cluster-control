@@ -253,6 +253,7 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
+  refreshLiveRouteGeometry = undefined
   cancelActiveGesture()
   const svg = select(element)
   const currentTransform = zoomTransform(element)
@@ -444,12 +445,12 @@ function render(): void {
     .on('start', function (_event, system) {
       movedSystems.delete(this)
       cancelledSystemGestures.delete(this)
+      const committedPosition = clusterSystemPosition(props.systemPositions, system.id)
       activeSystemGestures.set(this, () => {
         movedSystems.delete(this)
         liveSystemPositions.delete(system.id)
-        const position = clusterSystemPosition(props.systemPositions, system.id)
-        select(this).classed('is-dragging', false).attr('transform', `translate(${position.x} ${position.y})`)
-        updateRouteGeometry()
+        select(this).classed('is-dragging', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+        refreshLiveRouteGeometry?.()
       })
       select(this).classed('is-dragging', true)
     })
@@ -516,6 +517,10 @@ function render(): void {
 }
 
 onMounted(render)
+onBeforeUnmount(() => {
+  refreshLiveRouteGeometry = undefined
+  cancelActiveGesture()
+})
 watch(() => props.cluster, render, { deep: true })
 watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)

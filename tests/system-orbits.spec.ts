@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback } from './helpers'
 import { clickDockAction } from './helpers'
-import { returnToClusterMap, workspaceNavigation, jsonMapImportInput } from './helpers'
+import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
 import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 
@@ -23,6 +23,63 @@ function recordNativeDragTypes(): void {
   document.addEventListener('dragstart', (event) => {
     dragWindow.__nativeDragTypes?.push(Array.from(event.dataTransfer?.types ?? []))
   })
+}
+
+async function waitForFiniteAnimations(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(async () => {
+    const animations = document.getAnimations().filter((animation) => {
+      const endTime = animation.effect?.getComputedTiming().endTime
+      return typeof endTime === 'number' && Number.isFinite(endTime)
+        && (animation.playState === 'running' || animation.pending)
+    })
+    await Promise.all(animations.map(animation => animation.finished.catch(() => undefined)))
+  })
+}
+
+async function moveToVisibleMapBackground(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+): Promise<void> {
+  const point = await map.evaluate(element => {
+    const svg = element instanceof SVGSVGElement ? element : element.querySelector('svg')
+    if (!(svg instanceof SVGSVGElement)) throw new Error('The system map SVG is not available.')
+
+    const svgBounds = svg.getBoundingClientRect()
+    let left = Math.max(0, svgBounds.left)
+    let right = Math.min(window.innerWidth, svgBounds.right)
+    let top = Math.max(0, svgBounds.top)
+    let bottom = Math.min(window.innerHeight, svgBounds.bottom)
+    let ancestor = svg.parentElement
+    while (ancestor && ancestor !== document.documentElement) {
+      const style = getComputedStyle(ancestor)
+      const bounds = ancestor.getBoundingClientRect()
+      if (['auto', 'clip', 'hidden', 'scroll'].includes(style.overflowX)) {
+        left = Math.max(left, bounds.left)
+        right = Math.min(right, bounds.right)
+      }
+      if (['auto', 'clip', 'hidden', 'scroll'].includes(style.overflowY)) {
+        top = Math.max(top, bounds.top)
+        bottom = Math.min(bottom, bounds.bottom)
+      }
+      ancestor = ancestor.parentElement
+    }
+
+    const columns = 13
+    const rows = 9
+    for (let row = 1; row <= rows; row += 1) {
+      for (let column = 1; column <= columns; column += 1) {
+        const x = left + (right - left) * column / (columns + 1)
+        const y = top + (bottom - top) * row / (rows + 1)
+        const hit = document.elementFromPoint(x, y)
+        if (hit === svg || (hit instanceof Element && hit.matches('.map-background, .map-grid'))) {
+          return { x, y }
+        }
+      }
+    }
+
+    throw new Error('No visible background hit was found within the clipped system map SVG.')
+  })
+  await page.mouse.move(point.x, point.y)
 }
 
 async function moveToWorldPoint(
@@ -104,7 +161,7 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   await dragHtmlElementToWorldPoint(
@@ -120,9 +177,11 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
   const resizeKnobs = map.locator('.orbit-resize-handle')
   await expect(resizeKnobs).toHaveCount(0)
 
+  await setWorkspaceMapMode(page, 'Move')
   const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
   const orbitRing = orbit.locator('.orbit-ring')
   const orbitTarget = orbit.locator('.orbit-hit-target')
+  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
   await orbitTarget.scrollIntoViewIfNeeded()
   await expect(orbitTarget).toHaveAttribute('role', 'slider')
   const radiusXBefore = Number(await orbitRing.getAttribute('rx'))
@@ -158,9 +217,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const dropPoint = { x: 360, y: 320 }
+  await ensureMapDragPointsReachable(page, map, page.getByRole('button', { name: 'Add orbit', exact: true }), dropPoint)
   await dragHtmlElementToWorldPoint(
     page,
     page.getByRole('button', { name: 'Add orbit' }),
@@ -180,6 +240,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }))
     .toBeVisible()
 
+  await setWorkspaceMapMode(page, 'Move')
   const centerHandle = orbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
   const movedCenter = { x: dropPoint.x + 32, y: dropPoint.y + 24 }
@@ -193,8 +254,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
-  await page.getByLabel('Horizontal radius').fill('300')
-  await page.getByLabel('Vertical radius').fill('50')
+  await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
+  await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('50')
   await page.getByLabel('Center X').fill('0.2')
   await page.getByLabel('Center Y').fill('0.5')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
@@ -228,7 +289,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     x: geometry.cx + geometry.rx * Math.cos(firstAngle) + 10 * normalX / normalLength,
     y: geometry.cy + geometry.ry * Math.sin(firstAngle) + 10 * normalY / normalLength,
   }
-  await dragToWorldPoint(
+  await ensureMapDragPointsReachable(
     page,
     map,
     map.getByRole('button', { name: /Binary A/ }).locator('.object-hit-target'),
@@ -237,11 +298,24 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await dragToWorldPoint(
     page,
     map,
+    map.getByRole('button', { name: /Binary A/ }).locator('.object-hit-target'),
+    firstDropPoint,
+  )
+  const secondDropPoint = {
+    x: geometry.cx + geometry.rx * Math.cos(secondAngle),
+    y: geometry.cy + geometry.ry * Math.sin(secondAngle),
+  }
+  await ensureMapDragPointsReachable(
+    page,
+    map,
     map.getByRole('button', { name: /Binary B/ }).locator('.object-hit-target'),
-    {
-      x: geometry.cx + geometry.rx * Math.cos(secondAngle),
-      y: geometry.cy + geometry.ry * Math.sin(secondAngle),
-    },
+    secondDropPoint,
+  )
+  await dragToWorldPoint(
+    page,
+    map,
+    map.getByRole('button', { name: /Binary B/ }).locator('.object-hit-target'),
+    secondDropPoint,
   )
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))
     .toBeCloseTo(firstAngle, 2)
@@ -252,10 +326,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const verticalHandle = orbit.locator('.orbit-axis-handle--vertical')
   await expect(horizontalHandle).toBeVisible()
   await expect(verticalHandle).toBeVisible()
-  await dragToWorldPoint(page, map, horizontalHandle, { x: geometry.cx + 320, y: geometry.cy })
+  await dragToWorldPoint(page, map, horizontalHandle, { x: geometry.cx + 320, y: geometry.cy }, true)
   await expect(ring).toHaveAttribute('rx', '320')
   await expect(ring).toHaveAttribute('ry', '50')
-  await dragToWorldPoint(page, map, verticalHandle, { x: geometry.cx, y: geometry.cy - 60 })
+  await dragToWorldPoint(page, map, verticalHandle, { x: geometry.cx, y: geometry.cy - 60 }, true)
   await expect(ring).toHaveAttribute('rx', '320')
   await expect(ring).toHaveAttribute('ry', '60')
 
@@ -309,10 +383,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))
     .toBeCloseTo(angleBeforeResize, 2)
 
-  const navigation = workspaceNavigation(page)
+  const navigation = workspaceZoomControls(page)
   const zoomLevel = navigation.locator('output')
   const zoomBeforeBackgroundWheel = await zoomLevel.textContent()
-  await moveToWorldPoint(page, map, { x: 900, y: 100 })
+  await moveToVisibleMapBackground(page, map)
   await page.keyboard.down('Control')
   await page.mouse.wheel(0, -100)
   await page.keyboard.up('Control')
@@ -427,6 +501,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
 
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await page.reload()
+  await openWorkspaceHierarchy(page)
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
   const restoredOrbit = restoredMap.getByRole('group', { name: orbitLabel })
   const restoredRing = restoredOrbit.locator('.orbit-ring')
@@ -493,7 +568,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit')
@@ -551,10 +626,12 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   await expect.poll(() => ellipticalOrbitAngle(map, detachedOrbitLabel, 'Nix'))
     .toBeCloseTo(angleBeforeDetach, 2)
 
+  await setWorkspaceMapMode(page, 'Move')
   const centerHandle = detachedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
   const objectBeforeMove = await map.getByRole('button', { name: /Nix/ }).getAttribute('transform')
   const movedCenter = { x: detachedCenter.x + 64, y: detachedCenter.y + 32 }
+  await ensureMapDragPointsReachable(page, map, centerHandle, movedCenter)
   await dragToWorldPoint(page, map, centerHandle, movedCenter)
   await expect.poll(async () =>
     Math.abs(Number(await detachedRing.getAttribute('cx')) - movedCenter.x),
@@ -585,6 +662,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     .toEqual([1])
 
   await page.reload()
+  await openWorkspaceHierarchy(page)
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
   const restoredRing = restoredMap.getByRole('group', { name: detachedOrbitLabel }).locator('.orbit-ring')
   await expect.poll(async () =>
@@ -605,7 +683,7 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'planet')
@@ -621,6 +699,7 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
   const innerOrbit = map.getByRole('group', { name: 'Orbit 1 around Iria' }).locator('.orbit-ring')
   const orbitCenterBefore = await innerOrbit.getAttribute('cx')
   const planetBefore = await planet.getAttribute('transform')
+  await ensureMapDragPointsReachable(page, map, planet.locator('.object-hit-target'), { x: 545, y: 185 })
   await beginDragToWorldPoint(page, map, planet.locator('.object-hit-target'), { x: 545, y: 185 })
   await expect(planet).toHaveClass(/is-dragging/)
   await expect.poll(async () => planet.getAttribute('transform'))
@@ -637,7 +716,7 @@ test('dragging Add Orbit onto a map object hosts it there', async ({ page }) => 
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const host = map.getByRole('button', { name: /Primary Star/ })
   const hostPoint = await host.evaluate(element => {
@@ -683,23 +762,26 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const addOrbit = page.getByRole('button', { name: 'Add orbit', exact: true })
+  await ensureMapDragPointsReachable(page, map, addOrbit, { x: 360, y: 320 })
   await dragHtmlElementToWorldPoint(
     page,
-    page.getByRole('button', { name: 'Add orbit' }),
+    addOrbit,
     map,
     { x: 360, y: 320 },
   )
 
   const unoccupiedOrbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
   const orbitId = await unoccupiedOrbit.getAttribute('data-orbit-id')
+  await setWorkspaceMapMode(page, 'Move')
   const centerHandle = unoccupiedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
-  await page.getByLabel('Horizontal radius').fill('16')
-  await page.getByLabel('Vertical radius').fill('60')
+  await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
+  await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
   const unoccupiedRing = unoccupiedOrbit.locator('.orbit-ring')
   await expect(unoccupiedRing).toHaveAttribute('rx', '16')
@@ -712,6 +794,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
     return { x: Number(transform[1]), y: Number(transform[2]) }
   })
 
+  await ensureMapDragPointsReachable(page, map, centerHandle, hostPoint)
   await dragToWorldPoint(page, map, centerHandle, hostPoint)
 
   const hostedOrbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
@@ -736,6 +819,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
 
   await inspectorToggle.click()
   await expect(inspectorPanel).toBeVisible()
+  await ensureMapDragPointsReachable(page, map, addOrbit, { x: 660, y: 350 })
   await dragHtmlElementToWorldPoint(
     page,
     page.getByRole('button', { name: 'Add orbit' }),
@@ -746,11 +830,12 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const smallOrbitId = await smallOrbit.getAttribute('data-orbit-id')
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
-  await page.getByLabel('Horizontal radius').fill('16')
-  await page.getByLabel('Vertical radius').fill('16')
+  await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
+  await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('16')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
   await expect(smallOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '16')
   await expect(smallOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '16')
+  await ensureMapDragPointsReachable(page, map, smallOrbit.locator('.orbit-center-handle'), hostPoint)
   await dragToWorldPoint(page, map, smallOrbit.locator('.orbit-center-handle'), hostPoint)
   const secondHostedOrbit = map.getByRole('group', { name: 'Orbit 2 around Primary Star' })
   await expect(secondHostedOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
@@ -771,6 +856,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   expect(confirmation.message()).toContain('Star systems: 1')
   await confirmation.accept()
 
+  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systems = page.getByRole('navigation', { name: 'Star systems' })
   const openSystem = systems.getByRole('button', { name: 'Open Vesper system map' }).last()
   await openSystem.click()
@@ -782,6 +868,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await expect(copiedSecondOrbit.locator('.orbit-ring')).toHaveAttribute('rx', '39')
   await expect(copiedSecondOrbit.locator('.orbit-ring')).toHaveAttribute('ry', '39')
   await page.reload()
+  await openWorkspaceHierarchy(page)
   const restoredSystems = page.getByRole('navigation', { name: 'Star systems' })
   await restoredSystems.getByRole('button').last().click()
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
@@ -809,6 +896,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const clusterConfirmation = await clusterImportPreview
   expect(clusterConfirmation.message()).toContain('Star systems: 2')
   await clusterConfirmation.accept()
+  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await page.getByRole('navigation', { name: 'Star systems' })
     .getByRole('button', { name: 'Open Vesper system map' }).last().click()
   const clusteredMapCopy = page.getByRole('group', { name: 'Vesper star system map' })
@@ -858,7 +946,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   const palette = page.getByRole('region', { name: 'Object palette' })
   await expect(palette).toBeVisible()
@@ -866,6 +954,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.keyboard.press('Escape')
   await expect(palette).toBeHidden()
   await setHeaderMapActionsOpen(page, true)
+  await waitForFiniteAnimations(page)
   const fileActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const fileActionsBefore = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
@@ -892,6 +981,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.evaluate(() => {
     (window as DragPreviewWindow).__dragPreview = undefined
   })
+  await ensureMapDragPointsReachable(page, map, addStar, { x: 320, y: 400 })
   await dragHtmlElementToWorldPoint(page, addStar, map, { x: 320, y: 400 }, async () => {
     starPreviewText = await assertDragPreview(starMark)
   })
@@ -912,6 +1002,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.evaluate(() => {
     (window as DragPreviewWindow).__dragPreview = undefined
   })
+  await ensureMapDragPointsReachable(page, map, addPlanet, { x: 592, y: 280 })
   await dragHtmlElementToWorldPoint(page, addPlanet, map, { x: 592, y: 280 }, async () => {
     planetPreviewText = await assertDragPreview(planetMark)
   })
@@ -927,8 +1018,12 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
   await expect(systemPlanet).toBeVisible()
   await expect(systemPlanet.locator('.object-mark')).toHaveText('◉')
-  await dragToWorldPoint(page, map, map.getByRole('button', { name: /New planet 2/ })
-    .locator('.object-hit-target'), { x: 592, y: 280 })
+  await setWorkspaceMapMode(page, 'Move')
+  const secondPlanetTarget = map.getByRole('button', { name: /New planet 2/ })
+    .locator('.object-hit-target')
+  const secondPlanetDropPoint = { x: 592, y: 280 }
+  await ensureMapDragPointsReachable(page, map, secondPlanetTarget, secondPlanetDropPoint)
+  await dragToWorldPoint(page, map, secondPlanetTarget, secondPlanetDropPoint)
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
     .toBeVisible()
 
@@ -948,6 +1043,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   )).toEqual(transformsBeforeCancel)
 
   await setHeaderMapActionsOpen(page, true)
+  await waitForFiniteAnimations(page)
   const fileActionsAfter = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')
     const buttonsFit = Array.from(element.querySelectorAll('button')).every(button => {

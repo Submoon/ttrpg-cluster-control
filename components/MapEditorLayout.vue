@@ -8,98 +8,75 @@
   >
     <div
       class="map-editor-layout"
-      :class="{ 'compact-modal-open': props.compactModalOpen }"
+      :class="{
+        'compact-modal-open': props.compactModalOpen,
+        'compact-viewport': props.isCompactViewport,
+      }"
       @focusin="redirectFocusFromLayoutRoot"
     >
       <div class="map-editor-header-row" :inert="props.compactModalOpen || undefined">
         <slot name="header" />
       </div>
 
-      <div class="map-editor-dock-row" :inert="props.compactModalOpen || undefined">
-        <slot name="dock" />
-      </div>
+      <UDashboardGroup class="workspace-dashboard-group" data-workspace-dashboard :persistent="false" unit="px">
+        <div ref="mapBoard" class="workspace-map-board" data-map-board>
+          <div class="workspace-map-canvas-region" :inert="props.compactModalOpen || undefined">
+            <slot name="map" />
+          </div>
+          <div ref="mapChromeRegion" class="workspace-map-chrome-region" :inert="props.compactModalOpen || undefined">
+            <slot name="map-chrome" />
+          </div>
+          <div ref="bottomControlsRegion" class="workspace-bottom-controls" :inert="props.compactModalOpen || undefined">
+            <div class="workspace-feedback-region">
+              <slot name="feedback" />
+            </div>
+            <div class="workspace-dock-region" data-map-obstruction>
+              <slot name="dock" />
+            </div>
+            <div class="workspace-zoom-region" data-map-obstruction>
+              <slot name="zoom" />
+            </div>
+          </div>
+        </div>
 
-      <div
-        class="editor-grid"
-        :class="{
-          'system-map-editor-grid': props.mode === 'system',
-          'hierarchy-hidden': !props.hierarchyVisible,
-          'inspector-hidden': !props.inspectorVisible,
-        }"
-      >
-        <div
-          id="workspace-hierarchy-panel"
-          v-show="props.hierarchyVisible"
-          class="workspace-side-panel hierarchy-panel"
-          :class="{ 'compact-recovery-visible': props.compactModalOpen && props.compactPanel === 'hierarchy' }"
+        <WorkspaceResizablePanel
+          panel-id="workspace-hierarchy-panel"
+          :label="props.hierarchyLabel"
+          side="left"
+          :visible="props.hierarchyVisible"
+          :compact="props.compactModalOpen && props.compactPanel === 'hierarchy'"
+          :board="mapBoard"
           :inert="props.compactModalOpen && props.compactPanel !== 'hierarchy' || undefined"
-          :role="props.compactModalOpen && props.compactPanel === 'hierarchy' ? 'dialog' : 'complementary'"
-          :aria-modal="props.compactModalOpen && props.compactPanel === 'hierarchy' ? 'true' : undefined"
-          :aria-label="props.hierarchyLabel"
+          @close="emit('close-panel', 'hierarchy')"
         >
-          <UDashboardPanel :resizable="false" :ui="panelUi" class="map-dashboard-panel">
-            <div ref="hierarchyContent" class="workspace-side-panel-content">
-              <UButton
-                class="workspace-control panel-close-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                type="button"
-                aria-label="Close hierarchy panel"
-                aria-controls="workspace-hierarchy-panel"
-                @click="emit('close-panel', 'hierarchy')"
-              >×</UButton>
-              <slot name="hierarchy" />
-            </div>
-          </UDashboardPanel>
-          <div v-if="props.compactModalOpen && props.compactPanel === 'hierarchy'" class="workspace-compact-recovery">
-            <slot name="compact-recovery" />
-          </div>
-        </div>
+          <template #compact-recovery><slot name="compact-recovery" /></template>
+          <slot name="hierarchy" />
+        </WorkspaceResizablePanel>
 
-        <div class="workspace-map-column" :inert="props.compactModalOpen || undefined">
-          <slot name="map" />
-        </div>
-
-        <div
-          id="workspace-inspector-panel"
-          v-show="props.inspectorVisible"
-          class="workspace-side-panel inspector-panel"
-          :class="{ 'compact-recovery-visible': props.compactModalOpen && props.compactPanel === 'inspector' }"
+        <WorkspaceResizablePanel
+          panel-id="workspace-inspector-panel"
+          :label="props.inspectorLabel"
+          side="right"
+          :visible="props.inspectorVisible"
+          :compact="props.compactModalOpen && props.compactPanel === 'inspector'"
+          :board="mapBoard"
           :inert="props.compactModalOpen && props.compactPanel !== 'inspector' || undefined"
-          :role="props.compactModalOpen && props.compactPanel === 'inspector' ? 'dialog' : 'complementary'"
-          :aria-modal="props.compactModalOpen && props.compactPanel === 'inspector' ? 'true' : undefined"
-          :aria-label="props.inspectorLabel"
+          @close="emit('close-panel', 'inspector')"
         >
-          <UDashboardPanel :resizable="false" :ui="panelUi" class="map-dashboard-panel">
-            <div ref="inspectorContent" class="workspace-side-panel-content">
-              <UButton
-                class="workspace-control panel-close-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                type="button"
-                aria-label="Close inspector panel"
-                aria-controls="workspace-inspector-panel"
-                @click="emit('close-panel', 'inspector')"
-              >×</UButton>
-              <slot name="inspector" />
-            </div>
-          </UDashboardPanel>
-          <div v-if="props.compactModalOpen && props.compactPanel === 'inspector'" class="workspace-compact-recovery">
-            <slot name="compact-recovery" />
-          </div>
-        </div>
-      </div>
+          <template #compact-recovery><slot name="compact-recovery" /></template>
+          <slot name="inspector" />
+        </WorkspaceResizablePanel>
+      </UDashboardGroup>
     </div>
   </FocusScope>
 </template>
 
 <script setup lang="ts">
-/** Keeps both legacy panel trees mounted while switching their desktop and exclusive compact presentation. */
-import { nextTick, ref, watch } from 'vue'
+/** Keeps both editor trees mounted while switching between full-board overlays and exclusive compact panels. */
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { FocusScope } from 'reka-ui'
 import type { WorkspacePanel } from '../composables/editor-workflows/types'
+import WorkspaceResizablePanel from './WorkspaceResizablePanel.vue'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
@@ -110,18 +87,53 @@ const props = defineProps<{
   compactModalOpen: boolean
   compactPanel: WorkspacePanel | null
   overlayOpen: boolean
+  isCompactViewport: boolean
 }>()
 
 const emit = defineEmits<{
   'close-panel': [panel: WorkspacePanel]
 }>()
 
-const panelUi = { root: 'map-dashboard-panel' }
-const hierarchyContent = ref<HTMLElement | null>(null)
-const inspectorContent = ref<HTMLElement | null>(null)
+const mapBoard = ref<HTMLElement | null>(null)
+const mapChromeRegion = ref<HTMLElement | null>(null)
+const bottomControlsRegion = ref<HTMLElement | null>(null)
+let clearanceObserver: ResizeObserver | undefined
+
+onMounted(async () => {
+  await nextTick()
+  updateMeasuredClearances()
+  if (typeof ResizeObserver === 'undefined') return
+  clearanceObserver = new ResizeObserver(updateMeasuredClearances)
+  if (mapChromeRegion.value) clearanceObserver.observe(mapChromeRegion.value)
+  if (bottomControlsRegion.value) clearanceObserver.observe(bottomControlsRegion.value)
+})
+
+onBeforeUnmount(() => {
+  clearanceObserver?.disconnect()
+  clearanceObserver = undefined
+})
 type FocusableElement = (HTMLElement | SVGElement) & Pick<HTMLElement, 'focus'>
 type FocusReturnTarget = { element: FocusableElement; selector?: string }
 let focusBeforeCompact: FocusReturnTarget | null = null
+
+function panelContent(panel: WorkspacePanel): HTMLElement | null {
+  return document.querySelector<HTMLElement>(panel === 'hierarchy'
+    ? '#workspace-hierarchy-panel .workspace-side-panel-content'
+    : '#workspace-inspector-panel .workspace-side-panel-content')
+}
+
+function updateMeasuredClearances(): void {
+  const board = mapBoard.value
+  const dashboard = board?.parentElement
+  if (!board || !dashboard) return
+  const dashboardBounds = dashboard.getBoundingClientRect()
+  const chromeBounds = mapChromeRegion.value?.getBoundingClientRect()
+  const controlsBounds = bottomControlsRegion.value?.getBoundingClientRect()
+  const chromeClearance = chromeBounds ? Math.max(0, chromeBounds.bottom - dashboardBounds.top + 12) : 12
+  const controlsClearance = controlsBounds ? Math.max(0, dashboardBounds.bottom - controlsBounds.top + 12) : 12
+  dashboard.style.setProperty('--workspace-map-chrome-clearance', `${chromeClearance}px`)
+  dashboard.style.setProperty('--workspace-bottom-controls-clearance', `${controlsClearance}px`)
+}
 
 function focusReturnTarget(element: Element | null): FocusReturnTarget | null {
   if (element instanceof HTMLElement) return { element }
@@ -138,14 +150,18 @@ function focusReturnTarget(element: Element | null): FocusReturnTarget | null {
   return null
 }
 
+function focusFirstActivePanelControl(): void {
+  if (typeof document === 'undefined') return
+  const panel = props.compactPanel
+  if (!panel) return
+  panelContent(panel)?.querySelector<HTMLElement>(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+  )?.focus()
+}
+
 function focusActivePanel(event: Event): void {
   event.preventDefault()
   nextTick(focusFirstActivePanelControl)
-}
-
-function focusFirstActivePanelControl(): void {
-  const panel = props.compactPanel === 'hierarchy' ? hierarchyContent.value : inspectorContent.value
-  panel?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')?.focus()
 }
 
 function redirectFocusFromLayoutRoot(event: FocusEvent): void {
@@ -161,10 +177,7 @@ watch(() => props.compactModalOpen, (open, wasOpen) => {
   if (typeof document === 'undefined') return
   if (open && !wasOpen) {
     focusBeforeCompact = focusReturnTarget(document.activeElement)
-    nextTick(() => {
-      const panel = props.compactPanel === 'hierarchy' ? hierarchyContent.value : inspectorContent.value
-      panel?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')?.focus()
-    })
+    nextTick(focusFirstActivePanelControl)
   } else if (!open && wasOpen) {
     nextTick(() => {
       const element = focusBeforeCompact?.element.isConnected
@@ -183,7 +196,8 @@ watch(() => props.compactModalOpen, (open, wasOpen) => {
 watch(() => props.compactPanel, async panel => {
   if (!props.compactModalOpen || !panel) return
   await nextTick()
-  const container = panel === 'hierarchy' ? hierarchyContent.value : inspectorContent.value
-  container?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')?.focus()
+  panelContent(panel)?.querySelector<HTMLElement>(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+  )?.focus()
 })
 </script>

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback } from './helpers'
 import { clickDockAction } from './helpers'
-import { workspaceNavigation } from './helpers'
+import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'
 import { dragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, editMapObject, saveMapObject, downloadImage, inspectImageSvg, selectCatalogueObjectButton } from './helpers'
 import type { DownloadWindow } from './helpers'
 
@@ -11,7 +11,7 @@ test('the system map can zoom well beyond 400 percent', async ({ page }) => {
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const navigation = workspaceNavigation(page)
+  const navigation = workspaceZoomControls(page)
   const zoomIn = navigation.getByRole('button', { name: 'Zoom in' })
   for (let step = 0; step < 25 && !(await zoomIn.isDisabled()); step += 1) {
     await zoomIn.click()
@@ -36,15 +36,14 @@ test('the system map expands beyond its initial bounds and exports the full layo
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit')
-  const orbit = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
-  const navigation = workspaceNavigation(page)
-  for (let index = 0; index < 8; index += 1) {
-    await navigation.getByRole('button', { name: 'Zoom out' }).click()
-  }
+  const navigation = workspaceZoomControls(page)
+  await zoomOutMapToMinimum(page)
   await expect(navigation.locator('output')).toHaveText('25%')
+  await setWorkspaceMapMode(page, 'Move')
+  const orbit = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
   await dragOrbitToWorldPoint(page, orbit, { x: 1550, y: 280 })
   expect(Number(await orbit.getAttribute('aria-valuenow'))).toBeGreaterThan(960)
 
@@ -119,10 +118,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
     .toHaveAttribute('transform', 'translate(480 280)')
   const restoredPlanet = restoredMap.getByRole('button', { name: /Far Planet/ })
   await expect(restoredPlanet).toHaveAttribute('transform', farTransform)
-  const restoredNavigation = workspaceNavigation(page)
-  for (let index = 0; index < 8; index += 1) {
-    await restoredNavigation.getByRole('button', { name: 'Zoom out' }).click()
-  }
+  await zoomOutMapToMinimum(page)
   await dragToWorldPoint(page, restoredMap, restoredPlanet.locator('.object-hit-target'), {
     x: 1850,
     y: 850,

@@ -1,0 +1,324 @@
+{
+  "sourceIdentity": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-resume-source-freeze-8/source-identity.json",
+  "scope": "Independent compiled UI supplement; canonical tests excluded because coordinator explicitly allows three test-only corrections concurrently. Application, QA scripts, fixture and compiled metadata remain frozen.",
+  "files": [
+    {
+      "path": "app.vue",
+      "sha256": "aee5b86e15b74f99536912dbe721d8d19dc1371e69f5c36e4c10cf995e2b4f4f"
+    },
+    {
+      "path": "assets/css/main.css",
+      "sha256": "12b2226bed626904c253621c9fd9b5c0ac9e97507b5940df864d9bbfd47bf093"
+    },
+    {
+      "path": "assets/css/map-workspace.css",
+      "sha256": "2e9080be313defb89792ff5f05ad6930063bd4b4624a66d41012d6c7a1c6ed36"
+    },
+    {
+      "path": "components/BaselinePage.vue",
+      "sha256": "5d148f4dbb3cd2c621fe226d15982bd84cd09e5c2d8ebd1b9c3126cf1cdeec4c"
+    },
+    {
+      "path": "components/ChartNamesDialog.vue",
+      "sha256": "49eea8c9be522bcffd28db67ed6c9ef888e2ddc62f7efc9c532fbdb562cb038f"
+    },
+    {
+      "path": "components/ClusterMap.vue",
+      "sha256": "376be6833c3e004869a99bc255e3f3b90a4aa23d482c20409f3d44780ae5a2af"
+    },
+    {
+      "path": "components/field-definitions/FieldDefinitionChangeConfirmation.vue",
+      "sha256": "3803bbef1d826f9fb604294dba81dce92f31bf7f2fdd9462c99e35c114855ceb"
+    },
+    {
+      "path": "components/field-definitions/FieldDefinitionEditor.vue",
+      "sha256": "07e1eabf85badfec5aac1846d5d1c300939b586640c07b236a7db4e87775173e"
+    },
+    {
+      "path": "components/field-definitions/FieldDefinitionList.vue",
+      "sha256": "815e2c0b8ec40a66cb333fdf182528cf7130df7863c0a56b0334158c78540e7e"
+    },
+    {
+      "path": "components/field-definitions/FieldDefinitionValues.vue",
+      "sha256": "5a6ed3a7f2017278d354ebce8dd3111c52c3eb264c5c6822ea500c783e319bde"
+    },
+    {
+      "path": "components/field-definitions/model.ts",
+      "sha256": "f36b1dff3d5551a583d89a50a42c7217b00e9359e7c8fc123ce43a1ffcb99b8e"
+    },
+    {
+      "path": "components/FieldDefinitionsDialog.vue",
+      "sha256": "1fdd77effaf2c94ed9f44f3de911d2efe15a227e84bf185b7133851b2649e448"
+    },
+    {
+      "path": "components/inspector/ChartDetailsPanel.vue",
+      "sha256": "45838ddb2ed583b0f9cbae69c54b1a4da9121d2c9fd08cfd1107ef5f047d28f8"
+    },
+    {
+      "path": "components/inspector/contracts.ts",
+      "sha256": "ea1b6eff17ee5f316f1a540b3754bcc3df383d38b090f7d57584bcb10f2934c5"
+    },
+    {
+      "path": "components/inspector/JumpRouteInspector.vue",
+      "sha256": "06c26cf91b931de7ccbd369ad3c593196ed212e4b05b43eecf8d606f6a01537a"
+    },
+    {
+      "path": "components/inspector/MapObjectInspector.vue",
+      "sha256": "69aa6a54753361785644be12c6cd57394cf81ee749346a97459370f4f610bac8"
+    },
+    {
+      "path": "components/inspector/OrbitInspector.vue",
+      "sha256": "7455d3f7205b670e322b6c923cf9594d080b89b499b69993521c7f2aef72c7c6"
+    },
+    {
+      "path": "components/MapEditorLayout.vue",
+      "sha256": "060f5ec5d5d6539be7793c693eb4557f74a65ab05c7d043d5e41308ce17df436"
+    },
+    {
+      "path": "components/MapHierarchy.vue",
+      "sha256": "79ac410e1f85607ffe20145e79d005789afb7eaae41fc28bc0e4b3742cffa902"
+    },
+    {
+      "path": "components/MapInspector.vue",
+      "sha256": "79f835c1ffc55255944410c580242afe667f87e714b0e6a23452792879f55ea1"
+    },
+    {
+      "path": "components/maps/system-map-renderer.ts",
+      "sha256": "4a1c0340d3d92622cc657b654434a35e361ac088b56ab25f3337f2bb0f4b335e"
+    },
+    {
+      "path": "components/ObjectPalette.vue",
+      "sha256": "e3555cfcc0a0d8a114d833a166931ab9ab3724ae6319c2ff888cc521c6c67092"
+    },
+    {
+      "path": "components/prototype-fields-fixture.ts",
+      "sha256": "4c9d549935aa1e7786af50bee96d8ec4a771d464c79b72be57ce735bf35b00a1"
+    },
+    {
+      "path": "components/prototype-inspector-fixture.ts",
+      "sha256": "971da11d6fe447b4caf454feaab0954bd4cd4644b5a0e7e85d0dec565cbe3ce5"
+    },
+    {
+      "path": "components/PrototypeBInspector.vue",
+      "sha256": "010d58fedeed2780bee57223e950b7bdd5d5233c2054dc20e18baf7fcb24df3e"
+    },
+    {
+      "path": "components/PrototypeCataloguePicker.vue",
+      "sha256": "b867a25140a1af8dd8589017d4171f5698a9e8c3dd4d2233be0b25dee57eb38e"
+    },
+    {
+      "path": "components/PrototypeCreationPopover.vue",
+      "sha256": "2e2600db14d492764c4fce6e34a27be2962d354db0fe7561a782d21ed9b79d47"
+    },
+    {
+      "path": "components/PrototypeFieldDefinitionsDialog.vue",
+      "sha256": "17f34ea3f2b9d4020a8c0bae5690b7564f9091d3c69f510a17c8b45e41900f4a"
+    },
+    {
+      "path": "components/PrototypeHierarchy.vue",
+      "sha256": "53277f2fa7cecd727513b9a6ad9e6c6dff89cc118f45ddad74ade849c338e833"
+    },
+    {
+      "path": "components/PrototypeInspector.vue",
+      "sha256": "9f4655a59d58267fdce020b7443bd9eb73ffc802fb025cfaeedc2692304c7a17"
+    },
+    {
+      "path": "components/PrototypeMapCanvas.vue",
+      "sha256": "38c36675c73b68ca79d5a252080123ce472b17ee62c3d631f3c9f9006631e7e5"
+    },
+    {
+      "path": "components/PrototypeWorkbench.vue",
+      "sha256": "b102bd8230e2d4e819d68b0b516df9a3e39d34751ab8a3d9ea7ca090a6bb7d7d"
+    },
+    {
+      "path": "components/StatePeek.vue",
+      "sha256": "a1e6b3211f5afc538689e7bee04f912c3386362cb4ccf14ec71fdbc84a54979c"
+    },
+    {
+      "path": "components/SystemMap.vue",
+      "sha256": "88dbb2861aedef3df315d232a2f40c2eed5eb55b2082d584589e824eee0e976b"
+    },
+    {
+      "path": "components/WorkspaceDock.vue",
+      "sha256": "e0620829956e35478cc317045736f2d7212e3e41330361780ad6d7eea2378c70"
+    },
+    {
+      "path": "components/WorkspaceFeedback.vue",
+      "sha256": "3b517307f74ac7382d6c40fe55fbca553d5894cc439ed0c7e777ddeb516ba63a"
+    },
+    {
+      "path": "components/WorkspaceHeader.vue",
+      "sha256": "5fd6c216c48a6bc42a60f0ab52a3e1b91b42d08dd832b49209ecf560ded91b66"
+    },
+    {
+      "path": "components/WorkspaceMapCanvas.vue",
+      "sha256": "b36dabf0d9a43862657ed4c73dfdc0e48e7042135002f55d398a10615feeaa9d"
+    },
+    {
+      "path": "components/WorkspaceMapChrome.vue",
+      "sha256": "2cb0e7edcf65a4e93db04b1956adaa4f5744e278795226fdbd43b533a57cee8e"
+    },
+    {
+      "path": "components/WorkspaceResizablePanel.vue",
+      "sha256": "c43850dd87be6bde0a594df45545d66e51e439581a69d3f905705800ea8a3704"
+    },
+    {
+      "path": "components/WorkspaceWelcome.vue",
+      "sha256": "c9d9209bbaea340b2080e9f2441afd19adf87d37e99749667bcf163ca2a05707"
+    },
+    {
+      "path": "components/WorkspaceZoomControls.vue",
+      "sha256": "2ad86cfd2d4f2548ed3328b5c01439da145d5f09fe138b55ad7f29f9de513fc2"
+    },
+    {
+      "path": "composables/editor-workflows/types.ts",
+      "sha256": "202d3fbe85f97ad5f8ca5c5670e3f96e702b9765e2320f0142e5b4813c76866c"
+    },
+    {
+      "path": "composables/editor-workflows/useClusterWorkflows.ts",
+      "sha256": "985be90139165ef20309e37e8be2088bcb2a490b66a0190a8c9120d3d6252107"
+    },
+    {
+      "path": "composables/editor-workflows/useEditorState.ts",
+      "sha256": "a0995d25032df47cf10b6fd1a8b6d1a6d7aa6dcf99093fc4ed436563cb6fe486"
+    },
+    {
+      "path": "composables/editor-workflows/useFieldDefinitionWorkflows.ts",
+      "sha256": "23398171805c290880e3b517061baea27eb627dcf57c57ad5c7a437e5385f28d"
+    },
+    {
+      "path": "composables/editor-workflows/useMapWorkflows.ts",
+      "sha256": "cb670e51e3deaddc7241ded1fb6b91018966cf600b5d1901a0f48dd03382e9e3"
+    },
+    {
+      "path": "composables/useEditorWorkflows.ts",
+      "sha256": "87cc18cb20e52e8a58f9d1f0e743e8bad4659db1f942a77dd2f152c87ae6ca0c"
+    },
+    {
+      "path": "composables/useLocalWorkspace.ts",
+      "sha256": "8fc3bd9969dfcf72e846f937d13d243248597a36750839b15cbcccfdb95679cf"
+    },
+    {
+      "path": "composables/useWorkspaceFiles.ts",
+      "sha256": "b947bc588e8580bcec2039aaf5d7eb4aaab6f76a57da3200eace75965029e376"
+    },
+    {
+      "path": "domain/workspace-cluster.ts",
+      "sha256": "00fd3f3f452e1d0662c024355bdb0637c2ea90fbf1d8a40f5c36d9614874a4dc"
+    },
+    {
+      "path": "domain/workspace-codec.ts",
+      "sha256": "1df963a8f441681517f911d7ff613d5b74dc60f0a43d15e6056d1d90b000fb11"
+    },
+    {
+      "path": "domain/workspace-deletion.ts",
+      "sha256": "8048ad77785957fc72e859eb9f4680057128af7e440b413863d91519bddb423d"
+    },
+    {
+      "path": "domain/workspace-fields.ts",
+      "sha256": "2992c06eda7973bddd852f1cf935f6174695c6499956e3735c4c0641d5fdd5ef"
+    },
+    {
+      "path": "domain/workspace-json-import.ts",
+      "sha256": "19fef79bca1ad5a91d65f6224fae9665d7a24b08262d87de5b936a3b262a9ec6"
+    },
+    {
+      "path": "domain/workspace-model.ts",
+      "sha256": "64c89ed0d7e5d3489673e48b67d1a8ceda7bce2b370c2b7ed6ba3481177e72e9"
+    },
+    {
+      "path": "domain/workspace-orbits.ts",
+      "sha256": "7842bd00df38c9055029ba55bc5dcd574ed92c0047563ca83353c1a40bc23357"
+    },
+    {
+      "path": "domain/workspace-schema.ts",
+      "sha256": "91dde3c88a0ad2a189f3ec4553a5367358d6887b33d08c6025575a40bea5969a"
+    },
+    {
+      "path": "domain/workspace-system-objects.ts",
+      "sha256": "4152340d99124584a01471999e52f032b8b4563a2cec33193f6e81031cbc4e4a"
+    },
+    {
+      "path": "domain/workspace-validation.ts",
+      "sha256": "5dec0055e5dba0c580f57076451b71f4130e711fe4cf9b12c6db52088470f588"
+    },
+    {
+      "path": "domain/workspace.ts",
+      "sha256": "241adb48be3d12f9bb0dd049bef4f1333fe7139786e7b439255b6befc974282a"
+    },
+    {
+      "path": "nuxt.config.ts",
+      "sha256": "14c6f852ea130b6737c50b4cee91f0149cfe9d57cdd63d328a85e8d022ff8bef"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "ceacd4b69e6dd6cd375947960cd93264191f3b475e317418f0d4caacce7a8bf7"
+    },
+    {
+      "path": "package.json",
+      "sha256": "cc5e0346863efe9470804de26bf78b8790ef694cbb73a86dd8e0e7aea0240f65"
+    },
+    {
+      "path": "utils/catalogue-marks.ts",
+      "sha256": "303519ba76e275edc0d1f1461d27d988fef06442634ccc91442716d68abe894d"
+    },
+    {
+      "path": "utils/cluster-map-geometry.ts",
+      "sha256": "1423315d60edb2b42700e3fca14779a3b5b50a8f8831106281f1721d7a2d683d"
+    },
+    {
+      "path": "utils/map-hierarchy.ts",
+      "sha256": "f4707f3649affad75bbb26a0b88e9df56cc2cd5035a824f00bc932c9ade5d060"
+    },
+    {
+      "path": "utils/map-image-export.ts",
+      "sha256": "e7c3b8423e5456745965754634157ab70e790bf880697df8e44402b3a30ecb60"
+    },
+    {
+      "path": "utils/map-usable-area.ts",
+      "sha256": "b70b3e7addb4af33a525e1ff93c7912eba748961d5cae3816266be9b46208803"
+    },
+    {
+      "path": "utils/map-zoom.ts",
+      "sha256": "40dc3c646f5ca672a41685224d4182ad5169341db5a2a447fd632ac71e71785a"
+    },
+    {
+      "path": "utils/system-map-geometry.ts",
+      "sha256": "8d28677a3e311fadce9079e5d6d8ad1c4f1ea63ab8b555b47c68c8f679549641"
+    },
+    {
+      "path": "utils/workspace-storage.ts",
+      "sha256": "00817a03e640fced61ea9a6f37bcad0f6a2ddfe4ac1f3683fe0cd5e533a0f5d4"
+    },
+    {
+      "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/check-paired-composition.mjs",
+      "sha256": "8384c4d75132102d5042319cf891e6c6d5a902e9221adb03f209f4592f637b4b"
+    },
+    {
+      "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/platform-hooks.mjs",
+      "sha256": "df5388b2da67d02fb631cab7a6296249e6d1e599eaf3b6687454de2ee35fa054"
+    },
+    {
+      "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/contrast.mjs",
+      "sha256": "827a50c3004165eca169e757a253350b1ffcee65536938e41392c86aa52cdd71"
+    },
+    {
+      "path": ".output/nitro.json",
+      "sha256": "46a8e65f819496fa7889190f8760d09802dafa78a329fda5aee4558a2eb7cc92"
+    },
+    {
+      "path": ".output/server/index.mjs",
+      "sha256": "2441da8e168741b5bf16b27ce66e7056d6499db6ca6a69c2ff150106d377dca1"
+    },
+    {
+      "path": ".output/server/package.json",
+      "sha256": "6417e2f7fc5c921a388311b88d0523b5eea7746b886c34d00d6c8b1ef261e8d1"
+    },
+    {
+      "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/fixtures/rich-cluster.json",
+      "sha256": "606283d0095d16e0e3948eb335a90c05eb5367d4b8c4fed326d8bf8f773f7435"
+    }
+  ],
+  "baseline": "e8bb78c014909f9046eb43c405cfbd7a72b43e3f",
+  "candidate": "ticket21-resume-source-freeze-8"
+}

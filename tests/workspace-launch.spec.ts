@@ -34,12 +34,14 @@ test('the product root creates and resumes a saved local workspace', async ({ pa
   await page.getByLabel('First star system').fill('Lark')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Lark')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+    .getByRole('heading', { name: 'Lark' })).toBeVisible()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
 
-  await expect(page.getByRole('region', { name: 'Active Star System summary' })).toContainText('Lark')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
+    .getByRole('heading', { name: 'Lark' })).toBeVisible()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Halcyon Spur Jump Cluster map' })).toBeVisible()

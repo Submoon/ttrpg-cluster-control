@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { activeWorkspaceFeedback, downloadJson, setWorkspaceMapMode } from './helpers'
+import { activeWorkspaceFeedback, downloadJson, setWorkspaceMapMode, workspaceZoomOutput } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
@@ -109,7 +109,7 @@ test('a second touch cancels a Move preview before pinch and pan change only the
   const scene = map.locator('.system-map-content')
   const objectTransformBefore = await star.getAttribute('transform')
   const viewportBefore = await scene.getAttribute('transform')
-  const zoomOutput = page.getByRole('toolbar', { name: 'Workspace navigation' }).locator('output')
+  const zoomOutput = workspaceZoomOutput(page)
   const zoomBefore = await zoomOutput.textContent()
 
   try {

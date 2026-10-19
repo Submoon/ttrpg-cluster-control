@@ -42,7 +42,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const selectedRouteId = ref<string | null>(null)
   const chartNamesEditing = ref(false)
   const transitionGuard = ref<TransitionGuard>(null)
-  const hierarchyPanelOpen = ref(true)
+  const hierarchyPanelOpen = ref(false)
   const inspectorPanelOpen = ref(true)
   const compactPanel = ref<WorkspacePanel | null>(null)
   const isCompactViewport = ref(false)

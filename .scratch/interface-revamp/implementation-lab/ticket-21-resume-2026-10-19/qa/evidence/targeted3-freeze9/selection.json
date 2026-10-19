@@ -1,0 +1,25 @@
+{
+  "count": 3,
+  "timeoutChange": false,
+  "buildRequired": false,
+  "workers": 1,
+  "grep": "(?:the\\ Warden\\ can\\ edit,\\ save,\\ export,\\ and\\ import\\ an\\ elliptical\\ Orbit\\ around\\ an\\ unoccupied\\ center|the\\ Warden\\ can\\ review\\ and\\ safely\\ confirm\\ dependent\\ map\\ deletions|an\\ attached\\ Orbit\\ with\\ undersized\\ imported\\ radii\\ is\\ rejected\\ without\\ losing\\ current\\ data)$",
+  "retries": 0,
+  "status": "released for final3",
+  "cases": [
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can review and safely confirm dependent map deletions"
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "an attached Orbit with undersized imported radii is rejected without losing current data"
+    }
+  ],
+  "maxFailures": 0,
+  "candidate": "ticket21-resume-source-freeze-9"
+}

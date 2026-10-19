@@ -1,0 +1,116 @@
+{
+  "cases": [
+    {
+      "file": "object-fields.spec.ts",
+      "rawFreeze2Line": 114,
+      "title": "Chart details is an active, keyboard-accessible inspector view",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "rawFreeze2Line": 12,
+      "title": "a first workspace visit keeps the full map board open with a bottom mode Dock",
+      "reason": "Integrated composition/resize/Fit regression coverage",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "rawFreeze2Line": 77,
+      "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+      "reason": "Integrated composition/resize/Fit regression coverage",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "rawFreeze2Line": 158,
+      "title": "a second touch cannot take over an active panel-resize pointer",
+      "reason": "Integrated composition/resize/Fit regression coverage",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 207,
+      "title": "custom field category and subtype scopes are united on independent system import",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 319,
+      "title": "the Warden can review and safely confirm dependent map deletions",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 486,
+      "title": "the Warden can export a cluster and standalone system as versioned JSON",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 697,
+      "title": "the Warden can validate and import an independent JSON copy",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 928,
+      "title": "the Warden can import a standalone system without adding cluster routes",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "rawFreeze2Line": 973,
+      "title": "the Warden can complete the local campaign workflow end to end",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "rawFreeze2Line": 103,
+      "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+      "reason": "Affected raw freeze-2 failure after approved precondition corrections",
+      "titlePresentInCurrentSource": true,
+      "staticMatch": "Literal title"
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "reason": "Remaining system-orbits failure after A cycles; corrected narrowly by B before freeze 5"
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+      "reason": "Remaining system-orbits failure after A cycles; corrected narrowly by B before freeze 5"
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+      "reason": "Remaining system-orbits failure after A cycles; corrected narrowly by B before freeze 5"
+    }
+  ],
+  "grep": "(?:Chart\\ details\\ is\\ an\\ active,\\ keyboard-accessible\\ inspector\\ view|a\\ first\\ workspace\\ visit\\ keeps\\ the\\ full\\ map\\ board\\ open\\ with\\ a\\ bottom\\ mode\\ Dock|overlay\\ panels\\ resize\\ by\\ pointer\\ and\\ keyboard\\ without\\ changing\\ their\\ mounted\\ trees\\ or\\ the\\ map\\ camera|a\\ second\\ touch\\ cannot\\ take\\ over\\ an\\ active\\ panel-resize\\ pointer|custom\\ field\\ category\\ and\\ subtype\\ scopes\\ are\\ united\\ on\\ independent\\ system\\ import|the\\ Warden\\ can\\ review\\ and\\ safely\\ confirm\\ dependent\\ map\\ deletions|the\\ Warden\\ can\\ export\\ a\\ cluster\\ and\\ standalone\\ system\\ as\\ versioned\\ JSON|the\\ Warden\\ can\\ validate\\ and\\ import\\ an\\ independent\\ JSON\\ copy|the\\ Warden\\ can\\ import\\ a\\ standalone\\ system\\ without\\ adding\\ cluster\\ routes|the\\ Warden\\ can\\ complete\\ the\\ local\\ campaign\\ workflow\\ end\\ to\\ end|an\\ attached\\ Orbit\\ with\\ undersized\\ imported\\ radii\\ is\\ rejected\\ without\\ losing\\ current\\ data|the\\ Warden\\ can\\ edit,\\ save,\\ export,\\ and\\ import\\ an\\ elliptical\\ Orbit\\ around\\ an\\ unoccupied\\ center|dropping\\ an\\ existing\\ unoccupied\\ Orbit\\ center\\ onto\\ an\\ object\\ raises\\ too-small\\ radii\\ and\\ round-trips|object\\ palette\\ drag\\ previews\\ match\\ placed\\ marks\\ and\\ preserve\\ map,\\ Orbit,\\ and\\ keyboard\\ adds)$",
+  "retries": 0,
+  "composition": 3,
+  "workers": 1,
+  "timeoutChange": false,
+  "count": 14,
+  "maxFailures": 0,
+  "candidate": "ticket21-resume-source-freeze-7",
+  "rawFreeze5Failures": 11
+}

@@ -1,0 +1,13 @@
+{
+  "scope": "Exact 10-case compiled subset: six freeze7 failures plus cluster3 and composition resize1",
+  "retries": 0,
+  "invocations": 1,
+  "maxFailures": 0,
+  "candidate": "ticket21-resume-source-freeze-8",
+  "started": "2026-10-19T15:27:12.2610282+02:00",
+  "trace": "retain-on-failure",
+  "screenshot": "only-on-failure",
+  "exitCode": 1,
+  "finished": "2026-10-19T15:29:13.4921919+02:00",
+  "workers": 1
+}

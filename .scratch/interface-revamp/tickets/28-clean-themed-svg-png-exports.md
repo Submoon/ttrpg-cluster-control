@@ -1,6 +1,6 @@
 ---
 title: 'Export clean complete SVG and PNG in active or print light palettes'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -67,3 +67,7 @@ The primary seam is the real integrated product through the existing Playwright 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
 No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+
+## Current availability - 2026-10-19
+
+Ticket21 completes its scoped B/Dock reassessment. This ticket is now open and unclaimed; no implementation is started. Its predecessor preserves existing export capabilities and records their successful focused checks; that evidence does not implement this ticket's complete clean/export-palette contract. See [the ticket21 execution record](../research/implementation-21-resume-2026-10-19.md) for source identities and validation limits.

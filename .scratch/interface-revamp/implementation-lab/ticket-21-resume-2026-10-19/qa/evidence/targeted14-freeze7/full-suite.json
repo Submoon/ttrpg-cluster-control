@@ -1,0 +1,864 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nodejs\\node.exe",
+      "C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/playwright.full.config.ts",
+      "--grep",
+      "(?:Chart\\ details\\ is\\ an\\ active,\\ keyboard-accessible\\ inspector\\ view|a\\ first\\ workspace\\ visit\\ keeps\\ the\\ full\\ map\\ board\\ open\\ with\\ a\\ bottom\\ mode\\ Dock|overlay\\ panels\\ resize\\ by\\ pointer\\ and\\ keyboard\\ without\\ changing\\ their\\ mounted\\ trees\\ or\\ the\\ map\\ camera|a\\ second\\ touch\\ cannot\\ take\\ over\\ an\\ active\\ panel-resize\\ pointer|custom\\ field\\ category\\ and\\ subtype\\ scopes\\ are\\ united\\ on\\ independent\\ system\\ import|the\\ Warden\\ can\\ review\\ and\\ safely\\ confirm\\ dependent\\ map\\ deletions|the\\ Warden\\ can\\ export\\ a\\ cluster\\ and\\ standalone\\ system\\ as\\ versioned\\ JSON|the\\ Warden\\ can\\ validate\\ and\\ import\\ an\\ independent\\ JSON\\ copy|the\\ Warden\\ can\\ import\\ a\\ standalone\\ system\\ without\\ adding\\ cluster\\ routes|the\\ Warden\\ can\\ complete\\ the\\ local\\ campaign\\ workflow\\ end\\ to\\ end|an\\ attached\\ Orbit\\ with\\ undersized\\ imported\\ radii\\ is\\ rejected\\ without\\ losing\\ current\\ data|the\\ Warden\\ can\\ edit,\\ save,\\ export,\\ and\\ import\\ an\\ elliptical\\ Orbit\\ around\\ an\\ unoccupied\\ center|dropping\\ an\\ existing\\ unoccupied\\ Orbit\\ center\\ onto\\ an\\ object\\ raises\\ too-small\\ radii\\ and\\ round-trips|object\\ palette\\ drag\\ previews\\ match\\ placed\\ marks\\ and\\ preserve\\ map,\\ Orbit,\\ and\\ keyboard\\ adds)$"
+    ],
+    "configFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-21-resume-2026-10-19\\qa\\playwright.full.config.ts",
+    "rootDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket21-final-freeze7-run1/full-suite-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3180",
+          "channel": "chrome",
+          "screenshot": "only-on-failure",
+          "trace": "retain-on-failure"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": ""
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "object-fields.spec.ts",
+      "file": "object-fields.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Chart details is an active, keyboard-accessible inspector view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5092,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:04:32.626Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-a3715381c1cc15db6752",
+          "file": "object-fields.spec.ts",
+          "line": 115,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "system-orbits.spec.ts",
+      "file": "system-orbits.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 15579,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\nExpected: \u001b[32m\"3\u001b[7m20\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"3\u001b[7m19\u001b[27m\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\u001b[22m\n\u001b[2m    14 × locator resolved to <ellipse ry=\"50\" cy=\"280\" rx=\"319\" cx=\"230.4\" class=\"orbit-ring\" transform=\"rotate(0 230.4 280)\"></ellipse>\u001b[22m\n\u001b[2m       - unexpected value \"319\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\nExpected: \u001b[32m\"3\u001b[7m20\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"3\u001b[7m19\u001b[27m\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\u001b[22m\n\u001b[2m    14 × locator resolved to <ellipse ry=\"50\" cy=\"280\" rx=\"319\" cx=\"230.4\" class=\"orbit-ring\" transform=\"rotate(0 230.4 280)\"></ellipse>\u001b[22m\n\u001b[2m       - unexpected value \"319\"\u001b[22m\n\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:284:22",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts",
+                      "column": 22,
+                      "line": 284
+                    },
+                    "snippet": "  282 |   await expect(verticalHandle).toBeVisible()\n  283 |   await dragToWorldPoint(page, map, horizontalHandle, { x: geometry.cx + 320, y: geometry.cy })\n> 284 |   await expect(ring).toHaveAttribute('rx', '320')\n      |                      ^\n  285 |   await expect(ring).toHaveAttribute('ry', '50')\n  286 |   await dragToWorldPoint(page, map, verticalHandle, { x: geometry.cx, y: geometry.cy - 60 })\n  287 |   await expect(ring).toHaveAttribute('rx', '320')"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts",
+                        "column": 22,
+                        "line": 284
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\nExpected: \u001b[32m\"3\u001b[7m20\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"3\u001b[7m19\u001b[27m\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\u001b[22m\n\u001b[2m    14 × locator resolved to <ellipse ry=\"50\" cy=\"280\" rx=\"319\" cx=\"230.4\" class=\"orbit-ring\" transform=\"rotate(0 230.4 280)\"></ellipse>\u001b[22m\n\u001b[2m       - unexpected value \"319\"\u001b[22m\n\n\n  282 |   await expect(verticalHandle).toBeVisible()\n  283 |   await dragToWorldPoint(page, map, horizontalHandle, { x: geometry.cx + 320, y: geometry.cy })\n> 284 |   await expect(ring).toHaveAttribute('rx', '320')\n      |                      ^\n  285 |   await expect(ring).toHaveAttribute('ry', '50')\n  286 |   await dragToWorldPoint(page, map, verticalHandle, { x: geometry.cx, y: geometry.cy - 60 })\n  287 |   await expect(ring).toHaveAttribute('rx', '320')\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:284:22"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:04:38.492Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-the-Warden-c-e440d-around-an-unoccupied-center\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts",
+                    "column": 22,
+                    "line": 284
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-6029f3074e1c0b3b3343",
+          "file": "system-orbits.spec.ts",
+          "line": 159,
+          "column": 1
+        },
+        {
+          "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 22148,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n\n    at openWorkspaceHierarchy (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts:339:27)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:825:3",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                      "column": 27,
+                      "line": 339
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:339\n\n  337 |   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()\n  338 |   const hierarchy = page.getByRole('complementary', { name })\n> 339 |   await expect(hierarchy).toBeVisible()\n      |                           ^\n  340 |   return hierarchy\n  341 | }\n  342 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                        "column": 27,
+                        "line": 339
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n\n\n   at helpers.ts:339\n\n  337 |   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()\n  338 |   const hierarchy = page.getByRole('complementary', { name })\n> 339 |   await expect(hierarchy).toBeVisible()\n      |                           ^\n  340 |   return hierarchy\n  341 | }\n  342 |\n    at openWorkspaceHierarchy (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts:339:27)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:825:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:04:56.659Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-dropping-an--bcf50-small-radii-and-round-trips\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-dropping-an--bcf50-small-radii-and-round-trips\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\system-orbits-dropping-an--bcf50-small-radii-and-round-trips\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                    "column": 27,
+                    "line": 339
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-678462acda9842372d51",
+          "file": "system-orbits.spec.ts",
+          "line": 704,
+          "column": 1
+        },
+        {
+          "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9739,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:22.141Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-dd97390d0290e260b4e0",
+          "file": "system-orbits.spec.ts",
+          "line": 863,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-composition.spec.ts",
+      "file": "workspace-composition.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a first workspace visit keeps the full map board open with a bottom mode Dock",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1758,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:32.317Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-2922e23f8249797b643f",
+          "file": "workspace-composition.spec.ts",
+          "line": 12,
+          "column": 1
+        },
+        {
+          "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3494,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:34.123Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-7205b1dec2a59f2372d1",
+          "file": "workspace-composition.spec.ts",
+          "line": 77,
+          "column": 1
+        },
+        {
+          "title": "a second touch cannot take over an active panel-resize pointer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1999,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:37.670Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-a53cbc790cfec5b6b0e6",
+          "file": "workspace-composition.spec.ts",
+          "line": 158,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-data.spec.ts",
+      "file": "workspace-data.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "custom field category and subtype scopes are united on independent system import",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7358,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:39.780Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-9be2b503c260bbd91611",
+          "file": "workspace-data.spec.ts",
+          "line": 207,
+          "column": 1
+        },
+        {
+          "title": "the Warden can review and safely confirm dependent map deletions",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 17240,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\u001b[22m\n\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:421:74",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                      "column": 74,
+                      "line": 421
+                    },
+                    "snippet": "  419 |\n  420 |   await page.reload()\n> 421 |   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()\n      |                                                                          ^\n  422 |   await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()\n  423 |   await returnToClusterMap(page)\n  424 |   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                        "column": 74,
+                        "line": 421
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /Select .*Iria/ })\u001b[22m\n\n\n  419 |\n  420 |   await page.reload()\n> 421 |   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()\n      |                                                                          ^\n  422 |   await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()\n  423 |   await returnToClusterMap(page)\n  424 |   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:421:74"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:05:47.171Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--92adc-irm-dependent-map-deletions\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                    "column": 74,
+                    "line": 421
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-60a4bad6b26c2b91ea41",
+          "file": "workspace-data.spec.ts",
+          "line": 320,
+          "column": 1
+        },
+        {
+          "title": "the Warden can export a cluster and standalone system as versioned JSON",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 18686,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:613:80",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                      "column": 80,
+                      "line": 613
+                    },
+                    "snippet": "  611 |     .toEqual({ horizontal: 512, vertical: 512 })\n  612 |   expect(updatedClusterExport.layout).not.toHaveProperty('orbitEllipseRadii')\n> 613 |   expect(Number.isFinite(updatedClusterExport.layout.objectAngles[planet.id])).toBe(true)\n      |                                                                                ^\n  614 |   expect(updatedClusterExport.layout).not.toHaveProperty('zoom')\n  615 |   expect(updatedClusterExport.layout).not.toHaveProperty('pan')\n  616 |   expect(updatedClusterExport).not.toHaveProperty('selectedSystemId')"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                        "column": 80,
+                        "line": 613
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  611 |     .toEqual({ horizontal: 512, vertical: 512 })\n  612 |   expect(updatedClusterExport.layout).not.toHaveProperty('orbitEllipseRadii')\n> 613 |   expect(Number.isFinite(updatedClusterExport.layout.objectAngles[planet.id])).toBe(true)\n      |                                                                                ^\n  614 |   expect(updatedClusterExport.layout).not.toHaveProperty('zoom')\n  615 |   expect(updatedClusterExport.layout).not.toHaveProperty('pan')\n  616 |   expect(updatedClusterExport).not.toHaveProperty('selectedSystemId')\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:613:80"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:06:07.607Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--0c87e-ne-system-as-versioned-JSON\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--0c87e-ne-system-as-versioned-JSON\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--0c87e-ne-system-as-versioned-JSON\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                    "column": 80,
+                    "line": 613
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-37e229d0e3953460ec70",
+          "file": "workspace-data.spec.ts",
+          "line": 488,
+          "column": 1
+        },
+        {
+          "title": "the Warden can validate and import an independent JSON copy",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5132,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:06:30.905Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-68fa23ff142dd3f8a617",
+          "file": "workspace-data.spec.ts",
+          "line": 701,
+          "column": 1
+        },
+        {
+          "title": "the Warden can import a standalone system without adding cluster routes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2873,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:06:36.551Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-a2e2379cf78f4a125027",
+          "file": "workspace-data.spec.ts",
+          "line": 933,
+          "column": 1
+        },
+        {
+          "title": "the Warden can complete the local campaign workflow end to end",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 29839,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\u001b[22m\n\u001b[2m    14 × locator resolved to 1 element\u001b[22m\n\u001b[2m       - unexpected value \"1\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\u001b[22m\n\u001b[2m    14 × locator resolved to 1 element\u001b[22m\n\u001b[2m       - unexpected value \"1\"\u001b[22m\n\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:1309:88",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                      "column": 88,
+                      "line": 1309
+                    },
+                    "snippet": "  1307 |   page.once('dialog', dialog => dialog.accept())\n  1308 |   await deleteImportedSystem.click()\n> 1309 |   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)\n       |                                                                                        ^\n  1310 |   await expect(importedRouteMark).toHaveCount(0)\n  1311 |   await page.reload()\n  1312 |   await returnToClusterMap(page)"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                        "column": 88,
+                        "line": 1309
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' }).getByRole('button', { name: 'Open Far Vesper system map' })\u001b[22m\n\u001b[2m    14 × locator resolved to 1 element\u001b[22m\n\u001b[2m       - unexpected value \"1\"\u001b[22m\n\n\n  1307 |   page.once('dialog', dialog => dialog.accept())\n  1308 |   await deleteImportedSystem.click()\n> 1309 |   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)\n       |                                                                                        ^\n  1310 |   await expect(importedRouteMark).toHaveCount(0)\n  1311 |   await page.reload()\n  1312 |   await returnToClusterMap(page)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts:1309:88"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:06:39.456Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--38889-ampaign-workflow-end-to-end\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--38889-ampaign-workflow-end-to-end\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-data-the-Warden--38889-ampaign-workflow-end-to-end\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-data.spec.ts",
+                    "column": 88,
+                    "line": 1309
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-daef59b38d676805981e",
+          "file": "workspace-data.spec.ts",
+          "line": 978,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-recovery.spec.ts",
+      "file": "workspace-recovery.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 8281,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n\n    at openWorkspaceHierarchy (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts:339:27)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-recovery.spec.ts:162:3",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                      "column": 27,
+                      "line": 339
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:339\n\n  337 |   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()\n  338 |   const hierarchy = page.getByRole('complementary', { name })\n> 339 |   await expect(hierarchy).toBeVisible()\n      |                           ^\n  340 |   return hierarchy\n  341 | }\n  342 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                        "column": 27,
+                        "line": 339
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('complementary', { name: 'Jump Cluster contents' })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('complementary', { name: 'Jump Cluster contents' }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('complementary', { name: 'Jump Cluster contents' })\u001b[22m\n\n\n   at helpers.ts:339\n\n  337 |   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()\n  338 |   const hierarchy = page.getByRole('complementary', { name })\n> 339 |   await expect(hierarchy).toBeVisible()\n      |                           ^\n  340 |   return hierarchy\n  341 | }\n  342 |\n    at openWorkspaceHierarchy (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts:339:27)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-recovery.spec.ts:162:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-19T13:07:13.950Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket21-final-freeze7-run1\\full-suite-artifacts\\workspace-recovery-an-atta-4f1f3-without-losing-current-data\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\helpers.ts",
+                    "column": 27,
+                    "line": 339
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-0e79f987193e09e64dfc",
+          "file": "workspace-recovery.spec.ts",
+          "line": 103,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-19T13:04:31.206Z",
+    "duration": 172101.796,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 6,
+    "flaky": 0
+  }
+}

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { captureMapExportBlobs, downloadJson } from './helpers'
+import { captureMapExportBlobs, downloadJson, openWorkspaceZoomNavigation } from './helpers'
 
 async function createWorkspace(page: Page): Promise<void> {
   await page.goto('/')
@@ -84,9 +84,10 @@ test('Move refuses an object with an unresolved inspector draft before preview a
   await page.mouse.up()
   await expect(independentObject).not.toHaveAttribute('transform', independentTransform!)
 
-  await page.getByRole('button', { name: 'Pan map right' }).click()
+  const zoomNavigation = await openWorkspaceZoomNavigation(page)
+  await zoomNavigation.getByRole('button', { name: 'Pan map right' }).click()
   await expect(page.locator('.system-map-content')).not.toHaveAttribute('transform', originalSceneTransform!)
-  const zoomSlider = page.getByRole('slider', { name: 'Map zoom level' })
+  const zoomSlider = zoomNavigation.getByRole('slider', { name: 'Map zoom level' })
   const originalZoomLabel = await zoomSlider.getAttribute('aria-valuetext')
   await page.getByRole('button', { name: 'Zoom in' }).click()
   await expect.poll(() => zoomSlider.getAttribute('aria-valuetext')).not.toBe(originalZoomLabel)

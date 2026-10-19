@@ -1,0 +1,13 @@
+{
+  "candidate": "ticket21-resume-source-freeze-5",
+  "scope": "Exact targeted 30-case compiled subset; not a full-suite rerun",
+  "invocations": 1,
+  "started": "2026-10-19T14:40:38.9280565+02:00",
+  "finished": "2026-10-19T14:45:19.3931269+02:00",
+  "exitCode": 1,
+  "workers": 1,
+  "maxFailures": 0,
+  "retries": 0,
+  "trace": "retain-on-failure",
+  "screenshot": "only-on-failure"
+}

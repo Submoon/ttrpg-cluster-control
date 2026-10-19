@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
+import { activeWorkspaceFeedback, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   for (const name of ['Close inspector panel', 'Close hierarchy panel']) {
@@ -131,8 +131,11 @@ test('save feedback has one compact bottom owner and leaves map controls hit-tes
     expect(geometry.canvasBottom).toBeGreaterThan(geometry.feedbackBottom - geometry.feedbackHeight)
 
     const dock = page.getByRole('toolbar', { name: 'Workspace navigation' })
-    for (const name of ['Add to map', 'Fit map']) {
-      const control = dock.getByRole('button', { name, exact: name === 'Add to map' })
+    const controls = [
+      dock.getByRole('button', { name: 'Add to map', exact: true }),
+      workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }),
+    ]
+    for (const control of controls) {
       await expect(control).toBeVisible()
       expect(await control.evaluate((element) => {
         const bounds = element.getBoundingClientRect()

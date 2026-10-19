@@ -1,8 +1,11 @@
 <template>
-  <button
+  <UButton
     v-if="!props.hideTrigger"
     ref="trigger"
-    class="field-definitions-trigger"
+    class="field-definitions-trigger workspace-control"
+    color="neutral"
+    variant="outline"
+    size="sm"
     type="button"
     aria-haspopup="dialog"
     aria-controls="field-definitions-dialog"
@@ -11,9 +14,9 @@
     title="Manage native and custom field definitions"
     @click="emit('request-open')"
   >
-    <span>FIELD DEFINITIONS</span>
-    <small>MAP DATA</small>
-  </button>
+    <UIcon name="i-lucide-list" aria-hidden="true" />
+    Fields
+  </UButton>
 
   <Teleport to="body">
     <dialog
@@ -145,7 +148,7 @@
 /**
  * The dialog owns selection and confirmation; submitted drafts reset only after the parent's save revision advances.
  */
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch, type ComponentPublicInstance } from 'vue'
 import type { CustomFieldType, LocalWorkspace } from '../domain/workspace'
 import FieldDefinitionChangeConfirmation from './field-definitions/FieldDefinitionChangeConfirmation.vue'
 import FieldDefinitionEditor from './field-definitions/FieldDefinitionEditor.vue'
@@ -179,7 +182,7 @@ const emit = defineEmits<{
   'remove-field-definition': [fieldId: string]
 }>()
 
-const trigger = ref<HTMLButtonElement | null>(null)
+const trigger = ref<ComponentPublicInstance | HTMLButtonElement | null>(null)
 const dialog = ref<HTMLDialogElement | null>(null)
 const dialogOpen = ref(false)
 const selectedFieldDefinitionId = ref<string>('native:atmosphere')
@@ -253,7 +256,16 @@ function close(): void {
   newCustomFieldFormOpen.value = false
   pendingAction.value = null
   emit('open-change', false)
-  void nextTick(() => trigger.value?.focus())
+  void nextTick(focusTrigger)
+}
+
+function focusTrigger(): void {
+  if (typeof HTMLButtonElement === 'undefined') return
+  const triggerRef = trigger.value
+  const element = triggerRef instanceof HTMLButtonElement ? triggerRef : triggerRef?.$el
+  if (element instanceof HTMLButtonElement && element.isConnected && !element.disabled) {
+    element.focus()
+  }
 }
 
 /** Prevents the native dialog cancel path from bypassing the draft-discard confirmation. */
@@ -356,37 +368,6 @@ defineExpose({
 </script>
 
 <style>
-.field-definitions-trigger {
-  display: grid;
-  min-height: 2.45rem;
-  scroll-margin-block: 0.5rem;
-  gap: 0.12rem;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0.34rem 0.55rem;
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.field-definitions-trigger:hover {
-  border-color: var(--accent);
-  background: var(--control-hover);
-  color: var(--accent-hover);
-}
-
-.field-definitions-trigger span {
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-}
-
-.field-definitions-trigger small {
-  color: var(--accent);
-  font-size: 0.5rem;
-  letter-spacing: 0.12em;
-}
-
 .field-definitions-dialog {
   width: min(60rem, calc(100vw - 2rem));
   max-width: none;
@@ -578,5 +559,13 @@ defineExpose({
     grid-template-columns: 1fr;
   }
 
+}
+</style>
+
+<style scoped>
+.field-definitions-trigger {
+  min-height: 2.35rem;
+  scroll-margin-block: 0.5rem;
+  white-space: nowrap;
 }
 </style>

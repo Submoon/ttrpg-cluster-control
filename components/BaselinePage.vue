@@ -3,37 +3,7 @@
     class="app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3"
     :class="{ 'map-workspace-shell': workspace && (activeView === 'cluster' || selectedSystem) }"
   >
-    <WorkspaceHeader
-      v-if="!workspace"
-      :workspace="workspace"
-      :active-view="activeView"
-      :selected-system="selectedSystem"
-      :jump-point-count="jumpPoints.length"
-      :cluster-map="clusterMapRef"
-      :system-map="systemMapRef"
-      :export-error="exportError"
-      @export-cluster-json="downloadClusterJson"
-      @export-system-json="downloadSystemJson"
-      @export-map-image="downloadMapImage"
-      @import-file="importJsonFile"
-    >
-      <template #field-definitions>
-        <FieldDefinitionsDialog
-          ref="fieldDefinitionsDialog"
-          v-if="workspace"
-          :workspace="workspace"
-          :saving="saveState === 'saving'"
-          :save-error="fieldDefinitionError"
-          :save-revision="fieldDefinitionSaveRevision"
-          @request-open="openFieldDefinitions"
-          @open-change="fieldDefinitionDialogOpen = $event"
-          @clear-error="fieldDefinitionError = ''"
-          @create-custom-field="createCustomField"
-          @save-field-definition="saveFieldDefinitionChanges"
-          @remove-field-definition="removeFieldDefinition"
-        />
-      </template>
-    </WorkspaceHeader>
+    <WorkspaceHeader v-if="!workspace" :workspace="workspace" />
 
     <ChartNamesDialog
       v-if="workspace"
@@ -75,7 +45,8 @@
           :inspector-visible="inspectorPanelVisible"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-            :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
+          :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
           <template #compact-recovery>
@@ -100,21 +71,7 @@
               :workspace="workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
-              :jump-point-count="jumpPoints.length"
-              :cluster-map="clusterMapRef"
-              :system-map="systemMapRef"
-              :export-error="exportError"
-              :hierarchy-open="hierarchyPanelVisible"
-              :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
-              @export-cluster-json="downloadClusterJson"
-              @export-system-json="downloadSystemJson"
-              @export-map-image="downloadMapImage"
-              @import-file="importJsonFile"
-              @show-cluster="showClusterMap"
-              @toggle-hierarchy="togglePanel('hierarchy')"
-              @toggle-inspector="togglePanel('inspector')"
-              @files-open-change="headerFilesOpen = $event"
             >
               <template #field-definitions>
                 <FieldDefinitionsDialog
@@ -135,15 +92,33 @@
             </WorkspaceHeader>
           </template>
 
+          <template #map-chrome>
+            <WorkspaceMapChrome
+              :workspace="workspace"
+              :active-view="activeView"
+              :selected-system="selectedSystem"
+              :cluster-map="clusterMapRef"
+              :system-map="systemMapRef"
+              :export-error="exportError"
+              :hierarchy-open="hierarchyPanelVisible"
+              :inspector-open="inspectorPanelVisible"
+              :compact-modal-open="compactPanelOpen"
+              @export-cluster-json="downloadClusterJson"
+              @export-system-json="downloadSystemJson"
+              @export-map-image="downloadMapImage"
+              @import-file="importJsonFile"
+              @show-cluster="showClusterMap"
+              @toggle-hierarchy="togglePanel('hierarchy')"
+              @toggle-inspector="togglePanel('inspector')"
+              @files-open-change="headerFilesOpen = $event"
+            />
+          </template>
+
           <template #dock>
             <WorkspaceDock
               :mode="mapMode"
-              :zoom-level="zoomLevel"
+              :close-signal="dockCloseSignal"
               @mode-change="setMapMode"
-              @zoom-by="zoomActiveMap"
-              @zoom-to="setViewportPercentage"
-              @fit-map="fitActiveMap"
-              @pan-by="panActiveMap"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -156,6 +131,7 @@
                 </template>
                 <ObjectPalette
                   v-else
+                  v-model:active-family="objectPaletteActiveFamily"
                   :selected-orbit="selectedOrbit"
                   :saving="saveState === 'saving'"
                   @add-object="addObject"
@@ -163,6 +139,17 @@
                 />
               </template>
             </WorkspaceDock>
+          </template>
+
+          <template #zoom>
+            <WorkspaceZoomControls
+              :zoom-level="zoomLevel"
+              :compact-modal-open="compactPanelOpen"
+              @zoom-by="zoomActiveMap"
+              @zoom-to="setViewportPercentage"
+              @fit-map="fitActiveMap"
+              @pan-by="panActiveMap"
+            />
           </template>
 
           <template #hierarchy>
@@ -282,6 +269,9 @@
                 Select a mark or Orbit to inspect it.
               </p>
             </section>
+          </template>
+
+          <template #feedback>
             <section
               v-if="workspace"
               ref="workspaceFeedbackRef"
@@ -289,6 +279,7 @@
               class="workspace-feedback"
               role="region"
               aria-label="Workspace feedback and recovery"
+              data-map-obstruction
             >
               <WorkspaceFeedback
                 :active="!compactPanelOpen"
@@ -348,7 +339,8 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { ObjectFamily } from '../domain/workspace'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -398,6 +390,7 @@ const {
   inspectedClusterSystem,
   hierarchyPanelVisible,
   inspectorPanelVisible,
+  isCompactViewport,
   compactPanelOpen,
   compactPanel,
   zoomLevel,
@@ -405,7 +398,6 @@ const {
   selectedObject,
   selectedOrbit,
   selectedRoute,
-  jumpPoints,
   routeEndpointSummary,
   hasUncommittedNames,
   hasChartNameDraft,
@@ -477,6 +469,8 @@ function handleBlockedObjectMove(objectId: string): void {
 const headerFilesOpen = ref(false)
 const recoveryDetailsOpen = ref(false)
 const workspaceFeedbackRef = ref<HTMLElement | null>(null)
+const objectPaletteActiveFamily = ref<ObjectFamily>('CelestialBody')
+const dockCloseSignal = computed(() => `${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
 
 const {
   exportError,

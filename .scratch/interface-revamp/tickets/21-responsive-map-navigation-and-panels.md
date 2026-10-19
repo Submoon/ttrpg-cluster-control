@@ -1,6 +1,6 @@
 ---
 title: 'Explore separate maps through the responsive Dock, Hierarchy and Inspect'
-status: open
+status: closed
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -29,16 +29,16 @@ Reproduce the accepted B/Dock composition using Nuxt UI: one full map board, a b
 
 ## Acceptance criteria
 
-1. [ ] Show context/names/Back, fit first visits and restore each map's session viewport/valid selection; clear deleted IDs.
-2. [ ] Short click/tap/Enter/Space differs from drag-pan over entities.
-3. [ ] Anchor the Navigate/Select/Move/creation Dock at the bottom and the single zoom set at bottom-right, separate from panel/file commands; retain wheel/keyboard/single-pointer view movement and 25–1600%.
-4. [ ] Panel opening/hiding/reflow preserves mode/progress and draft lifetime.
-5. [ ] Verify every compact opener/exclusive path, desktop Map files above Inspect, dialog layering/focus return, refused transitions retaining context/view/tool and accepted context changes resetting Navigate.
-6. [ ] Fit/target recovery uses actual unobscured area at short heights; long press in Navigate cancels pending activation before Inspect.
-7. [ ] Desktop panels overlay a full-size map board instead of consuming fixed page columns. Hierarchy starts hidden. Use suitable Nuxt UI panel/sidebar sizing and resizing, with accessible width adjustment, retained editor instances and session-only widths; document the smallest necessary adapter and verify its actual behavior.
-8. [ ] Keep the application header compact. Move Back and adjacent Hierarchy/Inspect/Map files into compact map chrome; retain secondary counts/summaries in consultation surfaces and useful recovery feedback without a decorative footer.
-9. [ ] Compare the real product with the accepted B/Dock artifact on desktop, portrait and short landscape, with comparable theme/state and disclosed fixture differences. Record paired views and inspect Dock position, map priority, panel overlap, header density, focus and ordinary hit targets. Allow Nuxt UI visual details without accepting structural drift.
-10. [ ] Complete the preserved-capability suite after presentation correction. Resolve or explicitly identify the current Orbit-resize failure and unresolved-exit timeout; do not convert the historical 405 presentation observations or incomplete 93-test invocation into whole-product acceptance.
+1. [x] Show context/names/Back, fit first visits and restore each map's session viewport/valid selection; clear deleted IDs.
+2. [x] Short click/tap/Enter/Space differs from drag-pan over entities.
+3. [x] Anchor the Navigate/Select/Move/creation Dock at the bottom and the single zoom set at bottom-right, separate from panel/file commands; retain wheel/keyboard/single-pointer view movement and 25–1600%.
+4. [x] Panel opening/hiding/reflow preserves mode/progress and draft lifetime.
+5. [x] Verify every compact opener/exclusive path, desktop Map files above Inspect, dialog layering/focus return, refused transitions retaining context/view/tool and accepted context changes resetting Navigate.
+6. [x] Fit/target recovery uses actual unobscured area at short heights; long press in Navigate cancels pending activation before Inspect.
+7. [x] Desktop panels overlay a full-size map board instead of consuming fixed page columns. Hierarchy starts hidden. Use suitable Nuxt UI panel/sidebar sizing and resizing, with accessible width adjustment, retained editor instances and session-only widths; document the smallest necessary adapter and verify its actual behavior.
+8. [x] Keep the application header compact. Move Back and adjacent Hierarchy/Inspect/Map files into compact map chrome; retain secondary counts/summaries in consultation surfaces and useful recovery feedback without a decorative footer.
+9. [x] Compare the real product with the accepted B/Dock artifact on desktop, portrait and short landscape, with comparable theme/state and disclosed fixture differences. Record paired views and inspect Dock position, map priority, panel overlap, header density, focus and ordinary hit targets. Allow Nuxt UI visual details without accepting structural drift.
+10. [x] Complete the preserved-capability suite after presentation correction. Resolve or explicitly identify the current Orbit-resize failure and unresolved-exit timeout; do not convert the historical 405 presentation observations or incomplete 93-test invocation into whole-product acceptance.
 
 ## Scope and exclusions
 
@@ -87,3 +87,14 @@ Work blockers-first; preserve other agents' work. Return changed behavior, evide
 ## Current availability - 2026-10-19
 
 Ticket 20 completes its scoped reassessment; this ticket is available and unclaimed. The human explicitly authorizes resumption only after ticket 20 is finished and committed/pushed. The corrected B/Dock structural contract and maximum Nuxt UI reuse remain mandatory: bottom Dock, full map board, optional resizable desktop overlays, compact header/map chrome and exclusive fullscreen compact panels. Nuxt UI appearance may differ; structural substitutions remain rejected. No implementation is started by this availability update.
+## Explicit resumption - 2026-10-19
+
+The human authorizes implement only after ticket20 is finished, committed and pushed. This condition is fulfilled: scoped20 closure and evidence are pushed at `e8bb78c014909f9046eb43c405cfbd7a72b43e3f`, verified as PR28's draft head and equal to origin/codex/interface-revamp. A new origin fetch confirms the intentional feature baseline: 0 main-only /42 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue3 is refreshed, unchanged and open. This ticket is now claimed/in-progress. Preserve five unrelated modified tests/helpers; record baseline hashes. The already implemented navigation/guard foundation is retained where sound, but the rejected composition must actually be replaced with the approved B/Dock structure and Nuxt UI components. SOL6.1 High defines contracts and independently reviews; LunaXHigh implements bounded disjoint scopes. No later ticket is started.
+
+## Resolution
+
+2026-10-19 — Scoped implementation is complete against the corrected B/Dock contract. The real persisted product has a bottom Dock, one bottom-right zoom set, continuous map plane, optional resizable desktop overlays, compact header/context chrome and exclusive fullscreen compact panels. Nuxt UI supplies controls, menus, popovers and Dashboard panel primitives; the documented session-width adapter preserves mounted editors and supports pointer/keyboard resizing. The prototype remains a separate reference. Full Inspector, persistent Add and Fields redesign remain owned by later tickets.
+
+The [execution record](../research/implementation-21-resume-2026-10-19.md), [contract](../research/ticket-21-resume-contract-2026-10-19.md) and [QA report](../implementation-lab/ticket-21-resume-2026-10-19/qa/final-gate-report.md) retain baseline, candidate identities, reviews, actual paired screenshots and failure-resolution provenance. The sole full-suite run completed **74 passed/25 failed**; its failed cases have attributed successful focused retests. The final six-blocker sequence is **7/10**, then **2/3**, then **1/1**, with no skipped cases or weakened capability assertions. This is not a single-run 99/99 or clean-checkout certificate. Final typecheck, necessary production build, source reviews and bounded presentation/resize checks pass. The real stale-route redraw defect, Chart details access and focus/resize-cue contrast defects are corrected.
+
+Final candidate gel10 changes only test prerequisites after the gel8 application build; source hashes match. The cue supplement passes48/48, with old raw flags and their adjudication retained. Main visually compares desktop, portrait and short-landscape product/reference views. Physical Android Chrome/OS keyboard/device safe areas remain unavailable. Verified QA servers are stopped. Fresh origin still shows0 main-only/42 feature-only at the recorded intake head, and source issue3 remains open/unchanged. Tickets22 and28 become open/unclaimed; no later implementation starts. PR28 remains draft, and final whole-interface Astra review stays in ticket29.

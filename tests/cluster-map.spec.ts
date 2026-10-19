@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback } from './helpers'
-import { returnToClusterMap, workspaceNavigation, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
+import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'
 
 async function orbitalAngle(map: import('@playwright/test').Locator): Promise<number> {
@@ -32,11 +32,11 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  const clusterNavigation = workspaceNavigation(page)
-  const clusterZoom = clusterNavigation.locator('output')
+  const clusterZoomControls = workspaceZoomControls(page)
+  const clusterZoom = workspaceZoomControls(page).locator('output').first()
   await expect(clusterZoom).toHaveText(/^\d+%$/)
   const initialClusterZoom = Number((await clusterZoom.textContent())?.replace('%', ''))
-  await clusterNavigation.getByRole('button', { name: 'Zoom in' }).click()
+  await clusterZoomControls.getByRole('button', { name: 'Zoom in' }).click()
   await expect.poll(async () => Number((await clusterZoom.textContent())?.replace('%', '')))
     .toBeGreaterThan(initialClusterZoom)
 
@@ -53,7 +53,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await expect(clusterZoom).toHaveText('1600%')
   await page.mouse.wheel(0, 5000)
   await expect(clusterZoom).toHaveText('25%')
-  await clusterNavigation.getByRole('button', { name: 'Fit map' }).click()
+  await clusterZoomControls.getByRole('button', { name: 'Fit map' }).click()
   await expect.poll(async () => Number((await clusterZoom.textContent())?.replace('%', '')))
     .toBeGreaterThan(25)
 
@@ -65,12 +65,14 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const systemNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   const nodeBeforeDrag = await systemNode.getAttribute('transform')
   await dragBy(page, systemNode.locator('.cluster-system-card'), { x: 48, y: 24 })
-  await expect(systemNode).not.toHaveAttribute('transform', nodeBeforeDrag!)
-  const nodeAfterDrag = await systemNode.getAttribute('transform')
+  const movedSystemNode = clusterMap.getByRole('button', { name: 'Select Vesper system' })
+  await expect(movedSystemNode).not.toHaveAttribute('transform', nodeBeforeDrag!)
+  const nodeAfterDrag = await movedSystemNode.getAttribute('transform')
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.reload()
   await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   const restoredNode = restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' })
   await expect(restoredNode).toHaveAttribute('transform', nodeAfterDrag!)
@@ -78,7 +80,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await restoredNode.click()
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit')
   await addCatalogueObject(page, 'planet')
@@ -95,6 +97,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const orbitRadius = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
   const radiusBeforeResize = Number(await orbitRadius.getAttribute('rx'))
   const uniformResizeStartAngle = 0.5
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await dragOrbitToWorldPoint(page, orbitRadius, {
     x: 480 + 153 * Math.cos(uniformResizeStartAngle),
     y: 280 + 153 * Math.sin(uniformResizeStartAngle),
@@ -124,8 +127,8 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const hazardTransform = await hazard.getAttribute('transform')
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  const systemNavigation = workspaceNavigation(page)
-  const systemZoom = systemNavigation.locator('output')
+  const systemNavigation = workspaceZoomControls(page)
+  const systemZoom = systemNavigation.locator('output').first()
   await expect(systemZoom).toHaveText(/^\d+%$/)
   const initialSystemZoom = Number((await systemZoom.textContent())?.replace('%', ''))
   await systemNavigation.getByRole('button', { name: 'Zoom in' }).click()
@@ -164,6 +167,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await expect(systemContent).not.toHaveAttribute('transform', systemBeforePan!)
 
   await page.reload()
+  await setWorkspaceMapMode(page, 'Move')
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
   await expect(restoredMap.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' }))
     .toHaveAttribute('aria-valuenow', String(resizedOrbitRadius))
@@ -189,7 +193,8 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await clickDockAction(page, 'Add star system')
-  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  const newSystemMap = page.getByRole('group', { name: 'New System 2 star system map' })
+  await expect(newSystemMap).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Arrival')
@@ -213,10 +218,11 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
   if (!routeBefore || !nodeBefore || !sourceBox) throw new Error('Could not locate the route or its source system.')
 
   await setWorkspaceMapMode(page, 'Move')
+  const movedSourceNode = clusterMap.getByRole('button', { name: 'Select Vesper system' })
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 100, sourceBox.y + sourceBox.height / 2 + 30, { steps: 4 })
-  await expect.poll(async () => sourceNode.getAttribute('transform'))
+  await expect.poll(async () => movedSourceNode.getAttribute('transform'))
     .not.toBe(nodeBefore)
   await expect.poll(async () => routeLine.getAttribute('d'))
     .not.toBe(routeBefore)
@@ -229,7 +235,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
 
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
@@ -255,7 +261,8 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await clickDockAction(page, 'Add star system')
-  await clusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
+  const newSystemMap = page.getByRole('group', { name: 'New System 2 star system map' })
+  await expect(newSystemMap).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Harrow Entry')
@@ -273,6 +280,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
     name: /Jump Level 3.*Vesper Exit.*Harrow Entry.*New System 2/,
   })
   await expect(knownRoute).toBeVisible()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await knownRoute.click()
   await expect(routeInspector.getByRole('heading', { name: 'Jump Level 3', level: 2 })).toBeVisible()
   await expect(routeInspector.locator('.orbit-facts')).toContainText('New System 2')
@@ -285,7 +293,9 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   })
   await expect(customLevelRoute).toBeVisible()
 
-  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  const vesperSystem = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
+  await vesperSystem.click()
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
@@ -320,6 +330,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
     name: /Jump Level 15.*Vesper Arrival.*unknown destination.*Unknown Rim/i,
   })).toBeVisible()
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
+  const restoredHierarchy = await openWorkspaceHierarchy(page)
+  await restoredHierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
   await expect(page.getByLabel('Physical Jump Station')).toHaveValue(stationId!)
 })

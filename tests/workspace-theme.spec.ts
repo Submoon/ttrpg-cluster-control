@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { openWorkspaceHierarchy } from './helpers'
 import { activeWorkspaceFeedback } from './helpers'
 import { returnToClusterMap, clickDockAction } from './helpers'
 import { addCatalogueObject } from './helpers'
@@ -334,7 +335,7 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await routeInspector.getByRole('button', { name: 'Cancel' }).click()
 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Select .*New jump point/ }).first().click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit map object' }).click()

@@ -63,6 +63,12 @@ Ticket 29 must remain last: its three direct blockers transitively include every
 
 The human-requested final Astra review covers the whole implemented interface, including Tools semantics/grouping and the conceptual comparison with Foundry VTT. Ticket 29 explicitly retains this gate; an earlier prototype review is not final product certification.
 
+## Ticket 21 resumed verification - 2026-10-19
+
+The human authorizes ticket21 only after ticket20 is finished and pushed. That condition is fulfilled at `e8bb78c014909f9046eb43c405cfbd7a72b43e3f`, equal to the feature remote at intake. Ticket21 now completes its scoped B/Dock reassessment with Nuxt UI; [its execution record](research/implementation-21-resume-2026-10-19.md) separates implementation, source reviews, failed full-suite results, attributed focused corrections and actual paired visual checks. The sole complete 99-case invocation gives74 passed/25 failed; its failed cases have successful focused retests, not a single-run99/99 certificate. Final typecheck/build, the six-blocker retests and bounded cue/resize checks pass. Physical Android Chrome checks remain unavailable.
+
+**Current frontier:18–21 are closed;22 and28 are open and unclaimed;23–27 and29 remain blocked and unclaimed.** No later implementation is started. The whole-interface Astra review, including Tools coherence, stays in final ticket29. Source issue3 remains open and PR28 remains draft. Historical progress entries below describe earlier checkpoints and do not replace this frontier.
+
 ## Execution and evidence
 
 Coordinate and analyze with **SOL 6.1 High**; delegate implementation to **Luna XHIGH** as requested. Follow the repository's project-development routing for contract design, bounded ownership, risk-appropriate independent reviews, correction and validation. Every ticket is self-contained with its approved scope, acceptance checklist, specification stories, B1–B10 families and blockers. No implementation has started from creating this backlog.
