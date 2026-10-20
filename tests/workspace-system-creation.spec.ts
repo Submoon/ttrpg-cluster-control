@@ -58,7 +58,14 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 }
 
-test('changing Placement inputs invalidates the old preview before an invalid replacement', async ({ page }) => {
+async function ensurePlacementOpen(controls: import('@playwright/test').Locator): Promise<void> {
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
+}
+
+test('Placement Add validates and uses the current coordinate inputs', async ({ page }) => {
+  await captureMapExportBlobs(page)
   await createWorkspace(page)
   const inspector = page.locator('#workspace-inspector-panel')
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
@@ -71,26 +78,71 @@ test('changing Placement inputs invalidates the old preview before an invalid re
   await controls.getByRole('button', { name: 'Placement', exact: true }).click()
   const x = page.getByLabel('Placement X')
   const y = page.getByLabel('Placement Y')
-  const preview = page.getByRole('button', { name: 'Preview placement' })
-  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
-
+  const add = page.getByRole('button', { name: 'Add', exact: true })
+  const beforeAdd = await downloadJson(page, 'Export star system JSON')
+  await ensurePlacementOpen(controls)
   await x.fill('0.3')
   await y.fill('0.4')
-  await preview.click()
-  await expect(confirm).toBeVisible()
-
-  await x.fill('0.35')
-  await expect(confirm).toHaveCount(0)
   await x.fill('')
-  await preview.click()
+  await add.click()
   await expect(page.getByText('X must be a finite number.', { exact: true })).toBeVisible()
-  await expect(confirm).toHaveCount(0)
   await expect(x).toHaveValue('')
   await expect(y).toHaveValue('0.4')
+  const afterInvalidAdd = await downloadJson(page, 'Export star system JSON')
+  expect(afterInvalidAdd.system).toEqual(beforeAdd.system)
+  expect(afterInvalidAdd.layout).toEqual(beforeAdd.layout)
 
+  await ensurePlacementOpen(controls)
   await x.fill('0.35')
-  await preview.click()
-  await expect(confirm).toBeVisible()
+  await y.fill('0.45')
+  await add.click()
+  await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
+  const afterAdd = await downloadJson(page, 'Export star system JSON')
+  const addedPlanet = afterAdd.system?.objects.find(object => object.subtype === 'planet')
+  expect(afterAdd.system?.objects).toHaveLength(2)
+  expect(addedPlanet?.placement).toEqual({ kind: 'system', x: 0.35, y: 0.45 })
+  await expect(inspector).toBeHidden()
+})
+
+test('Other map Add explains a blank label and recovers through Placement', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await createWorkspace(page)
+
+  const inspector = page.locator('#workspace-inspector-panel')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  await expect(inspector).toBeHidden()
+
+  const before = await downloadJson(page, 'Export star system JSON')
+  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const otherButton = await selectCatalogueObjectButton(page, 'other')
+  await otherButton.click()
+  const controls = page.getByRole('group', { name: 'Other creation controls', exact: true })
+  await expect(controls).toBeVisible()
+
+  const mapPoint = await clickNormalizedSystemPoint(page, map, { x: 0.25, y: 0.25 })
+  const afterBlankLabel = await downloadJson(page, 'Export star system JSON')
+  expect(afterBlankLabel.system).toEqual(before.system)
+  expect(afterBlankLabel.layout).toEqual(before.layout)
+  await expect(controls.getByRole('alert')).toContainText('Type label is required.')
+
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
+  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+  await placementForm.getByLabel('Type label', { exact: true }).fill('Relay Beacon')
+  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+
+  await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
+  const afterAdd = await downloadJson(page, 'Export star system JSON')
+  const addedObject = afterAdd.system?.objects.find(object =>
+    !before.system!.objects.some(existing => existing.id === object.id),
+  )
+  expect(afterAdd.system?.objects).toHaveLength(before.system!.objects.length + 1)
+  expect(addedObject?.subtype).toBe('Relay Beacon')
+  expectSystemPlacement(addedObject?.placement, mapPoint)
+  await expect(controls).toBeVisible()
+  await expect(inspector).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })).toBeVisible()
 })
 
 async function clickNormalizedSystemPoint(
@@ -143,7 +195,7 @@ function expectSystemPlacement(
   expect(placement.y).toBeCloseTo(expected.y, 6)
 }
 
-test('system Add previews before confirming, repeats the type, and reloads confirmed placements', async ({ page }) => {
+test('system Add immediately places on repeated clicks and reloads both placements', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
 
@@ -163,34 +215,29 @@ test('system Add previews before confirming, repeats the type, and reloads confi
   const afterChoosingPlanet = await downloadJson(page, 'Export star system JSON')
   expect(afterChoosingPlanet.system?.objects).toEqual(beforeChoosingPlanet.system?.objects)
   await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(inspector).toBeHidden()
 
   const firstPoint = { x: 0.25, y: 0.25 }
   const firstDeliveredPoint = await clickNormalizedSystemPoint(page, map, firstPoint)
   const confirmPlacement = page.getByRole('button', { name: 'Confirm placement', exact: true })
-  await expect(confirmPlacement).toBeVisible()
-
-  const beforeConfirming = await downloadJson(page, 'Export star system JSON')
-  expect(beforeConfirming.system?.objects).toEqual(beforeChoosingPlanet.system?.objects)
-
-  await confirmPlacement.click()
-  const afterFirstConfirmation = await downloadJson(page, 'Export star system JSON')
-  const firstPlanets = afterFirstConfirmation.system?.objects.filter(object => object.subtype === 'planet') ?? []
+  await expect(confirmPlacement).toHaveCount(0)
+  const afterFirstClick = await downloadJson(page, 'Export star system JSON')
+  const firstPlanets = afterFirstClick.system?.objects.filter(object => object.subtype === 'planet') ?? []
   expect(firstPlanets).toHaveLength(1)
   expectSystemPlacement(firstPlanets[0]?.placement, firstDeliveredPoint)
   await expect(inspector).toBeHidden()
 
   const secondPoint = { x: 0.75, y: 0.75 }
   const secondDeliveredPoint = await clickNormalizedSystemPoint(page, map, secondPoint)
-  await expect(confirmPlacement).toBeVisible()
+  await expect(confirmPlacement).toHaveCount(0)
   await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
   await expect(inspector).toBeHidden()
-  await confirmPlacement.click()
 
-  const afterSecondConfirmation = await downloadJson(page, 'Export star system JSON')
-  const confirmedPlanets = afterSecondConfirmation.system?.objects.filter(object => object.subtype === 'planet') ?? []
-  expect(confirmedPlanets).toHaveLength(2)
-  expectSystemPlacement(confirmedPlanets[0]?.placement, firstDeliveredPoint)
-  expectSystemPlacement(confirmedPlanets[1]?.placement, secondDeliveredPoint)
+  const afterSecondClick = await downloadJson(page, 'Export star system JSON')
+  const placedPlanets = afterSecondClick.system?.objects.filter(object => object.subtype === 'planet') ?? []
+  expect(placedPlanets).toHaveLength(2)
+  expectSystemPlacement(placedPlanets[0]?.placement, firstDeliveredPoint)
+  expectSystemPlacement(placedPlanets[1]?.placement, secondDeliveredPoint)
 
   await page.reload()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
@@ -201,7 +248,7 @@ test('system Add previews before confirming, repeats the type, and reloads confi
   expectSystemPlacement(reloadedPlanets[1]?.placement, secondDeliveredPoint)
 })
 
-test('Orbit Add retains its target, corrects each axis, and retries one applied write', async ({ page }) => {
+test('Orbit form Add retains its host, corrects each axis, and retries one applied write', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
@@ -218,65 +265,31 @@ test('Orbit Add retains its target, corrects each axis, and retries one applied 
   const controls = page.getByRole('group', { name: 'Orbit creation controls' })
   await expect(controls).toBeVisible()
 
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
-  await clickNormalizedSystemPoint(page, map, { x: 0.5, y: 0.5 })
-  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
-  // An Object draft does not own Orbit ordering or host geometry, so this target remains independent.
-  await expect(confirm).toBeVisible()
-  await expect(controls.getByRole('alert')).toHaveCount(0)
-  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
-  await controls.getByRole('button', { name: 'Cancel placement', exact: true }).click()
-  await inspector.getByRole('button', { name: 'Discard changes Cancel map object edits', exact: true }).click()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  await expect(inspector).toBeHidden()
-
-  // A free map target replaces the current host selection in Orbit Placement.
   await controls.getByRole('button', { name: 'Placement', exact: true }).click()
   const orbitHost = page.getByLabel('Orbit center or host', { exact: true })
   await selectInspectorOption(orbitHost, 'Around Primary Star')
-  await page.getByRole('button', { name: 'Preview placement' }).click()
-  await expect(confirm).toBeVisible()
-  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
-  const freeCenter = await clickNormalizedSystemPoint(page, map, { x: 0.9, y: 0.1 })
-  await expect(confirm).toBeVisible()
-  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
-  await expect.poll(() => readInspectorSelection(orbitHost)).toBe('Unoccupied center')
-  // Match the map's float32 pointer conversion against the double-precision DOM matrix oracle.
-  expect(Number(await page.getByLabel('Placement X', { exact: true }).inputValue())).toBeCloseTo(freeCenter.x, 6)
-  expect(Number(await page.getByLabel('Placement Y', { exact: true }).inputValue())).toBeCloseTo(freeCenter.y, 6)
-  await selectInspectorOption(orbitHost, 'Around Primary Star')
-  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
-
-  // Dismissing the anchored non-modal form from another Dock control leaves parent-owned inputs armed.
-  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
-  const placementForm = page.getByRole('form', { name: 'Placement' })
-  await expect(placementForm).toBeVisible()
-  await page.getByRole('button', { name: 'Navigate', exact: true }).click()
-  await expect(placementForm).toBeHidden()
-  await expect(controls).toBeVisible()
-
-  await clickNormalizedSystemPoint(page, map, { x: 0.5, y: 0.5 })
-  await expect(confirm).toBeVisible()
-
-  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
   await page.getByLabel('Horizontal radius').fill('10')
   await page.getByLabel('Vertical radius').fill('80')
-  await page.getByRole('button', { name: 'Preview placement' }).click()
-  await expect(confirm).toBeVisible()
+  await page.getByLabel('Rotation', { exact: true }).fill('37')
   const creationStatus = page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('status')
-  await expect(creationStatus).toContainText('Horizontal radius set to 39')
-  await expect(page.getByLabel('Horizontal radius')).toHaveValue('39')
-  await expect(page.getByLabel('Vertical radius')).toHaveValue('80')
 
-  const beforeConfirm = await downloadJson(page, 'Export star system JSON')
-  expect(beforeConfirm.system?.orbits).toHaveLength(0)
+  const beforeAdd = await downloadJson(page, 'Export star system JSON')
+  expect(beforeAdd.system?.orbits).toHaveLength(0)
 
+  await ensurePlacementOpen(controls)
   await failNextCurrentWorkspaceWrite(page)
-  await confirm.click()
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
   const saveFeedback = activeWorkspaceFeedback(page).locator('.save-feedback')
   await expect(saveFeedback).toContainText('Not saved.')
   await expect(creationStatus).toContainText('Horizontal radius set to 39')
   await expect(creationStatus).toContainText('Orbit 1 added')
+  await expect(page.getByLabel('Horizontal radius')).toHaveValue('39')
+  await expect(page.getByLabel('Vertical radius')).toHaveValue('80')
+  await expect(page.getByLabel('Rotation', { exact: true })).toHaveValue('37')
+  await expect.poll(() => readInspectorSelection(orbitHost)).toBe('Around Primary Star')
+  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
+  await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
   await restoreCurrentWorkspaceWrite(page)
 
   const appliedMemory = await downloadJson(page, 'Export star system JSON')
@@ -284,9 +297,7 @@ test('Orbit Add retains its target, corrects each axis, and retries one applied 
   expect(appliedMemory.system?.orbits).toHaveLength(1)
   expect(appliedOrbit?.hostId).toBe(appliedMemory.system?.objects[0]?.id)
   expect(appliedMemory.layout.orbitRadii[appliedOrbit!.id]).toEqual({ horizontal: 39, vertical: 80 })
-  expect(appliedMemory.layout.orbitRotations?.[appliedOrbit!.id]).toBe(0)
-  await expect(inspector).toBeHidden()
-  await expect(controls).toBeVisible()
+  expect(appliedMemory.layout.orbitRotations?.[appliedOrbit!.id]).toBe(37)
 
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
   await expect(saveFeedback).toHaveText('Saved on this device')
@@ -296,6 +307,7 @@ test('Orbit Add retains its target, corrects each axis, and retries one applied 
   expect(afterReload.system?.orbits[0]?.hostId).toBe(afterReload.system?.objects[0]?.id)
   expect(afterReload.layout.orbitRadii[afterReload.system!.orbits[0]!.id])
     .toEqual({ horizontal: 39, vertical: 80 })
+  expect(afterReload.layout.orbitRotations?.[afterReload.system!.orbits[0]!.id]).toBe(37)
 })
 
 test('Add chooser dismissal consumes outside contact and preserves the next right-pan', async ({ page }) => {
@@ -307,8 +319,8 @@ test('Add chooser dismissal consumes outside contact and preserves the next righ
   await addToggle.click()
   await page.getByRole('button', { name: 'Add orbit', exact: true }).click()
   const controls = page.getByRole('group', { name: 'Orbit creation controls' })
-  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
   await expect(controls).toBeVisible()
+  const beforeOutsideDismissal = await downloadJson(page, 'Export star system JSON')
 
   // Escape closes the real chooser while leaving the armed Add type available.
   await addToggle.click()
@@ -323,15 +335,19 @@ test('Add chooser dismissal consumes outside contact and preserves the next righ
   await page.mouse.click(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
   await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
   await expect(controls).toBeVisible()
-  await expect(confirm).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
   await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+  const afterOutsideDismissal = await downloadJson(page, 'Export star system JSON')
+  expect(afterOutsideDismissal.system).toEqual(beforeOutsideDismissal.system)
+  expect(afterOutsideDismissal.layout).toEqual(beforeOutsideDismissal.layout)
 
-  // A right-button outside dismissal consumes the whole drag sequence while preserving preview state.
+  // A valid map click adds immediately; opening the chooser and right-dragging outside it must not add again.
   await clickNormalizedSystemPoint(page, map, { x: 0.5, y: 0.5 })
-  await expect(confirm).toBeVisible()
+  const afterMapAdd = await downloadJson(page, 'Export star system JSON')
+  expect(afterMapAdd.system?.orbits).toHaveLength(1)
   const viewportBeforeRightDismissal = await map.locator('.system-map-content').getAttribute('transform')
   if (viewportBeforeRightDismissal === null) throw new Error('The system map has no viewport transform to preserve.')
-  const memoryBeforeRightDismissal = await downloadJson(page, 'Export star system JSON')
+  const memoryBeforeRightDismissal = afterMapAdd
   await addToggle.click()
   const rightDrag = await map.evaluate(element => {
     const bounds = element.getBoundingClientRect()
@@ -350,8 +366,8 @@ test('Add chooser dismissal consumes outside contact and preserves the next righ
   await page.mouse.move(rightDrag.end.x, rightDrag.end.y, { steps: 3 })
   await page.mouse.up({ button: 'right' })
   await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
-  await expect(confirm).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
+  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
   await expect(map.locator('.system-map-content')).toHaveAttribute('transform', viewportBeforeRightDismissal)
   const memoryAfterRightDismissal = await downloadJson(page, 'Export star system JSON')
   expect(memoryAfterRightDismissal.system).toEqual(memoryBeforeRightDismissal.system)
@@ -365,7 +381,6 @@ test('Add chooser dismissal consumes outside contact and preserves the next righ
   await page.mouse.move(rightDrag.end.x, rightDrag.end.y, { steps: 3 })
   await page.mouse.up({ button: 'right' })
   await expect(map.locator('.system-map-content')).not.toHaveAttribute('transform', viewportBeforeFreshPan)
-  await expect(confirm).toHaveCount(0)
 })
 
 test('an Orbit draft blocks only same-host Orbit creation and survives independent creations', async ({ page }) => {
@@ -420,9 +435,8 @@ test('an Orbit draft blocks only same-host Orbit creation and survives independe
     x: (520 - 64) / 832,
     y: (210.7179676972449 - 72) / 416,
   })
-  await expect(confirm).toBeVisible()
+  await expect(confirm).toHaveCount(0)
   await expect(controls.getByRole('alert')).toHaveCount(0)
-  await confirm.click()
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
   await expect(horizontalRadius).toHaveValue(modifiedRadius)
 
@@ -452,37 +466,60 @@ test('an Orbit draft blocks only same-host Orbit creation and survives independe
   await expect(betaChoice).toBeVisible()
   await expect(confirmPlanet).toHaveCount(0)
   await alphaChoice.click()
-  await expect(confirmPlanet).toBeVisible()
+  await expect(confirmPlanet).toHaveCount(0)
+  const afterNamedChoice = await downloadJson(page, 'Export star system JSON')
+  expect(afterNamedChoice.system?.objects).toHaveLength(initial.system!.objects.length + 1)
+  const namedPlanet = afterNamedChoice.system!.objects.find(object =>
+    !initial.system!.objects.some(existing => existing.id === object.id),
+  )
+  expect(namedPlanet?.subtype).toBe('planet')
+  expect(namedPlanet?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
 
-  // A free map point replaces the selected Orbit in the public Placement form.
+  // A free map click also adds immediately and updates the retained Placement target.
   const orbitPlacement = page.getByLabel('Orbit placement', { exact: true })
-  await planetControls.getByRole('button', { name: 'Placement', exact: true }).click()
+  const placementToggle = planetControls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   await expect.poll(() => readInspectorSelection(orbitPlacement))
     .toBe(`Orbit ${primaryOrbit.order} around ${primary.name}`)
-  await planetControls.getByRole('button', { name: 'Placement', exact: true }).click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   const freePoint = await clickNormalizedSystemPoint(page, map, { x: 0.9, y: 0.1 })
-  await expect(confirmPlanet).toBeVisible()
-  await planetControls.getByRole('button', { name: 'Placement', exact: true }).click()
+  await expect(confirmPlanet).toHaveCount(0)
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
   await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe('Free map position')
   // The map's D3 pointer is float32-backed while the public DOM matrix oracle is double precision.
   expect(Number(await page.getByLabel('Placement X', { exact: true }).inputValue())).toBeCloseTo(freePoint.x, 6)
   expect(Number(await page.getByLabel('Placement Y', { exact: true }).inputValue())).toBeCloseTo(freePoint.y, 6)
+  const afterFreeMapAdd = await downloadJson(page, 'Export star system JSON')
+  expect(afterFreeMapAdd.system?.objects).toHaveLength(initial.system!.objects.length + 2)
+  const freePlanet = afterFreeMapAdd.system!.objects.find(object =>
+    !initial.system!.objects.some(existing => existing.id === object.id)
+      && object.id !== namedPlanet?.id,
+  )
+  expectSystemPlacement(freePlanet?.placement, freePoint)
+
+  await ensurePlacementOpen(planetControls)
   await selectInspectorOption(orbitPlacement, `Orbit ${primaryOrbit.order} around ${primary.name}`)
-  await page.getByRole('button', { name: 'Preview placement' }).click()
-  await expect(confirmPlanet).toBeVisible()
+  await ensurePlacementOpen(planetControls)
+  await page.getByLabel('Angle (degrees)', { exact: true }).fill('45')
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(confirmPlanet).toHaveCount(0)
   await expect(planetControls.getByRole('alert')).toHaveCount(0)
-  await confirmPlanet.click()
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
   await expect(inspector.getByLabel('Horizontal radius', { exact: true })).toHaveValue(modifiedRadius)
 
   const afterIndependentObject = await downloadJson(page, 'Export star system JSON')
   expect(afterIndependentObject.system?.orbits).toHaveLength(originalOrbitCount + 1)
-  expect(afterIndependentObject.system?.objects).toHaveLength(initial.system!.objects.length + 1)
-  const newPlanet = afterIndependentObject.system!.objects.find(object =>
+  expect(afterIndependentObject.system?.objects).toHaveLength(initial.system!.objects.length + 3)
+  const newPlanets = afterIndependentObject.system!.objects.filter(object =>
     !initial.system!.objects.some(existing => existing.id === object.id),
   )
-  expect(newPlanet?.subtype).toBe('planet')
-  expect(newPlanet?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
+  expect(newPlanets.map(object => object.subtype)).toEqual(['planet', 'planet', 'planet'])
+  expect(newPlanets[0]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
+  expect(newPlanets[1]?.placement).toEqual(freePlanet?.placement)
+  expect(newPlanets[2]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
+  expect(afterIndependentObject.layout.objectAngles[newPlanets[2]!.id]).toBeCloseTo(Math.PI / 4, 6)
   expect(afterIndependentObject.layout.objectAngles[oldPlanet.id]).toBeDefined()
   const oldMoon = initial.system!.objects.find(object => object.name === 'Old Moon')!
   expect(afterIndependentObject.layout.objectAngles[oldMoon.id]).toBeDefined()

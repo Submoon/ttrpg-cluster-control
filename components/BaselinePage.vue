@@ -143,10 +143,8 @@
               :selected-system="selectedSystem"
               @mode-change="changeMapMode"
               @update-creation-input="updateCreationInput"
-              @preview-creation-from-inputs="previewCreationFromInputs"
-              @confirm-creation="confirmCreation"
+              @add-from-inputs="addCreationFromInputs"
               @choose-creation-candidate="chooseCreationCandidate"
-              @cancel-creation-preview="cancelCreationPreview"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -510,8 +508,7 @@ const {
   chooseCreationCandidate,
   updateCreationInput,
   offerCreationCandidates,
-  previewCreationFromInputs,
-  confirmCreation,
+  addCreationFromInputs,
   cancelCreationPreview,
   quitAdd,
   handleCreationDrop: processCreationDrop,

@@ -28,7 +28,7 @@ Place every one of fifteen catalogue subtypes, including Other, at free/Orbit po
 2. [x] Retain Back/context and Inspect on demand.
 3. [x] Dismissal consumes Escape/outside input before map quit/placement, preserving progress/type/drafts; Quit drops only unfinished work.
 4. [x] Place at the actual transformed/rotated/nested target, never a fixed angle.
-5. [x] Indicate candidates without hover, explicitly resolve overlap, explain invalid targets without mutation/reset, and provide keyboard/single-pointer preview/Confirm/Cancel/coordinates/Orbit-position alternatives.
+5. [x] A completed click/tap on a unique valid target adds immediately; a named ambiguity choice adds without another confirmation. Numeric Placement has one Add action, retaining coordinates/Orbit-position alternatives, visible errors and unchanged manipulation Confirm/Cancel commands.
 6. [x] Add Orbit chooses object host or unoccupied center with nested validation and independent per-axis corrections/notices.
 7. [x] Pan/takeover/cancel/interruption cannot publish partial creation; valid completion publishes once with real save-failure/JSON/reload checks.
 
@@ -40,7 +40,7 @@ Existing system creation catalogue, two result families sharing targeting/lifeti
 
 - [Edit complete object and Orbit data through a resumable Inspector](22-complete-object-and-orbit-inspectors.md)
 
-Dependency rationale: 22 — actual object/Orbit draft dependency authority must reject conflicting creation before preview.
+Dependency rationale: 22 — actual object/Orbit draft dependency authority must reject conflicting creation before publication.
 
 ## Specification and evidence mapping
 
@@ -74,7 +74,7 @@ Work blockers-first; preserve other agents' work. Return changed behavior, evide
 
 The human requests coordinated implement for ticket23, retaining the accepted prototype conclusions and maximum Nuxt UI reuse. Claimed from `0bd3b33d106fa0631ed7dbd5f6e73af018e1422e`, equal to the freshly fetched feature remote, with a clean tracked tree. Main remains `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only /44 feature-only commits). This is the intentional feature baseline; issue3 is open and unchanged. SOL6.1 High defines and reviews the sensitive placement/draft contract; bounded Luna XHIGH agents implement. Coordinator owns lifecycle/Git; one QA owner serializes runtime. Reuse the human-approved actual-product Playwright/import/download/reload seam. See [the execution record](../research/implementation-23-2026-10-20.md). No successor is started.
 
-## Resolution
+## Previous delivery checkpoint (superseded for completion)
 
 Completed from the intentional feature baseline `0bd3b33d106fa0631ed7dbd5f6e73af018e1422e`. Final fresh origin/source reads still match that feature remote and main `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only / 44 feature-only before this delivery); issue3 remains open and unchanged.
 
@@ -87,3 +87,11 @@ Validation is attributed, not a blanket whole-suite certificate: the sole comple
 Final Add comparisons pass27/27 checks across three root/B pairs; the two unchanged-scope Chart views pass20/20. Eight selected images retain per-candidate provenance. Coordinator visual inspection accepts the bounded B/Dock structure; Nuxt control appearance and root/B fixture differences are explicit. Final category/help contrast minima exceed7:1. Physical Android Chrome, OS keyboard and safe-area checks remain unavailable. Owned servers are stopped and3100/3180 are free.
 
 Tickets24 and25 are now open and unclaimed;26 and28 remain open;27 and29 remain blocked. No successor is started. Source issue3 stays open, PR28 stays draft, and final whole-interface Astra review including Tools coherence remains ticket29.
+
+## Resolution
+
+The human-requested direct repeated Add follow-up supersedes the earlier mandatory creation Preview/Confirm interaction. Unique valid map targets add immediately; named ambiguous choices add directly; numeric Placement has one Add submit using current inputs. The type stays armed. Native drops share the same completion path and publish once. Missing Other labels and retained invalid geometry have visible errors while Placement is closed. Existing manipulation/destructive confirmations, current-memory/draft validation, geometry, schema and save recovery remain unchanged; no Canvas patch was justified by the passing gesture regressions.
+
+Final complete validation passes **124/124**, zero failed/skipped/flaky, zero retries, original30-second deadlines:123 compiled cases plus the unchanged development-only storage case, each canonical identity executed exactly once. This is an actual whole-suite pass on the final frozen candidate, not an aggregation of focused retests. The first two-worker full run117/7 remains recorded; all seven timeout cases pass on the same source with one worker, followed by the complete124/124 serial invocation. Typecheck/build and both independent technical/Standards and specification/data reviews pass. Two compiled desktop/mobile views pass16/16 checks and coordinator visual inspection;107/107 input hashes stay unchanged. Physical Android Chrome/OS-keyboard/safe-area checks remain unavailable.
+
+Fresh completion reads still match feature baseline `87aae398b35c0f15363c12af49d638c66cb90216` and main `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only/45 feature-only before this commit); issue3 remains open and unchanged. See the [direct-Add execution record](../research/implementation-23-direct-add-2026-10-20.md) and its QA evidence. Owned processes are stopped and3100/3180 are free. Tickets24/25 return to open/unclaimed; no successor starts, PR28 stays draft and final Astra review remains29.

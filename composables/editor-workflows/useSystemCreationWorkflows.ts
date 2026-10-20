@@ -1,4 +1,4 @@
-/** Owns persistent Add intent and one transient, single-use system creation preview. */
+/** Owns persistent Add intent and one transient, single-use completion token. */
 import { ref, type ComputedRef, type Ref } from 'vue'
 import {
   createOrbit,
@@ -70,7 +70,7 @@ function parseFinite(value: string): number | undefined {
 /**
  * Builds the page-owned Add lifecycle around the synchronous memory-application boundary.
  * @param options Latest workspace, current system, map resolver, durable owner, and Inspector authority.
- * @returns Persistent type/input state and commands for candidate, preview, and Confirm actions.
+ * @returns Persistent type/input state and direct Add commands for map and form targets.
  */
 export function useSystemCreationWorkflows({
   workspace,
@@ -283,7 +283,7 @@ export function useSystemCreationWorkflows({
         if (map && scenePoint && !map.getCreationCandidates(scenePoint, session.type).some(candidate =>
           candidate.target.kind === 'orbit' && candidate.target.orbitId === target.orbitId,
         )) {
-          return 'This Orbit placement changed. Choose the Orbit again before confirming.'
+          return 'This Orbit placement changed. Choose the Orbit again before adding.'
         }
         if (isEntityCommandBlocked({ kind: 'object-create', orbitId: target.orbitId })) {
           return 'Resolve the Inspector draft before creating an object in this Orbit.'
@@ -351,12 +351,12 @@ export function useSystemCreationWorkflows({
       return { radii, rotation }
     }
 
-    // Object-on-Orbit previews read the current renderer geometry directly, so a concurrent
+    // Object-on-Orbit targets read the current renderer geometry directly, so a concurrent
     // radius or rotation edit cannot leave a stale ellipse on screen.
     return undefined
   }
 
-  function previewCreation(target: SystemCreationTarget, fromMap = false): boolean {
+  function prepareCreation(target: SystemCreationTarget, fromMap = false): boolean {
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -393,14 +393,16 @@ export function useSystemCreationWorkflows({
       target,
       ...(geometry ? { radii: geometry.radii, rotation: geometry.rotation } : {}),
     }
-    const correction = session.notice
-    session.notice = session.type.kind === 'orbit'
-      ? `${correction ? `${correction} ` : ''}Preview only. Confirm to add this Orbit.`
-      : 'Preview only. Confirm to add this map object.'
     return true
   }
 
-  function previewCreationFromInputs(): boolean {
+  function completeCreation(target: SystemCreationTarget, fromMap = false): boolean {
+    if (!prepareCreation(target, fromMap)) return false
+    const previewId = creationSession.value?.preview?.id
+    return previewId !== undefined && confirmCreation(previewId)
+  }
+
+  function addCreationFromInputs(): boolean {
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -430,7 +432,7 @@ export function useSystemCreationWorkflows({
         if (x === undefined || y === undefined) return false
         target = { kind: 'free', point: { x, y } }
       }
-      return previewCreation(target)
+      return completeCreation(target)
     }
 
     const hostId = session.inputs.hostId && session.inputs.hostId !== '__center__'
@@ -447,7 +449,7 @@ export function useSystemCreationWorkflows({
       if (x === undefined || y === undefined) return false
       target = { kind: 'free', point: { x, y } }
     }
-    return previewCreation(target)
+    return completeCreation(target)
   }
 
   function offerCreationCandidates(candidates: SystemCreationCandidate[]): boolean {
@@ -459,19 +461,34 @@ export function useSystemCreationWorkflows({
       setError('target', 'The star system for this Add session is no longer available.')
       return false
     }
-    session.candidates = candidates
-    if (candidates.length !== 1) {
-      session.preview = null
-      session.notice = candidates.length > 1 ? 'Choose a named placement target.' : 'No placement target is available here.'
+    const system = currentSystemForSession(session)
+    if (!system) {
+      setError('target', 'The star system for this Add session is no longer available.')
       return false
     }
-    const candidate = candidates[0]
-    if (!candidate) return false
-    if (candidate.error) {
-      setError('target', candidate.error)
+
+    const currentCandidates = candidates.map((candidate) => {
+      const validationError = validateTarget(session, system, candidate.target)
+      return { ...candidate, error: candidate.error ?? validationError }
+    })
+    const validCandidates = currentCandidates.filter(candidate => !candidate.error)
+    if (validCandidates.length === 1) {
+      const candidate = validCandidates[0]
+      return candidate ? completeCreation(candidate.target, true) : false
+    }
+
+    session.candidates = currentCandidates
+    if (validCandidates.length > 1) {
+      session.notice = 'Choose a named placement target.'
       return false
     }
-    return previewCreation(candidate.target, true)
+
+    session.notice = candidates.length
+      ? 'No valid placement target is available here.'
+      : 'No placement target is available here.'
+    const invalidCandidate = currentCandidates.find(candidate => candidate.error)
+    if (invalidCandidate?.error) setTargetError(invalidCandidate.target, invalidCandidate.error)
+    return false
   }
 
   function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): boolean {
@@ -481,9 +498,7 @@ export function useSystemCreationWorkflows({
       session = creationSession.value
     }
     if (!session) return false
-    const previewed = offerCreationCandidates(candidates)
-    if (!previewed || !session.preview) return false
-    return confirmCreation(session.preview.id)
+    return offerCreationCandidates(candidates)
   }
 
   function cancelCreationPreview(): void {
@@ -491,7 +506,7 @@ export function useSystemCreationWorkflows({
     if (!session) return
     session.preview = null
     session.candidates = []
-    session.notice = 'Choose another location or use Placement to enter coordinates.'
+    session.notice = 'Choose another target or use Placement to add by coordinates.'
   }
 
   function materializeEffectiveAngles(system: StarSystem, orbitId: string, objectAngles: Record<string, number>): void {
@@ -515,9 +530,7 @@ export function useSystemCreationWorkflows({
 
     const preview = session.preview
     const target = preview.target
-    const correctionNotice = session.notice
-      .replace(/\s*Preview only\. Confirm to add (?:this Orbit|this map object)\.$/, '')
-      .trim()
+    const correctionNotice = session.notice.trim()
     const error = validateTarget(session, system, target)
     if (error) {
       invalidatePreview(session)
@@ -527,6 +540,7 @@ export function useSystemCreationWorkflows({
 
     try {
       let nextWorkspace: LocalWorkspace
+      let successNotice: string
       if (session.type.kind === 'object') {
         if (session.type.subtype === 'other' && !session.inputs.otherType.trim()) {
           invalidatePreview(session)
@@ -559,11 +573,11 @@ export function useSystemCreationWorkflows({
             layout: { ...nextWorkspace.layout, objectAngles },
           }
         }
-        session.notice = `${correctionNotice ? `${correctionNotice} ` : ''}${positionedObject.name} added. Choose another location or Quit Add.`
+        successNotice = `${correctionNotice ? `${correctionNotice} ` : ''}${positionedObject.name} added. Choose another location or Quit Add.`
       } else {
         const rotation = preview.rotation
         if (!preview.radii || typeof rotation !== 'number' || !Number.isFinite(rotation)) {
-          throw new Error('Enter valid Orbit radii and rotation before confirming.')
+          throw new Error('Enter valid Orbit radii and rotation before adding.')
         }
         const hostId = target.kind === 'host' ? target.objectId : null
         const orbit = createOrbit(system, hostId)
@@ -582,12 +596,14 @@ export function useSystemCreationWorkflows({
             orbitRotations: { ...withOrbit.layout.orbitRotations, [placedOrbit.id]: rotation },
           },
         }
-        session.notice = `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${placedOrbit.order} added. Choose another target or Quit Add.`
+        successNotice = `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${placedOrbit.order} added. Choose another target or Quit Add.`
       }
 
-      const { durable } = applyWorkspace(nextWorkspace)
+      // Consume this preparation before synchronous memory publication or any durable work begins.
       session.preview = null
       session.candidates = []
+      const { durable } = applyWorkspace(nextWorkspace)
+      session.notice = successNotice
       void durable.catch(() => undefined)
       return true
     } catch (error) {
@@ -601,12 +617,16 @@ export function useSystemCreationWorkflows({
     const session = creationSession.value
     const candidate = session?.candidates.find(item => item.key === key)
     if (!session || !candidate) return false
-    if (candidate.error) {
+    const system = currentSystemForSession(session)
+    const error = candidate.error ?? (system
+      ? validateTarget(session, system, candidate.target)
+      : 'The star system for this Add session is no longer available.')
+    if (error) {
       invalidatePreview(session)
-      setError('target', candidate.error)
+      setTargetError(candidate.target, error)
       return false
     }
-    return previewCreation(candidate.target, true)
+    return completeCreation(candidate.target, true)
   }
 
   function quitAdd(): void {
@@ -620,9 +640,7 @@ export function useSystemCreationWorkflows({
     offerCreationCandidates,
     chooseCreationCandidate,
     handleCreationDrop,
-    previewCreation,
-    previewCreationFromInputs,
-    confirmCreation,
+    addCreationFromInputs,
     cancelCreationPreview,
     quitAdd,
   }

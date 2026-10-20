@@ -1,0 +1,231 @@
+{
+  "presentation": {
+    "cases": [
+      {
+        "id": "direct-desktop-light",
+        "width": 1440,
+        "height": 900,
+        "dark": false,
+        "screenshot": "direct-desktop-light.png",
+        "exportSha256": "63fe5a5cc24c4e922768da6a9cddf6e1f50b1f0a36f96a62bcdd9e7288e0a684",
+        "systemId": "4ce0806f-b339-4f18-88df-183e2bd9892e",
+        "planets": [
+          {
+            "id": "b2ade88e-0620-4682-9a5d-dfd7ee8515cf",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "New planet 1",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.24995106917161208,
+              "y": 0.19938289202176607
+            }
+          },
+          {
+            "id": "07aaede5-6b38-4a8a-819e-2922e18b164a",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-02",
+            "name": "New planet 2",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.6498545133150541,
+              "y": 0.6996828225942758
+            }
+          }
+        ]
+      },
+      {
+        "id": "numeric-mobile-dark",
+        "width": 390,
+        "height": 844,
+        "dark": true,
+        "screenshot": "numeric-mobile-dark.png",
+        "exportSha256": "565732744d11af7e6573c215017a4e974ea8d924d4df717a3a859617a1995676",
+        "systemId": "ee98feee-e66d-4cf7-abfe-04c6a8dd7977",
+        "planets": [
+          {
+            "id": "ab59bba7-a407-4782-9140-cb97aaa3b04e",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "New planet 1",
+            "description": "",
+            "placement": {
+              "kind": "system",
+              "x": 0.3,
+              "y": 0.7
+            }
+          }
+        ]
+      }
+    ],
+    "passed": 16,
+    "hashesUnchanged": 107,
+    "pageerrors": 0,
+    "checks": 16,
+    "browser": "155.0.8059.80",
+    "status": "passed",
+    "coordinatorVisualAcceptance": "Accepted both actual PNGs; unchanged map viewport may crop labels and no auto-fit is promised."
+  },
+  "finalComplete": {
+    "duplicates": [],
+    "retries": 0,
+    "workers": 1,
+    "compiled": 123,
+    "stats": {
+      "startTime": "2026-10-20T13:04:59.156Z",
+      "duration": 712548.892,
+      "expected": 124,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "extra": [],
+    "candidate": "direct-final-v4",
+    "executed": 124,
+    "hashesUnchanged": 107,
+    "maxFailures": 0,
+    "developmentStorage": [
+      {
+        "key": "workspace-recovery.spec.ts:331:1:a failed IndexedDB save preserves current and backup snapshots",
+        "file": "workspace-recovery.spec.ts",
+        "line": 331,
+        "title": "a failed IndexedDB save preserves current and backup snapshots",
+        "project": "development-storage",
+        "outcome": "expected",
+        "status": "passed",
+        "durationMs": 6149,
+        "executions": 1
+      }
+    ],
+    "missing": [],
+    "everyCanonicalExactlyOnce": true,
+    "timeout": 30000
+  },
+  "build": {
+    "changed": [],
+    "hashes": 107,
+    "durationMs": 103887,
+    "exitCode": 0
+  },
+  "discovery": {
+    "missing": [],
+    "extra": [],
+    "compiled": 123,
+    "exactlyOnce": true,
+    "split": 124,
+    "developmentStorage": [
+      {
+        "key": "workspace-recovery.spec.ts:331:1:a failed IndexedDB save preserves current and backup snapshots",
+        "title": "a failed IndexedDB save preserves current and backup snapshots",
+        "project": "development-storage"
+      }
+    ],
+    "canonical": 124,
+    "duplicates": []
+  },
+  "reviews": "Both independent reviews cleared the final visible Other-label correction; coordinator confirmed no remaining blocker.",
+  "parallelDurationNote": "The unchanged test timeout was30000ms; recorded timed-out result durations also include teardown.",
+  "serialDiagnostic": {
+    "hashesUnchanged": 107,
+    "stats": {
+      "startTime": "2026-10-20T13:02:21.419Z",
+      "duration": 126733.357,
+      "expected": 7,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "workers": 1
+  },
+  "typecheck": {
+    "exitCode": 0,
+    "stoppedDev": 39540,
+    "durationMs": 19365,
+    "portsFree": true
+  },
+  "sourceFiles": 107,
+  "baseline": "87aae398b35c0f15363c12af49d638c66cb90216",
+  "candidate": "direct-final-v4",
+  "limitations": [
+    "Two relevant root views only; accepted B/Dock composition is unchanged.",
+    "Browser emulation does not certify physical Android Chrome, OS keyboard, safe areas or physical gestures."
+  ],
+  "firstComplete": {
+    "hashesUnchanged": 107,
+    "compiled": 123,
+    "stats": {
+      "startTime": "2026-10-20T12:49:35.45Z",
+      "duration": 727311.121,
+      "expected": 117,
+      "skipped": 0,
+      "unexpected": 7,
+      "flaky": 0
+    },
+    "developmentStoragePassed": true,
+    "workers": 2
+  },
+  "productionBuildCount": 1,
+  "comparison": [
+    {
+      "title": "the Warden can build and edit a nested star-system map",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 44645,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 18201,
+      "finalCompleteDurationMs": 17308
+    },
+    {
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 45046,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 19534,
+      "finalCompleteDurationMs": 19699
+    },
+    {
+      "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 39474,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 18776,
+      "finalCompleteDurationMs": 16443
+    },
+    {
+      "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 45621,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 13239,
+      "finalCompleteDurationMs": 11836
+    },
+    {
+      "title": "the Warden can review and safely confirm dependent map deletions",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 42275,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 17114,
+      "finalCompleteDurationMs": 16964
+    },
+    {
+      "title": "the Warden can export a cluster and standalone system as versioned JSON",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 42752,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 18419,
+      "finalCompleteDurationMs": 16543
+    },
+    {
+      "title": "the Warden can construct, edit, and reload the local campaign",
+      "parallelStatus": "timedOut",
+      "parallelObservedDurationMs": 40611,
+      "serialDiagnosticStatus": "passed",
+      "serialDiagnosticDurationMs": 17039,
+      "finalCompleteDurationMs": 17788
+    }
+  ]
+}

@@ -62,10 +62,8 @@
         :selected-system="props.selectedSystem"
         :chooser-open="addOpen"
         @update-input="(key, value) => emit('update-creation-input', key, value)"
-        @preview-from-inputs="emit('preview-creation-from-inputs')"
-        @confirm="emit('confirm-creation', $event)"
+        @add-from-inputs="emit('add-from-inputs')"
         @choose-candidate="emit('choose-creation-candidate', $event)"
-        @cancel-preview="emit('cancel-creation-preview')"
       />
     </div>
   </nav>
@@ -92,10 +90,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'mode-change': [mode: MapInteractionMode]
   'update-creation-input': [key: keyof SystemCreationSession['inputs'], value: string]
-  'preview-creation-from-inputs': []
-  'confirm-creation': [previewId: number]
+  'add-from-inputs': []
   'choose-creation-candidate': [key: string]
-  'cancel-creation-preview': []
 }>()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [

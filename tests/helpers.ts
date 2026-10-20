@@ -780,7 +780,7 @@ export async function addCatalogueObject(
   await completeCatalogueObjectCreation(page, subtype, options)
 }
 
-/** Completes an already armed catalogue type through public Placement, Preview and Confirm controls. */
+/** Completes an already armed catalogue type through its public Placement Add action. */
 export async function completeCatalogueObjectCreation(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
@@ -808,10 +808,8 @@ export async function completeCatalogueObjectCreation(
     await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
   }
 
-  await page.getByRole('button', { name: 'Preview placement', exact: true }).click()
-  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
-  await expect(confirm).toBeVisible()
-  await confirm.click()
+  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 
@@ -853,7 +851,7 @@ async function nextFreeSystemPoint(map: import('@playwright/test').Locator): Pro
   }
 }
 
-/** Creates an Orbit through its public placement form and optionally inspects it from Hierarchy. */
+/** Creates an Orbit through its public Placement Add action and optionally inspects it from Hierarchy. */
 export async function completeOrbitCreation(
   page: import('@playwright/test').Page,
   options: OrbitCreationOptions = {},
@@ -873,10 +871,8 @@ export async function completeOrbitCreation(
     await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
   }
 
-  await page.getByRole('button', { name: 'Preview placement', exact: true }).click()
-  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
-  await expect(confirm).toBeVisible()
-  await confirm.click()
+  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 

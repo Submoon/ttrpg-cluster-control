@@ -1,5 +1,7 @@
 # Ticket 23 implementation contract
 
+> Historical initial contract. The human-authorized [direct-Add follow-up](implementation-23-direct-add-2026-10-20.md) supersedes mandatory creation Preview/Confirm. Reuse its validation/publication guarantees with one completed input action; existing manipulation/destructive confirmations are unchanged.
+
 ## Baseline and boundary
 
 2026-10-20 architecture/domain inspection for the coordinator. The coordinator supplied the freshly fetched intentional feature baseline `0bd3b33d106fa0631ed7dbd5f6e73af018e1422e`, equal to the feature remote; `origin/main` is `629d2a98715c3a16b954e0f77c639b1f0c31212c`, with 0 main-only / 44 feature-only commits. This artifact is the only file owned by this analysis. No application, browser, Git, storage or test execution occurred here.

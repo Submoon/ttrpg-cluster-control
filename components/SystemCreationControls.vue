@@ -23,7 +23,7 @@
       </UButton>
 
       <template #content>
-        <form class="system-creation-placement-form" aria-label="Placement" @submit.prevent="previewFromInputs">
+        <form class="system-creation-placement-form" aria-label="Placement" @submit.prevent="emit('add-from-inputs')">
           <div class="system-creation-form-heading">
             <span class="section-kicker">PLACEMENT</span>
             <p v-if="props.session.type.kind === 'orbit'">Choose a host or an unoccupied center, then set its ellipse.</p>
@@ -146,7 +146,7 @@
           <p v-if="props.session.errors.form" class="system-creation-error system-creation-form-wide" role="alert">
             {{ props.session.errors.form }}
           </p>
-          <UButton class="workspace-control system-creation-form-wide" color="primary" type="submit">Preview placement</UButton>
+          <UButton class="workspace-control system-creation-form-wide" color="primary" type="submit" aria-label="Add">Add</UButton>
         </form>
       </template>
     </UPopover>
@@ -159,38 +159,16 @@
         color="neutral"
         :variant="candidate.error ? 'outline' : 'soft'"
         size="sm"
-        :aria-label="candidate.label"
+        :aria-label="candidate.error ? `${candidate.label}: ${candidate.error}` : candidate.label"
         :disabled="!!candidate.error"
         @click="emit('choose-candidate', candidate.key)"
       >
-        {{ candidate.label }}
+        <span>{{ candidate.label }}</span>
+        <span v-if="candidate.error" class="system-creation-candidate-error">{{ candidate.error }}</span>
       </UButton>
     </div>
-
-    <UButton
-      v-if="props.session.preview"
-      class="workspace-control"
-      color="primary"
-      variant="solid"
-      size="sm"
-      aria-label="Confirm placement"
-      @click="emit('confirm', props.session.preview.id)"
-    >
-      Confirm
-    </UButton>
-    <UButton
-      v-if="props.session.preview"
-      class="workspace-control"
-      color="neutral"
-      variant="outline"
-      size="sm"
-      aria-label="Cancel placement"
-      @click="emit('cancel-preview')"
-    >
-      Cancel
-    </UButton>
-    <span v-if="props.session.errors.target" class="system-creation-error" role="alert">
-      {{ props.session.errors.target }}
+    <span v-if="visibleSessionError" class="system-creation-error" role="alert">
+      {{ visibleSessionError }}
     </span>
   </div>
 </template>
@@ -213,13 +191,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update-input': [key: CreationInputKey, value: string]
-  'preview-from-inputs': []
+  'add-from-inputs': []
   'choose-candidate': [key: string]
-  confirm: [previewId: number]
-  'cancel-preview': []
 }>()
 
 const placementOpen = ref(false)
+const visibleSessionError = computed(() => {
+  const session = props.session
+  if (!session) return ''
+  if (session.errors.target) return session.errors.target
+  if (placementOpen.value) return ''
+  return Object.values(session.errors).find(Boolean) ?? ''
+})
 const objectOrbitValue = computed(() => props.session?.inputs.orbitId || freeValue)
 const hostValue = computed(() => props.session?.inputs.hostId || centerValue)
 const objectOrbitItems = computed(() => [
@@ -252,9 +235,6 @@ function updateHost(value: unknown): void {
   updateInput('hostId', String(value ?? '') === centerValue ? '' : String(value ?? ''))
 }
 
-function previewFromInputs(): void {
-  emit('preview-from-inputs')
-}
 </script>
 
 <style scoped>
@@ -269,6 +249,7 @@ function previewFromInputs(): void {
 
 .system-creation-candidates { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .system-creation-candidate { white-space: normal; }
+.system-creation-candidate-error { display: block; font-size: 0.72rem; }
 
 .system-creation-error {
   margin: 0;

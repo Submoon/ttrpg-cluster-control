@@ -238,7 +238,7 @@ const creationProgress = computed(() => {
   const session = props.creationSession
   if (!session) return ''
   if (session.notice) return session.notice
-  if (session.preview) return 'Preview ready'
+  if (session.preview) return 'Add ready'
   if (session.candidates.length > 1) return 'Choose a named target'
   return 'Choose a target'
 })
