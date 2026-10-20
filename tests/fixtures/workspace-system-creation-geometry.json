@@ -1,0 +1,96 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "system",
+  "system": {
+    "id": "creation-geometry-system",
+    "name": "Dense Reach",
+    "objects": [
+      {
+        "id": "creation-geometry-star",
+        "family": "CelestialBody",
+        "subtype": "star",
+        "locationKey": "A",
+        "name": "Primary Star",
+        "description": "",
+        "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+      },
+      {
+        "id": "creation-geometry-old-planet",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL.1",
+        "name": "Old Planet",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "creation-geometry-alpha" }
+      },
+      {
+        "id": "creation-geometry-old-moon",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO.1",
+        "name": "Old Moon",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "creation-geometry-alpha" }
+      },
+      {
+        "id": "creation-geometry-nested-moon",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO.2",
+        "name": "Nested Moon",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "creation-geometry-nested" }
+      },
+      {
+        "id": "creation-geometry-beta-colony",
+        "family": "Installation",
+        "subtype": "colony",
+        "locationKey": "CO.1",
+        "name": "Outer Colony",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "creation-geometry-beta" }
+      },
+      {
+        "id": "creation-geometry-deep-asteroid",
+        "family": "SmallBody/Field",
+        "subtype": "asteroid",
+        "locationKey": "AS.1",
+        "name": "Deep Asteroid",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "creation-geometry-deep" }
+      }
+    ],
+    "orbits": [
+      { "id": "creation-geometry-alpha", "hostId": "creation-geometry-star", "order": 1 },
+      { "id": "creation-geometry-beta", "hostId": "creation-geometry-star", "order": 2 },
+      { "id": "creation-geometry-nested", "hostId": "creation-geometry-old-planet", "order": 1 },
+      { "id": "creation-geometry-deep", "hostId": "creation-geometry-nested-moon", "order": 1 }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": ["Breathable", "Unbreathable", "Vacuum"],
+    "portClassOptions": ["Class I", "Class II", "Class III"],
+    "customFields": []
+  },
+  "layout": {
+    "version": 1,
+    "orbitRadii": {
+      "creation-geometry-alpha": { "horizontal": 120, "vertical": 80 },
+      "creation-geometry-beta": { "horizontal": 190, "vertical": 100 },
+      "creation-geometry-nested": { "horizontal": 80, "vertical": 55 },
+      "creation-geometry-deep": { "horizontal": 38, "vertical": 30 }
+    },
+    "orbitRotations": {
+      "creation-geometry-alpha": 30,
+      "creation-geometry-beta": 340,
+      "creation-geometry-nested": 25,
+      "creation-geometry-deep": 15
+    },
+    "objectAngles": {
+      "creation-geometry-nested-moon": 3.141592653589793,
+      "creation-geometry-beta-colony": 3.141592653589793,
+      "creation-geometry-deep-asteroid": 2.1
+    }
+  }
+}

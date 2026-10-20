@@ -1,0 +1,114 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "cluster",
+  "cluster": {
+    "id": "campaign-baseline-cluster",
+    "name": "Kestrel Reach Prime",
+    "systems": [
+      {
+        "id": "campaign-baseline-vesper",
+        "name": "Vesper Prime",
+        "objects": [
+          {
+            "id": "campaign-baseline-star",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+          },
+          {
+            "id": "campaign-baseline-iria",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "Iria",
+            "description": "A survey world.",
+            "placement": { "kind": "orbit", "orbitId": "campaign-baseline-primary-orbit" },
+            "customFieldValues": { "campaign-baseline-warden-notes": "Existing campaign record." }
+          },
+          {
+            "id": "campaign-baseline-nix",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "Nix",
+            "description": "",
+            "placement": { "kind": "orbit", "orbitId": "campaign-baseline-iria-orbit" }
+          },
+          {
+            "id": "campaign-baseline-departure",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Vesper Departure",
+            "description": "",
+            "placement": { "kind": "system", "x": 0.75, "y": 0.5 }
+          }
+        ],
+        "orbits": [
+          { "id": "campaign-baseline-primary-orbit", "hostId": "campaign-baseline-star", "order": 1 },
+          { "id": "campaign-baseline-iria-orbit", "hostId": "campaign-baseline-iria", "order": 1 }
+        ]
+      },
+      {
+        "id": "campaign-baseline-harrow",
+        "name": "Harrow",
+        "objects": [
+          {
+            "id": "campaign-baseline-harrow-star",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "A",
+            "name": "Primary Star",
+            "description": "",
+            "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+          },
+          {
+            "id": "campaign-baseline-arrival",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Harrow Arrival",
+            "description": "",
+            "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+          }
+        ],
+        "orbits": []
+      }
+    ],
+    "routes": [
+      {
+        "id": "campaign-baseline-route",
+        "jumpLevel": 1,
+        "fromPointId": "campaign-baseline-departure",
+        "toPointId": "campaign-baseline-arrival"
+      }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": ["Breathable", "Unbreathable", "Vacuum"],
+    "portClassOptions": ["Class I", "Class II", "Class III"],
+    "customFields": [
+      {
+        "id": "campaign-baseline-warden-notes",
+        "name": "Warden notes",
+        "type": "text"
+      }
+    ]
+  },
+  "layout": {
+    "version": 1,
+    "systemPositions": {
+      "campaign-baseline-vesper": { "x": 0.35, "y": 0.5 },
+      "campaign-baseline-harrow": { "x": 0.75, "y": 0.5 }
+    },
+    "orbitRadii": {
+      "campaign-baseline-primary-orbit": { "horizontal": 112, "vertical": 112 },
+      "campaign-baseline-iria-orbit": { "horizontal": 46, "vertical": 46 }
+    },
+    "objectAngles": { "campaign-baseline-nix": 1.2 }
+  }
+}

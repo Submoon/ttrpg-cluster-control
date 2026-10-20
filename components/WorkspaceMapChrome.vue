@@ -8,7 +8,24 @@
   >
     <div class="workspace-map-context">
       <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
-      <h2>{{ contextName }}</h2>
+      <div class="workspace-map-context-line">
+        <h2>{{ contextName }}</h2>
+        <template v-if="props.creationSession">
+          <span class="workspace-add-status" role="status" aria-live="polite">
+            ADD {{ props.creationTypeLabel }} · {{ creationProgress }}
+          </span>
+          <UButton
+            class="workspace-control workspace-add-quit"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            aria-label="Quit Add and return to Navigate"
+            @click="emit('quit-add')"
+          >
+            Quit Add
+          </UButton>
+        </template>
+      </div>
     </div>
 
     <UButton
@@ -172,6 +189,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
+import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
 
 const props = withDefaults(defineProps<{
@@ -184,10 +202,14 @@ const props = withDefaults(defineProps<{
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
   compactModalOpen?: boolean
+  creationSession?: SystemCreationSession | null
+  creationTypeLabel?: string
 }>(), {
   hierarchyOpen: false,
   inspectorOpen: false,
   compactModalOpen: false,
+  creationSession: null,
+  creationTypeLabel: 'object',
 })
 
 const emit = defineEmits<{
@@ -199,6 +221,7 @@ const emit = defineEmits<{
   'toggle-hierarchy': []
   'toggle-inspector': []
   'files-open-change': [open: boolean]
+  'quit-add': []
 }>()
 
 const headerMapActionsOpen = ref(false)
@@ -211,6 +234,14 @@ const inspectorOpen = computed(() => props.inspectorOpen)
 const contextName = computed(() => activeView.value === 'cluster'
   ? workspace.value?.cluster.name ?? 'Jump Cluster'
   : selectedSystem.value?.name ?? 'Star system')
+const creationProgress = computed(() => {
+  const session = props.creationSession
+  if (!session) return ''
+  if (session.notice) return session.notice
+  if (session.preview) return 'Preview ready'
+  if (session.candidates.length > 1) return 'Choose a named target'
+  return 'Choose a target'
+})
 const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
   : `star system ${selectedSystem.value?.name ?? ''}`)
@@ -285,6 +316,23 @@ function openJsonImportPicker(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.workspace-map-context-line {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+.workspace-add-status {
+  min-width: 0;
+  color: var(--text-secondary);
+  font: 0.625rem Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.workspace-add-quit { flex: 0 0 auto; }
 
 .workspace-map-actions,
 .workspace-map-panel-actions {

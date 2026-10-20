@@ -486,7 +486,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  await addCatalogueObject(page, 'jump-point')
+  await addCatalogueObject(page, 'jump-point', { preserveDraft: true, noSelection: true })
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
   await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('')
@@ -971,12 +971,12 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
     } else if (selectionKind === 'orbit') {
       await addCatalogueObject(page, 'planet')
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-      await clickDockAction(page, 'Add orbit')
+      await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
       await hierarchy.getByRole('button', { name: /Select PL-01, New planet 1/ }).click()
       await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-expanded', 'false')
       await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
-      await clickDockAction(page, 'Add orbit')
+      await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
     } else {
       await returnToClusterMap(page)

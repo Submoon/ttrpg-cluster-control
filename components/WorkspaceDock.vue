@@ -19,7 +19,14 @@
       <UPopover
         v-model:open="addOpen"
         :modal="false"
-        :content="{ side: 'top', align: 'start', sideOffset: 8, collisionPadding: 12, avoidCollisions: true }"
+        :content="{
+          side: 'top',
+          align: 'start',
+          sideOffset: 8,
+          collisionPadding: 12,
+          avoidCollisions: true,
+          onEscapeKeyDown: consumeChooserEscape,
+        }"
         :ui="{ content: 'workspace-add-popover-content' }"
       >
         <UButton
@@ -30,6 +37,7 @@
           aria-label="Add to map"
           aria-controls="workspace-add-menu"
           :aria-expanded="addOpen"
+          ref="addTrigger"
         >
           <UIcon name="i-lucide-plus" aria-hidden="true" />
           Add
@@ -37,6 +45,7 @@
         <template #content>
           <div
             id="workspace-add-menu"
+            ref="addMenu"
             class="workspace-add-menu"
             role="group"
             aria-label="Add to map"
@@ -46,23 +55,47 @@
           </div>
         </template>
       </UPopover>
+
+      <SystemCreationControls
+        :session="props.creationSession"
+        :type-label="props.creationTypeLabel"
+        :selected-system="props.selectedSystem"
+        :chooser-open="addOpen"
+        @update-input="(key, value) => emit('update-creation-input', key, value)"
+        @preview-from-inputs="emit('preview-creation-from-inputs')"
+        @confirm="emit('confirm-creation', $event)"
+        @choose-candidate="emit('choose-creation-candidate', $event)"
+        @cancel-preview="emit('cancel-creation-preview')"
+      />
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { MapInteractionMode } from '../composables/editor-workflows/types'
+import { onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import type { MapInteractionMode, SystemCreationSession } from '../composables/editor-workflows/types'
+import type { StarSystem } from '../domain/workspace'
+import SystemCreationControls from './SystemCreationControls.vue'
 
 const props = withDefaults(defineProps<{
   mode: MapInteractionMode
   closeSignal?: string
+  creationSession?: SystemCreationSession | null
+  creationTypeLabel?: string
+  selectedSystem?: StarSystem
 }>(), {
   closeSignal: '',
+  creationSession: null,
+  creationTypeLabel: 'object',
 })
 
 const emit = defineEmits<{
   'mode-change': [mode: MapInteractionMode]
+  'update-creation-input': [key: keyof SystemCreationSession['inputs'], value: string]
+  'preview-creation-from-inputs': []
+  'confirm-creation': [previewId: number]
+  'choose-creation-candidate': [key: string]
+  'cancel-creation-preview': []
 }>()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [
@@ -70,12 +103,177 @@ const modes: Array<{ value: MapInteractionMode; label: string }> = [
   { value: 'select', label: 'Select' },
   { value: 'move', label: 'Move' },
 ]
-const addOpen = ref(false)
+const addOpen = defineModel<boolean>('addOpen', { default: false })
+const addTrigger = ref<ComponentPublicInstance | null>(null)
+const addMenu = ref<HTMLElement | null>(null)
+
+type DismissedAddSequence = {
+  pointerId: number | null
+  pointerType: string
+  origin: EventTarget | null
+  touchIdentifier: number | null
+}
+
+let dismissedAddSequence: DismissedAddSequence | null = null
+
+const touchCapture: AddEventListenerOptions = { capture: true, passive: false }
+
+function addTriggerElement(): HTMLElement | null {
+  const root = addTrigger.value?.$el
+  return root instanceof HTMLElement ? root : null
+}
+
+function eventIsWithin(event: Event, root: HTMLElement | null): boolean {
+  if (!root) return false
+  return event.composedPath().some(target => target instanceof Node && (target === root || root.contains(target)))
+}
+
+function eventMatchesOrigin(event: Event, origin: EventTarget | null): boolean {
+  if (!origin) return false
+  if (event.composedPath().includes(origin)) return true
+  return origin instanceof Node && event.target instanceof Node
+    && (origin.contains(event.target) || event.target.contains(origin))
+}
+
+function isInsideHigherModal(): boolean {
+  // An active modal owns all outside interactions, including its backdrop.
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'))
+    .some(dialog => dialog.getClientRects().length > 0 && !dialog.closest('[inert]'))
+}
+
+function isInsideAddUi(event: Event): boolean {
+  return eventIsWithin(event, addTriggerElement()) || eventIsWithin(event, addMenu.value)
+}
+
+function consumeOutsideEvent(event: Event): void {
+  if (event.cancelable) event.preventDefault()
+  event.stopImmediatePropagation()
+}
+
+function dismissAddForPointerDown(event: PointerEvent): void {
+  const sequence = dismissedAddSequence
+  if (sequence) {
+    // A touchstart can precede its compatibility PointerEvent. Keep that same contact consumed.
+    if (sequence.pointerId === null && sequence.pointerType === 'touch'
+      && event.pointerType === 'touch' && event.isPrimary && eventMatchesOrigin(event, sequence.origin)) {
+      sequence.pointerId = event.pointerId
+      consumeOutsideEvent(event)
+      return
+    }
+    // A new physical contact starts a fresh sequence; stale compatibility clicks cannot eat it.
+    dismissedAddSequence = null
+  }
+
+  if (!addOpen.value || !event.isPrimary || event.button < 0
+    || isInsideHigherModal() || isInsideAddUi(event)) return
+
+  dismissedAddSequence = {
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    origin: event.target,
+    touchIdentifier: null,
+  }
+  closeAdd()
+  consumeOutsideEvent(event)
+}
+
+function dismissAddForTouchStart(event: TouchEvent): void {
+  if (event.changedTouches.length !== 1) return
+  const touch = event.changedTouches[0]
+  if (!touch) return
+
+  const sequence = dismissedAddSequence
+  if (sequence) {
+    const isSameContact = sequence.pointerType === 'touch'
+      && (sequence.touchIdentifier === touch.identifier
+        || sequence.touchIdentifier === null && eventMatchesOrigin(event, sequence.origin))
+    if (isSameContact) {
+      sequence.touchIdentifier = touch.identifier
+      consumeOutsideEvent(event)
+      return
+    }
+    dismissedAddSequence = null
+  }
+
+  if (!addOpen.value || isInsideHigherModal() || isInsideAddUi(event)) return
+  dismissedAddSequence = {
+    pointerId: null,
+    pointerType: 'touch',
+    origin: event.target,
+    touchIdentifier: touch.identifier,
+  }
+  closeAdd()
+  consumeOutsideEvent(event)
+}
+
+function consumeDismissedPointerEnd(event: PointerEvent): void {
+  if (dismissedAddSequence?.pointerId === event.pointerId) consumeOutsideEvent(event)
+}
+
+function consumeDismissedTouchEnd(event: TouchEvent): void {
+  const identifier = dismissedAddSequence?.touchIdentifier
+  if (identifier === null || identifier === undefined || event.changedTouches.length !== 1) return
+  if (event.changedTouches[0]?.identifier === identifier) consumeOutsideEvent(event)
+}
+
+function consumeDismissedClick(event: MouseEvent): void {
+  const sequence = dismissedAddSequence
+  if (!sequence || event.detail === 0) return
+
+  const pointerId = 'pointerId' in event ? (event as PointerEvent).pointerId : null
+  if (pointerId !== sequence.pointerId && !eventMatchesOrigin(event, sequence.origin)) return
+  consumeOutsideEvent(event)
+  dismissedAddSequence = null
+}
+
+function consumeDismissedContextMenu(event: MouseEvent): void {
+  const sequence = dismissedAddSequence
+  // Keyboard context-menu activation reports button 0/detail 0; leave that action alone.
+  if (!sequence || (event.detail === 0 && event.button === 0)) return
+
+  const pointerId = 'pointerId' in event ? (event as PointerEvent).pointerId : null
+  if (pointerId !== sequence.pointerId && !eventMatchesOrigin(event, sequence.origin)) return
+  consumeOutsideEvent(event)
+}
+
+function installAddDismissalAdapter(): void {
+  document.addEventListener('pointerdown', dismissAddForPointerDown, true)
+  document.addEventListener('pointerup', consumeDismissedPointerEnd, true)
+  document.addEventListener('pointercancel', consumeDismissedPointerEnd, true)
+  document.addEventListener('touchstart', dismissAddForTouchStart, touchCapture)
+  document.addEventListener('touchend', consumeDismissedTouchEnd, touchCapture)
+  document.addEventListener('touchcancel', consumeDismissedTouchEnd, touchCapture)
+  document.addEventListener('click', consumeDismissedClick, true)
+  document.addEventListener('auxclick', consumeDismissedClick, true)
+  document.addEventListener('contextmenu', consumeDismissedContextMenu, true)
+}
+
+function removeAddDismissalAdapter(): void {
+  document.removeEventListener('pointerdown', dismissAddForPointerDown, true)
+  document.removeEventListener('pointerup', consumeDismissedPointerEnd, true)
+  document.removeEventListener('pointercancel', consumeDismissedPointerEnd, true)
+  document.removeEventListener('touchstart', dismissAddForTouchStart, true)
+  document.removeEventListener('touchend', consumeDismissedTouchEnd, true)
+  document.removeEventListener('touchcancel', consumeDismissedTouchEnd, true)
+  document.removeEventListener('click', consumeDismissedClick, true)
+  document.removeEventListener('auxclick', consumeDismissedClick, true)
+  document.removeEventListener('contextmenu', consumeDismissedContextMenu, true)
+  dismissedAddSequence = null
+}
+
+onMounted(installAddDismissalAdapter)
+onBeforeUnmount(removeAddDismissalAdapter)
 
 watch(() => props.closeSignal, () => closeAdd())
 
 function closeAdd(): void {
   addOpen.value = false
+}
+
+function consumeChooserEscape(event: KeyboardEvent): void {
+  event.preventDefault()
+  event.stopPropagation()
+  closeAdd()
 }
 </script>
 

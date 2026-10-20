@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { captureMapExportBlobs, downloadJson, openWorkspaceZoomNavigation } from './helpers'
+import { addCatalogueObject, captureMapExportBlobs, downloadJson, openWorkspaceZoomNavigation } from './helpers'
 
 async function createWorkspace(page: Page): Promise<void> {
   await page.goto('/')
@@ -29,9 +29,9 @@ test('Move refuses an object with an unresolved inspector draft before preview a
   const object = map.locator('.system-object').filter({ hasText: 'Primary Star' })
 
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add Planet', exact: true }).click()
+  await addCatalogueObject(page, 'planet', { noSelection: true })
   await expect(map.locator('.system-object')).toHaveCount(2)
+  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await object.click()
   const objectId = await object.getAttribute('data-object-id')
   const committedBefore = await downloadJson(page, 'Export star system JSON')

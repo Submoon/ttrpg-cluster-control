@@ -1,0 +1,80 @@
+{
+  "candidate": "ticket23-app-neutral-category",
+  "changedPaths": [
+    "components/ObjectPalette.vue"
+  ],
+  "files": [
+    {
+      "path": "components/BaselinePage.vue",
+      "sha256": "9A4B1F2921B313538561B0987E53DFF771B7B21F34275204A648D2C4DA9DE060"
+    },
+    {
+      "path": "components/inspector/ChartDetailsPanel.vue",
+      "sha256": "6CEDEBD10744A753ACF533B64B686BB599F5AF4614057AA4D7C0991624F2C9FB"
+    },
+    {
+      "path": "components/MapEditorLayout.vue",
+      "sha256": "9BB0282A429969E5E1E0CAB318769FD773E2D8A330FD9C1564FC18AB36267112"
+    },
+    {
+      "path": "components/MapInspector.vue",
+      "sha256": "629811D8B566DBDA4F9FB23896FEF8F925F62A710212C21F3491F9473B27DB12"
+    },
+    {
+      "path": "components/maps/system-map-renderer.ts",
+      "sha256": "5730C230B85762E72140A4028DF58E0A40EA6DFACDE94B88B6A4CE96FCAFC897"
+    },
+    {
+      "path": "components/SystemCreationControls.vue",
+      "sha256": "15E0A19CDC207D7DFE462EB41F292B343C4C90DFFF8BAFE9DB70AEC80FC4FDE4"
+    },
+    {
+      "path": "components/SystemMap.vue",
+      "sha256": "ADDCB667408842C68EB503826D5CC25469F4BFB20CA89CAD32EC3780A6485AB0"
+    },
+    {
+      "path": "components/WorkspaceDock.vue",
+      "sha256": "B9F111D4F5865651DD28C285081A59517F3A5183598D8DBBF49EC2DD5D9263DB"
+    },
+    {
+      "path": "components/WorkspaceMapCanvas.vue",
+      "sha256": "0309920526FDC9F0C07EABCCF95747CCAB17984EBD6206FABA9D7E8761FE5283"
+    },
+    {
+      "path": "components/WorkspaceMapChrome.vue",
+      "sha256": "458CBA7AAA194C5CA9CE3D976AA7C14C3C90B1D1FE3D55D446FD34CBF66ADE28"
+    },
+    {
+      "path": "components/WorkspaceResizablePanel.vue",
+      "sha256": "C580F85129E1CE1C7CB1F966BACA84CE3889A22B7D20B3251248E7F1EA3E0D10"
+    },
+    {
+      "path": "composables/editor-workflows/types.ts",
+      "sha256": "088E03F92CCDA4535FF76609C12334956DDD83CB029C1B4386ABB20637AA10EE"
+    },
+    {
+      "path": "composables/editor-workflows/useEntityInspectorSession.ts",
+      "sha256": "AA63E4DB3C205FE5EB0B5F8E918D0142C34B94E3C069C6232ED40822551B697B"
+    },
+    {
+      "path": "composables/editor-workflows/useMapWorkflows.ts",
+      "sha256": "762022A96C02C3A07A020EC50191A4FFA8E8481B40829E132B1D1201BF0B4FCC"
+    },
+    {
+      "path": "composables/editor-workflows/useSystemCreationWorkflows.ts",
+      "sha256": "78C8013BE34B636B7612D9E9D5A38AE6567AB5E41F6CB4B36F5F1DF982EF2459"
+    },
+    {
+      "path": "composables/useEditorWorkflows.ts",
+      "sha256": "E63586FC5B5168ACFB9B4C4CB52B9ABC91BC7C03858972E1FA1DA96B88CD1370"
+    },
+    {
+      "path": "utils/system-map-geometry.ts",
+      "sha256": "30D6EEC00347A59DE58038D3105F9BB7932D1C369B3F82DBF0F03DFD22B89EFD"
+    },
+    {
+      "path": "components/ObjectPalette.vue",
+      "sha256": "C789F6647F193B6C2891C5C309709BBD784FA92552AC073BD40487B0CFC97590"
+    }
+  ]
+}

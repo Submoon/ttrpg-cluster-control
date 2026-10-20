@@ -7,7 +7,6 @@ import {
   catalogueTypes,
   minimumOrbitRadius,
   normalizeOrbitRotation,
-  type CatalogueSubtype,
   type Orbit,
   type OrbitRadii,
   type Point,
@@ -15,7 +14,12 @@ import {
   type SystemObject,
 } from '../../domain/workspace'
 import type { EntityCommand } from '../../composables/editor-workflows/types'
-import { objectMark } from '../../utils/catalogue-marks'
+import type {
+  SystemCreationCandidate,
+  SystemCreationPreview,
+  SystemCreationType,
+} from '../../composables/editor-workflows/types'
+import { catalogueMarks, objectMark } from '../../utils/catalogue-marks'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import {
   getSvgViewportRect,
@@ -36,6 +40,7 @@ import {
   orbitRotationHandlePoint,
   requiredPosition,
   rotatePoint,
+  creationCandidatesAtPoint,
   toNormalizedMapPoint,
   type SystemMapGeometry,
 } from '../../utils/system-map-geometry'
@@ -101,15 +106,10 @@ export interface SystemMapEventHandlers {
   rotateOrbit(id: string, rotation: number): void
   /** Commit object placement into an Orbit using a parameter angle in radians. */
   placeObjectInOrbit(id: string, orbitId: string, angle: number): void
-  /** Handle Orbit drops at an SVG scene point, with an optional object host. */
-  dropOrbit(point: Point, hostId: string | null): void
-  /** Handle catalogue-object drops in scene coordinates; angle is radians or null outside an Orbit. */
-  dropObject(
-    subtype: CatalogueSubtype,
-    point: Point,
-    orbitId: string | null,
-    angle: number | null,
-  ): void
+  /** Offers the named map targets for a user click while Add is armed. */
+  creationTarget(candidates: SystemCreationCandidate[]): void
+  /** Resolves a native palette release through the same creation candidate path as an armed Add click. */
+  creationDropTarget(type: SystemCreationType, candidates: SystemCreationCandidate[]): void
 }
 
 export interface SystemMapRendererOptions {
@@ -121,6 +121,10 @@ export interface SystemMapRendererOptions {
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  /** Persistent map Add type and its transient placement preview. */
+  creationType: SystemCreationType | null
+  creationPreview: SystemCreationPreview | null
+  creationChooserOpen: boolean
   /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
   moveEnabled: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
@@ -142,6 +146,10 @@ export interface SystemMapRenderer {
   captureOrbitRotationWheel(event: WheelEvent): void
   /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
   handleObjectDrop(event: DragEvent): void
+  /** Consumes a map click in Add and offers its candidates in raw scene coordinates. */
+  handleCreationClick(event: MouseEvent): void
+  /** Resolves candidates from an unclamped SVG scene point using the same calculation as map clicks. */
+  getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }
 
 function orbitLabel(system: StarSystem, orbit: Orbit): string {
@@ -167,6 +175,9 @@ export function renderSystemMap({
   geometry,
   selectedObjectId,
   selectedOrbitId,
+  creationType,
+  creationPreview,
+  creationChooserOpen,
   moveEnabled,
   orbitRotationWheelEvents,
   handlers,
@@ -204,11 +215,8 @@ export function renderSystemMap({
       if (!content) return
 
       const [x, y] = pointer(event, content)
-      const hostId = event.target instanceof Element
-        ? event.target.closest('.system-object')?.getAttribute('data-object-id') ?? null
-        : null
-      if (blockEntityCommand({ kind: 'orbit-create', hostId })) return
-      handlers.dropOrbit({ x, y }, hostId)
+      const type: SystemCreationType = { kind: 'orbit' }
+      handlers.creationDropTarget(type, creationCandidatesAtPoint(system, { x, y }, type, geometry))
       return
     }
 
@@ -218,33 +226,8 @@ export function renderSystemMap({
     if (!catalogueType || !content) return
 
     const [x, y] = pointer(event, content)
-    const point = { x, y }
-    const positions = objectPositions(system, geometry)
-    const targetOrbitId = event.target instanceof Element
-      ? event.target.closest('.orbit-hit-target')?.getAttribute('data-orbit-id')
-      : null
-    const orbit = system.orbits.find(candidate => candidate.id === targetOrbitId)
-      ?? orbitAtPoint(system, point, positions, geometry)
-    if (blockEntityCommand({
-      kind: 'object-placement',
-      objectId: '',
-      fromOrbitId: null,
-      toOrbitId: orbit?.id ?? null,
-    })) return
-    const center = orbit ? orbitCenter(orbit, positions) : undefined
-    handlers.dropObject(
-      catalogueType.value,
-      point,
-      orbit?.id ?? null,
-      orbit && center
-        ? orbitAngleAtPoint(
-            point,
-            center,
-            orbitRadii(system, orbit, geometry),
-            orbitRotation(orbit, geometry),
-          )
-        : null,
-    )
+    const type: SystemCreationType = { kind: 'object', subtype: catalogueType.value }
+    handlers.creationDropTarget(type, creationCandidatesAtPoint(system, { x, y }, type, geometry))
   }
 
   const livePositions = new Map<string, Point>()
@@ -308,6 +291,29 @@ export function renderSystemMap({
     }
   }
   const positions = currentPositions()
+
+  function getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[] {
+    return creationCandidatesAtPoint(system, point, type, geometry)
+  }
+
+  function offerCreationTarget(point: Point): void {
+    if (!creationType || creationChooserOpen) return
+    handlers.creationTarget(getCreationCandidates(point, creationType))
+  }
+
+  function handleCreationClick(event: MouseEvent): void {
+    if (!creationType) return
+    if (event.detail === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    if (creationChooserOpen) return
+    const contentNode = element.querySelector<SVGGElement>('.system-map-content')
+    if (!contentNode) return
+    const [x, y] = pointer(event, contentNode)
+    offerCreationTarget({ x, y })
+  }
+
   const svg = select(element)
   const currentTransform = zoomTransform(element)
   const focusedOrbitCenterId = element.querySelector<SVGElement>('.orbit-center-handle:focus')
@@ -421,6 +427,7 @@ export function renderSystemMap({
       .attr('y1', verticalHandle.y)
       .attr('x2', rotationHandle.x)
       .attr('y2', rotationHandle.y)
+      .style('pointer-events', 'none')
     mark.append<SVGCircleElement>('circle')
       .attr('class', 'orbit-edit-control orbit-rotation-handle')
       .attr('data-orbit-id', orbit.id)
@@ -625,6 +632,106 @@ export function renderSystemMap({
       .text(objectMark(object))
   })
 
+  if (creationType && creationPreview) {
+    const previewGroup = content.append('g')
+      .attr('class', 'system-creation-preview')
+      .attr('aria-hidden', 'true')
+      .style('pointer-events', 'none')
+
+    if (creationType.kind === 'object') {
+      const subtypeLabel = catalogueTypes.find(candidate => candidate.value === creationType.subtype)?.label
+        ?? creationType.subtype
+      let point: Point | undefined
+      let targetLabel: string
+      if (creationPreview.target.kind === 'free') {
+        point = {
+          x: 64 + creationPreview.target.point.x * 832,
+          y: 72 + creationPreview.target.point.y * 416,
+        }
+        targetLabel = 'Free map position'
+      } else if (creationPreview.target.kind === 'orbit') {
+        const orbitTarget = creationPreview.target
+        const orbit = system.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
+        if (orbit) {
+          const center = orbitCenter(orbit, positions)
+          const radii = creationPreview.radii ?? orbitRadii(system, orbit, geometry)
+          const rotation = creationPreview.rotation ?? orbitRotation(orbit, geometry)
+          point = orbitPointAtAngle(center, radii, orbitTarget.angle, rotation)
+          previewGroup.append('ellipse')
+            .attr('class', 'system-creation-preview-orbit')
+            .attr('cx', center.x)
+            .attr('cy', center.y)
+            .attr('rx', radii.horizontal)
+            .attr('ry', radii.vertical)
+            .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+          targetLabel = orbitLabel(system, orbit)
+        } else {
+          targetLabel = 'Orbit'
+        }
+      } else {
+        targetLabel = 'Unavailable target'
+      }
+
+      if (point) {
+        const marker = previewGroup.append('g')
+          .attr('class', 'system-creation-preview-object')
+          .attr('transform', `translate(${point.x} ${point.y})`)
+        marker.append('circle')
+          .attr('class', 'system-creation-preview-ring')
+          .attr('r', 24)
+        marker.append('text')
+          .attr('class', 'system-creation-preview-glyph')
+          .attr('y', 7)
+          .attr('text-anchor', 'middle')
+          .text(catalogueMarks[creationType.subtype])
+        marker.append('text')
+          .attr('class', 'system-creation-preview-label')
+          .attr('y', -30)
+          .attr('text-anchor', 'middle')
+          .text(`Preview · ${subtypeLabel} · ${targetLabel}`)
+      }
+    } else {
+      let center: Point | undefined
+      let targetLabel: string
+      if (creationPreview.target.kind === 'free') {
+        center = {
+          x: 64 + creationPreview.target.point.x * 832,
+          y: 72 + creationPreview.target.point.y * 416,
+        }
+        targetLabel = 'New unoccupied center'
+      } else if (creationPreview.target.kind === 'host') {
+        const hostTarget = creationPreview.target
+        center = positions.get(hostTarget.objectId)
+        const host = system.objects.find(object => object.id === hostTarget.objectId)
+        targetLabel = host ? `around ${host.name}` : 'Unavailable host'
+      } else {
+        targetLabel = 'Unavailable target'
+      }
+
+      if (center && creationPreview.radii) {
+        const rotation = creationPreview.rotation ?? 0
+        previewGroup.append('ellipse')
+          .attr('class', 'system-creation-preview-orbit')
+          .attr('cx', center.x)
+          .attr('cy', center.y)
+          .attr('rx', creationPreview.radii.horizontal)
+          .attr('ry', creationPreview.radii.vertical)
+          .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+        previewGroup.append('circle')
+          .attr('class', 'system-creation-preview-center')
+          .attr('cx', center.x)
+          .attr('cy', center.y)
+          .attr('r', 6)
+        previewGroup.append('text')
+          .attr('class', 'system-creation-preview-label')
+          .attr('x', center.x)
+          .attr('y', center.y - creationPreview.radii.vertical - 30)
+          .attr('text-anchor', 'middle')
+          .text(`Preview · Orbit ${targetLabel}`)
+      }
+    }
+  }
+
   /**
    * Expands the background and grid around both object and Orbit bounds beyond the initial SVG viewBox.
    */
@@ -728,7 +835,7 @@ export function renderSystemMap({
       }
     })
   const objectDrag = drag<SVGGElement, SystemObject>()
-    .filter(event => moveEnabled && !event.ctrlKey && !event.button
+    .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
       && (!('touches' in event) || event.touches.length === 1))
     .clickDistance(6)
     .container(() => content.node()!)
@@ -975,7 +1082,7 @@ export function renderSystemMap({
   }
   orbitResizeTargets.call(
     drag<SVGElement, Orbit>()
-      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1038,7 +1145,7 @@ export function renderSystemMap({
 
   orbitCenterHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1091,7 +1198,7 @@ export function renderSystemMap({
   const orbitRotationGestures = new WeakMap<SVGCircleElement, OrbitRotationGesture>()
   orbitRotationHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(event => moveEnabled && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1191,5 +1298,12 @@ export function renderSystemMap({
     orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
   }
 
-  return { zoomBehavior, cancelActiveGesture, captureOrbitRotationWheel, handleObjectDrop }
+  return {
+    zoomBehavior,
+    cancelActiveGesture,
+    captureOrbitRotationWheel,
+    handleObjectDrop,
+    handleCreationClick,
+    getCreationCandidates,
+  }
 }

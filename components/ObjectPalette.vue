@@ -5,25 +5,34 @@
       <span class="object-palette-hint">Choose a category, then add or drag an object.</span>
     </div>
     <div class="object-palette-categories" role="group" aria-label="Object categories">
-      <button
+      <UButton
         v-for="group in groups"
         :key="group.family"
         class="object-palette-category-button"
+        as="button"
         type="button"
+        size="sm"
+        color="neutral"
+        :variant="activeFamily === group.family ? 'soft' : 'outline'"
         :aria-pressed="activeFamily === group.family"
         :title="`Show ${group.label} objects`"
         @click="activeFamily = group.family"
       >
+        <span v-if="activeFamily === group.family" aria-hidden="true">✓</span>
         {{ group.label }}
-      </button>
+      </UButton>
     </div>
     <div class="object-palette-controls">
       <div class="object-palette-items" role="group" :aria-label="activeGroup.label">
-        <button
+        <UButton
           v-for="type in activeGroup.types"
           :key="type.value"
           class="object-palette-button"
+          as="button"
           type="button"
+          size="sm"
+          color="neutral"
+          variant="outline"
           draggable="true"
           :disabled="props.saving"
           :aria-label="`Add ${type.label}`"
@@ -33,11 +42,15 @@
         >
           <span class="object-mark" aria-hidden="true">{{ catalogueMarks[type.value] }}</span>
           <span>{{ type.label }}</span>
-        </button>
+        </UButton>
       </div>
-      <button
+      <UButton
         class="object-palette-button object-palette-orbit"
+        as="button"
         type="button"
+        size="sm"
+        color="primary"
+        variant="outline"
         aria-label="Add orbit"
         draggable="true"
         :disabled="props.saving"
@@ -46,7 +59,7 @@
         @click="emit('add-orbit')"
       >
         <span aria-hidden="true">+</span> Add Orbit
-      </button>
+      </UButton>
     </div>
     <span v-if="props.selectedOrbit" class="placement-hint">
       New objects go in Orbit {{ props.selectedOrbit.order }}
@@ -146,7 +159,8 @@ function startOrbitDrag(event: DragEvent): void {
   border: 1px solid var(--line-soft);
   border-radius: 3px;
   padding: 0.45rem;
-  background: rgba(10, 17, 19, 0.42);
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text);
 }
 
 .object-palette-button {
@@ -154,46 +168,18 @@ function startOrbitDrag(event: DragEvent): void {
   align-items: center;
   gap: 0.25rem;
   min-height: 1.8rem;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  background: var(--control-bg);
-  color: var(--text-secondary);
   cursor: grab;
-  font-size: 0.62rem;
-  padding: 0.25rem 0.42rem;
 }
 
 .object-palette-category-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 1.65rem;
-  border: 1px solid var(--line-soft);
-  border-radius: 2px;
-  background: rgba(10, 17, 19, 0.42);
-  color: var(--text-muted);
+  min-height: 1.8rem;
   cursor: pointer;
-  font: 0.55rem Consolas, monospace;
-  padding: 0.22rem 0.4rem;
-}
-
-.object-palette-category-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent-hover);
-}
-
-.object-palette-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--control-hover);
-  color: var(--accent-hover);
 }
 
 .object-palette-button:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
-
-.object-palette-category-button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
@@ -209,17 +195,13 @@ function startOrbitDrag(event: DragEvent): void {
 
 .object-palette-hint,
 .placement-hint {
-  color: var(--text-muted);
-  font: 0.55rem Consolas, monospace;
+  color: var(--ui-text-toned);
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .placement-hint {
-  color: var(--text-muted);
-  font: 0.55rem Consolas, monospace;
-}
-
-.placement-hint {
-  font-size: 0.58rem;
+  font-size: 0.75rem;
 }
 
 .map-workspace-shell .system-map-tools .object-palette {
@@ -232,9 +214,8 @@ function startOrbitDrag(event: DragEvent): void {
   margin: 0;
   border-color: var(--line);
   padding: 0.4rem;
-  background: rgba(18, 28, 30, 0.96);
+  background: var(--ui-bg-elevated);
   box-shadow: 0 0.7rem 2rem rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(12px);
 }
 
 .map-workspace-shell .system-map-tools .object-palette {
@@ -251,9 +232,7 @@ function startOrbitDrag(event: DragEvent): void {
 }
 
 .map-workspace-shell .system-map-tools .object-palette-category-button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-hover);
+  font-weight: 700;
 }
 
 .map-workspace-shell .object-palette-heading {
@@ -266,20 +245,6 @@ function startOrbitDrag(event: DragEvent): void {
 
 .map-workspace-shell .object-palette-hint {
   white-space: nowrap;
-}
-
-.map-workspace-shell .system-map-tools .object-palette-hint,
-.map-workspace-shell .system-map-tools .placement-hint {
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
-.map-workspace-shell .system-map-tools .object-palette-button {
-  font-size: 0.875rem;
-}
-
-.map-workspace-shell .system-map-tools .object-palette-category-button {
-  font-size: 0.8125rem;
 }
 
 .map-workspace-shell .object-palette-categories {

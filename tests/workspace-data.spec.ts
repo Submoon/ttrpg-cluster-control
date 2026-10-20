@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, ensureMapDragPointsReachable, panMap, dragBy, setHeaderMapActionsOpen, downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, downloadImage, inspectImageSvg, setJsonFile, addCatalogueObject } from './helpers'
@@ -337,16 +338,20 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
   await hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ }).click()
-  await addCatalogueObject(page, 'jump-point')
+  await addCatalogueObject(page, 'jump-point', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Iria' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Vesper Exit' } })
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
-  await addCatalogueObject(page, 'moon')
+  await addCatalogueObject(page, 'moon', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Vesper Exit' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await saveMapObject(page)
@@ -453,9 +458,16 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   expect(deletionPreview).toContain('Harrow Entry')
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toHaveCount(0)
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
+})
 
-  await reloadedClusterHierarchy.getByRole('button', { name: 'Close hierarchy panel' }).click()
-  await reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+test('deleting an associated physical Station clears the Jump Point association after reload', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
   await addCatalogueObject(page, 'station')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Gate')
@@ -471,6 +483,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await selectInspectorOption(physicalStation, { label: /Vesper Gate/ })
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Gate/ }).click()
+  let deletionPreview = ''
   page.once('dialog', async (dialog) => {
     deletionPreview = dialog.message()
     await dialog.accept()
@@ -583,9 +596,11 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await addCustomFieldThroughDialog(page, 'Campaign notes', 'text')
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
-  await addCatalogueObject(page, 'planet')
+  await addCatalogueObject(page, 'planet', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Campaign notes').fill('A local secret.')
@@ -981,7 +996,7 @@ test('the Warden can import a standalone system without adding cluster routes', 
   expect(firstObject.id).not.toBe(secondObject.id)
 })
 
-test('the Warden can complete the local campaign workflow end to end', async ({ page }) => {
+test('the Warden can construct, edit, and reload the local campaign', async ({ page }) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -1012,15 +1027,19 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
   await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
-  await addCatalogueObject(page, 'planet')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  await addCatalogueObject(page, 'planet', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Warden notes').fill('Existing campaign record.')
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
-  await clickDockAction(page, 'Add orbit')
-  await addCatalogueObject(page, 'moon')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
+  await addCatalogueObject(page, 'moon', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Iria' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await saveMapObject(page)
@@ -1091,11 +1110,56 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
 
   const baseline = await downloadJson(page, 'Export Jump Cluster JSON')
   const originalSystem = baseline.cluster!.systems.find(system => system.name === systemName)!
+  const originalPlanet = originalSystem.objects.find(object => object.name === 'Iria')!
+  const existingField = baseline.objectFieldSettings.customFields.find(field => field.name === 'Warden notes')!
+  expect(originalPlanet.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
+  expect(baseline.cluster!.systems).toHaveLength(2)
+  expect(baseline.cluster!.routes).toHaveLength(1)
+})
+
+test('the Warden can import, export, and safely delete versioned campaign data', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
+  await page.getByLabel('First star system').fill('Campaign staging')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+
+  const clusterName = 'Kestrel Reach Prime'
+  const systemName = 'Vesper Prime'
+  const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map` })
+  const baselineImport = page.waitForEvent('dialog')
+  await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+  const baselinePreview = await baselineImport
+  expect(baselinePreview.message()).toContain('Star systems: 2')
+  expect(baselinePreview.message()).toContain('Map objects: 6')
+  expect(baselinePreview.message()).toContain('Jump Routes: 1')
+  await baselinePreview.accept()
+
+  await returnToClusterMap(page)
+  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  page.once('dialog', dialog => dialog.accept())
+  await clusterHierarchy.getByRole('button', { name: 'Delete Campaign staging system', exact: true }).click()
+  await expect(clusterMap.getByRole('button', { name: 'Open Campaign staging system map' })).toHaveCount(0)
+  await page.reload()
+  await returnToClusterMap(page)
+
+  const clusterNavigation = workspaceZoomControls(page)
+  const baseline = await downloadJson(page, 'Export Jump Cluster JSON')
+  const originalSystem = baseline.cluster!.systems.find(system => system.name === systemName)!
   const originalStar = originalSystem.objects.find(object => object.name === 'Primary Star')!
   const originalPlanet = originalSystem.objects.find(object => object.name === 'Iria')!
   const originalRoute = baseline.cluster!.routes.find(route => route.jumpLevel === 1)!
   const existingField = baseline.objectFieldSettings.customFields.find(field => field.name === 'Warden notes')!
   const originalSystemIds = baseline.cluster!.systems.map(system => system.id)
+  expect(baseline.cluster!.systems).toHaveLength(2)
   expect(originalPlanet.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
 
   const incoming = {
@@ -1296,8 +1360,8 @@ test('the Warden can complete the local campaign workflow end to end', async ({ 
     ?.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
 
   await returnToClusterMap(page)
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const deleteImportedSystem = clusterHierarchy.getByRole('button', { name: 'Delete Far Vesper system' })
+  const importedClusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const deleteImportedSystem = importedClusterHierarchy.getByRole('button', { name: 'Delete Far Vesper system' })
   let deletionPreview = ''
   page.once('dialog', async (dialog) => {
     deletionPreview = dialog.message()

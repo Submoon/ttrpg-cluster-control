@@ -1,6 +1,7 @@
 ---
 title: 'Populate star systems with every catalogue type and Orbit structure'
-status: open
+status: closed
+assignee: ticket23
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,13 +24,13 @@ Place every one of fifteen catalogue subtypes, including Other, at free/Orbit po
 
 ## Acceptance criteria
 
-1. [ ] Introduce real chooser, same-type lifetime, type/next-target/Quit and compact context-banner reuse through working system creation.
-2. [ ] Retain Back/context and Inspect on demand.
-3. [ ] Dismissal consumes Escape/outside input before map quit/placement, preserving progress/type/drafts; Quit drops only unfinished work.
-4. [ ] Place at the actual transformed/rotated/nested target, never a fixed angle.
-5. [ ] Indicate candidates without hover, explicitly resolve overlap, explain invalid targets without mutation/reset, and provide keyboard/single-pointer preview/Confirm/Cancel/coordinates/Orbit-position alternatives.
-6. [ ] Add Orbit chooses object host or unoccupied center with nested validation and independent per-axis corrections/notices.
-7. [ ] Pan/takeover/cancel/interruption cannot publish partial creation; valid completion publishes once with real save-failure/JSON/reload checks.
+1. [x] Introduce real chooser, same-type lifetime, type/next-target/Quit and compact context-banner reuse through working system creation.
+2. [x] Retain Back/context and Inspect on demand.
+3. [x] Dismissal consumes Escape/outside input before map quit/placement, preserving progress/type/drafts; Quit drops only unfinished work.
+4. [x] Place at the actual transformed/rotated/nested target, never a fixed angle.
+5. [x] Indicate candidates without hover, explicitly resolve overlap, explain invalid targets without mutation/reset, and provide keyboard/single-pointer preview/Confirm/Cancel/coordinates/Orbit-position alternatives.
+6. [x] Add Orbit chooses object host or unoccupied center with nested validation and independent per-axis corrections/notices.
+7. [x] Pan/takeover/cancel/interruption cannot publish partial creation; valid completion publishes once with real save-failure/JSON/reload checks.
 
 ## Scope and exclusions
 
@@ -67,4 +68,22 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not independently authorize GitHub writes, source-issue closure, merge or deployment.
+
+## Explicit implementation - 2026-10-20
+
+The human requests coordinated implement for ticket23, retaining the accepted prototype conclusions and maximum Nuxt UI reuse. Claimed from `0bd3b33d106fa0631ed7dbd5f6e73af018e1422e`, equal to the freshly fetched feature remote, with a clean tracked tree. Main remains `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only /44 feature-only commits). This is the intentional feature baseline; issue3 is open and unchanged. SOL6.1 High defines and reviews the sensitive placement/draft contract; bounded Luna XHIGH agents implement. Coordinator owns lifecycle/Git; one QA owner serializes runtime. Reuse the human-approved actual-product Playwright/import/download/reload seam. See [the execution record](../research/implementation-23-2026-10-20.md). No successor is started.
+
+## Resolution
+
+Completed from the intentional feature baseline `0bd3b33d106fa0631ed7dbd5f6e73af018e1422e`. Final fresh origin/source reads still match that feature remote and main `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only / 44 feature-only before this delivery); issue3 remains open and unchanged.
+
+All fifteen catalogue subtypes and hosted/unoccupied Orbits use one parent-owned, repeatable Add session with precise map or numeric targeting, named ambiguity, preview/Confirm/Cancel and truthful single publication/save recovery. Existing object positions, authoritative draft exclusion, MIME identities, codecs and database schema are preserved. Chooser dismissal consumes its sequence; view navigation cancels only unfinished geometry. Nuxt UI supplies the anchored chooser, category/catalogue buttons and precision controls. The small documented input-sequence adapter preserves ordinary native dragging and outside dismissal.
+
+The human's Chart details presentation feedback is included: padded Nuxt UI consultation, aligned statistics and a shared named header action. The obstructive tooltip is removed. Preservation also fixes preview redraw canceling new view navigation and a decorative rotation stem intercepting the vertical resize handle; geometry and actual rotation controls remain unchanged.
+
+Validation is attributed, not a blanket whole-suite certificate: the sole complete invocation is **111 passed / 8 failed / 119 executed**, zero skipped/flaky. All eight failed journeys have successful focused retests after reviewed corrections; logical test splits yield121 canonical cases. Final palette regressions pass6/6, the complete original ellipse journey passes1/1, final gesture checks pass2/2, and typecheck plus the required production builds pass. Five builds correspond to actual source changes; no complete-suite repeat, raised deadline, weakened precision or forced interaction is used. See the [execution record](../research/implementation-23-2026-10-20.md) and [final QA report](../implementation-lab/ticket-23-2026-10-20/qa/final-gate-report.md) for exact intermediate failures, identities and limitations.
+
+Final Add comparisons pass27/27 checks across three root/B pairs; the two unchanged-scope Chart views pass20/20. Eight selected images retain per-candidate provenance. Coordinator visual inspection accepts the bounded B/Dock structure; Nuxt control appearance and root/B fixture differences are explicit. Final category/help contrast minima exceed7:1. Physical Android Chrome, OS keyboard and safe-area checks remain unavailable. Owned servers are stopped and3100/3180 are free.
+
+Tickets24 and25 are now open and unclaimed;26 and28 remain open;27 and29 remain blocked. No successor is started. Source issue3 stays open, PR28 stays draft, and final whole-interface Astra review including Tools coherence remains ticket29.

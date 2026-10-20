@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
+import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'
 import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'
 import { dragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, editMapObject, saveMapObject, downloadImage, inspectImageSvg, selectCatalogueObjectButton } from './helpers'
@@ -38,7 +38,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   const navigation = workspaceZoomControls(page)
   await zoomOutMapToMinimum(page)
   await expect(navigation.locator('output')).toHaveText('25%')
@@ -48,7 +48,11 @@ test('the system map expands beyond its initial bounds and exports the full layo
   expect(Number(await orbit.getAttribute('aria-valuenow'))).toBeGreaterThan(960)
 
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
+  const objectCountBeforeDrop = await map.locator('.system-object').count()
   await dragHtmlElementToWorldPoint(page, planetButton, map, { x: 1400, y: 700 })
+  await expect(map.locator('.system-object')).toHaveCount(objectCountBeforeDrop + 1)
+  await quitSystemAdd(page)
+  await hierarchy.getByRole('button', { name: /Select PL-\d+, New planet/ }).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Far Planet')
   await saveMapObject(page)

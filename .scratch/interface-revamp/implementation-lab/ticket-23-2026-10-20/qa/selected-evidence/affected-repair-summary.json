@@ -1,0 +1,96 @@
+{
+  "candidate": "ticket23-final-repair-v5-frozen",
+  "canonicalDiscovered": 121,
+  "affected": 10,
+  "passed": 8,
+  "failed": 2,
+  "skipped": 0,
+  "flaky": 0,
+  "durationMs": 104935.331,
+  "sourcePaths": 107,
+  "sourceMismatches": 0,
+  "workers": 2,
+  "retries": 0,
+  "cases": [
+    {
+      "file": "cluster-map.spec.ts",
+      "title": "the Warden can navigate and arrange both maps",
+      "project": null,
+      "status": "expected",
+      "durationMs": 22087,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "project": null,
+      "status": "unexpected",
+      "durationMs": 28528,
+      "firstError": "Error: Map drag points are still unreachable after public Fit and bounded Zoom out recovery."
+    },
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+      "project": null,
+      "status": "expected",
+      "durationMs": 7733,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can review and safely confirm dependent map deletions",
+      "project": null,
+      "status": "expected",
+      "durationMs": 22720,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "deleting an associated physical Station clears the Jump Point association after reload",
+      "project": null,
+      "status": "expected",
+      "durationMs": 7927,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can construct, edit, and reload the local campaign",
+      "project": null,
+      "status": "expected",
+      "durationMs": 19242,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can import, export, and safely delete versioned campaign data",
+      "project": null,
+      "status": "expected",
+      "durationMs": 14779,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "Orbit sessions allow occupant-angle and unrelated-host changes, block related creation, and preserve both radii when reordered",
+      "project": null,
+      "status": "unexpected",
+      "durationMs": 33712,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "legacy Object and Orbit palette drags still add to the active map in every mode",
+      "project": null,
+      "status": "expected",
+      "durationMs": 21368,
+      "firstError": null
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus",
+      "project": null,
+      "status": "expected",
+      "durationMs": 3599,
+      "firstError": null
+    }
+  ]
+}

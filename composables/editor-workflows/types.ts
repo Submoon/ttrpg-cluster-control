@@ -3,6 +3,7 @@
  */
 import type { Ref } from 'vue'
 import type {
+  CatalogueSubtype,
   CustomFieldDefinition,
   CustomFieldApplicabilityTarget,
   CustomFieldType,
@@ -99,11 +100,62 @@ export type EntityInspectorSession = {
 /** Specific map/data commands checked against the active entity session's captured dependencies. */
 export type EntityCommand =
   | { kind: 'object-placement'; objectId: string; fromOrbitId?: string | null; toOrbitId?: string | null }
+  | { kind: 'object-create'; orbitId: string | null }
   | { kind: 'orbit-geometry'; orbitId: string }
   | { kind: 'orbit-host'; orbitId: string; hostId: string | null }
   | { kind: 'orbit-create'; hostId: string | null }
   | { kind: 'definition-mutation'; fieldId: string }
   | { kind: 'deletion'; target: MapDeletionTarget }
+
+/** Persistent catalogue choice for one system-map creation session. */
+export type SystemCreationType =
+  | { kind: 'object'; subtype: CatalogueSubtype }
+  | { kind: 'orbit' }
+
+/** A normalized free point, Orbit parameter angle, or object host selected for creation. */
+export type SystemCreationTarget =
+  | { kind: 'free'; point: Point }
+  | { kind: 'orbit'; orbitId: string; angle: number }
+  | { kind: 'host'; objectId: string }
+
+/** Named target offered to the Warden, including any current Inspector conflict. */
+export interface SystemCreationCandidate {
+  key: string
+  label: string
+  target: SystemCreationTarget
+  error: string | null
+}
+
+/** One transient, single-use target preview. Orbit geometry is expressed in scene units. */
+export interface SystemCreationPreview {
+  id: number
+  target: SystemCreationTarget
+  radii?: OrbitRadii
+  rotation?: number
+}
+
+/** Parent-owned Add state; presentation changes do not discard its type or form strings. */
+export interface SystemCreationSession {
+  id: number
+  clusterId: string
+  systemId: string
+  type: SystemCreationType
+  candidates: SystemCreationCandidate[]
+  preview: SystemCreationPreview | null
+  inputs: {
+    x: string
+    y: string
+    orbitId: string
+    angleDegrees: string
+    hostId: string
+    horizontalRadius: string
+    verticalRadius: string
+    rotation: string
+    otherType: string
+  }
+  errors: Record<string, string>
+  notice: string
+}
 
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
@@ -185,6 +237,8 @@ export interface SystemMapHandle extends MapNavigationHandle {
    * @returns Normalized map coordinates, or undefined when no candidate passes the point-clearance checks.
    */
   getDetachedOrbitCenter(orbitId: string): Point | undefined
+  /** Resolves all named creation targets near a raw SVG scene point. */
+  getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }
 
 /** Values submitted from a field-definition draft after the UI's confirmation step. */

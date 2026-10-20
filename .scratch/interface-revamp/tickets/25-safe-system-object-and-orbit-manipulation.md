@@ -1,6 +1,6 @@
 ---
 title: 'Reposition objects and manipulate Orbit geometry safely'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

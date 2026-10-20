@@ -68,6 +68,20 @@
               />
             </section>
           </template>
+          <template #inspector-header-actions>
+            <UButton
+              class="workspace-control chart-details-control"
+              color="neutral"
+              :variant="!selectedObject && !selectedOrbit ? 'soft' : 'outline'"
+              size="sm"
+              icon="i-lucide-info"
+              aria-label="Chart details"
+              :aria-pressed="!selectedObject && !selectedOrbit"
+              @click="showChartDetails()"
+            >
+              Chart details
+            </UButton>
+          </template>
           <template #header>
             <WorkspaceHeader
               :workspace="workspace"
@@ -105,6 +119,8 @@
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
+              :creation-session="activeView === 'system' ? creationSession : null"
+              :creation-type-label="creationTypeLabel"
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
@@ -113,6 +129,7 @@
               @toggle-hierarchy="togglePanel('hierarchy')"
               @toggle-inspector="togglePanel('inspector')"
               @files-open-change="headerFilesOpen = $event"
+              @quit-add="quitSystemAdd"
             />
           </template>
 
@@ -120,7 +137,16 @@
             <WorkspaceDock
               :mode="mapMode"
               :close-signal="dockCloseSignal"
-              @mode-change="setMapMode"
+              v-model:add-open="creationChooserOpen"
+              :creation-session="activeView === 'system' ? creationSession : null"
+              :creation-type-label="creationTypeLabel"
+              :selected-system="selectedSystem"
+              @mode-change="changeMapMode"
+              @update-creation-input="updateCreationInput"
+              @preview-creation-from-inputs="previewCreationFromInputs"
+              @confirm-creation="confirmCreation"
+              @choose-creation-candidate="chooseCreationCandidate"
+              @cancel-creation-preview="cancelCreationPreview"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -136,8 +162,8 @@
                   v-model:active-family="objectPaletteActiveFamily"
                   :selected-orbit="selectedOrbit"
                   :saving="saveState === 'saving'"
-                  @add-object="addObject"
-                  @add-orbit="addOrbit"
+                  @add-object="chooseObjectCreationType"
+                  @add-orbit="chooseOrbitCreationType"
                 />
               </template>
             </WorkspaceDock>
@@ -199,6 +225,9 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :creation-type="null"
+                    :creation-preview="null"
+                    :creation-chooser-open="creationChooserOpen"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -216,8 +245,6 @@
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
-                    @drop-orbit="handleOrbitDrop"
-                    @drop-object="addObject"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
                   />
                   <WorkspaceMapCanvas
@@ -234,6 +261,9 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :creation-type="creationSession?.type ?? null"
+                    :creation-preview="creationSession?.preview ?? null"
+                    :creation-chooser-open="creationChooserOpen"
                     :feedback-element="workspaceFeedbackRef"
                     :is-object-move-blocked="isObjectMoveBlocked"
                     :is-entity-command-blocked="isEntityCommandBlocked"
@@ -254,8 +284,9 @@
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
-                    @drop-orbit="handleOrbitDrop"
-                    @drop-object="addObject"
+                    @creation-target="offerCreationCandidates"
+                    @creation-drop-target="handleCreationDrop"
+                    @cancel-creation-preview="cancelCreationPreview"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
                   />
                   <template #fallback>
@@ -356,9 +387,13 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { ObjectFamily } from '../domain/workspace'
-import type { EntityCommand } from '../composables/editor-workflows/types'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { catalogueTypes, type CatalogueSubtype, type ObjectFamily } from '../domain/workspace'
+import type {
+  EntityCommand,
+  SystemCreationCandidate,
+  SystemCreationType,
+} from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -470,9 +505,16 @@ const {
   showChartDetails,
   beginObjectEdit,
   beginOrbitEdit,
-  addObject,
-  addOrbit,
-  handleOrbitDrop,
+  creationSession,
+  chooseCreationType,
+  chooseCreationCandidate,
+  updateCreationInput,
+  offerCreationCandidates,
+  previewCreationFromInputs,
+  confirmCreation,
+  cancelCreationPreview,
+  quitAdd,
+  handleCreationDrop: processCreationDrop,
   createCustomField,
   saveFieldDefinitionChanges,
   removeFieldDefinition,
@@ -505,6 +547,8 @@ function blockedEntityCommandMessage(command: EntityCommand): string {
   switch (command.kind) {
     case 'object-placement':
       return 'Resolve the Inspector draft before moving this object or changing a related placement.'
+    case 'object-create':
+      return 'Resolve the Inspector draft before creating an object in this Orbit.'
     case 'orbit-geometry':
     case 'orbit-host':
       return 'Resolve the Inspector draft before changing this Orbit or one of its hosts.'
@@ -521,7 +565,55 @@ const headerFilesOpen = ref(false)
 const recoveryDetailsOpen = ref(false)
 const workspaceFeedbackRef = ref<HTMLElement | null>(null)
 const objectPaletteActiveFamily = ref<ObjectFamily>('CelestialBody')
-const dockCloseSignal = computed(() => `${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
+const creationChooserOpen = ref(false)
+const creationTypeLabel = computed(() => {
+  const type = creationSession.value?.type
+  if (!type) return ''
+  if (type.kind === 'orbit') return 'Orbit'
+  return catalogueTypes.find(candidate => candidate.value === type.subtype)?.label ?? type.subtype
+})
+const dockCloseSignal = computed(() => `${activeView.value}:${selectedSystemId.value ?? ''}:${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
+watch(dockCloseSignal, () => { creationChooserOpen.value = false })
+watch([activeView, selectedSystemId], () => {
+  if (creationSession.value) quitSystemAdd()
+})
+
+function chooseObjectCreationType(subtype: CatalogueSubtype): void {
+  chooseCreationType({ kind: 'object', subtype })
+  creationChooserOpen.value = false
+}
+
+function chooseOrbitCreationType(): void {
+  chooseCreationType({ kind: 'orbit' })
+  creationChooserOpen.value = false
+}
+
+function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): boolean {
+  // Keep the palette mounted through the browser's drop dispatch; close it only after the shared
+  // owner has accepted the exact candidate set or exposed an ambiguity for correction.
+  const completed = processCreationDrop(type, candidates)
+  creationChooserOpen.value = false
+  return completed
+}
+
+function quitSystemAdd(): void {
+  creationChooserOpen.value = false
+  quitAdd()
+}
+
+function changeMapMode(mode: 'navigate' | 'select' | 'move'): void {
+  if (creationSession.value && mode !== mapMode.value) cancelCreationPreview()
+  setMapMode(mode)
+}
+
+function handleAddEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || event.defaultPrevented || !creationSession.value || creationChooserOpen.value) return
+  if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+  const target = event.target
+  if (target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]')) return
+  event.preventDefault()
+  quitSystemAdd()
+}
 
 const {
   exportError,
@@ -550,10 +642,14 @@ function warnBeforeLeaving(event: BeforeUnloadEvent): void {
 
 onMounted(() => {
   window.addEventListener('beforeunload', warnBeforeLeaving)
+  window.addEventListener('keydown', handleAddEscape)
   void hydrate()
 })
 
-onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeLeaving))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnBeforeLeaving)
+  window.removeEventListener('keydown', handleAddEscape)
+})
 
 async function retryLatestSave(): Promise<void> {
   try {

@@ -11,6 +11,11 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import type {
+  SystemCreationCandidate,
+  SystemCreationType,
+} from '../composables/editor-workflows/types'
+import { catalogueObjectLabel } from './catalogue-labels'
 
 export interface SystemMapGeometry {
   /** Saved object orbital parameter angles, in radians. */
@@ -469,4 +474,94 @@ export function orbitAtPoint(
       distance <= 16 && (!objectId || canPlaceObjectInOrbit(system, objectId, orbit.id)),
     )
     .sort((left, right) => left.distance - right.distance)[0]?.orbit
+}
+
+/**
+ * Resolves the first supported map-placement candidate for a catalogue object.
+ * The click point is raw SVG scene geometry; the returned free point uses the saved normalized map frame.
+ * Existing marks and their labels remain occupied targets instead of silently becoming free centers.
+ */
+export function creationCandidatesAtPoint(
+  system: StarSystem,
+  point: Point,
+  type: SystemCreationType,
+  geometry: SystemMapGeometry,
+): SystemCreationCandidate[] {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return []
+
+  const positions = objectPositions(system, geometry)
+  const nearbyObjects = system.objects
+    .map(object => ({ object, position: positions.get(object.id)! }))
+    // Glyph, key and name labels all belong to the same non-empty object mark.
+    .map(entry => ({ ...entry, distance: Math.hypot(point.x - entry.position.x, point.y - entry.position.y) }))
+    .filter(entry => entry.distance <= 52)
+    .sort((left, right) => left.distance - right.distance)
+
+  if (type.kind === 'object') {
+    const nearbyOrbits = system.orbits
+      .map(orbit => {
+        const center = orbitCenter(orbit, positions)
+        const radii = orbitRadii(system, orbit, geometry)
+        const rotation = orbitRotation(orbit, geometry)
+        const angle = orbitAngleAtPoint(point, center, radii, rotation)
+        const projected = orbitPointAtAngle(center, radii, angle, rotation)
+        return { orbit, angle, distance: Math.hypot(point.x - projected.x, point.y - projected.y) }
+      })
+      // Keep the manipulation resolver's existing scene-unit tolerance for placement targeting.
+      .filter(candidate => candidate.distance <= 16)
+      .sort((left, right) => left.distance - right.distance || left.orbit.order - right.orbit.order)
+
+    const orbitCandidates: SystemCreationCandidate[] = nearbyOrbits.map(({ orbit, angle }) => ({
+      key: `orbit:${orbit.id}`,
+      label: orbitLabel(system, orbit),
+      target: { kind: 'orbit', orbitId: orbit.id, angle },
+      error: null,
+    }))
+    const occupiedObjectCandidates: SystemCreationCandidate[] = nearbyObjects.map(({ object }) => ({
+      key: `occupied:${object.id}`,
+      label: `Object mark: ${catalogueObjectLabel(object)}`,
+      target: { kind: 'host', objectId: object.id },
+      error: `${catalogueObjectLabel(object)} already occupies this mark. Choose an Orbit or a clear map position.`,
+    }))
+
+    if (orbitCandidates.length > 0) return [...orbitCandidates, ...occupiedObjectCandidates]
+    if (occupiedObjectCandidates.length > 0) return occupiedObjectCandidates
+    return [{
+      key: `free:${point.x}:${point.y}`,
+      label: 'Free map position',
+      target: { kind: 'free', point: toNormalizedMapPoint(point) },
+      error: null,
+    }]
+  }
+
+  if (nearbyObjects.length > 0) {
+    return nearbyObjects.map(({ object }) => ({
+      key: `host:${object.id}`,
+      label: `Orbit around ${object.name}`,
+      target: { kind: 'host', objectId: object.id },
+      error: null,
+    }))
+  }
+
+  const nearbyCenter = system.orbits
+    .filter(orbit => orbit.hostId === null)
+    .map(orbit => ({ orbit, center: orbitCenter(orbit, positions) }))
+    .map(entry => ({ ...entry, distance: Math.hypot(point.x - entry.center.x, point.y - entry.center.y) }))
+    .find(entry => entry.distance < 40)
+
+  return [{
+    key: `center:${point.x}:${point.y}`,
+    label: 'New unoccupied Orbit center',
+    target: { kind: 'free', point: toNormalizedMapPoint(point) },
+    error: nearbyCenter
+      ? `This center is too close to ${orbitLabel(system, nearbyCenter.orbit)}. Choose another map position.`
+      : null,
+  }]
+}
+
+function orbitLabel(system: StarSystem, orbit: Orbit): string {
+  if (orbit.hostId === null) return `Orbit ${orbit.order} around unoccupied center`
+  const host = system.objects.find(object => object.id === orbit.hostId)
+  if (!host) throw new Error(`Orbit "${orbit.id}" has no host object.`)
+  return `Orbit ${orbit.order} around ${host.name}`
 }

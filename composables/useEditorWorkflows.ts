@@ -5,6 +5,7 @@ import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
 import { useEditorState } from './editor-workflows/useEditorState'
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
+import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import type { EditorWorkflowOptions } from './editor-workflows/types'
 
 /**
@@ -18,6 +19,13 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     workspace: options.workspace,
     commit: options.commit,
     resolveTransition: editorState.resolveTransition,
+    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+  })
+  const systemCreation = useSystemCreationWorkflows({
+    workspace: options.workspace,
+    selectedSystem: editorState.selectedSystem,
+    systemMapRef: editorState.systemMapRef,
+    applyWorkspace: options.applyWorkspace,
     isEntityCommandBlocked: editorState.isEntityCommandBlocked,
   })
   const clusterWorkflows = useClusterWorkflows({
@@ -49,8 +57,6 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     selectedSystem: editorState.selectedSystem,
     selectedObject: editorState.selectedObject,
     selectedOrbit: editorState.selectedOrbit,
-    selectedObjectId: editorState.selectedObjectId,
-    selectedOrbitId: editorState.selectedOrbitId,
     mapInspectorRef: editorState.mapInspectorRef,
     systemMapRef: editorState.systemMapRef,
     resolveTransition: editorState.resolveTransition,
@@ -60,10 +66,17 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     editorError: editorState.editorError,
   })
 
+  function quitAdd(): void {
+    systemCreation.quitAdd()
+    editorState.setMapMode('navigate')
+  }
+
   return {
     ...editorState,
     ...fieldDefinitions,
     ...clusterWorkflows,
     ...mapWorkflows,
+    ...systemCreation,
+    quitAdd,
   }
 }

@@ -82,8 +82,10 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
-  await addCatalogueObject(page, 'planet')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  await addCatalogueObject(page, 'planet', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
@@ -111,14 +113,17 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   expect(Math.abs(await orbitalAngle(map) - angleBeforeResize)).toBeLessThan(0.02)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  await setWorkspaceMapMode(page, 'Move')
   const largeOrbitRadius = map.getByRole('slider', { name: 'Resize Orbit 2 around Primary Star' })
   await largeOrbitRadius.press('End')
   await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '570')
   await page.keyboard.press('ArrowRight')
   await expect(largeOrbitRadius).toHaveAttribute('aria-valuenow', '571')
 
-  await addCatalogueObject(page, 'hazard')
+  await addCatalogueObject(page, 'hazard', {
+    target: { kind: 'orbit', label: 'Orbit 2 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Glass Wake')
   await saveMapObject(page)

@@ -3,6 +3,7 @@ import {
   addCatalogueObject,
   catalogueSubtypes,
   clickDockAction,
+  completeCatalogueObjectCreation,
   editMapObject,
   openChartDetails,
   returnToClusterMap,
@@ -345,6 +346,7 @@ test('every catalogue glyph matches the corresponding Add object action', async 
     const menuMark = (await button.locator('.object-mark').textContent())?.trim()
     const objectCount = await mapObjects.count()
     await button.click()
+    await completeCatalogueObjectCreation(page, subtype, { noSelection: true })
     await expect(mapObjects).toHaveCount(objectCount + 1)
     await expect(mapObjects.nth(objectCount).locator('.system-object-glyph')).toHaveText(menuMark!)
   }

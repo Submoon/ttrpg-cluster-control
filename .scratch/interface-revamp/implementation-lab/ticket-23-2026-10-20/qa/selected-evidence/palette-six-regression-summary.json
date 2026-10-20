@@ -1,0 +1,51 @@
+{
+  "testExit": 0,
+  "sourcePaths": 107,
+  "sourceMismatches": 0,
+  "stats": {
+    "startTime": "2026-10-20T11:40:00.069Z",
+    "duration": 50313.263,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "the Warden adds and reloads celestial bodies and fields",
+      "status": "expected",
+      "durationMs": 16156,
+      "errors": []
+    },
+    {
+      "title": "the Warden adds and reloads installations and vessels",
+      "status": "expected",
+      "durationMs": 18632,
+      "errors": []
+    },
+    {
+      "title": "the Warden adds and reloads jump points and phenomena",
+      "status": "expected",
+      "durationMs": 13124,
+      "errors": []
+    },
+    {
+      "title": "dragging Add Orbit onto a map object hosts it there",
+      "status": "expected",
+      "durationMs": 3827,
+      "errors": []
+    },
+    {
+      "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+      "status": "expected",
+      "durationMs": 20953,
+      "errors": []
+    },
+    {
+      "title": "the Warden can import, export, and safely delete versioned campaign data",
+      "status": "expected",
+      "durationMs": 14867,
+      "errors": []
+    }
+  ]
+}

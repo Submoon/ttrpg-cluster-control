@@ -1,0 +1,969 @@
+{
+  "candidate": "ticket23-final-v4",
+  "canonical": 119,
+  "compiled": 118,
+  "developmentStorage": 1,
+  "passed": 111,
+  "failed": 8,
+  "skipped": 0,
+  "flaky": 0,
+  "durationMs": 549314.279,
+  "sourcePaths": 106,
+  "sourceMismatches": 0,
+  "workers": 2,
+  "retries": 0,
+  "cases": [
+    {
+      "file": "cluster-map.spec.ts",
+      "title": "the Warden can navigate and arrange both maps",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 33886,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "cluster-map.spec.ts",
+      "title": "the Jump Route line follows a system while it is being dragged",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 11119,
+      "firstError": null
+    },
+    {
+      "file": "cluster-map.spec.ts",
+      "title": "the Warden can connect Jump Points across a cluster and record an unresolved exit",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 18882,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the Warden can build and edit a nested star-system map",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 23416,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the Warden adds and reloads celestial bodies and fields",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 10837,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the Warden adds and reloads installations and vessels",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 13674,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the Warden adds and reloads jump points and phenomena",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 15620,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "Chart details is an active, keyboard-accessible inspector view",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 8918,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the Warden can configure native and reusable custom object fields",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 26989,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "custom field category and subtype scopes hide ineligible objects without deleting values",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 10809,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "field definitions dialog stays centered on desktop and narrow viewports",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1991,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "field definition management previews destructive changes in a map-bound dialog",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 14393,
+      "firstError": null
+    },
+    {
+      "file": "object-fields.spec.ts",
+      "title": "the retired field-definition prototype route is unavailable",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 923,
+      "firstError": null
+    },
+    {
+      "file": "system-map.spec.ts",
+      "title": "the system map can zoom well beyond 400 percent",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2477,
+      "firstError": null
+    },
+    {
+      "file": "system-map.spec.ts",
+      "title": "the system map expands beyond its initial bounds and exports the full layout",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 14485,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "dragging an Orbit ring scales both axes and the system caption stays concise",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6672,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 14230,
+      "firstError": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m"
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "the Warden can detach a hosted Orbit and move its unoccupied center",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 18410,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "an object drag keeps its hosted Orbit with it before release",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 12783,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "dragging Add Orbit onto a map object hosts it there",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2784,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 24925,
+      "firstError": null
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 20695,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "hiding the chart-name dialog keeps the draft available to resume",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3084,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "dismissing Chromium beforeunload keeps a modified hidden chart draft",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2086,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "Add system applies dirty chart names before building from the latest workspace",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5380,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a hidden invalid chart draft survives an unrelated object placement and stays out of export",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 7249,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "restoring both committed names makes a stale validation error a clean transition",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3158,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a guarded transition can stay with the draft or discard it and continue",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3676,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "export failures stay separate from chart draft and workspace save feedback",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3141,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "failed chart writes keep applied memory and Retry saves the latest workspace without replaying placement",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 7757,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "an older successful write cannot mark a newer applied workspace saved or end its draft",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4833,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "an older failed write cannot replace newer saving feedback or clear a draft",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4347,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "canceling the initial system-delete review leaves a hidden chart draft and error untouched",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4380,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "system deletion resolves its chart target after review and asks again for the refreshed plan",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 7378,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "chart-name dialog buttons show the semantic keyboard focus outline",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2360,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a delayed import acknowledgement does not take ownership of a pending object guard",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 9464,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a delayed import acknowledgement does not take ownership of a pending orbit guard",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 12648,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a delayed import acknowledgement does not take ownership of a pending route guard",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5356,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "a delayed import navigation that meets an invalid new draft stays with its exact values and error",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4333,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "an import completion with a new chart draft honors apply before navigation",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4625,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "title": "an import completion with a new chart draft honors discard before navigation",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4625,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "title": "a hidden clean chart-name session remains resumable without claiming unapplied changes",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2640,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "title": "save feedback has one compact bottom owner and leaves map controls hit-testable",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3134,
+      "firstError": null
+    },
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 31170,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "title": "a first workspace visit keeps the full map board open with a bottom mode Dock",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1560,
+      "firstError": null
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3076,
+      "firstError": null
+    },
+    {
+      "file": "workspace-composition.spec.ts",
+      "title": "a second touch cannot take over an active panel-resize pointer",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1927,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "deleting a map object without dependents still asks for confirmation",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1787,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "older saved Jump Routes and circle/ellipse layouts restore and reject invalid levels",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 11,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "restoring a workspace removes legacy object targets without deleting values",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "custom field category and subtype scopes are united on independent system import",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 12042,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can review and safely confirm dependent map deletions",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 39070,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can export a cluster and standalone system as versioned JSON",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 27672,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can validate and import an independent JSON copy",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 9606,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can import a standalone system without adding cluster routes",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4444,
+      "firstError": null
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can complete the local campaign workflow end to end",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 46015,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "title": "same-kind object switches keep Inspector labels attached to the selected controls",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6056,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "title": "native and custom single-select options can store the literal unset token",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 9766,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "title": "an object inspector keeps its draft across Hide and offers persistent Apply actions",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2801,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "title": "an Orbit Inspector applies rotation and numeric geometry in Select mode",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 13185,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "title": "the Orbit Inspector footer stays visible and hittable after its body scrolls",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 8234,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "object Apply preserves typed zero, false and hidden assignments while an unrelated definition changes",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6368,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "object transitions keep Stay, Apply and Discard distinct, while a clean edit leaves directly",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5879,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "Orbit sessions allow occupant-angle and unrelated-host changes, block related creation, and preserve both radii when reordered",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 9630,
+      "firstError": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed"
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "a failed Inspector save leaves current memory intact and Retry save persists only the applied record",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 8869,
+      "firstError": null
+    },
+    {
+      "file": "workspace-entity-sessions.spec.ts",
+      "title": "a failed Orbit Apply and continue keeps the transition and Retry persists its applied rotation",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 9228,
+      "firstError": null
+    },
+    {
+      "file": "workspace-launch.spec.ts",
+      "title": "the product root creates and resumes a saved local workspace",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2526,
+      "firstError": null
+    },
+    {
+      "file": "workspace-launch.spec.ts",
+      "title": "keyboard focus remains visible on launch and recovery actions in a short landscape viewport",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2496,
+      "firstError": null
+    },
+    {
+      "file": "workspace-map-gesture-guards.spec.ts",
+      "title": "Move refuses an object with an unresolved inspector draft before preview and opens Resolve access",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 9632,
+      "firstError": null
+    },
+    {
+      "file": "workspace-map-gesture-guards.spec.ts",
+      "title": "keyboard Enter and Space still activate a map object immediately after pointer pan",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3392,
+      "firstError": null
+    },
+    {
+      "file": "workspace-map-gesture-guards.spec.ts",
+      "title": "browser blur cancels a Move object preview before its later pointer release",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2499,
+      "firstError": null
+    },
+    {
+      "file": "workspace-map-gesture-guards.spec.ts",
+      "title": "changing interaction mode cancels a pending pointer long press",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3121,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "a fresh compact workspace starts on the map without opening a panel",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1967,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "the Dock and zoom controls expose separate map toolbars",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2426,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "reselecting the current object or Orbit reopens Inspect without changing the selection",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6350,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "Navigate opens a system while Select keeps the cluster map active and inspects system data",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3981,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "Navigate and Select drags pan a system node without opening or selecting it",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4066,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "right-click keeps the native context menu while right-drag pans in every mode",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5150,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "A to B to A restores each system camera and the selected map object",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6914,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "deleting the inspected cluster system clears its current selection",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3393,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "Select can rename system B from its inspector while keeping system A active",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4854,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "a held mouse press inspects an entity without navigating or publishing a click",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2559,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "Move selects map entities without opening Inspect or entering a system",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4356,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "map focus pans with arrow keys while focused Orbit controls keep their geometry keys",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3211,
+      "firstError": null
+    },
+    {
+      "file": "workspace-navigation.spec.ts",
+      "title": "legacy Object and Orbit palette drags still add to the active map in every mode",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 7451,
+      "firstError": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed"
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "desktop panels remain independent and the portaled Map files menu stays hit-testable",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4992,
+      "firstError": null
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus",
+      "project": "compiled",
+      "status": "unexpected",
+      "durationMs": 30985,
+      "firstError": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "touch long press keeps focus inside the compact inspector after the touch is released",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4828,
+      "firstError": null
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "desktop-to-compact reflow retains an invalid chart-name draft and the active map mode",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 7358,
+      "firstError": null
+    },
+    {
+      "file": "workspace-panels.spec.ts",
+      "title": "a nested chart dialog pauses the compact panel focus trap and returns focus to its opener",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4459,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4941,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "the last valid workspace can be restored after the current snapshot fails to load",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3665,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "a failed backup restore stays unavailable and preserves both records until a retry succeeds",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2723,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "the recovery screen explains when no local backup is available",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1856,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "a damaged backup is rejected without replacing the current record",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1822,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "a temporary IndexedDB opening failure can be retried without exposing a partial workspace",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1477,
+      "firstError": null
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "title": "a failed IndexedDB save preserves current and backup snapshots",
+      "project": "development-storage",
+      "status": "expected",
+      "durationMs": 18959,
+      "firstError": null
+    },
+    {
+      "file": "workspace-route-inspection.spec.ts",
+      "title": "Add Jump Route opens a route draft while a cluster system is inspected",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 8664,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation-geometry.spec.ts",
+      "title": "system Add targets rotated primary and nested Orbits without shifting legacy occupants",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6284,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation-geometry.spec.ts",
+      "title": "a second map touch cancels only the creation preview and leaves Add ready for a fresh target",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 6027,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation.spec.ts",
+      "title": "changing Placement inputs invalidates the old preview before an invalid replacement",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2725,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation.spec.ts",
+      "title": "system Add previews before confirming, repeats the type, and reloads confirmed placements",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 8340,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation.spec.ts",
+      "title": "Orbit Add retains its target, corrects each axis, and retries one applied write",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 12984,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation.spec.ts",
+      "title": "Add chooser dismissal consumes outside contact and preserves the next right-pan",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5368,
+      "firstError": null
+    },
+    {
+      "file": "workspace-system-creation.spec.ts",
+      "title": "an Orbit draft blocks only same-host Orbit creation and survives independent creations",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 10507,
+      "firstError": null
+    },
+    {
+      "file": "workspace-theme.spec.ts",
+      "title": "the shell follows the OS until an explicit theme choice persists across reloads",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2635,
+      "firstError": null
+    },
+    {
+      "file": "workspace-theme.spec.ts",
+      "title": "theme changes recolor both maps without changing workspace drafts or writing IndexedDB",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 5816,
+      "firstError": null
+    },
+    {
+      "file": "workspace-theme.spec.ts",
+      "title": "theme changes preserve object and route drafts plus pending and failed save status",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 10926,
+      "firstError": null
+    },
+    {
+      "file": "workspace-theme.spec.ts",
+      "title": "keyboard focus stays fully visible on the Fields command in short landscape view",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1641,
+      "firstError": null
+    },
+    {
+      "file": "workspace-touch-takeover.spec.ts",
+      "title": "a second touch cancels a Move preview before pinch and pan change only the view",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3578,
+      "firstError": null
+    },
+    {
+      "file": "workspace-touch-takeover.spec.ts",
+      "title": "Navigate and Move long presses inspect the same system, consume release, and leave a fresh tap usable",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4746,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "the application exposes its generic brand visibly and accessibly",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 1143,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "Hierarchy starts closed, desktop panels overlay the map, and compact panels stay exclusive",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3967,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "the Add to map palette stays reachable inside its Dock popover at desktop and compact widths",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2564,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "object categories reveal their matching catalogue actions on narrow screens",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 2584,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "cluster creation actions and Map files follow the active map context",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3636,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "Map context and consultation details retain chart names and counts outside the SVG",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 4411,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "panel toggles preserve the active mode and Delete remains safe while editing",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 3460,
+      "firstError": null
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "title": "every catalogue glyph matches the corresponding Add object action",
+      "project": "compiled",
+      "status": "expected",
+      "durationMs": 25417,
+      "firstError": null
+    }
+  ]
+}

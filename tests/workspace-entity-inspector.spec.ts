@@ -11,6 +11,7 @@ import {
   openWorkspaceHierarchy,
   openFieldDefinitionDialog,
   readInspectorSelection,
+  quitSystemAdd,
   saveMapObject,
   selectInspectorOption,
   setWorkspaceMapMode,
@@ -118,6 +119,8 @@ test('an Orbit Inspector applies rotation and numeric geometry in Select mode', 
   const center = { x: 360, y: 320 }
   await ensureMapDragPointsReachable(page, map, addOrbit, center)
   await dragHtmlElementToWorldPoint(page, addOrbit, map, center)
+  await expect(map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })).toBeVisible()
+  await quitSystemAdd(page)
   await setWorkspaceMapMode(page, 'Select')
 
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
@@ -165,6 +168,8 @@ test('the Orbit Inspector footer stays visible and hittable after its body scrol
   const center = { x: 360, y: 320 }
   await ensureMapDragPointsReachable(page, map, addOrbit, center)
   await dragHtmlElementToWorldPoint(page, addOrbit, map, center)
+  await expect(map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })).toBeVisible()
+  await quitSystemAdd(page)
   await setWorkspaceMapMode(page, 'Select')
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()

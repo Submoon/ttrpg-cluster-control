@@ -1,0 +1,20 @@
+# Ticket 23 bounded final QA plan
+
+Preparation only. Wait for both writers, the coordinator's source freeze and explicit runtime release. Preserve the first vertical 1/1, Placement 1/1 and actual overlap RED; neither setup failures nor source review count as a feature pass.
+
+1. With repository writes frozen, verify the released manifest, typecheck, and execute only released new/affected canonical journeys on the identified dev server. Preserve exact failed attempts; corrections justify affected-only follow-ups. Chart's legacy creation helper migrates with owner A; no separate premature Chart rerun is planned.
+2. After focused GREEN and independent review, record the final source identity, stop only the verified owned dev tree and build once. Identify compiled 3180. Start identified dev 3100 afterward against the same frozen sources; `.output` stays stable.
+3. Discover all canonical cases and the complementary projects without executing a baseline suite. Require the same total unique identities, exactly one development-storage title and all other cases in compiled. Run the complete suite once with `QA_FINAL_SPLIT=1`, two workers, retries 0, maxFailures 0 and unchanged deadlines. Keep real project/runtime attribution; no skipped/excluded capability.
+4. Use existing Playwright/public fixture/import/download controls for a bounded compiled Add comparison. Target six Add PNGs (three root/B pairs) plus two refreshed Chart PNGs after the actual shared-header tooltip source repair. Eight selected positive PNGs remain the total budget. Reuse shell evidence and the prepared focus/hit utilities; no separate component harness, acceptance CSS or exhaustive matrix.
+
+| Pair | Actual root state | Viewport/theme | Reference and observations |
+| --- | --- | --- | --- |
+| 1 | Anchored Add chooser with catalogue/category content | 1440×900 light | Actual B Add chooser; Dock anchoring, ordinary choices/dismissal, readable names and visible keyboard focus |
+| 2 | Persistent selected type and actual candidate/preview status | 390×844 dark | Nearest actual B compact Add state; context/Quit, exclusive overlays, visible action reachability and explicit named ambiguity |
+| 3 | Placement alternatives and confirmed/cancelable targeting controls | 844×390 light | Nearest actual B short-height chooser/creation structure; scrolling, ordinary Confirm/Cancel hits and unobscured focus |
+
+B remains memory-only. Record its actual public state and any missing domain/preview counterpart; Orbit comparisons may be structural, never invented matching data. Root uses the final authoritative-domain-valid dense/rotated/nested fixture through public import, recording actual copied IDs and downloaded JSON hash. Reuse a passed compact 390×500 canonical journey for reduced-height action reachability; add an image only for a distinct observed failure. Sample only changed useful text/control contrast where necessary, using the existing measurement utility and restoring any measurement suppression.
+
+Keep the earlier Chart attempt historically: padding/stat/hit/natural-focus observations passed, compact close-focus passed, and the desktop automatic-return failure was a QA overreach adjudicated from existing compact-only behavior. Do not relabel its original 16/1 result. The later shared-header tooltip source repair justifies the coordinator-released refresh of both 390×844 dark and 1440×900 light Chart views, preserving compact automatic return and desktop ordinary keyboard reopenability as separate observations.
+
+Curate concise normalized outcomes, manifests/identities, exact commands and selected images. Raw logs, failed screenshots/traces and source freezes stay under literal host TEMP; no source trees or patch dumps. Record passed/failed/unreached/unavailable separately. Physical Android Chrome, real OS keyboard, safe areas and physical gestures remain unavailable; viewport/touch emulation is not device proof. Stop verified owned servers and confirm 3100/3180 free before handoff. QA does not own Git, lifecycle closure or successor implementation.

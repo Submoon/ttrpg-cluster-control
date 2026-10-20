@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, workspaceZoomControls } from './helpers'
+import { activeWorkspaceFeedback, addCatalogueObject, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -157,7 +157,7 @@ test('save feedback has one compact bottom owner and leaves map controls hit-tes
       })).toBe(true)
 
       const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-      await inspector.getByRole('button', { name: 'Chart details' }).click()
+      await page.getByRole('button', { name: 'Chart details', exact: true }).click()
       const chartNames = inspector.getByRole('button', { name: 'Edit chart names' })
       await expect(chartNames).toBeVisible()
       expect(await chartNames.evaluate((element) => {
@@ -189,13 +189,8 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Add to map', exact: true }).click()
-  const palette = page.getByRole('region', { name: 'Object palette' })
-  await palette.getByRole('group', { name: 'Object categories' })
-    .getByRole('button', { name: 'Celestial bodies', exact: true }).click()
-  await palette.getByRole('button', { name: 'Add Planet', exact: true }).click()
+  await addCatalogueObject(page, 'planet', { noSelection: true })
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
-  await page.keyboard.press('Escape')
   await closeCompactPanels(page)
 
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
@@ -215,7 +210,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   const cameraBeforeFeedback = await systemMap.getAttribute('transform')
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const chartInspector = page.locator('#workspace-inspector-panel')
-  await chartInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   await chartInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
   const appliedDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
   await appliedDialog.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
@@ -229,7 +224,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await closeCompactPanels(page)
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const draftInspector = page.locator('#workspace-inspector-panel')
-  await draftInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   await draftInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
   const draftDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
   await draftDialog.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')

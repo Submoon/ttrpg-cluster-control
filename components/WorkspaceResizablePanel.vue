@@ -15,8 +15,24 @@
         class="workspace-side-panel-content"
         :class="{ 'workspace-side-panel-content-inspector': props.panelId === 'workspace-inspector-panel' }"
       >
+        <div v-if="props.showHeaderActions" class="workspace-side-panel-header">
+          <div class="workspace-side-panel-header-actions">
+            <slot name="header-actions" />
+          </div>
+          <UButton
+            v-if="props.showCloseButton"
+            class="workspace-control panel-close-button"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            type="button"
+            :aria-label="props.panelId.includes('hierarchy') ? 'Close hierarchy panel' : 'Close inspector panel'"
+            :aria-controls="props.panelId"
+            @click="emit('close')"
+          >×</UButton>
+        </div>
         <UButton
-          v-if="props.showCloseButton"
+          v-else-if="props.showCloseButton"
           class="workspace-control panel-close-button"
           color="neutral"
           variant="outline"
@@ -71,9 +87,11 @@ const props = withDefaults(defineProps<{
   visible: boolean
   compact: boolean
   board: HTMLElement | null
+  showHeaderActions?: boolean
   showCloseButton?: boolean
   showCompactRecovery?: boolean
 }>(), {
+  showHeaderActions: false,
   showCloseButton: true,
   showCompactRecovery: true,
 })
@@ -177,3 +195,26 @@ onBeforeUnmount(() => {
   cancelActivePointer()
 })
 </script>
+
+<style scoped>
+.workspace-side-panel-header {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 2.8rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem 0.1rem;
+}
+
+.workspace-side-panel-header-actions { display: flex; min-width: 0; align-items: center; gap: 0.35rem; }
+
+.workspace-side-panel-header .panel-close-button {
+  position: relative;
+  top: auto;
+  float: none;
+  flex: 0 0 2.2rem;
+  align-self: auto;
+  margin: 0;
+}
+</style>

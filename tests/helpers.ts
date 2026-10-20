@@ -120,6 +120,10 @@ export async function ensureMapDragPointsReachable(
     await expect(source).toBeVisible()
     await source.scrollIntoViewIfNeeded()
   }
+  const closeChooserBeforeCameraChange = async (): Promise<void> => {
+    if (!paletteSource) return
+    await dismissAddChooser(page)
+  }
   await ensureSourceVisible()
   await source.scrollIntoViewIfNeeded()
 
@@ -149,9 +153,10 @@ export async function ensureMapDragPointsReachable(
   const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
   if (await isReachable()) return
 
+  await closeChooserBeforeCameraChange()
   await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-  await ensureSourceVisible()
   if (initialZoom === '25%') {
+    await closeChooserBeforeCameraChange()
     await zoomOutMapToMinimum(page)
     if (!(await isReachable())) {
       throw new Error('Map drag points are unreachable at the required 25% zoom after Fit.')
@@ -162,6 +167,7 @@ export async function ensureMapDragPointsReachable(
   const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
   for (let attempt = 0; attempt < 64; attempt += 1) {
     if (await isReachable()) return
+    await closeChooserBeforeCameraChange()
     if (await zoomOut.isDisabled()) break
     await zoomOut.click()
   }
@@ -187,6 +193,7 @@ export async function beginDragToWorldPoint(
   point: WorldPoint,
   roundEndpoint = false,
 ): Promise<void> {
+  await dismissAddChooser(page)
   await setWorkspaceMapMode(page, 'Move')
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
@@ -230,6 +237,7 @@ export async function dragOrbitToWorldPoint(
   point: WorldPoint,
   startAngle = 0,
 ): Promise<void> {
+  await dismissAddChooser(page)
   await setWorkspaceMapMode(page, 'Move')
   await orbit.scrollIntoViewIfNeeded()
   const coordinates = await orbit.evaluate((element, target) => {
@@ -260,6 +268,7 @@ export async function panMap(
   map: import('@playwright/test').Locator,
   delta: WorldPoint,
 ): Promise<void> {
+  await dismissAddChooser(page)
   await map.scrollIntoViewIfNeeded()
   const start = await map.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
@@ -282,6 +291,7 @@ export async function dragBy(
 
   // Capture the source while its Navigate-mode accessible name is still current.
   // Switching to Move changes map-entity labels to their Select action names.
+  await dismissAddChooser(page)
   await setWorkspaceMapMode(page, 'Move')
   const x = sourceBox.x + sourceBox.width / 2
   const y = sourceBox.y + sourceBox.height / 2
@@ -298,7 +308,10 @@ export async function setHeaderMapActionsOpen(
   const toggle = page.getByRole('button', { name: 'Map files', exact: true })
   await expect(toggle).toBeVisible()
   const isOpen = await toggle.getAttribute('aria-expanded') === 'true'
-  if (isOpen !== open) await toggle.click()
+  if (isOpen !== open) {
+    await dismissAddChooser(page)
+    await toggle.click()
+  }
 }
 
 /** Finds the shared Dock containing map interaction modes and Add. */
@@ -318,6 +331,7 @@ export function workspaceZoomOutput(page: import('@playwright/test').Page): impo
 /** Reaches the public minimum zoom without assuming a particular starting level. */
 export async function zoomOutMapToMinimum(page: import('@playwright/test').Page): Promise<void> {
   const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  if (!(await zoomOut.isDisabled())) await dismissAddChooser(page)
   for (let step = 0; step < 64 && !(await zoomOut.isDisabled()); step += 1) {
     await zoomOut.click()
   }
@@ -329,7 +343,10 @@ export async function openWorkspaceZoomNavigation(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
   const toggle = workspaceZoomControls(page).getByRole('button', { name: 'Open map navigation controls' })
-  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  await dismissAddChooser(page)
+  if (await toggle.getAttribute('aria-expanded') !== 'true') {
+    await toggle.click()
+  }
   const controls = page.getByRole('group', { name: 'Map zoom' })
   await expect(controls).toBeVisible()
   return controls
@@ -342,7 +359,10 @@ export async function openWorkspaceHierarchy(
 ): Promise<import('@playwright/test').Locator> {
   const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await expect(toggle).toBeVisible()
-  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  await dismissAddChooser(page)
+  if (await toggle.getAttribute('aria-expanded') !== 'true') {
+    await toggle.click()
+  }
   const hierarchy = page.getByRole('complementary', { name })
   await expect(hierarchy).toBeVisible()
   return hierarchy
@@ -367,7 +387,10 @@ export async function setWorkspaceMapMode(
   mode: 'Navigate' | 'Select' | 'Move',
 ): Promise<void> {
   const button = workspaceNavigation(page).getByRole('button', { name: mode, exact: true })
-  if (await button.getAttribute('aria-pressed') !== 'true') await button.click()
+  if (await button.getAttribute('aria-pressed') !== 'true') {
+    await dismissAddChooser(page)
+    await button.click()
+  }
 }
 
 /** Returns to the cluster through the real compact-context Back control. */
@@ -378,6 +401,7 @@ export async function returnToClusterMap(page: import('@playwright/test').Page):
   await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
   if (await back.isVisible()) {
+    await dismissAddChooser(page)
     await back.click()
   } else {
     await expect(contextKind).toHaveText('Jump Cluster')
@@ -403,8 +427,22 @@ export async function dockAction(
 export async function clickDockAction(
   page: import('@playwright/test').Page,
   name: string,
+  options: OrbitCreationOptions = {},
 ): Promise<void> {
   await (await dockAction(page, name)).click()
+  await dismissAddChooser(page)
+
+  if (name === 'Add orbit') await completeOrbitCreation(page, options)
+}
+
+async function dismissAddChooser(page: import('@playwright/test').Page): Promise<void> {
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') {
+    // Its outside-dismiss capture consumes the first pointer gesture on another control.
+    // Dismiss only the chooser; Add remains armed until Confirm or Quit Add.
+    await page.keyboard.press('Escape')
+    await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
+  }
 }
 
 export function jsonMapImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
@@ -688,11 +726,34 @@ export const objectPaletteCategoryBySubtype: Record<typeof catalogueSubtypes[num
   other: 'Other',
 }
 
+export type CatalogueCreationTarget =
+  | { kind: 'free'; x: number; y: number }
+  | { kind: 'orbit'; label: string; angleDegrees?: number }
+
+export type CatalogueCreationOptions = {
+  target?: CatalogueCreationTarget
+  preserveDraft?: boolean
+  noSelection?: boolean
+  typeLabel?: string
+}
+
+export type OrbitCreationTarget =
+  | { kind: 'center'; x: number; y: number }
+  | { kind: 'host'; name: string }
+
+export type OrbitCreationOptions = {
+  target?: OrbitCreationTarget
+  preserveDraft?: boolean
+  noSelection?: boolean
+}
+
 export async function selectCatalogueObjectButton(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
 ): Promise<import('@playwright/test').Locator> {
-  const addMenu = page.getByRole('button', { name: 'Add to map', exact: true })
+  // The modal Add popover aria-hides its trigger while open, so keep this locator stable
+  // for the expanded-state assertion after opening it.
+  const addMenu = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
   const palette = page.getByRole('region', { name: 'Object palette' })
   if (await addMenu.getAttribute('aria-expanded') !== 'true') {
     await addMenu.click()
@@ -713,6 +774,155 @@ export async function selectCatalogueObjectButton(
 export async function addCatalogueObject(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
+  options: CatalogueCreationOptions = {},
 ): Promise<void> {
   await (await selectCatalogueObjectButton(page, subtype)).click()
+  await completeCatalogueObjectCreation(page, subtype, options)
+}
+
+/** Completes an already armed catalogue type through public Placement, Preview and Confirm controls. */
+export async function completeCatalogueObjectCreation(
+  page: import('@playwright/test').Page,
+  subtype: typeof catalogueSubtypes[number],
+  options: CatalogueCreationOptions = {},
+): Promise<void> {
+  const subtypeLabel = subtype.split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+  const controls = page.getByRole('group', { name: `${subtypeLabel} creation controls` })
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+
+  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const target = options.target ?? await defaultCatalogueCreationTarget(page, map, options)
+  if (subtype === 'other') {
+    await page.getByLabel('Type label', { exact: true }).fill(options.typeLabel ?? 'Other object')
+  }
+
+  if (target.kind === 'orbit') {
+    await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), target.label)
+    await page.getByLabel('Angle (degrees)', { exact: true }).fill(String(target.angleDegrees ?? 0))
+  } else {
+    await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
+    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
+    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+  }
+
+  await page.getByRole('button', { name: 'Preview placement', exact: true }).click()
+  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
+  await expect(confirm).toBeVisible()
+  await confirm.click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await quitSystemAdd(page)
+
+  if (!options.noSelection && !options.preserveDraft) {
+    const hierarchy = await openWorkspaceHierarchy(page)
+    const generatedType = subtype.toLowerCase() === 'jump-point' ? 'jump point' : subtype
+    const createdObject = hierarchy.getByRole('button', { name: new RegExp(`New ${escapeRegExp(generatedType)}`, 'i') }).last()
+    await expect(createdObject).toBeVisible()
+    await createdObject.click()
+  }
+}
+
+async function defaultCatalogueCreationTarget(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  options: CatalogueCreationOptions,
+): Promise<CatalogueCreationTarget> {
+  if (options.preserveDraft || options.noSelection) return { kind: 'free', ...await nextFreeSystemPoint(map) }
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  if (await hierarchy.count() > 0) {
+    const selected = hierarchy.locator('button[aria-current="true"]')
+    if (await selected.count() > 0) {
+      const selectedLabel = await selected.first().getAttribute('aria-label') ?? await selected.first().innerText()
+      const orbitLabel = selectedLabel.replace(/\s+/g, ' ').match(/Orbit \d+ around .+?(?=, \d+ objects?$|$)/i)?.[0]
+      if (orbitLabel) return { kind: 'orbit', label: orbitLabel }
+    }
+  }
+
+  return { kind: 'free', ...await nextFreeSystemPoint(map) }
+}
+
+async function nextFreeSystemPoint(map: import('@playwright/test').Locator): Promise<WorldPoint> {
+  const objectCount = await map.locator('.system-object').count()
+  const gridIndex = Math.max(0, objectCount - 1) % 16
+  return {
+    x: ((gridIndex % 4) + 1) / 5,
+    y: (Math.floor(gridIndex / 4) + 1) / 5,
+  }
+}
+
+/** Creates an Orbit through its public placement form and optionally inspects it from Hierarchy. */
+export async function completeOrbitCreation(
+  page: import('@playwright/test').Page,
+  options: OrbitCreationOptions = {},
+): Promise<void> {
+  const controls = page.getByRole('group', { name: 'Orbit creation controls' })
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+
+  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const target = options.target ?? await defaultOrbitCreationTarget(page, map, options)
+  const targetControl = page.getByLabel('Orbit center or host', { exact: true })
+  if (target.kind === 'host') {
+    await selectInspectorOption(targetControl, `Around ${target.name}`)
+  } else {
+    await selectInspectorOption(targetControl, 'Unoccupied center')
+    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
+    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+  }
+
+  await page.getByRole('button', { name: 'Preview placement', exact: true }).click()
+  const confirm = controls.getByRole('button', { name: 'Confirm placement', exact: true })
+  await expect(confirm).toBeVisible()
+  await confirm.click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await quitSystemAdd(page)
+
+  if (!options.noSelection && !options.preserveDraft) {
+    const hierarchy = await openWorkspaceHierarchy(page)
+    const hostLabel = target.kind === 'host' ? target.name : 'unoccupied center'
+    const createdOrbit = hierarchy.getByRole('button', {
+      name: new RegExp(`^Orbit \\d+ around ${escapeRegExp(hostLabel)}`, 'i'),
+    }).last()
+    await expect(createdOrbit).toBeVisible()
+    await createdOrbit.click()
+  }
+}
+
+async function defaultOrbitCreationTarget(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  options: OrbitCreationOptions,
+): Promise<OrbitCreationTarget> {
+  if (options.preserveDraft || options.noSelection) return { kind: 'center', x: 0.25, y: 0.25 }
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  if (await hierarchy.count() > 0) {
+    const selected = hierarchy.locator('button[aria-current="true"]')
+    if (await selected.count() > 0) {
+      const selectedLabel = (await selected.first().getAttribute('aria-label') ?? await selected.first().innerText())
+        .replace(/\s+/g, ' ')
+      const orbitHost = selectedLabel.match(/Orbit \d+ around (.+?)(?=, \d+ objects?$|$)/i)?.[1]
+      if (orbitHost && !/^unoccupied center$/i.test(orbitHost)) return { kind: 'host', name: orbitHost }
+
+      const objectName = selectedLabel.match(/^Select [^,]+,\s*(.+?)(?:\s+\([^)]*\))?$/i)?.[1]
+      if (objectName) return { kind: 'host', name: objectName }
+    }
+  }
+
+  return { kind: 'center', ...await nextFreeSystemPoint(map) }
+}
+
+export async function quitSystemAdd(page: import('@playwright/test').Page): Promise<void> {
+  await dismissAddChooser(page)
+  const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+  const quit = context.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })
+  await expect(quit).toBeVisible()
+  await quit.click()
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

@@ -34,11 +34,14 @@
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
       :object-angles="props.workspace.layout.objectAngles"
+      :creation-type="props.creationType ?? null"
+      :creation-preview="props.creationPreview ?? null"
+      :creation-chooser-open="props.creationChooserOpen ?? false"
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
-      :move-enabled="props.mode === 'move'"
+      :move-enabled="props.mode === 'move' && !props.creationType"
       touch-navigation
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
@@ -51,8 +54,9 @@
       @resize-orbit="forwardResizeOrbit"
       @rotate-orbit="forwardRotateOrbit"
       @place-object-in-orbit="forwardPlaceObject"
-      @drop-orbit="forwardDropOrbit"
-      @drop-object="forwardDropObject"
+      @creation-target="forwardCreationTarget"
+      @creation-drop-target="forwardCreationDropTarget"
+      @cancel-creation-preview="forwardCancelCreationPreview"
       @viewport-change="emitViewport"
     />
   </div>
@@ -62,13 +66,18 @@
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
 import { onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
-  CatalogueSubtype,
   LocalWorkspace,
   OrbitRadii,
   Point,
   StarSystem,
 } from '../domain/workspace'
-import type { MapInteractionMode, SystemMapHandle } from '../composables/editor-workflows/types'
+import type {
+  MapInteractionMode,
+  SystemCreationCandidate,
+  SystemCreationPreview,
+  SystemCreationType,
+  SystemMapHandle,
+} from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type { MapImageFormat } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
@@ -91,6 +100,9 @@ const props = defineProps<{
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
+  creationType?: SystemCreationType | null
+  creationPreview?: SystemCreationPreview | null
+  creationChooserOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -112,8 +124,9 @@ const emit = defineEmits<{
   'resize-orbit': [id: string, radii: OrbitRadii]
   'rotate-orbit': [id: string, rotation: number]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
-  'drop-orbit': [point: Point, hostId: string | null]
-  'drop-object': [subtype: CatalogueSubtype, point: Point, orbitId: string | null, angle: number | null]
+  'creation-target': [candidates: SystemCreationCandidate[]]
+  'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
+  'cancel-creation-preview': []
   'viewport-change': [change: { key: string; viewport: MapViewport }]
 }>()
 
@@ -170,6 +183,7 @@ function cancelCanvasGesture(suppressRelease = false): void {
   clearPointerLongPress()
   touchStart = null
   activePointerPan = null
+  if (props.activeView === 'system') systemMapRef.value?.cancelCreationPreview()
   currentMap()?.cancelActiveGesture()
   if (suppressRelease) holdClickSuppression()
 }
@@ -379,9 +393,19 @@ function forwardRotateOrbit(id: string, rotation: number): void { if (props.mode
 function forwardPlaceObject(id: string, orbitId: string, angle: number): void {
   if (props.mode === 'move') emit('place-object-in-orbit', id, orbitId, angle)
 }
-function forwardDropOrbit(point: Point, hostId: string | null): void { emit('drop-orbit', point, hostId) }
-function forwardDropObject(subtype: CatalogueSubtype, point: Point, orbitId: string | null, angle: number | null): void {
-  emit('drop-object', subtype, point, orbitId, angle)
+function forwardCreationTarget(candidates: SystemCreationCandidate[]): void {
+  if (!props.creationType || props.creationChooserOpen) return
+  emit('creation-target', candidates)
+}
+
+function forwardCreationDropTarget(type: SystemCreationType, candidates: SystemCreationCandidate[]): void {
+  if (props.activeView !== 'system') return
+  emit('creation-drop-target', type, candidates)
+}
+
+function forwardCancelCreationPreview(): void {
+  if (!props.creationType || !props.creationPreview) return
+  emit('cancel-creation-preview')
 }
 
 function emitViewport(viewport: MapViewport): void {
@@ -492,6 +516,8 @@ defineExpose({
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),
   endTouchNavigation: (event: TouchEvent) => currentMap()?.endTouchNavigation(event),
   getDetachedOrbitCenter: (orbitId: string) => systemMapRef.value?.getDetachedOrbitCenter(orbitId),
+  getCreationCandidates: (point: Point, type: SystemCreationType) =>
+    systemMapRef.value?.getCreationCandidates(point, type) ?? [],
 })
 </script>
 

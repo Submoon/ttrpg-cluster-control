@@ -1,9 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   captureMapExportBlobs,
+  clickDockAction,
+  dragHtmlElementToWorldPoint,
   downloadJson,
+  ensureMapDragPointsReachable,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
+  quitSystemAdd,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
@@ -67,9 +71,10 @@ test('reselecting the current object or Orbit reopens Inspect without changing t
   await expect(map.locator('.system-object.is-selected')).toHaveCount(1)
 
   await inspectToggle.click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add orbit', exact: true }).click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
+  await clickDockAction(page, 'Add orbit', {
+    target: { kind: 'host', name: 'Primary Star' },
+    noSelection: true,
+  })
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   const hierarchy = await openWorkspaceHierarchy(page)
@@ -345,10 +350,11 @@ test('a held mouse press inspects an entity without navigating or publishing a c
 test('Move selects map entities without opening Inspect or entering a system', async ({ page }) => {
   await createWorkspace(page)
   const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add orbit', exact: true }).click()
+  await clickDockAction(page, 'Add orbit', {
+    target: { kind: 'center', x: 0.25, y: 0.25 },
+    noSelection: true,
+  })
   await expect(systemMap.locator('.orbit-mark')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Add to map' }).click()
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -389,8 +395,10 @@ test('Move selects map entities without opening Inspect or entering a system', a
 test('map focus pans with arrow keys while focused Orbit controls keep their geometry keys', async ({ page }) => {
   await createWorkspace(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add orbit', exact: true }).click()
+  await clickDockAction(page, 'Add orbit', {
+    target: { kind: 'center', x: 0.25, y: 0.25 },
+    noSelection: true,
+  })
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
 
   const scene = page.locator('.system-map-svg .system-map-content')
@@ -412,17 +420,28 @@ test('map focus pans with arrow keys while focused Orbit controls keep their geo
 test('legacy Object and Orbit palette drags still add to the active map in every mode', async ({ page }) => {
   await createWorkspace(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const journeys = [
+    { mode: 'Navigate', object: { x: 220, y: 180 }, orbit: { x: 730, y: 150 } },
+    { mode: 'Select', object: { x: 260, y: 220 }, orbit: { x: 730, y: 490 } },
+    { mode: 'Move', object: { x: 320, y: 260 }, orbit: { x: 200, y: 490 } },
+  ] as const
 
-  for (const mode of ['Navigate', 'Select', 'Move']) {
+  for (const journey of journeys) {
+    const { mode, object: objectPoint, orbit: orbitPoint } = journey
     await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: mode }).click()
-    await page.getByRole('button', { name: 'Add to map' }).click()
 
     const objectCount = await map.locator('.system-object').count()
-    await page.getByRole('button', { name: 'Add Planet', exact: true }).dragTo(map)
+    const addPlanet = page.getByRole('button', { name: 'Add Planet', exact: true })
+    await ensureMapDragPointsReachable(page, map, addPlanet, objectPoint)
+    await dragHtmlElementToWorldPoint(page, addPlanet, map, objectPoint)
     await expect(map.locator('.system-object')).toHaveCount(objectCount + 1)
+    await quitSystemAdd(page)
 
     const orbitCount = await map.locator('.orbit-mark').count()
-    await page.getByRole('button', { name: 'Add orbit', exact: true }).dragTo(map)
+    const addOrbit = page.getByRole('button', { name: 'Add orbit', exact: true })
+    await ensureMapDragPointsReachable(page, map, addOrbit, orbitPoint)
+    await dragHtmlElementToWorldPoint(page, addOrbit, map, orbitPoint)
     await expect(map.locator('.orbit-mark')).toHaveCount(orbitCount + 1)
+    await quitSystemAdd(page)
   }
 })

@@ -16,6 +16,7 @@
       aria-description="Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls."
       tabindex="0"
       @wheel.capture="captureOrbitRotationWheel"
+      @click.capture="handleCreationClick"
       @touchstart.capture="startTouchNavigation"
       @dragover.prevent
       @drop.prevent="handleObjectDrop"
@@ -30,12 +31,16 @@
  */
 import { pointer, select, zoomIdentity, zoomTransform } from 'd3'
 import {
-  type CatalogueSubtype,
   type OrbitRadii,
   type Point,
   type StarSystem,
 } from '../domain/workspace'
 import type { EntityCommand } from '../composables/editor-workflows/types'
+import type {
+  SystemCreationCandidate,
+  SystemCreationPreview,
+  SystemCreationType,
+} from '../composables/editor-workflows/types'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import {
   clampMapViewport,
@@ -63,6 +68,9 @@ const props = withDefaults(defineProps<{
   orbitRadii: Record<string, OrbitRadii>
   orbitRotations: Record<string, number>
   objectAngles: Record<string, number>
+  creationType?: SystemCreationType | null
+  creationPreview?: SystemCreationPreview | null
+  creationChooserOpen?: boolean
   selectedObjectId: string | null
   selectedOrbitId: string | null
   isObjectMoveBlocked?: (objectId: string) => boolean
@@ -70,7 +78,14 @@ const props = withDefaults(defineProps<{
   moveEnabled?: boolean
   touchNavigation?: boolean
   showZoomControls?: boolean
-}>(), { moveEnabled: true, touchNavigation: false, showZoomControls: true })
+}>(), {
+  creationType: null,
+  creationPreview: null,
+  creationChooserOpen: false,
+  moveEnabled: true,
+  touchNavigation: false,
+  showZoomControls: true,
+})
 
 const emit = defineEmits<{
   'select-object': [id: string]
@@ -83,8 +98,9 @@ const emit = defineEmits<{
   'resize-orbit': [id: string, radii: OrbitRadii]
   'rotate-orbit': [id: string, rotation: number]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
-  'drop-orbit': [point: Point, hostId: string | null]
-  'drop-object': [subtype: CatalogueSubtype, point: Point, orbitId: string | null, angle: number | null]
+  'creation-target': [candidates: SystemCreationCandidate[]]
+  'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
+  'cancel-creation-preview': []
   'viewport-change': [viewport: MapViewport]
 }>()
 
@@ -103,10 +119,11 @@ type SystemTouchGesture =
 let touchGesture: SystemTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
+let cancelledCreationPreviewId: number | null = null
 
 const handlers: SystemMapEventHandlers = {
-  selectObject: id => emit('select-object', id),
-  selectOrbit: id => emit('select-orbit', id),
+  selectObject: id => { if (!props.creationType) emit('select-object', id) },
+  selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
   isEntityCommandBlocked: command => props.isEntityCommandBlocked?.(command) ?? false,
   objectMoveBlocked: id => emit('object-move-blocked', id),
@@ -117,9 +134,8 @@ const handlers: SystemMapEventHandlers = {
   resizeOrbit: (id, radii) => emit('resize-orbit', id, radii),
   rotateOrbit: (id, rotation) => emit('rotate-orbit', id, rotation),
   placeObjectInOrbit: (id, orbitId, angle) => emit('place-object-in-orbit', id, orbitId, angle),
-  dropOrbit: (point, hostId) => emit('drop-orbit', point, hostId),
-  dropObject: (subtype, point, orbitId, angle) =>
-    emit('drop-object', subtype, point, orbitId, angle),
+  creationTarget: candidates => emit('creation-target', candidates),
+  creationDropTarget: (type, candidates) => emit('creation-drop-target', type, candidates),
 }
 
 /** Forwards a captured wheel event so Orbit rotation cannot also zoom the map. */
@@ -130,6 +146,11 @@ function captureOrbitRotationWheel(event: WheelEvent): void {
 /** Forwards palette drops to the D3 renderer for scene-coordinate target resolution. */
 function handleObjectDrop(event: DragEvent): void {
   mapRenderer?.handleObjectDrop(event)
+}
+
+/** Consumes a map click in Add and forwards its named candidates without selecting a map entity. */
+function handleCreationClick(event: MouseEvent): void {
+  mapRenderer?.handleCreationClick(event)
 }
 
 /** Returns the current D3 transform as the map's public viewport state. */
@@ -184,6 +205,7 @@ function beginTouchPinch(touches: TouchList): void {
 
 function startTouchNavigation(event: TouchEvent): void {
   if (!props.touchNavigation || event.touches.length < 2) return
+  cancelCreationPreview(true)
   cancelActiveGesture()
   beginTouchPinch(event.touches)
   event.preventDefault()
@@ -231,10 +253,20 @@ function cancelActiveGesture(): void {
   mapRenderer?.cancelActiveGesture()
 }
 
+/** Cancels only the currently displayed geometric target, retaining the armed Add type. */
+function cancelCreationPreview(preserveNavigation = false): void {
+  const preview = props.creationPreview
+  if (!props.creationType || !preview || cancelledCreationPreviewId === preview.id) return
+  cancelledCreationPreviewId = preview.id
+  if (!preserveNavigation) cancelActiveGesture()
+  emit('cancel-creation-preview')
+}
+
 /** Starts a view-only pan and rolls back any unfinished object or Orbit preview. */
 function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !mapRenderer) return
+  cancelCreationPreview(true)
   cancelActiveGesture()
   viewPan = { transform: zoomTransform(element), start: pointer(event, element) as [number, number] }
 }
@@ -259,7 +291,20 @@ function endViewPan(): void { viewPan = null }
 async function exportImage(format: MapImageFormat): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The star system map is not ready to export.')
-  return exportMapImage(element, format, props.system.name)
+  const previews = [...element.querySelectorAll<SVGGElement>('.system-creation-preview')]
+    .map(preview => ({ preview, parent: preview.parentNode, nextSibling: preview.nextSibling }))
+  let exportPromise: Promise<Blob>
+  try {
+    previews.forEach(({ preview }) => preview.remove())
+    exportPromise = exportMapImage(element, format, props.system.name)
+  } finally {
+    for (const { preview, parent, nextSibling } of [...previews].reverse()) {
+      if (!parent || !element.contains(parent)) continue
+      if (nextSibling?.parentNode === parent) parent.insertBefore(preview, nextSibling)
+      else parent.appendChild(preview)
+    }
+  }
+  return await exportPromise
 }
 
 /**
@@ -299,19 +344,26 @@ function fitMap(usableRect?: SvgViewportRect): void {
 }
 
 /**
- * Rebuilds the D3 scene from current props; zoom and scene gestures remain renderer-owned.
+ * Rebuilds the D3 scene; creation-only redraws leave active view navigation intact.
  */
-function render(): void {
+function render(preserveNavigation = false): void {
   const element = svgElement.value
   if (!element) return
 
-  cancelActiveGesture()
+  mapRenderer?.cancelActiveGesture()
+  if (!preserveNavigation) {
+    touchGesture = null
+    viewPan = null
+  }
   mapRenderer = renderSystemMap({
     element,
     system: props.system,
     geometry: mapGeometry.value,
     selectedObjectId: props.selectedObjectId,
     selectedOrbitId: props.selectedOrbitId,
+    creationType: props.creationType,
+    creationPreview: props.creationPreview,
+    creationChooserOpen: props.creationChooserOpen,
     moveEnabled: props.moveEnabled,
     orbitRotationWheelEvents,
     handlers,
@@ -333,16 +385,44 @@ function getDetachedOrbitCenter(orbitId: string): Point | undefined {
   return findDetachedOrbitCenter(props.system, orbitId, mapGeometry.value)
 }
 
-onMounted(render)
-watch(() => props.system, render, { deep: true })
-watch(() => props.orbitRadii, render, { deep: true })
-watch(() => props.orbitRotations, render, { deep: true })
-watch(() => props.objectAngles, render, { deep: true })
-watch(() => props.selectedObjectId, render)
-watch(() => props.selectedOrbitId, render)
-watch(() => props.moveEnabled, render)
+/** Returns all creation candidates around a raw SVG scene point using the live system geometry. */
+function getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[] {
+  return mapRenderer?.getCreationCandidates(point, type) ?? []
+}
 
-defineExpose({ exportImage, getDetachedOrbitCenter, getViewport, setViewport, zoomBy, panBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+onMounted(() => render())
+onBeforeUnmount(cancelActiveGesture)
+watch(() => props.system, () => render(), { deep: true })
+watch(() => props.orbitRadii, () => render(), { deep: true })
+watch(() => props.orbitRotations, () => render(), { deep: true })
+watch(() => props.objectAngles, () => render(), { deep: true })
+watch(() => props.selectedObjectId, () => render())
+watch(() => props.selectedOrbitId, () => render())
+watch(() => props.moveEnabled, () => render())
+watch(() => props.creationType, () => render(), { deep: true })
+watch([
+  () => props.creationPreview,
+  () => props.creationChooserOpen,
+], () => render(true), { deep: true })
+
+defineExpose({
+  exportImage,
+  getDetachedOrbitCenter,
+  getCreationCandidates,
+  getViewport,
+  setViewport,
+  zoomBy,
+  panBy,
+  fitMap,
+  cancelActiveGesture,
+  cancelCreationPreview,
+  startViewPan,
+  moveViewPan,
+  endViewPan,
+  startTouchNavigation,
+  moveTouchNavigation,
+  endTouchNavigation,
+})
 </script>
 
 <style>
@@ -581,5 +661,43 @@ defineExpose({ exportImage, getDetachedOrbitCenter, getViewport, setViewport, zo
 .map-empty {
   fill: var(--map-muted);
   font: 16px Georgia, serif;
+}
+
+.system-creation-preview {
+  pointer-events: none;
+}
+
+.system-creation-preview-orbit {
+  fill: none;
+  stroke: var(--map-selected);
+  stroke-width: 2.5;
+  stroke-dasharray: 8 6;
+  opacity: 0.9;
+}
+
+.system-creation-preview-center {
+  fill: var(--map-bg);
+  stroke: var(--map-selected);
+  stroke-width: 2.5;
+}
+
+.system-creation-preview-ring {
+  fill: color-mix(in srgb, var(--map-bg) 72%, transparent);
+  stroke: var(--map-selected);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+
+.system-creation-preview-glyph {
+  fill: var(--map-selected);
+  font: 20px Consolas, monospace;
+}
+
+.system-creation-preview-label {
+  fill: var(--map-text);
+  font: 12px Georgia, serif;
+  stroke: var(--map-bg);
+  stroke-width: 4px;
+  paint-order: stroke;
 }
 </style>

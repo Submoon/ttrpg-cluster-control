@@ -13,6 +13,7 @@ import {
   openFieldDefinitionDialog,
   openWorkspaceHierarchy,
   readInspectorSelection,
+  quitSystemAdd,
   returnToClusterMap,
   selectInspectorOption,
   setHeaderMapActionsOpen,
@@ -205,10 +206,14 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
   const addOrbit = page.getByRole('button', { name: 'Add orbit', exact: true })
   await ensureMapDragPointsReachable(page, map, addOrbit, { x: 480, y: 280 })
   await dragHtmlElementToWorldPoint(page, addOrbit, map, { x: 480, y: 280 })
-  await expect(page.getByRole('complementary', { name: 'Object inspector', exact: true }).getByRole('alert'))
+  const orbitCreation = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
+  await expect(orbitCreation.getByRole('alert'))
     .toContainText('Resolve the Inspector draft before adding another Orbit to this host.')
+  await expect(orbitCreation.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
   let exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.system!.orbits).toHaveLength(3)
+  expect(exported.system!.orbits).toEqual(initial.system!.orbits)
+  await quitSystemAdd(page)
 
   // Nix sits at angle 0 on this Orbit, directly over the horizontal axis handle.
   // Use the unobstructed vertical handle so the real handle receives pointerdown.
@@ -234,7 +239,7 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
   await ensureMapDragPointsReachable(page, map, addOrbit, { x: 771, y: 280 })
   await dragHtmlElementToWorldPoint(page, addOrbit, map, { x: 771, y: 280 })
   await expect(hierarchy.getByRole('button', { name: 'Orbit 2 around Distant Star, 0 objects', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Resume Inspector draft', exact: true }).click()
+  await quitSystemAdd(page)
   await expect(page.getByRole('spinbutton', { name: 'Orbit order', exact: true })).toHaveValue('1')
   await expect(page.getByRole('button', { name: /Apply changes/ })).toBeVisible()
 

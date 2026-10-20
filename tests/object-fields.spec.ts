@@ -1,8 +1,49 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption } from './helpers'
+import { activeWorkspaceFeedback, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
+
+const generatedNames = new Map<typeof catalogueSubtypes[number], RegExp>([
+  ['star', /New star/],
+  ['planet', /New planet/],
+  ['moon', /New moon/],
+  ['asteroid', /New asteroid/],
+  ['belt', /New belt/],
+  ['station', /New station/],
+  ['base', /New base/],
+  ['colony', /New colony/],
+  ['vessel', /New vessel/],
+  ['derelict', /New derelict/],
+  ['jump-point', /New jump point/],
+  ['anomaly', /New anomaly/],
+  ['nebula', /New nebula/],
+  ['hazard', /New hazard/],
+  ['other', /New other/i],
+] as const)
+
+const catalogueFamilies = [
+  {
+    label: 'celestial bodies and fields',
+    subtypes: ['star', 'planet', 'moon', 'asteroid', 'belt'],
+  },
+  {
+    label: 'installations and vessels',
+    subtypes: ['station', 'base', 'colony', 'vessel', 'derelict'],
+  },
+  {
+    label: 'jump points and phenomena',
+    subtypes: ['jump-point', 'anomaly', 'nebula', 'hazard', 'other'],
+  },
+] as const
+
+async function createCatalogueWorkspace(page: import('@playwright/test').Page): Promise<void> {
+  await captureMapExportBlobs(page)
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+}
 
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
   await page.goto('/')
@@ -23,16 +64,18 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
     .toHaveCount(3)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await hierarchy.getByRole('button', { name: /Orbit 2 around Primary Star/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('spinbutton', { name: 'Orbit order', exact: true }).fill('1')
   await page.getByRole('button', { name: 'Apply changes' }).click()
   await expect(inspector.getByRole('heading', { name: 'Orbit 1' })).toBeVisible()
 
-  await addCatalogueObject(page, 'planet')
+  await addCatalogueObject(page, 'planet', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await page.getByLabel('Description').fill('A chlorine cloud deck.')
@@ -53,11 +96,15 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
-  await addCatalogueObject(page, 'belt')
+  await addCatalogueObject(page, 'belt', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ })).toBeVisible()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
-  await clickDockAction(page, 'Add orbit')
-  await addCatalogueObject(page, 'moon')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
+  await addCatalogueObject(page, 'moon', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Iria' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Nix')
@@ -69,28 +116,8 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(inspector.getByRole('heading', { name: 'Nix' })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Nix/ })).toHaveAttribute('aria-current', 'true')
 
-  const generatedNames = new Map([
-    ['star', /New star/],
-    ['planet', /New planet/],
-    ['moon', /New moon/],
-    ['asteroid', /New asteroid/],
-    ['belt', /New belt/],
-    ['station', /New station/],
-    ['base', /New base/],
-    ['colony', /New colony/],
-    ['vessel', /New vessel/],
-    ['derelict', /New derelict/],
-    ['jump-point', /New jump point/],
-    ['anomaly', /New anomaly/],
-    ['nebula', /New nebula/],
-    ['hazard', /New hazard/],
-    ['other', /New other/],
-  ] as const)
-
-  for (const subtype of catalogueSubtypes) {
-    await addCatalogueObject(page, subtype)
-    await expect(inspector.getByRole('heading', { name: generatedNames.get(subtype)! })).toBeVisible()
-  }
+  await addCatalogueObject(page, 'other')
+  await expect(inspector.getByRole('heading', { name: generatedNames.get('other')! })).toBeVisible()
 
   await editMapObject(page)
   await page.getByLabel('Type label').fill('Relay Beacon')
@@ -112,6 +139,42 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(inspector.getByLabel('Schematic X')).toHaveValue('0.75')
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
 })
+
+for (const family of catalogueFamilies) {
+  test(`the Warden adds and reloads ${family.label}`, async ({ page }) => {
+    await createCatalogueWorkspace(page)
+    const inspector = page.getByRole('complementary', { name: 'Object inspector' })
+    const createdObjects: Array<{ subtype: string; name: string }> = []
+
+    for (const [index, subtype] of family.subtypes.entries()) {
+      await addCatalogueObject(page, subtype, {
+        target: { kind: 'free', x: [0.1, 0.3, 0.5, 0.7, 0.9][index]!, y: 0.2 },
+      })
+      const heading = inspector.getByRole('heading', { name: generatedNames.get(subtype)! })
+      await expect(heading).toBeVisible()
+      createdObjects.push({
+        subtype: subtype === 'other' ? 'Other object' : subtype,
+        name: await inspector.getByRole('textbox', { name: 'Name', exact: true }).inputValue(),
+      })
+    }
+
+    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    const exported = await downloadJson(page, 'Export star system JSON')
+    for (const created of createdObjects) {
+      expect(exported.system?.objects).toContainEqual(expect.objectContaining(created))
+    }
+
+    await page.reload()
+    const hierarchy = await openWorkspaceHierarchy(page)
+    for (const created of createdObjects) {
+      await expect(hierarchy.getByRole('button', { name: new RegExp(created.name) })).toBeVisible()
+    }
+    const reloaded = await downloadJson(page, 'Export star system JSON')
+    for (const created of createdObjects) {
+      expect(reloaded.system?.objects).toContainEqual(expect.objectContaining(created))
+    }
+  })
+}
 
 test('Chart details is an active, keyboard-accessible inspector view', async ({ page }) => {
   await page.goto('/')
@@ -144,14 +207,16 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await expect(systemInspector.getByRole('heading', { name: 'Axes and rotation' })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await chartDetails.press('Enter')
   await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
 
-  await addCatalogueObject(page, 'jump-point')
+  await addCatalogueObject(page, 'jump-point', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Exit')
   await saveMapObject(page)
@@ -230,7 +295,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit')
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
   await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
 

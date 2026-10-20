@@ -1,0 +1,29 @@
+{
+  "testExit": 1,
+  "sourcePaths": 107,
+  "sourceMismatches": 0,
+  "stats": {
+    "startTime": "2026-10-20T11:24:19.385Z",
+    "duration": 36429.644,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "status": "unexpected",
+      "durationMs": 20002,
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\nExpected: \u001b[32m\"9\u001b[7m0\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"9\u001b[7m1\u001b[27m\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('group', { name: 'Vesper star system map' }).getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')\u001b[22m\n\u001b[2m    14 × locator resolved to <ellipse ry=\"91\" cy=\"280\" rx=\"399\" cx=\"230.4\" class=\"orbit-ring\" transform=\"rotate(45.061079728465415 230.4 280)\"></ellipse>\u001b[22m\n\u001b[2m       - unexpected value \"91\"\u001b[22m\n\n\n  397 |   })\n  398 |   await expect(ring).toHaveAttribute('rx', String(globallyResizedHorizontalRadius))\n> 399 |   await expect(ring).toHaveAttribute('ry', '90')\n      |                      ^\n  400 |   const resizedHorizontalRadius = Number(await ring.getAttribute('rx'))\n  401 |   const resizedVerticalRadius = Number(await ring.getAttribute('ry'))\n  402 |   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\system-orbits.spec.ts:399:22"
+      ]
+    },
+    {
+      "title": "the Warden can detach a hosted Orbit and move its unoccupied center",
+      "status": "expected",
+      "durationMs": 11904,
+      "errors": []
+    }
+  ]
+}

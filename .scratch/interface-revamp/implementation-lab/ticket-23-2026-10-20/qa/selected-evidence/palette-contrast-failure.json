@@ -1,0 +1,84 @@
+{
+  "candidate": "ticket23-final-palette-json",
+  "hostEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket23-final-palette-20261020-run2/presentation",
+  "positivePngs": 0,
+  "pageerrors": [],
+  "contrast": [
+    {
+      "caseId": "chooser-desktop-light",
+      "arm": "root",
+      "target": "active category",
+      "theme": "light",
+      "kind": "text",
+      "css": "rgb(156, 74, 22)",
+      "rgba": [
+        156,
+        74,
+        22,
+        0.935017
+      ],
+      "bounds": {
+        "x": 807.1875,
+        "y": 715.765625,
+        "width": 119.9375,
+        "height": 28.796875,
+        "top": 715.765625,
+        "right": 927.125,
+        "bottom": 744.5625,
+        "left": 807.1875
+      },
+      "extent": 0,
+      "text": "✓ Celestial bodies",
+      "pseudo": null,
+      "background": [
+        [
+          236,
+          224,
+          211
+        ],
+        [
+          236,
+          224,
+          211
+        ],
+        [
+          236,
+          224,
+          211
+        ]
+      ],
+      "ratios": [
+        4.2514615647057585,
+        4.2514615647057585,
+        4.2514615647057585
+      ],
+      "minimum": 4.2514615647057585,
+      "threshold": 4.5,
+      "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+    }
+  ],
+  "checks": [
+    {
+      "name": "chooser-desktop-light/root: active category contrast",
+      "passed": false,
+      "detail": {
+        "minimum": 4.2514615647057585,
+        "threshold": 4.5,
+        "text": "✓ Celestial bodies"
+      }
+    },
+    {
+      "name": "chooser-desktop-light/root: execution",
+      "passed": false,
+      "detail": {
+        "message": "chooser-desktop-light/root: active category contrast\n\nexpect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false",
+        "stack": "Error: chooser-desktop-light/root: active category contrast\n\nexpect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at captureRawStack (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright-core\\lib\\coreBundle.js:9282:17)\n    at callMatcherAsStep (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright\\lib\\matchers\\expect.js:13316:57)\n    at Object.toBe (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright\\lib\\matchers\\expect.js:13308:23)\n    at check (C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-23-2026-10-20\\qa\\capture-add.mjs:35:114)\n    at state (C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-23-2026-10-20\\qa\\capture-add.mjs:133:5)\n    at async file:///C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/implementation-lab/ticket-23-2026-10-20/qa/capture-add.mjs:168:24"
+      }
+    },
+    {
+      "name": "Released source unchanged",
+      "passed": true
+    }
+  ],
+  "sourceMismatches": 0
+}

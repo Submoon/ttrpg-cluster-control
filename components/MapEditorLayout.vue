@@ -60,11 +60,13 @@
           :visible="props.inspectorVisible"
           :compact="props.compactModalOpen && props.compactPanel === 'inspector'"
           :board="mapBoard"
+          :show-header-actions="props.mode === 'system'"
           :show-close-button="!props.entityInspectorActive"
           :show-compact-recovery="!props.entityInspectorActive"
           :inert="props.compactModalOpen && props.compactPanel !== 'inspector' || undefined"
           @close="emit('close-panel', 'inspector')"
         >
+          <template #header-actions><slot name="inspector-header-actions" /></template>
           <template #compact-recovery><slot name="compact-recovery" /></template>
           <slot name="inspector" />
         </WorkspaceResizablePanel>

@@ -31,14 +31,6 @@
       />
     </div>
     <div v-else-if="props.selectedSystem" class="map-inspector-system-content">
-      <button
-        class="quiet-button chart-details-control"
-        type="button"
-        :aria-pressed="chartDetailsActive"
-        @click="emit('show-chart-details')"
-      >
-        Chart details
-      </button>
       <div v-if="props.selectedObject" class="map-inspector-entity-content">
         <MapObjectInspector
           :key="props.selectedObject?.id ?? 'current'"
@@ -192,13 +184,6 @@ const hasResumableEntitySession = computed(() => {
   }
   return props.selectedOrbit?.id !== session.targetId
 })
-const chartDetailsActive = computed(() =>
-  !props.selectedObject
-  && !props.selectedOrbit
-  && !props.selectedRoute
-  && !(routeInspectorRef.value?.hasUnsavedEdits() ?? false),
-)
-
 /** Discards every child inspector draft and clears the parent-visible editor error. */
 function cancelEdits(): void {
   orbitInspectorRef.value?.cancelEdits(false)
@@ -242,8 +227,7 @@ defineExpose({
 .map-inspector-resume-draft { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: .6rem; border-bottom: 1px solid var(--line-soft); padding: .55rem .7rem; font-size: .72rem; }
 .map-inspector-resume-draft .section-kicker { margin-bottom: .15rem; }
 .map-inspector-route-content { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
-.map-inspector-system-content { display: grid; flex: 1 1 auto; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
-.chart-details-control { justify-self: start; margin: .5rem .7rem; }
+.map-inspector-system-content { display: grid; flex: 1 1 auto; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .map-inspector-entity-content,
 .map-inspector-details-content { min-height: 0; overflow: hidden; }
 .map-inspector-entity-content > :deep(*) { width: 100%; height: 100%; min-height: 0; }

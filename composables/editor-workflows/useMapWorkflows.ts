@@ -4,8 +4,6 @@
 import { ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
-  createOrbit,
-  createSystemObject,
   defaultOrbitRadius,
   detachOrbit,
   minimumOrbitRadius,
@@ -14,7 +12,6 @@ import {
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
   updateSystemObject,
-  type CatalogueSubtype,
   type LocalWorkspace,
   type Orbit,
   type OrbitRadii,
@@ -37,8 +34,6 @@ interface MapWorkflowOptions {
   selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
   selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
   selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
-  selectedObjectId: Ref<string | null>
-  selectedOrbitId: Ref<string | null>
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   systemMapRef: ShallowRef<SystemMapHandle | null>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
@@ -59,8 +54,6 @@ export function useMapWorkflows({
   selectedSystem,
   selectedObject,
   selectedOrbit,
-  selectedObjectId,
-  selectedOrbitId,
   mapInspectorRef,
   systemMapRef,
   resolveTransition,
@@ -473,131 +466,6 @@ export function useMapWorkflows({
   }
 
   /**
-   * Adds a catalogue object from a click/keyboard intent or a map drop.
-   * Drop points use SVG scene coordinates and are converted to normalized initial-scene placement;
-   * an Orbit drop angle, when supplied, is stored in radians. Click/keyboard additions to a selected Orbit
-   * leave the angle unset so geometry uses its sibling-order default.
-   * @param subtype Catalogue subtype to add.
-   * @param dropPoint Optional drop position in SVG scene coordinates.
-   * @param dropOrbitId Optional Orbit under a map drop; omitted click/keyboard intents use the selected Orbit.
-   * @param dropAngle Optional orbital position for an Orbit drop, in radians.
-   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
-   */
-  async function addObject(
-    subtype: CatalogueSubtype,
-    dropPoint?: Point,
-    dropOrbitId?: string | null,
-    dropAngle?: number | null,
-  ): Promise<void> {
-    const systemId = selectedSystem.value?.id
-    const intendedOrbitId = dropPoint
-      ? dropOrbitId ?? undefined
-      : selectedOrbitId.value ?? undefined
-    if (!systemId || !workspace.value || !await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
-    const currentWorkspace = workspace.value
-    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!currentWorkspace || !system || selectedSystem.value?.id !== systemId) return
-    if (intendedOrbitId && !system.orbits.some(orbit => orbit.id === intendedOrbitId)) return
-
-    try {
-      let object = createSystemObject(system, subtype, intendedOrbitId)
-      if (dropPoint && !intendedOrbitId) {
-        if (!Number.isFinite(dropPoint.x) || !Number.isFinite(dropPoint.y)) {
-          throw new Error('The dropped map position must contain finite coordinates.')
-        }
-        object = {
-          ...object,
-          placement: {
-            kind: 'system',
-            x: (dropPoint.x - 64) / 832,
-            y: (dropPoint.y - 72) / 416,
-          },
-        }
-      }
-
-      let nextWorkspace = replaceWorkspaceSystem(currentWorkspace, {
-        ...system,
-        objects: [...system.objects, object],
-      })
-      if (dropPoint && intendedOrbitId && dropAngle !== null && dropAngle !== undefined) {
-        if (!Number.isFinite(dropAngle)) {
-          throw new Error('An orbital angle must be finite.')
-        }
-        nextWorkspace = {
-          ...nextWorkspace,
-          layout: {
-            ...nextWorkspace.layout,
-            objectAngles: {
-              ...nextWorkspace.layout.objectAngles,
-              [object.id]: dropAngle,
-            },
-          },
-        }
-      }
-
-      selectedObjectId.value = object.id
-      selectedOrbitId.value = null
-      editorError.value = ''
-      await commit(nextWorkspace)
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
-  }
-
-  /**
-   * Adds an Orbit under a host or at a dropped unoccupied center.
-   * A dropped center is in SVG scene coordinates and is stored in normalized map coordinates.
-   * @param hostId Host object ID, or null for an unoccupied center; defaults to selected object or no host.
-   * @param dropPoint Optional center supplied by the map renderer.
-   * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
-   */
-  async function addOrbit(
-    hostId: string | null = selectedObject.value?.id ?? null,
-    dropPoint?: Point,
-  ): Promise<void> {
-    const systemId = selectedSystem.value?.id
-    if (rejectBlockedEntityCommand({ kind: 'orbit-create', hostId })) return
-    if (!systemId || !await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
-    const latestWorkspace = workspace.value
-    const system = latestWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!system || selectedSystem.value?.id !== systemId) return
-    if (hostId !== null && !system.objects.some(object => object.id === hostId)) return
-
-    try {
-      const orbit = createOrbit(system, hostId)
-      if (dropPoint && (!Number.isFinite(dropPoint.x) || !Number.isFinite(dropPoint.y))) {
-        throw new Error('The dropped map position must contain finite coordinates.')
-      }
-      const placedOrbit: Orbit = hostId === null && dropPoint
-        ? {
-            ...orbit,
-            hostId: null,
-            center: {
-              x: (dropPoint.x - 64) / 832,
-              y: (dropPoint.y - 72) / 416,
-            },
-          }
-        : orbit
-      selectedOrbitId.value = placedOrbit.id
-      selectedObjectId.value = null
-      editorError.value = ''
-      await saveSystem({ ...system, orbits: [...system.orbits, placedOrbit] })
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
-  }
-
-  /**
-   * Adapts the renderer's Orbit-drop event to the shared Orbit creation command.
-   * @param point Drop position in SVG scene coordinates.
-   * @param hostId Object under the drop, or null for an unoccupied center.
-   * @returns The addOrbit attempt.
-   */
-  function handleOrbitDrop(point: Point, hostId: string | null): Promise<void> {
-    return addOrbit(hostId, point)
-  }
-
-  /**
    * Applies sibling order, optional unoccupied center, and scene-unit radii from the Orbit draft.
    * The inspector receives a save acknowledgement only after the workspace commit succeeds.
    * @param request Orbit ID, target sibling order, radii, and optional normalized center.
@@ -666,9 +534,6 @@ export function useMapWorkflows({
     beginObjectEdit,
     beginOrbitEdit,
     saveObjectEdit,
-    addObject,
-    addOrbit,
-    handleOrbitDrop,
     saveOrbitEdit,
   }
 }

@@ -1,6 +1,6 @@
 ---
 title: 'Construct and arrange a Jump Cluster with complete Jump Routes'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -760,6 +760,10 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (command.kind === 'orbit-create') {
       return session.kind === 'orbit' && command.hostId === session.initial.orbit.hostId
     }
+    if (command.kind === 'object-create') {
+      // Appending a new occupant does not change the selected entity or any captured host dependency.
+      return false
+    }
     if (command.kind === 'orbit-geometry') {
       return ids.orbits.has(command.orbitId)
     }

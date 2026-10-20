@@ -1,0 +1,13 @@
+{
+  "testExit": 1,
+  "sourcePaths": 107,
+  "sourceMismatches": 0,
+  "stats": {
+    "startTime": "2026-10-20T11:12:16.932Z",
+    "duration": 19033.887,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
