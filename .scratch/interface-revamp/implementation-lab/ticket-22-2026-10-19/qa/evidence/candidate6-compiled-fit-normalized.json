@@ -1,0 +1,35 @@
+{
+  "candidate": "ticket22-final-candidate-6",
+  "runtime": "compiled",
+  "workers": 1,
+  "retries": 0,
+  "maxFailures": 0,
+  "timeouts": "Canonical unchanged",
+  "stats": {
+    "startTime": "2026-10-20T07:46:56.794Z",
+    "duration": 8562.566,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "discovered": 1,
+  "executed": 1,
+  "cases": [
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "line": 183,
+      "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6461,
+          "errors": [],
+          "attachments": []
+        }
+      ]
+    }
+  ],
+  "runnerErrors": []
+}

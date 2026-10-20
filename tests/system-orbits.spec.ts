@@ -1014,7 +1014,8 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
 
   await page.getByRole('complementary', { name: 'Object inspector' })
     .getByRole('button', { name: 'Chart details' }).click()
-  await addPlanet.press('Enter')
+  const keyboardAddPlanet = await selectCatalogueObjectButton(page, 'planet')
+  await keyboardAddPlanet.press('Enter')
   const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
   await expect(systemPlanet).toBeVisible()
   await expect(systemPlanet.locator('.object-mark')).toHaveText('◉')

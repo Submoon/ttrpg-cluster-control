@@ -37,12 +37,14 @@
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
+      :is-entity-command-blocked="props.isEntityCommandBlocked"
       :move-enabled="props.mode === 'move'"
       touch-navigation
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
       @object-move-blocked="forwardBlockedObjectMove"
+      @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object="forwardMoveObject"
       @move-orbit-center="forwardMoveOrbitCenter"
       @rotate-object="forwardRotateObject"
@@ -67,6 +69,7 @@ import type {
   StarSystem,
 } from '../domain/workspace'
 import type { MapInteractionMode, SystemMapHandle } from '../composables/editor-workflows/types'
+import type { EntityCommand } from '../composables/editor-workflows/types'
 import type { MapImageFormat } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
 import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
@@ -86,6 +89,7 @@ const props = defineProps<{
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
+  isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
 }>()
 
@@ -100,6 +104,7 @@ const emit = defineEmits<{
   'select-orbit': [id: string]
   'move-select-orbit': [id: string]
   'object-move-blocked': [id: string]
+  'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]

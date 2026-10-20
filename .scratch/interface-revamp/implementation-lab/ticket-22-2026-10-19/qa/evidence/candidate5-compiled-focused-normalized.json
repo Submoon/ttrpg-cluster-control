@@ -1,0 +1,102 @@
+{
+  "candidate": "ticket22-final-candidate-5",
+  "runtime": "compiled",
+  "workers": 1,
+  "retries": 0,
+  "maxFailures": 0,
+  "timeouts": "Canonical unchanged",
+  "stats": {
+    "startTime": "2026-10-20T07:42:49.530Z",
+    "duration": 35198.917,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "discovered": 4,
+  "executed": 4,
+  "cases": [
+    {
+      "file": "system-orbits.spec.ts",
+      "line": 909,
+      "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 11442,
+          "errors": [],
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "file": "workspace-chart-feedback.spec.ts",
+      "line": 183,
+      "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+      "status": "unexpected",
+      "results": [
+        {
+          "status": "failed",
+          "durationMs": 7705,
+          "errors": [
+            {
+              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Saved on this device')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Saved on this device') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.workspace-feedback:not([inert]), .workspace-compact-recovery').getByText('Saved on this device')\u001b[22m\n\n\n  209 |   await inspector.getByLabel('Schematic Y', { exact: true }).fill('0.9')\n  210 |   await inspector.getByRole('button', { name: /^Apply changes/ }).click()\n> 211 |   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()\n      |                                                                                 ^\n  212 |   await closeCompactPanels(page)\n  213 |\n  214 |   const systemMap = page.locator('.system-map-content')\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts:211:81",
+              "location": {
+                "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-chart-feedback.spec.ts",
+                "column": 81,
+                "line": 211
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "name": "screenshot",
+              "contentType": "image/png",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket22-candidate5-compiled-focused-20261020\\artifacts\\workspace-chart-feedback-e-88a74-ck-and-a-hidden-chart-draft\\test-failed-1.png"
+            },
+            {
+              "name": "error-context",
+              "contentType": "text/markdown",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket22-candidate5-compiled-focused-20261020\\artifacts\\workspace-chart-feedback-e-88a74-ck-and-a-hidden-chart-draft\\error-context.md"
+            },
+            {
+              "name": "trace",
+              "contentType": "application/zip",
+              "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket22-candidate5-compiled-focused-20261020\\artifacts\\workspace-chart-feedback-e-88a74-ck-and-a-hidden-chart-draft\\trace.zip"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "workspace-theme.spec.ts",
+      "line": 289,
+      "title": "theme changes preserve object and route drafts plus pending and failed save status",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6949,
+          "errors": [],
+          "attachments": []
+        }
+      ]
+    },
+    {
+      "file": "workspace-ui.spec.ts",
+      "line": 298,
+      "title": "panel toggles preserve the active mode and Delete remains safe while editing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3199,
+          "errors": [],
+          "attachments": []
+        }
+      ]
+    }
+  ],
+  "runnerErrors": []
+}

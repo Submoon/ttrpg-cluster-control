@@ -124,7 +124,7 @@
           <span class="object-mark" aria-hidden="true">{{ objectMark(row.object) }}</span>
           <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
             {{ row.object.name }}
-            <small class="mt-[0.18rem] block">{{ row.object.family }} / {{ row.object.subtype }}</small>
+            <small class="mt-[0.18rem] block">{{ catalogueFamilyLabel(row.object.family) }} / {{ catalogueSubtypeLabel(row.object) }}</small>
           </span>
         </button>
         <button
@@ -159,6 +159,7 @@ import {
   type LocalWorkspace,
 } from '../domain/workspace'
 import { objectMark } from '../utils/catalogue-marks'
+import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../utils/catalogue-labels'
 import { buildMapHierarchy } from '../utils/map-hierarchy'
 
 const props = defineProps<{

@@ -23,6 +23,7 @@ import type {
   WorkspacePanel,
 } from './types'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
+import { useEntityInspectorSession } from './useEntityInspectorSession'
 
 /**
  * Derives editor selections from workspace IDs and keeps navigation coherent as entities change.
@@ -58,6 +59,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   let chartNamesSessionSequence = 0
   let pendingTransition: {
     leaveChart: boolean
+    leaveEntitySession: boolean
     resolve: (accepted: boolean) => void
   } | null = null
   const mapInspectorRef = shallowRef<MapInspectorHandle | null>(null)
@@ -135,6 +137,30 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const selectedRoute = computed(() =>
     workspace.value?.cluster.routes.find(route => route.id === selectedRouteId.value),
   )
+  const {
+    entitySession,
+    hasModifiedEntitySession,
+    beginObjectSession,
+    beginOrbitSession,
+    applyEntitySession: applyEntitySessionDraft,
+    discardEntitySession: discardEntitySessionDraft,
+    isEntityCommandBlocked,
+    isEntityDraftTarget,
+  } = useEntityInspectorSession({ workspace, applyWorkspace })
+
+  function applyEntitySession(expectedId?: number): boolean {
+    const applied = applyEntitySessionDraft(expectedId)
+    if (applied) editorError.value = ''
+    return applied
+  }
+
+  function discardEntitySession(expectedId?: number): void {
+    const active = entitySession.value
+    if (!active || (expectedId !== undefined && active.id !== expectedId)) return
+    discardEntitySessionDraft(expectedId)
+    editorError.value = ''
+  }
+
   const jumpPoints = computed(() =>
     workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [],
   )
@@ -574,16 +600,19 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     if (pendingTransition) return Promise.resolve(false)
 
     const leaveChart = options.leaveChart !== false
+    const leaveEntitySession = options.leaveEntitySession !== false
     const hasChartDraft = leaveChart && chartNamesSession.value !== null
     const hasInspectorDraft = mapInspectorRef.value?.hasUnsavedEdits() ?? false
     const chartNeedsResolution = hasChartDraft && hasUncommittedNames.value
-    if (!chartNeedsResolution && !hasInspectorDraft) {
+    const entityNeedsResolution = leaveEntitySession && hasModifiedEntitySession.value
+    if (!chartNeedsResolution && !entityNeedsResolution && !hasInspectorDraft) {
       if (hasChartDraft) cancelChartNamesEdit()
+      if (leaveEntitySession && entitySession.value) discardEntitySession(entitySession.value.id)
       return Promise.resolve(true)
     }
 
     return new Promise(resolve => {
-      pendingTransition = { leaveChart, resolve }
+      pendingTransition = { leaveChart, leaveEntitySession, resolve }
       transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
     })
   }
@@ -604,11 +633,16 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       transitionGuard.value = 'chart'
       return
     }
+    if (pending.leaveEntitySession && hasModifiedEntitySession.value) {
+      transitionGuard.value = 'inspector'
+      return
+    }
     if (mapInspectorRef.value?.hasUnsavedEdits()) {
       transitionGuard.value = 'inspector'
       return
     }
     if (pending.leaveChart && chartNamesSession.value) cancelChartNamesEdit()
+    if (pending.leaveEntitySession && entitySession.value) discardEntitySession(entitySession.value.id)
     finishPendingTransition(true)
   }
 
@@ -635,6 +669,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       return
     }
 
+    const session = entitySession.value
+    if (pendingTransition.leaveEntitySession && session && hasModifiedEntitySession.value) {
+      if (decision === 'apply') {
+        if (!applyEntitySession(session.id)) {
+          finishPendingTransition(false)
+          return
+        }
+      } else {
+        discardEntitySession(session.id)
+      }
+    }
     mapInspectorRef.value?.cancelEdits()
     advancePendingTransition()
   }
@@ -764,7 +809,8 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     }
     const startingNavigationStamp = navigationContextStamp()
     const startingSessionId = chartNamesSession.value?.id ?? null
-    if (!await resolveTransition()) return
+    const returningToDraft = isEntityDraftTarget('object', objectId)
+    if (!await resolveTransition({ leaveEntitySession: !returningToDraft })) return
     const latestWorkspace = workspace.value
     if (
       !latestWorkspace
@@ -802,7 +848,8 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     }
     const startingNavigationStamp = navigationContextStamp()
     const startingSessionId = chartNamesSession.value?.id ?? null
-    if (!await resolveTransition()) return
+    const returningToDraft = isEntityDraftTarget('orbit', orbitId)
+    if (!await resolveTransition({ leaveEntitySession: !returningToDraft })) return
     const latestWorkspace = workspace.value
     if (
       !latestWorkspace
@@ -912,6 +959,14 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     cancelChartNamesEdit,
     resolveTransition,
     resolveTransitionChoice,
+    entitySession,
+    hasModifiedEntitySession,
+    beginObjectSession,
+    beginOrbitSession,
+    applyEntitySession,
+    discardEntitySession,
+    isEntityCommandBlocked,
+    isEntityDraftTarget,
     setChartNamesDialogOpen,
     isChartDraftTarget,
     selectImportedWorkspace,

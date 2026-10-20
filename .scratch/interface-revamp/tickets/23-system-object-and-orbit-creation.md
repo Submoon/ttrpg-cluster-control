@@ -1,6 +1,6 @@
 ---
 title: 'Populate star systems with every catalogue type and Orbit structure'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

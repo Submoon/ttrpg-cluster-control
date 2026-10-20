@@ -1,0 +1,23 @@
+# Ticket 22 QA coordination
+
+Current status (20 October 2026): runtime and presentation gates are complete. Read [the final gate report](final-gate-report.md) for authoritative results and boundaries; the earlier sections below retain the initial coordination history. The sole complete compiled suite was 104 passed / 5 failed / 109 executed. Scoped follow-up evidence is 3/1 on candidate 5, then final Fit 1/0 on candidate 6 and unchanged development-only recovery 1/0. Final typecheck and the single production build passed. This is not a 109/109 single-pass claim. Both owned servers are stopped and ports 3100/3180 are free.
+
+Eight selected positive PNGs and concise normalized results are under `evidence/`; hashes and provenance are in `evidence/evidence-manifest.json`. The coordinator visually accepted the selection. Physical Android Chrome/OS keyboard/safe-area/gesture proof remains unavailable. `normalize-results.mjs` reduces existing Playwright JSON without executing tests. Original failed attempts remain under literal host TEMP.
+
+The final capture used `QA_RUNTIME_RELEASE=compiled`, `QA_CANDIDATE=ticket22-final-candidate-5`, its literal `QA_SOURCE_IDENTITY`, a fresh literal host `QA_HOST_OUTPUT_ROOT` and `QA_CASE_ARMS=object-portrait-dark:B,orbit-short-light:root,orbit-short-light:B`. Only those three remaining arms ran; the five earlier positive images were retained. The final source freeze is candidate 6 (35 paths; application equal to the built candidate 4). Do not rerun the build or complete suite merely to reproduce the curated report.
+
+Intentional feature baseline: `2a4564d7ef5916df0cc4e025e7997ca7c86f81f7`, equal to the fetched feature remote at intake. Main remains `629d2a98715c3a16b954e0f77c639b1f0c31212c`, with 0 main-only/43 feature-only commits. QA owns only this directory and literal host TEMP `ticket22-*` evidence. Canonical application/tests and Git/lifecycle remain with their assigned owners.
+
+The coordinator-approved seam is the actual persisted product through Playwright, public controls, actual downloads and durable reload. QA waits for the canonical test owner before executing a meaningful RED journey, then coordinates bounded focused runs. Writers do not start servers or browsers. Each attempt gets a distinct persistent output directory, candidate identity, stdout/stderr and JSON; failed traces/screenshots remain preserved. No timeout inflation, retries, forced clicks or weakened assertions are introduced.
+
+`playwright.config.ts` reuses the separately identified development server on 3100 and installed Chrome. Focused runs use one worker. The sole complete-suite run occurs after integration/source freeze; two workers are available only if isolated-context behavior proves stable. The config never starts or replaces a server implicitly.
+
+Final validation includes typecheck/build and a bounded comparison of actual object/Orbit Inspectors with the accepted dense B reference on desktop, portrait and short landscape, both themes. Record actual fixture/source IDs, field/action reachability, ordinary hits and focus. Presentation behavior does not certify visual fidelity. Prefer 6–10 meaningful new journeys with existing preservation coverage intact; avoid a repeated observation matrix. Physical Android Chrome, actual OS-keyboard behavior, safe areas and physical gestures remain unavailable and must not be reported as simulated passes.
+
+## Initial runtime and RED
+
+Dev server: `http://127.0.0.1:3100`, QA launch root PID 15920, actual host listener PID 35660. HTTP readiness was confirmed after initial Nuxt bundling. Launch/readiness identities and persistent stdout/stderr are under `C:/Users/fbal-fontaine/AppData/Local/Temp/ticket22-runtime-20261019`.
+
+The first operational selection attempt matched zero tests because a start-anchored grep excluded Playwright's file-prefixed title; that attempt is preserved as `ticket22-object-footer-red-20261019-run1` and is not a product RED. Correcting only the selector produced the first actual test run in `ticket22-object-footer-red-20261019-run2`: **0 passed / 1 failed**, 11.741 seconds, 94/94 source hashes unchanged. The real selected-object edit reached `workspace-entity-inspector.spec.ts:17` and failed because the required `Object details` heading was absent. Later Hide/footer/Apply assertions were not reached. Screenshot, trace, JSON and source identity remain in the host directory.
+
+The coordinator explicitly accepted this required Inspector-envelope failure as legitimate RED and released both writers. No second RED was run. QA remains runtime owner and awaits their next focused integrated test request. No full suite or compiled presentation pass is claimed.

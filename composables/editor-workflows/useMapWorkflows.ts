@@ -24,6 +24,7 @@ import {
 } from '../../domain/workspace'
 import type {
   MapInspectorHandle,
+  EntityCommand,
   ObjectEditRequest,
   OrbitEditRequest,
   SystemMapHandle,
@@ -41,6 +42,9 @@ interface MapWorkflowOptions {
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   systemMapRef: ShallowRef<SystemMapHandle | null>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
+  beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
+  beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
+  isEntityCommandBlocked: (command: EntityCommand) => boolean
   editorError: Ref<string>
 }
 
@@ -60,9 +64,18 @@ export function useMapWorkflows({
   mapInspectorRef,
   systemMapRef,
   resolveTransition,
+  beginObjectSession,
+  beginOrbitSession,
+  isEntityCommandBlocked,
   editorError,
 }: MapWorkflowOptions) {
   const orbitAdjustmentNotice = ref('')
+
+  function rejectBlockedEntityCommand(command: EntityCommand): boolean {
+    if (!isEntityCommandBlocked(command)) return false
+    editorError.value = 'Resolve the Inspector draft before changing this object, Orbit, or a related dependency.'
+    return true
+  }
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -122,11 +135,16 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
    */
   async function moveMapObject(objectId: string, position: Point): Promise<void> {
-    if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const system = selectedSystem.value
     const object = system?.objects.find(candidate => candidate.id === objectId)
     const objectFieldSettings = workspace.value?.objectFieldSettings
     if (!system || !object || !objectFieldSettings) return
+    if (rejectBlockedEntityCommand({
+      kind: 'object-placement',
+      objectId,
+      fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
+      toOrbitId: null,
+    })) return
 
     try {
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
@@ -155,12 +173,17 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
    */
   async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
-    if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     const object = system?.objects.find(candidate => candidate.id === objectId)
     const objectFieldSettings = currentWorkspace?.objectFieldSettings
     if (!currentWorkspace || !system || !object || !objectFieldSettings) return
+    if (rejectBlockedEntityCommand({
+      kind: 'object-placement',
+      objectId,
+      fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
+      toOrbitId: orbitId,
+    })) return
 
     try {
       if (!Number.isFinite(angle)) throw new Error('An orbital angle must be finite.')
@@ -194,10 +217,15 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; invalid angles and save failures populate editorError.
    */
   async function rotateMapObject(objectId: string, angle: number): Promise<void> {
-    if (mapInspectorRef.value?.isEditingObject(objectId)) return
     const currentWorkspace = workspace.value
     const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
     if (!currentWorkspace || object?.placement.kind !== 'orbit') return
+    if (rejectBlockedEntityCommand({
+      kind: 'object-placement',
+      objectId,
+      fromOrbitId: object.placement.orbitId,
+      toOrbitId: object.placement.orbitId,
+    })) return
 
     try {
       if (!Number.isFinite(angle)) throw new Error('An orbital angle must be finite.')
@@ -228,6 +256,7 @@ export function useMapWorkflows({
     const system = selectedSystem.value
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
     if (!currentWorkspace || !system || !orbit) return
+    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
       const minimum = minimumOrbitRadius(system, orbit)
@@ -262,6 +291,7 @@ export function useMapWorkflows({
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system?.orbits.some(orbit => orbit.id === orbitId)) return
+    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
       const orbitRotations = {
@@ -297,6 +327,12 @@ export function useMapWorkflows({
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system) return
+    const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
+    if (!currentOrbit) return
+    const command: EntityCommand = currentOrbit.hostId === hostId
+      ? { kind: 'orbit-geometry', orbitId }
+      : { kind: 'orbit-host', orbitId, hostId }
+    if (rejectBlockedEntityCommand(command)) return
 
     orbitAdjustmentNotice.value = ''
     try {
@@ -351,8 +387,9 @@ export function useMapWorkflows({
       !systemId
       || !orbitId
       || selectedOrbit.value?.hostId === null
-      || !await resolveTransition({ leaveChart: false })
     ) return
+    if (rejectBlockedEntityCommand({ kind: 'orbit-host', orbitId, hostId: null })) return
+    if (!await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
 
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
@@ -391,8 +428,10 @@ export function useMapWorkflows({
   async function beginObjectEdit(): Promise<void> {
     const objectId = selectedObject.value?.id
     if (!objectId || !await resolveTransition({ leaveChart: false })) return
-    if (selectedObject.value?.id !== objectId) return
-    mapInspectorRef.value?.startObjectEdit()
+    const currentWorkspace = workspace.value
+    const system = selectedSystem.value
+    if (!currentWorkspace || !system || selectedObject.value?.id !== objectId) return
+    beginObjectSession(currentWorkspace.cluster.id, system.id, objectId)
     editorError.value = ''
   }
 
@@ -400,8 +439,10 @@ export function useMapWorkflows({
   async function beginOrbitEdit(): Promise<void> {
     const orbitId = selectedOrbit.value?.id
     if (!orbitId || !await resolveTransition({ leaveChart: false })) return
-    if (selectedOrbit.value?.id !== orbitId) return
-    mapInspectorRef.value?.startOrbitEdit()
+    const currentWorkspace = workspace.value
+    const system = selectedSystem.value
+    if (!currentWorkspace || !system || selectedOrbit.value?.id !== orbitId) return
+    beginOrbitSession(currentWorkspace.cluster.id, system.id, orbitId)
     editorError.value = ''
   }
 
@@ -415,6 +456,7 @@ export function useMapWorkflows({
     const currentWorkspace = workspace.value
     const object = system?.objects.find(candidate => candidate.id === request.objectId)
     if (!system || !currentWorkspace || !object) return
+    if (rejectBlockedEntityCommand({ kind: 'object-placement', objectId: request.objectId })) return
 
     try {
       await saveSystem(updateSystemObject(
@@ -451,7 +493,7 @@ export function useMapWorkflows({
     const intendedOrbitId = dropPoint
       ? dropOrbitId ?? undefined
       : selectedOrbitId.value ?? undefined
-    if (!systemId || !workspace.value || !await resolveTransition({ leaveChart: false })) return
+    if (!systemId || !workspace.value || !await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     if (!currentWorkspace || !system || selectedSystem.value?.id !== systemId) return
@@ -514,7 +556,8 @@ export function useMapWorkflows({
     dropPoint?: Point,
   ): Promise<void> {
     const systemId = selectedSystem.value?.id
-    if (!systemId || !await resolveTransition({ leaveChart: false })) return
+    if (rejectBlockedEntityCommand({ kind: 'orbit-create', hostId })) return
+    if (!systemId || !await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
     const latestWorkspace = workspace.value
     const system = latestWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     if (!system || selectedSystem.value?.id !== systemId) return
@@ -565,6 +608,7 @@ export function useMapWorkflows({
     const system = selectedSystem.value
     const orbit = system?.orbits.find(candidate => candidate.id === request.orbitId)
     if (!currentWorkspace || !system || !orbit) return
+    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId: request.orbitId })) return
 
     try {
       let updatedSystem = system

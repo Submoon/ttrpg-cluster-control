@@ -96,7 +96,7 @@ test('Move refuses an object with an unresolved inspector draft before preview a
 test('keyboard Enter and Space still activate a map object immediately after pointer pan', async ({ page }) => {
   await createWorkspace(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const object = map.getByRole('button', { name: 'Select A, Primary Star (CelestialBody / star)' })
+  const object = map.getByRole('button', { name: 'Select A, Primary Star (Star)' })
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   if (await inspectorToggle.getAttribute('aria-expanded') === 'true') await inspectorToggle.click()

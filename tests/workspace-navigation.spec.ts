@@ -55,7 +55,7 @@ test('reselecting the current object or Orbit reopens Inspect without changing t
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const star = map.getByRole('button', { name: 'Select A, Primary Star (CelestialBody / star)' })
+  const star = map.getByRole('button', { name: 'Select A, Primary Star (Star)' })
   await star.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'true')
   await expect(map.locator('.system-object.is-selected')).toHaveCount(1)
@@ -199,7 +199,7 @@ test('right-click keeps the native context menu while right-drag pans in every m
 
 test('A to B to A restores each system camera and the selected map object', async ({ page }) => {
   await createWorkspace(page)
-  const starLabel = 'Select A, Primary Star (CelestialBody / star)'
+  const starLabel = 'Select A, Primary Star (Star)'
   const hierarchyStarLabel = 'Select A, Primary Star'
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await page.getByRole('group', { name: 'Vesper star system map' }).getByRole('button', { name: starLabel }).click()
@@ -358,7 +358,7 @@ test('Move selects map entities without opening Inspect or entering a system', a
   await expect(page.getByRole('button', { name: 'Inspect', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await page.setViewportSize({ width: 844, height: 390 })
 
-  const starLabel = 'Select A, Primary Star (CelestialBody / star)'
+  const starLabel = 'Select A, Primary Star (Star)'
   await systemMap.getByRole('button', { name: starLabel }).click()
   await expect(systemMap.locator('.system-object.is-selected')).toHaveCount(1)
   await expect(page.getByRole('dialog')).toHaveCount(0)

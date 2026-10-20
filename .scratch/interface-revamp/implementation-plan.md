@@ -18,6 +18,12 @@ Corrected specification SHA-256: `EE5A92BC565933541233F06BC0607F5F6384F0A925A536
 
 Source [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) remains open and unchanged, with no issue comments/labels/closure included in this planning step. Freshly fetched intake is `codex/interface-revamp` at `f4aa1b4438217412c308e61733d862f3d71597ca`, equal to its remote, 0 main-only / 23 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The specification SHA-256 remains `DF58B9D8715140A8F18D9F808FF83A2B1EBEC3F2596A2B23F37F1E51778E212F`. These are recorded intake identities, not a demand to reset later work.
 
+## Current frontier - 2026-10-20
+
+**18–22 are closed;23,26 and28 are open and unclaimed;24,25,27 and29 remain blocked and unclaimed.** Ticket22 completes the resumable object/Orbit Inspectors in the real Nuxt UI product. See its [Resolution](tickets/22-complete-object-and-orbit-inspectors.md#resolution), [execution record](research/implementation-22-2026-10-19.md) and [final QA report](implementation-lab/ticket-22-2026-10-19/qa/final-gate-report.md). No successor is started. Dated progress/frontier entries below are historical checkpoints, superseded by this section.
+
+Final typecheck/build pass. The sole compiled109-case run gives104 passed/5 failed; all five failed titles have attributed passing retests (four compiled, one unchanged development-only storage-module proof). Eight paired product/B presentation PNGs and bounded compact keyboard/hit/contrast checks support scoped fidelity, with disclosed fixture and durable-status differences. This is not a single-run109/109 or physical Android Chrome certificate. Issue3 remains open, PR28 remains draft and the final whole-interface Astra review, including Tools coherence, remains in29.
+
 ## Approved delivery graph
 
 | Local ticket | What it delivers | Direct blockers |
@@ -70,6 +76,10 @@ The human authorizes ticket21 only after ticket20 is finished and pushed. That c
 **Current frontier:18–21 are closed;22 and28 are open and unclaimed;23–27 and29 remain blocked and unclaimed.** No later implementation is started. The whole-interface Astra review, including Tools coherence, stays in final ticket29. Source issue3 remains open and PR28 remains draft. Historical progress entries below describe earlier checkpoints and do not replace this frontier.
 
 ## Execution and evidence
+
+### Ticket22 explicit implementation - 2026-10-19
+
+The human authorizes implement for ticket22 using Luna XHIGH implementation, prototype fidelity and Nuxt UI. It is claimed/in-progress from `2a4564d7ef5916df0cc4e025e7997ca7c86f81f7`, equal to the fetched feature remote (0 main-only/43 feature-only against unchanged main). The [execution record](research/implementation-22-2026-10-19.md) and [contract](research/ticket-22-contract-2026-10-19.md) govern the scoped resumable object/Orbit Inspector work. SOL6.1 High defines/reviews; two disjoint Luna writers implement; QA owns runtime. Object and Orbit tracer journeys pass after recorded corrections, but remaining guards, preservation, visual checks and independent reviews are not complete. **18–21 remain closed;22 is in-progress;28 remains open/unclaimed;23–27 and29 remain blocked.** No successor is started; source issue3 remains open and PR28 draft.
 
 Coordinate and analyze with **SOL 6.1 High**; delegate implementation to **Luna XHIGH** as requested. Follow the repository's project-development routing for contract design, bounded ownership, risk-appropriate independent reviews, correction and validation. Every ticket is self-contained with its approved scope, acceptance checklist, specification stories, B1–B10 families and blockers. No implementation has started from creating this backlog.
 

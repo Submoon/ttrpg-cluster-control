@@ -3,11 +3,15 @@
  */
 import type { Ref } from 'vue'
 import type {
+  CustomFieldDefinition,
   CustomFieldApplicabilityTarget,
   CustomFieldType,
   LocalWorkspace,
+  MapDeletionTarget,
+  Orbit,
   OrbitRadii,
   Point,
+  SystemObject,
   SystemObjectChanges,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
@@ -19,7 +23,87 @@ export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
   /** Keeps a resumable chart-name session open for a command independent of its captured chart target. */
   leaveChart?: boolean
+  /** Lets a read-only dialog open while an entity draft remains owned by its Inspector session. */
+  leaveEntitySession?: boolean
 }
+
+/** String-backed form values owned above the object Inspector's presentation lifetime. */
+export interface ObjectDraft {
+  locationKey: string
+  name: string
+  description: string
+  subtype: string
+  placement: string
+  x: string
+  y: string
+  atmosphere: string
+  portClass: string
+  jumpStationId: string
+  customFieldValues: Record<string, string>
+}
+
+/** String-backed Orbit inputs; Detach remains an explicit map command. */
+export interface OrbitDraft {
+  targetOrder: string
+  horizontalRadius: string
+  verticalRadius: string
+  centerX: string
+  centerY: string
+  rotation: string
+}
+
+/** Relationship values needed to detect changes to a captured host/placement chain. */
+export interface EntityDependencyBaseline {
+  objects: Array<Pick<SystemObject, 'id' | 'family' | 'subtype' | 'placement'>>
+  orbits: Orbit[]
+  orbitRadii: Record<string, OrbitRadii>
+  orbitRotations: Record<string, number>
+}
+
+/** Immutable object values and definitions used to create one object draft. */
+export interface ObjectEditBaseline {
+  object: SystemObject
+  values: ObjectDraft
+  dependencies: EntityDependencyBaseline
+  linkedStations: Array<Pick<SystemObject, 'id' | 'family' | 'subtype'>>
+  customFieldDefinitions: CustomFieldDefinition[]
+  nativeFieldOptions: {
+    atmosphereOptions?: string[]
+    portClassOptions?: string[]
+  }
+}
+
+/** Immutable Orbit geometry, sibling ordering, and host-chain values used to create one Orbit draft. */
+export interface OrbitEditBaseline {
+  orbit: Orbit
+  values: OrbitDraft
+  effectiveRadii: OrbitRadii
+  rotation: number
+  siblings: Array<Pick<Orbit, 'id' | 'hostId' | 'order'>>
+  dependencies: EntityDependencyBaseline
+}
+
+/** Parent-owned edit session that remains available while an Inspector is hidden or reflowed. */
+export type EntityInspectorSession = {
+  id: number
+  clusterId: string
+  systemId: string
+  targetId: string
+  errors: Record<string, string>
+  error: string
+} & (
+  | { kind: 'object'; initial: ObjectEditBaseline; draft: ObjectDraft }
+  | { kind: 'orbit'; initial: OrbitEditBaseline; draft: OrbitDraft }
+)
+
+/** Specific map/data commands checked against the active entity session's captured dependencies. */
+export type EntityCommand =
+  | { kind: 'object-placement'; objectId: string; fromOrbitId?: string | null; toOrbitId?: string | null }
+  | { kind: 'orbit-geometry'; orbitId: string }
+  | { kind: 'orbit-host'; orbitId: string; hostId: string | null }
+  | { kind: 'orbit-create'; hostId: string | null }
+  | { kind: 'definition-mutation'; fieldId: string }
+  | { kind: 'deletion'; target: MapDeletionTarget }
 
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */

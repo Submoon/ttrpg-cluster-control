@@ -16,6 +16,7 @@ import {
 } from '../../domain/workspace'
 import type {
   MapInspectorHandle,
+  EntityCommand,
   SaveState,
   JumpRouteSaveRequest,
   TransitionOptions,
@@ -38,6 +39,7 @@ interface ClusterWorkflowOptions {
   selectedRoute: Readonly<ComputedRef<JumpRoute | undefined>>
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
+  isEntityCommandBlocked: (command: EntityCommand) => boolean
   isChartDraftTarget: (systemId: string) => boolean
   contextStamp: () => string
   selectCreatedSystem: (systemId: string, originStamp: string) => Promise<void>
@@ -66,6 +68,7 @@ export function useClusterWorkflows({
   selectedRoute,
   mapInspectorRef,
   resolveTransition,
+  isEntityCommandBlocked,
   isChartDraftTarget,
   contextStamp,
   selectCreatedSystem,
@@ -195,8 +198,12 @@ export function useClusterWorkflows({
       if (!window.confirm(confirmationFor(initialPlan))) return
 
       let acceptedPlan = initialPlan
-      if (resolveBeforeCommit) {
-        if (!await resolveBeforeCommit()) return
+      const entityConflict = isEntityCommandBlocked({ kind: 'deletion', target })
+      if (resolveBeforeCommit || entityConflict) {
+        const accepted = resolveBeforeCommit
+          ? await resolveBeforeCommit()
+          : await resolveTransition({ leaveChart: false })
+        if (!accepted) return
         const latestWorkspace = workspace.value
         if (!latestWorkspace) return
         const refreshedPlan = planMapEntityDeletion(latestWorkspace, target)
@@ -218,7 +225,13 @@ export function useClusterWorkflows({
   async function deleteSystem(systemId: string): Promise<void> {
     await deleteMapEntity(
       { kind: 'system', systemId },
-      () => resolveTransition({ leaveChart: isChartDraftTarget(systemId) }),
+      () => resolveTransition({
+        leaveChart: isChartDraftTarget(systemId),
+        leaveEntitySession: isEntityCommandBlocked({
+          kind: 'deletion',
+          target: { kind: 'system', systemId },
+        }),
+      }),
     )
   }
 

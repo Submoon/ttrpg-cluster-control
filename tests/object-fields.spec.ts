@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -28,8 +28,8 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await clickDockAction(page, 'Add orbit')
   await hierarchy.getByRole('button', { name: /Orbit 2 around Primary Star/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
-  await page.getByRole('button', { name: 'Move orbit up' }).click()
-  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  await page.getByRole('spinbutton', { name: 'Orbit order', exact: true }).fill('1')
+  await page.getByRole('button', { name: 'Apply changes' }).click()
   await expect(inspector.getByRole('heading', { name: 'Orbit 1' })).toBeVisible()
 
   await addCatalogueObject(page, 'planet')
@@ -48,6 +48,7 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(page.getByRole('alert')).toContainText('already used')
   await expect(key).toHaveValue('A')
   await key.fill(originalKey)
+  await expect(page.getByRole('button', { name: /Apply changes/ })).toBeEnabled()
   await saveMapObject(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
 
@@ -130,7 +131,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   })
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await expect(systemInspector.getByText('MAP OBJECT / SELECTED')).toBeVisible()
+  await expect(systemInspector.getByRole('heading', { name: 'Object details' })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await page.mouse.move(0, 0)
   const selectedAppearance = await chartDetails.evaluate((button) => {
@@ -144,7 +145,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit')
-  await expect(systemInspector.getByText('SYSTEM STRUCTURE / SELECTED')).toBeVisible()
+  await expect(systemInspector.getByRole('heading', { name: 'Axes and rotation' })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await chartDetails.press('Enter')
   await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
@@ -207,11 +208,11 @@ test('the Warden can configure native and reusable custom object fields', async 
   await signalClassDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   await editMapObject(page)
-  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Chlorine')
+  await selectInspectorOption(page.getByLabel('Atmosphere', { exact: true }), 'Chlorine')
   await page.getByLabel('Campaign notes').fill('Relay station under the ice.')
   await page.getByLabel('Threat level').fill('4')
-  await page.getByLabel('Hostile').selectOption('true')
-  await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+  await selectInspectorOption(page.getByLabel('Hostile'), 'Yes')
+  await selectInspectorOption(page.getByLabel('Signal class', { exact: true }), 'Red')
   await saveMapObject(page)
 
   await addCatalogueObject(page, 'station')
@@ -219,13 +220,13 @@ test('the Warden can configure native and reusable custom object fields', async 
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Campaign notes')).toHaveValue('')
   await editMapObject(page)
-  await page.getByLabel('Port class', { exact: true }).selectOption('Class II')
+  await selectInspectorOption(page.getByLabel('Port class', { exact: true }), 'Class II')
   await saveMapObject(page)
 
   await addCatalogueObject(page, 'moon')
   await expect(page.getByLabel('Atmosphere', { exact: true })).toBeVisible()
   await editMapObject(page)
-  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Thin')
+  await selectInspectorOption(page.getByLabel('Atmosphere', { exact: true }), 'Thin')
   await saveMapObject(page)
 
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
@@ -246,16 +247,16 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.reload()
   await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
-  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Chlorine')
+  expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Chlorine')
   await expect(page.getByLabel('Campaign notes')).toHaveValue('Relay station under the ice.')
   await expect(page.getByLabel('Threat level')).toHaveValue('4')
-  await expect(page.getByLabel('Hostile')).toHaveValue('true')
-  await expect(page.getByLabel('Signal class', { exact: true })).toHaveValue('Red')
+  expect(await readInspectorSelection(page.getByLabel('Hostile'))).toBe('Yes')
+  expect(await readInspectorSelection(page.getByLabel('Signal class', { exact: true }))).toBe('Red')
   await hierarchy.getByRole('button', { name: /New moon 1/ }).click()
-  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Thin')
+  expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Thin')
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await hierarchy.getByRole('button', { name: /New station/ }).click()
-  await expect(page.getByLabel('Port class', { exact: true })).toHaveValue('Class II')
+  expect(await readInspectorSelection(page.getByLabel('Port class', { exact: true }))).toBe('Class II')
 
   await returnToClusterMap(page)
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
@@ -400,7 +401,7 @@ test('field definition management previews destructive changes in a map-bound di
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await editMapObject(page)
-  await page.getByLabel('Atmosphere', { exact: true }).selectOption('Breathable')
+  await selectInspectorOption(page.getByLabel('Atmosphere', { exact: true }), 'Breathable')
   await saveMapObject(page)
 
   const openButton = page.getByRole('button', { name: 'Open field definitions' })
@@ -423,11 +424,11 @@ test('field definition management previews destructive changes in a map-bound di
   await expect(nativeConfirmation).toContainText('Iria')
   await expect(nativeConfirmation).toContainText('Breathable')
   await nativeDialog.getByRole('button', { name: 'Cancel field changes' }).click()
-  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('Breathable')
+  expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Breathable')
   await nativeDialog.getByLabel('Atmosphere choices').fill('Thin\nVacuum')
   await nativeDialog.getByRole('button', { name: 'Save changes' }).click()
   await nativeDialog.getByRole('button', { name: 'Remove options and clear affected values' }).click()
-  await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveValue('')
+  expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Not recorded')
   await nativeDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   const fieldDialog = await openFieldDefinitionDialog(page)
@@ -439,7 +440,7 @@ test('field definition management previews destructive changes in a map-bound di
   await fieldDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   await editMapObject(page)
-  await page.getByLabel('Signal class', { exact: true }).selectOption('Red')
+  await selectInspectorOption(page.getByLabel('Signal class', { exact: true }), 'Red')
   await saveMapObject(page)
   const editDialog = await openFieldDefinitionDialog(page)
   await editDialog.getByRole('button', { name: /Signal class/ }).click()
@@ -455,7 +456,7 @@ test('field definition management previews destructive changes in a map-bound di
   await expect(confirmation).toContainText('Iria')
   await expect(confirmation).toContainText('Red')
   await editDialog.getByRole('button', { name: 'Cancel field changes' }).click()
-  await expect(page.getByLabel('Signal class', { exact: true })).toHaveValue('Red')
+  expect(await readInspectorSelection(page.getByLabel('Signal class', { exact: true }))).toBe('Red')
   await expect(editDialog.getByRole('button', { name: /Signal class/ })).toBeVisible()
 
   await editDialog.getByLabel('Custom field name').fill('Signal designation')
@@ -463,13 +464,13 @@ test('field definition management previews destructive changes in a map-bound di
   await editDialog.getByRole('button', { name: 'Save changes' }).click()
   await expect(confirmation).toContainText('Red')
   await editDialog.getByRole('button', { name: 'Remove options and clear affected values' }).click()
-  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('')
+  expect(await readInspectorSelection(page.getByLabel('Signal designation', { exact: true }))).toBe('Not recorded')
   await expect(editDialog.getByRole('button', { name: /Signal designation/ })).toBeVisible()
   await expect(editDialog.getByLabel('Signal designation choices')).toHaveValue('Amber')
   await editDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   await editMapObject(page)
-  await page.getByLabel('Signal designation', { exact: true }).selectOption('Amber')
+  await selectInspectorOption(page.getByLabel('Signal designation', { exact: true }), 'Amber')
   await saveMapObject(page)
   const updatedExport = await downloadJson(page, 'Export star system JSON')
   expect(updatedExport.objectFieldSettings.customFields).toContainEqual(
@@ -487,7 +488,7 @@ test('field definition management previews destructive changes in a map-bound di
   await page.reload()
   await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
-  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('Amber')
+  expect(await readInspectorSelection(page.getByLabel('Signal designation', { exact: true }))).toBe('Amber')
   const deleteDialog = await openFieldDefinitionDialog(page)
   await deleteDialog.getByRole('button', { name: /Signal designation/ }).click()
   await expect(deleteDialog.getByRole('region', { name: 'Existing field values' })).toContainText('Amber')
@@ -497,7 +498,7 @@ test('field definition management previews destructive changes in a map-bound di
   await expect(deleteConfirmation).toContainText('Iria')
   await expect(deleteConfirmation).toContainText('Amber')
   await deleteDialog.getByRole('button', { name: 'Cancel field changes' }).click()
-  await expect(page.getByLabel('Signal designation', { exact: true })).toHaveValue('Amber')
+  expect(await readInspectorSelection(page.getByLabel('Signal designation', { exact: true }))).toBe('Amber')
   await deleteDialog.getByRole('button', { name: 'Delete field definition' }).click()
   await deleteDialog.getByRole('button', { name: 'Delete field and clear values' }).click()
   await expect(page.getByLabel('Signal designation', { exact: true })).toHaveCount(0)

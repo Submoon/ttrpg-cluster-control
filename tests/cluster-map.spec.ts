@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
+import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'
 
@@ -249,13 +249,10 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
 
   await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
   await editMapObject(page)
-  const station = page.getByLabel('Physical Jump Station')
-  const stationOption = page.getByRole('option', { name: /Vesper Gate/ })
-  const stationId = await stationOption.getAttribute('value')
-  expect(stationId).toBeTruthy()
-  await station.selectOption(stationId!)
+  const station = page.getByLabel('Physical Station association')
+  await selectInspectorOption(station, { label: /Vesper Gate/ })
   await saveMapObject(page)
-  await expect(station).toHaveValue(stationId!)
+  expect(await readInspectorSelection(station)).toMatch(/Vesper Gate/)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await returnToClusterMap(page)
@@ -332,5 +329,5 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const restoredHierarchy = await openWorkspaceHierarchy(page)
   await restoredHierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
-  await expect(page.getByLabel('Physical Jump Station')).toHaveValue(stationId!)
+  expect(await readInspectorSelection(page.getByLabel('Physical Station association'))).toMatch(/Vesper Gate/)
 })

@@ -35,6 +35,7 @@ import {
   type Point,
   type StarSystem,
 } from '../domain/workspace'
+import type { EntityCommand } from '../composables/editor-workflows/types'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import {
   clampMapViewport,
@@ -65,6 +66,7 @@ const props = withDefaults(defineProps<{
   selectedObjectId: string | null
   selectedOrbitId: string | null
   isObjectMoveBlocked?: (objectId: string) => boolean
+  isEntityCommandBlocked?: (command: EntityCommand) => boolean
   moveEnabled?: boolean
   touchNavigation?: boolean
   showZoomControls?: boolean
@@ -74,6 +76,7 @@ const emit = defineEmits<{
   'select-object': [id: string]
   'select-orbit': [id: string]
   'object-move-blocked': [id: string]
+  'entity-command-blocked': [command: EntityCommand]
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
@@ -105,7 +108,9 @@ const handlers: SystemMapEventHandlers = {
   selectObject: id => emit('select-object', id),
   selectOrbit: id => emit('select-orbit', id),
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
+  isEntityCommandBlocked: command => props.isEntityCommandBlocked?.(command) ?? false,
   objectMoveBlocked: id => emit('object-move-blocked', id),
+  entityCommandBlocked: command => emit('entity-command-blocked', command),
   moveObject: (id, position) => emit('move-object', id, position),
   moveOrbitCenter: (id, center, hostId) => emit('move-orbit-center', id, center, hostId),
   rotateObject: (id, angle) => emit('rotate-object', id, angle),

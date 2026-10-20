@@ -2,10 +2,13 @@ import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
-  for (const name of ['Close inspector panel', 'Close hierarchy panel']) {
-    const close = page.getByRole('button', { name, exact: true })
-    if (await close.isVisible()) await close.click()
-  }
+  const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  const inspectorHide = page.getByRole('button', { name: 'Hide inspector', exact: true })
+  if (await inspectorClose.isVisible()) await inspectorClose.click()
+  else if (await inspectorHide.isVisible()) await inspectorHide.click()
+
+  const hierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await hierarchyClose.isVisible()) await hierarchyClose.click()
 }
 
 async function abortNextWorkspaceWrite(
@@ -204,8 +207,8 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Schematic X', { exact: true }).fill('0.9')
   await inspector.getByLabel('Schematic Y', { exact: true }).fill('0.9')
-  await inspector.getByRole('button', { name: 'Save map object', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await inspector.getByRole('button', { name: /^Apply changes/ }).click()
+  await expect(inspector.locator('.entity-inspector-save-feedback').getByRole('status', { name: 'Saved on this device', exact: true })).toBeVisible()
   await closeCompactPanels(page)
 
   const systemMap = page.locator('.system-map-content')

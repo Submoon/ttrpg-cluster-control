@@ -18,6 +18,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     workspace: options.workspace,
     commit: options.commit,
     resolveTransition: editorState.resolveTransition,
+    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
   })
   const clusterWorkflows = useClusterWorkflows({
     workspace: options.workspace,
@@ -36,6 +37,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     selectedRoute: editorState.selectedRoute,
     mapInspectorRef: editorState.mapInspectorRef,
     resolveTransition: editorState.resolveTransition,
+    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
     isChartDraftTarget: editorState.isChartDraftTarget,
     contextStamp: editorState.contextStamp,
     selectCreatedSystem: editorState.selectCreatedSystem,
@@ -52,6 +54,9 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     mapInspectorRef: editorState.mapInspectorRef,
     systemMapRef: editorState.systemMapRef,
     resolveTransition: editorState.resolveTransition,
+    beginObjectSession: editorState.beginObjectSession,
+    beginOrbitSession: editorState.beginOrbitSession,
+    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
     editorError: editorState.editorError,
   })
 

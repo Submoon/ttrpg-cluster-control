@@ -14,7 +14,9 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
+import type { EntityCommand } from '../../composables/editor-workflows/types'
 import { objectMark } from '../../utils/catalogue-marks'
+import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import {
   getSvgViewportRect,
   MAP_ZOOM_MAX_SCALE,
@@ -51,6 +53,14 @@ function dragClientPoint(sourceEvent: Event): Point | null {
   return null
 }
 
+function dragTargetObjectId(sourceEvent: Event): string | null {
+  const point = dragClientPoint(sourceEvent)
+  const target = point ? document.elementFromPoint(point.x, point.y) : null
+  return target instanceof Element
+    ? target.closest('.system-object')?.getAttribute('data-object-id') ?? null
+    : null
+}
+
 type OrbitResizeAxis = 'global' | 'horizontal' | 'vertical'
 
 interface OrbitResizeGesture {
@@ -69,6 +79,10 @@ interface OrbitRotationGesture {
 export interface SystemMapEventHandlers {
   /** Select an existing system object. */
   selectObject(id: string): void
+  /** Checks whether a pending entity command touches an active inspector draft. */
+  isEntityCommandBlocked(command: EntityCommand): boolean
+  /** Reports a blocked pending entity command before the map preview changes. */
+  entityCommandBlocked(command: EntityCommand): void
   /** Checks whether the inspector currently owns a draft for this object. */
   isObjectMoveBlocked(id: string): boolean
   /** Reports a blocked drag after the pointer has crossed D3's client-pixel click threshold. */
@@ -161,6 +175,12 @@ export function renderSystemMap({
 }: SystemMapRendererOptions): SystemMapRenderer {
   let rotateOrbitFromWheel: (event: WheelEvent) => boolean = () => false
 
+  function blockEntityCommand(command: EntityCommand): boolean {
+    if (!handlers.isEntityCommandBlocked(command)) return false
+    handlers.entityCommandBlocked(command)
+    return true
+  }
+
   /**
    * Prevents selected-Orbit Ctrl+wheel rotation from also becoming a D3 map-zoom gesture.
    * @param event Native wheel event captured by Vue on the SVG.
@@ -187,6 +207,7 @@ export function renderSystemMap({
       const hostId = event.target instanceof Element
         ? event.target.closest('.system-object')?.getAttribute('data-object-id') ?? null
         : null
+      if (blockEntityCommand({ kind: 'orbit-create', hostId })) return
       handlers.dropOrbit({ x, y }, hostId)
       return
     }
@@ -204,6 +225,12 @@ export function renderSystemMap({
       : null
     const orbit = system.orbits.find(candidate => candidate.id === targetOrbitId)
       ?? orbitAtPoint(system, point, positions, geometry)
+    if (blockEntityCommand({
+      kind: 'object-placement',
+      objectId: '',
+      fromOrbitId: null,
+      toOrbitId: orbit?.id ?? null,
+    })) return
     const center = orbit ? orbitCenter(orbit, positions) : undefined
     handlers.dropObject(
       catalogueType.value,
@@ -228,6 +255,7 @@ export function renderSystemMap({
   const cancelledGestures = new WeakSet<Element>()
   const draftBlockedObjectGestures = new WeakSet<SVGGElement>()
   const draftBlockFeedbackShown = new WeakSet<SVGGElement>()
+  const blockedObjectCommands = new WeakMap<SVGGElement, EntityCommand>()
   const objectDragStartClient = new WeakMap<SVGGElement, Point>()
   function beginGesture(element: Element, rollback: () => void): void {
     cancelledGestures.delete(element)
@@ -261,6 +289,24 @@ export function renderSystemMap({
     orbitRadii: liveOrbitRadii,
     orbitRotations: liveOrbitRotations,
   })
+  function objectPlacementCommand(object: SystemObject, point: Point): EntityCommand {
+    const targetOrbit = orbitAtPoint(
+      system,
+      point,
+      currentPositions(),
+      geometry,
+      object.id,
+      liveOrbitRadii,
+      liveOrbitRotations,
+      liveOrbitCenters,
+    )
+    return {
+      kind: 'object-placement',
+      objectId: object.id,
+      fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
+      toOrbitId: targetOrbit?.id ?? null,
+    }
+  }
   const positions = currentPositions()
   const svg = select(element)
   const currentTransform = zoomTransform(element)
@@ -437,6 +483,7 @@ export function renderSystemMap({
       } else return
 
       event.preventDefault()
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
       handlers.resizeOrbit(orbit.id, { horizontal, vertical })
     })
   orbitAxisHandles
@@ -463,6 +510,7 @@ export function renderSystemMap({
       else if (event.key === 'End') radius += 400
       else return
       event.preventDefault()
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
       handlers.resizeOrbit(orbit.id, { ...current, [axis]: Math.max(minimumOrbitRadius(system, orbit), radius) })
     })
   orbitCenterHandles
@@ -498,6 +546,8 @@ export function renderSystemMap({
 
       event.preventDefault()
       const nextCenter = { x, y }
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
+        || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })) return
       liveOrbitCenters.set(orbit.id, nextCenter)
       updateLiveGeometry()
       handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(nextCenter), null)
@@ -523,6 +573,7 @@ export function renderSystemMap({
       const rotation = normalizeOrbitRotation(
         orbitRotation(orbit, geometry, liveOrbitRotations) + step * direction,
       )
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
       liveOrbitRotations.set(orbit.id, rotation)
       updateLiveGeometry()
       handlers.rotateOrbit(orbit.id, rotation)
@@ -540,7 +591,7 @@ export function renderSystemMap({
     })
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', object => `Select ${object.locationKey}, ${object.name} (${object.family} / ${object.subtype})`)
+    .attr('aria-label', object => `Select ${catalogueObjectLabel(object)}`)
 
   objectMarks.each(function (object) {
     const mark = select(this)
@@ -692,13 +743,21 @@ export function renderSystemMap({
         select(this).classed('is-dragging', false)
       })
       select(this).classed('is-dragging', true)
-      if (handlers.isObjectMoveBlocked(object.id)) {
+      const command = objectPlacementCommand(object, { x: event.x, y: event.y })
+      if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
         draftBlockedObjectGestures.add(this)
+        blockedObjectCommands.set(this, command)
         cancelGesture(this)
       }
     })
     .on('drag', function (event, object) {
-      if (handlers.isObjectMoveBlocked(object.id)) draftBlockedObjectGestures.add(this)
+      if (!draftBlockedObjectGestures.has(this) && !cancelledGestures.has(this)) {
+        const command = objectPlacementCommand(object, { x: event.x, y: event.y })
+        if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
+          draftBlockedObjectGestures.add(this)
+          blockedObjectCommands.set(this, command)
+        }
+      }
       if (draftBlockedObjectGestures.has(this)) {
         cancelGesture(this)
         const start = objectDragStartClient.get(this)
@@ -706,7 +765,9 @@ export function renderSystemMap({
         if (start && current && !draftBlockFeedbackShown.has(this)
           && Math.hypot(current.x - start.x, current.y - start.y) > 6) {
           draftBlockFeedbackShown.add(this)
-          handlers.objectMoveBlocked(object.id)
+          const blockedCommand = blockedObjectCommands.get(this)
+          if (blockedCommand) handlers.entityCommandBlocked(blockedCommand)
+          else handlers.objectMoveBlocked(object.id)
         }
         return
       }
@@ -747,6 +808,12 @@ export function renderSystemMap({
           liveOrbitCenters,
         )
         if (targetOrbit) {
+          if (blockEntityCommand({
+            kind: 'object-placement',
+            objectId: object.id,
+            fromOrbitId: orbitId,
+            toOrbitId: targetOrbit.id,
+          })) return
           const center = orbitCenter(targetOrbit, positions, liveOrbitCenters)
           handlers.placeObjectInOrbit(object.id, targetOrbit.id, orbitAngleAtPoint(
             point,
@@ -755,6 +822,12 @@ export function renderSystemMap({
             orbitRotation(targetOrbit, geometry, liveOrbitRotations),
           ))
         } else {
+          if (blockEntityCommand({
+            kind: 'object-placement',
+            objectId: object.id,
+            fromOrbitId: orbitId,
+            toOrbitId: orbitId,
+          })) return
           const center = orbitCenter(orbit, positions, liveOrbitCenters)
           handlers.rotateObject(object.id, orbitAngleAtPoint(
             point,
@@ -779,6 +852,12 @@ export function renderSystemMap({
         liveOrbitCenters,
       )
       if (targetOrbit) {
+        if (blockEntityCommand({
+          kind: 'object-placement',
+          objectId: object.id,
+          fromOrbitId: null,
+          toOrbitId: targetOrbit.id,
+        })) return
         const center = orbitCenter(targetOrbit, positions, liveOrbitCenters)
         handlers.placeObjectInOrbit(object.id, targetOrbit.id, orbitAngleAtPoint(
           point,
@@ -787,6 +866,12 @@ export function renderSystemMap({
           orbitRotation(targetOrbit, geometry, liveOrbitRotations),
         ))
       } else {
+        if (blockEntityCommand({
+          kind: 'object-placement',
+          objectId: object.id,
+          fromOrbitId: null,
+          toOrbitId: null,
+        })) return
         handlers.moveObject(object.id, {
           x: (event.x - 64) / 832,
           y: (event.y - 72) / 416,
@@ -834,6 +919,7 @@ export function renderSystemMap({
     const rotation = normalizeOrbitRotation(
       orbitRotation(orbit, geometry, liveOrbitRotations) + event.deltaY * 0.05,
     )
+    if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return true
     liveOrbitRotations.set(orbit.id, rotation)
     updateLiveGeometry()
     handlers.rotateOrbit(orbit.id, rotation)
@@ -920,6 +1006,10 @@ export function renderSystemMap({
         if (event.dx || event.dy) resizedOrbits.add(this)
         const gesture = orbitResizeGestures.get(this)
         if (!gesture) return
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          cancelGesture(this)
+          return
+        }
         liveOrbitRadii.set(orbit.id, resizedRadii({ x: event.x, y: event.y }, orbit, gesture))
         updateLiveGeometry()
       })
@@ -935,6 +1025,11 @@ export function renderSystemMap({
         orbitResizeGestures.delete(this)
         if (!gesture || !resizedOrbits.has(this)) return
         const radii = resizedRadii({ x: event.x, y: event.y }, orbit, gesture)
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          liveOrbitRadii.delete(orbit.id)
+          updateLiveGeometry()
+          return
+        }
         liveOrbitRadii.set(orbit.id, radii)
         updateLiveGeometry()
         handlers.resizeOrbit(orbit.id, radii)
@@ -960,6 +1055,12 @@ export function renderSystemMap({
       .on('drag', function (event, orbit) {
         if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) movedOrbitCenters.add(this)
+        const hostId = dragTargetObjectId(event.sourceEvent)
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
+          || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId })) {
+          cancelGesture(this)
+          return
+        }
         liveOrbitCenters.set(orbit.id, { x: event.x, y: event.y })
         updateLiveGeometry()
       })
@@ -972,12 +1073,16 @@ export function renderSystemMap({
         select(this).classed('is-moving', false)
         if (!movedOrbitCenters.has(this)) return
         const center = { x: event.x, y: event.y }
+        const hostId = dragTargetObjectId(event.sourceEvent)
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
+          || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId })) {
+          liveOrbitCenters.delete(orbit.id)
+          updateLiveGeometry()
+          movedOrbitCenters.delete(this)
+          return
+        }
         liveOrbitCenters.set(orbit.id, center)
         updateLiveGeometry()
-        const target = event.sourceEvent.target
-        const hostId = target instanceof Element
-          ? target.closest('.system-object')?.getAttribute('data-object-id') ?? null
-          : null
         handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(center), hostId)
       }),
   )
@@ -1021,6 +1126,10 @@ export function renderSystemMap({
         else if (delta < -Math.PI) delta += Math.PI * 2
         gesture.rotation = normalizeOrbitRotation(gesture.rotation + delta * 180 / Math.PI)
         gesture.lastPointerAngle = pointerAngle
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          cancelGesture(this)
+          return
+        }
         liveOrbitRotations.set(orbit.id, gesture.rotation)
         updateLiveGeometry()
       })
@@ -1035,6 +1144,11 @@ export function renderSystemMap({
         const gesture = orbitRotationGestures.get(this)
         orbitRotationGestures.delete(this)
         if (!gesture || !rotatedOrbits.has(this)) return
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          liveOrbitRotations.delete(orbit.id)
+          updateLiveGeometry()
+          return
+        }
         handlers.rotateOrbit(orbit.id, gesture.rotation)
       }),
   )

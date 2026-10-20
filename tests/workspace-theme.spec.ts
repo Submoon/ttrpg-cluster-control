@@ -347,7 +347,7 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await expect(objectName).toHaveValue('Tentative gate')
   await expect(objectDescription).toHaveValue('A draft survives the palette change.')
 
-  const saveStatus = page.locator('.save-feedback')
+  const saveStatus = activeWorkspaceFeedback(page).locator('.save-feedback')
   await installWorkspaceWriteGate(page)
   try {
     await inspector.getByRole('button', { name: 'Save map object' }).click()

@@ -115,7 +115,7 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   await primaryStar.focus()
   await page.keyboard.press('Enter')
   await expectCompactPanel(page, 'inspector')
-  await page.getByRole('button', { name: 'Close inspector panel' }).click()
+  await page.getByRole('button', { name: 'Hide inspector', exact: true }).click()
   await expect(primaryStar).toBeFocused()
   await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
 

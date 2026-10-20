@@ -1,6 +1,6 @@
 ---
 title: 'Consult, edit and create Fields without losing work or assignments'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -1089,6 +1089,25 @@ p-note {
   padding: 1rem;
   overscroll-behavior: contain;
 }
+.workspace-resizable-panel .workspace-side-panel-content-inspector {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.workspace-side-panel-content-inspector > .panel-close-button {
+  position: relative;
+  top: auto;
+  float: none;
+  flex: 0 0 2.2rem;
+  align-self: flex-end;
+  margin: 0.4rem 0.55rem 0.1rem;
+}
+.workspace-side-panel-content-inspector > .map-inspector-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
 .workspace-panel-resize-handle {
   position: absolute;
   z-index: 3;
@@ -1202,6 +1221,9 @@ p-note {
   padding: clamp(0.75rem, 2.5vw, 1.2rem);
   padding-bottom: max(8.5rem, calc(8rem + env(safe-area-inset-bottom)));
 }
+.map-editor-layout.compact-modal-open .workspace-side-panel-content-inspector {
+  padding: 0;
+}
 .map-editor-layout.compact-modal-open .workspace-panel-resize-handle { display: none; }
 
 @media (max-width: 1000px) and (min-width: 761px) and (min-height: 601px) {
@@ -1233,6 +1255,7 @@ p-note {
   .workspace-zoom-value { min-width: 2.8rem; }
   .workspace-resizable-panel:not(.workspace-resizable-panel-compact) .workspace-panel-resize-handle { display: none; }
   .workspace-side-panel-content { padding: 0.7rem; }
+  .workspace-resizable-panel .workspace-side-panel-content-inspector { padding: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

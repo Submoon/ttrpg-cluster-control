@@ -15,7 +15,9 @@
           <p class="inspector-intro m-0">
             {{ guardMode === 'chart'
               ? 'Apply these chart names, discard the draft, or stay here and keep editing.'
-              : 'Discard the current inspector changes, or stay here and keep editing.' }}
+              : hasModifiedEntitySession
+                ? 'Apply these Inspector changes, discard them, or stay here and keep editing.'
+                : 'Discard the current inspector changes, or stay here and keep editing.' }}
           </p>
         </div>
       </div>
@@ -61,7 +63,7 @@
             {{ guardMode === 'chart' ? 'Discard and continue' : 'Discard edits and continue' }}
           </UButton>
           <UButton
-            v-if="guardMode === 'chart'"
+            v-if="guardMode === 'chart' || hasModifiedEntitySession"
             color="primary"
             @click="emit('resolve-transition', 'apply')"
           >
@@ -89,6 +91,7 @@ const systemName = defineModel<string>('systemName', { required: true })
 const props = defineProps<{
   formError: string
   guardMode: TransitionGuard
+  hasModifiedEntitySession: boolean
   targetSystemName?: string
 }>()
 

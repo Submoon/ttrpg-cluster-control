@@ -1,0 +1,1907 @@
+[
+  {
+    "fixtures": [
+      {
+        "kind": "product import source",
+        "sha256": "07f3c8bf81698398e47b62ae603c69d03e0da3075138cc8a213d52f11a347ccf",
+        "systemId": "47275268-3c22-4489-ae50-14e754924d15",
+        "planetId": "0fa0cb2f-cc08-48c4-a321-c6d2579cc573",
+        "orbitId": "e5e9f144-9930-4009-89ca-f40700cc54a1",
+        "validated": true
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/PrototypeWorkbench.vue",
+        "sha256": "b102bd8230e2d4e819d68b0b516df9a3e39d34751ab8a3d9ea7ca090a6bb7d7d"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/PrototypeBInspector.vue",
+        "sha256": "010d58fedeed2780bee57223e950b7bdd5d5233c2054dc20e18baf7fcb24df3e"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/prototype-inspector-fixture.ts",
+        "sha256": "971da11d6fe447b4caf454feaab0954bd4cd4644b5a0e7e85d0dec565cbe3ce5"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/contrast.mjs",
+        "sha256": "827a50c3004165eca169e757a253350b1ffcee65536938e41392c86aa52cdd71"
+      },
+      {
+        "caseId": "object-desktop-light",
+        "kind": "actual public imported system export",
+        "sha256": "8b524190aeb2dfffd84fa220994a0b4e1505e1537d3128ba97732976a344ed0a",
+        "systemId": "8ed03516-27bd-4421-919c-4a33843a40f9",
+        "objects": [
+          {
+            "id": "3ecac3cc-57ff-450b-98ae-146cececcb69",
+            "key": "A",
+            "name": "Primary Star"
+          },
+          {
+            "id": "7ca6c04e-d236-4189-b872-f5b8f71a4f92",
+            "key": "PL-01",
+            "name": "QA Survey World of the Outer Meridian"
+          }
+        ],
+        "orbits": [
+          {
+            "id": "7107296c-9ac0-44a0-963d-41f66ee2f164",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.25,
+              "y": 0.65
+            }
+          }
+        ]
+      },
+      {
+        "caseId": "object-desktop-light",
+        "kind": "actual dense B object reference",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "sameEntityKindAsRoot": true
+      },
+      {
+        "caseId": "orbit-desktop-dark",
+        "kind": "actual public imported system export",
+        "sha256": "e1188abfd939d8ff9729bb28ba1d825fb6727198c2abab07b1801f8818063b63",
+        "systemId": "ef0b5756-e605-4376-b4a1-676a915df8cd",
+        "objects": [
+          {
+            "id": "9095e35c-9895-4ee5-a12d-a08f9a86a9de",
+            "key": "A",
+            "name": "Primary Star"
+          },
+          {
+            "id": "b57bba43-2b86-4b5e-8065-f7a473b096b8",
+            "key": "PL-01",
+            "name": "QA Survey World of the Outer Meridian"
+          }
+        ],
+        "orbits": [
+          {
+            "id": "d2a5d2e0-e787-4db5-a51f-dca24f26f6df",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.25,
+              "y": 0.65
+            }
+          }
+        ]
+      },
+      {
+        "caseId": "orbit-desktop-dark",
+        "kind": "actual dense B object reference",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "sameEntityKindAsRoot": false
+      },
+      {
+        "caseId": "object-portrait-dark",
+        "kind": "actual public imported system export",
+        "sha256": "9f46f76db4a35dca1a4ca59fe88422a75f6b6d52379c68c879915ff6804a4471",
+        "systemId": "89b47b24-b4ca-440b-899a-c1b936d1629f",
+        "objects": [
+          {
+            "id": "b14c2fac-dd1d-46eb-860e-4c2cc331d82d",
+            "key": "A",
+            "name": "Primary Star"
+          },
+          {
+            "id": "61abf804-f4ac-4cb5-b66d-31170adfeb16",
+            "key": "PL-01",
+            "name": "QA Survey World of the Outer Meridian"
+          }
+        ],
+        "orbits": [
+          {
+            "id": "baae5c62-5937-4e46-8607-719ca5c4c6d2",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.25,
+              "y": 0.65
+            }
+          }
+        ]
+      }
+    ],
+    "contrast": [
+      {
+        "caseId": "object-desktop-light",
+        "kind": "text",
+        "css": "rgb(152, 47, 35)",
+        "rgba": [
+          152,
+          47,
+          35,
+          1
+        ],
+        "bounds": {
+          "x": 1096.390625,
+          "y": 347.109375,
+          "width": 303.21875,
+          "height": 17.171875,
+          "top": 347.109375,
+          "right": 1399.609375,
+          "bottom": 364.28125,
+          "left": 1096.390625
+        },
+        "extent": 0,
+        "text": "1 form issue",
+        "pseudo": null,
+        "background": [
+          [
+            245,
+            233,
+            229
+          ],
+          [
+            245,
+            233,
+            229
+          ],
+          [
+            245,
+            233,
+            229
+          ]
+        ],
+        "ratios": [
+          6.388203522169436,
+          6.388203522169436,
+          6.388203522169436
+        ],
+        "minimum": 6.388203522169436,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "object-desktop-light",
+        "kind": "text",
+        "css": "rgb(89, 100, 93)",
+        "rgba": [
+          89,
+          100,
+          93,
+          1
+        ],
+        "bounds": {
+          "x": 1083.390625,
+          "y": 686.875,
+          "width": 329.21875,
+          "height": 16.3125,
+          "top": 686.875,
+          "right": 1412.609375,
+          "bottom": 703.1875,
+          "left": 1083.390625
+        },
+        "extent": 0,
+        "text": "Unapplied changes",
+        "pseudo": null,
+        "background": [
+          [
+            255,
+            254,
+            250
+          ],
+          [
+            255,
+            254,
+            250
+          ],
+          [
+            255,
+            254,
+            250
+          ]
+        ],
+        "ratios": [
+          6.110093590448718,
+          6.110093590448718,
+          6.110093590448718
+        ],
+        "minimum": 6.110093590448718,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "orbit-desktop-dark",
+        "kind": "text",
+        "css": "rgb(255, 162, 149)",
+        "rgba": [
+          255,
+          162,
+          149,
+          1
+        ],
+        "bounds": {
+          "x": 1096.390625,
+          "y": 300.359375,
+          "width": 303.21875,
+          "height": 17.171875,
+          "top": 300.359375,
+          "right": 1399.609375,
+          "bottom": 317.53125,
+          "left": 1096.390625
+        },
+        "extent": 0,
+        "text": "1 form issue",
+        "pseudo": null,
+        "background": [
+          [
+            42,
+            41,
+            42
+          ],
+          [
+            42,
+            41,
+            42
+          ],
+          [
+            42,
+            41,
+            42
+          ]
+        ],
+        "ratios": [
+          7.490470527866335,
+          7.490470527866335,
+          7.490470527866335
+        ],
+        "minimum": 7.490470527866335,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "orbit-desktop-dark",
+        "kind": "text",
+        "css": "rgb(156, 170, 162)",
+        "rgba": [
+          156,
+          170,
+          162,
+          1
+        ],
+        "bounds": {
+          "x": 1083.390625,
+          "y": 686.875,
+          "width": 329.21875,
+          "height": 16.3125,
+          "top": 686.875,
+          "right": 1412.609375,
+          "bottom": 703.1875,
+          "left": 1083.390625
+        },
+        "extent": 0,
+        "text": "Unapplied changes",
+        "pseudo": null,
+        "background": [
+          [
+            18,
+            28,
+            30
+          ],
+          [
+            18,
+            28,
+            30
+          ],
+          [
+            18,
+            28,
+            30
+          ]
+        ],
+        "ratios": [
+          7.174480179723202,
+          7.174480179723202,
+          7.174480179723202
+        ],
+        "minimum": 7.174480179723202,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "object-portrait-dark",
+        "kind": "text",
+        "css": "rgb(255, 162, 149)",
+        "rgba": [
+          255,
+          162,
+          149,
+          1
+        ],
+        "bounds": {
+          "x": 27.390625,
+          "y": 202.640625,
+          "width": 335.21875,
+          "height": 17.171875,
+          "top": 202.640625,
+          "right": 362.609375,
+          "bottom": 219.8125,
+          "left": 27.390625
+        },
+        "extent": 0,
+        "text": "1 form issue",
+        "pseudo": null,
+        "background": [
+          [
+            42,
+            41,
+            42
+          ],
+          [
+            42,
+            41,
+            42
+          ],
+          [
+            42,
+            41,
+            42
+          ]
+        ],
+        "ratios": [
+          7.490470527866335,
+          7.490470527866335,
+          7.490470527866335
+        ],
+        "minimum": 7.490470527866335,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "object-portrait-dark",
+        "kind": "text",
+        "css": "rgb(156, 170, 162)",
+        "rgba": [
+          156,
+          170,
+          162,
+          1
+        ],
+        "bounds": {
+          "x": 14.390625,
+          "y": 712.25,
+          "width": 361.21875,
+          "height": 16.3125,
+          "top": 712.25,
+          "right": 375.609375,
+          "bottom": 728.5625,
+          "left": 14.390625
+        },
+        "extent": 0,
+        "text": "Unapplied changes",
+        "pseudo": null,
+        "background": [
+          [
+            18,
+            28,
+            30
+          ],
+          [
+            18,
+            28,
+            30
+          ],
+          [
+            18,
+            28,
+            30
+          ]
+        ],
+        "ratios": [
+          7.174480179723202,
+          7.174480179723202,
+          7.174480179723202
+        ],
+        "minimum": 7.174480179723202,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      }
+    ],
+    "sourceInputs": 32,
+    "hostEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket22-candidate4-compiled-presentation-20261019-run1",
+    "limitations": [
+      "Four structural pairs, eight selected positive PNGs; existing ticket21 shell geometry is retained evidence.",
+      "Root uses a separately constructed authoritative-domain-validated import through public controls. B uses its actual memory-only dense sample, never as a product fixture source.",
+      "B has no editable numeric Orbit form. Orbit root bodies are compared with its dense object header/body/footer structure; domain fields and fixture identities differ.",
+      "The retained B sample renders unnamed fields; its existing visible DOM control IDs are used explicitly. Product controls continue to be located by public labels.",
+      "390x500 is reduced-height emulation, not physical Android Chrome, OS keyboard, safe-area or gesture proof.",
+      "Two text contrast samples per root state reuse the retained ticket21 sampleContrast utility. Temporary foreground-only suppression is restored; selected PNGs are unmodified."
+    ],
+    "checks": [
+      {
+        "name": "object-desktop-light/root: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Schematic X",
+          "row": {
+            "x": 1083.390625,
+            "y": 467.53125,
+            "width": 159.015625,
+            "height": 63.3125,
+            "top": 467.53125,
+            "right": 1242.40625,
+            "bottom": 530.84375,
+            "left": 1083.390625
+          },
+          "label": {
+            "x": 1083.390625,
+            "y": 467.53125,
+            "width": 71.46875,
+            "height": 15.3125,
+            "top": 467.53125,
+            "right": 1154.859375,
+            "bottom": 482.84375,
+            "left": 1083.390625
+          },
+          "control": {
+            "x": 1083.390625,
+            "y": 486.84375,
+            "width": 159.015625,
+            "height": 44,
+            "top": 486.84375,
+            "right": 1242.40625,
+            "bottom": 530.84375,
+            "left": 1083.390625
+          },
+          "body": {
+            "x": 1069,
+            "y": 322.921875,
+            "width": 358,
+            "height": 353.359375,
+            "top": 322.921875,
+            "right": 1427,
+            "bottom": 676.28125,
+            "left": 1069
+          },
+          "bodyClientHeight": 353,
+          "footer": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125,
+            "top": 676.28125,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "availableTop": 322.921875,
+          "availableBottom": 675.921875,
+          "text": "Schematic X",
+          "complete": true
+        }
+      },
+      {
+        "name": "object-desktop-light: footer stays reachable after body scroll",
+        "passed": true,
+        "detail": {
+          "before": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125
+          },
+          "after": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125
+          },
+          "scrollable": true,
+          "evidence": {
+            "bounds": {
+              "x": 1083.390625,
+              "y": 777.84375,
+              "width": 161.015625,
+              "height": 32,
+              "top": 777.84375,
+              "right": 1244.40625,
+              "bottom": 809.84375,
+              "left": 1083.390625
+            },
+            "ordinaryHit": true
+          }
+        }
+      },
+      {
+        "name": "object-desktop-light: natural footer keyboard focus visible/unobscured",
+        "passed": true,
+        "detail": {
+          "outline": "rgb(155, 63, 0) solid 2px",
+          "shadow": "none",
+          "extent": 4,
+          "fits": true
+        }
+      },
+      {
+        "name": "object-desktop-light/root: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 1087,
+            "y": 527,
+            "width": 121.875,
+            "height": 32,
+            "top": 527,
+            "right": 1208.875,
+            "bottom": 559,
+            "left": 1087
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "object-desktop-light/root: error action focuses its control",
+        "passed": true,
+        "detail": "object-inspector-7ca6c04e-d236-4189-b872-f5b8f71a4f92-locationKey"
+      },
+      {
+        "name": "object-desktop-light: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 6.388203522169436,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "object-desktop-light: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 6.110093590448718,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "object-desktop-light/B: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 1123,
+            "y": 545,
+            "width": 165.375,
+            "height": 32,
+            "top": 545,
+            "right": 1288.375,
+            "bottom": 577,
+            "left": 1123
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "object-desktop-light/B: error action focuses its control",
+        "passed": true,
+        "detail": "b-inspector-control-name"
+      },
+      {
+        "name": "orbit-desktop-dark/root: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Horizontal radius",
+          "row": {
+            "x": 1083.390625,
+            "y": 280.71875,
+            "width": 159.015625,
+            "height": 111.3125,
+            "top": 280.71875,
+            "right": 1242.40625,
+            "bottom": 392.03125,
+            "left": 1083.390625
+          },
+          "label": {
+            "x": 1083.390625,
+            "y": 280.71875,
+            "width": 112,
+            "height": 15.3125,
+            "top": 280.71875,
+            "right": 1195.390625,
+            "bottom": 296.03125,
+            "left": 1083.390625
+          },
+          "control": {
+            "x": 1083.390625,
+            "y": 300.03125,
+            "width": 159.015625,
+            "height": 44,
+            "top": 300.03125,
+            "right": 1242.40625,
+            "bottom": 344.03125,
+            "left": 1083.390625
+          },
+          "body": {
+            "x": 1069,
+            "y": 281.171875,
+            "width": 358,
+            "height": 395.109375,
+            "top": 281.171875,
+            "right": 1427,
+            "bottom": 676.28125,
+            "left": 1069
+          },
+          "bodyClientHeight": 395,
+          "footer": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125,
+            "top": 676.28125,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "availableTop": 281.171875,
+          "availableBottom": 676.171875,
+          "text": "Horizontal radiusHorizontal radius is required.",
+          "complete": true
+        }
+      },
+      {
+        "name": "orbit-desktop-dark: footer stays reachable after body scroll",
+        "passed": true,
+        "detail": {
+          "before": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125
+          },
+          "after": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125
+          },
+          "scrollable": true,
+          "evidence": {
+            "bounds": {
+              "x": 1083.390625,
+              "y": 777.84375,
+              "width": 161.015625,
+              "height": 32,
+              "top": 777.84375,
+              "right": 1244.40625,
+              "bottom": 809.84375,
+              "left": 1083.390625
+            },
+            "ordinaryHit": true
+          }
+        }
+      },
+      {
+        "name": "orbit-desktop-dark: natural footer keyboard focus visible/unobscured",
+        "passed": true,
+        "detail": {
+          "outline": "rgb(255, 192, 135) solid 2px",
+          "shadow": "none",
+          "extent": 4,
+          "fits": true
+        }
+      },
+      {
+        "name": "orbit-desktop-dark/root: error action focuses its control",
+        "passed": true,
+        "detail": "orbit-inspector-d2a5d2e0-e787-4db5-a51f-dca24f26f6df-horizontalRadius"
+      },
+      {
+        "name": "orbit-desktop-dark: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 7.490470527866335,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "orbit-desktop-dark: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 7.174480179723202,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "orbit-desktop-dark/B: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 1123,
+            "y": 545,
+            "width": 165.375,
+            "height": 32,
+            "top": 545,
+            "right": 1288.375,
+            "bottom": 577,
+            "left": 1123
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "orbit-desktop-dark/B: error action focuses its control",
+        "passed": true,
+        "detail": "b-inspector-control-name"
+      },
+      {
+        "name": "object-portrait-dark/root: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Schematic X",
+          "row": {
+            "x": 14.390625,
+            "y": 614.0625,
+            "width": 361.21875,
+            "height": 63.3125,
+            "top": 614.0625,
+            "right": 375.609375,
+            "bottom": 677.375,
+            "left": 14.390625
+          },
+          "label": {
+            "x": 14.390625,
+            "y": 614.0625,
+            "width": 71.46875,
+            "height": 15.3125,
+            "top": 614.0625,
+            "right": 85.859375,
+            "bottom": 629.375,
+            "left": 14.390625
+          },
+          "control": {
+            "x": 14.390625,
+            "y": 633.375,
+            "width": 202,
+            "height": 44,
+            "top": 633.375,
+            "right": 216.390625,
+            "bottom": 677.375,
+            "left": 14.390625
+          },
+          "body": {
+            "x": 0,
+            "y": 180.859375,
+            "width": 390,
+            "height": 523.203125,
+            "top": 180.859375,
+            "right": 390,
+            "bottom": 704.0625,
+            "left": 0
+          },
+          "bodyClientHeight": 523,
+          "footer": {
+            "x": 0,
+            "y": 704.0625,
+            "width": 390,
+            "height": 139.9375,
+            "top": 704.0625,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "availableTop": 180.859375,
+          "availableBottom": 703.859375,
+          "text": "Schematic X",
+          "complete": true
+        }
+      },
+      {
+        "name": "object-portrait-dark: footer stays reachable after body scroll",
+        "passed": true,
+        "detail": {
+          "before": {
+            "x": 0,
+            "y": 704.0625,
+            "width": 390,
+            "height": 139.9375
+          },
+          "after": {
+            "x": 0,
+            "y": 704.0625,
+            "width": 390,
+            "height": 139.9375
+          },
+          "scrollable": true,
+          "evidence": {
+            "bounds": {
+              "x": 14.390625,
+              "y": 801.609375,
+              "width": 177.8125,
+              "height": 32,
+              "top": 801.609375,
+              "right": 192.203125,
+              "bottom": 833.609375,
+              "left": 14.390625
+            },
+            "ordinaryHit": true
+          }
+        }
+      },
+      {
+        "name": "object-portrait-dark: natural footer keyboard focus visible/unobscured",
+        "passed": true,
+        "detail": {
+          "outline": "rgb(255, 192, 135) solid 2px",
+          "shadow": "none",
+          "extent": 4,
+          "fits": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/root: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 18,
+            "y": 464,
+            "width": 133.859375,
+            "height": 32,
+            "top": 464,
+            "right": 151.859375,
+            "bottom": 496,
+            "left": 18
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/root: error action focuses its control",
+        "passed": true,
+        "detail": "object-inspector-61abf804-f4ac-4cb5-b66d-31170adfeb16-locationKey"
+      },
+      {
+        "name": "object-portrait-dark: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 7.490470527866335,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "object-portrait-dark: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 7.174480179723202,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "object-portrait-dark/390x500: footer stays reachable after body scroll",
+        "passed": true,
+        "detail": {
+          "before": {
+            "x": 0,
+            "y": 360.0625,
+            "width": 390,
+            "height": 139.9375
+          },
+          "after": {
+            "x": 0,
+            "y": 360.0625,
+            "width": 390,
+            "height": 139.9375
+          },
+          "scrollable": true,
+          "evidence": {
+            "bounds": {
+              "x": 14.390625,
+              "y": 457.609375,
+              "width": 177.8125,
+              "height": 32,
+              "top": 457.609375,
+              "right": 192.203125,
+              "bottom": 489.609375,
+              "left": 14.390625
+            },
+            "ordinaryHit": true
+          }
+        }
+      },
+      {
+        "name": "object-portrait-dark/390x500: natural footer keyboard focus visible/unobscured",
+        "passed": true,
+        "detail": {
+          "outline": "rgb(255, 192, 135) solid 2px",
+          "shadow": "none",
+          "extent": 4,
+          "fits": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/root/390x500: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Schematic X",
+          "row": {
+            "x": 14.390625,
+            "y": 239.0625,
+            "width": 361.21875,
+            "height": 63.3125,
+            "top": 239.0625,
+            "right": 375.609375,
+            "bottom": 302.375,
+            "left": 14.390625
+          },
+          "label": {
+            "x": 14.390625,
+            "y": 239.0625,
+            "width": 71.46875,
+            "height": 15.3125,
+            "top": 239.0625,
+            "right": 85.859375,
+            "bottom": 254.375,
+            "left": 14.390625
+          },
+          "control": {
+            "x": 14.390625,
+            "y": 258.375,
+            "width": 202,
+            "height": 44,
+            "top": 258.375,
+            "right": 216.390625,
+            "bottom": 302.375,
+            "left": 14.390625
+          },
+          "body": {
+            "x": 0,
+            "y": 180.859375,
+            "width": 390,
+            "height": 179.203125,
+            "top": 180.859375,
+            "right": 390,
+            "bottom": 360.0625,
+            "left": 0
+          },
+          "bodyClientHeight": 179,
+          "footer": {
+            "x": 0,
+            "y": 360.0625,
+            "width": 390,
+            "height": 139.9375,
+            "top": 360.0625,
+            "right": 390,
+            "bottom": 500,
+            "left": 0
+          },
+          "availableTop": 180.859375,
+          "availableBottom": 359.859375,
+          "text": "Schematic X",
+          "complete": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/B: execution",
+        "passed": false,
+        "detail": {
+          "message": "expect(locator).toBeVisible() failed\n\nLocator: locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeVisible\" locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]') with timeout 5000ms\n  - waiting for locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]')\n",
+          "stack": "Error: expect(locator).toBeVisible() failed\n\nLocator: locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeVisible\" locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]') with timeout 5000ms\n  - waiting for locator('.b-inspector-card:visible').locator('[id=\"b-inspector-control-name\"]')\n\n    at captureRawStack (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright-core\\lib\\coreBundle.js:9282:17)\n    at callMatcherAsStep (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright\\lib\\matchers\\expect.js:13316:57)\n    at Object.toBeVisible (C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\playwright\\lib\\matchers\\expect.js:13308:23)\n    at referenceSetup (C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-22-2026-10-19\\qa\\capture-inspectors.mjs:131:22)\n    at async file:///C:/Git/PERSO/ttrpg-cluster-control/.scratch/interface-revamp/implementation-lab/ticket-22-2026-10-19/qa/capture-inspectors.mjs:217:67"
+        }
+      },
+      {
+        "name": "Released source unchanged",
+        "passed": true,
+        "detail": null
+      }
+    ],
+    "cases": [
+      {
+        "id": "object-desktop-light",
+        "kind": "object",
+        "width": 1440,
+        "height": 900,
+        "palette": "light",
+        "arm": "root",
+        "completed": true
+      },
+      {
+        "id": "object-desktop-light",
+        "kind": "object",
+        "width": 1440,
+        "height": 900,
+        "palette": "light",
+        "arm": "B",
+        "completed": true
+      },
+      {
+        "id": "orbit-desktop-dark",
+        "kind": "orbit",
+        "width": 1440,
+        "height": 900,
+        "palette": "dark",
+        "arm": "root",
+        "completed": true
+      },
+      {
+        "id": "orbit-desktop-dark",
+        "kind": "orbit",
+        "width": 1440,
+        "height": 900,
+        "palette": "dark",
+        "arm": "B",
+        "completed": true
+      },
+      {
+        "id": "object-portrait-dark",
+        "kind": "object",
+        "width": 390,
+        "height": 844,
+        "palette": "dark",
+        "arm": "root",
+        "completed": true
+      },
+      {
+        "id": "object-portrait-dark",
+        "kind": "object",
+        "width": 390,
+        "height": 844,
+        "palette": "dark",
+        "arm": "B",
+        "completed": false
+      }
+    ],
+    "runtime": "compiled",
+    "status": "failed",
+    "started": "2026-10-19T15:45:19.714Z",
+    "scriptSha256": "8a2ea4ce76c0a3ccaebb4eeef51ade3b724dad22e307f7b7665805bc9845246d",
+    "browser": "155.0.8059.80",
+    "pageerrors": [],
+    "sourceMismatches": 0,
+    "base": "http://127.0.0.1:3180",
+    "finished": "2026-10-19T15:45:55.102Z",
+    "candidate": "ticket22-final-candidate-4",
+    "screenshots": [
+      {
+        "id": "object-desktop-light",
+        "kind": "object",
+        "width": 1440,
+        "height": 900,
+        "palette": "light",
+        "arm": "root",
+        "file": "object-desktop-light-root.png",
+        "title": "◉QA Survey World of the Outer Meridian",
+        "geometry": {
+          "bounds": {
+            "x": 1069,
+            "y": 186.0625,
+            "width": 358,
+            "height": 634.171875,
+            "top": 186.0625,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "footer": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125,
+            "top": 676.28125,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "activeId": "object-inspector-7ca6c04e-d236-4189-b872-f5b8f71a4f92-locationKey",
+          "pageScrollWidth": 1440,
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      },
+      {
+        "id": "object-desktop-light",
+        "kind": "object",
+        "width": 1440,
+        "height": 900,
+        "palette": "light",
+        "arm": "B",
+        "file": "object-desktop-light-B.png",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "geometry": {
+          "bounds": {
+            "x": 1105,
+            "y": 107.390625,
+            "width": 318,
+            "height": 682.015625,
+            "top": 107.390625,
+            "right": 1423,
+            "bottom": 789.40625,
+            "left": 1105
+          },
+          "footer": {
+            "x": 1105,
+            "y": 711.953125,
+            "width": 318,
+            "height": 77.453125,
+            "top": 711.953125,
+            "right": 1423,
+            "bottom": 789.40625,
+            "left": 1105
+          },
+          "activeId": "b-inspector-control-name",
+          "pageScrollWidth": 1440,
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      },
+      {
+        "id": "orbit-desktop-dark",
+        "kind": "orbit",
+        "width": 1440,
+        "height": 900,
+        "palette": "dark",
+        "arm": "root",
+        "file": "orbit-desktop-dark-root.png",
+        "title": "Orbit 1",
+        "geometry": {
+          "bounds": {
+            "x": 1069,
+            "y": 186.0625,
+            "width": 358,
+            "height": 634.171875,
+            "top": 186.0625,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "footer": {
+            "x": 1069,
+            "y": 676.28125,
+            "width": 358,
+            "height": 143.953125,
+            "top": 676.28125,
+            "right": 1427,
+            "bottom": 820.234375,
+            "left": 1069
+          },
+          "activeId": "orbit-inspector-d2a5d2e0-e787-4db5-a51f-dca24f26f6df-horizontalRadius",
+          "pageScrollWidth": 1440,
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      },
+      {
+        "id": "orbit-desktop-dark",
+        "kind": "orbit",
+        "width": 1440,
+        "height": 900,
+        "palette": "dark",
+        "arm": "B",
+        "file": "orbit-desktop-dark-B.png",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "geometry": {
+          "bounds": {
+            "x": 1105,
+            "y": 107.390625,
+            "width": 318,
+            "height": 682.015625,
+            "top": 107.390625,
+            "right": 1423,
+            "bottom": 789.40625,
+            "left": 1105
+          },
+          "footer": {
+            "x": 1105,
+            "y": 711.953125,
+            "width": 318,
+            "height": 77.453125,
+            "top": 711.953125,
+            "right": 1423,
+            "bottom": 789.40625,
+            "left": 1105
+          },
+          "activeId": "b-inspector-control-name",
+          "pageScrollWidth": 1440,
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      },
+      {
+        "id": "object-portrait-dark",
+        "kind": "object",
+        "width": 390,
+        "height": 844,
+        "palette": "dark",
+        "arm": "root",
+        "file": "object-portrait-dark-root.png",
+        "title": "◉QA Survey World of the Outer Meridian",
+        "geometry": {
+          "bounds": {
+            "x": 0,
+            "y": 48,
+            "width": 390,
+            "height": 796,
+            "top": 48,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "footer": {
+            "x": 0,
+            "y": 704.0625,
+            "width": 390,
+            "height": 139.9375,
+            "top": 704.0625,
+            "right": 390,
+            "bottom": 844,
+            "left": 0
+          },
+          "activeId": "object-inspector-61abf804-f4ac-4cb5-b66d-31170adfeb16-locationKey",
+          "pageScrollWidth": 390,
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      }
+    ]
+  },
+  {
+    "fixtures": [
+      {
+        "kind": "product import source",
+        "sha256": "ecc72a08996bda1686864a3db9c5bdcf8107412c712984a24cf0b629f5503cc6",
+        "systemId": "e33f9b9f-1994-4856-bb4b-28c4a30c43ce",
+        "planetId": "1e182b29-592a-400a-a053-f839da69057f",
+        "orbitId": "e8a5ee5d-b2e4-4d28-9ad4-cd9bc283d2ce",
+        "validated": true
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/PrototypeWorkbench.vue",
+        "sha256": "b102bd8230e2d4e819d68b0b516df9a3e39d34751ab8a3d9ea7ca090a6bb7d7d"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/PrototypeBInspector.vue",
+        "sha256": "010d58fedeed2780bee57223e950b7bdd5d5233c2054dc20e18baf7fcb24df3e"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": "components/prototype-inspector-fixture.ts",
+        "sha256": "971da11d6fe447b4caf454feaab0954bd4cd4644b5a0e7e85d0dec565cbe3ce5"
+      },
+      {
+        "kind": "reference/measurement source",
+        "path": ".scratch/interface-revamp/implementation-lab/ticket-21-resume-2026-10-19/qa/contrast.mjs",
+        "sha256": "827a50c3004165eca169e757a253350b1ffcee65536938e41392c86aa52cdd71"
+      },
+      {
+        "caseId": "object-portrait-dark",
+        "kind": "actual dense B object reference",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "sameEntityKindAsRoot": true
+      },
+      {
+        "caseId": "orbit-short-light",
+        "kind": "actual public imported system export",
+        "sha256": "5444865d458dde280fce04a9451393786502f2c1b35e1bd74d6371af3af32693",
+        "systemId": "ed716b62-9a29-4a53-9df9-e7be05de4262",
+        "objects": [
+          {
+            "id": "f690aede-26fe-48d8-bd82-452389f12905",
+            "key": "A",
+            "name": "Primary Star"
+          },
+          {
+            "id": "471e005e-3099-41b1-8616-e86be21428bf",
+            "key": "PL-01",
+            "name": "QA Survey World of the Outer Meridian"
+          }
+        ],
+        "orbits": [
+          {
+            "id": "6be5dc13-8795-478b-ba71-7216e7218762",
+            "order": 1,
+            "hostId": null,
+            "center": {
+              "x": 0.25,
+              "y": 0.65
+            }
+          }
+        ]
+      },
+      {
+        "caseId": "orbit-short-light",
+        "kind": "actual dense B object reference",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "sameEntityKindAsRoot": false
+      }
+    ],
+    "contrast": [
+      {
+        "caseId": "orbit-short-light",
+        "kind": "text",
+        "css": "rgb(152, 47, 35)",
+        "rgba": [
+          152,
+          47,
+          35,
+          1
+        ],
+        "bounds": {
+          "x": 27.390625,
+          "y": 160.890625,
+          "width": 789.21875,
+          "height": 17.171875,
+          "top": 160.890625,
+          "right": 816.609375,
+          "bottom": 178.0625,
+          "left": 27.390625
+        },
+        "extent": 0,
+        "text": "1 form issue",
+        "pseudo": null,
+        "background": [
+          [
+            245,
+            233,
+            229
+          ],
+          [
+            245,
+            233,
+            229
+          ],
+          [
+            245,
+            233,
+            229
+          ]
+        ],
+        "ratios": [
+          6.388203522169436,
+          6.388203522169436,
+          6.388203522169436
+        ],
+        "minimum": 6.388203522169436,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      },
+      {
+        "caseId": "orbit-short-light",
+        "kind": "text",
+        "css": "rgb(89, 100, 93)",
+        "rgba": [
+          89,
+          100,
+          93,
+          1
+        ],
+        "bounds": {
+          "x": 14.390625,
+          "y": 258.25,
+          "width": 815.21875,
+          "height": 16.3125,
+          "top": 258.25,
+          "right": 829.609375,
+          "bottom": 274.5625,
+          "left": 14.390625
+        },
+        "extent": 0,
+        "text": "Unapplied changes",
+        "pseudo": null,
+        "background": [
+          [
+            255,
+            254,
+            250
+          ],
+          [
+            255,
+            254,
+            250
+          ],
+          [
+            255,
+            254,
+            250
+          ]
+        ],
+        "ratios": [
+          6.110093590448718,
+          6.110093590448718,
+          6.110093590448718
+        ],
+        "minimum": 6.110093590448718,
+        "threshold": 4.5,
+        "method": "Browser-parsed foreground with effective ancestor opacity against actual rendered background pixels; full style restored after foreground-only sampling."
+      }
+    ],
+    "sourceInputs": 35,
+    "hostEvidence": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket22-candidate5-compiled-presentation-20261020",
+    "limitations": [
+      "Four structural pairs, eight selected positive PNGs; existing ticket21 shell geometry is retained evidence.",
+      "Root uses a separately constructed authoritative-domain-validated import through public controls. B uses its actual memory-only dense sample, never as a product fixture source.",
+      "B has no editable numeric Orbit form. Orbit root bodies are compared with its dense object header/body/footer structure; domain fields and fixture identities differ.",
+      "The retained B sample renders unnamed fields; its existing visible DOM control IDs are used explicitly. Product controls continue to be located by public labels.",
+      "390x500 is reduced-height emulation, not physical Android Chrome, OS keyboard, safe-area or gesture proof.",
+      "Two text contrast samples per root state reuse the retained ticket21 sampleContrast utility. Temporary foreground-only suppression is restored; selected PNGs are unmodified."
+    ],
+    "checks": [
+      {
+        "name": "object-portrait-dark/B: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Survey confidence",
+          "row": {
+            "x": 27.1875,
+            "y": 403.578125,
+            "width": 335.625,
+            "height": 63.3125,
+            "top": 403.578125,
+            "right": 362.8125,
+            "bottom": 466.890625,
+            "left": 27.1875
+          },
+          "label": {
+            "x": 27.1875,
+            "y": 403.578125,
+            "width": 114.03125,
+            "height": 15.3125,
+            "top": 403.578125,
+            "right": 141.21875,
+            "bottom": 418.890625,
+            "left": 27.1875
+          },
+          "control": {
+            "x": 27.1875,
+            "y": 422.890625,
+            "width": 202,
+            "height": 44,
+            "top": 422.890625,
+            "right": 229.1875,
+            "bottom": 466.890625,
+            "left": 27.1875
+          },
+          "body": {
+            "x": 12.796875,
+            "y": 113.046875,
+            "width": 364.40625,
+            "height": 644.71875,
+            "top": 113.046875,
+            "right": 377.203125,
+            "bottom": 757.765625,
+            "left": 12.796875
+          },
+          "bodyClientHeight": 645,
+          "footer": {
+            "x": 12.796875,
+            "y": 757.765625,
+            "width": 364.40625,
+            "height": 73.4375,
+            "top": 757.765625,
+            "right": 377.203125,
+            "bottom": 831.203125,
+            "left": 12.796875
+          },
+          "availableTop": 113.046875,
+          "availableBottom": 757.765625,
+          "text": "Survey confidence",
+          "complete": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/B: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 31,
+            "y": 604,
+            "width": 183.5625,
+            "height": 32,
+            "top": 604,
+            "right": 214.5625,
+            "bottom": 636,
+            "left": 31
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "object-portrait-dark/B: error action focuses its control",
+        "passed": true,
+        "detail": "b-inspector-control-name"
+      },
+      {
+        "name": "orbit-short-light/root: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Horizontal radius",
+          "row": {
+            "x": 14.390625,
+            "y": 139.25,
+            "width": 815.21875,
+            "height": 91.3125,
+            "top": 139.25,
+            "right": 829.609375,
+            "bottom": 230.5625,
+            "left": 14.390625
+          },
+          "label": {
+            "x": 14.390625,
+            "y": 139.25,
+            "width": 112,
+            "height": 15.3125,
+            "top": 139.25,
+            "right": 126.390625,
+            "bottom": 154.5625,
+            "left": 14.390625
+          },
+          "control": {
+            "x": 14.390625,
+            "y": 158.5625,
+            "width": 180,
+            "height": 44,
+            "top": 158.5625,
+            "right": 194.390625,
+            "bottom": 202.5625,
+            "left": 14.390625
+          },
+          "body": {
+            "x": 0,
+            "y": 139.109375,
+            "width": 844,
+            "height": 110.953125,
+            "top": 139.109375,
+            "right": 844,
+            "bottom": 250.0625,
+            "left": 0
+          },
+          "bodyClientHeight": 111,
+          "footer": {
+            "x": 0,
+            "y": 250.0625,
+            "width": 844,
+            "height": 139.9375,
+            "top": 250.0625,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "availableTop": 139.109375,
+          "availableBottom": 250.0625,
+          "text": "Horizontal radiusHorizontal radius is required.",
+          "complete": true
+        }
+      },
+      {
+        "name": "orbit-short-light: footer stays reachable after body scroll",
+        "passed": true,
+        "detail": {
+          "before": {
+            "x": 0,
+            "y": 250.0625,
+            "width": 844,
+            "height": 139.9375
+          },
+          "after": {
+            "x": 0,
+            "y": 250.0625,
+            "width": 844,
+            "height": 139.9375
+          },
+          "scrollable": true,
+          "evidence": {
+            "bounds": {
+              "x": 14.390625,
+              "y": 347.609375,
+              "width": 404.8125,
+              "height": 32,
+              "top": 347.609375,
+              "right": 419.203125,
+              "bottom": 379.609375,
+              "left": 14.390625
+            },
+            "ordinaryHit": true
+          }
+        }
+      },
+      {
+        "name": "orbit-short-light: natural footer keyboard focus visible/unobscured",
+        "passed": true,
+        "detail": {
+          "outline": "rgb(155, 63, 0) solid 2px",
+          "shadow": "none",
+          "extent": 4,
+          "fits": true
+        }
+      },
+      {
+        "name": "orbit-short-light/root: error action focuses its control",
+        "passed": true,
+        "detail": "orbit-inspector-6be5dc13-8795-478b-ba71-7216e7218762-horizontalRadius"
+      },
+      {
+        "name": "orbit-short-light: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 6.388203522169436,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "orbit-short-light: changed error/status text contrast",
+        "passed": true,
+        "detail": {
+          "minimum": 6.110093590448718,
+          "threshold": 4.5
+        }
+      },
+      {
+        "name": "orbit-short-light/B: one complete numeric field row fits while footer is visible",
+        "passed": true,
+        "detail": {
+          "labelText": "Survey confidence",
+          "row": {
+            "x": 27.1875,
+            "y": 165.875,
+            "width": 789.625,
+            "height": 63.3125,
+            "top": 165.875,
+            "right": 816.8125,
+            "bottom": 229.1875,
+            "left": 27.1875
+          },
+          "label": {
+            "x": 27.1875,
+            "y": 165.875,
+            "width": 114.03125,
+            "height": 15.3125,
+            "top": 165.875,
+            "right": 141.21875,
+            "bottom": 181.1875,
+            "left": 27.1875
+          },
+          "control": {
+            "x": 27.1875,
+            "y": 185.1875,
+            "width": 180,
+            "height": 44,
+            "top": 185.1875,
+            "right": 207.1875,
+            "bottom": 229.1875,
+            "left": 27.1875
+          },
+          "body": {
+            "x": 12.796875,
+            "y": 91.34375,
+            "width": 818.40625,
+            "height": 212.421875,
+            "top": 91.34375,
+            "right": 831.203125,
+            "bottom": 303.765625,
+            "left": 12.796875
+          },
+          "bodyClientHeight": 212,
+          "footer": {
+            "x": 12.796875,
+            "y": 303.765625,
+            "width": 818.40625,
+            "height": 73.4375,
+            "top": 303.765625,
+            "right": 831.203125,
+            "bottom": 377.203125,
+            "left": 12.796875
+          },
+          "availableTop": 91.34375,
+          "availableBottom": 303.34375,
+          "text": "Survey confidence",
+          "complete": true
+        }
+      },
+      {
+        "name": "orbit-short-light/B: actual select popup ordinary hit",
+        "passed": true,
+        "detail": {
+          "bounds": {
+            "x": 31,
+            "y": 225,
+            "width": 165.375,
+            "height": 32,
+            "top": 225,
+            "right": 196.375,
+            "bottom": 257,
+            "left": 31
+          },
+          "ordinaryHit": true
+        }
+      },
+      {
+        "name": "orbit-short-light/B: error action focuses its control",
+        "passed": true,
+        "detail": "b-inspector-control-name"
+      },
+      {
+        "name": "Released source unchanged",
+        "passed": true,
+        "detail": null
+      }
+    ],
+    "cases": [
+      {
+        "id": "object-portrait-dark",
+        "kind": "object",
+        "width": 390,
+        "height": 844,
+        "palette": "dark",
+        "arm": "B",
+        "completed": true
+      },
+      {
+        "id": "orbit-short-light",
+        "kind": "orbit",
+        "width": 844,
+        "height": 390,
+        "palette": "light",
+        "arm": "root",
+        "completed": true
+      },
+      {
+        "id": "orbit-short-light",
+        "kind": "orbit",
+        "width": 844,
+        "height": 390,
+        "palette": "light",
+        "arm": "B",
+        "completed": true
+      }
+    ],
+    "runtime": "compiled",
+    "status": "scripted-checks-complete-coordinator-visual-inspection-pending",
+    "started": "2026-10-20T07:44:12.694Z",
+    "scriptSha256": "972c84b7c7011ccdebcb8dec049ca38dff73677454c53dc2aeaa024ac092dd26",
+    "browser": "155.0.8059.80",
+    "pageerrors": [],
+    "sourceMismatches": 0,
+    "base": "http://127.0.0.1:3180",
+    "finished": "2026-10-20T07:44:33.969Z",
+    "candidate": "ticket22-final-candidate-5",
+    "screenshots": [
+      {
+        "id": "object-portrait-dark",
+        "kind": "object",
+        "width": 390,
+        "height": 844,
+        "palette": "dark",
+        "arm": "B",
+        "file": "object-portrait-dark-B.png",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "geometry": {
+          "bounds": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "width": 364.40625,
+            "height": 820.015625,
+            "top": 11.1875,
+            "right": 377.203125,
+            "bottom": 831.203125,
+            "left": 12.796875
+          },
+          "footer": {
+            "x": 12.796875,
+            "y": 757.765625,
+            "width": 364.40625,
+            "height": 73.4375,
+            "top": 757.765625,
+            "right": 377.203125,
+            "bottom": 831.203125,
+            "left": 12.796875
+          },
+          "activeId": "b-inspector-control-name",
+          "pageScrollWidth": 390,
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      },
+      {
+        "id": "orbit-short-light",
+        "kind": "orbit",
+        "width": 844,
+        "height": 390,
+        "palette": "light",
+        "arm": "root",
+        "file": "orbit-short-light-root.png",
+        "title": "Orbit 1",
+        "geometry": {
+          "bounds": {
+            "x": 0,
+            "y": 48,
+            "width": 844,
+            "height": 342,
+            "top": 48,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "footer": {
+            "x": 0,
+            "y": 250.0625,
+            "width": 844,
+            "height": 139.9375,
+            "top": 250.0625,
+            "right": 844,
+            "bottom": 390,
+            "left": 0
+          },
+          "activeId": "orbit-inspector-6be5dc13-8795-478b-ba71-7216e7218762-horizontalRadius",
+          "pageScrollWidth": 844,
+          "viewport": {
+            "width": 844,
+            "height": 390
+          }
+        }
+      },
+      {
+        "id": "orbit-short-light",
+        "kind": "orbit",
+        "width": 844,
+        "height": 390,
+        "palette": "light",
+        "arm": "B",
+        "file": "orbit-short-light-B.png",
+        "title": "Aster, Keeper of the Quiet Meridian and Outer Beacon",
+        "geometry": {
+          "bounds": {
+            "x": 12.796875,
+            "y": 11.1875,
+            "width": 818.40625,
+            "height": 366.015625,
+            "top": 11.1875,
+            "right": 831.203125,
+            "bottom": 377.203125,
+            "left": 12.796875
+          },
+          "footer": {
+            "x": 12.796875,
+            "y": 303.765625,
+            "width": 818.40625,
+            "height": 73.4375,
+            "top": 303.765625,
+            "right": 831.203125,
+            "bottom": 377.203125,
+            "left": 12.796875
+          },
+          "activeId": "b-inspector-control-name",
+          "pageScrollWidth": 844,
+          "viewport": {
+            "width": 844,
+            "height": 390
+          }
+        }
+      }
+    ]
+  }
+]

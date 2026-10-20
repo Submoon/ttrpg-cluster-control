@@ -60,6 +60,8 @@
           :visible="props.inspectorVisible"
           :compact="props.compactModalOpen && props.compactPanel === 'inspector'"
           :board="mapBoard"
+          :show-close-button="!props.entityInspectorActive"
+          :show-compact-recovery="!props.entityInspectorActive"
           :inert="props.compactModalOpen && props.compactPanel !== 'inspector' || undefined"
           @close="emit('close-panel', 'inspector')"
         >
@@ -84,6 +86,7 @@ const props = defineProps<{
   inspectorLabel: string
   hierarchyVisible: boolean
   inspectorVisible: boolean
+  entityInspectorActive: boolean
   compactModalOpen: boolean
   compactPanel: WorkspacePanel | null
   overlayOpen: boolean

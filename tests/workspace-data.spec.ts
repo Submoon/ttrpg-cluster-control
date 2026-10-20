@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback } from './helpers'
+import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, ensureMapDragPointsReachable, panMap, dragBy, setHeaderMapActionsOpen, downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, downloadImage, inspectImageSvg, setJsonFile, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -467,10 +467,8 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
   await editMapObject(page)
-  const physicalStation = page.getByLabel('Physical Jump Station')
-  const stationId = await page.getByRole('option', { name: /Vesper Gate/ }).getAttribute('value')
-  expect(stationId).toBeTruthy()
-  await physicalStation.selectOption(stationId!)
+  const physicalStation = page.getByLabel('Physical Station association')
+  await selectInspectorOption(physicalStation, { label: /Vesper Gate/ })
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Gate/ }).click()
   page.once('dialog', async (dialog) => {
@@ -482,12 +480,12 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   expect(deletionPreview).toContain('Vesper Gate')
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Gate/ })).toHaveCount(0)
   await hierarchy.getByRole('button', { name: /Select .*Vesper Arrival/ }).click()
-  await expect(physicalStation).toHaveValue('')
+  expect(await readInspectorSelection(physicalStation)).toBe('No physical Station')
 
   await page.reload()
   await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: /Select .*Vesper Arrival/ }).click()
-  await expect(page.getByLabel('Physical Jump Station')).toHaveValue('')
+  expect(await readInspectorSelection(page.getByLabel('Physical Station association'))).toBe('No physical Station')
 })
 
 test('the Warden can export a cluster and standalone system as versioned JSON', async ({ page }) => {

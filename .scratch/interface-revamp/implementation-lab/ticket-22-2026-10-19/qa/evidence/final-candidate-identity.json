@@ -1,0 +1,147 @@
+{
+  "applicationEquivalentTo": "ticket22-final-candidate-4",
+  "files": [
+    {
+      "sha256": "41E630E8F09320497BAA9447F807F227C20B626A26549B0F471B94EA33D1E142",
+      "path": "assets/css/map-workspace.css"
+    },
+    {
+      "sha256": "B40D365811A81FBAAE25898863437B928B72BBA937B76B3C947F3568D17D42DB",
+      "path": "components/BaselinePage.vue"
+    },
+    {
+      "sha256": "44D6D95C778D2CD3528BF8BE2B9036391107D05175DBFBE3F17053DD58EBCC79",
+      "path": "components/ChartNamesDialog.vue"
+    },
+    {
+      "sha256": "43E7CDDDE6FEF4812CBCDBA0EA6E2E23BA7815FD673970C2CFBD510C1E1185C1",
+      "path": "components/MapEditorLayout.vue"
+    },
+    {
+      "sha256": "A46C3E660DCB410835050B9FA1314AAFD381B4FA58BB19FB11C0BB4DD1380ECC",
+      "path": "components/MapHierarchy.vue"
+    },
+    {
+      "sha256": "D419C551B8B77F4B28169D81DE2933DB4A294D152D08838BE623A89DBDAE221F",
+      "path": "components/MapInspector.vue"
+    },
+    {
+      "sha256": "369CDA53F89926370BAB6C4B7AA436B1D680E5D807968E6D00550788C7F23A48",
+      "path": "components/SystemMap.vue"
+    },
+    {
+      "sha256": "F2DCFE9F04A3C942173BB94C6652CE4C423196943039433A12BD097FCA71AD2F",
+      "path": "components/WorkspaceMapCanvas.vue"
+    },
+    {
+      "sha256": "86EFC5091F9EB59AA6E439375E53F596D75DAA5B14757F8242E50D77E100BD15",
+      "path": "components/WorkspaceResizablePanel.vue"
+    },
+    {
+      "sha256": "D5F9B9B615FD5F7078B8C958B957B5795AF601656002FEDF51DC653BFE90040B",
+      "path": "components/inspector/MapObjectInspector.vue"
+    },
+    {
+      "sha256": "4C1E22F413713A73D2E865BDDE691278118697EFD29374DC21615A82C81C9918",
+      "path": "components/inspector/OrbitInspector.vue"
+    },
+    {
+      "sha256": "443423F4EA1D1CF6557CFA9DDF3CDAC921FD614B739579D57B02DDC70AC5DAEB",
+      "path": "components/inspector/contracts.ts"
+    },
+    {
+      "sha256": "F962B54D4428292420A96841884876C94E514748A2D88FEE42EAF9154AC99BE0",
+      "path": "components/maps/system-map-renderer.ts"
+    },
+    {
+      "sha256": "1F3D2F14865B35A8EEFDFC27529789F1A72C7988C371AB78787D5A0C0660B6F7",
+      "path": "composables/editor-workflows/types.ts"
+    },
+    {
+      "sha256": "C9B20EE80FC43C94EA8753EE19631ADC34453A9CD03316E4162C9FCE44C1246D",
+      "path": "composables/editor-workflows/useClusterWorkflows.ts"
+    },
+    {
+      "sha256": "33992E90113E6C87943E34F4FC162771B8C21FD9C48AEFB3202403DEC387F8F8",
+      "path": "composables/editor-workflows/useEditorState.ts"
+    },
+    {
+      "sha256": "B1EA8CC44AEA0F2DC52BB883050B4E5325AA636D833562CA5C66EF9D45F2A15B",
+      "path": "composables/editor-workflows/useEntityInspectorSession.ts"
+    },
+    {
+      "sha256": "CB057D743F5A7748D37E0D6F52F7EED8C83EBBB3C8CC42F01554D6D4E05DF313",
+      "path": "composables/editor-workflows/useFieldDefinitionWorkflows.ts"
+    },
+    {
+      "sha256": "B96FBD6A4E5069036C8CECCCE70CEE742C398715491BDE918B0728B997FC6811",
+      "path": "composables/editor-workflows/useMapWorkflows.ts"
+    },
+    {
+      "sha256": "51CA68FB7CBE133051311253914270B907B2CD4B96113FAB5561E20D9F93ADB2",
+      "path": "composables/useEditorWorkflows.ts"
+    },
+    {
+      "sha256": "B1FE7719174B32462095B27E5917E8E7BA1EB4FD1F14E7B26D1EBECCE6CA08EF",
+      "path": "tests/cluster-map.spec.ts"
+    },
+    {
+      "sha256": "DC9821DDBF3A5DD998A3D0E7E8AD3D3D29D8B11F85400B99B7C1C99FFC9F48F4",
+      "path": "tests/fixtures/workspace-entity-sessions.json"
+    },
+    {
+      "sha256": "0A5A261558DCEBB72BCE22EE847D58D9FABF0585A727507BD0D8762906D44752",
+      "path": "tests/helpers.ts"
+    },
+    {
+      "sha256": "6B2CEA9E6B35911D502265821AE32A0D7410BF88BC11B1658B787535BB873F98",
+      "path": "tests/object-fields.spec.ts"
+    },
+    {
+      "sha256": "D001631F3A7D53E544314B853AE37EDE382D280873C43BC38F793C9CA2CC239A",
+      "path": "tests/system-orbits.spec.ts"
+    },
+    {
+      "sha256": "E73AC3565D8E9C1161311715C31D7F7309B5A1BF7D68CDD2A48C53043FFEAE55",
+      "path": "tests/workspace-chart-feedback.spec.ts"
+    },
+    {
+      "sha256": "9B2FB74EF5D1EE834F01C5CB57DE36E668F5ECFE9CD3AF82862690C25B7766B1",
+      "path": "tests/workspace-data.spec.ts"
+    },
+    {
+      "sha256": "7913AC9473B8BB55308400B811CC08AD8926C5B8FBFD72E86C5D5340F79868F7",
+      "path": "tests/workspace-entity-inspector.spec.ts"
+    },
+    {
+      "sha256": "3710C8FAF6F0C4BDF5613CC8D55673E4052AA89F2F34EA6B5C6C3287FBFB22E0",
+      "path": "tests/workspace-entity-sessions.spec.ts"
+    },
+    {
+      "sha256": "15CE07D40A94309B36E9410C206059DD69525998F484BF4CC6B0667F68411D3C",
+      "path": "tests/workspace-map-gesture-guards.spec.ts"
+    },
+    {
+      "sha256": "0CD8331D611A2D74212B956F89FF190331CCC2DB2A6AC9D1165D011732ACC5A2",
+      "path": "tests/workspace-navigation.spec.ts"
+    },
+    {
+      "sha256": "BAC7BE38A665A505D3B0B6FDD877484E91C7F728CFDF1E3804DA48BB7C7FA494",
+      "path": "tests/workspace-panels.spec.ts"
+    },
+    {
+      "sha256": "9332737FA18E6FA086F75A05E9192C35930A0F305647FA9B81DA35712199615A",
+      "path": "tests/workspace-theme.spec.ts"
+    },
+    {
+      "sha256": "A0EEEAD3086151BFFF45F26FE489F4BB640C4F8CCCBDE4413883597E2AD90367",
+      "path": "tests/workspace-ui.spec.ts"
+    },
+    {
+      "sha256": "FCED188CC362CD14304198AD6699E09F21A4A65888349ABA327AC5C11733A19B",
+      "path": "utils/catalogue-labels.ts"
+    }
+  ],
+  "baseline": "2a4564d7ef5916df0cc4e025e7997ca7c86f81f7",
+  "candidate": "ticket22-final-candidate-6"
+}

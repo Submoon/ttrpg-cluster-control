@@ -28,7 +28,10 @@ export type ExportedObject = {
   family: string
   subtype: string
   locationKey: string
+  description: string
   placement: { kind: 'system'; x: number; y: number } | { kind: 'orbit'; orbitId: string }
+  atmosphere?: string
+  portClass?: string
   jumpStationId?: string | null
   customFieldValues?: Record<string, string | number | boolean>
 }
@@ -447,6 +450,44 @@ export async function editMapObject(page: import('@playwright/test').Page): Prom
 
 export async function saveMapObject(page: import('@playwright/test').Page): Promise<void> {
   await page.getByRole('button', { name: 'Save map object' }).click()
+}
+
+export type InspectorSelectionOption = string | { label: string | RegExp; value?: string }
+
+/** Selects through the Inspector's public semantic control, whether a legacy native select or Nuxt UI Select. */
+export async function selectInspectorOption(
+  control: import('@playwright/test').Locator,
+  option: InspectorSelectionOption,
+): Promise<void> {
+  const tagName = await control.evaluate(element => element.tagName)
+  if (tagName === 'SELECT') {
+    if (typeof option === 'string') {
+      await control.selectOption(option)
+    } else if (option.value !== undefined) {
+      await control.selectOption(option.value)
+    } else if (typeof option.label === 'string') {
+      await control.selectOption({ label: option.label })
+    } else {
+      throw new Error('Native select options need a string label or value.')
+    }
+    return
+  }
+
+  const label = typeof option === 'string' ? option : option.label
+  await control.click()
+  const optionControl = control.page().getByRole('option', { name: label, exact: typeof label === 'string' })
+  await expect(optionControl).toBeVisible()
+  await optionControl.click()
+}
+
+/** Reads the current Inspector selection from its visible value label, preserving USelect semantics. */
+export async function readInspectorSelection(control: import('@playwright/test').Locator): Promise<string> {
+  const tagName = await control.evaluate(element => element.tagName)
+  if (tagName === 'SELECT') return control.inputValue()
+
+  const selectedValue = control.locator('[data-slot="value"]')
+  if (await selectedValue.count()) return (await selectedValue.innerText()).trim()
+  return ''
 }
 
 export async function addCustomFieldThroughDialog(

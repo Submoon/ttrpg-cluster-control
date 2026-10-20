@@ -9,6 +9,7 @@
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
+      :has-modified-entity-session="hasModifiedEntitySession"
       v-model:cluster-name="clusterName"
       v-model:system-name="systemName"
       :form-error="formError"
@@ -43,6 +44,7 @@
           :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
+          :entity-inspector-active="activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
           :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
@@ -234,6 +236,7 @@
                     :mode="mapMode"
                     :feedback-element="workspaceFeedbackRef"
                     :is-object-move-blocked="isObjectMoveBlocked"
+                    :is-entity-command-blocked="isEntityCommandBlocked"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
@@ -245,6 +248,7 @@
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-object="moveMapObject"
                     @object-move-blocked="handleBlockedObjectMove"
+                    @entity-command-blocked="handleBlockedEntityCommand"
                     @move-orbit-center="moveMapOrbitCenter"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
@@ -309,15 +313,25 @@
               :selected-route="selectedRoute"
               :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
               :has-chart-name-draft="hasChartNameDraft"
+              :has-uncommitted-names="hasUncommittedNames"
+              :entity-session="entitySession"
+              :has-modified-entity-session="hasModifiedEntitySession"
+              :is-entity-draft-target="isEntityDraftTarget"
               :saving="saveState === 'saving'"
               :editor-error="editorError"
+              :save-state="saveState"
+              :save-message="saveMessage"
+              :save-error="saveError"
+              :export-error="exportError"
               @edit-chart-names="beginChartNamesEdit"
               @show-chart-details="showChartDetails"
+              @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"
-              @save-object="saveObjectEdit"
+              @resume-entity-session="resumeEntitySession"
+              @apply-entity-session="applyEntitySession"
+              @discard-entity-session="discardEntitySession"
               @delete-object="deleteSelectedObject"
               @request-orbit-edit="beginOrbitEdit"
-              @save-orbit="saveOrbitEdit"
               @detach-orbit="detachSelectedOrbit"
               @delete-orbit="deleteSelectedOrbit"
               @request-route-edit="beginRouteEdit"
@@ -326,6 +340,9 @@
               @delete-route="deleteSelectedRoute"
               @clear-route-selection="selectedRouteId = null"
               @clear-error="editorError = ''"
+              @resume-chart-draft="beginChartNamesEdit()"
+              @retry-save="retryLatestSave"
+              @export-current-json="downloadClusterJson"
             />
           </template>
         </MapEditorLayout>
@@ -341,6 +358,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ObjectFamily } from '../domain/workspace'
+import type { EntityCommand } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -380,6 +398,12 @@ const {
   fieldDefinitionsDialog,
   formError,
   editorError,
+  entitySession,
+  hasModifiedEntitySession,
+  isEntityCommandBlocked,
+  isEntityDraftTarget,
+  applyEntitySession,
+  discardEntitySession,
   orbitAdjustmentNotice,
   mapInspectorRef,
   clusterMapRef,
@@ -446,24 +470,51 @@ const {
   showChartDetails,
   beginObjectEdit,
   beginOrbitEdit,
-  saveObjectEdit,
   addObject,
   addOrbit,
   handleOrbitDrop,
-  saveOrbitEdit,
   createCustomField,
   saveFieldDefinitionChanges,
   removeFieldDefinition,
 } = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
 
+function resumeEntitySession(sessionId: number): void {
+  const session = entitySession.value
+  if (!session || session.id !== sessionId) return
+  if (session.kind === 'object') void selectObject(session.targetId)
+  else void selectOrbit(session.targetId)
+}
+
 function isObjectMoveBlocked(objectId: string): boolean {
-  return mapInspectorRef.value?.isEditingObject(objectId) ?? false
+  return isEntityCommandBlocked({ kind: 'object-placement', objectId })
 }
 
 function handleBlockedObjectMove(objectId: string): void {
   if (!isObjectMoveBlocked(objectId)) return
-  editorError.value = 'Save or cancel this object draft before moving it.'
+  editorError.value = 'Resolve the Inspector draft before moving an object or changing a related placement.'
   requestPanel('inspector')
+}
+
+function handleBlockedEntityCommand(command: EntityCommand): void {
+  if (!isEntityCommandBlocked(command)) return
+  editorError.value = blockedEntityCommandMessage(command)
+  requestPanel('inspector')
+}
+
+function blockedEntityCommandMessage(command: EntityCommand): string {
+  switch (command.kind) {
+    case 'object-placement':
+      return 'Resolve the Inspector draft before moving this object or changing a related placement.'
+    case 'orbit-geometry':
+    case 'orbit-host':
+      return 'Resolve the Inspector draft before changing this Orbit or one of its hosts.'
+    case 'orbit-create':
+      return 'Resolve the Inspector draft before adding another Orbit to this host.'
+    case 'definition-mutation':
+      return 'Resolve the Inspector draft before changing a custom field used by this object.'
+    case 'deletion':
+      return 'Resolve the Inspector draft before deleting this object or one of its dependencies.'
+  }
 }
 
 const headerFilesOpen = ref(false)

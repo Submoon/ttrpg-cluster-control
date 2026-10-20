@@ -11,8 +11,12 @@
     :aria-label="props.label"
   >
     <UDashboardPanel :resizable="false" :ui="panelUi" class="workspace-panel-surface">
-      <div class="workspace-side-panel-content">
+      <div
+        class="workspace-side-panel-content"
+        :class="{ 'workspace-side-panel-content-inspector': props.panelId === 'workspace-inspector-panel' }"
+      >
         <UButton
+          v-if="props.showCloseButton"
           class="workspace-control panel-close-button"
           color="neutral"
           variant="outline"
@@ -46,7 +50,7 @@
       @keydown="resizeByKeyboard"
       @dblclick="resetWidth"
     />
-    <div v-if="props.compact" class="workspace-compact-recovery">
+    <div v-if="props.compact && props.showCompactRecovery" class="workspace-compact-recovery">
       <slot name="compact-recovery" />
     </div>
   </aside>
@@ -60,14 +64,19 @@ const MIN_PANEL_WIDTH = 220
 const MAX_PANEL_WIDTH = 520
 const PANEL_CENTER_RESERVE = 280
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   panelId: string
   label: string
   side: 'left' | 'right'
   visible: boolean
   compact: boolean
   board: HTMLElement | null
-}>()
+  showCloseButton?: boolean
+  showCompactRecovery?: boolean
+}>(), {
+  showCloseButton: true,
+  showCompactRecovery: true,
+})
 
 const emit = defineEmits<{ close: [] }>()
 

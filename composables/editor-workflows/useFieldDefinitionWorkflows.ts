@@ -13,13 +13,14 @@ import {
   type CustomFieldApplicabilityTarget,
   type LocalWorkspace,
 } from '../../domain/workspace'
-import type { FieldDefinitionUpdateRequest, CustomFieldCreateRequest } from './types'
+import type { EntityCommand, FieldDefinitionUpdateRequest, CustomFieldCreateRequest } from './types'
 import type { TransitionOptions } from './types'
 
 interface FieldDefinitionWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
+  isEntityCommandBlocked: (command: EntityCommand) => boolean
 }
 
 /**
@@ -31,6 +32,7 @@ export function useFieldDefinitionWorkflows({
   workspace,
   commit,
   resolveTransition,
+  isEntityCommandBlocked,
 }: FieldDefinitionWorkflowOptions) {
   const fieldDefinitionDialogOpen = ref(false)
   const fieldDefinitionError = ref('')
@@ -45,7 +47,7 @@ export function useFieldDefinitionWorkflows({
   /** Opens the dialog only for an existing workspace and after the inspector-draft guard passes. */
   async function openFieldDefinitions(): Promise<void> {
     if (!workspace.value || fieldDefinitionDialogOpen.value) return
-    if (!await resolveTransition({ leaveChart: false })) return
+    if (!await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
     if (!workspace.value || fieldDefinitionDialogOpen.value) return
     fieldDefinitionError.value = ''
     fieldDefinitionsDialog.value?.open()
@@ -140,6 +142,10 @@ export function useFieldDefinitionWorkflows({
   async function saveFieldDefinitionChanges(request: FieldDefinitionUpdateRequest): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
+    if (isEntityCommandBlocked({ kind: 'definition-mutation', fieldId: request.fieldId })) {
+      fieldDefinitionError.value = 'Resolve the Inspector draft before changing a field used by this object.'
+      return
+    }
 
     try {
       await commit(applyFieldDefinitionUpdate(currentWorkspace, request))
@@ -158,6 +164,10 @@ export function useFieldDefinitionWorkflows({
   async function removeFieldDefinition(fieldId: string): Promise<void> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
+    if (isEntityCommandBlocked({ kind: 'definition-mutation', fieldId })) {
+      fieldDefinitionError.value = 'Resolve the Inspector draft before removing a field used by this object.'
+      return
+    }
 
     try {
       await commit(removeCustomFieldDefinition(currentWorkspace, fieldId))

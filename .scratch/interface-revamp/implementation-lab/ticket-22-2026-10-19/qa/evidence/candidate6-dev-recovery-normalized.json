@@ -1,0 +1,35 @@
+{
+  "candidate": "ticket22-final-candidate-6",
+  "runtime": "development",
+  "workers": 1,
+  "retries": 0,
+  "maxFailures": 0,
+  "timeouts": "Canonical unchanged",
+  "stats": {
+    "startTime": "2026-10-20T07:51:30.853Z",
+    "duration": 19844.794,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "discovered": 1,
+  "executed": 1,
+  "cases": [
+    {
+      "file": "workspace-recovery.spec.ts",
+      "line": 331,
+      "title": "a failed IndexedDB save preserves current and backup snapshots",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 17533,
+          "errors": [],
+          "attachments": []
+        }
+      ]
+    }
+  ],
+  "runnerErrors": []
+}
