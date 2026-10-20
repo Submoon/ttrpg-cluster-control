@@ -36,11 +36,18 @@
           size="sm"
           aria-label="Add to map"
           aria-controls="workspace-add-menu"
+          :aria-describedby="props.creationSession ? 'workspace-dock-add-type' : undefined"
           :aria-expanded="addOpen"
           ref="addTrigger"
         >
           <UIcon name="i-lucide-plus" aria-hidden="true" />
-          Add
+          <span>Add</span>
+          <span v-if="props.creationSession" class="workspace-dock-add-separator" aria-hidden="true">·</span>
+          <span
+            v-if="props.creationSession"
+            id="workspace-dock-add-type"
+            class="workspace-dock-add-type"
+          >{{ props.creationTypeLabel }}</span>
         </UButton>
         <template #content>
           <div
@@ -292,6 +299,20 @@ function consumeChooserEscape(event: KeyboardEvent): void {
 
 .workspace-dock-add {
   flex: 0 0 auto;
+}
+
+.workspace-dock-add-type {
+  display: inline-block;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .workspace-dock-add-type {
+    max-width: 7ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .workspace-add-menu {

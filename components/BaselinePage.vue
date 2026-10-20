@@ -599,7 +599,7 @@ function quitSystemAdd(): void {
 }
 
 function changeMapMode(mode: 'navigate' | 'select' | 'move'): void {
-  if (creationSession.value && mode !== mapMode.value) cancelCreationPreview()
+  if (creationSession.value) quitSystemAdd()
   setMapMode(mode)
 }
 

@@ -3,6 +3,7 @@ import creationGeometryFixture from './fixtures/workspace-system-creation-geomet
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
+  dragToWorldPoint,
   downloadJson,
   jsonMapImportInput,
   openWorkspaceHierarchy,
@@ -12,6 +13,7 @@ import {
   selectInspectorOption,
   setHeaderMapActionsOpen,
   setJsonFile,
+  workspaceNavigation,
   workspaceZoomControls,
   type WorldPoint,
 } from './helpers'
@@ -246,6 +248,53 @@ test('system Add immediately places on repeated clicks and reloads both placemen
   expect(reloadedPlanets).toHaveLength(2)
   expectSystemPlacement(reloadedPlanets[0]?.placement, firstDeliveredPoint)
   expectSystemPlacement(reloadedPlanets[1]?.placement, secondDeliveredPoint)
+})
+
+test('explicit Move exits Add when Move is already active', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await createWorkspace(page)
+  const inspector = page.locator('#workspace-inspector-panel')
+  if (await inspector.isVisible()) await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  await expect(inspector).toBeHidden()
+
+  const navigation = workspaceNavigation(page)
+  const move = navigation.getByRole('button', { name: 'Move', exact: true })
+  const addTrigger = navigation.getByRole('button', { name: 'Add to map', exact: true })
+  await move.click()
+  await expect(move).toHaveAttribute('aria-pressed', 'true')
+
+  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const beforeAdd = await downloadJson(page, 'Export star system JSON')
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  await expect(controls).toBeVisible()
+  await expect(addTrigger).toContainText('Planet')
+  await page.setViewportSize({ width: 390, height: 844 })
+  const compactAddBounds = await addTrigger.boundingBox()
+  if (!compactAddBounds) throw new Error('The Add button is not visible at a 390px viewport width.')
+  expect(compactAddBounds.x).toBeGreaterThanOrEqual(0)
+  expect(compactAddBounds.x + compactAddBounds.width).toBeLessThanOrEqual(390)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await page.setViewportSize({ width: 1440, height: 960 })
+
+  await move.click()
+  await expect(controls).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true }))
+    .toHaveCount(0)
+  await expect(addTrigger).toHaveText('Add')
+  await expect(move).toHaveAttribute('aria-pressed', 'true')
+
+  await dragToWorldPoint(
+    page,
+    map,
+    map.getByRole('button', { name: /Primary Star/ }).locator('.object-hit-target'),
+    { x: 640, y: 400 },
+  )
+  const afterMove = await downloadJson(page, 'Export star system JSON')
+  expect(afterMove.system?.objects).toHaveLength(beforeAdd.system!.objects.length)
+  const originalStar = beforeAdd.system!.objects.find(object => object.subtype === 'star')
+  const movedStar = afterMove.system?.objects.find(object => object.subtype === 'star')
+  expect(movedStar?.placement).not.toEqual(originalStar?.placement)
 })
 
 test('Orbit form Add retains its host, corrects each axis, and retries one applied write', async ({ page }) => {
