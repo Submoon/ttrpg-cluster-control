@@ -158,6 +158,16 @@
               :cluster-system-position-inputs="clusterSystemPositionInputs"
               :cluster-system-position-input-errors="clusterSystemPositionInputErrors"
               :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
+              :system-object-move-available="systemObjectMoveAvailable"
+              :system-object-move-destination="systemObjectMoveDestination"
+              :system-object-move-destination-options="systemObjectMoveDestinationOptions"
+              :system-object-move-candidates="systemObjectMoveCandidates"
+              :system-object-move-candidate-request="systemObjectMoveCandidateRequest"
+              :system-object-position-input="systemObjectPositionInput"
+              :system-object-position-x-input="systemObjectPositionXInput"
+              :system-object-position-y-input="systemObjectPositionYInput"
+              :system-object-move-preview="systemObjectMovePreview"
+              :system-object-move-error="systemObjectMoveError"
               :selected-system="selectedSystem"
               @mode-change="changeMapMode"
               @update-creation-input="updateCreationInput"
@@ -166,6 +176,14 @@
               @update-cluster-system-input="updateClusterSystemPositionInput"
               @add-cluster-system-from-inputs="addSystemFromInputs"
               @preview-cluster-system-move-from-inputs="previewSystemMoveFromInputs"
+              @update-system-object-move-destination="updateSystemObjectMoveDestination"
+              @update-system-object-position-input="updateSystemObjectPositionInput"
+              @update-system-object-position-x-input="updateSystemObjectPositionXInput"
+              @update-system-object-position-y-input="updateSystemObjectPositionYInput"
+              @choose-system-object-move-candidate="chooseObjectMoveCandidate"
+              @preview-system-object-move="previewSystemObjectMoveFromInputs"
+              @confirm-system-object-move="confirmSystemObjectMove"
+              @cancel-system-object-move="cancelSystemObjectMovePreview"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -265,6 +283,7 @@
                     @cancel-cluster-preview="cancelSystemMovePreview"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
+                    @orbit-center-candidates="handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
@@ -301,9 +320,11 @@
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-object="moveMapObject"
+                    @object-move-candidates="handleObjectMoveCandidates"
                     @object-move-blocked="handleBlockedObjectMove"
                     @entity-command-blocked="handleBlockedEntityCommand"
                     @move-orbit-center="moveMapOrbitCenter"
+                    @orbit-center-candidates="handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
@@ -311,6 +332,8 @@
                     @creation-target="offerCreationCandidates"
                     @creation-drop-target="handleCreationDrop"
                     @cancel-creation-preview="cancelCreationPreview"
+                    @cancel-object-placement-preview="cancelSystemObjectMovePreview"
+                    @cancel-orbit-placement-preview="cancelOrbitPlacementPreview"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
                   />
                   <template #fallback>
@@ -381,6 +404,7 @@
               :has-uncommitted-names="hasUncommittedNames"
               :entity-session="entitySession"
               :has-modified-entity-session="hasModifiedEntitySession"
+              :has-orbit-placement-preview="Boolean(orbitPlacementPreview && entitySession?.kind === 'orbit' && orbitPlacementPreview.sessionId === entitySession.id && orbitPlacementPreview.orbitId === selectedOrbit?.id)"
               :is-entity-draft-target="isEntityDraftTarget"
               :saving="saveState === 'saving'"
               :editor-error="editorError"
@@ -397,6 +421,8 @@
               @discard-entity-session="discardEntitySession"
               @delete-object="deleteSelectedObject"
               @request-orbit-edit="beginOrbitEdit"
+              @update-orbit-host="updateOrbitHost"
+              @preview-orbit-placement="previewOrbitPlacement"
               @detach-orbit="detachSelectedOrbit"
               @delete-orbit="deleteSelectedOrbit"
               @request-route-edit="beginRouteEdit"
@@ -426,8 +452,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type {
   EntityCommand,
+  OrbitCenterMoveCandidate,
   SystemCreationCandidate,
   SystemCreationType,
+  SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
@@ -470,6 +498,7 @@ const {
   editorError,
   entitySession,
   hasModifiedEntitySession,
+  orbitPlacementPreview,
   routeSession,
   hasModifiedRouteSession,
   offerRouteSystems,
@@ -538,6 +567,25 @@ const {
   clusterSystemMoveError,
   clusterSystemPositionInputs,
   clusterSystemPositionInputErrors,
+  systemObjectMoveAvailable,
+  systemObjectMoveDestination,
+  systemObjectMoveDestinationOptions,
+  systemObjectPositionInput,
+  systemObjectPositionXInput,
+  systemObjectPositionYInput,
+  systemObjectMoveCandidates,
+  systemObjectMoveCandidateRequest,
+  systemObjectMovePreview,
+  systemObjectMoveError,
+  updateSystemObjectMoveDestination,
+  updateSystemObjectPositionInput,
+  updateSystemObjectPositionXInput,
+  updateSystemObjectPositionYInput,
+  offerObjectMoveCandidates,
+  chooseObjectMoveCandidate,
+  previewSystemObjectMoveFromInputs,
+  confirmSystemObjectMove,
+  cancelSystemObjectMovePreview,
   armSystemAdd,
   updateClusterSystemPositionInput,
   addSystemAt,
@@ -560,6 +608,10 @@ const {
   showChartDetails,
   beginObjectEdit,
   beginOrbitEdit,
+  updateOrbitHost,
+  previewOrbitPlacement,
+  offerOrbitCenterCandidates,
+  cancelOrbitPlacementPreview,
   creationSession,
   chooseCreationType,
   chooseCreationCandidate,
@@ -583,6 +635,108 @@ function resumeEntitySession(sessionId: number): void {
 
 function isObjectMoveBlocked(objectId: string): boolean {
   return isEntityCommandBlocked({ kind: 'object-placement', objectId })
+}
+
+let objectMoveCandidateRequestId = 0
+let orbitCenterCandidateRequestId = 0
+let appliedOrbitPreview: { map: NonNullable<typeof systemMapRef.value>; orbitId: string } | null = null
+watch(() => [systemMapRef.value, orbitPlacementPreview.value, activeView.value, selectedSystemId.value, entitySession.value] as const,
+  ([map, preview, view, systemId, session]) => {
+    const activePreview = preview !== null
+      && view === 'system'
+      && session?.kind === 'orbit'
+      && session.id === preview.sessionId
+      && session.systemId === systemId
+      ? preview
+      : null
+    if (appliedOrbitPreview && (appliedOrbitPreview.map !== map
+      || !activePreview || appliedOrbitPreview.orbitId !== activePreview.orbitId)) {
+      appliedOrbitPreview.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
+      appliedOrbitPreview = null
+    }
+    if (map && activePreview) {
+      map.setOrbitPlacementPreview(activePreview.orbitId, activePreview.preview)
+      appliedOrbitPreview = { map, orbitId: activePreview.orbitId }
+    }
+  }, { flush: 'post', immediate: true })
+watch([() => workspace.value?.cluster.id, activeView, selectedSystemId, mapMode], () => {
+  objectMoveCandidateRequestId += 1
+  orbitCenterCandidateRequestId += 1
+}, { flush: 'sync' })
+
+async function handleObjectMoveCandidates(objectId: string, candidates: SystemObjectMoveCandidate[]): Promise<void> {
+  const requestId = ++objectMoveCandidateRequestId
+  const clusterId = workspace.value?.cluster.id
+  const systemId = selectedSystemId.value
+  const view = activeView.value
+  const mode = mapMode.value
+  if (!clusterId || !systemId || view !== 'system' || mode !== 'move') return
+  const sourceObject = selectedSystem.value?.objects.find(object => object.id === objectId)
+  if (!sourceObject) return
+  const sourcePlacement = JSON.stringify(sourceObject.placement)
+
+  await selectObject(objectId, false)
+  const latestSystem = selectedSystem.value
+  const latestObject = latestSystem?.objects.find(object => object.id === objectId)
+  if (requestId !== objectMoveCandidateRequestId
+    || workspace.value?.cluster.id !== clusterId
+    || activeView.value !== view
+    || selectedSystemId.value !== systemId
+    || mapMode.value !== mode
+    || selectedObjectId.value !== objectId
+    || !latestObject
+    || JSON.stringify(latestObject.placement) !== sourcePlacement) return
+
+  offerObjectMoveCandidates(objectId, candidates)
+}
+
+async function handleOrbitCenterCandidates(orbitId: string, candidates: OrbitCenterMoveCandidate[]): Promise<void> {
+  const requestId = ++orbitCenterCandidateRequestId
+  const clusterId = workspace.value?.cluster.id
+  const systemId = selectedSystemId.value
+  const view = activeView.value
+  const mode = mapMode.value
+  if (!clusterId || !systemId || view !== 'system' || mode !== 'move' || creationSession.value) return
+  const sourceOrbit = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
+  if (!sourceOrbit || sourceOrbit.hostId !== null) return
+  const sourceSnapshot = JSON.stringify(sourceOrbit)
+  const startingSession = entitySession.value
+  if (startingSession && !(startingSession.kind === 'orbit' && startingSession.targetId === orbitId)) return
+
+  const matchesCurrentContext = (): boolean => requestId === orbitCenterCandidateRequestId
+    && workspace.value?.cluster.id === clusterId
+    && activeView.value === view
+    && selectedSystemId.value === systemId
+    && mapMode.value === mode
+    && creationSession.value === null
+  const sourceIsUnchanged = (): boolean => {
+    const current = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
+    return current?.hostId === null && JSON.stringify(current) === sourceSnapshot
+  }
+
+  await selectOrbit(orbitId, false)
+  if (!matchesCurrentContext() || selectedOrbitId.value !== orbitId || !sourceIsUnchanged()) return
+  const selectedSession = entitySession.value
+  if (selectedSession && !(selectedSession.kind === 'orbit' && selectedSession.targetId === orbitId)) return
+
+  const sessionIdBeforeBegin = entitySession.value?.id ?? null
+  await beginOrbitEdit()
+  if (creationSession.value) {
+    const newlyStarted = entitySession.value
+    if (sessionIdBeforeBegin === null && newlyStarted?.kind === 'orbit'
+      && newlyStarted.targetId === orbitId && !hasModifiedEntitySession.value) {
+      discardEntitySession(newlyStarted.id)
+    }
+    return
+  }
+  if (!matchesCurrentContext() || selectedOrbitId.value !== orbitId || !sourceIsUnchanged()) return
+  const session = entitySession.value
+  if (!session || session.kind !== 'orbit' || session.targetId !== orbitId
+    || session.initial.orbit.hostId !== null) return
+  if (startingSession?.kind === 'orbit' && startingSession.targetId === orbitId
+    && session.id !== startingSession.id) return
+  if (!offerOrbitCenterCandidates(session.id, candidates)) return
+  requestPanel('inspector')
 }
 
 function handleBlockedObjectMove(objectId: string): void {
@@ -718,10 +872,15 @@ function changeMapMode(mode: 'navigate' | 'select' | 'move'): void {
 function handleAddEscape(event: KeyboardEvent): void {
   const hasMovePreview = clusterSystemMovePreview.value !== null
   if (event.key !== 'Escape' || event.defaultPrevented
-    || (!creationSession.value && !clusterAddType.value && !hasMovePreview)
+    || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value)
     || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
   if (document.querySelector('[role="listbox"][data-state="open"]')) return
+  if (systemObjectMovePreview.value) {
+    event.preventDefault()
+    cancelSystemObjectMovePreview()
+    return
+  }
   const target = event.target
   if (target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]')) return
   event.preventDefault()
@@ -765,6 +924,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  appliedOrbitPreview?.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
+  appliedOrbitPreview = null
   window.removeEventListener('beforeunload', warnBeforeLeaving)
   window.removeEventListener('keydown', handleAddEscape)
 })

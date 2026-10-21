@@ -20,6 +20,10 @@ Source [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/i
 
 ## Current frontier - 2026-10-21
 
+**Ticket25 is in-progress/assigned;18–24 remain closed;26,28 remain open/unclaimed;27 is blocked by26;29 remains blocked by25,27,28.** The human authorizes the next implementation, preserving B/Dock and maximum Nuxt UI. The [ticket25 execution record](research/implementation-25-2026-10-21.md) owns its actual baseline, scoped contracts, validation and handoff. No successor starts.
+
+### Prior ticket24 follow-up
+
 **18–24 are closed;25,26,28 remain open/unclaimed;27 remains blocked by26;29 remains last.** The human-reported Add/route-targeting follow-up is complete: exclusive Add presentation, scoped From/To choices, automatic unique endpoints, explicit retargeting and select-popup Escape priority. Latest validation is **14/14 focused cases**, typecheck/build, bounded independent review and desktop/mobile presentation. Baseline `b4258cf7` retains its earlier complete135/135 result; no fresh complete-suite result is claimed. See the [follow-up record](research/implementation-24-targeting-2026-10-21.md). No successor starts; issue3 remains open and PR28 draft.
 
 ### Prior ticket24 completion
@@ -122,3 +126,11 @@ Scoped reassessment completed: **18–19 are closed; 20 is open/unclaimed; 21–
 The human resumes ticket 20 from `92c4bd85a2891bb1144c01e19d2b6088a93d5a7b`, equal to the fetched feature branch (0 main-only / 38 feature-only). Scoped source `65f6cc2c` retains the chart/save foundation and corrects compact feedback, truthful session/status cues, recovery popovers and measured explicit Fit. Two confirmed UI defects are causally repaired: short-screen target occlusion and adjacent focus-ring contrast. Source reviews have no blockers; typecheck, attributed compiled28/28 and final CSS-only3/3 plus compact27/27 and details37/37 pass. All failed attempts and the unrecoverable one-shot full-suite result remain explicit; no whole-suite/clean-checkout/physical-device/whole-interface acceptance follows. See the [execution record](research/implementation-20-resume-2026-10-19.md).
 
 Frontier: **18-20 are closed; 21 is open/unclaimed; 22-29 remain blocked/unclaimed.** The human authorizes 21 only after 20 is finished and committed/pushed. Keep the accepted B/Dock structure and use Nuxt UI components; do not treat the rejected top Dock/column panels/dense Header as an accepted delivery. No ticket21 implementation is started by completing20.
+
+## Ticket 25 completion — 2026-10-21
+
+The human-authorized system-manipulation work is complete from feature baseline `8d4b67841956e22e5b9d1269724845c902770121`. The human amendment permits ordinary Move drag-out detachment into clear space. Optional precise Nuxt UI controls, explicit overlap choices, preserved dependents/implicit geometry and system-wrapper cancellation are implemented without changing stored formats or the accepted B/Dock composition.
+
+Final typecheck/build and the complete **161/161** suite pass with one worker and zero retries; the earlier 158/161 candidate's three diagnosed regressions and corrections remain explicit. Independent technical and domain/data reviews have no blockers; actual compiled desktop and compact presentation is inspected. See [execution](research/implementation-25-2026-10-21.md), [review](research/review-25-2026-10-21.md) and [QA](implementation-lab/ticket-25-2026-10-21/qa/README.md).
+
+Current frontier: **18–25 closed; 26 and 28 open/unclaimed; 27 blocked by 26; 29 remains last after 27 and 28.** No successor is started. Physical-device checks remain unavailable; full image verification belongs to 28 and final whole-interface Astra/Tools review belongs to 29. Source issue 3 stays open and PR 28 stays draft.

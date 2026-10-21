@@ -1,0 +1,5861 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nodejs\\node.exe",
+      "C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      ".scratch/interface-revamp/implementation-lab/ticket-23-2026-10-20/qa/playwright.config.ts"
+    ],
+    "configFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-23-2026-10-20\\qa\\playwright.config.ts",
+    "rootDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket23-ticket25-20261021/released-full-suite/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "compiled",
+        "name": "compiled",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket23-ticket25-20261021/released-full-suite/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "development-storage",
+        "name": "development-storage",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": {},
+        "outputDir": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\released-full-suite\\artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "compiled",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3180",
+          "channel": "chrome",
+          "screenshot": "only-on-failure",
+          "trace": "retain-on-failure"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "compiled"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\released-full-suite\\artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "development-storage",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3100",
+          "channel": "chrome",
+          "screenshot": "only-on-failure",
+          "trace": "retain-on-failure"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "development-storage"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\released-full-suite\\results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "cluster-map.spec.ts",
+      "file": "cluster-map.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the Warden can navigate and arrange both maps",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14995,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:03:12.697Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b3eedb3644a592aab1f1-e3fd50c7b025d0c80b41",
+          "file": "cluster-map.spec.ts",
+          "line": 27,
+          "column": 1
+        },
+        {
+          "title": "the Jump Route line follows a system while it is being dragged",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8833,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:03:28.360Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b3eedb3644a592aab1f1-4de8578a73444eda5d10",
+          "file": "cluster-map.spec.ts",
+          "line": 187,
+          "column": 1
+        },
+        {
+          "title": "the Warden can connect Jump Points across a cluster and record an unresolved exit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14863,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:03:37.214Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b3eedb3644a592aab1f1-b4b6bde79d0d5d476936",
+          "file": "cluster-map.spec.ts",
+          "line": 237,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "object-fields.spec.ts",
+      "file": "object-fields.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the Warden can build and edit a nested star-system map",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15565,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:03:52.136Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-c39e5697a10601dc8087",
+          "file": "object-fields.spec.ts",
+          "line": 48,
+          "column": 1
+        },
+        {
+          "title": "the Warden adds and reloads celestial bodies and fields",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10665,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:04:07.722Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-78c6e19577fddabcc968",
+          "file": "object-fields.spec.ts",
+          "line": 144,
+          "column": 3
+        },
+        {
+          "title": "the Warden adds and reloads installations and vessels",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9848,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:04:18.407Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-2d1e39bf889b15aed9e5",
+          "file": "object-fields.spec.ts",
+          "line": 144,
+          "column": 3
+        },
+        {
+          "title": "the Warden adds and reloads jump points and phenomena",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10412,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:04:28.276Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-4ea65d91c0ceb32b32e0",
+          "file": "object-fields.spec.ts",
+          "line": 144,
+          "column": 3
+        },
+        {
+          "title": "Chart details is an active, keyboard-accessible inspector view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6393,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:04:38.710Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-f9aa352d5c6333b54243",
+          "file": "object-fields.spec.ts",
+          "line": 179,
+          "column": 1
+        },
+        {
+          "title": "the Warden can configure native and reusable custom object fields",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18317,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:04:45.123Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-c69258d56a216e0e9de6",
+          "file": "object-fields.spec.ts",
+          "line": 245,
+          "column": 1
+        },
+        {
+          "title": "custom field category and subtype scopes hide ineligible objects without deleting values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8834,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:03.461Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-170e6731ad9e79889b41",
+          "file": "object-fields.spec.ts",
+          "line": 339,
+          "column": 1
+        },
+        {
+          "title": "field definitions dialog stays centered on desktop and narrow viewports",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2193,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:12.315Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-0e903491e8a8e87870ef",
+          "file": "object-fields.spec.ts",
+          "line": 424,
+          "column": 1
+        },
+        {
+          "title": "field definition management previews destructive changes in a map-bound dialog",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9199,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:14.527Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-6b8aea74753fc8bf5610",
+          "file": "object-fields.spec.ts",
+          "line": 452,
+          "column": 1
+        },
+        {
+          "title": "the retired field-definition prototype route is unavailable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 519,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:23.745Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e326d863321a2a8c57b-3610408bbfe25101ddfa",
+          "file": "object-fields.spec.ts",
+          "line": 584,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "system-map.spec.ts",
+      "file": "system-map.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the system map can zoom well beyond 400 percent",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1947,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:24.303Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "115494f65234b70b0305-ee409379c9a0cb1d55e4",
+          "file": "system-map.spec.ts",
+          "line": 8,
+          "column": 1
+        },
+        {
+          "title": "the system map expands beyond its initial bounds and exports the full layout",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8602,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:26.268Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "115494f65234b70b0305-b55b4b768a729daa7455",
+          "file": "system-map.spec.ts",
+          "line": 22,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "system-orbits.spec.ts",
+      "file": "system-orbits.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "dragging an Orbit ring scales both axes and the system caption stays concise",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4784,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:34.945Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-4f1d0f45eb8271b39cce",
+          "file": "system-orbits.spec.ts",
+          "line": 158,
+          "column": 1
+        },
+        {
+          "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18935,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:39.748Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-591923748542b12de2f1",
+          "file": "system-orbits.spec.ts",
+          "line": 208,
+          "column": 1
+        },
+        {
+          "title": "the Warden can detach a hosted Orbit and move its unoccupied center",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12462,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:05:58.704Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-191b95096d6831164720",
+          "file": "system-orbits.spec.ts",
+          "line": 592,
+          "column": 1
+        },
+        {
+          "title": "an object drag keeps its hosted Orbit with it before release",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9090,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:11.188Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-895d35bd5b74b75741e0",
+          "file": "system-orbits.spec.ts",
+          "line": 720,
+          "column": 1
+        },
+        {
+          "title": "dragging Add Orbit onto a map object hosts it there",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2163,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:20.300Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-2726d1375a14ee971af9",
+          "file": "system-orbits.spec.ts",
+          "line": 756,
+          "column": 1
+        },
+        {
+          "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15330,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:22.483Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-38eb99c3f9998db2d72b",
+          "file": "system-orbits.spec.ts",
+          "line": 795,
+          "column": 1
+        },
+        {
+          "title": "object palette drag previews match placed marks and preserve map, Orbit, and keyboard adds",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11166,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:37.834Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2bc17f56b741a30d4e38-23732f6a6f3bb1558f55",
+          "file": "system-orbits.spec.ts",
+          "line": 958,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-add-route-targeting.spec.ts",
+      "file": "workspace-add-route-targeting.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Add Jump Route deselects ordinary map modes and switching mode exits Add",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2484,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:49.056Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1ddb2719eae9038e1ec1-f99de3310f446e5cb712",
+          "file": "workspace-add-route-targeting.spec.ts",
+          "line": 38,
+          "column": 1
+        },
+        {
+          "title": "Add Jump Route uses scoped From and To controls for map-picked systems without mutating before Apply",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5140,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:51.561Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1ddb2719eae9038e1ec1-3539c1c559ef1ac39bd5",
+          "file": "workspace-add-route-targeting.spec.ts",
+          "line": 59,
+          "column": 1
+        },
+        {
+          "title": "Resetting either route endpoint returns that choice to map targeting and preserves the other endpoint",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3982,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:06:56.721Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1ddb2719eae9038e1ec1-95445bfc9f3443bff3ca",
+          "file": "workspace-add-route-targeting.spec.ts",
+          "line": 136,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-chart-drafts.spec.ts",
+      "file": "workspace-chart-drafts.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "hiding the chart-name dialog keeps the draft available to resume",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2834,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:00.818Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-790e5b2a70085046df6e",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 376,
+          "column": 1
+        },
+        {
+          "title": "dismissing Chromium beforeunload keeps a modified hidden chart draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1739,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:03.665Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-0eb6fd708ee478de8af7",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 407,
+          "column": 1
+        },
+        {
+          "title": "adding a system preserves a dirty chart-name draft while committing the system",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3062,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:05.425Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-c9d645251791df83e575",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 432,
+          "column": 1
+        },
+        {
+          "title": "a hidden invalid chart draft survives an unrelated object placement and stays out of export",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4825,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:08.511Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-35432a0f880f9c5e78a1",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 468,
+          "column": 1
+        },
+        {
+          "title": "restoring both committed names makes a stale validation error a clean transition",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2241,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:13.355Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-79291f480cfb8b0762ce",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 513,
+          "column": 1
+        },
+        {
+          "title": "a guarded transition can stay with the draft or discard it and continue",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3124,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:15.617Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-4ea912ecaa7e8c1afc62",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 544,
+          "column": 1
+        },
+        {
+          "title": "export failures stay separate from chart draft and workspace save feedback",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3205,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:18.759Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-7cdfdae8173c739b15db",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 573,
+          "column": 1
+        },
+        {
+          "title": "failed chart writes keep applied memory and Retry saves the latest workspace without replaying placement",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5463,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:21.984Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-a81393d914e45fc5bd3d",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 618,
+          "column": 1
+        },
+        {
+          "title": "an older successful write cannot mark a newer applied workspace saved or end its draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4676,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:27.470Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-de433a6c9a36ebc2c3e4",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 688,
+          "column": 1
+        },
+        {
+          "title": "an older failed write cannot replace newer saving feedback or clear a draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3153,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:32.167Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-786e087468d0d60a8706",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 737,
+          "column": 1
+        },
+        {
+          "title": "canceling the initial system-delete review leaves a hidden chart draft and error untouched",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3206,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:35.341Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-7371df742fd37e5a1b2b",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 782,
+          "column": 1
+        },
+        {
+          "title": "system deletion resolves its chart target after review and asks again for the refreshed plan",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4689,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:38.568Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-df0cac820edff742f676",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 856,
+          "column": 1
+        },
+        {
+          "title": "chart-name dialog buttons show the semantic keyboard focus outline",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2240,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:43.275Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-9af85142602252b40b0c",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 902,
+          "column": 1
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending object guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6443,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:45.535Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-a5f947630617c4e24774",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 963,
+          "column": 3
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending orbit guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9246,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:07:52.000Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-a3116232c73c047117e6",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 963,
+          "column": 3
+        },
+        {
+          "title": "a delayed import acknowledgement does not take ownership of a pending route guard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4277,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:01.265Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-f6d670237c7407bb68a6",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 963,
+          "column": 3
+        },
+        {
+          "title": "a delayed import navigation that meets an invalid new draft stays with its exact values and error",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4462,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:05.560Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-1857832085599c1122ae",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1033,
+          "column": 1
+        },
+        {
+          "title": "an import completion with a new chart draft honors apply before navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4233,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:10.043Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-04e81c4f67fbdbccb735",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1070,
+          "column": 3
+        },
+        {
+          "title": "an import completion with a new chart draft honors discard before navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4014,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:14.296Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c87092c7c7f854cb9f23-ed1ba814706242b67e78",
+          "file": "workspace-chart-drafts.spec.ts",
+          "line": 1070,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "workspace-chart-feedback.spec.ts",
+      "file": "workspace-chart-feedback.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a hidden clean chart-name session remains resumable without claiming unapplied changes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1828,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:18.358Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-240addb8ba2ef8a2865f",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 60,
+          "column": 1
+        },
+        {
+          "title": "save feedback has one compact bottom owner and leaves map controls hit-testable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2547,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:20.204Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-4f337462366f42fb948a",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 82,
+          "column": 1
+        },
+        {
+          "title": "explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7094,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:22.767Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39a1d9a3f388f358d054-bdadeda9a060378ea0f6",
+          "file": "workspace-chart-feedback.spec.ts",
+          "line": 183,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-cluster-construction.spec.ts",
+      "file": "workspace-cluster-construction.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Add System places two systems at targeted cluster points and reloads their coordinates",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4798,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:29.897Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f222991a3a6688ee9fea-94b84f69e66885412ccc",
+          "file": "workspace-cluster-construction.spec.ts",
+          "line": 119,
+          "column": 1
+        },
+        {
+          "title": "Add System keeps coordinate errors visible while closed and accepts a corrected numeric point",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3633,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:34.716Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f222991a3a6688ee9fea-17a23ea7bac3137fff74",
+          "file": "workspace-cluster-construction.spec.ts",
+          "line": 177,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-cluster-gesture-takeover.spec.ts",
+      "file": "workspace-cluster-gesture-takeover.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "cluster two-contact takeover cancels an active Move drag and never activates Navigate, Select, or Add System",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4044,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:38.383Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "088e36542c807e1542f9-83e387ba9fa6dbe7f0c7",
+          "file": "workspace-cluster-gesture-takeover.spec.ts",
+          "line": 83,
+          "column": 1
+        },
+        {
+          "title": "Add System ignores right-pan and exits when Navigate is reselected",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3996,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:42.448Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "088e36542c807e1542f9-01ad887b5bf494968800",
+          "file": "workspace-cluster-gesture-takeover.spec.ts",
+          "line": 161,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-cluster-move-precision.spec.ts",
+      "file": "workspace-cluster-move-precision.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Move System previews numeric cluster coordinates, cancels without changing JSON, then confirms and reloads",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6835,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:46.481Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1213885aa3a855f6806c-85bb8030bf757afacddc",
+          "file": "workspace-cluster-move-precision.spec.ts",
+          "line": 50,
+          "column": 1
+        },
+        {
+          "title": "Move System keeps its preview visible after applying an independent chart-name change",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4373,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:53.333Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1213885aa3a855f6806c-83955489974c642fdb80",
+          "file": "workspace-cluster-move-precision.spec.ts",
+          "line": 132,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-cluster-routes.spec.ts",
+      "file": "workspace-cluster-routes.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Add Jump Route retains its origin through pan and zoom, then clears both endpoints after applying",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4415,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:08:57.745Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e2ea530321012a89274-46dbf1a861a8a2ce067d",
+          "file": "workspace-cluster-routes.spec.ts",
+          "line": 44,
+          "column": 1
+        },
+        {
+          "title": "invalid route edits focus the validation summary and Stay preserves the edit context",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3167,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:02.189Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e2ea530321012a89274-a87cbaae9b217e6d57a5",
+          "file": "workspace-cluster-routes.spec.ts",
+          "line": 119,
+          "column": 1
+        },
+        {
+          "title": "route staging survives view gestures and unrelated deletion, while Quit starts a blank route",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6543,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:05.377Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e2ea530321012a89274-fb67e649a10c0d63ea3f",
+          "file": "workspace-cluster-routes.spec.ts",
+          "line": 160,
+          "column": 1
+        },
+        {
+          "title": "a failed route save keeps the applied route and Retry persists it once",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6103,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:11.941Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6e2ea530321012a89274-dc0d945c6bff15ba4a8f",
+          "file": "workspace-cluster-routes.spec.ts",
+          "line": 309,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-composition.spec.ts",
+      "file": "workspace-composition.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a first workspace visit keeps the full map board open with a bottom mode Dock",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1373,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:18.079Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-9e5b3956e9d3b3d8ca93",
+          "file": "workspace-composition.spec.ts",
+          "line": 12,
+          "column": 1
+        },
+        {
+          "title": "overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2358,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:19.474Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-9085d05e49be63dbb665",
+          "file": "workspace-composition.spec.ts",
+          "line": 77,
+          "column": 1
+        },
+        {
+          "title": "a second touch cannot take over an active panel-resize pointer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1443,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:21.852Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8bff3ea24235ca87140e-f7414d05718009659db3",
+          "file": "workspace-composition.spec.ts",
+          "line": 158,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-data.spec.ts",
+      "file": "workspace-data.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "deleting a map object without dependents still asks for confirmation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1688,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:23.355Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-511d9fb5ab3df5f7bd15",
+          "file": "workspace-data.spec.ts",
+          "line": 64,
+          "column": 1
+        },
+        {
+          "title": "older saved Jump Routes and circle/ellipse layouts restore and reject invalid levels",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:25.058Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-c6eb09b6a89629fe0c5f",
+          "file": "workspace-data.spec.ts",
+          "line": 84,
+          "column": 1
+        },
+        {
+          "title": "restoring a workspace removes legacy object targets without deleting values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:25.083Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-615a11194c4490c76acc",
+          "file": "workspace-data.spec.ts",
+          "line": 170,
+          "column": 1
+        },
+        {
+          "title": "custom field category and subtype scopes are united on independent system import",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10471,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:25.097Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-07d1f8a733426ef9ea32",
+          "file": "workspace-data.spec.ts",
+          "line": 208,
+          "column": 1
+        },
+        {
+          "title": "the Warden can review and safely confirm dependent map deletions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19862,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:35.586Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-4fd138c01be33095f813",
+          "file": "workspace-data.spec.ts",
+          "line": 321,
+          "column": 1
+        },
+        {
+          "title": "deleting an associated physical Station clears the Jump Point association after reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7441,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:09:55.469Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-ad1b3ec8d1f0bd6bbfa9",
+          "file": "workspace-data.spec.ts",
+          "line": 469,
+          "column": 1
+        },
+        {
+          "title": "the Warden can export a cluster and standalone system as versioned JSON",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19852,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:10:02.930Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-0d171d1fa80ce253f0a1",
+          "file": "workspace-data.spec.ts",
+          "line": 510,
+          "column": 1
+        },
+        {
+          "title": "the Warden can validate and import an independent JSON copy",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4932,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:10:22.801Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-ad5ece5765abbcd9af06",
+          "file": "workspace-data.spec.ts",
+          "line": 732,
+          "column": 1
+        },
+        {
+          "title": "the Warden can import a standalone system without adding cluster routes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2611,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:10:27.752Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-7819ea2af2ad278686d8",
+          "file": "workspace-data.spec.ts",
+          "line": 964,
+          "column": 1
+        },
+        {
+          "title": "the Warden can construct, edit, and reload the local campaign",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19942,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:10:30.387Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-fc1b3a4dcfeb5b7c69b2",
+          "file": "workspace-data.spec.ts",
+          "line": 1009,
+          "column": 1
+        },
+        {
+          "title": "the Warden can import, export, and safely delete versioned campaign data",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10421,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:10:50.357Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bd8b05ec4e6fe5029862-7a5409788ff41e535573",
+          "file": "workspace-data.spec.ts",
+          "line": 1130,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-entity-inspector.spec.ts",
+      "file": "workspace-entity-inspector.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "same-kind object switches keep Inspector labels attached to the selected controls",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4270,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:00.816Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "73b0838dc47982f153ab-bda2484a3fafbcedb24a",
+          "file": "workspace-entity-inspector.spec.ts",
+          "line": 20,
+          "column": 1
+        },
+        {
+          "title": "native and custom single-select options can store the literal unset token",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7030,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:05.110Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "73b0838dc47982f153ab-299a73376783134ef37c",
+          "file": "workspace-entity-inspector.spec.ts",
+          "line": 38,
+          "column": 1
+        },
+        {
+          "title": "an object inspector keeps its draft across Hide and offers persistent Apply actions",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2293,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:12.162Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "73b0838dc47982f153ab-f04e68b4e0b8c440c9a2",
+          "file": "workspace-entity-inspector.spec.ts",
+          "line": 82,
+          "column": 1
+        },
+        {
+          "title": "an Orbit Inspector applies rotation and numeric geometry in Select mode",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8069,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:14.475Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "73b0838dc47982f153ab-fcb6ce3ea382c05ab726",
+          "file": "workspace-entity-inspector.spec.ts",
+          "line": 109,
+          "column": 1
+        },
+        {
+          "title": "the Orbit Inspector footer stays visible and hittable after its body scrolls",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6680,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:22.564Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "73b0838dc47982f153ab-b9c6049a4adf274f8559",
+          "file": "workspace-entity-inspector.spec.ts",
+          "line": 159,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-entity-sessions.spec.ts",
+      "file": "workspace-entity-sessions.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "object Apply preserves typed zero, false and hidden assignments while an unrelated definition changes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6238,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:29.295Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e85ae9d2bf8cf3345386-fe7c1f19568af0c369dc",
+          "file": "workspace-entity-sessions.spec.ts",
+          "line": 94,
+          "column": 1
+        },
+        {
+          "title": "object transitions keep Stay, Apply and Discard distinct, while a clean edit leaves directly",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5392,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:35.557Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e85ae9d2bf8cf3345386-d67c5d45db134ef8d77f",
+          "file": "workspace-entity-sessions.spec.ts",
+          "line": 149,
+          "column": 1
+        },
+        {
+          "title": "Orbit sessions allow occupant-angle and unrelated-host changes, block related creation, and preserve both radii when reordered",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8842,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:40.970Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e85ae9d2bf8cf3345386-f715657f1a4dbe85ec69",
+          "file": "workspace-entity-sessions.spec.ts",
+          "line": 191,
+          "column": 1
+        },
+        {
+          "title": "a failed Inspector save leaves current memory intact and Retry save persists only the applied record",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5066,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:49.832Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e85ae9d2bf8cf3345386-3c5426e2180c12445493",
+          "file": "workspace-entity-sessions.spec.ts",
+          "line": 275,
+          "column": 1
+        },
+        {
+          "title": "a failed Orbit Apply and continue keeps the transition and Retry persists its applied rotation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5405,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:11:54.918Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e85ae9d2bf8cf3345386-e412a4222cfb3d117d0a",
+          "file": "workspace-entity-sessions.spec.ts",
+          "line": 307,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-launch.spec.ts",
+      "file": "workspace-launch.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the product root creates and resumes a saved local workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1562,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:00.352Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6408914ca40b6d84b23f-288b750c35dcc320ed8d",
+          "file": "workspace-launch.spec.ts",
+          "line": 29,
+          "column": 1
+        },
+        {
+          "title": "keyboard focus remains visible on launch and recovery actions in a short landscape viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1478,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:01.934Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6408914ca40b6d84b23f-0f72cf644a64628bd8ed",
+          "file": "workspace-launch.spec.ts",
+          "line": 50,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-map-gesture-guards.spec.ts",
+      "file": "workspace-map-gesture-guards.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Move refuses an object with an unresolved inspector draft before preview and opens Resolve access",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4732,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:03.449Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5eb98f77ff2f5987a8ed-626dca5abed58939a308",
+          "file": "workspace-map-gesture-guards.spec.ts",
+          "line": 24,
+          "column": 1
+        },
+        {
+          "title": "keyboard Enter and Space still activate a map object immediately after pointer pan",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2870,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:08.201Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5eb98f77ff2f5987a8ed-05b6bc5228419ea50256",
+          "file": "workspace-map-gesture-guards.spec.ts",
+          "line": 96,
+          "column": 1
+        },
+        {
+          "title": "browser blur cancels a Move object preview before its later pointer release",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2196,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:11.091Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5eb98f77ff2f5987a8ed-92f289c06cf13ac7a6b9",
+          "file": "workspace-map-gesture-guards.spec.ts",
+          "line": 114,
+          "column": 1
+        },
+        {
+          "title": "changing interaction mode cancels a pending pointer long press",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2115,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:13.308Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5eb98f77ff2f5987a8ed-50fdb4be81352800590a",
+          "file": "workspace-map-gesture-guards.spec.ts",
+          "line": 136,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-navigation.spec.ts",
+      "file": "workspace-navigation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a fresh compact workspace starts on the map without opening a panel",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1267,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:15.472Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-36be493a8bdf17d33cce",
+          "file": "workspace-navigation.spec.ts",
+          "line": 28,
+          "column": 1
+        },
+        {
+          "title": "the Dock and zoom controls expose separate map toolbars",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2172,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:16.760Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-f73bbb10072bbfd0473b",
+          "file": "workspace-navigation.spec.ts",
+          "line": 41,
+          "column": 1
+        },
+        {
+          "title": "reselecting the current object or Orbit reopens Inspect without changing the selection",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3429,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:18.952Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-94050a4ce12e6abb0521",
+          "file": "workspace-navigation.spec.ts",
+          "line": 56,
+          "column": 1
+        },
+        {
+          "title": "Navigate opens a system while Select keeps the cluster map active and inspects system data",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1893,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:22.402Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-e5f805f6fc56543830d7",
+          "file": "workspace-navigation.spec.ts",
+          "line": 94,
+          "column": 1
+        },
+        {
+          "title": "Navigate and Select drags pan a system node without opening or selecting it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1784,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:24.315Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-670b431fd00874ef9e83",
+          "file": "workspace-navigation.spec.ts",
+          "line": 112,
+          "column": 1
+        },
+        {
+          "title": "right-click keeps the native context menu while right-drag pans in every mode",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2595,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:26.116Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-62d113ab1855e6467eac",
+          "file": "workspace-navigation.spec.ts",
+          "line": 143,
+          "column": 1
+        },
+        {
+          "title": "A to B to A restores each system camera and the selected map object",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5106,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:28.728Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-137a22e2587b9040fdcf",
+          "file": "workspace-navigation.spec.ts",
+          "line": 206,
+          "column": 1
+        },
+        {
+          "title": "deleting the inspected cluster system clears its current selection",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3902,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:33.855Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-dcce94749e4aedf910a0",
+          "file": "workspace-navigation.spec.ts",
+          "line": 252,
+          "column": 1
+        },
+        {
+          "title": "Select can rename system B from its inspector while keeping system A active",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4388,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:37.777Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-38a6770f90174b509237",
+          "file": "workspace-navigation.spec.ts",
+          "line": 278,
+          "column": 1
+        },
+        {
+          "title": "a held mouse press inspects an entity without navigating or publishing a click",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1962,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:42.186Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-d051ee1183d1f9290124",
+          "file": "workspace-navigation.spec.ts",
+          "line": 323,
+          "column": 1
+        },
+        {
+          "title": "Move selects map entities without opening Inspect or entering a system",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3259,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:44.166Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-ab1b23c58a8734f9ae75",
+          "file": "workspace-navigation.spec.ts",
+          "line": 345,
+          "column": 1
+        },
+        {
+          "title": "map focus pans with arrow keys while focused Orbit controls keep their geometry keys",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2970,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:47.442Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-24fde082d27ec2c15396",
+          "file": "workspace-navigation.spec.ts",
+          "line": 390,
+          "column": 1
+        },
+        {
+          "title": "legacy Object and Orbit palette drags still add to the active map in every mode",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11466,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:12:50.431Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "62ee0100868f01d700c4-c4fb111f8729d2c2e5a5",
+          "file": "workspace-navigation.spec.ts",
+          "line": 415,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-object-placement-guards.spec.ts",
+      "file": "workspace-object-placement-guards.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "armed object Add owns Placement and cancels an existing-object preview",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3846,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:01.932Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "14bdae42f8e58e6afd78-84371489a011848f8e27",
+          "file": "workspace-object-placement-guards.spec.ts",
+          "line": 10,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-orbit-placement.spec.ts",
+      "file": "workspace-orbit-placement.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "an unoccupied Orbit previews attachment safely and applies with the new host minimum",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7446,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:05.830Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5b7a7823798f4b281e38-2a9fc41500672ed03ac6",
+          "file": "workspace-orbit-placement.spec.ts",
+          "line": 157,
+          "column": 1
+        },
+        {
+          "title": "dragging an unoccupied Orbit center onto a host previews and commits attachment",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4240,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:13.297Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5b7a7823798f4b281e38-1533994bca633fa91c00",
+          "file": "workspace-orbit-placement.spec.ts",
+          "line": 245,
+          "column": 1
+        },
+        {
+          "title": "an ambiguous Orbit center drag requires a named host choice before preview and Apply",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5565,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:17.557Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5b7a7823798f4b281e38-ba67c25fc85dddc31a69",
+          "file": "workspace-orbit-placement.spec.ts",
+          "line": 310,
+          "column": 1
+        },
+        {
+          "title": "moving a free Orbit center to a nearby free point commits instead of treating itself as an Add collision",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4424,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:23.142Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5b7a7823798f4b281e38-f4b51d212051aeb13109",
+          "file": "workspace-orbit-placement.spec.ts",
+          "line": 420,
+          "column": 1
+        },
+        {
+          "title": "attaching an implicit-radius free Orbit preserves both free Orbit geometries while reindexing a sibling",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6359,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:27.584Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5b7a7823798f4b281e38-f237de323955afe973a7",
+          "file": "workspace-orbit-placement.spec.ts",
+          "line": 487,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-panels.spec.ts",
+      "file": "workspace-panels.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "desktop panels remain independent and the portaled Map files menu stays hit-testable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2378,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:33.987Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ef83e836f81925c62d56-1f7c3e3cc31ee7a2fc09",
+          "file": "workspace-panels.spec.ts",
+          "line": 40,
+          "column": 1
+        },
+        {
+          "title": "short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2985,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:36.390Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ef83e836f81925c62d56-79152650dfb5e3456e83",
+          "file": "workspace-panels.spec.ts",
+          "line": 87,
+          "column": 1
+        },
+        {
+          "title": "touch long press keeps focus inside the compact inspector after the touch is released",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2253,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:39.394Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ef83e836f81925c62d56-d8ed469937a9419a6802",
+          "file": "workspace-panels.spec.ts",
+          "line": 130,
+          "column": 1
+        },
+        {
+          "title": "desktop-to-compact reflow retains an invalid chart-name draft and the active map mode",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3396,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:41.662Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ef83e836f81925c62d56-e6a7f0ae26f698ac9008",
+          "file": "workspace-panels.spec.ts",
+          "line": 186,
+          "column": 1
+        },
+        {
+          "title": "a nested chart dialog pauses the compact panel focus trap and returns focus to its opener",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2008,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:45.076Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ef83e836f81925c62d56-cf4a9ca4582257054d8d",
+          "file": "workspace-panels.spec.ts",
+          "line": 238,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-recovery.spec.ts",
+      "file": "workspace-recovery.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2438,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:47.123Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-50808d02f16aad3d5255",
+          "file": "workspace-recovery.spec.ts",
+          "line": 103,
+          "column": 1
+        },
+        {
+          "title": "the last valid workspace can be restored after the current snapshot fails to load",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2942,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:49.582Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-473cac4c632455d0d47a",
+          "file": "workspace-recovery.spec.ts",
+          "line": 167,
+          "column": 1
+        },
+        {
+          "title": "a failed backup restore stays unavailable and preserves both records until a retry succeeds",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2753,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:52.545Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-c820dcda198115f52171",
+          "file": "workspace-recovery.spec.ts",
+          "line": 200,
+          "column": 1
+        },
+        {
+          "title": "the recovery screen explains when no local backup is available",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1354,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:55.318Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-254ee65fb2c7b13453ac",
+          "file": "workspace-recovery.spec.ts",
+          "line": 311,
+          "column": 1
+        },
+        {
+          "title": "a damaged backup is rejected without replacing the current record",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1316,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:56.689Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-75862166005c0ede2a11",
+          "file": "workspace-recovery.spec.ts",
+          "line": 398,
+          "column": 1
+        },
+        {
+          "title": "a temporary IndexedDB opening failure can be retried without exposing a partial workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1024,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:58.020Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-1c025097a05ab02dcb7a",
+          "file": "workspace-recovery.spec.ts",
+          "line": 415,
+          "column": 1
+        },
+        {
+          "title": "a failed IndexedDB save preserves current and backup snapshots",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "development-storage",
+              "projectName": "development-storage",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9006,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:55.624Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "da3f0a9d15b9d38ec60f-250122af74d7ebfc9aa1",
+          "file": "workspace-recovery.spec.ts",
+          "line": 331,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-route-inspection.spec.ts",
+      "file": "workspace-route-inspection.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Add Jump Route opens a route draft while a cluster system is inspected",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7306,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:13:59.082Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c729f7d2992ad4b1aee1-d270ead32ab48089e3c2",
+          "file": "workspace-route-inspection.spec.ts",
+          "line": 15,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-system-creation-geometry.spec.ts",
+      "file": "workspace-system-creation-geometry.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "system Add targets rotated primary and nested Orbits without shifting legacy occupants",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4914,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:06.431Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "305034682d36c718bae1-afa65f9409e621f29da8",
+          "file": "workspace-system-creation-geometry.spec.ts",
+          "line": 154,
+          "column": 1
+        },
+        {
+          "title": "a second map touch interrupts a fresh Add gesture and leaves the completed object unchanged",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5815,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:11.364Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "305034682d36c718bae1-6f81dacd99a72cae5a90",
+          "file": "workspace-system-creation-geometry.spec.ts",
+          "line": 253,
+          "column": 1
+        },
+        {
+          "title": "a held pan release after click suppression expires adds nothing before a fresh Add click",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4302,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:17.200Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "305034682d36c718bae1-8c21a2a090352675863b",
+          "file": "workspace-system-creation-geometry.spec.ts",
+          "line": 330,
+          "column": 1
+        },
+        {
+          "title": "a stationary Primary Star long press adds no Orbit after click suppression expires",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4463,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:21.522Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "305034682d36c718bae1-f57820d27ac4fa21726b",
+          "file": "workspace-system-creation-geometry.spec.ts",
+          "line": 378,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-system-creation.spec.ts",
+      "file": "workspace-system-creation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Placement Add validates and uses the current coordinate inputs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3241,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:26.017Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-8fd72a7a699fd50f40d5",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 69,
+          "column": 1
+        },
+        {
+          "title": "Other map Add explains a blank label and recovers through Placement",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4173,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:29.273Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-b4e7722007df5fcce198",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 109,
+          "column": 1
+        },
+        {
+          "title": "system Add immediately places on repeated clicks and reloads both placements",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5528,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:33.472Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-7853b8d9db7180801955",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 200,
+          "column": 1
+        },
+        {
+          "title": "explicit Move exits Add when Move is already active",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2726,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:39.022Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-e1cd70ce2137f05d95f5",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 253,
+          "column": 1
+        },
+        {
+          "title": "Orbit form Add retains its host, corrects each axis, and retries one applied write",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4482,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:41.766Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-b79dcfbd4cfed8ed38c8",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 300,
+          "column": 1
+        },
+        {
+          "title": "Add chooser dismissal consumes outside contact and preserves the next right-pan",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4580,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:46.265Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-b2de8cba1ada594b9898",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 362,
+          "column": 1
+        },
+        {
+          "title": "an Orbit draft blocks only same-host Orbit creation and survives independent creations",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7472,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:50.864Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7538e9b6da97eb16df9b-60a431718ff41084383b",
+          "file": "workspace-system-creation.spec.ts",
+          "line": 435,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-system-gesture-arbitration.spec.ts",
+      "file": "workspace-system-gesture-arbitration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Escape restores an Orbit ring drag before its late mouse release",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6529,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:14:58.385Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-d039dd0315e701849800",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 293,
+          "column": 1
+        },
+        {
+          "title": "a second contact cancels a horizontal Orbit resize before pinch pans the camera",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6134,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:04.930Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-446a68ceaf42fc05290f",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 350,
+          "column": 1
+        },
+        {
+          "title": "a native right-pan cancels a vertical Orbit resize while keeping Move active",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5795,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:11.082Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-bcbc2749b6f006d5d321",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 407,
+          "column": 1
+        },
+        {
+          "title": "keyboard Select cancels a held Orbit rotation preview",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4676,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:16.896Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-bbfde975b4447372ba83",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 454,
+          "column": 1
+        },
+        {
+          "title": "touchcancel restores an unoccupied Orbit center and failed host attachment can be retried",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8066,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:21.589Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-cb598d98951380cb2d3d",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 499,
+          "column": 1
+        },
+        {
+          "title": "Navigate object long-press inspects without editing and camera takeover stays navigation-only",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6652,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:29.675Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-3beb0b1262943515f9e3",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 594,
+          "column": 1
+        },
+        {
+          "title": "Select ring long-press leaves the map data and Select mode intact",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5296,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:36.346Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-ff922f85490f23186ed5",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 622,
+          "column": 1
+        },
+        {
+          "title": "blur restores an attached host drag and Move camera takeover changes only the view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6800,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:41.661Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-af3b5245013371c97cc1",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 646,
+          "column": 1
+        },
+        {
+          "title": "Object Add suppresses long-press inspection and second-contact takeover preserves Add",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:48.481Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-a3b4f15067858c7883a5",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 694,
+          "column": 1
+        },
+        {
+          "title": "Orbit Add ring drag cancels on Escape and camera takeover stays navigation-only",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5358,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:15:56.522Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "32cf8f4d0e98d6d3036f-7669dcfbeba780c612ee",
+          "file": "workspace-system-gesture-arbitration.spec.ts",
+          "line": 748,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-system-manipulation.spec.ts",
+      "file": "workspace-system-manipulation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "dragging an attached object into empty space previews its raw drop and preserves dependent geometry",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3626,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:01.945Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-ef443d121d5d69433447",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 133,
+          "column": 1
+        },
+        {
+          "title": "an existing attached object supports numeric Orbit-angle preview, cancellation, and confirmation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6629,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:05.590Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-8e86a71076f182ad99f7",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "an existing object can preview and confirm a named Orbit or explicit free placement",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10324,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:12.240Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-29609c4b1b308b610bd3",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 342,
+          "column": 1
+        },
+        {
+          "title": "an ambiguous object drag offers overlapping Orbit destinations before confirmation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4898,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:22.587Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-e5d12cb1101690aeeb16",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 518,
+          "column": 1
+        },
+        {
+          "title": "moving one implicit Orbit occupant preserves its source sibling position",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3652,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:27.507Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-e08cf36b45824cb569a8",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 572,
+          "column": 1
+        },
+        {
+          "title": "short landscape precise placement safely rejects derived overflow and persists valid input",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10013,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:31.186Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-b43cb34798e5fb8a1cc8",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 626,
+          "column": 1
+        },
+        {
+          "title": "dropping an object into its own hosted Orbit is refused instead of becoming Free",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4141,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:41.218Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-824610a3b74d731bf754",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 754,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-theme.spec.ts",
+      "file": "workspace-theme.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the shell follows the OS until an explicit theme choice persists across reloads",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1187,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:45.403Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-ea4d6ff7c23185f5079f",
+          "file": "workspace-theme.spec.ts",
+          "line": 173,
+          "column": 1
+        },
+        {
+          "title": "theme changes recolor both maps without changing workspace drafts or writing IndexedDB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3526,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:46.609Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-ef3eda059c1e47affbcf",
+          "file": "workspace-theme.spec.ts",
+          "line": 203,
+          "column": 1
+        },
+        {
+          "title": "theme changes preserve object and route drafts plus pending and failed save status",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8793,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:50.154Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-2a70747e849e1bafa14c",
+          "file": "workspace-theme.spec.ts",
+          "line": 289,
+          "column": 1
+        },
+        {
+          "title": "keyboard focus stays fully visible on the Fields command in short landscape view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1180,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:16:58.967Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "11a2427431f0f4366018-20810243c00a27bd898d",
+          "file": "workspace-theme.spec.ts",
+          "line": 382,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-touch-takeover.spec.ts",
+      "file": "workspace-touch-takeover.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a second touch cancels a Move preview before pinch and pan change only the view",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2221,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:00.184Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3deb69082a085175ec49-aa03f83a0cf346d84b93",
+          "file": "workspace-touch-takeover.spec.ts",
+          "line": 93,
+          "column": 1
+        },
+        {
+          "title": "Navigate and Move long presses inspect the same system, consume release, and leave a fresh tap usable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3091,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:02.424Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3deb69082a085175ec49-05f41201831b79c6b6da",
+          "file": "workspace-touch-takeover.spec.ts",
+          "line": 171,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "workspace-ui.spec.ts",
+      "file": "workspace-ui.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the application exposes its generic brand visibly and accessibly",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1465,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:05.548Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-4dfdc94ff90b06a9d754",
+          "file": "workspace-ui.spec.ts",
+          "line": 27,
+          "column": 1
+        },
+        {
+          "title": "Hierarchy starts closed, desktop panels overlay the map, and compact panels stay exclusive",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2913,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:07.032Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-a7bf44c0d959417599d3",
+          "file": "workspace-ui.spec.ts",
+          "line": 35,
+          "column": 1
+        },
+        {
+          "title": "the Add to map palette stays reachable inside its Dock popover at desktop and compact widths",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2459,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:09.964Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-7f18a51fc67ff7ef22b3",
+          "file": "workspace-ui.spec.ts",
+          "line": 127,
+          "column": 1
+        },
+        {
+          "title": "object categories reveal their matching catalogue actions on narrow screens",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2324,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:12.445Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-d37e43068c0618538b3e",
+          "file": "workspace-ui.spec.ts",
+          "line": 177,
+          "column": 1
+        },
+        {
+          "title": "cluster creation actions and Map files follow the active map context",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3226,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:14.790Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-6bafd07ce88a3e9b123d",
+          "file": "workspace-ui.spec.ts",
+          "line": 225,
+          "column": 1
+        },
+        {
+          "title": "Map context and consultation details retain chart names and counts outside the SVG",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3239,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:18.041Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-a22fd771748756bd5482",
+          "file": "workspace-ui.spec.ts",
+          "line": 262,
+          "column": 1
+        },
+        {
+          "title": "panel toggles preserve the active mode and Delete remains safe while editing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2650,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:21.301Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-5997ce4491f24bc34157",
+          "file": "workspace-ui.spec.ts",
+          "line": 299,
+          "column": 1
+        },
+        {
+          "title": "every catalogue glyph matches the corresponding Add object action",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "compiled",
+              "projectName": "compiled",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 22055,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:17:23.969Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "214dde7d85546ae8585c-2e9c69dd92fa474af75c",
+          "file": "workspace-ui.spec.ts",
+          "line": 338,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-21T16:03:10.565Z",
+    "duration": 895021.8609999999,
+    "expected": 161,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

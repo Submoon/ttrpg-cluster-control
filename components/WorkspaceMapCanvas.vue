@@ -3,6 +3,7 @@
     ref="canvasRoot"
     class="workspace-map-canvas"
     @pointerdown.capture="onPointerDownCapture"
+    @mousedown.capture="onMouseDownCapture"
     @contextmenu.capture="onContextMenuCapture"
     @click.capture="onClickCapture"
     @keydown.capture="onKeyDownCapture"
@@ -52,6 +53,8 @@
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
       @object-move-blocked="forwardBlockedObjectMove"
+      @object-move-candidates="forwardObjectMoveCandidates"
+      @orbit-center-candidates="forwardOrbitCenterCandidates"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object="forwardMoveObject"
       @move-orbit-center="forwardMoveOrbitCenter"
@@ -62,6 +65,8 @@
       @creation-target="forwardCreationTarget"
       @creation-drop-target="forwardCreationDropTarget"
       @cancel-creation-preview="forwardCancelCreationPreview"
+      @cancel-object-placement-preview="emit('cancel-object-placement-preview')"
+      @cancel-orbit-placement-preview="emit('cancel-orbit-placement-preview')"
       @viewport-change="emitViewport"
     />
   </div>
@@ -78,10 +83,13 @@ import type {
 } from '../domain/workspace'
 import type {
   MapInteractionMode,
+  OrbitCenterMoveCandidate,
+  OrbitPlacementPreview,
   SystemCreationCandidate,
   SystemCreationPreview,
   SystemCreationType,
   SystemMapHandle,
+  SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type { MapImageFormat } from '../utils/map-image-export'
@@ -124,10 +132,14 @@ const emit = defineEmits<{
   'select-orbit': [id: string]
   'move-select-orbit': [id: string]
   'object-move-blocked': [id: string]
+  'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
+  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
   'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
   'cluster-target': [point: Point, systemIds: string[]]
   'cancel-cluster-preview': []
+  'cancel-object-placement-preview': []
+  'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
@@ -147,7 +159,17 @@ const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
-let pointerLongPress: { id: number; x: number; y: number; target: EventTarget | null; timer: ReturnType<typeof setTimeout> } | null = null
+let activeMousePointerId: number | null = null
+let pointerLongPress: {
+  id: number
+  x: number
+  y: number
+  target: EventTarget | null
+  addHold: boolean
+  timer: ReturnType<typeof setTimeout>
+} | null = null
+let consumedAddPointerId: number | null = null
+let consumedAddTouchId: number | null = null
 const sourceMapKey = props.mapKey
 let mapReady = false
 let suppressNextClick = false
@@ -155,7 +177,7 @@ let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
-let touchStart: { x: number; y: number; target: EventTarget | null } | null = null
+let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
 let touchPanStarted = false
 
 function holdClickSuppression(): void {
@@ -196,7 +218,11 @@ function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = tru
   touchStart = null
   touchPanStarted = false
   activePointerPan = null
-  if (props.activeView === 'system') systemMapRef.value?.cancelCreationPreview()
+  if (props.activeView === 'system') {
+    emit('cancel-object-placement-preview')
+    emit('cancel-orbit-placement-preview')
+    systemMapRef.value?.cancelCreationPreview()
+  }
   currentMap()?.cancelActiveGesture()
   if (suppressRelease) holdClickSuppression()
 }
@@ -217,6 +243,10 @@ function onDocumentFreeze(): void { cancelForFocusInterruption() }
 
 function hasClusterAddIntent(): boolean {
   return props.activeView === 'cluster' && props.clusterAddType != null
+}
+
+function hasMapAddIntent(): boolean {
+  return hasClusterAddIntent() || (props.activeView === 'system' && props.creationType != null)
 }
 
 function isMapEntityTarget(target: EventTarget | null): boolean {
@@ -246,26 +276,42 @@ function inspectLongPress(target: EventTarget | null): void {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  const isMouseButtonChord = event.pointerType === 'mouse'
+    && event.button === 2
+    && (event.buttons & 1) !== 0
+  if (!isMouseButtonChord) consumedAddPointerId = null
+  if (event.pointerType === 'mouse') activeMousePointerId = event.pointerId
   // A fresh pointer sequence is a separate user intent. Any synthetic click
   // from the prior gesture has already had its chance to arrive.
   if (!activePointerPan) clearStaleGestureSuppression()
   if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
-  if (!hasClusterAddIntent()
+  const entityPress = event.button === 0 && isMapEntityTarget(event.target)
+  const addHold = hasMapAddIntent() && entityPress
+  const inspectHold = !hasMapAddIntent()
     && (props.mode === 'navigate' || props.mode === 'move')
-    && event.button === 0
-    && isMapEntityTarget(event.target)) {
+    && entityPress
+  if (addHold || inspectHold) {
     clearPointerLongPress()
     const pointerId = event.pointerId
     const target = event.target
     const timer = setTimeout(() => {
       if (pointerLongPress?.id !== pointerId) return
       pointerLongPress = null
+      if (addHold) {
+        consumedAddPointerId = pointerId
+        cancelMapGesture()
+        return
+      }
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
+      if (props.activeView === 'system') {
+        emit('cancel-object-placement-preview')
+        emit('cancel-orbit-placement-preview')
+      }
       cancelMapGesture()
       holdClickSuppression()
       inspectLongPress(target)
     }, 560)
-    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, timer }
+    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, timer }
   }
   const isRightPan = event.button === 2
   const isBackgroundPan = props.mode === 'move' && event.button === 0 && !isMapEntityTarget(event.target)
@@ -276,6 +322,25 @@ function onPointerDownCapture(event: PointerEvent): void {
   activePointerPan = { id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, moved: false }
   if (isRightPan) holdClickSuppression()
   // Prevent D3's map gesture from competing with this view-only pan. Click activation still runs on release.
+  event.stopImmediatePropagation()
+}
+
+/** Takes over a held left-button gesture when the browser reports right-button chord only as mousedown. */
+function onMouseDownCapture(event: MouseEvent): void {
+  if (event.button !== 2 || (event.buttons & 1) === 0 || activeMousePointerId === null) return
+  // Browsers that emit a second pointerdown already entered the ordinary right-pan path.
+  if (activePointerPan?.button === 2) return
+
+  cancelCanvasGesture()
+  currentMap()?.startViewPan(event)
+  activePointerPan = {
+    id: activeMousePointerId,
+    button: 2,
+    x: event.clientX,
+    y: event.clientY,
+    moved: false,
+  }
+  holdClickSuppression()
   event.stopImmediatePropagation()
 }
 
@@ -297,7 +362,9 @@ function onKeyDownCapture(event: KeyboardEvent): void {
 function onWindowPointerMove(event: PointerEvent): void {
   if (pointerLongPress?.id === event.pointerId
     && Math.hypot(event.clientX - pointerLongPress.x, event.clientY - pointerLongPress.y) > 9) {
+    const addHold = pointerLongPress.addHold
     clearPointerLongPress()
+    if (addHold) holdClickSuppression()
   }
   const pan = activePointerPan
   if (!pan || event.pointerId !== pan.id) return
@@ -317,10 +384,20 @@ function onWindowPointerMove(event: PointerEvent): void {
 
 function onWindowPointerUp(event: PointerEvent): void {
   if (event.type === 'pointercancel') {
+    if (consumedAddPointerId === event.pointerId) {
+      holdClickSuppression()
+      consumedAddPointerId = null
+    }
+    if (activeMousePointerId === event.pointerId) activeMousePointerId = null
     cancelCanvasGesture(true)
     return
   }
   if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
+  if (consumedAddPointerId === event.pointerId) {
+    holdClickSuppression()
+    consumedAddPointerId = null
+  }
+  if (event.pointerType === 'mouse' && activeMousePointerId === event.pointerId) activeMousePointerId = null
   if (!activePointerPan || event.pointerId !== activePointerPan.id) return
   currentMap()?.endViewPan()
   activePointerPan = null
@@ -356,14 +433,30 @@ function onTouchStartCapture(event: TouchEvent): void {
     return
   }
   const touch = event.touches[0]!
-  touchStart = { x: touch.clientX, y: touch.clientY, target: event.target }
+  consumedAddTouchId = null
+  touchStart = { id: touch.identifier, x: touch.clientX, y: touch.clientY, target: event.target }
   touchPanStarted = false
   clearLongPress()
-  if (hasClusterAddIntent() || (props.mode !== 'navigate' && props.mode !== 'move')) return
+  if (hasMapAddIntent()) {
+    if (!isMapEntityTarget(event.target)) return
+    const touchId = touch.identifier
+    longPressTimer = setTimeout(() => {
+      if (touchStart?.id !== touchId) return
+      longPressTimer = undefined
+      consumedAddTouchId = touchId
+      cancelMapGesture()
+    }, 560)
+    return
+  }
+  if (props.mode !== 'navigate' && props.mode !== 'move') return
   longPressTimer = setTimeout(() => {
     if (!touchStart) return
     const target = touchStart.target
     if (props.activeView === 'cluster') emit('cancel-cluster-preview')
+    if (props.activeView === 'system') {
+      emit('cancel-object-placement-preview')
+      emit('cancel-orbit-placement-preview')
+    }
     cancelMapGesture()
     holdClickSuppression()
     inspectLongPress(target)
@@ -383,6 +476,10 @@ function onTouchMoveCapture(event: TouchEvent): void {
       touchPanStarted = true
       clearLongPress()
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
+      if (props.activeView === 'system') {
+        emit('cancel-object-placement-preview')
+        emit('cancel-orbit-placement-preview')
+      }
       holdClickSuppression()
     }
   }
@@ -390,6 +487,11 @@ function onTouchMoveCapture(event: TouchEvent): void {
 }
 
 function onTouchEndCapture(event: TouchEvent): void {
+  if (consumedAddTouchId !== null
+    && Array.from(event.changedTouches).some(touch => touch.identifier === consumedAddTouchId)) {
+    holdClickSuppression()
+    consumedAddTouchId = null
+  }
   clearLongPress()
   touchStart = null
   touchPanStarted = false
@@ -432,6 +534,12 @@ function forwardClusterTarget(point: Point, systemIds: string[]): void {
 }
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
 function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
+function forwardObjectMoveCandidates(id: string, candidates: SystemObjectMoveCandidate[]): void {
+  if (props.activeView === 'system' && props.mode === 'move') emit('object-move-candidates', id, candidates)
+}
+function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[]): void {
+  if (props.activeView === 'system' && props.mode === 'move') emit('orbit-center-candidates', id, candidates)
+}
 function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null): void {
   if (props.mode === 'move') emit('move-orbit-center', id, center, hostId)
 }
@@ -549,6 +657,25 @@ onBeforeUnmount(() => {
 })
 
 watch(() => props.mode, () => cancelCanvasGesture(true), { flush: 'sync' })
+watch(() => props.creationType, () => {
+  emit('cancel-object-placement-preview')
+  emit('cancel-orbit-placement-preview')
+}, { deep: true, flush: 'sync' })
+watch(
+  [
+    () => props.activeView,
+    () => props.mapKey,
+    () => props.system?.id,
+    () => props.selectedSystemId,
+    () => props.selectedObjectId,
+    () => props.selectedOrbitId,
+  ],
+  () => {
+    emit('cancel-object-placement-preview')
+    emit('cancel-orbit-placement-preview')
+  },
+  { flush: 'sync' },
+)
 
 defineExpose({
   exportImage: async (format: MapImageFormat) => currentMap()?.exportImage(format)
@@ -564,6 +691,12 @@ defineExpose({
   endViewPan: () => currentMap()?.endViewPan(),
   setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
     if (props.activeView === 'cluster') clusterMapRef.value?.setClusterSystemPositionPreview(systemId, position)
+  },
+  setObjectPlacementPreview: (objectId: string, scenePoint: Point | null) => {
+    if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
+  },
+  setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null) => {
+    if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
   },
   startTouchNavigation: (event: TouchEvent) => currentMap()?.startTouchNavigation(event),
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),

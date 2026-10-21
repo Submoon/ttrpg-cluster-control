@@ -1,6 +1,7 @@
 ---
 title: 'Reposition objects and manipulate Orbit geometry safely'
-status: open
+status: closed
+assignee: ticket25
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,13 +24,13 @@ Move changes object placement/attachment and Orbit axes/rotation/centers deliber
 
 ## Acceptance criteria
 
-1. [ ] Attached-object drag into empty space retains its Orbit/changes position; explicit valid Orbit targeting transfers/attaches, and attached-to-free is explicit.
-2. [ ] Transform nested/rotated targets correctly and move hosted/nested dependents in previews/commits.
-3. [ ] Named Orbit controls provide independent axes, uniform ring resize, rotation/unoccupied-center movement; hosted centers require Detach and attachable centers indicate valid hosts.
-4. [ ] Preserve cycles/order/geometry/host-minimum notices/expanding scenes and focused/keyboard/numeric/Confirm alternatives.
-5. [ ] In the **system wrapper**, test every mode over entities/handles with second-contact/right-pan, interruption/tool/Escape/long press and suppressed late release, alongside normal once-only commit.
-6. [ ] Refuse dependency conflicts before preview; permit independent navigation.
-7. [ ] Verify applied versus canceled outcomes in JSON/reload/save failure.
+1. [x] In Move, dropping an attached object in clear space detaches it at the raw drop position; a unique valid Orbit drop attaches/transfers at the indicated position. Normal free/unique-target release commits directly. Ambiguous targets require a named choice, invalid-only targets refuse without mutation, and precise Orbit/free controls remain an alternative. Preserve former occupants' effective positions. This follows the human's 2026-10-21 amendment; hosted-Orbit centers still require explicit Detach.
+2. [x] Transform nested/rotated targets correctly and move hosted/nested dependents in previews/commits.
+3. [x] Named Orbit controls provide independent axes, uniform ring resize, rotation/unoccupied-center movement; hosted centers require Detach and attachable centers indicate valid hosts.
+4. [x] Preserve cycles/order/geometry/host-minimum notices/expanding scenes and focused/keyboard/numeric/Confirm alternatives.
+5. [x] In the **system wrapper**, test every mode over entities/handles with second-contact/right-pan, interruption/tool/Escape/long press and suppressed late release, alongside normal once-only commit.
+6. [x] Refuse dependency conflicts before preview; permit independent navigation.
+7. [x] Verify applied versus canceled outcomes in JSON/reload/save failure.
 
 ## Scope and exclusions
 
@@ -67,4 +68,12 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Claimed on2026-10-21 from `8d4b67841956e22e5b9d1269724845c902770121`, equal to the freshly fetched feature remote (0 main-only/49 feature-only against main `629d2a98715c3a16b954e0f77c639b1f0c31212c`). Ticket23 is closed. See the [execution record](../research/implementation-25-2026-10-21.md). SOL6.1 High defines/reviews the contracts and Luna XHIGH implements serial tracer verticals. Preserve others' work; no successor, source-issue closure or merge.
+
+## Resolution
+
+Completed on 2026-10-21 from the intentionally continued feature baseline `8d4b67841956e22e5b9d1269724845c902770121`. Move supports the human-approved direct drag-out detachment, explicit overlap choices, optional Nuxt UI precise placement, safe Orbit host/geometry changes, and canceled-gesture suppression while preserving dependent geometry and durable formats.
+
+Final typecheck and production build pass. The final complete suite passes **161/161 in 14.9 minutes**, with one worker, zero retries, zero skips and zero flaky outcomes. The earlier 158/161 candidate and all three diagnosed corrections remain recorded; they are not counted as a green run. Both independent review axes have no unresolved blockers. Actual compiled desktop/light, portrait/dark and short-landscape/dark presentation was exercised and inspected.
+
+See the [execution record](../research/implementation-25-2026-10-21.md), [Standards and Spec review](../research/review-25-2026-10-21.md), and [integrated QA evidence](../implementation-lab/ticket-25-2026-10-21/qa/README.md). Physical Android Chrome, OS keyboard and safe-area proof remain unavailable. Ticket 28 retains full SVG/PNG verification; ticket 29 retains final cleanup and whole-interface Astra/Tools review. No successor implementation, source-issue closure or merge is included.

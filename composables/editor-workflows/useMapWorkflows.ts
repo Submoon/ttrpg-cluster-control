@@ -31,6 +31,7 @@ import type {
 interface MapWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
+  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
   selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
   selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
   selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
@@ -44,13 +45,14 @@ interface MapWorkflowOptions {
 }
 
 /**
- * Builds system-map commands around the page commit and inspector draft-acknowledgement boundaries.
+ * Builds system-map commands around the page publication and inspector draft-acknowledgement boundaries.
  * @param options Current selection refs, renderer handles, draft-transition resolver, and persistence callback.
  * @returns Map edit commands; rejected edits are exposed through editorError rather than thrown to the UI.
  */
 export function useMapWorkflows({
   workspace,
   commit,
+  applyWorkspace,
   selectedSystem,
   selectedObject,
   selectedOrbit,
@@ -72,6 +74,16 @@ export function useMapWorkflows({
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  function materializeEffectiveAngles(system: StarSystem, orbitId: string, objectAngles: Record<string, number>): void {
+    const siblings = system.objects.filter(object =>
+      object.placement.kind === 'orbit' && object.placement.orbitId === orbitId,
+    )
+    siblings.forEach((object, index) => {
+      if (objectAngles[object.id] !== undefined) return
+      objectAngles[object.id] = -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
+    })
   }
 
   /**
@@ -128,10 +140,12 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
    */
   async function moveMapObject(objectId: string, position: Point): Promise<void> {
-    const system = selectedSystem.value
+    const currentWorkspace = workspace.value
+    const selectedSystemId = selectedSystem.value?.id
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
-    const objectFieldSettings = workspace.value?.objectFieldSettings
-    if (!system || !object || !objectFieldSettings) return
+    const objectFieldSettings = currentWorkspace?.objectFieldSettings
+    if (!currentWorkspace || !system || !object || !objectFieldSettings) return
     if (rejectBlockedEntityCommand({
       kind: 'object-placement',
       objectId,
@@ -143,6 +157,13 @@ export function useMapWorkflows({
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
         throw new Error('A map position must contain finite coordinates.')
       }
+      const objectAngles = { ...currentWorkspace.layout.objectAngles }
+      const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+      if (fromOrbitId) materializeEffectiveAngles(system, fromOrbitId, objectAngles)
+      const workspaceWithAngles: LocalWorkspace = {
+        ...currentWorkspace,
+        layout: { ...currentWorkspace.layout, objectAngles },
+      }
       const updatedSystem = updateSystemObject(system, object.id, {
         placement: {
           kind: 'system',
@@ -150,7 +171,7 @@ export function useMapWorkflows({
           y: position.y,
         },
       }, objectFieldSettings)
-      await saveSystem(updatedSystem)
+      await commit(replaceWorkspaceSystem(workspaceWithAngles, updatedSystem))
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -167,7 +188,8 @@ export function useMapWorkflows({
    */
   async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const selectedSystemId = selectedSystem.value?.id
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
     const objectFieldSettings = currentWorkspace?.objectFieldSettings
     if (!currentWorkspace || !system || !object || !objectFieldSettings) return
@@ -183,10 +205,20 @@ export function useMapWorkflows({
       if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
         throw new Error('Choose a valid Orbit for this object.')
       }
+      const objectAngles = { ...currentWorkspace.layout.objectAngles }
+      const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+      if (fromOrbitId !== orbitId) {
+        if (fromOrbitId) materializeEffectiveAngles(system, fromOrbitId, objectAngles)
+        materializeEffectiveAngles(system, orbitId, objectAngles)
+      }
+      const workspaceWithAngles: LocalWorkspace = {
+        ...currentWorkspace,
+        layout: { ...currentWorkspace.layout, objectAngles },
+      }
       const updatedSystem = updateSystemObject(system, object.id, {
         placement: { kind: 'orbit', orbitId },
       }, objectFieldSettings)
-      const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
+      const nextWorkspace = replaceWorkspaceSystem(workspaceWithAngles, updatedSystem)
       await commit({
         ...nextWorkspace,
         layout: {
@@ -306,7 +338,8 @@ export function useMapWorkflows({
 
   /**
    * Moves an unoccupied Orbit center or attaches that Orbit to an object host.
-   * If the new host raises its minimum, saved radii are clamped and an independent status notice follows commit.
+   * Attaching preserves effective radii across free-Orbit reindexing and clamps each axis to the new host minimum.
+   * A correction notice follows successful memory publication, independent of durable persistence.
    * @param orbitId Orbit whose center or host changes.
    * @param center Proposed normalized map center, used when hostId is null.
    * @param hostId Object to host the Orbit, or null to leave it unoccupied.
@@ -318,7 +351,8 @@ export function useMapWorkflows({
     hostId: string | null,
   ): Promise<void> {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const selectedSystemId = selectedSystem.value?.id
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     if (!currentWorkspace || !system) return
     const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
     if (!currentOrbit) return
@@ -327,42 +361,54 @@ export function useMapWorkflows({
       : { kind: 'orbit-host', orbitId, hostId }
     if (rejectBlockedEntityCommand(command)) return
 
-    orbitAdjustmentNotice.value = ''
     try {
+      const orbitRadii = { ...currentWorkspace.layout.orbitRadii }
+      if (hostId !== null) {
+        for (const freeOrbit of system.orbits.filter(candidate => candidate.hostId === null)) {
+          const savedRadii = currentWorkspace.layout.orbitRadii[freeOrbit.id]
+          const defaultRadius = defaultOrbitRadius(system, freeOrbit)
+          orbitRadii[freeOrbit.id] = savedRadii
+            ? { horizontal: savedRadii.horizontal, vertical: savedRadii.vertical }
+            : { horizontal: defaultRadius, vertical: defaultRadius }
+        }
+      }
+      const workspaceWithEffectiveRadii = hostId !== null
+        ? { ...currentWorkspace, layout: { ...currentWorkspace.layout, orbitRadii } }
+        : currentWorkspace
       const updatedSystem = moveOrbitCenter(system, orbitId, center, hostId)
-      const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
+      let nextWorkspace = replaceWorkspaceSystem(workspaceWithEffectiveRadii, updatedSystem)
       const updatedOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbitId)
-      const savedRadii = currentWorkspace.layout.orbitRadii[orbitId]
       const minimum = hostId !== null && updatedOrbit
         ? minimumOrbitRadius(updatedSystem, updatedOrbit)
         : undefined
-      const adjustedRadii = savedRadii && minimum !== undefined
+      const sourceRadii = minimum !== undefined ? orbitRadii[orbitId] : undefined
+      const adjustedRadii = sourceRadii && minimum !== undefined
         ? {
-            horizontal: Math.max(savedRadii.horizontal, minimum),
-            vertical: Math.max(savedRadii.vertical, minimum),
+            horizontal: Math.max(sourceRadii.horizontal, minimum),
+            vertical: Math.max(sourceRadii.vertical, minimum),
           }
         : undefined
-      const adjusted = adjustedRadii !== undefined && savedRadii !== undefined && (
-        adjustedRadii.horizontal !== savedRadii.horizontal
-        || adjustedRadii.vertical !== savedRadii.vertical
+      const adjusted = adjustedRadii !== undefined && sourceRadii !== undefined && (
+        adjustedRadii.horizontal !== sourceRadii.horizontal
+        || adjustedRadii.vertical !== sourceRadii.vertical
       )
 
-      await commit(adjusted && adjustedRadii
-        ? {
-            ...nextWorkspace,
-            layout: {
-              ...nextWorkspace.layout,
-              orbitRadii: {
-                ...nextWorkspace.layout.orbitRadii,
-                [orbitId]: adjustedRadii,
-              },
-            },
-          }
-        : nextWorkspace)
+      if (adjustedRadii) {
+        nextWorkspace = {
+          ...nextWorkspace,
+          layout: {
+            ...nextWorkspace.layout,
+            orbitRadii: { ...nextWorkspace.layout.orbitRadii, [orbitId]: adjustedRadii },
+          },
+        }
+      }
+      const { durable } = applyWorkspace(nextWorkspace)
       editorError.value = ''
+      orbitAdjustmentNotice.value = ''
       if (adjusted && minimum !== undefined) {
         orbitAdjustmentNotice.value = `Orbit radii increased to the new host minimum of ${minimum}.`
       }
+      await durable
     } catch (error) {
       editorError.value = errorText(error)
     }

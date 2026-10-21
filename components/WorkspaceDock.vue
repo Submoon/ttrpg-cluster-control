@@ -82,15 +82,44 @@
         @add-from-inputs="emit('add-cluster-system-from-inputs')"
         @preview-move-from-inputs="emit('preview-cluster-system-move-from-inputs')"
       />
+      <SystemObjectPlacementControls
+        v-if="props.systemObjectMoveAvailable && !addActive"
+        :destination="props.systemObjectMoveDestination"
+        :destination-options="props.systemObjectMoveDestinationOptions"
+        :candidates="props.systemObjectMoveCandidates"
+        :candidate-request="props.systemObjectMoveCandidateRequest"
+        :position-input="props.systemObjectPositionInput"
+        :position-x-input="props.systemObjectPositionXInput"
+        :position-y-input="props.systemObjectPositionYInput"
+        :preview="props.systemObjectMovePreview"
+        :error="props.systemObjectMoveError"
+        @update-destination="emit('update-system-object-move-destination', $event)"
+        @update-position-input="emit('update-system-object-position-input', $event)"
+        @update-position-x-input="emit('update-system-object-position-x-input', $event)"
+        @update-position-y-input="emit('update-system-object-position-y-input', $event)"
+        @choose-candidate="emit('choose-system-object-move-candidate', $event)"
+        @preview-position="emit('preview-system-object-move')"
+        @confirm-position="emit('confirm-system-object-move', $event)"
+        @cancel-preview="emit('cancel-system-object-move')"
+      />
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
-import type { ClusterSystemPositionInput, ClusterSystemPositionInputs, MapInteractionMode, SystemCreationSession } from '../composables/editor-workflows/types'
+import type {
+  ClusterSystemPositionInput,
+  ClusterSystemPositionInputs,
+  MapInteractionMode,
+  SystemObjectMoveCandidate,
+  SystemCreationSession,
+  SystemObjectMoveDestinationOption,
+  SystemObjectMovePreview,
+} from '../composables/editor-workflows/types'
 import type { StarSystem } from '../domain/workspace'
 import ClusterSystemPlacementControls from './ClusterSystemPlacementControls.vue'
+import SystemObjectPlacementControls from './SystemObjectPlacementControls.vue'
 import SystemCreationControls from './SystemCreationControls.vue'
 
 const props = withDefaults(defineProps<{
@@ -103,10 +132,30 @@ const props = withDefaults(defineProps<{
   clusterSystemPositionInputs?: ClusterSystemPositionInputs
   clusterSystemPositionInputErrors?: Record<ClusterSystemPositionInput, string>
   selectedSystem?: StarSystem
+  systemObjectMoveAvailable?: boolean
+  systemObjectMoveDestination?: string
+  systemObjectMoveDestinationOptions?: SystemObjectMoveDestinationOption[]
+  systemObjectMoveCandidates?: SystemObjectMoveCandidate[]
+  systemObjectMoveCandidateRequest?: number
+  systemObjectPositionInput?: string
+  systemObjectPositionXInput?: string
+  systemObjectPositionYInput?: string
+  systemObjectMovePreview?: SystemObjectMovePreview | null
+  systemObjectMoveError?: string
 }>(), {
   closeSignal: '',
   creationSession: null,
   creationTypeLabel: 'object',
+  systemObjectMoveAvailable: false,
+  systemObjectMoveDestination: '__free__',
+  systemObjectMoveDestinationOptions: () => [{ label: 'Free placement', value: '__free__' }],
+  systemObjectMoveCandidates: () => [],
+  systemObjectMoveCandidateRequest: 0,
+  systemObjectPositionInput: '',
+  systemObjectPositionXInput: '',
+  systemObjectPositionYInput: '',
+  systemObjectMovePreview: null,
+  systemObjectMoveError: '',
 })
 
 const emit = defineEmits<{
@@ -117,6 +166,14 @@ const emit = defineEmits<{
   'update-cluster-system-input': [key: ClusterSystemPositionInput, value: string]
   'add-cluster-system-from-inputs': []
   'preview-cluster-system-move-from-inputs': []
+  'update-system-object-position-input': [value: string]
+  'update-system-object-move-destination': [value: string]
+  'update-system-object-position-x-input': [value: string]
+  'update-system-object-position-y-input': [value: string]
+  'choose-system-object-move-candidate': [key: string]
+  'preview-system-object-move': []
+  'confirm-system-object-move': [token: number]
+  'cancel-system-object-move': []
 }>()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [

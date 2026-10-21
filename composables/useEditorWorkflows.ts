@@ -1,4 +1,4 @@
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 
 /**
  * Composes editor state and focused commands around the page's commit boundary; it does not own persistence.
@@ -9,6 +9,7 @@ import { useEditorState } from './editor-workflows/useEditorState'
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
+import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
 import type { EditorWorkflowOptions } from './editor-workflows/types'
 
 /**
@@ -27,6 +28,19 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const systemCreation = useSystemCreationWorkflows({
     workspace: options.workspace,
     selectedSystem: editorState.selectedSystem,
+    systemMapRef: editorState.systemMapRef,
+    applyWorkspace: options.applyWorkspace,
+    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+  })
+  const systemObjectPlacement = useSystemObjectPlacement({
+    workspace: options.workspace,
+    activeView: editorState.activeView,
+    mapMode: editorState.mapMode,
+    creationActive: computed(() => systemCreation.creationSession.value !== null),
+    selectedSystemId: editorState.selectedSystemId,
+    selectedObjectId: editorState.selectedObjectId,
+    selectedSystem: editorState.selectedSystem,
+    selectedObject: editorState.selectedObject,
     systemMapRef: editorState.systemMapRef,
     applyWorkspace: options.applyWorkspace,
     isEntityCommandBlocked: editorState.isEntityCommandBlocked,
@@ -75,6 +89,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const mapWorkflows = useMapWorkflows({
     workspace: options.workspace,
     commit: options.commit,
+    applyWorkspace: options.applyWorkspace,
     selectedSystem: editorState.selectedSystem,
     selectedObject: editorState.selectedObject,
     selectedOrbit: editorState.selectedOrbit,
@@ -100,6 +115,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     ...clusterWorkflows,
     ...mapWorkflows,
     ...systemCreation,
+    ...systemObjectPlacement,
     ...clusterSystemPlacement,
     quitAdd,
   }

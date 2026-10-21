@@ -1,0 +1,11 @@
+
+Running 4 tests using 1 worker
+
+(node:17652) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\system-orbits.spec.ts:592:1 › the Warden can detach a hosted Orbit and move its unoccupied center (20.9s)
+  ok 2 tests\workspace-entity-sessions.spec.ts:191:1 › Orbit sessions allow occupant-angle and unrelated-host changes, block related creation, and preserve both radii when reordered (11.9s)
+  ok 3 tests\workspace-system-creation-geometry.spec.ts:378:1 › a stationary Primary Star long press adds no Orbit after click suppression expires (6.1s)
+  ok 4 tests\workspace-system-gesture-arbitration.spec.ts:694:1 › Object Add suppresses long-press inspection and second-contact takeover preserves Add (9.2s)
+
+  4 passed (50.4s)

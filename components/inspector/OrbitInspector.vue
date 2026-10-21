@@ -5,7 +5,8 @@
         <p class="section-kicker">SYSTEM STRUCTURE</p>
         <h2 class="orbit-title mt-2 mb-1">Orbit {{ selectedOrbit.order }}</h2>
         <p class="entity-inspector-subtitle m-0">
-          <template v-if="selectedOrbit.hostId === null">Unoccupied center · unkeyed placement</template>
+          <template v-if="isAttachmentDraft">Proposed host · {{ proposedHostLabel }}</template>
+          <template v-else-if="selectedOrbit.hostId === null">Unoccupied center · unkeyed placement</template>
           <template v-else>
             Hosted by {{ selectedSystem?.objects.find(object => object.id === selectedOrbit?.hostId)?.name ?? 'unknown object' }}
           </template>
@@ -113,7 +114,8 @@
               type="number"
               step="1"
               min="1"
-              :max="siblingCount"
+              :max="orderMaximum"
+              :disabled="isAttachmentDraft"
               inputmode="numeric"
             />
           </UFormField>
@@ -121,9 +123,50 @@
         <p class="inspector-footnote m-0">
           Order is counted among {{ siblingCount === 1 ? 'the Orbit with this host' : `${siblingCount} Orbits with this host` }}.
         </p>
+        <template v-if="selectedOrbit.hostId === null">
+          <fieldset class="entity-inspector-fields" :disabled="!orbitSession || props.saving">
+            <UFormField label="Host" :error="fieldError('hostId')">
+              <USelect
+                :id="controlId('hostId')"
+                :model-value="hasPendingCenterMoveChoice ? undefined : (orbitDraft.hostId ?? unoccupiedCenterValue)"
+                :placeholder="hasPendingCenterMoveChoice ? 'Choose a named host' : undefined"
+                :items="hostItems"
+                :disabled="!orbitSession || props.saving || (hasPendingCenterMoveChoice && pendingHostItems.length === 0)"
+                @update:model-value="updateOrbitHostSelection($event)"
+              />
+            </UFormField>
+          </fieldset>
+          <UAlert
+            v-if="hasPendingCenterMoveChoice"
+            color="warning"
+            variant="subtle"
+            description="Several map targets overlap this Orbit center. Choose a named host to continue; the free center will not be selected implicitly."
+          />
+          <ul v-if="pendingInvalidHostReasons.length" class="inspector-footnote m-0 list-disc pl-5">
+            <li v-for="candidate in pendingInvalidHostReasons" :key="candidate.key">
+              {{ candidate.label }}: {{ candidate.error }}
+            </li>
+          </ul>
+          <p v-if="isAttachmentDraft" class="inspector-footnote m-0">
+            This appends as Orbit {{ orbitDraft.targetOrder }} under {{ proposedHostLabel }}. Preview clamps each axis to its own host minimum when needed.
+          </p>
+          <p v-if="isAttachmentDraft && props.hasOrbitPlacementPreview" class="entity-inspector-placement-preview m-0" role="status" aria-live="polite">
+            Preview ready · Orbit {{ orbitDraft.targetOrder }} under {{ proposedHostLabel }} · axes {{ orbitDraft.horizontalRadius }} × {{ orbitDraft.verticalRadius }} scene units · rotation {{ normalizedDraftRotation }}°.
+          </p>
+          <UButton
+            v-if="isAttachmentDraft || hasPendingCenterMoveChoice"
+            class="workspace-control"
+            color="primary"
+            variant="soft"
+            size="sm"
+            type="button"
+            :disabled="!orbitSession || hasPendingCenterMoveChoice || props.saving"
+            @click="previewOrbitSession"
+          >Preview placement</UButton>
+        </template>
       </section>
 
-      <section v-if="selectedOrbit.hostId === null" class="entity-inspector-section" aria-labelledby="orbit-center-heading">
+      <section v-if="selectedOrbit.hostId === null && orbitDraft.hostId === null" class="entity-inspector-section" aria-labelledby="orbit-center-heading">
         <div class="entity-inspector-section-heading">
           <div>
             <p class="section-kicker">UNHOSTED ORBIT</p>
@@ -266,7 +309,7 @@
           color="primary"
           type="submit"
           :form="formId"
-          :disabled="!orbitSession || (!props.hasModifiedEntitySession && !hasSessionErrors) || props.saving"
+          :disabled="!orbitSession || hasPendingCenterMoveChoice || (!props.hasModifiedEntitySession && !hasSessionErrors) || props.saving"
         >
           <span>Apply changes</span><span class="sr-only">Save Orbit</span>
         </UButton>
@@ -275,7 +318,7 @@
           color="neutral"
           variant="outline"
           type="button"
-          :disabled="!orbitSession || !props.hasModifiedEntitySession"
+          :disabled="!orbitSession || (!props.hasModifiedEntitySession && !hasPendingCenterMoveChoice) || props.saving"
           @click="discardOrbitSession"
         >
           <span>Discard changes</span><span class="sr-only">Cancel Orbit edits</span>
@@ -291,12 +334,15 @@ import { computed } from 'vue'
 import {
   defaultOrbitRadius,
   minimumOrbitRadius,
+  normalizeOrbitRotation,
   type LocalWorkspace,
   type Orbit,
   type StarSystem,
 } from '../../domain/workspace'
 import type { EntityInspectorSession, OrbitDraft, SaveState } from '../../composables/editor-workflows/types'
 import type { OrbitInspectorHandle } from './contracts'
+import { objectsMovedWithOrbit } from '../../utils/system-map-geometry'
+import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 
 const props = defineProps<{
@@ -305,6 +351,7 @@ const props = defineProps<{
   selectedOrbit?: Orbit
   session: Extract<EntityInspectorSession, { kind: 'orbit' }> | null
   hasModifiedEntitySession: boolean
+  hasOrbitPlacementPreview: boolean
   saving: boolean
   editorError: string
   hasChartNameDraft: boolean
@@ -317,6 +364,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'request-orbit-edit': []
+  'update-orbit-host': [sessionId: number, hostId: string | null]
+  'preview-orbit-placement': [sessionId: number]
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]
   'detach-orbit': []
@@ -337,17 +386,63 @@ const orbitSession = computed(() => {
 })
 const formId = computed(() => `orbit-inspector-form-${selectedOrbit.value?.id ?? 'current'}`)
 const orbitDraft = computed<OrbitDraft>(() => orbitSession.value?.draft ?? readOrbitValues(selectedOrbit.value))
+const unoccupiedCenterValue = '__unoccupied_orbit_center__'
 const errorEntries = computed(() => Object.entries(orbitSession.value?.errors ?? {}))
 const summaryMessage = computed(() => orbitSession.value?.error || props.editorError)
 const hasSessionErrors = computed(() => errorEntries.value.length > 0 || !!orbitSession.value?.error)
+const pendingCenterMoveCandidates = computed(() => orbitSession.value?.centerMoveCandidates ?? null)
+const hasPendingCenterMoveChoice = computed(() => pendingCenterMoveCandidates.value !== null)
+const pendingHostItems = computed(() =>
+  (pendingCenterMoveCandidates.value ?? [])
+    .filter(candidate => candidate.target.kind === 'host' && !candidate.error)
+    .map(candidate => ({ label: candidate.label, value: candidate.target.kind === 'host' ? candidate.target.objectId : '' })),
+)
+const pendingInvalidHostReasons = computed(() =>
+  (pendingCenterMoveCandidates.value ?? []).filter(candidate => !!candidate.error),
+)
 const selectedOrbitMinimumRadius = computed(() => {
   const system = selectedSystem.value
   const orbit = selectedOrbit.value
-  return system && orbit ? minimumOrbitRadius(system, orbit) : 16
+  if (!system || !orbit) return 16
+  const hostId = orbitDraft.value.hostId
+  if (orbit.hostId === null && hostId !== null
+    && system.objects.some(object => object.id === hostId)) {
+    return minimumOrbitRadius(system, { id: orbit.id, order: orbit.order, hostId })
+  }
+  return minimumOrbitRadius(system, orbit)
+})
+const isAttachmentDraft = computed(() => selectedOrbit.value?.hostId === null && orbitDraft.value.hostId !== null)
+const proposedHost = computed(() => selectedSystem.value?.objects.find(object => object.id === orbitDraft.value.hostId))
+const proposedHostLabel = computed(() => proposedHost.value ? catalogueObjectLabel(proposedHost.value) : 'selected object')
+const hostItems = computed(() => {
+  const system = selectedSystem.value
+  const orbit = selectedOrbit.value
+  if (hasPendingCenterMoveChoice.value) return pendingHostItems.value
+  const movedObjectIds = system && orbit ? objectsMovedWithOrbit(system, orbit.id) : new Set<string>()
+  return [
+    { label: 'Unoccupied center', value: unoccupiedCenterValue },
+    ...(system?.objects ?? [])
+      .filter(object => !movedObjectIds.has(object.id))
+      .map(object => ({ label: catalogueObjectLabel(object), value: object.id })),
+  ]
 })
 const siblingCount = computed(() => {
   const orbit = selectedOrbit.value
-  return orbit ? selectedSystem.value?.orbits.filter(candidate => candidate.hostId === orbit.hostId).length ?? 1 : 1
+  const hostId = isAttachmentDraft.value ? orbitDraft.value.hostId : orbit?.hostId
+  if (!orbit) return 1
+  const count = selectedSystem.value?.orbits.filter(candidate => candidate.hostId === hostId).length ?? 0
+  return isAttachmentDraft.value ? count + 1 : count
+})
+const orderMaximum = computed(() => {
+  const orbit = selectedOrbit.value
+  if (!orbit) return 1
+  if (isAttachmentDraft.value) {
+    const hostId = orbitDraft.value.hostId
+    return (selectedSystem.value?.orbits
+      .filter(candidate => candidate.hostId === hostId)
+      .reduce((highest, candidate) => Math.max(highest, candidate.order), 0) ?? 0) + 1
+  }
+  return siblingCount.value
 })
 const placedObjectCount = computed(() => {
   const orbit = selectedOrbit.value
@@ -372,6 +467,7 @@ function readOrbitValues(orbit: Orbit | undefined): OrbitDraft {
     ? { horizontal: savedRadii, vertical: savedRadii }
     : savedRadii ?? { horizontal: defaultRadius, vertical: defaultRadius }
   return {
+    hostId: orbit?.hostId ?? null,
     targetOrder: String(orbit?.order ?? ''),
     horizontalRadius: String(radii.horizontal),
     verticalRadius: String(radii.vertical),
@@ -379,6 +475,23 @@ function readOrbitValues(orbit: Orbit | undefined): OrbitDraft {
     centerY: orbit?.hostId === null ? String(orbit.center.y) : '',
     rotation: String(orbit ? props.workspace.layout.orbitRotations[orbit.id] ?? 0 : 0),
   }
+}
+
+const normalizedDraftRotation = computed(() => {
+  const rotation = Number(orbitDraft.value.rotation)
+  return Number.isFinite(rotation) ? normalizeOrbitRotation(rotation) : orbitDraft.value.rotation
+})
+
+function updateOrbitHostSelection(value: unknown): void {
+  const session = orbitSession.value
+  if (!session) return
+  const selected = String(value ?? (hasPendingCenterMoveChoice.value ? '' : unoccupiedCenterValue))
+  emit('update-orbit-host', session.id, selected === unoccupiedCenterValue ? null : selected)
+}
+
+function previewOrbitSession(): void {
+  const session = orbitSession.value
+  if (session) emit('preview-orbit-placement', session.id)
 }
 
 function controlId(key: string): string {
@@ -460,6 +573,7 @@ defineExpose(inspectorHandle)
 .entity-inspector-feedback--error { border-color: color-mix(in srgb, var(--error) 60%, var(--line)); background: color-mix(in srgb, var(--error) 10%, var(--panel-bg)); }
 .entity-inspector-feedback--error strong,
 .entity-inspector-feedback--error li :deep(.entity-inspector-issue-action) { color: var(--error); }
+.entity-inspector-placement-preview { border-left: 2px solid var(--line); padding-left: .55rem; color: var(--text-secondary); font-size: .72rem; line-height: 1.45; }
 .entity-inspector-feedback ul { display: grid; gap: .16rem; margin: .35rem 0 0; padding-left: 1.1rem; }
 .entity-inspector-feedback li :deep(.entity-inspector-issue-action) { text-decoration: underline; text-underline-offset: .12em; }
 .entity-inspector-delete-button { justify-self: start; margin-top: .45rem; }

@@ -72,6 +72,7 @@
           :selected-orbit="props.selectedOrbit"
           :session="orbitSession"
           :has-modified-entity-session="props.hasModifiedEntitySession"
+          :has-orbit-placement-preview="props.hasOrbitPlacementPreview"
           :saving="props.saving"
           :editor-error="props.editorError"
           :has-chart-name-draft="props.hasChartNameDraft"
@@ -81,6 +82,8 @@
           :save-error="props.saveError"
           :export-error="props.exportError"
           @request-orbit-edit="emit('request-orbit-edit')"
+          @update-orbit-host="(sessionId, hostId) => emit('update-orbit-host', sessionId, hostId)"
+          @preview-orbit-placement="emit('preview-orbit-placement', $event)"
           @apply-entity-session="emit('apply-entity-session', $event)"
           @discard-entity-session="emit('discard-entity-session', $event)"
           @detach-orbit="emit('detach-orbit')"
@@ -142,6 +145,7 @@ const props = defineProps<{
   hasUncommittedNames: boolean
   entitySession: EntityInspectorSession | null
   hasModifiedEntitySession: boolean
+  hasOrbitPlacementPreview: boolean
   isEntityDraftTarget: (kind: 'object' | 'orbit', id: string) => boolean
   saving: boolean
   editorError: string
@@ -161,6 +165,8 @@ const emit = defineEmits<{
   'discard-entity-session': [sessionId: number]
   'delete-object': []
   'request-orbit-edit': []
+  'update-orbit-host': [sessionId: number, hostId: string | null]
+  'preview-orbit-placement': [sessionId: number]
   'detach-orbit': []
   'delete-orbit': []
   'request-route-edit': [routeId: string]

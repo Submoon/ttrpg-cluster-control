@@ -28,7 +28,7 @@ Standalone SVG/matching PNG contain the full applied map in active light/dark or
 3. [ ] Resolve export palette without changing live preference; standalone SVG and PNG match arrangement/palette/title/bounds.
 4. [ ] Exercise both maps × active-light/active-dark/print × SVG/PNG with dense content/hidden draft/preview/failed save.
 5. [ ] Before/after applied JSON/live state proves no selection/view/tool/gesture/draft/theme/save mutation, implicit Apply/Discard or conflated export error.
-6. [ ] New target owners extend exclusion checks as introduced.
+6. [ ] New target owners extend exclusion checks as introduced. Ticket 25 introduces parent-owned existing-object position and Orbit-host/geometry previews: exclude both from SVG cloning and PNG rasterization, verify applied geometry in the downloaded image, and verify the visible preview/draft survives export. Its adapters omit these transient overrides around the synchronous clone; that implementation is a handoff, not completion of this ticket's full clean-export acceptance.
 
 ## Scope and exclusions
 

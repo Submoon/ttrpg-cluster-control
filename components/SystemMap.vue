@@ -37,9 +37,12 @@ import {
 } from '../domain/workspace'
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type {
+  OrbitCenterMoveCandidate,
+  OrbitPlacementPreview,
   SystemCreationCandidate,
   SystemCreationPreview,
   SystemCreationType,
+  SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
 import {
@@ -91,7 +94,11 @@ const emit = defineEmits<{
   'select-object': [id: string]
   'select-orbit': [id: string]
   'object-move-blocked': [id: string]
+  'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
+  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
   'entity-command-blocked': [command: EntityCommand]
+  'cancel-object-placement-preview': []
+  'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
@@ -120,6 +127,8 @@ let touchGesture: SystemTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
 let cancelledCreationPreviewId: number | null = null
+const objectPlacementPreviews = new Map<string, Point>()
+const orbitPlacementPreviews = new Map<string, OrbitPlacementPreview>()
 
 const handlers: SystemMapEventHandlers = {
   selectObject: id => { if (!props.creationType) emit('select-object', id) },
@@ -127,7 +136,11 @@ const handlers: SystemMapEventHandlers = {
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
   isEntityCommandBlocked: command => props.isEntityCommandBlocked?.(command) ?? false,
   objectMoveBlocked: id => emit('object-move-blocked', id),
+  objectMoveCandidates: (id, candidates) => emit('object-move-candidates', id, candidates),
+  orbitCenterCandidates: (id, candidates) => emit('orbit-center-candidates', id, candidates),
   entityCommandBlocked: command => emit('entity-command-blocked', command),
+  cancelObjectPlacementPreview: () => emit('cancel-object-placement-preview'),
+  cancelOrbitPlacementPreview: () => emit('cancel-orbit-placement-preview'),
   moveObject: (id, position) => emit('move-object', id, position),
   moveOrbitCenter: (id, center, hostId) => emit('move-orbit-center', id, center, hostId),
   rotateObject: (id, angle) => emit('rotate-object', id, angle),
@@ -205,6 +218,8 @@ function beginTouchPinch(touches: TouchList): void {
 
 function startTouchNavigation(event: TouchEvent): void {
   if (!props.touchNavigation || event.touches.length < 2) return
+  emit('cancel-object-placement-preview')
+  emit('cancel-orbit-placement-preview')
   cancelCreationPreview(true)
   cancelActiveGesture()
   beginTouchPinch(event.touches)
@@ -253,6 +268,27 @@ function cancelActiveGesture(): void {
   mapRenderer?.cancelActiveGesture()
 }
 
+/** Replaces or clears a parent-owned object placement preview in scene coordinates. */
+function setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void {
+  if (scenePoint) objectPlacementPreviews.set(objectId, { ...scenePoint })
+  else objectPlacementPreviews.delete(objectId)
+  mapRenderer?.setObjectPlacementPreview(objectId, scenePoint)
+}
+
+/** Replaces or clears a parent-owned proposed-host Orbit preview in scene coordinates. */
+function setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void {
+  if (preview) {
+    orbitPlacementPreviews.set(orbitId, {
+      ...preview,
+      center: { ...preview.center },
+      radii: { ...preview.radii },
+    })
+  } else {
+    orbitPlacementPreviews.delete(orbitId)
+  }
+  mapRenderer?.setOrbitPlacementPreview(orbitId, preview)
+}
+
 /** Cancels only the currently displayed geometric target, retaining the armed Add type. */
 function cancelCreationPreview(preserveNavigation = false): void {
   const preview = props.creationPreview
@@ -266,6 +302,8 @@ function cancelCreationPreview(preserveNavigation = false): void {
 function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !mapRenderer) return
+  emit('cancel-object-placement-preview')
+  emit('cancel-orbit-placement-preview')
   cancelCreationPreview(true)
   cancelActiveGesture()
   viewPan = { transform: zoomTransform(element), start: pointer(event, element) as [number, number] }
@@ -282,6 +320,23 @@ function moveViewPan(event: MouseEvent): void {
 
 function endViewPan(): void { viewPan = null }
 
+/** Rolls back an active D3 edit on Escape even when the pointer left focus on another control. */
+function cancelActiveMapGestureOnEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  const element = svgElement.value
+  if (!element?.querySelector('.is-resizing, .is-moving, .is-rotating, .is-dragging')) return
+
+  const target = event.target
+  const originatedInMap = target instanceof Node && element.contains(target)
+  if (originatedInMap) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+  emit('cancel-object-placement-preview')
+  emit('cancel-orbit-placement-preview')
+  cancelActiveGesture()
+}
+
 /**
  * Exports the full system scene and includes the current system name in its title band.
  * @param format Requested SVG or PNG output.
@@ -291,10 +346,14 @@ function endViewPan(): void { viewPan = null }
 async function exportImage(format: MapImageFormat): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The star system map is not ready to export.')
+  const placementPreviews = [...objectPlacementPreviews]
+  const orbitPreviews = [...orbitPlacementPreviews]
   const previews = [...element.querySelectorAll<SVGGElement>('.system-creation-preview')]
     .map(preview => ({ preview, parent: preview.parentNode, nextSibling: preview.nextSibling }))
   let exportPromise: Promise<Blob>
   try {
+    for (const [objectId] of placementPreviews) setObjectPlacementPreview(objectId, null)
+    for (const [orbitId] of orbitPreviews) mapRenderer?.setOrbitPlacementPreview(orbitId, null)
     previews.forEach(({ preview }) => preview.remove())
     exportPromise = exportMapImage(element, format, props.system.name)
   } finally {
@@ -302,6 +361,12 @@ async function exportImage(format: MapImageFormat): Promise<Blob> {
       if (!parent || !element.contains(parent)) continue
       if (nextSibling?.parentNode === parent) parent.insertBefore(preview, nextSibling)
       else parent.appendChild(preview)
+    }
+    for (const [objectId, scenePoint] of placementPreviews) {
+      setObjectPlacementPreview(objectId, scenePoint)
+    }
+    for (const [orbitId, preview] of orbitPreviews) {
+      mapRenderer?.setOrbitPlacementPreview(orbitId, preview)
     }
   }
   return await exportPromise
@@ -364,6 +429,8 @@ function render(preserveNavigation = false): void {
     creationType: props.creationType,
     creationPreview: props.creationPreview,
     creationChooserOpen: props.creationChooserOpen,
+    objectPlacementPreviews,
+    orbitPlacementPreviews,
     moveEnabled: props.moveEnabled,
     orbitRotationWheelEvents,
     handlers,
@@ -390,8 +457,14 @@ function getCreationCandidates(point: Point, type: SystemCreationType): SystemCr
   return mapRenderer?.getCreationCandidates(point, type) ?? []
 }
 
-onMounted(() => render())
-onBeforeUnmount(cancelActiveGesture)
+onMounted(() => {
+  render()
+  document.addEventListener('keydown', cancelActiveMapGestureOnEscape, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', cancelActiveMapGestureOnEscape, true)
+  cancelActiveGesture()
+})
 watch(() => props.system, () => render(), { deep: true })
 watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
@@ -416,6 +489,8 @@ defineExpose({
   fitMap,
   cancelActiveGesture,
   cancelCreationPreview,
+  setObjectPlacementPreview,
+  setOrbitPlacementPreview,
   startViewPan,
   moveViewPan,
   endViewPan,

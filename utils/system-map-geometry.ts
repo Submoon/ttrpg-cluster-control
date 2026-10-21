@@ -38,6 +38,15 @@ export interface MapGeometryOverrides {
   orbitRotations: ReadonlyMap<string, number>
 }
 
+/** Orbit ring hit used by existing-object move resolution, including cycle-invalid destinations. */
+export interface OrbitPlacementHit {
+  orbit: Orbit
+  angle: number
+  point: Point
+  distance: number
+  valid: boolean
+}
+
 /**
  * Resolves an unoccupied Orbit's normalized center to scene coordinates or returns its host's position.
  * @param orbit Orbit whose center is requested.
@@ -146,6 +155,20 @@ export function orbitPointAtAngle(
     x: center.x + Math.cos(angle) * radii.horizontal,
     y: center.y + Math.sin(angle) * radii.vertical,
   }, center, rotation)
+}
+
+/** Projects a scene point onto a rotated Orbit and returns the shared angle and rendered position. */
+export function projectPointToOrbit(
+  point: Point,
+  center: Point,
+  radii: OrbitRadii,
+  rotation: number,
+): { angle: number; point: Point } {
+  const angle = orbitAngleAtPoint(point, center, radii, rotation)
+  return {
+    angle,
+    point: orbitPointAtAngle(center, radii, angle, rotation),
+  }
 }
 
 /**
@@ -458,22 +481,61 @@ export function orbitAtPoint(
   orbitRotationsOverrides?: ReadonlyMap<string, number>,
   orbitCenterOverrides?: ReadonlyMap<string, Point>,
 ): Orbit | undefined {
+  return orbitPlacementHitsAtPoint(
+    system,
+    point,
+    positions,
+    geometry,
+    objectId,
+    orbitRadiiOverrides,
+    orbitRotationsOverrides,
+    orbitCenterOverrides,
+  ).find(candidate => candidate.valid)?.orbit
+}
+
+/**
+ * Returns every Orbit ring within the existing placement tolerance, retaining cycle-invalid hits.
+ * @param system System whose Orbit ellipses are tested.
+ * @param point Pointer location in SVG scene coordinates.
+ * @param positions Resolved object positions in SVG scene coordinates.
+ * @param geometry Saved radii, rotations, and object angles.
+ * @param objectId Optional object being moved; supplied IDs mark recursive host targets invalid.
+ * @param orbitRadiiOverrides Optional temporary drag radii.
+ * @param orbitRotationsOverrides Optional temporary degree-based drag rotations.
+ * @param orbitCenterOverrides Optional temporary scene-coordinate unoccupied centers.
+ * @returns All raw ring hits ordered by distance, then by their source system order.
+ * @throws If a required hosted-object position cannot be resolved.
+ */
+export function orbitPlacementHitsAtPoint(
+  system: StarSystem,
+  point: Point,
+  positions: ReadonlyMap<string, Point>,
+  geometry: SystemMapGeometry,
+  objectId?: string,
+  orbitRadiiOverrides?: ReadonlyMap<string, OrbitRadii>,
+  orbitRotationsOverrides?: ReadonlyMap<string, number>,
+  orbitCenterOverrides?: ReadonlyMap<string, Point>,
+): OrbitPlacementHit[] {
   return system.orbits
-    .map(orbit => {
+    .map((orbit, index) => {
       const center = orbitCenter(orbit, positions, orbitCenterOverrides)
       const radii = orbitRadii(system, orbit, geometry, orbitRadiiOverrides)
       const rotation = orbitRotation(orbit, geometry, orbitRotationsOverrides)
       const angle = orbitAngleAtPoint(point, center, radii, rotation)
-      const nearestPoint = orbitPointAtAngle(center, radii, angle, rotation)
+      const projectedPoint = orbitPointAtAngle(center, radii, angle, rotation)
+      const distance = Math.hypot(point.x - projectedPoint.x, point.y - projectedPoint.y)
       return {
         orbit,
-        distance: Math.hypot(point.x - nearestPoint.x, point.y - nearestPoint.y),
+        angle,
+        point: projectedPoint,
+        distance,
+        valid: !objectId || canPlaceObjectInOrbit(system, objectId, orbit.id),
+        index,
       }
     })
-    .filter(({ orbit, distance }) =>
-      distance <= 16 && (!objectId || canPlaceObjectInOrbit(system, objectId, orbit.id)),
-    )
-    .sort((left, right) => left.distance - right.distance)[0]?.orbit
+    .filter(candidate => candidate.distance <= 16)
+    .sort((left, right) => left.distance - right.distance || left.index - right.index)
+    .map(({ index: _index, ...candidate }) => candidate)
 }
 
 /**

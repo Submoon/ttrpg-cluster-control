@@ -47,12 +47,22 @@ export interface ObjectDraft {
 
 /** String-backed Orbit inputs; Detach remains an explicit map command. */
 export interface OrbitDraft {
+  /** Proposed host for an Orbit whose committed center is unoccupied. */
+  hostId: string | null
   targetOrder: string
   horizontalRadius: string
   verticalRadius: string
   centerX: string
   centerY: string
   rotation: string
+}
+
+/** Transient scene-space geometry for previewing a proposed host on an unoccupied Orbit. */
+export interface OrbitPlacementPreview {
+  center: Point
+  radii: OrbitRadii
+  /** Optional draft rotation in degrees; omitted previews use the committed value. */
+  rotation?: number
 }
 
 /** Relationship values needed to detect changes to a captured host/placement chain. */
@@ -96,7 +106,13 @@ export type EntityInspectorSession = {
   error: string
 } & (
   | { kind: 'object'; initial: ObjectEditBaseline; draft: ObjectDraft }
-  | { kind: 'orbit'; initial: OrbitEditBaseline; draft: OrbitDraft }
+  | {
+      kind: 'orbit'
+      initial: OrbitEditBaseline
+      draft: OrbitDraft
+      /** Pending named choices raised by an ambiguous unoccupied-center drag. */
+      centerMoveCandidates: OrbitCenterMoveCandidate[] | null
+    }
 )
 
 /** Specific map/data commands checked against the active entity session's captured dependencies. */
@@ -108,6 +124,37 @@ export type EntityCommand =
   | { kind: 'orbit-create'; hostId: string | null }
   | { kind: 'definition-mutation'; fieldId: string }
   | { kind: 'deletion'; target: MapDeletionTarget }
+
+/** Explicit destination for an existing object. */
+export type SystemObjectMoveTarget =
+  | { kind: 'orbit'; orbitId: string; angle: number }
+  | { kind: 'free'; point: Point }
+
+export const FREE_SYSTEM_OBJECT_PLACEMENT = '__free__'
+
+/** Accessible label/value pair offered by the existing-object Destination selector. */
+export interface SystemObjectMoveDestinationOption {
+  label: string
+  value: string
+}
+
+/** One Orbit ring intersected by an existing-object drag release. */
+export interface SystemObjectMoveCandidate {
+  key: string
+  label: string
+  target: Extract<SystemObjectMoveTarget, { kind: 'orbit' }>
+  /** Null means the candidate remains eligible after the latest parent-side validation. */
+  error: string | null
+}
+
+/** One transient, single-use placement preview for an existing system object. */
+export interface SystemObjectMovePreview {
+  token: number
+  clusterId: string
+  systemId: string
+  objectId: string
+  target: SystemObjectMoveTarget
+}
 
 /** Persistent catalogue choice for one system-map creation session. */
 export type SystemCreationType =
@@ -126,6 +173,11 @@ export interface SystemCreationCandidate {
   label: string
   target: SystemCreationTarget
   error: string | null
+}
+
+/** Host or free-center choice raised when an Orbit center drag overlaps multiple candidates. */
+export type OrbitCenterMoveCandidate = Omit<SystemCreationCandidate, 'target'> & {
+  target: Extract<SystemCreationTarget, { kind: 'host' | 'free' }>
 }
 
 /** One transient, single-use target preview. Orbit geometry is expressed in scene units. */
@@ -240,6 +292,10 @@ export interface MapVisitMemory {
 
 /** Renderer capabilities needed by system-map workflows. */
 export interface SystemMapHandle extends MapNavigationHandle {
+  /** Shows or clears one transient existing-object placement preview in SVG scene coordinates. */
+  setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  /** Shows or clears one transient proposed-host preview in SVG scene coordinates. */
+  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.

@@ -7,6 +7,7 @@ import {
   defaultOrbitRadius,
   isCustomFieldApplicableToObject,
   minimumOrbitRadius,
+  moveOrbitCenter,
   normalizeOrbitRotation,
   planMapEntityDeletion,
   replaceWorkspaceSystem,
@@ -27,9 +28,13 @@ import type {
   EntityInspectorSession,
   ObjectDraft,
   ObjectEditBaseline,
+  OrbitCenterMoveCandidate,
   OrbitDraft,
   OrbitEditBaseline,
+  OrbitPlacementPreview,
 } from './types'
+import { objectPositions, objectsMovedWithOrbit } from '../../utils/system-map-geometry'
+import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 
 type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
 
@@ -42,6 +47,22 @@ interface DraftDependencySnapshots {
   sessionId: number
   placements: Map<string, EntityDependencyBaseline>
   stations: Map<string, Pick<SystemObject, 'id' | 'family' | 'subtype'>>
+  orbitHosts: Map<string, OrbitHostDependencySnapshot>
+}
+
+interface OrbitHostDependencySnapshot {
+  object: Pick<SystemObject, 'id' | 'family' | 'subtype' | 'placement'>
+  placement: EntityDependencyBaseline
+  siblings: Array<Pick<Orbit, 'id' | 'hostId' | 'order'>>
+  scenePosition: Point
+}
+
+interface OrbitPlacementPreviewState {
+  sessionId: number
+  orbitId: string
+  hostId: string
+  signature: string
+  preview: OrbitPlacementPreview
 }
 
 function clone<T>(value: T): T {
@@ -143,6 +164,64 @@ function captureObjectPlacementDependencies(
     : { objects: [], orbits: [], orbitRadii: {}, orbitRotations: {} }
 }
 
+function captureOrbitHostDependencies(
+  workspace: LocalWorkspace,
+  system: StarSystem,
+  hostId: string,
+): OrbitHostDependencySnapshot | undefined {
+  const host = system.objects.find(object => object.id === hostId)
+  if (!host) return undefined
+  try {
+    const scenePosition = objectPositions(system, {
+      objectAngles: workspace.layout.objectAngles,
+      orbitRadii: workspace.layout.orbitRadii,
+      orbitRotations: workspace.layout.orbitRotations,
+    }).get(hostId)
+    if (!scenePosition) return undefined
+    return {
+      object: {
+        id: host.id,
+        family: host.family,
+        subtype: host.subtype,
+        placement: clone(host.placement),
+      },
+      placement: captureObjectPlacementDependencies(workspace, system, host),
+      siblings: system.orbits
+        .filter(orbit => orbit.hostId === hostId)
+        .sort((left, right) => left.order - right.order)
+        .map(orbit => ({ id: orbit.id, hostId: orbit.hostId, order: orbit.order })),
+      scenePosition: clone(scenePosition),
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function validateOrbitCenterMoveCandidate(
+  currentWorkspace: LocalWorkspace,
+  system: StarSystem,
+  orbit: Orbit,
+  candidate: OrbitCenterMoveCandidate,
+): OrbitCenterMoveCandidate {
+  if (candidate.target.kind !== 'host') return { ...candidate }
+  const hostId = candidate.target.objectId
+  const host = system.objects.find(object => object.id === hostId)
+  let error = candidate.error
+  if (!error) {
+    if (!host) error = 'This map object is no longer available as an Orbit host.'
+    else if (objectsMovedWithOrbit(system, orbit.id).has(host.id)) {
+      error = 'Choose a host outside this Orbit and its nested contents.'
+    } else if (!captureOrbitHostDependencies(currentWorkspace, system, host.id)) {
+      error = 'This host or its parent placement no longer has a valid map position.'
+    }
+  }
+  return {
+    ...candidate,
+    label: host ? catalogueObjectLabel(host) : candidate.label,
+    error,
+  }
+}
+
 function objectDefinitionBaseline(object: SystemObject, settings: ObjectFieldSettings): CustomFieldDefinition[] {
   return settings.customFields
     .filter(field => Object.hasOwn(object.customFieldValues ?? {}, field.id)
@@ -192,6 +271,7 @@ function captureOrbitBaseline(
   return {
     orbit: clone(orbit),
     values: {
+      hostId: orbit.hostId,
       targetOrder: String(orbit.order),
       horizontalRadius: String(radii.horizontal),
       verticalRadius: String(radii.vertical),
@@ -219,9 +299,11 @@ function sameDependencyBaseline(expected: EntityDependencyBaseline, current: Ent
 function dependencyIds(session: EntityInspectorSession, drafts: DraftDependencySnapshots | null): {
   objects: Set<string>
   orbits: Set<string>
+  destinationOrbitSiblings: Set<string>
 } {
   const objects = new Set<string>()
   const orbits = new Set<string>()
+  const destinationOrbitSiblings = new Set<string>()
   const add = (baseline: EntityDependencyBaseline | undefined) => {
     if (!baseline) return
     for (const object of baseline.objects) objects.add(object.id)
@@ -241,8 +323,18 @@ function dependencyIds(session: EntityInspectorSession, drafts: DraftDependencyS
   } else {
     orbits.add(session.targetId)
     add(session.initial.dependencies)
+    if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
+      const host = drafts?.sessionId === session.id
+        ? drafts.orbitHosts.get(session.draft.hostId)
+        : undefined
+      if (host) {
+        objects.add(host.object.id)
+        add(host.placement)
+        for (const sibling of host.siblings) destinationOrbitSiblings.add(sibling.id)
+      }
+    }
   }
-  return { objects, orbits }
+  return { objects, orbits, destinationOrbitSiblings }
 }
 
 function globalObject(workspace: LocalWorkspace, objectId: string): SystemObject | undefined {
@@ -317,6 +409,11 @@ function deletionChangesOwnedDependencies(
       .map(orbit => ({ id: orbit.id, hostId: orbit.hostId, order: orbit.order }))
       .sort((left, right) => left.order - right.order)
     if (!sameValue(siblings, nextSiblings)) return true
+    if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
+      const currentHost = captureOrbitHostDependencies(workspace, currentSystem, session.draft.hostId)
+      const nextHost = captureOrbitHostDependencies(planned, nextSystem, session.draft.hostId)
+      if (!currentHost || !nextHost || !sameValue(currentHost, nextHost)) return true
+    }
   }
   return false
 }
@@ -471,18 +568,32 @@ function resolveObjectDraft(
 
 export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityInspectorSessionOptions) {
   const entitySession = ref<EntityInspectorSession | null>(null)
+  const orbitPlacementPreview = ref<OrbitPlacementPreviewState | null>(null)
   let sessionSequence = 0
   let draftDependencies: DraftDependencySnapshots | null = null
 
   function captureDraftDependencies(): void {
     const session = entitySession.value
     const currentWorkspace = workspace.value
-    if (!session || session.kind !== 'object' || !currentWorkspace) return
+    if (!session || !currentWorkspace) return
     if (!draftDependencies || draftDependencies.sessionId !== session.id) {
-      draftDependencies = { sessionId: session.id, placements: new Map(), stations: new Map() }
+      draftDependencies = {
+        sessionId: session.id,
+        placements: new Map(),
+        stations: new Map(),
+        orbitHosts: new Map(),
+      }
     }
     const system = plannedSystem(currentWorkspace, session.systemId)
     if (!system) return
+    if (session.kind === 'orbit') {
+      const hostId = session.initial.orbit.hostId === null ? session.draft.hostId : null
+      if (hostId && !draftDependencies.orbitHosts.has(hostId)) {
+        const snapshot = captureOrbitHostDependencies(currentWorkspace, system, hostId)
+        if (snapshot) draftDependencies.orbitHosts.set(hostId, snapshot)
+      }
+      return
+    }
     const orbitId = parseOrbitPlacement(session.draft.placement)
     if (orbitId && !draftDependencies.placements.has(orbitId)) {
       draftDependencies.placements.set(orbitId, captureOrbitDependencies(currentWorkspace, system, orbitId))
@@ -504,8 +615,44 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     const session = entitySession.value
     return session?.kind === 'object'
       ? [session.id, session.draft.placement, session.draft.jumpStationId] as const
-      : null
+      : session?.kind === 'orbit'
+        ? [session.id, session.draft.hostId] as const
+        : null
   }, captureDraftDependencies, { flush: 'sync' })
+
+  watch(() => {
+    const session = entitySession.value
+    return session?.kind === 'orbit'
+      ? [
+          session.id,
+          session.draft.hostId,
+          session.draft.targetOrder,
+          session.draft.horizontalRadius,
+          session.draft.verticalRadius,
+          session.draft.centerX,
+          session.draft.centerY,
+          session.draft.rotation,
+        ] as const
+      : null
+  }, values => {
+    const preview = orbitPlacementPreview.value
+    if (!preview || !values || preview.sessionId !== values[0]) return
+    if (preview.signature !== JSON.stringify(values.slice(1))) orbitPlacementPreview.value = null
+  }, { flush: 'sync' })
+
+  function cancelOrbitPlacementPreview(): void {
+    orbitPlacementPreview.value = null
+  }
+
+  watch([workspace, orbitPlacementPreview], () => {
+    const preview = orbitPlacementPreview.value
+    const session = entitySession.value
+    if (!preview) return
+    if (!session || session.kind !== 'orbit' || session.id !== preview.sessionId
+      || getEntitySessionStaleError(session) !== null) {
+      orbitPlacementPreview.value = null
+    }
+  }, { flush: 'sync' })
 
   const hasModifiedEntitySession = computed(() => {
     const session = entitySession.value
@@ -593,6 +740,18 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if ((currentWorkspace.layout.orbitRotations[currentOrbit.id] ?? 0) !== session.initial.rotation) {
       return 'Orbit rotation changed while this Inspector was open.'
     }
+    if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
+      if (objectsMovedWithOrbit(system, currentOrbit.id).has(session.draft.hostId)) {
+        return 'Choose a host outside this Orbit and its nested contents.'
+      }
+      const expectedHost = draftDependencies?.sessionId === session.id
+        ? draftDependencies.orbitHosts.get(session.draft.hostId)
+        : undefined
+      const currentHost = captureOrbitHostDependencies(currentWorkspace, system, session.draft.hostId)
+      if (!expectedHost || !currentHost || !sameValue(expectedHost, currentHost)) {
+        return 'The proposed host, its parent placement, or its sibling Orbit order changed while this Inspector was open.'
+      }
+    }
     return null
   }
 
@@ -605,11 +764,13 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (active?.kind === 'object' && active.clusterId === clusterId
       && active.systemId === systemId && active.targetId === objectId) return
 
+    orbitPlacementPreview.value = null
     const initial = captureObjectBaseline(currentWorkspace, system, object)
     draftDependencies = {
       sessionId: sessionSequence + 1,
       placements: new Map(),
       stations: new Map(initial.linkedStations.map(station => [station.id, station])),
+      orbitHosts: new Map(),
     }
     if (object.placement.kind === 'orbit') {
       draftDependencies.placements.set(
@@ -640,6 +801,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (active?.kind === 'orbit' && active.clusterId === clusterId
       && active.systemId === systemId && active.targetId === orbitId) return
 
+    orbitPlacementPreview.value = null
     sessionSequence += 1
     draftDependencies = null
     const initial = captureOrbitBaseline(currentWorkspace, system, orbit)
@@ -651,14 +813,218 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       kind: 'orbit',
       initial,
       draft: clone(initial.values),
+      centerMoveCandidates: null,
       errors: {},
       error: '',
+    }
+  }
+
+  function offerOrbitCenterCandidates(expectedId: number, candidates: OrbitCenterMoveCandidate[]): boolean {
+    const session = entitySession.value
+    if (!session || session.id !== expectedId || session.kind !== 'orbit'
+      || session.initial.orbit.hostId !== null || session.draft.hostId !== null) return false
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
+    const orbit = system?.orbits.find(candidate => candidate.id === session.targetId)
+    if (!currentWorkspace || !system || !orbit || orbit.hostId !== null) {
+      session.centerMoveCandidates = null
+      session.error = 'The unoccupied Orbit changed before its overlapping host choices could be reviewed.'
+      return false
+    }
+    const staleError = getEntitySessionStaleError(session)
+    if (staleError) {
+      session.centerMoveCandidates = null
+      session.error = staleError
+      return false
+    }
+
+    const hasNamedHost = candidates.some(candidate => candidate.target.kind === 'host')
+    if (!hasNamedHost) return false
+    session.centerMoveCandidates = candidates.map(candidate =>
+      validateOrbitCenterMoveCandidate(currentWorkspace, system, orbit, candidate),
+    )
+    session.errors = {}
+    session.error = ''
+    return true
+  }
+
+  function updateOrbitHost(expectedId: number, hostId: string | null): boolean {
+    const session = entitySession.value
+    if (!session || session.id !== expectedId || session.kind !== 'orbit'
+      || session.initial.orbit.hostId !== null) return false
+    orbitPlacementPreview.value = null
+
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
+    const orbit = system?.orbits.find(candidate => candidate.id === session.targetId)
+    if (!currentWorkspace || !system || !orbit) {
+      session.error = 'The Orbit for this draft no longer exists.'
+      return false
+    }
+    if (session.centerMoveCandidates !== null) {
+      const staleError = getEntitySessionStaleError(session)
+      if (staleError) {
+        session.centerMoveCandidates = null
+        session.errors = { hostId: staleError }
+        session.error = staleError
+        return false
+      }
+      if (hostId === null) {
+        const error = 'Choose a named host from the overlapping map targets before previewing this Orbit.'
+        session.errors = { hostId: error }
+        session.error = error
+        return false
+      }
+      const candidate = session.centerMoveCandidates.find(item =>
+        item.target.kind === 'host' && item.target.objectId === hostId,
+      )
+      if (!candidate) {
+        const error = 'Choose one of the named hosts that overlapped the Orbit center.'
+        session.errors = { hostId: error }
+        session.error = error
+        return false
+      }
+      if (candidate.error) {
+        session.errors = { hostId: candidate.error }
+        session.error = candidate.error
+        return false
+      }
+      const currentCandidate = validateOrbitCenterMoveCandidate(currentWorkspace, system, orbit, candidate)
+      if (currentCandidate.error) {
+        session.centerMoveCandidates = session.centerMoveCandidates.map(item =>
+          item.key === candidate.key ? currentCandidate : item,
+        )
+        session.errors = { hostId: currentCandidate.error }
+        session.error = currentCandidate.error
+        return false
+      }
+    }
+    if (hostId !== null) {
+      if (!system.objects.some(object => object.id === hostId)) {
+        session.errors = { hostId: 'Choose an existing map object as the Orbit host.' }
+        session.error = session.errors.hostId!
+        return false
+      }
+      if (objectsMovedWithOrbit(system, orbit.id).has(hostId)) {
+        session.errors = { hostId: 'Choose a host outside this Orbit and its nested contents.' }
+        session.error = session.errors.hostId!
+        return false
+      }
+    }
+
+    session.draft.hostId = hostId
+    session.centerMoveCandidates = null
+    if (hostId === null) {
+      session.draft.targetOrder = String(session.initial.orbit.order)
+    } else {
+      const siblings = system.orbits.filter(candidate => candidate.hostId === hostId)
+      session.draft.targetOrder = String(siblings.reduce((highest, sibling) => Math.max(highest, sibling.order), 0) + 1)
+    }
+    session.errors = {}
+    session.error = ''
+    return true
+  }
+
+  function previewOrbitPlacement(expectedId: number): boolean {
+    const session = entitySession.value
+    if (!session || session.id !== expectedId || session.kind !== 'orbit'
+      || session.initial.orbit.hostId !== null) return false
+    orbitPlacementPreview.value = null
+
+    if (session.centerMoveCandidates !== null) {
+      const error = 'Choose a named host from the overlapping map targets before previewing this Orbit.'
+      session.errors = { hostId: error }
+      session.error = error
+      return false
+    }
+    if (session.draft.hostId === null) return false
+
+    const staleError = getEntitySessionStaleError(session)
+    if (staleError) {
+      session.error = staleError
+      return false
+    }
+
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
+    const orbit = system?.orbits.find(candidate => candidate.id === session.targetId)
+    const host = system?.objects.find(candidate => candidate.id === session.draft.hostId)
+    if (!currentWorkspace || !system || !orbit || !host) {
+      session.error = 'The Orbit or proposed host for this preview no longer exists.'
+      return false
+    }
+    if (orbit.hostId !== null || !orbit.center) {
+      const error = 'This Orbit is already hosted; detach it before choosing a new host.'
+      session.errors = { hostId: error }
+      session.error = error
+      return false
+    }
+    if (objectsMovedWithOrbit(system, orbit.id).has(host.id)) {
+      session.errors = { hostId: 'Choose a host outside this Orbit and its nested contents.' }
+      session.error = session.errors.hostId!
+      return false
+    }
+
+    const errors: Record<string, string> = {}
+    const horizontal = parseFiniteInput(session.draft.horizontalRadius, 'Horizontal radius', errors, 'horizontalRadius')
+    const vertical = parseFiniteInput(session.draft.verticalRadius, 'Vertical radius', errors, 'verticalRadius')
+    const rotation = parseFiniteInput(session.draft.rotation, 'Rotation', errors, 'rotation')
+    if (horizontal === null || vertical === null || rotation === null) {
+      session.errors = errors
+      session.error = Object.values(errors).join(' ')
+      return false
+    }
+
+    try {
+      const sourceCenter = orbit.center
+      const attachedSystem = moveOrbitCenter(system, orbit.id, sourceCenter, host.id)
+      const attachedOrbit = attachedSystem.orbits.find(candidate => candidate.id === orbit.id)
+      if (!attachedOrbit) throw new Error('The Orbit could not be attached to the proposed host.')
+      const minimum = minimumOrbitRadius(attachedSystem, attachedOrbit)
+      const radii = {
+        horizontal: Math.max(horizontal, minimum),
+        vertical: Math.max(vertical, minimum),
+      }
+      const positions = objectPositions(system, {
+        objectAngles: currentWorkspace.layout.objectAngles,
+        orbitRadii: currentWorkspace.layout.orbitRadii,
+        orbitRotations: currentWorkspace.layout.orbitRotations,
+      })
+      const center = positions.get(host.id)
+      if (!center) throw new Error('The proposed host has no resolved map position.')
+
+      session.draft.targetOrder = String(attachedOrbit.order)
+      session.draft.horizontalRadius = String(radii.horizontal)
+      session.draft.verticalRadius = String(radii.vertical)
+      session.errors = {}
+      session.error = ''
+      const signature = JSON.stringify([
+        session.draft.hostId,
+        session.draft.targetOrder,
+        session.draft.horizontalRadius,
+        session.draft.verticalRadius,
+        session.draft.centerX,
+        session.draft.centerY,
+        session.draft.rotation,
+      ])
+      orbitPlacementPreview.value = {
+        sessionId: session.id,
+        orbitId: orbit.id,
+        hostId: host.id,
+        signature,
+        preview: { center, radii, rotation: normalizeOrbitRotation(rotation) },
+      }
+      return true
+    } catch (error) {
+      session.error = error instanceof Error ? error.message : String(error)
+      return false
     }
   }
 
   function discardEntitySession(expectedId?: number): void {
     const active = entitySession.value
     if (!active || (expectedId !== undefined && active.id !== expectedId)) return
+    if (orbitPlacementPreview.value?.sessionId === active.id) orbitPlacementPreview.value = null
     entitySession.value = null
     draftDependencies = null
   }
@@ -678,7 +1044,14 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     }
     const staleError = getEntitySessionStaleError(session)
     if (staleError) {
+      if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
       session.error = staleError
+      return false
+    }
+    if (session.kind === 'orbit' && session.centerMoveCandidates !== null) {
+      const error = 'Choose a named host from the overlapping map targets before applying this Orbit.'
+      session.errors = { hostId: error }
+      session.error = error
       return false
     }
 
@@ -702,6 +1075,24 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
         }
         nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
       } else {
+        if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
+          const preview = orbitPlacementPreview.value
+          const signature = JSON.stringify([
+            session.draft.hostId,
+            session.draft.targetOrder,
+            session.draft.horizontalRadius,
+            session.draft.verticalRadius,
+            session.draft.centerX,
+            session.draft.centerY,
+            session.draft.rotation,
+          ])
+          if (!preview || preview.sessionId !== session.id || preview.orbitId !== session.targetId
+            || preview.hostId !== session.draft.hostId || preview.signature !== signature) {
+            session.errors = { form: 'Preview placement again before applying these host and geometry changes.' }
+            session.error = session.errors.form!
+            return false
+          }
+        }
         const result = applyOrbitDraft(currentWorkspace, system, session)
         session.errors = result.errors
         if (!result.workspace) {
@@ -713,6 +1104,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
 
       const { durable } = applyWorkspace(nextWorkspace)
       if (entitySession.value?.id === session.id) {
+        if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
         entitySession.value = null
         draftDependencies = null
       }
@@ -758,11 +1150,19 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       return ids.objects.has(command.objectId)
     }
     if (command.kind === 'orbit-create') {
-      return session.kind === 'orbit' && command.hostId === session.initial.orbit.hostId
+      return session.kind === 'orbit'
+        && (command.hostId === session.initial.orbit.hostId
+          || (session.initial.orbit.hostId === null
+            && session.draft.hostId !== null
+            && command.hostId === session.draft.hostId))
     }
     if (command.kind === 'object-create') {
-      // Appending a new occupant does not change the selected entity or any captured host dependency.
-      return false
+      // A new occupant is independent unless it can change the proposed host's resolved placement.
+      return session.kind === 'orbit'
+        && session.initial.orbit.hostId === null
+        && session.draft.hostId !== null
+        && command.orbitId !== null
+        && ids.orbits.has(command.orbitId)
     }
     if (command.kind === 'orbit-geometry') {
       return ids.orbits.has(command.orbitId)
@@ -773,7 +1173,12 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (session.kind === 'orbit') {
       const initialHostId = session.initial.orbit.hostId
       const siblingIds = new Set(session.initial.siblings.map(sibling => sibling.id))
-      return siblingIds.has(command.orbitId) || command.hostId === initialHostId
+      return siblingIds.has(command.orbitId)
+        || ids.destinationOrbitSiblings.has(command.orbitId)
+        || command.hostId === initialHostId
+        || (session.initial.orbit.hostId === null
+          && session.draft.hostId !== null
+          && command.hostId === session.draft.hostId)
     }
     return false
   }
@@ -791,16 +1196,29 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     }
     if (currentWorkspace.cluster.id === session.clusterId
       && plannedSystem(currentWorkspace, session.systemId)?.[session.kind === 'object' ? 'objects' : 'orbits']
-        .some(entity => entity.id === session.targetId)
-      && (hasModifiedEntitySession.value || getEntitySessionStaleError(session) === null)) return
+        .some(entity => entity.id === session.targetId)) {
+      const staleError = getEntitySessionStaleError(session)
+      if (session.kind === 'orbit' && session.centerMoveCandidates !== null && staleError) {
+        session.centerMoveCandidates = null
+        session.errors = { hostId: staleError }
+        session.error = staleError
+        orbitPlacementPreview.value = null
+      }
+      if (hasModifiedEntitySession.value || staleError === null) return
+    }
     if (!hasModifiedEntitySession.value) discardEntitySession(session.id)
   })
 
   return {
     entitySession,
     hasModifiedEntitySession,
+    orbitPlacementPreview,
     beginObjectSession,
     beginOrbitSession,
+    offerOrbitCenterCandidates,
+    updateOrbitHost,
+    previewOrbitPlacement,
+    cancelOrbitPlacementPreview,
     applyEntitySession,
     discardEntitySession,
     isEntityCommandBlocked,
@@ -815,7 +1233,8 @@ function applyOrbitDraft(
 ): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
   const draft = session.draft
-  const targetOrder = parseFiniteInput(draft.targetOrder, 'Orbit order', errors, 'targetOrder')
+  const attaching = session.initial.orbit.hostId === null && draft.hostId !== null
+  const targetOrder = attaching ? null : parseFiniteInput(draft.targetOrder, 'Orbit order', errors, 'targetOrder')
   const horizontalRadius = parseFiniteInput(draft.horizontalRadius, 'Horizontal radius', errors, 'horizontalRadius')
   const verticalRadius = parseFiniteInput(draft.verticalRadius, 'Vertical radius', errors, 'verticalRadius')
   const rotation = parseFiniteInput(draft.rotation, 'Rotation', errors, 'rotation')
@@ -823,34 +1242,62 @@ function applyOrbitDraft(
   if (!orbit) return { workspace: null, errors: { form: 'The Orbit for this draft no longer exists.' } }
 
   const siblings = system.orbits.filter(candidate => candidate.hostId === orbit.hostId)
-  if (targetOrder !== null && (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > siblings.length)) {
+  if (!attaching && targetOrder !== null
+    && (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > siblings.length)) {
     errors.targetOrder = `Choose an Orbit order from 1 to ${siblings.length}.`
   }
-  const minimum = minimumOrbitRadius(system, orbit)
-  if (horizontalRadius !== null && horizontalRadius < minimum) {
-    errors.horizontalRadius = `Horizontal radius must be at least ${minimum}.`
-  }
-  if (verticalRadius !== null && verticalRadius < minimum) {
-    errors.verticalRadius = `Vertical radius must be at least ${minimum}.`
+  let updatedSystem = system
+  let minimum = minimumOrbitRadius(system, orbit)
+  if (attaching) {
+    if (orbit.hostId !== null || !orbit.center) {
+      errors.hostId = 'This Orbit is already hosted; detach it before choosing a new host.'
+    } else {
+      const sourceCenter = orbit.center
+      const hostId = draft.hostId
+      const host = hostId === null ? undefined : system.objects.find(object => object.id === hostId)
+      if (!host) errors.hostId = 'Choose an existing map object as the Orbit host.'
+      else if (objectsMovedWithOrbit(system, orbit.id).has(host.id)) {
+        errors.hostId = 'Choose a host outside this Orbit and its nested contents.'
+      } else {
+        updatedSystem = moveOrbitCenter(system, orbit.id, sourceCenter, host.id)
+        const attachedOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbit.id)
+        if (!attachedOrbit) return { workspace: null, errors: { form: 'The Orbit could not be attached.' } }
+        minimum = minimumOrbitRadius(updatedSystem, attachedOrbit)
+      }
+    }
+  } else {
+    if (draft.hostId !== orbit.hostId) errors.hostId = 'Hosted Orbits can only be detached with the existing Detach action.'
+    if (horizontalRadius !== null && horizontalRadius < minimum) {
+      errors.horizontalRadius = `Horizontal radius must be at least ${minimum}.`
+    }
+    if (verticalRadius !== null && verticalRadius < minimum) {
+      errors.verticalRadius = `Vertical radius must be at least ${minimum}.`
+    }
   }
 
   let center: Point | undefined
-  if (orbit.hostId === null) {
+  if (orbit.hostId === null && !attaching) {
     const centerX = parseFiniteInput(draft.centerX, 'Center X', errors, 'centerX')
     const centerY = parseFiniteInput(draft.centerY, 'Center Y', errors, 'centerY')
     if (centerX !== null && centerY !== null) center = { x: centerX, y: centerY }
   }
-  if (Object.keys(errors).length || targetOrder === null || horizontalRadius === null
+  if (Object.keys(errors).length || (!attaching && targetOrder === null) || horizontalRadius === null
     || verticalRadius === null || rotation === null) return { workspace: null, errors }
 
-  let updatedSystem = system
-  let currentOrder = orbit.order
-  while (currentOrder !== targetOrder) {
-    const direction = currentOrder < targetOrder ? 1 : -1
-    updatedSystem = moveOrbitOnce(updatedSystem, orbit.id, direction)
-    currentOrder += direction
+  let finalHorizontal = horizontalRadius
+  let finalVertical = verticalRadius
+  if (attaching) {
+    finalHorizontal = Math.max(horizontalRadius, minimum)
+    finalVertical = Math.max(verticalRadius, minimum)
+  } else if (targetOrder !== null) {
+    let currentOrder = orbit.order
+    while (currentOrder !== targetOrder) {
+      const direction = currentOrder < targetOrder ? 1 : -1
+      updatedSystem = moveOrbitOnce(updatedSystem, orbit.id, direction)
+      currentOrder += direction
+    }
   }
-  if (center && orbit.hostId === null) {
+  if (center && orbit.hostId === null && !attaching) {
     updatedSystem = {
       ...updatedSystem,
       orbits: updatedSystem.orbits.map(candidate => candidate.id === orbit.id && candidate.hostId === null
@@ -869,12 +1316,16 @@ function applyOrbitDraft(
       orbitRadii[sibling.id] = effectiveOrbitRadii(currentWorkspace, system, sibling)
     }
   }
-  const changedRadii = horizontalRadius !== session.initial.effectiveRadii.horizontal
-    || verticalRadius !== session.initial.effectiveRadii.vertical
-  if (changedRadii) {
+  const changedRadii = finalHorizontal !== session.initial.effectiveRadii.horizontal
+    || finalVertical !== session.initial.effectiveRadii.vertical
+  if (attaching) {
     const updatedDefault = defaultOrbitRadius(updatedSystem, updatedOrbit)
-    if (horizontalRadius === updatedDefault && verticalRadius === updatedDefault) delete orbitRadii[orbit.id]
-    else orbitRadii[orbit.id] = { horizontal: horizontalRadius, vertical: verticalRadius }
+    if (finalHorizontal === updatedDefault && finalVertical === updatedDefault) delete orbitRadii[orbit.id]
+    else orbitRadii[orbit.id] = { horizontal: finalHorizontal, vertical: finalVertical }
+  } else if (changedRadii) {
+    const updatedDefault = defaultOrbitRadius(updatedSystem, updatedOrbit)
+    if (finalHorizontal === updatedDefault && finalVertical === updatedDefault) delete orbitRadii[orbit.id]
+    else orbitRadii[orbit.id] = { horizontal: finalHorizontal, vertical: finalVertical }
   }
 
   const orbitRotations = { ...updatedLayout.orbitRotations }
