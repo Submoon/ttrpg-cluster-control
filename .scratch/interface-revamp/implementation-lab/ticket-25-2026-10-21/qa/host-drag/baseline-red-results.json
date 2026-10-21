@@ -1,0 +1,191 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nodejs\\node.exe",
+      "C:\\Git\\PERSO\\ttrpg-cluster-control\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      ".scratch/interface-revamp/implementation-lab/ticket-23-2026-10-20/qa/playwright.config.ts",
+      "tests/workspace-system-manipulation.spec.ts",
+      "--grep",
+      "dragging an Orbit host across its initial ring"
+    ],
+    "configFile": "C:\\Git\\PERSO\\ttrpg-cluster-control\\.scratch\\interface-revamp\\implementation-lab\\ticket-23-2026-10-20\\qa\\playwright.config.ts",
+    "rootDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/fbal-fontaine/AppData/Local/Temp/ticket23-ticket25-20261021/host-drag-red/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Git/PERSO/ttrpg-cluster-control/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\host-drag-red\\artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "",
+        "testDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "snapshotDir": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:3180",
+          "channel": "chrome",
+          "screenshot": "only-on-failure",
+          "trace": "retain-on-failure"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": ""
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\host-drag-red\\results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "workspace-system-manipulation.spec.ts",
+      "file": "workspace-system-manipulation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "dragging an Orbit host across its initial ring carries dependent geometry to the raw drop",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 7776,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: < \u001b[32m1\u001b[39m\nReceived:   \u001b[31m103.92304845413264\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: < \u001b[32m1\u001b[39m\nReceived:   \u001b[31m103.92304845413264\u001b[39m\n    at expectPointNear (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts:66:43)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts:847:3",
+                    "location": {
+                      "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts",
+                      "column": 43,
+                      "line": 66
+                    },
+                    "snippet": "  64 |\n  65 | function expectPointNear(actual: WorldPoint, expected: WorldPoint, tolerance = 1): void {\n> 66 |   expect(Math.abs(actual.x - expected.x)).toBeLessThan(tolerance)\n     |                                           ^\n  67 |   expect(Math.abs(actual.y - expected.y)).toBeLessThan(tolerance)\n  68 | }\n  69 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts",
+                        "column": 43,
+                        "line": 66
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: < \u001b[32m1\u001b[39m\nReceived:   \u001b[31m103.92304845413264\u001b[39m\n\n  64 |\n  65 | function expectPointNear(actual: WorldPoint, expected: WorldPoint, tolerance = 1): void {\n> 66 |   expect(Math.abs(actual.x - expected.x)).toBeLessThan(tolerance)\n     |                                           ^\n  67 |   expect(Math.abs(actual.y - expected.y)).toBeLessThan(tolerance)\n  68 | }\n  69 |\n    at expectPointNear (C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts:66:43)\n    at C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts:847:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-21T16:57:22.034Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\host-drag-red\\artifacts\\workspace-system-manipulat-aadb8-nt-geometry-to-the-raw-drop\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\host-drag-red\\artifacts\\workspace-system-manipulat-aadb8-nt-geometry-to-the-raw-drop\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\fbal-fontaine\\AppData\\Local\\Temp\\ticket23-ticket25-20261021\\host-drag-red\\artifacts\\workspace-system-manipulat-aadb8-nt-geometry-to-the-raw-drop\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Git\\PERSO\\ttrpg-cluster-control\\tests\\workspace-system-manipulation.spec.ts",
+                    "column": 43,
+                    "line": 66
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "a54b1fa117fd24cb37a2-47349f7019a9bb6c3a8b",
+          "file": "workspace-system-manipulation.spec.ts",
+          "line": 805,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-21T16:57:20.168Z",
+    "duration": 11320.483,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

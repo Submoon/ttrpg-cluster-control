@@ -248,9 +248,10 @@ test('an existing attached object supports numeric Orbit-angle preview, cancella
 
   const primary = system.objects.find(object => object.name === 'Primary Star')
   const oldPlanet = system.objects.find(object => object.name === 'Old Planet')
+  const oldMoon = system.objects.find(object => object.name === 'Old Moon')
   const nestedMoon = system.objects.find(object => object.name === 'Nested Moon')
   const deepAsteroid = system.objects.find(object => object.name === 'Deep Asteroid')
-  if (!primary || !oldPlanet || !nestedMoon || !deepAsteroid) {
+  if (!primary || !oldPlanet || !oldMoon || !nestedMoon || !deepAsteroid) {
     throw new Error('The imported geometry fixture is missing an expected map object.')
   }
   const alphaOrbit = system.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)
@@ -397,10 +398,8 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
   await expect(page.getByRole('option', { name: 'Orbit 1 around Primary Star', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'Orbit 2 around Primary Star', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'Free placement', exact: true })).toBeVisible()
-  for (const label of ['Orbit 1 around Old Planet', 'Orbit 1 around Nested Moon']) {
-    const cycleOption = page.getByRole('option', { name: label, exact: true })
-    if (await cycleOption.count()) await expect(cycleOption).toBeDisabled()
-  }
+  await expect(page.getByRole('option', { name: 'Orbit 1 around Old Planet', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: 'Orbit 1 around Nested Moon', exact: true })).toHaveCount(0)
   await page.getByRole('option', { name: 'Orbit 2 around Primary Star', exact: true }).click()
 
   const betaAngle = Math.PI / 2
@@ -751,7 +750,7 @@ test('short landscape precise placement safely rejects derived overflow and pers
   expectPointNear(await objectMapPosition(restoredMap, oldPlanet.id), expectedFreePosition)
 })
 
-test('dropping an object into its own hosted Orbit is refused instead of becoming Free', async ({ page }) => {
+test('dragging an Orbit host across its carried ring follows the raw pointer and keeps nested objects attached', async ({ page }) => {
   await captureMapExportBlobs(page)
   const map = await createDenseReach(page)
   const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
@@ -760,10 +759,20 @@ test('dropping an object into its own hosted Orbit is refused instead of becomin
   const initial = await downloadJson(page, 'Export star system JSON')
   const system = initial.system
   if (!system) throw new Error('The imported Dense Reach workspace did not export a star system.')
+  const primary = system.objects.find(object => object.name === 'Primary Star')
   const oldPlanet = system.objects.find(object => object.name === 'Old Planet')
-  if (!oldPlanet) throw new Error('The imported geometry fixture is missing Old Planet.')
+  const oldMoon = system.objects.find(object => object.name === 'Old Moon')
+  const nestedMoon = system.objects.find(object => object.name === 'Nested Moon')
+  const deepAsteroid = system.objects.find(object => object.name === 'Deep Asteroid')
+  if (!primary || !oldPlanet || !oldMoon || !nestedMoon || !deepAsteroid) {
+    throw new Error('The imported geometry fixture is missing an expected map object.')
+  }
+  const alphaOrbit = system.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)
   const nestedOrbit = system.orbits.find(orbit => orbit.hostId === oldPlanet.id && orbit.order === 1)
-  if (!nestedOrbit) throw new Error('The imported geometry fixture is missing Old Planet\'s hosted Orbit.')
+  const deepOrbit = system.orbits.find(orbit => orbit.hostId === nestedMoon.id && orbit.order === 1)
+  if (!alphaOrbit || !nestedOrbit || !deepOrbit) {
+    throw new Error('The imported geometry fixture is missing an expected hosted Orbit.')
+  }
   expect(oldPlanet.placement.kind).toBe('orbit')
 
   const sourcePoint = await objectMapPosition(map, oldPlanet.id)
@@ -771,33 +780,171 @@ test('dropping an object into its own hosted Orbit is refused instead of becomin
   const nestedRotation = initial.layout.orbitRotations?.[nestedOrbit.id] ?? 0
   expect(nestedRadii).toEqual({ horizontal: 80, vertical: 55 })
   expect(nestedRotation).toBe(25)
-  const invalidTarget = ellipsePoint(sourcePoint, nestedRadii, 0, nestedRotation)
+  const ringCrossing = ellipsePoint(sourcePoint, nestedRadii, 0, nestedRotation)
+  const rawDropPoint = { x: 800, y: 430 }
+  const originalNestedMoon = await objectMapPosition(map, nestedMoon.id)
+  const originalDeepAsteroid = await objectMapPosition(map, deepAsteroid.id)
   const hitTarget = objectMark(map, oldPlanet.id).locator('.object-hit-target')
 
   await setWorkspaceMapMode(page, 'Move')
-  await ensureMapDragPointsReachable(page, map, hitTarget, invalidTarget)
-  await beginDragToWorldPoint(page, map, hitTarget, invalidTarget)
+  await ensureMapDragPointsReachable(page, map, hitTarget, ringCrossing)
+  await ensureMapDragPointsReachable(page, map, hitTarget, rawDropPoint)
+  await beginDragToWorldPoint(page, map, hitTarget, ringCrossing)
   await expect(objectMark(map, oldPlanet.id)).toHaveClass(/is-dragging/)
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), sourcePoint)
+  const ringDelta = { x: ringCrossing.x - sourcePoint.x, y: ringCrossing.y - sourcePoint.y }
+  expectPointNear(await objectMapPosition(map, oldPlanet.id), ringCrossing)
+  expectPointNear(await objectMapPosition(map, nestedMoon.id), {
+    x: originalNestedMoon.x + ringDelta.x,
+    y: originalNestedMoon.y + ringDelta.y,
+  })
+  expectPointNear(await objectMapPosition(map, deepAsteroid.id), {
+    x: originalDeepAsteroid.x + ringDelta.x,
+    y: originalDeepAsteroid.y + ringDelta.y,
+  })
   expect(await downloadSystemJsonDuringDrag(page)).toEqual(initial)
   await expect(objectMark(map, oldPlanet.id)).toHaveClass(/is-dragging/)
 
-  await page.mouse.up()
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), sourcePoint)
-  await ensureObjectPlacementOpen(page)
-  const chooser = page.getByRole('group', { name: 'Choose destination Orbit', exact: true })
-  await expect(chooser).toBeVisible()
-  await expect(chooser.getByRole('button')).toHaveCount(1)
-  const ownOrbit = chooser.getByRole('button', { name: 'Orbit 1 around Old Planet', exact: true })
-  await expect(ownOrbit).toBeDisabled()
-  await expect(chooser.getByRole('note')).toHaveText(
-    'This Orbit is hosted by the object or one of its descendants.',
-  )
-  await expect(page.getByRole('button', { name: 'Confirm position', exact: true })).toHaveCount(0)
+  const dropScreenPoint = await map.evaluate((element, point) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const transform = content?.getScreenCTM()
+    if (!transform) throw new Error('The system map content is not attached to the document.')
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(transform)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, rawDropPoint)
+  await page.mouse.move(dropScreenPoint.x, dropScreenPoint.y, { steps: 6 })
+  const dropDelta = { x: rawDropPoint.x - sourcePoint.x, y: rawDropPoint.y - sourcePoint.y }
+  expectPointNear(await objectMapPosition(map, oldPlanet.id), rawDropPoint)
+  expectPointNear(await objectMapPosition(map, nestedMoon.id), {
+    x: originalNestedMoon.x + dropDelta.x,
+    y: originalNestedMoon.y + dropDelta.y,
+  })
+  expectPointNear(await objectMapPosition(map, deepAsteroid.id), {
+    x: originalDeepAsteroid.x + dropDelta.x,
+    y: originalDeepAsteroid.y + dropDelta.y,
+  })
 
-  const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
-  if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), sourcePoint)
+  await page.mouse.up()
+  const committed = await downloadJson(page, 'Export star system JSON')
+  const committedSystem = committed.system
+  const committedPlanet = committedSystem?.objects.find(object => object.id === oldPlanet.id)
+  if (!committedSystem || !committedPlanet) throw new Error('The moved system object is missing from the export.')
+  expect(committedPlanet.placement.kind).toBe('system')
+  expectPointNear(objectPosition(committedPlanet), rawDropPoint)
+  expect(committed.layout.objectAngles[oldPlanet.id]).toBeUndefined()
+  expect(committed.layout.objectAngles[oldMoon.id]).toBeCloseTo(
+    initial.layout.objectAngles[oldMoon.id] ?? implicitOrbitAngle(system, oldMoon.id, alphaOrbit.id),
+  )
+  const committedNestedMoonPosition = ellipsePoint(
+    objectPosition(committedPlanet),
+    orbitRadii(committed, nestedOrbit.id),
+    committed.layout.objectAngles[nestedMoon.id]!,
+    committed.layout.orbitRotations?.[nestedOrbit.id] ?? 0,
+  )
+  const committedDeepAsteroidPosition = ellipsePoint(
+    committedNestedMoonPosition,
+    orbitRadii(committed, deepOrbit.id),
+    committed.layout.objectAngles[deepAsteroid.id]!,
+    committed.layout.orbitRotations?.[deepOrbit.id] ?? 0,
+  )
+  expectPointNear(await objectMapPosition(map, nestedMoon.id), committedNestedMoonPosition)
+  expectPointNear(await objectMapPosition(map, deepAsteroid.id), committedDeepAsteroidPosition)
+})
+
+test('dragging an Orbit host across its initial ring carries dependent geometry to the raw drop', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  const map = await createDenseReach(page)
+  const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await closeHierarchy.isVisible()) await closeHierarchy.click()
+
+  const initial = await downloadJson(page, 'Export star system JSON')
+  const system = initial.system
+  if (!system) throw new Error('The imported Dense Reach workspace did not export a star system.')
+  const primary = system.objects.find(object => object.name === 'Primary Star')
+  const oldPlanet = system.objects.find(object => object.name === 'Old Planet')
+  const oldMoon = system.objects.find(object => object.name === 'Old Moon')
+  const nestedMoon = system.objects.find(object => object.name === 'Nested Moon')
+  const deepAsteroid = system.objects.find(object => object.name === 'Deep Asteroid')
+  if (!primary || !oldPlanet || !oldMoon || !nestedMoon || !deepAsteroid) {
+    throw new Error('The imported geometry fixture is missing an expected map object.')
+  }
+  const alphaOrbit = system.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)
+  if (!alphaOrbit) throw new Error('The imported fixture is missing Primary Star\'s first Orbit.')
+
+  const originalHostPosition = objectPosition(primary)
+  const alphaRadii = orbitRadii(initial, alphaOrbit.id)
+  const alphaRotation = initial.layout.orbitRotations?.[alphaOrbit.id] ?? 0
+  const ringCrossing = ellipsePoint(originalHostPosition, alphaRadii, 0, alphaRotation)
+  const rawDropPoint = { x: 800, y: 430 }
+  const carriedObjects = [oldPlanet, oldMoon, nestedMoon, deepAsteroid]
+  const originalDependentPositions = new Map(
+    await Promise.all(carriedObjects.map(async object => [object.id, await objectMapPosition(map, object.id)] as const)),
+  )
+  const hitTarget = objectMark(map, primary.id).locator('.object-hit-target')
+  await setWorkspaceMapMode(page, 'Move')
+  await ensureMapDragPointsReachable(page, map, hitTarget, ringCrossing)
+  await ensureMapDragPointsReachable(page, map, hitTarget, rawDropPoint)
+  await beginDragToWorldPoint(page, map, hitTarget, ringCrossing)
+  await expect(objectMark(map, primary.id)).toHaveClass(/is-dragging/)
+
+  const ringDelta = { x: ringCrossing.x - originalHostPosition.x, y: ringCrossing.y - originalHostPosition.y }
+  expectPointNear(await objectMapPosition(map, primary.id), ringCrossing)
+  for (const object of carriedObjects) {
+    const originalPosition = originalDependentPositions.get(object.id)
+    if (!originalPosition) throw new Error(`Could not read the original position of "${object.name}".`)
+    expectPointNear(await objectMapPosition(map, object.id), {
+      x: originalPosition.x + ringDelta.x,
+      y: originalPosition.y + ringDelta.y,
+    })
+  }
+
+  const dropScreenPoint = await map.evaluate((element, point) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const transform = content?.getScreenCTM()
+    if (!transform) throw new Error('The system map content is not attached to the document.')
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(transform)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, rawDropPoint)
+  await page.mouse.move(dropScreenPoint.x, dropScreenPoint.y, { steps: 6 })
+  const dropDelta = { x: rawDropPoint.x - originalHostPosition.x, y: rawDropPoint.y - originalHostPosition.y }
+  expectPointNear(await objectMapPosition(map, primary.id), rawDropPoint)
+  for (const object of carriedObjects) {
+    const originalPosition = originalDependentPositions.get(object.id)
+    if (!originalPosition) throw new Error(`Could not read the original position of "${object.name}".`)
+    expectPointNear(await objectMapPosition(map, object.id), {
+      x: originalPosition.x + dropDelta.x,
+      y: originalPosition.y + dropDelta.y,
+    })
+  }
+
+  await page.mouse.up()
+  const committed = await downloadJson(page, 'Export star system JSON')
+  const committedPrimary = committed.system?.objects.find(object => object.id === primary.id)
+  if (!committedPrimary) throw new Error('The committed export is missing Primary Star.')
+  expect(committedPrimary.placement.kind).toBe('system')
+  expectPointNear(objectPosition(committedPrimary), rawDropPoint)
+  const expectedCommitted = JSON.parse(JSON.stringify(initial)) as ExportedMap
+  const expectedPrimary = expectedCommitted.system?.objects.find(object => object.id === primary.id)
+  if (!expectedPrimary) throw new Error('The expected export is missing Primary Star.')
+  expectedPrimary.placement = committedPrimary.placement
+  expect(committed).toEqual(expectedCommitted)
+
+  await page.reload()
+  await returnToClusterMap(page)
+  const openRestoredSystem = page.getByRole('button', { name: 'Open Dense Reach system map', exact: true })
+  if (!(await openRestoredSystem.isVisible())) await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+  await openRestoredSystem.click()
+  const restoredMap = page.getByRole('group', { name: 'Dense Reach star system map', exact: true })
+  await expect(restoredMap).toBeVisible()
+  const restoredCloseHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await restoredCloseHierarchy.isVisible()) await restoredCloseHierarchy.click()
+  expect(await downloadJson(page, 'Export star system JSON')).toEqual(expectedCommitted)
+  expectPointNear(await objectMapPosition(restoredMap, primary.id), rawDropPoint)
+  for (const object of carriedObjects) {
+    const originalPosition = originalDependentPositions.get(object.id)
+    if (!originalPosition) throw new Error(`Could not read the original position of "${object.name}".`)
+    expectPointNear(await objectMapPosition(restoredMap, object.id), {
+      x: originalPosition.x + dropDelta.x,
+      y: originalPosition.y + dropDelta.y,
+    })
+  }
 })

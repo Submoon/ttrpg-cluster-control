@@ -37,3 +37,7 @@ Physical Android Chrome, OS keyboard and safe-area proof remain unavailable. Ful
 The prior complete candidate had 158 passes / 3 failures. Its report, log and source identity are retained separately as predecessor evidence. The three legacy oracles were unchanged; after source corrections, all three and the adjacent Add-touch case passed together (4/4, 50.4 seconds). The final candidate adds reviewed stale-contact cleanup and passes the complete 161-case invocation. Source and compiled fingerprints were checked unchanged after QA. The screenshots above come from that final invocation and were visually inspected.
 
 Archived text logs have trailing whitespace normalized for Git; their outcomes/content are unchanged and original TEMP logs remain intact.
+
+## Hosted-object drag follow-up
+
+A later human report exposed carried-ring ghost targeting. The [focused follow-up](host-drag/README.md) records its compiled-baseline RED, corrected pointer oracle, 14/14 focused development passes, typecheck/build and independent review. The complete 161/161 run above predates that correction; it is not a claim of a new complete-suite pass.

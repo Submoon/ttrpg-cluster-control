@@ -380,17 +380,38 @@ export function renderSystemMap({
     orbitRotations: effectiveOrbitRotations,
   })
   const appliedPositions = () => objectPositions(system, geometry)
-  function objectPlacementCommand(object: SystemObject, point: Point): EntityCommand {
-    const targetOrbit = orbitAtPoint(
+  const objectPlacementCarriedOrbitIds = new Map<string, Set<string>>()
+  function carriedOrbitIdsForObject(objectId: string): Set<string> {
+    const cached = objectPlacementCarriedOrbitIds.get(objectId)
+    if (cached) return cached
+
+    const carriedObjectIds = new Set([objectId])
+    for (const orbit of system.orbits) {
+      if (orbit.hostId !== objectId) continue
+      for (const carriedObjectId of objectsMovedWithOrbit(system, orbit.id)) {
+        carriedObjectIds.add(carriedObjectId)
+      }
+    }
+    const carriedOrbitIds = new Set(system.orbits
+      .filter(orbit => orbit.hostId !== null && carriedObjectIds.has(orbit.hostId))
+      .map(orbit => orbit.id))
+    objectPlacementCarriedOrbitIds.set(objectId, carriedOrbitIds)
+    return carriedOrbitIds
+  }
+  function objectPlacementHits(objectId: string, point: Point) {
+    return orbitPlacementHitsAtPoint(
       system,
       point,
       appliedPositions(),
       geometry,
-      object.id,
+      objectId,
       effectiveOrbitRadii,
       effectiveOrbitRotations,
       effectiveOrbitCenters,
-    )
+    ).filter(hit => !carriedOrbitIdsForObject(objectId).has(hit.orbit.id))
+  }
+  function objectPlacementCommand(object: SystemObject, point: Point): EntityCommand {
+    const targetOrbit = objectPlacementHits(object.id, point).find(hit => hit.valid)?.orbit
     return {
       kind: 'object-placement',
       objectId: object.id,
@@ -399,17 +420,7 @@ export function renderSystemMap({
     }
   }
   function objectDragPreviewPosition(object: SystemObject, point: Point, originalPosition: Point): Point {
-    const positions = appliedPositions()
-    const hits = orbitPlacementHitsAtPoint(
-      system,
-      point,
-      positions,
-      geometry,
-      object.id,
-      effectiveOrbitRadii,
-      effectiveOrbitRotations,
-      effectiveOrbitCenters,
-    )
+    const hits = objectPlacementHits(object.id, point)
     const eligibleHits = hits.filter(hit => hit.valid)
     if (eligibleHits.length > 1 || (hits.length > 0 && eligibleHits.length === 0)) return originalPosition
     if (eligibleHits.length === 1) return eligibleHits[0]!.point
@@ -1123,19 +1134,9 @@ export function renderSystemMap({
         return
       }
       setTimeout(() => movedObjects.delete(this), 0)
-      const positions = appliedPositions()
       const point = { x: event.x, y: event.y }
       const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
-      const hits = orbitPlacementHitsAtPoint(
-        system,
-        point,
-        positions,
-        geometry,
-        object.id,
-        effectiveOrbitRadii,
-        effectiveOrbitRotations,
-        effectiveOrbitCenters,
-      )
+      const hits = objectPlacementHits(object.id, point)
       const candidates: SystemObjectMoveCandidate[] = hits.map(hit => {
         const command: EntityCommand = {
           kind: 'object-placement',
