@@ -25,7 +25,8 @@ export interface RouteInspectorSession {
   routeId: string | null
   initial: RouteDraftValues
   draft: RouteDraftValues
-  offeredPoints: JumpPointReference[]
+  sourceSystemIds: string[] | null
+  destinationSystemIds: string[] | null
   endpointToChoose: 'from' | 'to'
   errors: Partial<Record<RouteDraftField | 'form', string>>
   error: string
@@ -57,7 +58,8 @@ function createSession(id: number, clusterId: string, routeId: string | null, dr
     routeId,
     initial: cloneDraft(draft),
     draft: cloneDraft(draft),
-    offeredPoints: [],
+    sourceSystemIds: null,
+    destinationSystemIds: null,
     endpointToChoose: draft.fromPointId ? 'to' : 'from',
     errors: {},
     error: '',
@@ -111,7 +113,9 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
     if (!active || active.id !== id) return
     if (field === 'destination') {
       active.draft.destination = value === 'external' ? 'external' : 'point'
-      if (active.draft.destination === 'external') active.draft.toPointId = ''
+      if (active.draft.destination === 'external') {
+        active.draft.toPointId = ''
+      }
       else active.draft.unresolvedExit = ''
       delete active.errors.destination
       delete active.errors.toPointId
@@ -120,16 +124,23 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
       active.draft[field] = value
       delete active.errors[field]
       if (field === 'fromPointId') {
+        if (!value) active.sourceSystemIds = null
         if (active.draft.toPointId === value) {
           active.draft.toPointId = ''
           delete active.errors.toPointId
         }
-        active.endpointToChoose = 'to'
+        active.endpointToChoose = value ? 'to' : 'from'
+      } else if (field === 'toPointId') {
+        if (!value) active.destinationSystemIds = null
+        if (value) {
+          active.draft.destination = 'point'
+          active.draft.unresolvedExit = ''
+        }
+        active.endpointToChoose = active.draft.fromPointId ? 'to' : 'from'
       }
     }
     delete active.errors.form
     active.error = ''
-    active.offeredPoints = []
   }
 
   function offerRouteSystems(id: number, systemIds: string[]): void {
@@ -137,39 +148,67 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
     const current = workspace.value
     if (!active || active.id !== id || !current || current.cluster.id !== active.clusterId) return
     const hitIds = new Set(systemIds)
-    active.offeredPoints = jumpPointsInCluster(current.cluster)
+    const choosing = active.endpointToChoose
+    const eligiblePoints = jumpPointsInCluster(current.cluster)
       .filter(reference => hitIds.has(reference.system.id)
-        && (active.endpointToChoose === 'from' || reference.point.id !== active.draft.fromPointId))
-    active.error = active.offeredPoints.length
-      ? ''
-      : 'Choose a system that contains an available logical Jump Point.'
-    active.errors.form = ''
+        && (choosing === 'from' || reference.point.id !== active.draft.fromPointId))
+    if (!eligiblePoints.length) {
+      active.error = 'Choose a system that contains an available logical Jump Point.'
+      return
+    }
+
+    active.error = ''
+    delete active.errors.form
+    const point = eligiblePoints.length === 1 ? eligiblePoints[0] : undefined
+    const eligibleSystemIds = [...new Set(eligiblePoints.map(reference => reference.system.id))]
+    if (choosing === 'from') {
+      active.sourceSystemIds = eligibleSystemIds
+      if (point) {
+        active.draft.fromPointId = point.point.id
+        active.endpointToChoose = 'to'
+        delete active.errors.fromPointId
+        if (active.draft.toPointId === point.point.id) {
+          active.draft.toPointId = ''
+          delete active.errors.toPointId
+        }
+      } else {
+        if (!eligiblePoints.some(reference => reference.point.id === active.draft.fromPointId)) {
+          active.draft.fromPointId = ''
+          delete active.errors.fromPointId
+        }
+      }
+      return
+    }
+
+    active.draft.destination = 'point'
+    active.draft.unresolvedExit = ''
+    delete active.errors.destination
+    delete active.errors.unresolvedExit
+    active.destinationSystemIds = eligibleSystemIds
+    if (point) {
+      active.draft.toPointId = point.point.id
+      delete active.errors.toPointId
+    } else {
+      if (!eligiblePoints.some(reference => reference.point.id === active.draft.toPointId)) {
+        active.draft.toPointId = ''
+        delete active.errors.toPointId
+      }
+    }
   }
 
   function chooseRoutePoint(id: number, pointId: string): void {
     const active = session.value
     const current = workspace.value
     if (!active || active.id !== id || !current || current.cluster.id !== active.clusterId) return
-    const offered = active.offeredPoints.some(reference => reference.point.id === pointId)
     const point = jumpPointsInCluster(current.cluster).find(reference => reference.point.id === pointId)
-    if (!offered || !point) {
+    const isFrom = active.endpointToChoose === 'from'
+    const scope = isFrom ? active.sourceSystemIds : active.destinationSystemIds
+    if (!point || !scope?.includes(point.system.id)
+      || (!isFrom && point.point.id === active.draft.fromPointId)) {
       active.error = 'Choose one of the logical Jump Points offered for that system.'
       return
     }
-    if (active.endpointToChoose === 'from') {
-      active.draft.fromPointId = pointId
-      if (active.draft.toPointId === pointId) active.draft.toPointId = ''
-      active.endpointToChoose = 'to'
-      active.errors.fromPointId = ''
-    } else {
-      active.draft.destination = 'point'
-      active.draft.toPointId = pointId
-      active.draft.unresolvedExit = ''
-      active.errors.toPointId = ''
-    }
-    active.offeredPoints = []
-    active.error = ''
-    active.errors.form = ''
+    updateRouteInput(id, isFrom ? 'fromPointId' : 'toPointId', pointId)
   }
 
   function discardRouteSession(id?: number): void {

@@ -109,24 +109,11 @@
           <USelect
             id="route-from"
             :model-value="props.session.draft.fromPointId"
-            :items="jumpPointItems"
+            :items="sourcePointItems"
             placeholder="Choose an origin Jump Point"
-            @update:model-value="update('fromPointId', $event)"
+            @update:model-value="updateFromPoint($event)"
           />
         </UFormField>
-
-        <UFormField v-if="props.session.offeredPoints.length" label="Jump Points in the chosen system">
-          <USelect
-            id="route-map-point"
-            :model-value="''"
-            :items="offeredPointItems"
-            placeholder="Choose a logical Jump Point"
-            @update:model-value="emit('choose-route-point', props.session!.id, String($event ?? ''))"
-          />
-        </UFormField>
-        <p v-if="props.session.offeredPoints.length > 1" class="inspector-intro m-0" role="status">
-          This system has multiple logical Jump Points. Choose the intended endpoint by name.
-        </p>
 
         <UFormField label="Route destination" :error="fieldError('destination')">
           <USelect
@@ -144,7 +131,7 @@
               :model-value="props.session.draft.toPointId"
               :items="destinationPointItems"
               placeholder="Choose a different Jump Point"
-              @update:model-value="update('toPointId', $event)"
+              @update:model-value="updateToPoint($event)"
             />
           </UFormField>
           <p class="inspector-intro m-0">
@@ -241,19 +228,37 @@ const emit = defineEmits<{
 
 const selectedRoute = computed(() => props.selectedRoute)
 const chartDetailsActive = computed(() => !props.selectedObject && !props.selectedOrbit && !selectedRoute.value && !props.session)
+const pickFromMap = '__route-pick-from-map__'
+const pickToMap = '__route-pick-to-map__'
 const jumpPointItems = computed(() => jumpPointsInCluster(props.workspace.cluster).map(({ point, system }) => ({
   label: `${point.name} (${system.name})`,
   value: point.id,
 })))
-const destinationPointItems = computed(() => jumpPointItems.value.filter(item => item.value !== props.session?.draft.fromPointId))
+const sourcePointItems = computed(() => {
+  const active = props.session
+  const scope = active?.sourceSystemIds
+  const points = jumpPointsInCluster(props.workspace.cluster)
+    .filter(reference => scope == null || scope.includes(reference.system.id))
+    .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id }))
+  return active?.draft.fromPointId
+    ? [{ label: 'Choose on map…', value: pickFromMap }, ...points]
+    : points
+})
+const destinationPointItems = computed(() => {
+  const active = props.session
+  const scope = active?.destinationSystemIds
+  const points = jumpPointsInCluster(props.workspace.cluster)
+    .filter(reference => (scope == null || scope.includes(reference.system.id))
+      && reference.point.id !== active?.draft.fromPointId)
+    .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id }))
+  return active?.draft.toPointId
+    ? [{ label: 'Choose on map…', value: pickToMap }, ...points]
+    : points
+})
 const destinationItems = [
   { label: 'Known Jump Point', value: 'point' },
   { label: 'Unresolved external exit', value: 'external' },
 ]
-const offeredPointItems = computed(() => props.session?.offeredPoints.map(({ point, system }) => ({
-  label: `${point.name} (${system.name})`,
-  value: point.id,
-})) ?? [])
 const destinationReference = computed(() => props.session
   ? jumpPointsInCluster(props.workspace.cluster).find(({ point }) => point.id === props.session?.draft.toPointId)
   : undefined)
@@ -319,6 +324,14 @@ function update(field: RouteDraftField, value: unknown): void {
   const session = props.session
   if (!session) return
   emit('update-route-input', session.id, field, String(value ?? ''))
+}
+
+function updateFromPoint(value: unknown): void {
+  update('fromPointId', String(value ?? '') === pickFromMap ? '' : value)
+}
+
+function updateToPoint(value: unknown): void {
+  update('toPointId', String(value ?? '') === pickToMap ? '' : value)
 }
 </script>
 

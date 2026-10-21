@@ -76,3 +76,9 @@ Targeted repeated system creation, deliberate system movement and full resumable
 Final complete validation is **135/135**, zero failures/skips/flaky cases/retries, original deadlines and one worker, on113 unchanged inputs. Typecheck/build and independent bounded technical/domain reviews pass. Final presentation checks pass24/24 with paired image inspection; desktop actions have a full-width summary above them and the compact Inspector fills the screen. The earlier133/2 full result, interrupted8-pass run, fixture corrections and all limits remain explicit in the [execution record](../research/implementation-24-2026-10-20.md) and [final QA report](../implementation-lab/ticket-24-2026-10-21/qa/README.md).
 
 Physical Android Chrome/OS-keyboard/safe-area checks remain unavailable. Owned servers are stopped. Source issue3 remains open, PR28 draft and no successor is started; final whole-interface Astra review, including Tools coherence, remains29.
+
+## Add and route-targeting follow-up — 2026-10-21
+
+The human-reported gaps after baseline `b4258cf7` are corrected: Add alone is visually/accessibly active; From/To stay scoped to map-targeted systems; a unique logical point is selected automatically; explicit endpoint resets permit retargeting. The duplicate third picker is removed, and Escape closes a select popup without also quitting Add. Global keyboard choices remain available before scoping or after explicit reset; targeting never applies data.
+
+The follow-up passes14/14 focused cases, final typecheck/build, bounded independent review and inspected desktop/mobile compiled presentation. The previous135/135 complete result belongs to its baseline; no new whole-suite result is claimed. See the [follow-up execution record](../research/implementation-24-targeting-2026-10-21.md) for failures, exact outcomes and limits. Owned runtime is stopped; issue3 remains open, PR28 draft and no successor starts.

@@ -20,6 +20,10 @@ Source [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/i
 
 ## Current frontier - 2026-10-21
 
+**18–24 are closed;25,26,28 remain open/unclaimed;27 remains blocked by26;29 remains last.** The human-reported Add/route-targeting follow-up is complete: exclusive Add presentation, scoped From/To choices, automatic unique endpoints, explicit retargeting and select-popup Escape priority. Latest validation is **14/14 focused cases**, typecheck/build, bounded independent review and desktop/mobile presentation. Baseline `b4258cf7` retains its earlier complete135/135 result; no fresh complete-suite result is claimed. See the [follow-up record](research/implementation-24-targeting-2026-10-21.md). No successor starts; issue3 remains open and PR28 draft.
+
+### Prior ticket24 completion
+
 **18–24 are closed;25,26,28 are open/unclaimed;27 remains blocked by26;29 remains blocked by25,27,28.** Ticket24 delivers targeted repeated system creation, precise system movement and complete resumable Jump Route editing with Nuxt UI, retaining the accepted B/Dock structure. Final complete validation is **135/135**, zero failures/skips/flaky cases/retries, on113 unchanged inputs. Typecheck/build, independent bounded technical/domain reviews and24/24 presentation checks pass their stated scopes. Physical Android Chrome/OS-keyboard/safe-area checks remain unavailable. See the [ticket24 execution record](research/implementation-24-2026-10-20.md) and [final QA report](implementation-lab/ticket-24-2026-10-21/qa/README.md). No successor is started; issue3 remains open, PR28 draft and the final whole-interface Astra review, including Tools coherence, stays in29.
 
 ### Prior ticket23 checkpoint

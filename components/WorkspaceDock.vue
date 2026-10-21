@@ -6,9 +6,9 @@
           v-for="mode in modes"
           :key="mode.value"
           color="neutral"
-          :variant="props.mode === mode.value ? 'solid' : 'outline'"
+          :variant="!addActive && props.mode === mode.value ? 'solid' : 'outline'"
           size="sm"
-          :aria-pressed="props.mode === mode.value"
+          :aria-pressed="!addActive && props.mode === mode.value"
           class="workspace-control"
           @click="emit('mode-change', mode.value)"
         >
@@ -32,12 +32,13 @@
         <UButton
           class="workspace-control workspace-dock-add"
           color="primary"
-          variant="outline"
+          :variant="addActive ? 'solid' : 'outline'"
           size="sm"
           aria-label="Add to map"
           aria-controls="workspace-add-menu"
           :aria-describedby="props.creationSession || props.clusterAddLabel ? 'workspace-dock-add-type' : undefined"
           :aria-expanded="addOpen"
+          :aria-pressed="addActive"
           ref="addTrigger"
         >
           <UIcon name="i-lucide-plus" aria-hidden="true" />
@@ -86,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import type { ClusterSystemPositionInput, ClusterSystemPositionInputs, MapInteractionMode, SystemCreationSession } from '../composables/editor-workflows/types'
 import type { StarSystem } from '../domain/workspace'
 import ClusterSystemPlacementControls from './ClusterSystemPlacementControls.vue'
@@ -123,6 +124,7 @@ const modes: Array<{ value: MapInteractionMode; label: string }> = [
   { value: 'select', label: 'Select' },
   { value: 'move', label: 'Move' },
 ]
+const addActive = computed(() => !!(props.creationSession || props.clusterAddLabel))
 const addOpen = defineModel<boolean>('addOpen', { default: false })
 const addTrigger = ref<ComponentPublicInstance | null>(null)
 const addMenu = ref<HTMLElement | null>(null)

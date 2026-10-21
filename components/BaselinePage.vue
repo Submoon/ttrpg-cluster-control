@@ -721,6 +721,7 @@ function handleAddEscape(event: KeyboardEvent): void {
     || (!creationSession.value && !clusterAddType.value && !hasMovePreview)
     || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+  if (document.querySelector('[role="listbox"][data-state="open"]')) return
   const target = event.target
   if (target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]')) return
   event.preventDefault()
