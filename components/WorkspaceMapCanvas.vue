@@ -18,13 +18,18 @@
       :system-positions="props.workspace.layout.systemPositions"
       :selected-system-id="props.selectedSystemId"
       :selected-route-id="props.selectedRouteId"
-      :move-enabled="props.mode === 'move'"
+      :move-enabled="props.mode === 'move' && props.clusterAddType == null"
       :system-activation="props.mode === 'select' || props.mode === 'move' ? 'select' : 'open'"
+      :cluster-add-type="props.clusterAddType ?? null"
+      :cluster-chooser-open="props.clusterChooserOpen ?? false"
+      :cluster-move-targeting="props.clusterMoveTargeting ?? false"
       touch-navigation
       :show-zoom-controls="false"
       @activate-system="handleSystemActivation"
       @select-route="handleRouteSelection"
       @move-system="forwardMoveSystem"
+      @cluster-target="forwardClusterTarget"
+      @cancel-cluster-preview="emit('cancel-cluster-preview')"
       @viewport-change="emitViewport"
     />
     <SystemMap
@@ -103,6 +108,9 @@ const props = defineProps<{
   creationType?: SystemCreationType | null
   creationPreview?: SystemCreationPreview | null
   creationChooserOpen?: boolean
+  clusterAddType?: 'system' | 'route' | null
+  clusterChooserOpen?: boolean
+  clusterMoveTargeting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -118,6 +126,8 @@ const emit = defineEmits<{
   'object-move-blocked': [id: string]
   'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
+  'cluster-target': [point: Point, systemIds: string[]]
+  'cancel-cluster-preview': []
   'move-object': [id: string, position: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
@@ -146,6 +156,7 @@ let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
 let touchStart: { x: number; y: number; target: EventTarget | null } | null = null
+let touchPanStarted = false
 
 function holdClickSuppression(): void {
   suppressNextClick = true
@@ -178,20 +189,34 @@ function clearPointerLongPress(): void {
 
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
-function cancelCanvasGesture(suppressRelease = false): void {
+function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
+  if (cancelClusterPreview && props.activeView === 'cluster') emit('cancel-cluster-preview')
   clearLongPress()
   clearPointerLongPress()
   touchStart = null
+  touchPanStarted = false
   activePointerPan = null
   if (props.activeView === 'system') systemMapRef.value?.cancelCreationPreview()
   currentMap()?.cancelActiveGesture()
   if (suppressRelease) holdClickSuppression()
 }
 
-function onWindowBlur(): void { cancelCanvasGesture(true) }
+function cancelForFocusInterruption(): void {
+  // This parent-owned preview exists even when the map renderer has no active gesture to cancel.
+  if (props.activeView === 'cluster') emit('cancel-cluster-preview')
+  cancelCanvasGesture(true, false)
+}
+
+function onWindowBlur(): void { cancelForFocusInterruption() }
 
 function onDocumentVisibilityChange(): void {
-  if (document.visibilityState === 'hidden') cancelCanvasGesture(true)
+  if (document.visibilityState === 'hidden') cancelForFocusInterruption()
+}
+
+function onDocumentFreeze(): void { cancelForFocusInterruption() }
+
+function hasClusterAddIntent(): boolean {
+  return props.activeView === 'cluster' && props.clusterAddType != null
 }
 
 function isMapEntityTarget(target: EventTarget | null): boolean {
@@ -225,13 +250,17 @@ function onPointerDownCapture(event: PointerEvent): void {
   // from the prior gesture has already had its chance to arrive.
   if (!activePointerPan) clearStaleGestureSuppression()
   if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
-  if ((props.mode === 'navigate' || props.mode === 'move') && event.button === 0 && isMapEntityTarget(event.target)) {
+  if (!hasClusterAddIntent()
+    && (props.mode === 'navigate' || props.mode === 'move')
+    && event.button === 0
+    && isMapEntityTarget(event.target)) {
     clearPointerLongPress()
     const pointerId = event.pointerId
     const target = event.target
     const timer = setTimeout(() => {
       if (pointerLongPress?.id !== pointerId) return
       pointerLongPress = null
+      if (props.activeView === 'cluster') emit('cancel-cluster-preview')
       cancelMapGesture()
       holdClickSuppression()
       inspectLongPress(target)
@@ -245,6 +274,7 @@ function onPointerDownCapture(event: PointerEvent): void {
 
   currentMap()?.startViewPan(event)
   activePointerPan = { id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, moved: false }
+  if (isRightPan) holdClickSuppression()
   // Prevent D3's map gesture from competing with this view-only pan. Click activation still runs on release.
   event.stopImmediatePropagation()
 }
@@ -274,7 +304,9 @@ function onWindowPointerMove(event: PointerEvent): void {
   const dx = event.clientX - pan.x
   const dy = event.clientY - pan.y
   if (!pan.moved && Math.hypot(dx, dy) < 4) return
+  const firstPanMove = !pan.moved
   pan.moved = true
+  if (firstPanMove && props.activeView === 'cluster') emit('cancel-cluster-preview')
   if (pan.button === 2) {
     event.preventDefault()
     holdContextMenuSuppression()
@@ -316,6 +348,7 @@ function onTouchStartCapture(event: TouchEvent): void {
   if (event.touches.length !== 1) {
     clearLongPress()
     touchStart = null
+    touchPanStarted = false
     if (event.touches.length > 1) {
       cancelCanvasGesture()
       holdClickSuppression()
@@ -324,11 +357,13 @@ function onTouchStartCapture(event: TouchEvent): void {
   }
   const touch = event.touches[0]!
   touchStart = { x: touch.clientX, y: touch.clientY, target: event.target }
+  touchPanStarted = false
   clearLongPress()
-  if (props.mode !== 'navigate' && props.mode !== 'move') return
+  if (hasClusterAddIntent() || (props.mode !== 'navigate' && props.mode !== 'move')) return
   longPressTimer = setTimeout(() => {
     if (!touchStart) return
     const target = touchStart.target
+    if (props.activeView === 'cluster') emit('cancel-cluster-preview')
     cancelMapGesture()
     holdClickSuppression()
     inspectLongPress(target)
@@ -343,8 +378,12 @@ function onTouchMoveCapture(event: TouchEvent): void {
     holdClickSuppression()
   } else {
     const touch = event.touches[0]
-    if (touchStart && touch && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > 9) {
+    if (touchStart && touch && !touchPanStarted
+      && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > 9) {
+      touchPanStarted = true
       clearLongPress()
+      if (props.activeView === 'cluster') emit('cancel-cluster-preview')
+      holdClickSuppression()
     }
   }
   currentMap()?.moveTouchNavigation(event)
@@ -353,6 +392,7 @@ function onTouchMoveCapture(event: TouchEvent): void {
 function onTouchEndCapture(event: TouchEvent): void {
   clearLongPress()
   touchStart = null
+  touchPanStarted = false
   if (event.type === 'touchcancel') {
     cancelCanvasGesture(true)
     return
@@ -361,12 +401,14 @@ function onTouchEndCapture(event: TouchEvent): void {
 }
 
 function handleSystemActivation(systemId: string): void {
+  if (hasClusterAddIntent()) return
   if (props.mode === 'navigate') emit('navigate-system', systemId)
   else if (props.mode === 'select') emit('select-cluster-system', systemId)
   else if (props.mode === 'move') emit('move-select-cluster-system', systemId)
 }
 
 function handleRouteSelection(routeId: string): void {
+  if (hasClusterAddIntent()) return
   if (props.mode === 'select') emit('select-route', routeId)
   else if (props.mode === 'move') emit('move-select-route', routeId)
 }
@@ -382,6 +424,12 @@ function handleOrbitSelection(orbitId: string): void {
 }
 
 function forwardMoveSystem(id: string, position: Point): void { if (props.mode === 'move') emit('move-system', id, position) }
+function forwardClusterTarget(point: Point, systemIds: string[]): void {
+  if (props.activeView !== 'cluster'
+    || (!hasClusterAddIntent() && !props.clusterMoveTargeting)
+    || props.clusterChooserOpen) return
+  emit('cluster-target', point, systemIds)
+}
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
 function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
 function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null): void {
@@ -473,6 +521,7 @@ onMounted(async () => {
   window.addEventListener('pointercancel', onWindowPointerUp, true)
   window.addEventListener('blur', onWindowBlur)
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+  document.addEventListener('freeze', onDocumentFreeze)
   await nextTick()
   const map = currentMap()
   if (!map) return
@@ -496,6 +545,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointercancel', onWindowPointerUp, true)
   window.removeEventListener('blur', onWindowBlur)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+  document.removeEventListener('freeze', onDocumentFreeze)
 })
 
 watch(() => props.mode, () => cancelCanvasGesture(true), { flush: 'sync' })
@@ -512,6 +562,9 @@ defineExpose({
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),
   endViewPan: () => currentMap()?.endViewPan(),
+  setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
+    if (props.activeView === 'cluster') clusterMapRef.value?.setClusterSystemPositionPreview(systemId, position)
+  },
   startTouchNavigation: (event: TouchEvent) => currentMap()?.startTouchNavigation(event),
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),
   endTouchNavigation: (event: TouchEvent) => currentMap()?.endTouchNavigation(event),

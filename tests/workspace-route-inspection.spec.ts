@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test'
 import {
   addCatalogueObject,
+  addClusterSystem,
   captureMapExportBlobs,
   clickDockAction,
   downloadJson,
   editMapObject,
+  selectInspectorOption,
   returnToClusterMap,
   saveMapObject,
   setWorkspaceMapMode,
@@ -23,8 +25,7 @@ test('Add Jump Route opens a route draft while a cluster system is inspected', a
   await saveMapObject(page)
   await returnToClusterMap(page)
 
-  await clickDockAction(page, 'Add star system')
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page, { open: true })
   await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Object palette' })).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
@@ -45,14 +46,14 @@ test('Add Jump Route opens a route draft while a cluster system is inspected', a
   const fromPoint = page.getByLabel('From Jump Point')
   await expect(jumpLevel).toBeVisible()
   await expect(fromPoint).toBeVisible()
-  await fromPoint.selectOption({ label: 'Arrival (New System 2)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Departure (Vesper)' })
+  await selectInspectorOption(fromPoint, 'Arrival (New System 2)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Departure (Vesper)')
   await jumpLevel.fill('7')
   await expect(inspector.getByRole('heading', { name: 'Connect Jump Points' })).toBeVisible()
   await expect(inspector.getByText('Destination system: Vesper')).toBeVisible()
 
-  await inspector.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Discard route draft', exact: true }).click()
   await expect(jumpLevel).toHaveCount(0)
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')

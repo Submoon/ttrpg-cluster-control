@@ -7,9 +7,12 @@
       </div>
       <UButton color="primary" variant="soft" @click="resumeEntitySession">Resume Inspector draft</UButton>
     </div>
-    <div v-if="props.mode === 'cluster'" class="map-inspector-route-content">
+    <div
+      v-if="props.mode === 'cluster'"
+      class="map-inspector-route-content"
+      :class="{ 'map-inspector-route-content--session': props.routeSession !== null }"
+    >
       <JumpRouteInspector
-        ref="routeInspectorRef"
         :workspace="props.workspace"
         :selected-system="props.selectedSystem"
         :selected-object="props.selectedObject"
@@ -20,13 +23,15 @@
         :has-chart-name-draft="props.hasChartNameDraft"
         :saving="props.saving"
         :editor-error="props.editorError"
+        :session="props.routeSession"
         @edit-chart-names="emit('edit-chart-names', $event)"
         @show-chart-details="emit('show-chart-details')"
         @request-route-edit="emit('request-route-edit', $event)"
-        @save-route="emit('save-route', $event)"
-        @cancel-route="emit('cancel-route', $event)"
+        @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
+        @choose-route-point="(sessionId, pointId) => emit('choose-route-point', sessionId, pointId)"
+        @apply-route-session="emit('apply-route-session', $event)"
+        @discard-route-session="emit('discard-route-session', $event)"
         @delete-route="emit('delete-route')"
-        @clear-route-selection="emit('clear-route-selection')"
         @clear-error="emit('clear-error')"
       />
     </div>
@@ -107,6 +112,7 @@
 import { computed, shallowRef } from 'vue'
 import type { EntityInspectorSession } from '../composables/editor-workflows/types'
 import type { SaveState } from '../composables/editor-workflows/types'
+import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type {
   JumpRoute,
   LocalWorkspace,
@@ -115,8 +121,6 @@ import type {
   SystemObject,
 } from '../domain/workspace'
 import type {
-  JumpRouteInspectorHandle,
-  JumpRouteSaveRequest,
   OrbitInspectorHandle,
 } from './inspector/contracts'
 import ChartDetailsPanel from './inspector/ChartDetailsPanel.vue'
@@ -132,6 +136,7 @@ const props = defineProps<{
   selectedObject?: SystemObject
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
+  routeSession: RouteInspectorSession | null
   selectedRouteSummary: string
   hasChartNameDraft: boolean
   hasUncommittedNames: boolean
@@ -159,10 +164,11 @@ const emit = defineEmits<{
   'detach-orbit': []
   'delete-orbit': []
   'request-route-edit': [routeId: string]
-  'save-route': [request: JumpRouteSaveRequest]
-  'cancel-route': [routeId: string | null]
+  'update-route-input': [sessionId: number, field: RouteDraftField, value: string]
+  'choose-route-point': [sessionId: number, pointId: string]
+  'apply-route-session': [sessionId: number]
+  'discard-route-session': [sessionId: number]
   'delete-route': []
-  'clear-route-selection': []
   'clear-error': []
   'resume-chart-draft': []
   'retry-save': []
@@ -170,7 +176,6 @@ const emit = defineEmits<{
 }>()
 
 const orbitInspectorRef = shallowRef<OrbitInspectorHandle | null>(null)
-const routeInspectorRef = shallowRef<JumpRouteInspectorHandle | null>(null)
 const objectSession = computed(() => props.entitySession?.kind === 'object' ? props.entitySession : null)
 const orbitSession = computed(() => props.entitySession?.kind === 'orbit' ? props.entitySession : null)
 const hasResumableEntitySession = computed(() => {
@@ -187,7 +192,6 @@ const hasResumableEntitySession = computed(() => {
 /** Discards every child inspector draft and clears the parent-visible editor error. */
 function cancelEdits(): void {
   orbitInspectorRef.value?.cancelEdits(false)
-  routeInspectorRef.value?.cancelEdits(false)
   emit('clear-error')
 }
 
@@ -197,18 +201,14 @@ function resumeEntitySession(): void {
 }
 
 defineExpose({
-  hasUnsavedEdits: () =>
-    routeInspectorRef.value?.hasUnsavedEdits() ?? false,
+  hasUnsavedEdits: () => false,
   isEditingObject: (objectId: string) =>
     props.isEntityDraftTarget('object', objectId),
   cancelEdits,
-  beginRoute: () => routeInspectorRef.value?.beginRoute(),
   startObjectEdit: () => emit('request-object-edit'),
   startOrbitEdit: () => emit('request-orbit-edit'),
-  startRouteEdit: () => routeInspectorRef.value?.startRouteEdit(),
   objectSaveSucceeded: () => undefined,
   orbitSaveSucceeded: () => undefined,
-  routeSaveSucceeded: () => routeInspectorRef.value?.routeSaveSucceeded(),
 })
 </script>
 
@@ -227,6 +227,7 @@ defineExpose({
 .map-inspector-resume-draft { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: .6rem; border-bottom: 1px solid var(--line-soft); padding: .55rem .7rem; font-size: .72rem; }
 .map-inspector-resume-draft .section-kicker { margin-bottom: .15rem; }
 .map-inspector-route-content { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+.map-inspector-route-content--session { overflow: hidden; }
 .map-inspector-system-content { display: grid; flex: 1 1 auto; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .map-inspector-entity-content,
 .map-inspector-details-content { min-height: 0; overflow: hidden; }

@@ -1,6 +1,6 @@
 ---
 title: 'Construct and arrange a Jump Cluster with complete Jump Routes'
-status: open
+status: closed
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,13 +23,13 @@ Add systems without leaving the cluster, deliberately move them and create/edit 
 
 ## Acceptance criteria
 
-1. [ ] Repeat Add System at intended destinations without auto-entry/Inspect or draft loss, reusing chooser/status/Quit/explicit alternatives.
-2. [ ] Move systems by once-only valid release or preview/Confirm/Cancel/coordinates.
-3. [ ] In the **cluster wrapper**, verify Navigate/Select pan, two-contact/right-pan in every mode, interruption/tool changes/long-press Inspect: cancel preview before takeover and suppress late release/click/system entry; preserve native stationary right-click outside recognized pan.
-4. [ ] Add Route keeps origin/stage during pan/zoom without partial data and resets both endpoints after completion.
-5. [ ] Full route Inspector retains From Jump Point, known/unresolved To Jump Point/external label, levels 1–9/higher positive integers and resumable endpoint ownership/guards.
-6. [ ] Resolve ambiguity/refusal, clear stale origins and retain applied results under save failure without replay.
-7. [ ] Label preview links as fresh previews rather than unsaved-workspace sharing.
+1. [x] Repeat Add System at intended destinations without auto-entry/Inspect or draft loss, reusing chooser/status/Quit/explicit alternatives.
+2. [x] Move systems by once-only valid release or preview/Confirm/Cancel/coordinates.
+3. [x] In the **cluster wrapper**, verify Navigate/Select pan, two-contact/right-pan in every mode, interruption/tool changes/long-press Inspect: cancel preview before takeover and suppress late release/click/system entry; preserve native stationary right-click outside recognized pan.
+4. [x] Add Route keeps origin/stage during pan/zoom without partial data and resets both endpoints after completion.
+5. [x] Full route Inspector retains From Jump Point, known/unresolved To Jump Point/external label, levels 1–9/higher positive integers and resumable endpoint ownership/guards.
+6. [x] Resolve ambiguity/refusal, clear stale origins and retain applied results under save failure without replay.
+7. [x] Label preview links as fresh previews rather than unsaved-workspace sharing.
 
 ## Scope and exclusions
 
@@ -67,4 +67,12 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Claimed on 2026-10-20 from `446d7eca6568441086fc60c35e95fcdce9808145`, equal to the freshly fetched feature remote. Main remains `629d2a98715c3a16b954e0f77c639b1f0c31212c` (0 main-only/47 feature-only); tracked tree is clean and source issue3 is open/unchanged. See the [execution record](../research/implementation-24-2026-10-20.md). SOL6.1 High defines/reviews contracts; Luna XHIGH implements. Keep focused iteration/reviews economical, then one complete final suite with one worker. Preserve others' work. No successor, issue closure or merge is authorized.
+
+## Resolution — 2026-10-21
+
+Targeted repeated system creation, deliberate system movement and full resumable Jump Route editing are implemented in the persisted editor with Nuxt UI and the accepted B/Dock structure. Creation resets both endpoints after memory application; failed saving retains applied data and Retry does not replay creation. Parent sessions retain stage, values and errors through hide/reflow/view navigation while exact transition/dependency guards preserve unrelated work. Quit explicitly abandons route creation; edit drafts retain their own lifecycle.
+
+Final complete validation is **135/135**, zero failures/skips/flaky cases/retries, original deadlines and one worker, on113 unchanged inputs. Typecheck/build and independent bounded technical/domain reviews pass. Final presentation checks pass24/24 with paired image inspection; desktop actions have a full-width summary above them and the compact Inspector fills the screen. The earlier133/2 full result, interrupted8-pass run, fixture corrections and all limits remain explicit in the [execution record](../research/implementation-24-2026-10-20.md) and [final QA report](../implementation-lab/ticket-24-2026-10-21/qa/README.md).
+
+Physical Android Chrome/OS-keyboard/safe-area checks remain unavailable. Owned servers are stopped. Source issue3 remains open, PR28 draft and no successor is started; final whole-interface Astra review, including Tools coherence, remains29.

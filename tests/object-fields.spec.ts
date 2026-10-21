@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption } from './helpers'
+import { activeWorkspaceFeedback, addClusterSystem, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -225,11 +225,16 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await clickDockAction(page, 'Add Jump Route')
   await expect(page.getByRole('button', { name: 'Chart details' })).toHaveCount(0)
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
+  await page.getByLabel('Unknown destination label').fill('Beyond the Reach')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const route = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Exit/ })
   await expect(route).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
+  await setWorkspaceMapMode(page, 'Select')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
-  await route.click()
+  await route.locator('.cluster-route-label').click()
   await expect(routeInspector.getByText('JUMP ROUTE / SELECTED')).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await chartDetails.press('Enter')
@@ -301,7 +306,7 @@ test('the Warden can configure native and reusable custom object fields', async 
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'planet')
   await expect(page.getByLabel('Campaign notes')).toBeVisible()

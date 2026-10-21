@@ -6,7 +6,7 @@
         <div class="context-breadcrumb"><span>CHART ROOM</span><b>／</b><strong>{{ contextName }}</strong></div>
         <div class="topbar-actions">
           <UButton size="sm" color="neutral" variant="outline" @click="toggleTheme">{{ theme === 'dark' ? 'Daylight' : 'Lamplight' }}</UButton>
-          <UButton size="sm" color="neutral" variant="ghost" @click="copyShareLink">Share view</UButton>
+          <UButton size="sm" color="neutral" variant="ghost" @click="copyShareLink">Copy fresh preview link</UButton>
         </div>
       </header>
 
@@ -104,12 +104,14 @@
                 <button class="panel-command" :class="{ 'is-active': inspectorOpen }" :aria-label="inspectorOpen ? 'Hide Inspect panel' : 'Open Inspect panel'" :aria-expanded="inspectorOpen" aria-controls="b-inspector-panel" @click="toggleInspector">Inspect</button>
               </div>
               <div v-if="controlLayout === 'groups'" class="b-file-actions" role="group" aria-label="Map file actions">
-                <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
+                <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Copy fresh preview link</button>
+                <small class="b-preview-link-help">Opens a fresh sample preview; unsaved workspace changes stay here.</small>
               </div>
               <details v-else class="b-files-menu">
                 <summary aria-label="Open map file commands">Map files</summary>
                 <div class="b-files-menu-items" role="group" aria-label="Map file commands">
-                  <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Share preview link</button>
+                  <button @click="chooseImport">Import map…</button><button @click="exportMap('png')">Export image · PNG</button><button @click="exportMap('svg')">Export vector · SVG</button><button @click="copyShareLink">Copy fresh preview link</button>
+                  <small class="b-preview-link-help">Opens a fresh sample preview; unsaved workspace changes stay here.</small>
                 </div>
               </details>
             </div>
@@ -185,7 +187,7 @@
       <button aria-label="Next interface" title="Next interface · →" @click="cycleVariant(1)">→</button>
       <button v-if="variant === 'B'" class="control-layout-switch" :aria-label="`Switch control presentation; current: ${controlLayoutLabel}`" :title="`Switch control presentation; current: ${controlLayoutLabel}`" @click="cycleControlLayout">Layout: {{ controlLayoutShortLabel }}</button>
       <button v-if="prototypeFieldsState.hasModifiedDraft && (!prototypeFieldsState.open || variant !== 'B')" class="fields-draft-return" @click="returnToFieldsDraft">Return to Fields draft</button>
-      <UButton class="switcher-share" size="xs" color="neutral" variant="ghost" @click="copyShareLink">Copy link</UButton>
+      <UButton class="switcher-share" size="xs" color="neutral" variant="ghost" @click="copyShareLink">Copy fresh preview link</UButton>
     </div>
 
     <UModal v-if="guardReason === 'navigation'" v-model:open="guardOpen" title="Unsaved inspector draft" description="This draft belongs to the current selection.">
@@ -1552,9 +1554,9 @@ async function copyShareLink(): Promise<void> {
   url.searchParams.set('variant', variant.value)
   try {
     await navigator.clipboard.writeText(url.toString())
-    showToast(`Shareable ${variant.value} URL copied.`)
+    showToast('Fresh sample preview link copied.')
   } catch {
-    showToast(`Share this URL: ${url.toString()}`)
+    showToast(`Copy this fresh sample preview link: ${url.toString()}`)
   }
 }
 
@@ -1880,6 +1882,7 @@ function seedWorkspace(): LocalWorkspace {
 .b-map-context { display: grid; min-width: 8rem; gap: .15rem; }
 .b-map-hud-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .3rem; }
 .b-file-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .25rem; }
+.b-preview-link-help { flex: 1 0 100%; color: var(--proto-muted); font-size: .65rem; line-height: 1.3; text-align: right; }
 .b-file-actions button, .b-files-menu summary, .b-files-menu-items button { min-height: 2.25rem; padding: .35rem .52rem; border: 1px solid var(--proto-line); background: var(--proto-raised); color: var(--proto-ink); font-family: var(--proto-ui-font); font-size: .72rem; line-height: 1.2; cursor: pointer; }
 .b-file-actions button:hover, .b-files-menu summary:hover, .b-files-menu-items button:hover { border-color: var(--proto-accent); color: var(--proto-accent); }
 .b-files-menu { position: relative; }

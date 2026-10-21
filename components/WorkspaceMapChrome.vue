@@ -10,9 +10,9 @@
       <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
       <div class="workspace-map-context-line">
         <h2>{{ contextName }}</h2>
-        <template v-if="props.creationSession">
+        <template v-if="props.creationSession || props.clusterAddPresentation">
           <span class="workspace-add-status" role="status" aria-live="polite">
-            ADD {{ props.creationTypeLabel }} · {{ creationProgress }}
+            {{ props.clusterAddPresentation?.status ?? `ADD ${props.creationTypeLabel} · ${creationProgress}` }}
           </span>
           <UButton
             class="workspace-control workspace-add-quit"
@@ -25,7 +25,40 @@
             Quit Add
           </UButton>
         </template>
+        <template v-else-if="props.clusterMovePresentation">
+          <span class="workspace-add-status" role="status" aria-live="polite">
+            {{ props.clusterMovePresentation.status }}
+          </span>
+          <UButton
+            v-if="props.clusterMovePresentation.previewing"
+            class="workspace-control"
+            color="primary"
+            variant="solid"
+            size="xs"
+            aria-label="Confirm system move"
+            @click="emit('confirm-system-move')"
+          >
+            Confirm move
+          </UButton>
+          <UButton
+            v-if="props.clusterMovePresentation.previewing"
+            class="workspace-control"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            aria-label="Cancel system move"
+            @click="emit('cancel-system-move')"
+          >
+            Cancel
+          </UButton>
+        </template>
       </div>
+      <p v-if="props.clusterAddPresentation?.error" class="workspace-add-error" role="alert">
+        {{ props.clusterAddPresentation.error }}
+      </p>
+      <p v-else-if="props.clusterMovePresentation?.error" class="workspace-add-error" role="alert">
+        {{ props.clusterMovePresentation.error }}
+      </p>
     </div>
 
     <UButton
@@ -204,12 +237,15 @@ const props = withDefaults(defineProps<{
   compactModalOpen?: boolean
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
+  clusterAddPresentation?: { label: string; status: string; error?: string } | null
+  clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
 }>(), {
   hierarchyOpen: false,
   inspectorOpen: false,
   compactModalOpen: false,
   creationSession: null,
   creationTypeLabel: 'object',
+  clusterAddPresentation: null,
 })
 
 const emit = defineEmits<{
@@ -222,6 +258,8 @@ const emit = defineEmits<{
   'toggle-inspector': []
   'files-open-change': [open: boolean]
   'quit-add': []
+  'confirm-system-move': []
+  'cancel-system-move': []
 }>()
 
 const headerMapActionsOpen = ref(false)
@@ -333,6 +371,13 @@ function openJsonImportPicker(): void {
 }
 
 .workspace-add-quit { flex: 0 0 auto; }
+
+.workspace-add-error {
+  margin: 0;
+  color: var(--color-error, #e88f87);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
 
 .workspace-map-actions,
 .workspace-map-panel-actions {

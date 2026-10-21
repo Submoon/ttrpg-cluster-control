@@ -44,6 +44,8 @@ One reviewed workspace-change/files journey across existing cascade/import/codec
 
 Dependency rationale: 24 — route/endpoint owner and cluster pending targets must work; 26 — Fields owners and reviewed-plan freshness/resolution must work. Object/Orbit owners are inherited; no image/system-gesture prerequisite.
 
+Prerequisite24 is satisfied on2026-10-21. This ticket remains blocked by26 and unclaimed; the approved dependency graph is retained.
+
 ## Specification and evidence mapping
 
 primary 94–98, 100; checks 3, 9, 15, 27, 36–43, 47–49, 58, 61, 78–80, 82–93, 99, 107–110, 120. **B:** B1, B4–B9.

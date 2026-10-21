@@ -26,6 +26,8 @@ export interface TransitionOptions {
   leaveChart?: boolean
   /** Lets a read-only dialog open while an entity draft remains owned by its Inspector session. */
   leaveEntitySession?: boolean
+  /** Keeps a Jump Route draft open for a command independent of its captured route target. */
+  leaveRouteSession?: boolean
 }
 
 /** String-backed form values owned above the object Inspector's presentation lifetime. */
@@ -172,26 +174,20 @@ export interface EditorWorkflowOptions {
 
 /** Imperative bridge from workflow commands to inspector-local draft state. */
 export interface MapInspectorHandle {
-  /** Whether any child inspector currently has unsaved form edits. */
+  /** Whether a legacy presentation-local inspector form currently has unsaved edits. */
   hasUnsavedEdits(): boolean
   /** Whether the specified object editor owns an active draft. */
   isEditingObject(objectId: string): boolean
   /** Discards all active inspector drafts. */
   cancelEdits(): void
-  /** Starts a route-creation draft. */
-  beginRoute(): void
   /** Starts the currently selected object draft. */
   startObjectEdit(): void
   /** Starts the currently selected Orbit draft. */
   startOrbitEdit(): void
-  /** Starts the currently selected route draft. */
-  startRouteEdit(): void
   /** Acknowledges a successful parent commit so the object editor may reset its draft. */
   objectSaveSucceeded(): void
   /** Acknowledges a successful parent commit so the Orbit editor may reset its draft. */
   orbitSaveSucceeded(): void
-  /** Acknowledges a successful parent commit so the route editor may reset its draft. */
-  routeSaveSucceeded(): void
 }
 
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */
@@ -208,10 +204,24 @@ export interface MapNavigationHandle extends MapImageExporter {
   startTouchNavigation(event: TouchEvent): void
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
+  /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
+  setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
 }
 
 /** Session-only selection saved for one map visit. */
 export type MapInteractionMode = 'navigate' | 'select' | 'move'
+export type ClusterAddType = 'system' | 'route'
+export type ClusterSystemPositionInput = 'x' | 'y'
+export type ClusterSystemPositionInputs = Record<ClusterSystemPositionInput, string>
+export interface ClusterSystemMovePreview {
+  token: number
+  clusterId: string
+  sourceSystemId: string
+  /** Saved normalized origin position, used to reject a stale source before confirmation. */
+  originPosition: Point
+  /** Normalized destination position shared by the form, map API, and workspace layout. */
+  targetPosition: Point
+}
 export type WorkspacePanel = 'hierarchy' | 'inspector'
 export type TransitionResult = { accepted: boolean }
 

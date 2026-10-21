@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
-import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
+import { addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'
 
 async function orbitalAngle(map: import('@playwright/test').Locator): Promise<number> {
@@ -197,7 +197,7 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   const newSystemMap = page.getByRole('group', { name: 'New System 2 star system map' })
   await expect(newSystemMap).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
@@ -207,9 +207,9 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
 
   await returnToClusterMap(page)
   await clickDockAction(page, 'Add Jump Route')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Departure (Vesper)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Arrival (New System 2)' })
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Departure (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Arrival (New System 2)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
 
   const routeMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Departure.*Arrival/ })
@@ -262,7 +262,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   const newSystemMap = page.getByRole('group', { name: 'New System 2 star system map' })
   await expect(newSystemMap).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
@@ -273,28 +273,31 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
 
   await clickDockAction(page, 'Add Jump Route')
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('3')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Harrow Entry (New System 2)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   const knownRoute = clusterMap.getByRole('button', {
     name: /Jump Level 3.*Vesper Exit.*Harrow Entry.*New System 2/,
   })
   await expect(knownRoute).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
+  await setWorkspaceMapMode(page, 'Select')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
-  await knownRoute.click()
+  await knownRoute.locator('.cluster-route-label').click()
   await expect(routeInspector.getByRole('heading', { name: 'Jump Level 3', level: 2 })).toBeVisible()
   await expect(routeInspector.locator('.orbit-facts')).toContainText('New System 2')
   await routeInspector.getByRole('button', { name: 'Edit Jump Route' }).click()
   await expect(routeInspector.getByText('Destination system: New System 2')).toBeVisible()
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
-  await routeInspector.getByRole('button', { name: 'Save Jump Route' }).click()
+  await routeInspector.getByRole('button', { name: 'Apply Jump Route' }).click()
   const customLevelRoute = clusterMap.getByRole('button', {
     name: /Jump Level 12.*Vesper Exit.*Harrow Entry.*New System 2/,
   })
   await expect(customLevelRoute).toBeVisible()
 
+  await setWorkspaceMapMode(page, 'Navigate')
   const vesperSystem = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await vesperSystem.click()
@@ -309,16 +312,21 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
 
   await clickDockAction(page, 'Add Jump Route')
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('15')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Arrival (Vesper)' })
-  await page.getByLabel('Route destination').selectOption('external')
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Arrival (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('Unknown Rim')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const unknownRoute = clusterMap.getByRole('button', {
     name: /Jump Level 15.*Vesper Arrival.*unknown destination.*Unknown Rim/i,
   })
   await expect(unknownRoute).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
+  await setWorkspaceMapMode(page, 'Select')
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
+  await unknownRoute.locator('.cluster-route-label').click()
   await expect(routeInspector.getByRole('heading', { name: 'Jump Level 15', level: 2 })).toBeVisible()
   await expect(routeInspector.getByText('Unknown destination: Unknown Rim', { exact: true })).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: /Open .* system map/ })).toHaveCount(2)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 

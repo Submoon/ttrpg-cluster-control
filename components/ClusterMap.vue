@@ -16,6 +16,7 @@
       aria-description="Focus this map and use the arrow keys to pan. Focus a map item to use its keyboard controls."
       tabindex="0"
       @touchstart.capture="startTouchNavigation"
+      @keydown="activateClusterTargetFromKeyboard"
     />
   </div>
 </template>
@@ -57,13 +58,26 @@ const props = withDefaults(defineProps<{
   selectedRouteId: string | null
   moveEnabled?: boolean
   systemActivation?: 'open' | 'select' | 'inspect'
+  clusterAddType?: 'system' | 'route' | null
+  clusterChooserOpen?: boolean
+  clusterMoveTargeting?: boolean
   touchNavigation?: boolean
   showZoomControls?: boolean
-}>(), { moveEnabled: true, systemActivation: 'open', touchNavigation: false, showZoomControls: true })
+}>(), {
+  moveEnabled: true,
+  systemActivation: 'open',
+  clusterAddType: null,
+  clusterChooserOpen: false,
+  clusterMoveTargeting: false,
+  touchNavigation: false,
+  showZoomControls: true,
+})
 
 const emit = defineEmits<{
   'activate-system': [id: string]
   'open-system': [id: string]
+  'cluster-target': [point: Point, systemIds: string[]]
+  'cancel-cluster-preview': []
   'select-route': [id: string]
   'move-system': [id: string, position: Point]
   'viewport-change': [viewport: MapViewport]
@@ -81,6 +95,7 @@ let zoomExtentOverride: SvgViewportRect | undefined
 const activeSystemGestures = new Map<SVGGElement, () => void>()
 const cancelledSystemGestures = new WeakSet<SVGGElement>()
 let refreshLiveRouteGeometry: (() => void) | undefined
+let applyClusterSystemPositionPreview: ((systemId: string, position: Point | null) => void) | undefined
 
 /** Returns the current D3 transform as the map's public viewport state. */
 function getViewport(): MapViewport {
@@ -245,6 +260,41 @@ function activateSystem(systemId: string): void {
   emit('open-system', systemId)
 }
 
+/** Emits one completed Add target in normalized cluster coordinates, including every card under it. */
+function emitClusterTargetAt(scenePoint: Point): void {
+  if ((props.clusterAddType === null && !props.clusterMoveTargeting) || props.clusterChooserOpen) return
+  const point = {
+    x: Math.max(0, Math.min(1, (scenePoint.x - 112) / 736)),
+    y: Math.max(0, Math.min(1, (scenePoint.y - 96) / 368)),
+  }
+  const systemIds = props.cluster.systems
+    .filter((system) => {
+      const position = clusterSystemPosition(props.systemPositions, system.id)
+      return Math.abs(scenePoint.x - position.x) <= 78
+        && Math.abs(scenePoint.y - position.y) <= 38
+    })
+    .map(system => system.id)
+  emit('cluster-target', point, systemIds)
+}
+
+function emitClusterTargetFromPointer(event: MouseEvent): void {
+  const content = svgElement.value?.querySelector<SVGGElement>('.cluster-map-content')
+  if (!content) return
+  const [x, y] = pointer(event, content)
+  emitClusterTargetAt({ x, y })
+}
+
+function activateClusterTargetFromKeyboard(event: KeyboardEvent): void {
+  const map = svgElement.value
+  if (!map || event.target !== map
+    || (props.clusterAddType === null && !props.clusterMoveTargeting)
+    || props.clusterChooserOpen) return
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  event.stopPropagation()
+  emitClusterTargetAt({ x: 480, y: 280 })
+}
+
 /**
  * Rebuilds D3 route/system nodes while preserving the user's temporary pan and zoom transform.
  * System drag positions remain preview-only until drag end; the emitted save position is normalized and clamped.
@@ -254,6 +304,7 @@ function render(): void {
   if (!element) return
 
   refreshLiveRouteGeometry = undefined
+  applyClusterSystemPositionPreview = undefined
   cancelActiveGesture()
   const svg = select(element)
   const currentTransform = zoomTransform(element)
@@ -364,13 +415,21 @@ function render(): void {
   routeMarks
     .on('click', (event, route) => {
       event.stopPropagation()
-      if (event.defaultPrevented) return
+      if (event.defaultPrevented || event.detail === 0) return
+      if (props.clusterAddType !== null) {
+        if (!props.clusterChooserOpen) emitClusterTargetFromPointer(event)
+        return
+      }
       emit('select-route', route.id)
     })
     .on('keydown', (event, route) => {
       if (event.key === 'Enter' || event.key === ' ') {
         if (event.defaultPrevented) return
         event.preventDefault()
+        if (props.clusterAddType !== null) {
+          event.stopPropagation()
+          return
+        }
         emit('select-route', route.id)
       }
     })
@@ -421,7 +480,11 @@ function render(): void {
   systemMarks
     .on('click', (event, system) => {
       event.stopPropagation()
-      if (event.defaultPrevented) return
+      if (event.defaultPrevented || event.detail === 0) return
+      if (props.clusterAddType !== null) {
+        if (!props.clusterChooserOpen) emitClusterTargetFromPointer(event)
+        return
+      }
       if (movedSystems.has(event.currentTarget as SVGGElement)) {
         movedSystems.delete(event.currentTarget as SVGGElement)
         return
@@ -432,6 +495,12 @@ function render(): void {
       if (event.key === 'Enter' || event.key === ' ') {
         if (event.defaultPrevented) return
         event.preventDefault()
+        if (props.clusterAddType !== null) {
+          event.stopPropagation()
+          const position = clusterSystemPosition(props.systemPositions, system.id)
+          emitClusterTargetAt(position)
+          return
+        }
         activateSystem(system.id)
       }
     })
@@ -443,6 +512,7 @@ function render(): void {
     .container(() => content.node()!)
     .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
     .on('start', function (_event, system) {
+      if (liveSystemPositions.has(system.id)) emit('cancel-cluster-preview')
       movedSystems.delete(this)
       cancelledSystemGestures.delete(this)
       const committedPosition = clusterSystemPosition(props.systemPositions, system.id)
@@ -477,6 +547,23 @@ function render(): void {
       })
     })
   systemMarks.call(systemDrag)
+  applyClusterSystemPositionPreview = (systemId, position) => {
+    const mark = systemMarks.filter(system => system.id === systemId)
+    if (mark.empty()) return
+    if (position) {
+      const scenePosition = {
+        x: 112 + position.x * 736,
+        y: 96 + position.y * 368,
+      }
+      liveSystemPositions.set(systemId, scenePosition)
+      mark.classed('is-move-preview', true).attr('transform', `translate(${scenePosition.x} ${scenePosition.y})`)
+    } else {
+      liveSystemPositions.delete(systemId)
+      const committedPosition = clusterSystemPosition(props.systemPositions, systemId)
+      mark.classed('is-move-preview', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+    }
+    updateRouteGeometry()
+  }
 
   if (props.cluster.systems.length === 0) {
     items.append('text')
@@ -512,6 +599,12 @@ function render(): void {
       })
     })
   svg.call(zoomBehavior)
+  svg.on('click.cluster-target', (event: MouseEvent) => {
+    if (event.detail === 0 || event.defaultPrevented
+      || (props.clusterAddType === null && !props.clusterMoveTargeting)
+      || props.clusterChooserOpen) return
+    emitClusterTargetFromPointer(event)
+  })
   content.attr('transform', currentTransform.toString())
   zoomLevel.value = Math.round(currentTransform.k * 100)
 }
@@ -519,6 +612,7 @@ function render(): void {
 onMounted(render)
 onBeforeUnmount(() => {
   refreshLiveRouteGeometry = undefined
+  applyClusterSystemPositionPreview = undefined
   cancelActiveGesture()
 })
 watch(() => props.cluster, render, { deep: true })
@@ -527,7 +621,23 @@ watch(() => props.selectedSystemId, render)
 watch(() => props.selectedRouteId, render)
 watch(() => props.systemActivation, render)
 
-defineExpose({ exportImage, getViewport, setViewport, zoomBy, panBy, fitMap, cancelActiveGesture, startViewPan, moveViewPan, endViewPan, startTouchNavigation, moveTouchNavigation, endTouchNavigation })
+defineExpose({
+  exportImage,
+  getViewport,
+  setViewport,
+  zoomBy,
+  panBy,
+  fitMap,
+  cancelActiveGesture,
+  startViewPan,
+  moveViewPan,
+  endViewPan,
+  startTouchNavigation,
+  moveTouchNavigation,
+  endTouchNavigation,
+  setClusterSystemPositionPreview: (systemId: string, position: Point | null) =>
+    applyClusterSystemPositionPreview?.(systemId, position),
+})
 </script>
 
 <style>
@@ -627,18 +737,18 @@ defineExpose({ exportImage, getViewport, setViewport, zoomBy, panBy, fitMap, can
 .cluster-route-label-bg {
   fill: var(--map-label-bg);
   stroke: var(--map-label-border);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .cluster-route-label,
 .cluster-exit-label {
   fill: var(--map-text);
   font: 10px Consolas, monospace;
-  pointer-events: none;
 }
 
 .cluster-route-label {
   text-anchor: middle;
+  pointer-events: auto;
 }
 
 .cluster-exit-mark {
@@ -649,6 +759,7 @@ defineExpose({ exportImage, getViewport, setViewport, zoomBy, panBy, fitMap, can
 
 .cluster-exit-label {
   fill: var(--map-unresolved);
+  pointer-events: none;
 }
 
 .cluster-system-node {
@@ -671,6 +782,12 @@ defineExpose({ exportImage, getViewport, setViewport, zoomBy, panBy, fitMap, can
 .cluster-system-node.is-selected .cluster-system-card {
   stroke: var(--map-selected);
   stroke-width: 2.5;
+}
+
+.cluster-system-node.is-move-preview .cluster-system-card {
+  stroke: var(--map-selected);
+  stroke-dasharray: 5 4;
+  stroke-width: 3;
 }
 
 .cluster-system-seal {

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput } from './helpers'
+import { activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput } from './helpers'
 import {
   createJumpRoute,
   createLocalWorkspace,
@@ -429,7 +429,7 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
   await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Unapplied Reach')
 })
 
-test('Add system applies dirty chart names before building from the latest workspace', async ({ page }) => {
+test('adding a system preserves a dirty chart-name draft while committing the system', async ({ page }) => {
   await captureExportedJson(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -445,24 +445,24 @@ test('Add system applies dirty chart names before building from the latest works
   await dialog.getByLabel('Star system').fill('Vesper Prime')
   await page.keyboard.press('Escape')
 
-  await clickDockAction(page, 'Add star system')
-  await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Apply and continue' }).click()
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page)
+  await expect(dialog).toBeHidden()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-  await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await expect(clusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
 
-  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(exported.cluster?.name).toBe('Kestrel Reach Prime')
-  expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper Prime', 'New System 2'])
+  const persisted = await readCurrentWorkspace(page)
+  expect(persisted.cluster.name).toBe('Kestrel Reach')
+  expect(persisted.cluster.systems.map(system => system.name)).toEqual(['Vesper', 'New System 2'])
 
-  await page.reload()
-  await returnToClusterMap(page)
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
-    .getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(exported.cluster?.name).toBe('Kestrel Reach')
+  expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'New System 2'])
+
+  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
+  await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Kestrel Reach Prime')
+  await expect(dialog.getByLabel('Star system')).toHaveValue('Vesper Prime')
+  await page.keyboard.press('Escape')
 })
 
 test('a hidden invalid chart draft survives an unrelated object placement and stays out of export', async ({ page }) => {
@@ -786,7 +786,7 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await returnToClusterMap(page)
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page)
   await returnToClusterMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteSystemButton = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
@@ -861,7 +861,7 @@ test('system deletion resolves its chart target after review and asks again for 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await returnToClusterMap(page)
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await returnToClusterMap(page)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 

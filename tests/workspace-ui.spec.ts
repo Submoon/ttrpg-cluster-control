@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   addCatalogueObject,
+  addClusterSystem,
   catalogueSubtypes,
   clickDockAction,
   completeCatalogueObjectCreation,
@@ -247,8 +248,7 @@ test('cluster creation actions and Map files follow the active map context', asy
   await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page, { open: true })
   await returnToClusterMap(page)
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(context.getByRole('heading', { name: 'Vesper' })).toBeVisible()

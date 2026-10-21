@@ -1,7 +1,10 @@
+import { watch } from 'vue'
+
 /**
  * Composes editor state and focused commands around the page's commit boundary; it does not own persistence.
  */
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
+import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useEditorState } from './editor-workflows/useEditorState'
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
@@ -28,6 +31,19 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     applyWorkspace: options.applyWorkspace,
     isEntityCommandBlocked: editorState.isEntityCommandBlocked,
   })
+  const clusterSystemPlacement = useClusterSystemPlacement({
+    workspace: options.workspace,
+    activeView: editorState.activeView,
+    mapMode: editorState.mapMode,
+    selectedSystemId: editorState.clusterSelectedSystemId,
+    clusterMapRef: editorState.clusterMapRef,
+    applyWorkspace: options.applyWorkspace,
+  })
+  watch(editorState.routeSession, session => {
+    if (!session && clusterSystemPlacement.clusterAddType.value === 'route') {
+      clusterSystemPlacement.quitClusterAdd()
+    }
+  }, { flush: 'sync' })
   const clusterWorkflows = useClusterWorkflows({
     workspace: options.workspace,
     commit: options.commit,
@@ -44,8 +60,13 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     selectedOrbit: editorState.selectedOrbit,
     selectedRoute: editorState.selectedRoute,
     mapInspectorRef: editorState.mapInspectorRef,
+    beginRouteSession: editorState.beginRouteSession,
+    routeSession: editorState.routeSession,
+    armRouteAdd: clusterSystemPlacement.armRouteAdd,
     resolveTransition: editorState.resolveTransition,
     isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+    isEntityDraftCommandBlocked: editorState.isEntityDraftCommandBlocked,
+    isRouteCommandBlocked: editorState.isRouteCommandBlocked,
     isChartDraftTarget: editorState.isChartDraftTarget,
     contextStamp: editorState.contextStamp,
     selectCreatedSystem: editorState.selectCreatedSystem,
@@ -67,6 +88,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   })
 
   function quitAdd(): void {
+    editorState.cancelRouteCreation()
+    clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
     editorState.setMapMode('navigate')
   }
@@ -77,6 +100,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     ...clusterWorkflows,
     ...mapWorkflows,
     ...systemCreation,
+    ...clusterSystemPlacement,
     quitAdd,
   }
 }

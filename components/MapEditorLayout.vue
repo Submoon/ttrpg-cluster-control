@@ -11,6 +11,7 @@
       :class="{
         'compact-modal-open': props.compactModalOpen,
         'compact-viewport': props.isCompactViewport,
+        'compact-route-session-open': props.compactModalOpen && props.compactPanel === 'inspector' && props.routeSessionActive,
       }"
       @focusin="redirectFocusFromLayoutRoot"
     >
@@ -82,7 +83,7 @@ import { FocusScope } from 'reka-ui'
 import type { WorkspacePanel } from '../composables/editor-workflows/types'
 import WorkspaceResizablePanel from './WorkspaceResizablePanel.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   mode: 'cluster' | 'system'
   hierarchyLabel: string
   inspectorLabel: string
@@ -93,7 +94,10 @@ const props = defineProps<{
   compactPanel: WorkspacePanel | null
   overlayOpen: boolean
   isCompactViewport: boolean
-}>()
+  routeSessionActive?: boolean
+}>(), {
+  routeSessionActive: false,
+})
 
 const emit = defineEmits<{
   'close-panel': [panel: WorkspacePanel]
@@ -206,3 +210,30 @@ watch(() => props.compactPanel, async panel => {
   )?.focus()
 })
 </script>
+
+<style>
+.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel > .workspace-panel-surface {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel .workspace-compact-recovery {
+  position: relative;
+  inset-inline: auto;
+  bottom: auto;
+  z-index: auto;
+  flex: 0 0 auto;
+  max-height: min(34dvh, 12rem);
+  box-shadow: none;
+}
+
+.map-editor-layout.compact-modal-open.compact-route-session-open .workspace-side-panel-content-inspector {
+  padding-bottom: 0;
+}
+</style>

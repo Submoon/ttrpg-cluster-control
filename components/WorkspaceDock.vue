@@ -36,18 +36,18 @@
           size="sm"
           aria-label="Add to map"
           aria-controls="workspace-add-menu"
-          :aria-describedby="props.creationSession ? 'workspace-dock-add-type' : undefined"
+          :aria-describedby="props.creationSession || props.clusterAddLabel ? 'workspace-dock-add-type' : undefined"
           :aria-expanded="addOpen"
           ref="addTrigger"
         >
           <UIcon name="i-lucide-plus" aria-hidden="true" />
           <span>Add</span>
-          <span v-if="props.creationSession" class="workspace-dock-add-separator" aria-hidden="true">·</span>
+          <span v-if="props.creationSession || props.clusterAddLabel" class="workspace-dock-add-separator" aria-hidden="true">·</span>
           <span
-            v-if="props.creationSession"
+            v-if="props.creationSession || props.clusterAddLabel"
             id="workspace-dock-add-type"
             class="workspace-dock-add-type"
-          >{{ props.creationTypeLabel }}</span>
+          >{{ props.clusterAddLabel ?? props.creationTypeLabel }}</span>
         </UButton>
         <template #content>
           <div
@@ -72,14 +72,24 @@
         @add-from-inputs="emit('add-from-inputs')"
         @choose-candidate="emit('choose-creation-candidate', $event)"
       />
+      <ClusterSystemPlacementControls
+        v-if="props.clusterAddLabel === 'System' || props.clusterMoveTargeting"
+        :purpose="props.clusterAddLabel === 'System' ? 'add' : 'move'"
+        :inputs="props.clusterSystemPositionInputs"
+        :input-errors="props.clusterSystemPositionInputErrors"
+        @update-input="(key, value) => emit('update-cluster-system-input', key, value)"
+        @add-from-inputs="emit('add-cluster-system-from-inputs')"
+        @preview-move-from-inputs="emit('preview-cluster-system-move-from-inputs')"
+      />
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
-import type { MapInteractionMode, SystemCreationSession } from '../composables/editor-workflows/types'
+import type { ClusterSystemPositionInput, ClusterSystemPositionInputs, MapInteractionMode, SystemCreationSession } from '../composables/editor-workflows/types'
 import type { StarSystem } from '../domain/workspace'
+import ClusterSystemPlacementControls from './ClusterSystemPlacementControls.vue'
 import SystemCreationControls from './SystemCreationControls.vue'
 
 const props = withDefaults(defineProps<{
@@ -87,6 +97,10 @@ const props = withDefaults(defineProps<{
   closeSignal?: string
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
+  clusterAddLabel?: string | null
+  clusterMoveTargeting?: boolean
+  clusterSystemPositionInputs?: ClusterSystemPositionInputs
+  clusterSystemPositionInputErrors?: Record<ClusterSystemPositionInput, string>
   selectedSystem?: StarSystem
 }>(), {
   closeSignal: '',
@@ -99,6 +113,9 @@ const emit = defineEmits<{
   'update-creation-input': [key: keyof SystemCreationSession['inputs'], value: string]
   'add-from-inputs': []
   'choose-creation-candidate': [key: string]
+  'update-cluster-system-input': [key: ClusterSystemPositionInput, value: string]
+  'add-cluster-system-from-inputs': []
+  'preview-cluster-system-move-from-inputs': []
 }>()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [

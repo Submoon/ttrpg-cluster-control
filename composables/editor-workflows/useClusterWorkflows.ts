@@ -4,9 +4,7 @@
 import { onMounted, onUnmounted, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   addStarSystem,
-  createJumpRoute,
   planMapEntityDeletion,
-  updateJumpRoute,
   type JumpRoute,
   type LocalWorkspace,
   type MapDeletionTarget,
@@ -18,9 +16,9 @@ import type {
   MapInspectorHandle,
   EntityCommand,
   SaveState,
-  JumpRouteSaveRequest,
   TransitionOptions,
 } from './types'
+import type { RouteInspectorSession } from './useRouteInspectorSession'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
@@ -38,8 +36,13 @@ interface ClusterWorkflowOptions {
   selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
   selectedRoute: Readonly<ComputedRef<JumpRoute | undefined>>
   mapInspectorRef: ShallowRef<MapInspectorHandle | null>
+  beginRouteSession: (routeId?: string | null) => number | null
+  routeSession: Readonly<Ref<RouteInspectorSession | null>>
+  armRouteAdd: () => void
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  isEntityDraftCommandBlocked: (command: EntityCommand) => boolean
+  isRouteCommandBlocked: (command: EntityCommand) => boolean
   isChartDraftTarget: (systemId: string) => boolean
   contextStamp: () => string
   selectCreatedSystem: (systemId: string, originStamp: string) => Promise<void>
@@ -67,8 +70,13 @@ export function useClusterWorkflows({
   selectedOrbit,
   selectedRoute,
   mapInspectorRef,
+  beginRouteSession,
+  routeSession,
+  armRouteAdd,
   resolveTransition,
   isEntityCommandBlocked,
+  isEntityDraftCommandBlocked,
+  isRouteCommandBlocked,
   isChartDraftTarget,
   contextStamp,
   selectCreatedSystem,
@@ -106,10 +114,22 @@ export function useClusterWorkflows({
 
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
   async function beginRoute(): Promise<void> {
+    const currentWorkspace = workspace.value
+    const existing = routeSession.value
+    if (currentWorkspace && activeView.value === 'cluster'
+      && existing?.routeId === null && existing.clusterId === currentWorkspace.cluster.id) {
+      selectedRouteId.value = null
+      armRouteAdd()
+      editorError.value = ''
+      return
+    }
     if (!await resolveTransition({ leaveChart: false })) return
-    if (!workspace.value || activeView.value !== 'cluster') return
+    const latestWorkspace = workspace.value
+    if (!latestWorkspace || activeView.value !== 'cluster') return
     selectedRouteId.value = null
-    mapInspectorRef.value?.beginRoute()
+    const sessionId = beginRouteSession(null)
+    if (sessionId === null) return
+    armRouteAdd()
     editorError.value = ''
   }
 
@@ -121,60 +141,8 @@ export function useClusterWorkflows({
     if (selectedRoute.value?.id !== routeId) return
     if (!await resolveTransition({ leaveChart: false })) return
     if (selectedRoute.value?.id !== routeId) return
-    mapInspectorRef.value?.startRouteEdit()
+    if (beginRouteSession(routeId) === null) return
     editorError.value = ''
-  }
-
-  /** Restores the route selection saved before its editor temporarily cleared it. */
-  function restoreRouteSelection(routeId: string | null): void {
-    selectedRouteId.value = routeId
-  }
-
-  /**
-   * Validates a route draft with the domain, commits it, then acknowledges the child draft.
-   * @param request Route identity and submitted endpoints/level; null routeId creates a route.
-   * @returns A promise that resolves after the attempt; failures remain visible in editorError.
-   */
-  async function submitRoute(request: JumpRouteSaveRequest): Promise<void> {
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace) return
-    const originStamp = contextStamp()
-
-    try {
-      const route = request.routeId
-        ? updateJumpRoute(
-            currentWorkspace.cluster,
-            request.routeId,
-            request.jumpLevel,
-            request.fromPointId,
-            request.toPointId,
-            request.unresolvedExit,
-          )
-        : createJumpRoute(
-            currentWorkspace.cluster,
-            request.jumpLevel,
-            request.fromPointId,
-            request.toPointId,
-            request.unresolvedExit,
-          )
-      const routes = currentWorkspace.cluster.routes.some(existing => existing.id === route.id)
-        ? currentWorkspace.cluster.routes.map(existing => existing.id === route.id ? route : existing)
-        : [...currentWorkspace.cluster.routes, route]
-      await commit({
-        ...currentWorkspace,
-        cluster: {
-          ...currentWorkspace.cluster,
-          routes,
-        },
-      })
-      if (contextStamp() === originStamp) {
-        selectedRouteId.value = route.id
-        mapInspectorRef.value?.routeSaveSucceeded()
-      }
-      editorError.value = ''
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
   }
 
   /**
@@ -223,14 +191,13 @@ export function useClusterWorkflows({
 
   /** Reviews a system cascade before resolving any draft that targets the system being removed. */
   async function deleteSystem(systemId: string): Promise<void> {
+    const command: EntityCommand = { kind: 'deletion', target: { kind: 'system', systemId } }
     await deleteMapEntity(
       { kind: 'system', systemId },
       () => resolveTransition({
         leaveChart: isChartDraftTarget(systemId),
-        leaveEntitySession: isEntityCommandBlocked({
-          kind: 'deletion',
-          target: { kind: 'system', systemId },
-        }),
+        leaveEntitySession: isEntityDraftCommandBlocked(command),
+        leaveRouteSession: isRouteCommandBlocked(command),
       }),
     )
   }
@@ -304,8 +271,6 @@ export function useClusterWorkflows({
     createSystem,
     beginRoute,
     beginRouteEdit,
-    restoreRouteSelection,
-    submitRoute,
     deleteSystem,
     deleteSelectedObject,
     deleteSelectedOrbit,

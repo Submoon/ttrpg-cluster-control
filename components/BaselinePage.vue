@@ -9,7 +9,7 @@
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
-      :has-modified-entity-session="hasModifiedEntitySession"
+      :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
       v-model:cluster-name="clusterName"
       v-model:system-name="systemName"
       :form-error="formError"
@@ -45,6 +45,7 @@
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
           :entity-inspector-active="activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
+          :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
           :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
@@ -53,6 +54,15 @@
         >
           <template #compact-recovery>
             <section class="workspace-compact-recovery-content" aria-label="Workspace save and recovery">
+              <div
+                v-if="routeSession && activeView === 'cluster' && compactPanel === 'hierarchy'"
+                class="route-draft-resume flex min-w-0 items-center justify-between gap-2 border-b border-[var(--line-soft)] px-3 py-2 text-xs"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="min-w-0">Jump Route draft is still available.</span>
+                <UButton color="primary" variant="soft" size="xs" @click="requestPanel('inspector')">Resume Jump Route</UButton>
+              </div>
               <WorkspaceFeedback
                 :active="true"
                 :has-chart-name-draft="hasChartNameDraft"
@@ -121,6 +131,8 @@
               :compact-modal-open="compactPanelOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
+              :cluster-add-presentation="clusterAddPresentation"
+              :cluster-move-presentation="clusterMovePresentation"
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
@@ -130,6 +142,8 @@
               @toggle-inspector="togglePanel('inspector')"
               @files-open-change="headerFilesOpen = $event"
               @quit-add="quitSystemAdd"
+              @confirm-system-move="confirmSystemMove"
+              @cancel-system-move="cancelSystemMovePreview"
             />
           </template>
 
@@ -140,15 +154,22 @@
               v-model:add-open="creationChooserOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
+              :cluster-add-label="clusterAddPresentation?.label ?? null"
+              :cluster-system-position-inputs="clusterSystemPositionInputs"
+              :cluster-system-position-input-errors="clusterSystemPositionInputErrors"
+              :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
               :selected-system="selectedSystem"
               @mode-change="changeMapMode"
               @update-creation-input="updateCreationInput"
               @add-from-inputs="addCreationFromInputs"
               @choose-creation-candidate="chooseCreationCandidate"
+              @update-cluster-system-input="updateClusterSystemPositionInput"
+              @add-cluster-system-from-inputs="addSystemFromInputs"
+              @preview-cluster-system-move-from-inputs="previewSystemMoveFromInputs"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
-                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="createSystem(); close()">
+                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAdd(); close()">
                     Add star system
                   </button>
                   <button class="workspace-control tool-button" type="button" aria-label="Add Jump Route" @click="beginRoute(); close()">
@@ -226,6 +247,9 @@
                     :creation-type="null"
                     :creation-preview="null"
                     :creation-chooser-open="creationChooserOpen"
+                    :cluster-add-type="clusterAddType"
+                    :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
+                    :cluster-chooser-open="creationChooserOpen"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -236,7 +260,9 @@
                     @move-select-object="selectObject($event, false)"
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
-                    @move-system="moveSystem"
+                    @move-system="handleClusterSystemMove"
+                    @cluster-target="handleClusterTarget"
+                    @cancel-cluster-preview="cancelSystemMovePreview"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
                     @rotate-object="rotateMapObject"
@@ -295,8 +321,8 @@
                 </ClientOnly>
               </div>
               <p v-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-                <span>KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS</span>
-                <span>Select a system to open it, or a route to inspect its endpoints.</span>
+                <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE LOGICAL ENDPOINTS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
+                <span>{{ clusterAddType === 'system' ? 'Choose clear cluster space, or use Placement to enter coordinates.' : clusterAddType === 'route' ? 'Choose a system, then a logical Jump Point for each endpoint.' : clusterMoveTargeting ? 'Choose a clear map point or use Placement to preview coordinates.' : 'Select a system to open it, or a route to inspect its endpoints.' }}</span>
               </p>
               <p v-else class="map-note mb-[1em] px-[0.2rem] pt-[0.55rem] pb-[0.1rem]">
                 Select a mark or Orbit to inspect it.
@@ -327,6 +353,15 @@
                 @export-current-json="downloadClusterJson"
                 @recovery-details-open-change="recoveryDetailsOpen = $event"
               />
+              <div
+                v-if="routeSession && activeView === 'cluster' && !inspectorPanelVisible && !compactPanelOpen"
+                class="route-draft-resume flex min-w-0 items-center justify-between gap-2 border-b border-[var(--line-soft)] px-3 py-2 text-xs"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="min-w-0">Jump Route draft is still available.</span>
+                <UButton color="primary" variant="soft" size="xs" @click="requestPanel('inspector')">Resume Jump Route</UButton>
+              </div>
             </section>
           </template>
 
@@ -340,6 +375,7 @@
               :selected-object="selectedObject"
               :selected-orbit="selectedOrbit"
               :selected-route="selectedRoute"
+              :route-session="routeSession"
               :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
               :has-chart-name-draft="hasChartNameDraft"
               :has-uncommitted-names="hasUncommittedNames"
@@ -364,10 +400,11 @@
               @detach-orbit="detachSelectedOrbit"
               @delete-orbit="deleteSelectedOrbit"
               @request-route-edit="beginRouteEdit"
-              @save-route="submitRoute"
-              @cancel-route="restoreRouteSelection"
+              @update-route-input="updateRouteInput"
+              @choose-route-point="chooseRoutePoint"
+              @apply-route-session="applyRouteSession"
+              @discard-route-session="discardRouteDraft"
               @delete-route="deleteSelectedRoute"
-              @clear-route-selection="selectedRouteId = null"
               @clear-error="editorError = ''"
               @resume-chart-draft="beginChartNamesEdit()"
               @retry-save="retryLatestSave"
@@ -386,7 +423,7 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { catalogueTypes, type CatalogueSubtype, type ObjectFamily } from '../domain/workspace'
+import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type {
   EntityCommand,
   SystemCreationCandidate,
@@ -433,6 +470,14 @@ const {
   editorError,
   entitySession,
   hasModifiedEntitySession,
+  routeSession,
+  hasModifiedRouteSession,
+  offerRouteSystems,
+  chooseRoutePoint,
+  updateRouteInput,
+  applyRouteSession,
+  discardRouteSession,
+  cancelRouteCreation,
   isEntityCommandBlocked,
   isEntityDraftTarget,
   applyEntitySession,
@@ -486,7 +531,21 @@ const {
   submitNames,
   beginChartNamesEdit,
   cancelChartNamesEdit,
-  createSystem,
+  clusterAddType,
+  clusterAddError,
+  clusterMoveTargeting,
+  clusterSystemMovePreview,
+  clusterSystemMoveError,
+  clusterSystemPositionInputs,
+  clusterSystemPositionInputErrors,
+  armSystemAdd,
+  updateClusterSystemPositionInput,
+  addSystemAt,
+  addSystemFromInputs,
+  previewSystemMoveAt,
+  previewSystemMoveFromInputs,
+  cancelSystemMovePreview,
+  confirmSystemMove,
   showClusterMap,
   selectSystem,
   selectObject,
@@ -494,8 +553,6 @@ const {
   selectRoute,
   beginRoute,
   beginRouteEdit,
-  restoreRouteSelection,
-  submitRoute,
   deleteSystem,
   deleteSelectedObject,
   deleteSelectedOrbit,
@@ -569,10 +626,35 @@ const creationTypeLabel = computed(() => {
   if (type.kind === 'orbit') return 'Orbit'
   return catalogueTypes.find(candidate => candidate.value === type.subtype)?.label ?? type.subtype
 })
-const dockCloseSignal = computed(() => `${activeView.value}:${selectedSystemId.value ?? ''}:${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
+const dockCloseSignal = computed(() => `${activeView.value}:${selectedSystemId.value ?? ''}:${clusterSelectedSystemId.value ?? ''}:${mapMode.value}:${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
+const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
+  ? {
+      label: 'System',
+      status: 'ADD System · Choose a clear map point or use Placement for coordinates.',
+      error: clusterAddError.value,
+    }
+  : clusterAddType.value === 'route'
+    ? {
+        label: 'Jump Route',
+        status: `ADD Jump Route · Choose a system to select the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} Jump Point.`,
+        error: routeSession.value?.error || undefined,
+      }
+    : null)
+const clusterMovePresentation = computed(() => {
+  if (!clusterMoveTargeting.value || clusterAddType.value !== null) return null
+  const preview = clusterSystemMovePreview.value
+  const systemName = clusterSelectedSystem.value?.name ?? 'selected system'
+  return {
+    status: preview
+      ? `MOVE preview · ${systemName} at ${preview.targetPosition.x}, ${preview.targetPosition.y}`
+      : `MOVE ${systemName} · Choose a destination or use Placement.`,
+    error: clusterSystemMoveError.value || undefined,
+    previewing: preview !== null,
+  }
+})
 watch(dockCloseSignal, () => { creationChooserOpen.value = false })
 watch([activeView, selectedSystemId], () => {
-  if (creationSession.value) quitSystemAdd()
+  if (creationSession.value || clusterAddType.value) quitSystemAdd()
 })
 
 function chooseObjectCreationType(subtype: CatalogueSubtype): void {
@@ -598,17 +680,54 @@ function quitSystemAdd(): void {
   quitAdd()
 }
 
+function handleClusterTarget(point: Point, systemIds: string[]): void {
+  if (clusterAddType.value === 'system') {
+    addSystemAt(point, systemIds)
+    return
+  }
+  if (clusterAddType.value === 'route') {
+    const session = routeSession.value
+    if (session) offerRouteSystems(session.id, systemIds)
+    return
+  }
+  if (clusterMoveTargeting.value) previewSystemMoveAt(point, systemIds)
+}
+
+function discardRouteDraft(sessionId: number): void {
+  const session = routeSession.value
+  if (!session || session.id !== sessionId) return
+  if (session.routeId === null) {
+    cancelRouteCreation()
+    quitSystemAdd()
+    return
+  }
+  discardRouteSession(sessionId)
+  editorError.value = ''
+}
+
+function handleClusterSystemMove(systemId: string, position: Point): void {
+  cancelSystemMovePreview()
+  moveSystem(systemId, position)
+}
+
 function changeMapMode(mode: 'navigate' | 'select' | 'move'): void {
-  if (creationSession.value) quitSystemAdd()
+  if (creationSession.value || clusterAddType.value) quitSystemAdd()
   setMapMode(mode)
 }
 
 function handleAddEscape(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || event.defaultPrevented || !creationSession.value || creationChooserOpen.value) return
+  const hasMovePreview = clusterSystemMovePreview.value !== null
+  if (event.key !== 'Escape' || event.defaultPrevented
+    || (!creationSession.value && !clusterAddType.value && !hasMovePreview)
+    || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
   const target = event.target
   if (target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]')) return
   event.preventDefault()
+  if (hasMovePreview) {
+    cancelSystemMovePreview()
+    return
+  }
   quitSystemAdd()
 }
 
@@ -631,8 +750,9 @@ const {
 function warnBeforeLeaving(event: BeforeUnloadEvent): void {
   const changedWelcomeDraft = !workspace.value
     && (clusterName.value.trim() !== 'New Jump Cluster' || systemName.value.trim() !== 'First System')
+  const changedInspectorDraft = hasModifiedEntitySession.value || hasModifiedRouteSession.value
   const appliedWorkspaceIsNotDurable = !!workspace.value && (saveState.value === 'saving' || saveState.value === 'error')
-  if (!changedWelcomeDraft && !hasUncommittedNames.value && !appliedWorkspaceIsNotDurable) return
+  if (!changedWelcomeDraft && !hasUncommittedNames.value && !changedInspectorDraft && !appliedWorkspaceIsNotDurable) return
   event.preventDefault()
   event.returnValue = ''
 }

@@ -18,7 +18,11 @@ Corrected specification SHA-256: `EE5A92BC565933541233F06BC0607F5F6384F0A925A536
 
 Source [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3) remains open and unchanged, with no issue comments/labels/closure included in this planning step. Freshly fetched intake is `codex/interface-revamp` at `f4aa1b4438217412c308e61733d862f3d71597ca`, equal to its remote, 0 main-only / 23 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. The specification SHA-256 remains `DF58B9D8715140A8F18D9F808FF83A2B1EBEC3F2596A2B23F37F1E51778E212F`. These are recorded intake identities, not a demand to reset later work.
 
-## Current frontier - 2026-10-20
+## Current frontier - 2026-10-21
+
+**18–24 are closed;25,26,28 are open/unclaimed;27 remains blocked by26;29 remains blocked by25,27,28.** Ticket24 delivers targeted repeated system creation, precise system movement and complete resumable Jump Route editing with Nuxt UI, retaining the accepted B/Dock structure. Final complete validation is **135/135**, zero failures/skips/flaky cases/retries, on113 unchanged inputs. Typecheck/build, independent bounded technical/domain reviews and24/24 presentation checks pass their stated scopes. Physical Android Chrome/OS-keyboard/safe-area checks remain unavailable. See the [ticket24 execution record](research/implementation-24-2026-10-20.md) and [final QA report](implementation-lab/ticket-24-2026-10-21/qa/README.md). No successor is started; issue3 remains open, PR28 draft and the final whole-interface Astra review, including Tools coherence, stays in29.
+
+### Prior ticket23 checkpoint
 
 **18–23 are closed;24,25,26 and28 are open and unclaimed;27 and29 are blocked and unclaimed.** The [direct-Add follow-up](research/implementation-23-direct-add-2026-10-20.md) removes mandatory creation confirmation and passes the final complete suite **124/124**, zero retries/skips/flaky cases, on the unchanged compiled candidate (123 compiled plus one established development-only storage proof). Typecheck/build, both independent review lenses and bounded desktop/mobile presentation pass. The first parallel full run117/7 and same-source serial diagnostic7/7 remain separate evidence; serial execution preserves all original deadlines. Prior111/8/119 results remain historical. No successor is started; issue3 remains open, PR28 draft and the final whole-interface Astra review, including Tools coherence, stays in29.
 

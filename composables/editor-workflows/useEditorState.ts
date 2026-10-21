@@ -21,9 +21,11 @@ import type {
   TransitionGuard,
   TransitionOptions,
   WorkspacePanel,
+  EntityCommand,
 } from './types'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
 import { useEntityInspectorSession } from './useEntityInspectorSession'
+import { useRouteInspectorSession } from './useRouteInspectorSession'
 
 /**
  * Derives editor selections from workspace IDs and keeps navigation coherent as entities change.
@@ -60,6 +62,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   let pendingTransition: {
     leaveChart: boolean
     leaveEntitySession: boolean
+    leaveRouteSession: boolean
     resolve: (accepted: boolean) => void
   } | null = null
   const mapInspectorRef = shallowRef<MapInspectorHandle | null>(null)
@@ -144,9 +147,36 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     beginOrbitSession,
     applyEntitySession: applyEntitySessionDraft,
     discardEntitySession: discardEntitySessionDraft,
-    isEntityCommandBlocked,
+    isEntityCommandBlocked: isEntitySessionCommandBlocked,
     isEntityDraftTarget,
   } = useEntityInspectorSession({ workspace, applyWorkspace })
+  const {
+    routeSession,
+    hasModifiedRouteSession,
+    beginRouteSession,
+    offerRouteSystems,
+    chooseRoutePoint,
+    updateRouteInput,
+    applyRouteSession: applyRouteSessionDraft,
+    discardRouteSession: discardRouteSessionDraft,
+    cancelRouteCreation,
+    isRouteCommandBlocked,
+  } = useRouteInspectorSession({ workspace, applyWorkspace })
+
+  function isEntityCommandBlocked(command: EntityCommand): boolean {
+    return isEntitySessionCommandBlocked(command) || isRouteCommandBlocked(command)
+  }
+
+  function applyRouteSession(sessionId: number): boolean {
+    const applied = applyRouteSessionDraft(sessionId)
+    if (applied) editorError.value = ''
+    return applied
+  }
+
+  function discardRouteSession(sessionId?: number): void {
+    discardRouteSessionDraft(sessionId)
+    editorError.value = ''
+  }
 
   function applyEntitySession(expectedId?: number): boolean {
     const applied = applyEntitySessionDraft(expectedId)
@@ -601,18 +631,21 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
 
     const leaveChart = options.leaveChart !== false
     const leaveEntitySession = options.leaveEntitySession !== false
+    const leaveRouteSession = options.leaveRouteSession !== false
     const hasChartDraft = leaveChart && chartNamesSession.value !== null
     const hasInspectorDraft = mapInspectorRef.value?.hasUnsavedEdits() ?? false
     const chartNeedsResolution = hasChartDraft && hasUncommittedNames.value
     const entityNeedsResolution = leaveEntitySession && hasModifiedEntitySession.value
-    if (!chartNeedsResolution && !entityNeedsResolution && !hasInspectorDraft) {
+    const routeNeedsResolution = leaveRouteSession && hasModifiedRouteSession.value
+    if (!chartNeedsResolution && !entityNeedsResolution && !routeNeedsResolution && !hasInspectorDraft) {
       if (hasChartDraft) cancelChartNamesEdit()
       if (leaveEntitySession && entitySession.value) discardEntitySession(entitySession.value.id)
+      if (leaveRouteSession && routeSession.value) discardRouteSession(routeSession.value.id)
       return Promise.resolve(true)
     }
 
     return new Promise(resolve => {
-      pendingTransition = { leaveChart, leaveEntitySession, resolve }
+      pendingTransition = { leaveChart, leaveEntitySession, leaveRouteSession, resolve }
       transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
     })
   }
@@ -637,12 +670,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       transitionGuard.value = 'inspector'
       return
     }
+    if (pending.leaveRouteSession && hasModifiedRouteSession.value) {
+      transitionGuard.value = 'inspector'
+      return
+    }
     if (mapInspectorRef.value?.hasUnsavedEdits()) {
       transitionGuard.value = 'inspector'
       return
     }
     if (pending.leaveChart && chartNamesSession.value) cancelChartNamesEdit()
     if (pending.leaveEntitySession && entitySession.value) discardEntitySession(entitySession.value.id)
+    if (pending.leaveRouteSession && routeSession.value) discardRouteSession(routeSession.value.id)
     finishPendingTransition(true)
   }
 
@@ -669,6 +707,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       return
     }
 
+    const routeDraft = routeSession.value
+    if (pendingTransition.leaveRouteSession && routeDraft && hasModifiedRouteSession.value) {
+      if (decision === 'apply') {
+        if (!applyRouteSession(routeDraft.id)) {
+          finishPendingTransition(false)
+          return
+        }
+      } else {
+        discardRouteSession(routeDraft.id)
+      }
+    }
     const session = entitySession.value
     if (pendingTransition.leaveEntitySession && session && hasModifiedEntitySession.value) {
       if (decision === 'apply') {
@@ -965,6 +1014,17 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     beginOrbitSession,
     applyEntitySession,
     discardEntitySession,
+    routeSession,
+    hasModifiedRouteSession,
+    beginRouteSession,
+    offerRouteSystems,
+    chooseRoutePoint,
+    updateRouteInput,
+    applyRouteSession,
+    discardRouteSession,
+    cancelRouteCreation,
+    isEntityDraftCommandBlocked: isEntitySessionCommandBlocked,
+    isRouteCommandBlocked,
     isEntityCommandBlocked,
     isEntityDraftTarget,
     setChartNamesDialogOpen,

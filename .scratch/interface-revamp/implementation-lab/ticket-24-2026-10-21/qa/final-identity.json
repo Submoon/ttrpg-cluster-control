@@ -1,0 +1,15 @@
+{
+  "candidate": "ticket24-resume-gate9-20261021",
+  "stats": {
+    "startTime": "2026-10-21T08:57:12.256Z",
+    "duration": 836224.174,
+    "expected": 135,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "entry": "2441DA8E168741B5BF16B27CE66E7056D6499DB6CA6A69C2FF150106D377DCA1",
+  "inputs": 113,
+  "css": 4,
+  "unchanged": true
+}

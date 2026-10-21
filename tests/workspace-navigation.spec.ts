@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   captureMapExportBlobs,
+  addClusterSystem,
   clickDockAction,
   dragHtmlElementToWorldPoint,
   downloadJson,
@@ -219,9 +220,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   const firstSystemViewport = await scene.getAttribute('transform')
 
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add star system' }).click()
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page, { open: true })
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await page.getByRole('group', { name: 'New System 2 star system map' }).getByRole('button', { name: starLabel }).click()
 
@@ -253,9 +252,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
 test('deleting the inspected cluster system clears its current selection', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add star system' }).click()
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page, { open: true })
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await page.getByRole('button', { name: 'Fit map' }).click()
@@ -282,9 +279,7 @@ test('Select can rename system B from its inspector while keeping system A activ
   await captureMapExportBlobs(page)
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await page.getByRole('button', { name: 'Add to map' }).click()
-  await page.getByRole('button', { name: 'Add star system' }).click()
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
+  await addClusterSystem(page, { open: true })
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })

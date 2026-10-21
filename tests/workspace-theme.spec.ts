@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { openWorkspaceHierarchy } from './helpers'
 import { activeWorkspaceFeedback } from './helpers'
 import { returnToClusterMap, clickDockAction } from './helpers'
-import { addCatalogueObject } from './helpers'
+import { addCatalogueObject, editMapObject, saveMapObject, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
 
 type ThemeWriteGate = {
   originalAddEventListener: typeof IDBTransaction.prototype.addEventListener
@@ -295,8 +295,14 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await addCatalogueObject(page, 'jump-point')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Departure')
+  await saveMapObject(page)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
+  await saveMapObject(page)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   await page.keyboard.press('Escape')
@@ -309,34 +315,25 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   const routeLevel = routeInspector.getByLabel('Jump level')
   const routeFrom = routeInspector.getByLabel('From Jump Point')
   const routeTo = routeInspector.getByLabel('To Jump Point')
-  const fromPointIds = await routeFrom.locator('option').evaluateAll(options =>
-    options.map(option => (option as HTMLOptionElement).value),
-  )
-  if (fromPointIds.length < 2) {
-    throw new Error('The route draft requires two actual Jump Points.')
-  }
   await routeLevel.fill('7')
-  await routeFrom.selectOption(fromPointIds[1]!)
-  const destinationPointIds = await routeTo.locator('option:not([disabled])').evaluateAll(options =>
-    options.map(option => (option as HTMLOptionElement).value),
-  )
-  if (destinationPointIds.length === 0) throw new Error('The route draft has no destination Jump Point.')
-  await routeTo.selectOption(destinationPointIds[0]!)
+  await selectInspectorOption(routeFrom, 'Vesper Departure (Vesper)')
+  await selectInspectorOption(routeTo, 'Vesper Arrival (Vesper)')
   const routeDraftBefore = {
     level: await routeLevel.inputValue(),
-    from: await routeFrom.inputValue(),
-    to: await routeTo.inputValue(),
+    from: await readInspectorSelection(routeFrom),
+    to: await readInspectorSelection(routeTo),
   }
   await switchTheme(page, 'light')
   await expect(routeLevel).toHaveValue(routeDraftBefore.level)
-  await expect(routeFrom).toHaveValue(routeDraftBefore.from)
-  await expect(routeTo).toHaveValue(routeDraftBefore.to)
+  expect(await readInspectorSelection(routeFrom)).toBe(routeDraftBefore.from)
+  expect(await readInspectorSelection(routeTo)).toBe(routeDraftBefore.to)
   await switchTheme(page, 'dark')
-  await routeInspector.getByRole('button', { name: 'Cancel' }).click()
+  await routeInspector.getByRole('button', { name: 'Discard route draft' }).click()
 
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: /Select .*New jump point/ }).first().click()
+  await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).first().click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit map object' }).click()
   const objectName = inspector.getByLabel('Name', { exact: true })

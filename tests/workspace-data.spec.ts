@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
+import { activeWorkspaceFeedback, addClusterSystem, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, ensureMapDragPointsReachable, panMap, dragBy, setHeaderMapActionsOpen, downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, downloadImage, inspectImageSvg, setJsonFile, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -229,7 +229,7 @@ test('custom field category and subtype scopes are united on independent system 
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'planet')
   await editMapObject(page)
@@ -367,7 +367,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
@@ -377,16 +377,21 @@ test('the Warden can review and safely confirm dependent map deletions', async (
 
   await clickDockAction(page, 'Add Jump Route')
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('1')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Harrow Entry (New System 2)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Harrow Entry/ })).toBeVisible()
 
   await clickDockAction(page, 'Add Jump Route')
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('2')
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Harrow Entry (New System 2)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   await expect(clusterMap.getByRole('button', { name: /Jump Level 2.*Harrow Entry/ })).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
+  await setWorkspaceMapMode(page, 'Select')
   await page.getByRole('navigation', { name: 'Jump Routes' })
     .getByRole('button', { name: /Select Jump Level 2/ })
     .click()
@@ -404,6 +409,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   expect(directRouteDeletionPreview).toContain('Level 2')
   await expect(clusterMap.getByRole('button', { name: /Jump Level 2/ })).toHaveCount(0)
 
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   let deletionPreview = ''
@@ -524,7 +530,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
@@ -534,12 +540,16 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
 
   await clickDockAction(page, 'Add Jump Route')
   await page.getByRole('spinbutton', { name: 'Jump level' }).fill('8')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Exit (Vesper)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Entry (New System 2)' })
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Harrow Entry (New System 2)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   const createdRoute = clusterMap.getByRole('button', { name: /Jump Level 8.*Harrow Entry/ })
   await expect(createdRoute).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
+  await setWorkspaceMapMode(page, 'Select')
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
+  await createdRoute.click()
   await expect(createdRoute).toHaveClass(/is-selected/)
   await expect(createdRoute.locator('.cluster-route-label')).toHaveText('Jump-8')
   const clusterMapText = await clusterMap.locator('text').allTextContents()
@@ -547,8 +557,8 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterMapText).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
   expect(clusterMapText).not.toContain('2 SYSTEMS / 1 ROUTES')
 
+  await setWorkspaceMapMode(page, 'Navigate')
   const secondSystem = clusterMap.getByRole('button', { name: 'Open New System 2 system map' })
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await dragBy(page, secondSystem.locator('.cluster-system-card'), { x: 48, y: 24 })
   await workspaceZoomControls(page).getByRole('button', { name: 'Zoom in' }).click()
   await panMap(page, clusterMap, { x: 24, y: 18 })
@@ -1051,7 +1061,7 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
 
   const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map` })
   await returnToClusterMap(page)
-  await clickDockAction(page, 'Add star system')
+  await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await page.getByRole('button', { name: 'Chart details' }).click()
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
@@ -1064,9 +1074,9 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
   await saveMapObject(page)
   await returnToClusterMap(page)
   await clickDockAction(page, 'Add Jump Route')
-  await page.getByLabel('From Jump Point').selectOption({ label: 'Vesper Departure (Vesper Prime)' })
-  await page.getByLabel('Route destination').selectOption('point')
-  await page.getByLabel('To Jump Point').selectOption({ label: 'Harrow Arrival (Harrow)' })
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(page.getByLabel('To Jump Point'), 'Harrow Arrival (Harrow)')
   await page.getByRole('button', { name: 'Create Jump Route' }).click()
   await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ }))
     .toBeVisible()

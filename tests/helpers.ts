@@ -435,6 +435,54 @@ export async function clickDockAction(
   if (name === 'Add orbit') await completeOrbitCreation(page, options)
 }
 
+/** Creates a cluster system through its public placement controls and optionally enters it. */
+export async function addClusterSystem(
+  page: import('@playwright/test').Page,
+  options: { open?: boolean; position?: WorldPoint } = {},
+): Promise<string | undefined> {
+  const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
+  const existingSystemActions = clusterMap.getByRole('button', { name: /^Open .* system map$/ })
+  const existingLabels = await Promise.all(
+    (await existingSystemActions.all()).map(button => button.getAttribute('aria-label')),
+  )
+
+  await clickDockAction(page, 'Add star system')
+
+  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const position = options.position ?? { x: 0.75, y: 0.75 }
+  await page.getByLabel('System position X', { exact: true }).fill(String(position.x))
+  await page.getByLabel('System position Y', { exact: true }).fill(String(position.y))
+  await page.getByRole('form', { name: 'System placement coordinates', exact: true })
+    .getByRole('button', { name: 'Add at coordinates', exact: true }).click()
+  await quitSystemAdd(page)
+
+  if (!options.open) return undefined
+
+  await setWorkspaceMapMode(page, 'Navigate')
+  await expect(clusterMap).toBeVisible()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(existingSystemActions).toHaveCount(existingLabels.length + 1)
+  const currentSystemActions = await existingSystemActions.all()
+  let createdAction: import('@playwright/test').Locator | undefined
+  let createdLabel: string | null = null
+  for (const action of currentSystemActions) {
+    const label = await action.getAttribute('aria-label')
+    if (label && !existingLabels.includes(label)) {
+      createdAction = action
+      createdLabel = label
+      break
+    }
+  }
+  if (!createdAction || !createdLabel) throw new Error('The cluster map does not expose the newly added system.')
+
+  const systemName = createdLabel.match(/^Open (.+) system map$/)?.[1]
+  if (!systemName) throw new Error(`Could not read the new system name from "${createdLabel}".`)
+  await createdAction.click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+  return systemName
+}
+
 async function dismissAddChooser(page: import('@playwright/test').Page): Promise<void> {
   const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
   if (await addToggle.getAttribute('aria-expanded') === 'true') {
