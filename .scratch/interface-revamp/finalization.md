@@ -36,11 +36,15 @@ The old registered prototype checkout was separately verified clean, with no act
 
 ### Audited local artifacts and retained exceptions
 
-Removed 555 proven disposable untracked files individually: 517 generated outputs/fixtures (30,008,386 bytes), 29 unconsumed QA runners/configs (150,087 bytes), and nine superseded QA notes (52,791 bytes). The notes described corrected header/focus/recovery-target defects already preserved as outcomes and maintained regressions; their obsolete pixel diagnostics were not another necessary report. Two saved patches and one preserved test-source snapshot remain untouched.
+Removed 555 proven disposable untracked files individually: 517 generated outputs/fixtures (30,008,386 bytes), 29 unconsumed QA runners/configs (150,087 bytes), and nine superseded QA notes (52,791 bytes). The notes described corrected header/focus/recovery-target defects already preserved as outcomes and maintained regressions; their obsolete pixel diagnostics were not another necessary report. Two saved patches and one preserved test-source snapshot were initially retained, then captured in the safety branch below.
 
 Retired three ignored, provenance-verified measurement copies after tests: source-baseline from `629d2a9`, source-b from `7ea41e0` with its documented fixture adaptation, and the old B output. Their offline-probe consumers were already removed. Safe preflight found no Git metadata, reparse points or active path references; individual deletion removed 46,335 files/601,204,893 bytes and 6,627 empty directories, with no errors. The registered prototype checkout was retired separately, as recorded above.
 
-The ignored `preview-build/` contains differing source and authored drafts whose provenance is uncertain. It remains protected locally and excluded from the product. No unrelated files or worktrees were removed. The effort now retains 33 files, including 32 Markdown documents, versus the initial 1,005/128; its one remaining ignore rule protects that unaudited local copy.
+The first closure at `161f8e351235804ee1fcde6facf05a01f067b842` left the ignored `preview-build/`, six ignored test-result files and empty laboratory folders on disk. The human requested their removal. A fresh fetch still showed `origin/main = 629d2a9`, with 0 main-only / 55 feature-only commits.
+
+Before removal, all 378 non-generated preview and saved working files (14,857,309 bytes) were captured byte-for-byte on the **local-only** branch `codex/interface-revamp-cleanup-safety-20261022`, commit `dd4842d991a597295951918034bfefab39d47b2e`. The preview source occupies its original root-relative paths; `preserved-current-worktree/` holds the three former working files. Independent review verified every raw Git blob against the source SHA-256 and exact tree coverage. The branch was not pushed, and no backup directory was added to the product.
+
+The follow-up removed all 28,020 residual inventoried files (355,490,219 bytes) and their empty directories. `preview-build`, `device-preservation-lab`, `implementation-lab`, `measurement-lab`, `research` and `visuals` are now absent, and their obsolete ignore rule is removed. Only `tickets/`, `spec.md`, `implementation-plan.md` and this dossier remain: 32 Markdown files versus the initial 1,005 effort files/128 Markdown documents. No unrelated work was removed. All 115 previously validated production/test/configuration hashes are unchanged; this filesystem/documentation follow-up uses targeted integrity and link checks, without another application test run.
 
 ## Acceptance and limits
 
