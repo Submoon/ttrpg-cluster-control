@@ -1,6 +1,0 @@
-{
-  "ProcessId": 48364,
-  "ParentProcessId": 19888,
-  "CreationDate": "2026-10-19T10:13:49.568186+02:00",
-  "CommandLine": "\"C:\\nodejs\\node.exe\" .output/server/index.mjs"
-}

@@ -1,9 +1,0 @@
-{
-  "diffCheckExit": 0,
-  "from": "freeze9",
-  "to": "freeze10",
-  "applicationUnchanged": true,
-  "changed": [
-    "tests/workspace-data.spec.ts"
-  ]
-}

@@ -1,6 +1,7 @@
 ---
 title: 'Finish the production editor and retire the revamp experiments'
-status: blocked
+status: closed
+assignee: ticket29
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -15,7 +16,7 @@ triage_labels:
 
 [Revamp the interface: responsive map editing with preserved local work](../spec.md). Source request: [Revamp the interface](https://github.com/Submoon/ttrpg-cluster-control/issues/3).
 
-The human approved the twelve-ticket breakdown and exact dependencies on 2026-10-16. Approved planning baseline: `f4aa1b4438217412c308e61733d862f3d71597ca`, intentionally above `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. See the [approved proposal](../research/ticket-breakdown-proposal-2026-10-16.md).
+The human approved the twelve-ticket breakdown and exact dependencies on 2026-10-16. The [implementation plan](../implementation-plan.md) preserves that graph; the [finalization dossier](../finalization.md) records the actual cleanup baseline and evidence.
 
 ## What to build
 
@@ -23,15 +24,15 @@ The real product ships no disposable comparison behavior, and maintainers receiv
 
 ## Acceptance criteria
 
-1. [ ] Start only after every implementation ticket 18–28 is closed; keep this cleanup ticket last. Inventory the current documentation/product experiment scope and classify canonical/archive/remove before usage-audited cleanup. Use the dated 2026-10-16 coordinator estimate of 510 tracked effort files/50 Markdown docs, eight product-tree `Prototype*.vue` components/two fixtures as starting evidence, not fixed counts or a deletion target.
-2. [ ] Remove residual sample/prototype routes/flags/seeds/comparisons/imports/navigation and unused components/assets/scripts/dependencies/config/harnesses; prove absence from route graph/SSR/production bundles.
-3. [ ] Keep valid necessary fixtures tests-only and preserve database/schema/compatibility/shared integration.
-4. [ ] Consolidate **all effort-created documentation**, repair links/indexes and archive superseded material without losing accepted rationale/hashes/runtime/device identity/failures.
-5. [ ] No blind `.scratch`/capture/untracked user/log/unrelated deletion; collection inventory need not inline-read every historical capture.
-6. [ ] After cleanup run integrated parity/browser, typecheck/build, compiled SSR/portal/local-resource and codec/storage/export regressions.
-7. [ ] Reconcile B1–B10, targeted Chrome OS-keyboard/physical gestures and keyboard/screen-reader evidence honestly.
-8. [ ] Measure final production initial/deferred JS/CSS/resources/startup/mount/overlays/pan/zoom **after comparison removal**, using comparable baseline arms only, reporting missing arms and investigating material regressions without invented budgets/library-only claims.
-9. [ ] Obtain the human-requested independent Astra review of the complete implemented interface, including desktop/mobile journeys and the meaning/grouping of Tools. Explicitly assess selection/data editing, view-only pan, movement and creation, using Foundry VTT as the requested conceptual comparison. Record findings and their adjudication against the accepted decisions; the review is not limited to Tools, and the earlier prototype review does not certify this final product.
+1. [x] Start after every implementation ticket 18–28 is closed; keep this cleanup last. Inventory the actual scope and classify retained/removed material before usage-audited cleanup.
+2. [x] Remove residual sample/prototype routes/flags/seeds/comparisons/imports/navigation and unused components/assets/scripts/dependencies/config/harnesses; prove absence from route graph/SSR/production bundles.
+3. [x] Keep valid necessary fixtures tests-only and preserve database/schema/compatibility/shared integration.
+4. [x] Consolidate **all effort-created documentation**, repair links/indexes and remove superseded working copies without losing accepted rationale/hashes/runtime/device identity/failures. Historical raw records remain recoverable from Git; do not create another archive tree.
+5. [x] No blind `.scratch`/capture/untracked user/log/unrelated deletion; collection inventory need not inline-read every historical capture.
+6. [x] After cleanup run integrated parity/browser, typecheck/build, compiled SSR/portal/local-resource and codec/storage/export regressions.
+7. [x] Reconcile B1–B10, targeted Chrome OS-keyboard/physical gestures and keyboard/screen-reader evidence honestly.
+8. [x] Measure final production initial/deferred JS/CSS/resources/startup/mount/overlays/pan/zoom **after comparison removal**, using comparable baseline arms only, reporting missing arms and investigating material regressions without invented budgets/library-only claims.
+9. [x] Obtain the human-requested independent Astra review of the complete implemented interface, including desktop/mobile journeys and the meaning/grouping of Tools. Explicitly assess selection/data editing, view-only pan, movement and creation, using Foundry VTT as the requested conceptual comparison. Record findings and their adjudication against the accepted decisions; the review is not limited to Tools, and the earlier prototype review does not certify this final product.
 
 ## Scope and exclusions
 
@@ -49,28 +50,24 @@ Dependency rationale: 25, 27, 28 — terminal closure includes **every ticket 18
 
 primary 119–120 plus cleanup amendment; mandatory regression 1–118. **B:** B1–B10 and final performance/evidence consolidation.
 
-Story numbers refer to the [specification user stories](../spec.md#user-stories). B1–B10 refer to the [behavioral acceptance families](../research/spec-test-seams-2026-10-16.md#smallest-useful-high-level-acceptance-suite). Required checks extend crosscutting contracts; primary ownership alone does not certify other owners or the whole product.
+Story numbers and B1–B10 refer to the [specification](../spec.md). Required checks extend crosscutting contracts; primary ownership alone does not certify other owners or the whole product.
 
-## Required product constraints
+## Preservation and verification
 
-- Preserve the accepted B/Dock composition for every UI surface changed by this ticket: bottom mode/creation Dock, full map board, optional desktop overlay panels and a compact header. Nuxt UI may change control appearance, spacing and typography; pixel identity is not required. Compare the actual integrated result with the accepted reference at comparable viewport/theme/state, recording structural differences, ordinary hit testing and focus. Behavioral passes do not certify visual fidelity. Follow the [presentation acceptance reset](../research/interface-fidelity-reset-2026-10-16.md); technical contracts cannot silently replace the approved composition.
+The specification remains normative: accepted B/Dock composition with maximum Nuxt UI reuse; shared domain, saved formats, drafts, save/recovery guarantees, accessibility and supported-browser boundaries are preserved. This ticket adds no renderer, migration, durable draft storage or deferred feature. Production behavior is verified through the maintained public-UI Playwright suite, actual downloads and durable reload, not a new application test API.
 
-- Deliver the real persisted-workspace product, never the memory-only sample. Preserve working baseline commands until their replacements work. Use Nuxt UI to the greatest practical extent: evaluate configuration, slots and adapters before bespoke equivalents and document the smallest justified exception. Keep the SSR shell/client maps and one provider/CSS integration.
-- Preserve domain vocabulary, authoritative validation, references, host/recovery corrections, database `ttrpg-cluster-control`, marker `ttrpg-cluster-control-map`, schema/version and applicable drag identities. Support accepted older shapes inside that marker/version boundary; add no migration or previous-marker fallback, durable drafts, renderer or unrelated feature.
-- At affected seams, own session draft identity/content/errors above presentation lifetime; hide/theme/reflow retain work. Refuse actual target/dependency conflicts before preview while allowing independent commands. Apply validates latest committed memory and ends its designated session before durable saving; failure retains applied data with truthful recovery. Scoped Cancel never undoes committed work. Preparation is read-only, and changed destructive effects require renewed review. Backup restoration retains its distinct durable-before-publication guarantee.
-- Verify relevant light/dark states, useful text >=4.5:1 and meaningful graphics/controls >=3:1 against actual adjacent/composited backgrounds, non-color cues, names/help, visible unobscured focus, modal entry/return and keyboard/single-pointer alternatives. Automate relevant mobile portrait/landscape/touch/reduced-height flows; 390×844, 844×390 and 390×500 are useful starting viewports. Target Android Chrome only for supplementary real OS-keyboard open/closed, safe-area and physical gesture checks. Simulation is not physical proof; report unavailable gates explicitly, without invented passes or a new device/CI harness. Desktop support retains baseline scope.
-- This feature owns its acceptance tests now; final cleanup does not supply missing feature checks. Record source/runtime/product route, validated fixture, viewport/browser/device/input and passed/failed/unexecuted/unavailable outcomes and limits. Preserve user storage with isolated browser contexts; historical prototype passes are prior art, not current integrated acceptance.
+Run focused checks, typecheck/build and one final full suite on the frozen candidate; record actual fixture/runtime/source identities and failures separately from retests. Compare compiled presentation with the accepted B/Dock reference and measure only comparable performance arms. Physical Android Chrome keyboard/safe-area/gestures and actual screen-reader checks remain unavailable unless performed; emulation cannot certify them.
 
-## Validation strategy
+Astra reviews the whole interface, Tools included. The human's “movement only” means view pan; distinguish approved Navigate/Select/Move/Add behavior from proposed redesigns. Historical prototype opinions do not certify the product.
 
-After usage-audited cleanup, run the integrated preserved-capability/browser suite, typecheck/build, compiled SSR/portal/local-resource and relevant codec/storage/export checks. Reconcile B1–B10 with actual Chrome keyboard/physical and assistive evidence. Measure comparable production resources/startup/overlays/map interaction after experimental code removal; report missing arms and no invented numerical budget.
+## Execution
 
-The human explicitly requested a later Astra opinion on the whole interface, including Tools, and clarified that “movement only” means moving the view. Preserve that review gate here while this ticket remains blocked. Treat the [earlier Astra prototype review](../research/astra-current-interface-review-2026-10-16.md) as prior art; distinguish confirmed product defects from suggestions that would reopen an approved design decision.
+Work started after verifying closure of tickets 18–28. SOL 6.1 High coordinates; Luna XHIGH implements; independent technical/spec reviews and the final Astra interface review follow the project-development workflow. The finalization dossier owns the three cleanup passes, integrated evidence and review adjudication. No source-issue closure, merge or release is authorized.
 
-The primary seam is the real integrated product through the existing Playwright browser suite, with narrow codec/domain/storage tests only for the relevant invariant. Use actual downloads and durable reload where applicable. Run affected checks and appropriate typecheck/build; compiled-production presentation checks supplement development iteration. No new application test API or separate component harness is required.
+## Resolution
 
-## Execution and handoff
+Completed 2026-10-22 from `cf469857862565c58047fee98f8f174bee845c7c`. Three progressively stricter passes retired prototype routes/components, historical artifacts and duplicate documentation while retaining the current contract and substantive ticket outcomes. The production editor is the only page workflow, including former comparison query URLs.
 
-Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
+Final typecheck/build pass; the single full Chrome run passes **194/194** in 11.7 minutes with one worker and zero retries/skips. Source and compiled hashes remain unchanged. Independent technical/spec reviews are clear; Astra reviewed the whole actual interface and Tools, found no blocker, and verified correction of its stale Add-label finding. Initial JS/CSS decreased 13.5%; startup measurements remain observational. Physical Android Chrome and screen-reader checks are unavailable, not passed. See the [finalization dossier](../finalization.md) for identities, three-pass accounting, performance, review and limits.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+GitHub issue 3 stays open and PR 28 stays draft for human acceptance; no merge or release is implied.

@@ -145,7 +145,7 @@
         </button>
       </template>
     </nav>
-    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Drag Orbit from Add Object onto a map object to host it, or elsewhere on the map to place an unoccupied center. Empty Orbits stay on the chart.</p>
+    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Choose Add Orbit from Add, then click the map to place it, or drag Orbit onto a map object to host it. Empty Orbits stay on the chart.</p>
   </template>
 </template>
 

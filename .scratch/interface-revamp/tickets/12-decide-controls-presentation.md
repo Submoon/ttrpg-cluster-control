@@ -5,93 +5,11 @@ assignee: codex-wayfinder-controls-presentation
 label: wayfinder:prototype
 type: prototype
 mode: HITL
-parent: ../map.md
+parent: ../spec.md
 ---
-
-## Parent map
-
-[Revamp the interface: make the map central on desktop and mobile](../map.md)
-
-## Question
-
-How should B present the resolved interaction modes, persistent Add creation intent with per-creation progress, panels and document commands with readable action text and distinguishable states on desktop, portrait and short landscape screens?
-
-## Context and candidates
-
-The [Astra global review](../research/astra-interface-review-2026-10-15.md) identifies flat operational hierarchy, tiny task labels and unnamed Orbit controls. Its earlier five-entry rail and later six-entry candidate are different proposals: the final mode contract must determine the real control count. Evaluate visible grouping, readable labels versus density/overflow, and the extra step of placing Import/Export/Share in a document menu. Do not squeeze another tiny icon into the current rail or treat that menu as already accepted. Clarify import/export/share scope without changing file formats or implying shared in-memory drafts.
-
-## Resolution criteria
-
-- A human-approved grouping and narrow-screen strategy preserving all capabilities, one zoom set, visible context return and explicit Inspect access.
-- Distinct active-mode, pending-operation, expanded-panel and immediate-command states, understandable without hover or color alone.
-- A reviewable readable-label/target strategy across the three screen shapes. Existing contrast, focus and keyboard requirements remain binding; Astra did not measure a new WCAG failure or establish new numeric thresholds.
-- Names for operation and target on every operable Orbit control, coordinated with keyboard focus/mode rules. Missing names are a preservation defect to address in the later prototype, not a reason to vote on whether accessible names are needed.
-- Clarify stationary right-click versus right-drag context-menu handling on the map, including readable gesture guidance. Right-drag view navigation must not be interrupted by a browser menu; browser/input compatibility needs executed checks in the later iteration. No new application context-menu feature is assumed.
-- Retain accepted B, optional nested Hierarchy, full-screen mobile Inspect and mobile panel exclusivity with hidden rail/zoom. No renewed A/B/C choice or automatic adoption of Astra's menu proposal.
-
-## Blocked by
-
-- [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md) — closed; supplies the authoritative resolved mode semantics. The current prototype exploration works this presentation question directly; it does not depend on final validation of the later prototype ticket.
 
 ## Resolution
 
-2026-10-16 — Consolidated on the human's explicit request to update the remaining planning records and proceed to to-spec. Freshly fetched baseline: `codex/interface-revamp` at `52b3e7aa2946824826ec41071b0d530cc88f38ed`, matching its remote, 0 main-only / 22 feature-only against `origin/main = 629d2a98715c3a16b954e0f77c639b1f0c31212c`. Source issue 3 remains unchanged and open. This resolves the presentation question from existing human choices and evidence; it does not certify every physical-device criterion.
+On 2026-10-16 the accepted composition was a Dock with distinct Navigate / Select / Move and Add, optional Hierarchy, Inspect and Map files. Desktop panels coexist with the map; mobile Inspect and Hierarchy are fullscreen and exclusive, hiding dock/zoom controls.
 
-- **Chosen composition:** retain B's selected Dock with distinct Navigate / Select / Move modes and creation entry; put Hierarchy / Inspect beside Map files, and keep one zoom set and explicit context/Back. The human selected Dock, tried its refinement on their phone, and later accepted Fields and Inspector. Map files groups document commands; a preview link must be labeled as a fresh preview rather than sharing an unsaved workspace. The anchored Nuxt UI creation chooser is part of this direction.
-- **Compact composition:** Inspect and Hierarchy remain full-height and mutually exclusive, hiding dock/zoom. While Add is active, reuse the context banner for chosen type, next target/progress and Quit Add; preserve current context and Back, then restore the ordinary summary on exit. The human delegated this placement and the coordinator chose it. Its implementation remains outstanding, without requiring another layout vote.
-- **States and readable controls:** distinguish mode, creation intent/progress, panel expansion and immediate commands without hover or color alone. Use readable action/target labels and accessible names on every Orbit operation. Current controls/chooser evidence and the [current Astra review](../research/astra-current-interface-review-2026-10-16.md) support the direction; they do not establish complete contrast, focus, screen-reader or device compliance.
-- **Pointer guidance:** right-button drag pans only and suppresses the pan's browser context menu/publication. Preserve stationary right-click's native behavior outside a recognized pan as the existing prototype trial; do not add an application context-menu feature. Specify and test deterministic release/cancellation across supported browsers rather than infer it from D3 defaults.
-- **Library policy:** maximize Nuxt UI components and adaptation. Custom prototype composition is evidence of appearance/behavior, not an approved implementation exception.
-
-The [controls prototype](../research/b-controls-prototype-2026-10-15.md), [Dock refinement](../research/dock-feedback-2026-10-15.md), actual human feedback, [validation dossier](../research/b-consolidated-validation-2026-10-16.md) and independent current Astra review are retained with separate provenance. Required implementation/acceptance work includes Map files/Inspector layering, compact Fields/Add chrome, keyboard-open action access, usable unobstructed map area, named/focusable controls and full feature preservation. During the specification handoff the human explicitly limits Android support to Chrome; test these criteria there. Earlier Android/Firefox findings remain historical observations, without requiring Firefox acceptance or proving Chrome failure/success. Closing this decision transfers the supported-browser obligations to the specification; it neither claims them fixed nor waives them.
-
-## Notes
-
-Apply Wayfinder and the UI prototype workflow to this HITL presentation question. Analysis/planning: SOL 6.1 High. Every prototype code change belongs to Luna XHIGH subagents. The human explicitly authorized the targeted prototype and requested a subagent to produce it; the two visual candidates are evidence for a later human choice. Preserve accepted B and the closed tools contract. Resolve at most one decision ticket per session, through an actual human response.
-
-## Comments
-
-> *This was generated by AI during triage.*
-
-2026-10-16 — [The new independent Astra review](../research/astra-current-interface-review-2026-10-16.md) covers the current whole interface and decisions at `4b10e069`, including live local Dock/Add/panel paths. It finds no new essential design choice before specification synthesis. The coordinator accepts the distinction between a coherent selected presentation and remaining integration defects: layering, compact Fields/Add chrome, keyboard reachability and usable map area. Reconcile each criterion with the existing artifact, scoped checks and human answers; do not reopen the Dock choice or claim physical gesture acceptance. The delegated context-banner refinement remains unimplemented. This evidence note retains the current status and supplies no formal Resolution.
-
-> *This was generated by AI during triage.*
-
-2026-10-16 — Evidence consolidation preserves the human's selected Dock and its existing phone-feedback conclusion. This ticket remains claimed and in progress for its remaining presentation criteria and eventual formal Resolution; there is no new Grouped rail/Dock vote. The [completed device/preservation investigation](10-validate-b-device-preservation.md#resolution) and [dossier](../research/b-consolidated-validation-2026-10-16.md) do not resolve this ticket or [the dependent tools validation](15-prototype-resolved-tools-contract.md). Existing assets/checks should be reused, with mobile Add-banner reuse and provisional input guidance distinguished from unsupported physical acceptance. Only the evidence task is resolved in the current session.
-
-> *This was generated by AI during triage.*
-
-2026-10-15 — The human reports trying the refined Dock on their phone. Their remaining presentation conclusion is that mobile Add feedback and Quit Add should reuse the Star System context banner or toolbar space rather than consume another permanent row; replacement or an overlay is acceptable, and the human explicitly delegates the placement choice. The coordinator selects the context-banner area: while Add is active, replace its ordinary summary with compact type/progress/next-target feedback and Quit Add, preserve the explicit Back to Jump Cluster command and access to current context, and restore the ordinary summary on exit. Do not cover the mode dock, zoom or panel commands, and do not change Add lifetime, route-origin preservation, drafts or cancellation. This is a conclusion for the next scoped prototype/specification, not a claim that the current deployed build implements it. Dock remains the selected presentation; no A/B comparison is reopened. This qualitative phone reaction does not establish the complete device/preservation matrix or final Nuxt UI adoption.
-
-> *This was generated by AI during triage.*
-
-2026-10-15 — The [Dock feedback refinement](../research/dock-feedback-2026-10-15.md) is implemented by Luna XHIGH and independently reviewed by SOL with no remaining findings. Local production checks cover targeted Orbit geometry/dismissal and responsive command access; the final layering-only correction has separate typecheck, three-viewport `npm run dev` chooser hit tests, screenshots and source hashes. The corrected preview is ready for human feedback. The human specifies local development testing for agents and Vercel for their phone preview. Keep this ticket in progress; this correction does not establish final physical-device acceptance or library adoption, close dependent validation, or resolve Fields/form questions.
-
-> *This was generated by AI during triage.*
-
-2026-10-15 — Human feedback selects the **Dock** direction. The human also requests click-targeted Orbit placement, Hierarchy / Inspect adjacent to Map files, and an Add chooser anchored consistently to its trigger on desktop and mobile, preferably through a Nuxt UI primitive. These refinements are authorized; they do not reopen the grouped-rail versus Dock choice. Keep this ticket in progress while the corrections and remaining presentation criteria are verified; do not interpret the preference as final physical-device acceptance. Fresh origin fetch confirms the intentionally different branch `codex/interface-revamp` at `f886b8a9781d02eab651e52d5a1e4e4c0d9f6b88`, matching its remote and 0 main-only / 11 branch-only versus `origin/main` at `629d2a98715c3a16b954e0f77c639b1f0c31212c`. Issue 3 remains open and unchanged. Unrelated local environment files and operational logs are preserved.
-
-> *This was generated by AI during triage.*
-
-2026-10-15 — Created as a separate, unanswered follow-up from the complete Astra review. Refreshed baseline and source provenance are recorded in [Finalize the tools contract after the Astra interface review](11-finalize-tools-contract.md). The human subsequently requests persistent Add and confirms same-type repetition; use the final tools Resolution, not Astra's original one-shot assumption. No presentation change is accepted or implemented by creating this ticket.
-
-2026-10-15 — Claimed by SOL 6.1 High as `codex-wayfinder-controls-presentation`, following the human's explicit request to continue with a targeted prototype iteration and launch a subagent to implement it. The question is now `wayfinder:prototype`/HITL because concrete alternatives are needed to choose the presentation. Luna XHIGH owns the running prototype implementation; SOL supplies analysis and this brief only. Parent-refreshed baseline is `codex/interface-revamp` at `19755c750560723429555a9a92c55a554dbd6360`, matching its remote, 0 main-only / 8 branch-only versus `origin/main` at `629d2a98715c3a16b954e0f77c639b1f0c31212c`; source issue remains open and unchanged, with no comments. Uncommitted decision artifacts from the human session are preserved.
-
-### Two focused presentation candidates to compare
-
-Build **two variants of the same accepted B**, using identical scenes, the complete closed tools contract, panel behavior and domain state. Keep B's map, context return, palette and Inspector envelope fixed. The candidate names below describe presentation only; they are not additional map modes or a renewed whole-layout A/B/C choice.
-
-1. **Grouped rail with direct commands.** Keep three visibly grouped Navigate / Select / Move controls, a separate Add control with the selected type, and a distinct Hierarchy / Inspect panel group. Desktop uses a labeled rail with clear group spacing/separators. Narrow portrait uses two readable dock rows (three modes, then Add / Hierarchy / Inspect) rather than six tiny captions or hidden horizontal items. Short landscape uses a readable horizontal grouping. Import JSON, Export image and Share preview link remain directly exposed in separate document chrome, with an intentional compact/wrapped command row on narrow screens. This shows the cost and discoverability of direct commands.
-2. **Mode dock with separate creation/panel surfaces.** Keep Navigate / Select / Move together in the primary rail/dock; put Add and its type/progress in a separate nearby creation strip, and Hierarchy / Inspect in a paired panel group in map chrome. Desktop preserves the B rail and floating map; portrait places the mode dock at the safe-area bottom with creation state immediately above and the paired panel controls in reachable chrome. Short landscape may align the groups horizontally when space allows. Present Import JSON / Export image / Share preview link through a clearly labeled Document menu candidate. This tests reduced permanent command density against the additional menu step; **the menu is not an accepted decision**.
-
-Both candidates keep explicit Inspect, a visible Back to Jump Cluster and one zoom set; every control must remain readable and reachable in desktop, small portrait and short landscape. Use words and distinct pressed/expanded/action treatments rather than color or hover alone. Keep comparisons on the same memory-only scene and preserve mode/type/route progress/selection/drafts when switching presentation, or disclose a necessary reset before comparing; a presentation switch must not masquerade as a map-context change. A comparison switcher must not cover the evaluated controls or full-height panels.
-
-While Add is active, both candidates show the selected creation type, actionable next target/stage (including chosen route origin and destination step), and **Quit Add**. Completion prepares the same type again, never automatically opens Inspect, and Add System stays in the cluster. Catalogue dismissal retains Add. Escape on the map/Quit Add abandons only unfinished creation and returns to Navigate; completed entities and unrelated drafts survive. Mode switches preserve valid selection/view/drafts and cancel only unfinished map actions. These are requirements from the closed tools decision, not candidates to vote on again.
-
-Right-button view drag and two-contact navigation preserve the active mode, type and any chosen route origin, while canceling uncommitted geometric preview and suppressing release/click publication. A stationary right click is a named, **provisional prototype input detail**, not a newly accepted contract or authorization to add an application context menu. Record the chosen trial behavior and separate it from pan-gesture suppression. Retain keyboard/single-pointer alternatives and dialog-first Escape handling.
-
-The current asset may establish this ticket's presentation choice. [Test the resolved tools contract in a focused B prototype iteration](15-prototype-resolved-tools-contract.md) remains blocked for final validation until this choice is human-resolved; it is not a blocker of this exploration. No human presentation verdict, new acceptance, ticket closure or product implementation follows from preparing these candidates.
-
-### Prototype artifact
-
-The [focused B control-presentation report](../research/b-controls-prototype-2026-10-15.md) records the two published candidates, source hashes, corrected review findings, passing build/typecheck, nine emulated-browser cases and the parent connected-browser spot check on `1666b008`. Compare [Grouped rail](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=groups) and [Mode dock](https://ttrpg-cluster-control-git-codex-interface-revamp-submoon.vercel.app/?variant=B&controls=dock). This remains an exploration until the human compares the actual presentations; publication is not a Resolution.
+When Add is active on a compact screen, reuse the context banner for type, next target/progress and Quit Add while preserving context and Back. Make controls and Orbit operations readable and named without relying on hover or color. Right-button drag pans; stationary right-click retains native browser behavior. Nuxt UI remains the default implementation library. This resolves composition, not physical-device, full-product or accessibility acceptance.

@@ -9,7 +9,7 @@
     <svg
       ref="svgElement"
       class="cluster-map-svg block h-full min-h-0 w-full flex-1"
-      :class="{ 'prototype-touch-surface': touchNavigation }"
+      :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${cluster.name} Jump Cluster map`"
@@ -688,7 +688,7 @@ defineExpose({
   background: var(--map-bg);
 }
 
-.prototype-touch-surface { touch-action: none; }
+.map-touch-surface { touch-action: none; }
 
 .map-navigation {
   position: absolute;

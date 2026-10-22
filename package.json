@@ -3,7 +3,6 @@
   "type": "module",
   "scripts": {
     "dev": "npx nuxt dev",
-    "prototype": "npx nuxt dev --host 127.0.0.1 --port 3113",
     "build": "npx nuxt build",
     "preview": "npx nuxt preview",
     "typecheck": "npx nuxt typecheck",
@@ -13,6 +12,7 @@
     "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/d3": "^7.4.3",
+    "@types/node": "^24.19.2",
     "nuxt": "^4.6.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",

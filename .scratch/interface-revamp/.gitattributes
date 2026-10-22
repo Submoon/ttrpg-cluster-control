@@ -1,3 +1,0 @@
-# Preserve fixture hashes and raw evidence across Windows/Linux checkouts.
-measurement-lab/** -text
-device-preservation-lab/artifacts/** -text

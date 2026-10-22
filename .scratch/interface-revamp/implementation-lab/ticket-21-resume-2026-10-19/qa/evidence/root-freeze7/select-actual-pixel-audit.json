@@ -1,9 +1,0 @@
-{
-  "minimumActualContrast": 9.368863980119915,
-  "rawObservationRemainsFailed": true,
-  "requiresCoordinatorAdjudication": true,
-  "label": "portrait-map Select neighbor contour",
-  "method": "Offline audit of the already captured actual RGB contour pixels versus the same-location background RGB, without changing browser state or nominal-colour paint-match predicate",
-  "nominalPaintMatches": false,
-  "pointCount": 48
-}

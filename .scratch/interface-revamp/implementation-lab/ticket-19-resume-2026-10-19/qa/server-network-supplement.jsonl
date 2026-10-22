@@ -1,3 +1,0 @@
-{"time":"2026-10-19T09:49:38.215Z","pid":22692,"event":"guard-installed","policy":"deny external hostnames and addresses; permit loopback and local pipes"}
-{"time":"2026-10-19T09:49:38.219Z","pid":22692,"event":"denied","label":"server-guard-canary","api":"net.Socket.connect","host":"example.com"}
-{"time":"2026-10-19T09:49:38.219Z","pid":22692,"event":"canary-passed","label":"server-guard-canary","code":"QA_EXTERNAL_NETWORK_DENIED"}

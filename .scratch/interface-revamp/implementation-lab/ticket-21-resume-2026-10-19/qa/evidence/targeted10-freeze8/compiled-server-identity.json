@@ -1,5 +1,0 @@
-{
-  "ProcessId": 25840,
-  "ParentProcessId": 46652,
-  "CommandLine": "\"C:\\nodejs\\node.exe\" --title=ticket21-final-compiled-freeze8 .output/server/index.mjs"
-}
