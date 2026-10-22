@@ -15,6 +15,11 @@ type DragPreviewWindow = Window & {
     text: string
     width: number
   }
+  __nativeEllipseDrop?: {
+    clientPoint: { x: number; y: number }
+    contentMatrix: { a: number; b: number; c: number; d: number; e: number; f: number }
+    ellipse: { cx: number; cy: number; rx: number; ry: number; rotation: number }
+  } | null
 }
 
 function recordNativeDragTypes(): void {
@@ -205,7 +210,7 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
     .not.toBe(planetBefore)
 })
 
-test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }) => {
+test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -442,15 +447,123 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
 
   const newPlanetAngle = 3.1
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
+  const newPlanetDropPoint = await ellipticalOrbitPoint(map, orbitLabel, newPlanetAngle)
+  const intendedDropScreenPoint = await map.evaluate((element, point) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const matrix = content?.getScreenCTM()
+    if (!matrix) throw new Error('Could not measure the native drop target on the system map.')
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, newPlanetDropPoint)
+  await map.evaluate((element, label) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const orbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
+      .find(candidate => candidate.getAttribute('aria-label') === label)
+    const ellipse = orbit?.querySelector<SVGEllipseElement>('.orbit-ring')
+    if (!content || !ellipse) throw new Error('Could not observe the native Orbit drop geometry.')
+
+    const document = element.ownerDocument
+    const dropWindow = document.defaultView as DragPreviewWindow | null
+    if (!dropWindow) throw new Error('Could not observe the native Orbit drop window.')
+    dropWindow.__nativeEllipseDrop = null
+    const captureDrop = (event: Event) => {
+      if (!(event instanceof DragEvent)
+        || !(event.target instanceof Node)
+        || !element.contains(event.target)) return
+      const matrix = content.getScreenCTM()
+      if (!matrix) return
+      dropWindow.__nativeEllipseDrop = {
+        clientPoint: { x: event.clientX, y: event.clientY },
+        contentMatrix: {
+          a: matrix.a,
+          b: matrix.b,
+          c: matrix.c,
+          d: matrix.d,
+          e: matrix.e,
+          f: matrix.f,
+        },
+        ellipse: {
+          cx: Number(ellipse.getAttribute('cx')),
+          cy: Number(ellipse.getAttribute('cy')),
+          rx: Number(ellipse.getAttribute('rx')),
+          ry: Number(ellipse.getAttribute('ry')),
+          rotation: Number(ellipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0),
+        },
+      }
+      document.removeEventListener('drop', captureDrop, true)
+    }
+    document.addEventListener('drop', captureDrop, true)
+  }, orbitLabel)
   await dragHtmlElementToWorldPoint(
     page,
     planetButton,
     map,
-    await ellipticalOrbitPoint(map, orbitLabel, newPlanetAngle),
+    newPlanetDropPoint,
   )
   const newPlanet = map.getByRole('button', { name: /New planet 1/ })
-  await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'New planet 1'))
-    .toBeCloseTo(newPlanetAngle, 2)
+  const nativeDropProbe = await map.evaluate((element, target) => {
+    const dropWindow = element.ownerDocument.defaultView as DragPreviewWindow | null
+    const nativeDrop = dropWindow?.__nativeEllipseDrop ?? null
+    const object = [...element.querySelectorAll<SVGGElement>('.system-object')]
+      .find(candidate => candidate.getAttribute('aria-label')?.includes('New planet 1'))
+    const transform = object?.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
+    const scenePoint = transform ? { x: Number(transform[1]), y: Number(transform[2]) } : null
+    const contentMatrix = nativeDrop?.contentMatrix ?? null
+    const screenPoint = scenePoint && contentMatrix ? {
+      x: contentMatrix.a * scenePoint.x + contentMatrix.c * scenePoint.y + contentMatrix.e,
+      y: contentMatrix.b * scenePoint.x + contentMatrix.d * scenePoint.y + contentMatrix.f,
+    } : null
+    let renderedAngle: number | null = null
+    if (scenePoint && nativeDrop) {
+      const radians = nativeDrop.ellipse.rotation * Math.PI / 180
+      const dx = scenePoint.x - nativeDrop.ellipse.cx
+      const dy = scenePoint.y - nativeDrop.ellipse.cy
+      const localX = dx * Math.cos(radians) + dy * Math.sin(radians)
+      const localY = -dx * Math.sin(radians) + dy * Math.cos(radians)
+      renderedAngle = Math.atan2(localY / nativeDrop.ellipse.ry, localX / nativeDrop.ellipse.rx)
+    }
+    return {
+      nativeDrop,
+      rendered: scenePoint ? { scenePoint, screenPoint, angle: renderedAngle } : null,
+      intendedScreenPoint: target.intendedScreenPoint,
+    }
+  }, { intendedScreenPoint: intendedDropScreenPoint })
+  await testInfo.attach('native-ellipse-drop-probe.json', {
+    body: JSON.stringify({
+      intendedAngle: newPlanetAngle,
+      intendedWorldPoint: newPlanetDropPoint,
+      ...nativeDropProbe,
+    }, null, 2),
+    contentType: 'application/json',
+  })
+  const nativeDrop = nativeDropProbe.nativeDrop
+  const renderedDrop = nativeDropProbe.rendered
+  if (!nativeDrop || !renderedDrop?.scenePoint || !renderedDrop.screenPoint) {
+    throw new Error('The native Orbit drop geometry probe did not capture the completed placement.')
+  }
+
+  const normalizedEllipseRadius = (point: WorldPoint) => {
+    const rotation = nativeDrop.ellipse.rotation * Math.PI / 180
+    const dx = point.x - nativeDrop.ellipse.cx
+    const dy = point.y - nativeDrop.ellipse.cy
+    const localX = dx * Math.cos(rotation) + dy * Math.sin(rotation)
+    const localY = -dx * Math.sin(rotation) + dy * Math.cos(rotation)
+    return (localX / nativeDrop.ellipse.rx) ** 2 + (localY / nativeDrop.ellipse.ry) ** 2
+  }
+  expect(normalizedEllipseRadius(newPlanetDropPoint)).toBeCloseTo(1, 10)
+  expect(normalizedEllipseRadius(renderedDrop.scenePoint)).toBeCloseTo(1, 10)
+
+  const intendedPointerDistance = Math.hypot(
+    intendedDropScreenPoint.x - nativeDrop.clientPoint.x,
+    intendedDropScreenPoint.y - nativeDrop.clientPoint.y,
+  )
+  expect(Math.abs(intendedDropScreenPoint.x - nativeDrop.clientPoint.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(intendedDropScreenPoint.y - nativeDrop.clientPoint.y)).toBeLessThanOrEqual(1)
+  const renderedPointerDistance = Math.hypot(
+    renderedDrop.screenPoint.x - nativeDrop.clientPoint.x,
+    renderedDrop.screenPoint.y - nativeDrop.clientPoint.y,
+  )
+  expect(renderedPointerDistance).toBeLessThanOrEqual(intendedPointerDistance + 1e-4)
   await quitSystemAdd(page)
   const movedPlanetAngle = 1.5
   await dragToWorldPoint(
@@ -461,6 +574,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   )
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'New planet 1'))
     .toBeCloseTo(movedPlanetAngle, 2)
+  const renderedNewPlanetAngle = await ellipticalOrbitAngle(map, orbitLabel, 'New planet 1')
 
   const finalRotation = await orbitRotationDegrees(ring)
 
@@ -486,7 +600,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const systemExport = await downloadJson(page, 'Export star system JSON')
   const system = systemExport.system!
   const exportedOrbit = system.orbits.find(candidate => candidate.hostId === null)!
+  const exportedNewPlanet = system.objects.find(object => object.name === 'New planet 1')!
   expect(exportedOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(exportedNewPlanet.placement).toEqual({ kind: 'orbit', orbitId: exportedOrbit.id })
+  expect(systemExport.layout.objectAngles[exportedNewPlanet.id]).toBeCloseTo(renderedNewPlanetAngle, 10)
   expect(systemExport.layout).not.toHaveProperty('orbitEllipseRadii')
   expect(systemExport.layout.orbitRadii[exportedOrbit.id])
     .toEqual({ horizontal: resizedHorizontalRadius, vertical: resizedVerticalRadius })

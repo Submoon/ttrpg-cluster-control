@@ -7,6 +7,7 @@ import type {
   CustomFieldDefinition,
   CustomFieldApplicabilityTarget,
   CustomFieldType,
+  CustomFieldValue,
   LocalWorkspace,
   MapDeletionTarget,
   Orbit,
@@ -308,9 +309,88 @@ export interface SystemMapHandle extends MapNavigationHandle {
 }
 
 /** Values submitted from a field-definition draft after the UI's confirmation step. */
+export type FieldDefinitionsScreen = 'list' | 'detail' | 'edit' | 'new'
+
+/** Raw strings owned by the parent session while a definition is being edited. */
+export interface FieldDefinitionDraft {
+  name: string
+  type: CustomFieldType
+  /** Newline-delimited option input, retained even while another type is selected. */
+  options: string
+  applicability: CustomFieldApplicabilityTarget[] | undefined
+}
+
+/** Read-only record for the two built-in object fields shown beside reusable definitions. */
+export interface NativeFieldDefinitionSnapshot {
+  id: 'native:atmosphere' | 'native:port-class'
+  name: string
+  type: 'single-select'
+  options: string[]
+  applicability?: undefined
+}
+
+export type FieldDefinitionSnapshot = CustomFieldDefinition | NativeFieldDefinitionSnapshot
+
+/** Parent-owned field management state; keeping this plain lets Vue props stay unwrapped. */
+export interface FieldDefinitionsSessionState {
+  open: boolean
+  screen: FieldDefinitionsScreen
+  selectedId: string | null
+  draft: (FieldDefinitionDraft & { baseline: FieldDefinitionSnapshot }) | null
+  createDraft: FieldDefinitionDraft | null
+  pendingGuard: FieldDefinitionsIntent | null
+  review: FieldDefinitionMutationReview | null
+  error: string | null
+  listPosition: { scrollTop: number; focusedFieldId: string | null }
+  /** Monotonic parent acknowledgement after a field mutation is applied in memory. */
+  appliedAck: number
+}
+
+/** User actions emitted by the field-management presentation for parent-side resolution. */
+export type FieldDefinitionsIntent =
+  | { kind: 'open' }
+  | { kind: 'close' }
+  | { kind: 'back' }
+  | { kind: 'select-field'; fieldId: string }
+  | { kind: 'edit-field'; fieldId: string }
+  | { kind: 'new-field' }
+  | { kind: 'cancel-create' }
+  | { kind: 'cancel-edit' }
+  | { kind: 'patch-definition'; patch: Partial<FieldDefinitionDraft> }
+  | { kind: 'patch-create'; patch: Partial<FieldDefinitionDraft> }
+  | { kind: 'remember-list'; position: { scrollTop: number; focusedFieldId: string | null } }
+  | { kind: 'save-field' }
+  | { kind: 'delete-field'; fieldId: string }
+  | { kind: 'confirm-review' }
+  | { kind: 'cancel-review' }
+  | { kind: 'resolve-transition'; decision: TransitionDecision }
+
+/** Consequence shown before resolving an entity draft or applying a field mutation. */
+export interface FieldDefinitionReviewImpact {
+  systemId: string
+  systemName: string
+  objectId: string
+  objectName: string
+  value: CustomFieldValue
+  nextValue?: CustomFieldValue
+  resolution: 'preserve' | 'clear' | 'remove'
+}
+
+/** Read-only prepared consequences for the currently selected field mutation. */
+export interface FieldDefinitionMutationReview {
+  fieldId: string
+  fieldName: string
+  operation: 'update' | 'remove'
+  fromType?: CustomFieldType
+  toType?: CustomFieldType
+  removedOptions?: string[]
+  impacts: FieldDefinitionReviewImpact[]
+}
+
 export interface FieldDefinitionUpdateRequest {
   fieldId: string
   name: string
+  type: CustomFieldType
   options: string[]
   applicability: CustomFieldApplicabilityTarget[] | undefined
 }

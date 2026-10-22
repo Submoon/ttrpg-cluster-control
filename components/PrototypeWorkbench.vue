@@ -227,8 +227,7 @@
       </template>
     </UModal>
 
-    <FieldDefinitionsDialog ref="fieldDefinitionsDialog" hide-trigger :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :inspector-conflict="guardOpen && guardReason === 'field' && fieldReviewOwner === 'legacy'" :inspector-conflict-error="inspectorConflictError" @request-open="openFieldManager" @create-custom-field="createFieldDefinition" @save-field-definition="saveLegacyFieldDefinition" @remove-field-definition="removeLegacyFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" />
-    <PrototypeFieldDefinitionsDialog ref="prototypeFieldDefinitionsDialog" :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :rejection-revision="prototypeFieldDefinitionRejectionRevision" :enabled="variant === 'B'" :action-layout="fieldActionLayout" :theme="theme" :inspector-conflict="guardOpen && guardReason === 'field' && fieldReviewOwner === 'prototype'" :inspector-conflict-error="inspectorConflictError" :is-dev="isDev" @create-custom-field="createPrototypeFieldDefinition" @save-field-definition="savePrototypeFieldDefinition" @remove-field-definition="removePrototypeFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" @toggle-action-layout="toggleFieldActionLayout" @state-change="prototypeFieldsState = $event" />
+    <PrototypeFieldDefinitionsDialog ref="prototypeFieldDefinitionsDialog" :workspace="workspace" :saving="saveState === 'saving'" :save-error="fieldDefinitionError" :save-revision="fieldDefinitionSaveRevision" :rejection-revision="prototypeFieldDefinitionRejectionRevision" :enabled="true" :action-layout="fieldActionLayout" :theme="theme" :inspector-conflict="guardOpen && guardReason === 'field' && fieldReviewOwner === 'prototype'" :inspector-conflict-error="inspectorConflictError" :is-dev="isDev" @create-custom-field="createPrototypeFieldDefinition" @save-field-definition="savePrototypeFieldDefinition" @remove-field-definition="removePrototypeFieldDefinition" @clear-error="clearFieldDefinitionError" @resolve-inspector-conflict="resolveGuard" @toggle-action-layout="toggleFieldActionLayout" @state-change="prototypeFieldsState = $event" />
 
     <UModal v-model:open="importOpen" title="Review imported map" description="The file is validated before replacing the in-memory sample.">
       <template #content>
@@ -1292,13 +1291,8 @@ function openFieldManager(source?: MouseEvent | HTMLElement): void {
     : source instanceof MouseEvent && source.currentTarget instanceof HTMLElement
       ? source.currentTarget
       : undefined
-  if (variant.value === 'B') {
-    fieldReviewOwner.value = 'prototype'
-    prototypeFieldDefinitionsDialog.value?.open(opener)
-  } else {
-    fieldReviewOwner.value = 'legacy'
-    fieldDefinitionsDialog.value?.open()
-  }
+  fieldReviewOwner.value = 'prototype'
+  prototypeFieldDefinitionsDialog.value?.open(opener)
 }
 
 function cancelActiveFieldReview(clearTransition: boolean): void {

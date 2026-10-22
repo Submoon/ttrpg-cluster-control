@@ -134,3 +134,13 @@ The human-authorized system-manipulation work is complete from feature baseline 
 Final typecheck/build and the complete **161/161** suite pass with one worker and zero retries; the earlier 158/161 candidate's three diagnosed regressions and corrections remain explicit. Independent technical and domain/data reviews have no blockers; actual compiled desktop and compact presentation is inspected. See [execution](research/implementation-25-2026-10-21.md), [review](research/review-25-2026-10-21.md) and [QA](implementation-lab/ticket-25-2026-10-21/qa/README.md).
 
 Current frontier: **18–25 closed; 26 and 28 open/unclaimed; 27 blocked by 26; 29 remains last after 27 and 28.** No successor is started. Physical-device checks remain unavailable; full image verification belongs to 28 and final whole-interface Astra/Tools review belongs to 29. Source issue 3 stays open and PR 28 stays draft.
+
+## Ticket 26 explicit implementation — 2026-10-22
+
+The human requests implement for the complete resumable Fields lifecycle, retaining the accepted B/Dock presentation and maximum Nuxt UI reuse. Claimed from fetched feature baseline `b97f4e07edcd8b5c16bf1649eef0b4bdfafb480f` (0 main-only / 51 feature-only). Sensitive routing covers reviewed definition changes, cross-owner drafts and memory/durable acknowledgement; SOL 6.1 High coordinates/contracts/reviews and Luna XHIGH implements. See [execution](research/implementation-26-2026-10-22.md). Current frontier: **18–25 closed; 26 in-progress; 27 blocked; 28 open/unclaimed; 29 remains last.** No successor is started; PR 28 stays draft and source issue 3 stays open.
+
+## Ticket 26 completion — 2026-10-22
+
+The resumable Fields lifecycle is implemented from `b97f4e07`, preserving the approved B/Dock composition through Nuxt UI and presentation-independent session ownership. Typecheck/build, 10/10 ticket tests and the complete affected Orbit journey pass. The complete one-worker predecessor is 171/172; its only failure is causally traced to native endpoint quantization and corrected in the test without changing application geometry. A later two-worker run is interrupted under deadline pressure, not represented as a pass. Exact outcomes and physical-device limits remain in the [verification record](implementation-lab/ticket-26-2026-10-22/qa/README.md). Independent reviews have no remaining source blockers.
+
+Current frontier: **18–26 closed; 27 and 28 open/unclaimed; 29 remains last after 27 and 28.** Ticket 27 is only unblocked by its completed dependency; no successor implementation is started. Source issue 3 remains open and PR 28 remains draft.

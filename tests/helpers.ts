@@ -585,7 +585,13 @@ export async function addCustomFieldThroughDialog(
   const dialog = await openFieldDefinitionDialog(page)
   await dialog.getByRole('button', { name: 'New custom field' }).click()
   await dialog.getByLabel('Custom field label').fill(name)
-  await dialog.getByLabel('Value type').selectOption(type)
+  const typeLabel = ({
+    text: 'Text',
+    number: 'Number',
+    boolean: 'Boolean',
+    'single-select': 'Single-select',
+  } as Record<string, string>)[type] ?? type
+  await selectInspectorOption(dialog.getByLabel('Value type'), typeLabel)
   if (options !== undefined) {
     await dialog.getByLabel('New field choices').fill(options)
   }

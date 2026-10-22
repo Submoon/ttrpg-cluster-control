@@ -52,7 +52,7 @@ test('native and custom single-select options can store the literal unset token'
   await nativeFields.getByRole('button', { name: /Atmosphere/ }).click()
   await editFieldDefinition(nativeFields)
   await nativeFields.getByLabel('Atmosphere choices').fill('Breathable\nUnbreathable\nVacuum\n__not_recorded__')
-  await nativeFields.getByRole('button', { name: 'Save changes' }).click()
+  await nativeFields.getByRole('button', { name: 'Apply field changes' }).click()
   await nativeFields.getByRole('button', { name: 'Close field definitions' }).click()
   await addCustomFieldThroughDialog(page, 'Signal designation', 'single-select', 'Amber\n__not_recorded__')
 

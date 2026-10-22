@@ -5,21 +5,6 @@
   >
     <WorkspaceHeader v-if="!workspace" :workspace="workspace" />
 
-    <ChartNamesDialog
-      v-if="workspace"
-      :open="chartNamesDialogOpen"
-      :guard-mode="transitionGuard"
-      :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
-      v-model:cluster-name="clusterName"
-      v-model:system-name="systemName"
-      :form-error="formError"
-      :target-system-name="chartDraftSystemName"
-      @update:open="setChartNamesDialogOpen"
-      @apply="submitNames"
-      @discard="cancelChartNamesEdit"
-      @resolve-transition="resolveTransitionChoice"
-    />
-
     <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
@@ -103,16 +88,14 @@
                 <FieldDefinitionsDialog
                   ref="fieldDefinitionsDialog"
                   v-if="workspace"
+                  :session="fieldDefinitionsSession"
                   :workspace="workspace"
                   :saving="saveState === 'saving'"
                   :save-error="fieldDefinitionError"
-                  :save-revision="fieldDefinitionSaveRevision"
-                  @request-open="openFieldDefinitions"
-                  @open-change="fieldDefinitionDialogOpen = $event"
-                  @clear-error="fieldDefinitionError = ''"
-                  @create-custom-field="createCustomField"
-                  @save-field-definition="saveFieldDefinitionChanges"
-                  @remove-field-definition="removeFieldDefinition"
+                  :inspector-conflict="fieldDefinitionInspectorConflict"
+                  :inspector-conflict-error="'Resolve the Inspector draft before changing this field.'"
+                  :has-modified-draft="hasModifiedFieldDefinitionsSession"
+                  @intent="handleFieldDefinitionsIntent"
                 />
               </template>
             </WorkspaceHeader>
@@ -435,11 +418,27 @@
               @resume-chart-draft="beginChartNamesEdit()"
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
+              @open-field-definitions="openFieldDefinitions"
             />
           </template>
         </MapEditorLayout>
       </section>
     </main>
+
+    <ChartNamesDialog
+      v-if="workspace"
+      :open="chartNamesDialogOpen"
+      :guard-mode="transitionGuard"
+      :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
+      v-model:cluster-name="clusterName"
+      v-model:system-name="systemName"
+      :form-error="formError"
+      :target-system-name="chartDraftSystemName"
+      @update:open="setChartNamesDialogOpen"
+      @apply="submitNames"
+      @discard="cancelChartNamesEdit"
+      @resolve-transition="resolveTransitionChoice"
+    />
 
   </div>
 </template>
@@ -492,8 +491,10 @@ const {
   transitionGuard,
   fieldDefinitionDialogOpen,
   fieldDefinitionError,
-  fieldDefinitionSaveRevision,
+  fieldDefinitionsSession,
+  hasModifiedFieldDefinitionsSession,
   fieldDefinitionsDialog,
+  openFieldDefinitions,
   formError,
   editorError,
   entitySession,
@@ -533,7 +534,7 @@ const {
   hasUncommittedNames,
   hasChartNameDraft,
   saveMessage,
-  openFieldDefinitions,
+  handleFieldDefinitionsIntent,
   resolveTransition,
   resolveTransitionChoice,
   setChartNamesDialogOpen,
@@ -621,10 +622,12 @@ const {
   cancelCreationPreview,
   quitAdd,
   handleCreationDrop: processCreationDrop,
-  createCustomField,
-  saveFieldDefinitionChanges,
-  removeFieldDefinition,
 } = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
+
+const fieldDefinitionInspectorConflict = computed(() => {
+  const fieldId = fieldDefinitionsSession.selectedId
+  return fieldId !== null && isEntityCommandBlocked({ kind: 'definition-mutation', fieldId })
+})
 
 function resumeEntitySession(sessionId: number): void {
   const session = entitySession.value
@@ -911,8 +914,9 @@ function warnBeforeLeaving(event: BeforeUnloadEvent): void {
   const changedWelcomeDraft = !workspace.value
     && (clusterName.value.trim() !== 'New Jump Cluster' || systemName.value.trim() !== 'First System')
   const changedInspectorDraft = hasModifiedEntitySession.value || hasModifiedRouteSession.value
+  const changedFieldDefinitionsDraft = hasModifiedFieldDefinitionsSession.value
   const appliedWorkspaceIsNotDurable = !!workspace.value && (saveState.value === 'saving' || saveState.value === 'error')
-  if (!changedWelcomeDraft && !hasUncommittedNames.value && !changedInspectorDraft && !appliedWorkspaceIsNotDurable) return
+  if (!changedWelcomeDraft && !hasUncommittedNames.value && !changedInspectorDraft && !changedFieldDefinitionsDraft && !appliedWorkspaceIsNotDurable) return
   event.preventDefault()
   event.returnValue = ''
 }

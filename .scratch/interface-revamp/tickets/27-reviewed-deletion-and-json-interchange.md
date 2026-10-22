@@ -1,6 +1,6 @@
 ---
 title: 'Review destructive changes and exchange independent JSON copies safely'
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

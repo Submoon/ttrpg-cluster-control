@@ -53,6 +53,7 @@
           :save-error="props.saveError"
           :export-error="props.exportError"
           @request-object-edit="emit('request-object-edit')"
+          @open-field-definitions="emit('open-field-definitions')"
           @apply-entity-session="emit('apply-entity-session', $event)"
           @discard-entity-session="emit('discard-entity-session', $event)"
           @delete-object="emit('delete-object')"
@@ -160,6 +161,7 @@ const emit = defineEmits<{
   'show-chart-details': []
   hide: []
   'request-object-edit': []
+  'open-field-definitions': []
   'resume-entity-session': [sessionId: number]
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]

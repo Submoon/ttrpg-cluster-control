@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:26692) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\system-orbits.spec.ts:213:1 › the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center (24.9s)
+
+  1 passed (27.2s)

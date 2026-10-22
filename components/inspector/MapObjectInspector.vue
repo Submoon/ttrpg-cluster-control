@@ -182,6 +182,17 @@
             <h3 id="object-custom-fields-heading">Custom fields</h3>
           </div>
           <UBadge color="neutral" variant="subtle">Reusable</UBadge>
+          <UButton
+            class="workspace-control"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            type="button"
+            aria-label="Manage field definitions"
+            @click="emit('open-field-definitions')"
+          >
+            Manage
+          </UButton>
         </div>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
           <UFormField
@@ -359,6 +370,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'request-object-edit': []
+  'open-field-definitions': []
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]
   'delete-object': []

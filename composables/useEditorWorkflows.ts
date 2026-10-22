@@ -21,7 +21,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const editorState = useEditorState(options)
   const fieldDefinitions = useFieldDefinitionWorkflows({
     workspace: options.workspace,
-    commit: options.commit,
+    applyWorkspace: options.applyWorkspace,
     resolveTransition: editorState.resolveTransition,
     isEntityCommandBlocked: editorState.isEntityCommandBlocked,
   })

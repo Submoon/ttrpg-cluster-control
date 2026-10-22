@@ -41,6 +41,8 @@ export {
   updateCustomFieldApplicability,
   renameCustomFieldDefinition,
   updateCustomFieldOptions,
+  isCustomFieldValueCompatible,
+  updateCustomFieldType,
   removeCustomFieldDefinition,
 } from './workspace-fields'
 export {

@@ -242,9 +242,9 @@ test('custom field category and subtype scopes are united on independent system 
   const definitionDialog = await openFieldDefinitionDialog(page)
   await definitionDialog.getByRole('button', { name: /Campaign notes/ }).click()
   await editFieldDefinition(definitionDialog)
-  await definitionDialog.getByRole('radio', { name: 'Selected catalogue targets' }).check()
+  await definitionDialog.getByLabel('All catalogue objects').uncheck()
   await definitionDialog.getByLabel('Subtype Planet').check()
-  await definitionDialog.getByRole('button', { name: 'Save changes' }).click()
+  await definitionDialog.getByRole('button', { name: 'Apply field changes' }).click()
   await definitionDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   await returnToClusterMap(page)
@@ -268,7 +268,7 @@ test('custom field category and subtype scopes are united on independent system 
   await editFieldDefinition(existingDefinitionDialog)
   await existingDefinitionDialog.getByLabel('Subtype Planet').uncheck()
   await existingDefinitionDialog.getByLabel('Category Celestial bodies').check()
-  await existingDefinitionDialog.getByRole('button', { name: 'Save changes' }).click()
+  await existingDefinitionDialog.getByRole('button', { name: 'Apply field changes' }).click()
   await existingDefinitionDialog.getByRole('button', { name: 'Close field definitions' }).click()
 
   const legacySystemExport: unknown = {

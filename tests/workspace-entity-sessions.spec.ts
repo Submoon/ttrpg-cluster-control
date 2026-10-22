@@ -109,7 +109,7 @@ test('object Apply preserves typed zero, false and hidden assignments while an u
   await definitions.getByRole('button', { name: /Unused installation notes/ }).click()
   await editFieldDefinition(definitions)
   await definitions.getByLabel('Custom field name', { exact: true }).fill('Archived installation notes')
-  await definitions.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await definitions.getByRole('button', { name: 'Apply field changes', exact: true }).click()
   await expect(definitions.getByRole('button', { name: /Archived installation notes/ })).toBeVisible()
   await definitions.getByRole('button', { name: 'Close field definitions', exact: true }).click()
 

@@ -1,6 +1,7 @@
 ---
 title: 'Consult, edit and create Fields without losing work or assignments'
-status: open
+status: closed
+assignee: ticket26
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,17 +24,17 @@ Fields/Manage resume one session for consultation, explicit editing, custom crea
 
 ## Acceptance criteria
 
-1. [ ] List → saved detail → Edit; compact full-area screens versus bounded centered desktop columns.
-2. [ ] Show type/choices/applicability/assignments.
-3. [ ] Back restores list position/highlight/focus; Close hides/returns to the actual opener, retaining map/editor/session.
-4. [ ] Manage invents no target.
-5. [ ] Definition/creation drafts survive Back/hide/theme/reflow; modified target/New changes use Apply/Discard/Stay, clean changes do not prompt.
-6. [ ] One guarded New entry per screen supports text/number/boolean/single-select/choices; success opens new read-only detail, explicit Cancel returns without creation, Close retains draft.
-7. [ ] Preserve native options/applicability/ineligible values/zero/false.
-8. [ ] Prepare type/option/deletion impacts read-only before object-draft resolution, reprepare/renew changed consequences after Apply and preserve work on Cancel/invalidity.
-9. [ ] Selected deletion returns to a valid row/list control, clears IDs and never defaults to Atmosphere.
-10. [ ] Memory-first acknowledgement/Retry cannot duplicate creation.
-11. [ ] Compact header/internal scroll/bottom actions/reviews/errors work with Android Chrome keyboard open/closed.
+1. [x] List → saved detail → Edit; compact full-area screens versus bounded centered desktop columns.
+2. [x] Show type/choices/applicability/assignments.
+3. [x] Back restores list position/highlight/focus; Close hides/returns to the actual opener, retaining map/editor/session.
+4. [x] Manage invents no target.
+5. [x] Definition/creation drafts survive Back/hide/theme/reflow; modified target/New changes use Apply/Discard/Stay, clean changes do not prompt.
+6. [x] One guarded New entry per screen supports text/number/boolean/single-select/choices; success opens new read-only detail, explicit Cancel returns without creation, Close retains draft.
+7. [x] Preserve native options/applicability/ineligible values/zero/false.
+8. [x] Prepare type/option/deletion impacts read-only before object-draft resolution, reprepare/renew changed consequences after Apply and preserve work on Cancel/invalidity.
+9. [x] Selected deletion returns to a valid row/list control, clears IDs and never defaults to Atmosphere.
+10. [x] Memory-first acknowledgement/Retry cannot duplicate creation.
+11. [x] Compact header/internal scroll/bottom actions/reviews/errors work with Android Chrome keyboard open/closed.
 
 ## Scope and exclusions
 
@@ -71,4 +72,12 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Claimed on 2026-10-22 from `b97f4e07edcd8b5c16bf1649eef0b4bdfafb480f`, equal to the freshly fetched feature remote (0 main-only / 51 feature-only versus main `629d2a98715c3a16b954e0f77c639b1f0c31212c`). See [execution](../research/implementation-26-2026-10-22.md). Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+
+## Resolution
+
+Implemented the real resumable Fields lifecycle with Nuxt UI: ordered consultation/Edit/New, parent-owned raw drafts and feedback, shared Manage entry and focus return, guarded transitions, reviewed non-coercive type/option/deletion changes, refreshed consequences after Inspector Apply, memory-first creation and truthful persistence recovery. Keep compatible and hidden assignments, zero and false; deletion returns to a valid list neighbor. Hidden Fields drafts have a visible cue and participate in departure warnings.
+
+The approved B/Dock composition is preserved. Compiled desktop/compact light/dark views are inspected; modal layering and full-height bottom actions are corrected through the existing Nuxt components. Typecheck/build and 10/10 ticket-owned tests pass. The complete run is 171/172; its sole ideal native-pointer angle oracle is causally corrected and the complete affected journey then passes, without any application geometry change. No fresh whole-suite pass is claimed. [Verification and limits](../implementation-lab/ticket-26-2026-10-22/qa/README.md) and [independent review](../research/review-26-2026-10-22.md) preserve the exact results. Criterion 11 has implementation and emulated reduced-height coverage; supplementary physical Android Chrome keyboard/safe-area verification remains unavailable, not certified.
+
+Source issue 3 remains open and PR 28 remains draft. This resolution does not implement a successor ticket.
