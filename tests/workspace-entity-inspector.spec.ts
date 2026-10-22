@@ -178,6 +178,10 @@ test('the Orbit Inspector footer stays visible and hittable after its body scrol
   const inspector = page.locator('.entity-inspector[aria-label="Orbit inspector"]')
   const body = inspector.locator('.entity-inspector-body')
   const apply = inspector.getByRole('button', { name: 'Apply changes' })
+  const deleteOrbit = inspector.getByRole('button', {
+    name: 'Delete Orbit 1 around unoccupied center',
+    exact: true,
+  })
   for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 500 }]) {
     await page.setViewportSize(viewport)
     await expect(body).toBeVisible()
@@ -197,6 +201,8 @@ test('the Orbit Inspector footer stays visible and hittable after its body scrol
     })
     expect(receivesPointer, `${viewport.width}x${viewport.height} Apply is the hit target`).toBe(true)
     await page.getByLabel('Center Y', { exact: true }).focus()
+    await page.keyboard.press('Tab')
+    await expect(deleteOrbit, `${viewport.width}x${viewport.height} Delete is reachable after Center Y`).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(apply, `${viewport.width}x${viewport.height} Apply can receive keyboard focus`).toBeFocused()
   }

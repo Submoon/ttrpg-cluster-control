@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { deletionReviewDialog, resolveDeletionReview } from './helpers'
 import {
   captureMapExportBlobs,
   addClusterSystem,
@@ -266,8 +267,11 @@ test('deleting the inspected cluster system clears its current selection', async
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteSystem = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
-  page.once('dialog', async dialog => { await dialog.accept() })
   await deleteSystem.click()
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('New System 2')
+  await resolveDeletionReview(deletionReview, 'confirm')
 
   await expect(deleteSystem).toHaveCount(0)
   await expect(clusterMap.locator('.cluster-system-node.is-selected')).toHaveCount(0)

@@ -260,7 +260,7 @@
         </p>
       </section>
 
-      <section v-if="!objectSession" class="entity-inspector-delete" aria-labelledby="object-delete-heading">
+      <section class="entity-inspector-delete" aria-labelledby="object-delete-heading">
         <div>
           <p class="section-kicker">SEPARATE DESTRUCTIVE ACTION</p>
           <h3 id="object-delete-heading">Delete</h3>

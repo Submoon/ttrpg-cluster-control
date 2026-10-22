@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { importReviewDialog, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
@@ -667,9 +668,12 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     .toBeCloseTo(angleBeforeResize, 2)
 
   const input = jsonMapImportInput(page)
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'elliptical-system.json', JSON.stringify(systemExport))
-  await (await importPreview).accept()
+  const importPreview = importReviewDialog(page)
+  const importSummary = await importPreview.innerText()
+  expect(importSummary).toContain('Star systems: 1')
+  await resolveImportReview(importPreview, 'confirm')
+  await returnToClusterMap(page)
   const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
   const importedSystem = clusterExport.cluster!.systems.find(candidate =>
     candidate.id !== system.id && candidate.name === system.name,
@@ -687,9 +691,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     .toBe(true)
 
   const sourceSystemIds = new Set(clusterExport.cluster!.systems.map(candidate => candidate.id))
-  const clusterPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'elliptical-cluster.json', JSON.stringify(clusterExport))
-  await (await clusterPreview).accept()
+  const clusterPreview = importReviewDialog(page)
+  const clusterSummary = await clusterPreview.innerText()
+  expect(clusterSummary).toContain('Star systems: 2')
+  await resolveImportReview(clusterPreview, 'confirm')
   const clusterRoundTrip = await downloadJson(page, 'Export Jump Cluster JSON')
   const roundTripSystem = clusterRoundTrip.cluster!.systems
     .filter(candidate => !sourceSystemIds.has(candidate.id))
@@ -1016,12 +1022,13 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   expect(exported.layout.orbitRadii[smallOrbitId!]).toEqual({ horizontal: 39, vertical: 39 })
 
   const input = jsonMapImportInput(page)
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'hosted-orbit.json', JSON.stringify(exported))
-  const confirmation = await importPreview
-  expect(confirmation.message()).toContain('Star systems: 1')
-  await confirmation.accept()
+  const confirmation = importReviewDialog(page)
+  const confirmationSummary = await confirmation.innerText()
+  expect(confirmationSummary).toContain('Star systems: 1')
+  await resolveImportReview(confirmation, 'confirm')
 
+  await returnToClusterMap(page)
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systems = page.getByRole('navigation', { name: 'Star systems' })
   const openSystem = systems.getByRole('button', { name: 'Open Vesper system map' }).last()
@@ -1057,11 +1064,11 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
       : { horizontal: 39, vertical: 39 }
     expect(exportedCluster.layout.orbitRadii[hostedOrbit.id]).toEqual(expected)
   }
-  const clusterImportPreview = page.waitForEvent('dialog')
   await setJsonFile(input, 'hosted-orbit-cluster.json', JSON.stringify(exportedCluster))
-  const clusterConfirmation = await clusterImportPreview
-  expect(clusterConfirmation.message()).toContain('Star systems: 2')
-  await clusterConfirmation.accept()
+  const clusterImportPreview = importReviewDialog(page)
+  const clusterImportSummary = await clusterImportPreview.innerText()
+  expect(clusterImportSummary).toContain('Star systems: 2')
+  await resolveImportReview(clusterImportPreview, 'confirm')
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await page.getByRole('navigation', { name: 'Star systems' })
     .getByRole('button', { name: 'Open Vesper system map' }).last().click()

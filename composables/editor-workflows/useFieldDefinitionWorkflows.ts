@@ -138,6 +138,38 @@ export function useFieldDefinitionWorkflows({
     hasDefinitionChanges() || hasCreateChanges(),
   )
 
+  /** Refuses an import only when it changes the definition currently owned by a dirty Fields draft. */
+  function getFieldDefinitionImportConflict(candidate: LocalWorkspace): { message: string } | null {
+    const currentWorkspace = workspace.value
+    const editDraft = fieldDefinitionsSession.draft
+    if (currentWorkspace && editDraft && hasDefinitionChanges()) {
+      const fieldId = editDraft.baseline.id
+      const current = definitionInWorkspace(currentWorkspace, fieldId)
+      const imported = definitionInWorkspace(candidate, fieldId)
+      if (!current || !imported || !sameDefinitionSnapshot(current, imported)) {
+        return {
+          message: `The import changes "${editDraft.baseline.name}" while its Fields draft is dirty. Review the Fields draft before importing.`,
+        }
+      }
+    }
+
+    const createDraft = fieldDefinitionsSession.createDraft
+    const proposedName = createDraft?.name.trim().toLowerCase()
+    if (currentWorkspace && createDraft && hasCreateChanges() && proposedName) {
+      const currentNames = new Set(currentWorkspace.objectFieldSettings.customFields
+        .map(field => field.name.trim().toLowerCase()))
+      const createsCollision = candidate.objectFieldSettings.customFields.some(field =>
+        field.name.trim().toLowerCase() === proposedName && !currentNames.has(proposedName),
+      )
+      if (createsCollision) {
+        return {
+          message: `The import adds a custom field named "${createDraft.name.trim()}", which conflicts with the retained Fields draft. Review the Fields draft before importing.`,
+        }
+      }
+    }
+    return null
+  }
+
   function needsTransitionGuard(intent: FieldDefinitionsIntent): boolean {
     if (intent.kind === 'select-field' && intent.fieldId === fieldDefinitionsSession.draft?.baseline.id) {
       return false
@@ -309,6 +341,14 @@ export function useFieldDefinitionWorkflows({
   }
 
   watch(workspace, () => {
+    const editDraft = fieldDefinitionsSession.draft
+    const latestDefinition = editDraft ? currentDefinition(editDraft.baseline.id) : null
+    if (editDraft && latestDefinition
+      && !sameDefinitionSnapshot(editDraft.baseline, latestDefinition)
+      && !hasDefinitionChanges()) {
+      fieldDefinitionsSession.draft = definitionDraft(latestDefinition)
+    }
+
     const selectedId = fieldDefinitionsSession.selectedId
     if (selectedId && !currentDefinition(selectedId)) {
       invalidatePreparedMutation()
@@ -800,6 +840,7 @@ export function useFieldDefinitionWorkflows({
 
   return {
     fieldDefinitionsSession,
+    getFieldDefinitionImportConflict,
     fieldDefinitionDialogOpen,
     fieldDefinitionError,
     fieldDefinitionSaveRevision,

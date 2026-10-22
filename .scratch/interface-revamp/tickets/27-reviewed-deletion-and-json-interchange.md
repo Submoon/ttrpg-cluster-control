@@ -1,6 +1,7 @@
 ---
 title: 'Review destructive changes and exchange independent JSON copies safely'
-status: open
+status: closed
+assignee: ticket27
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,15 +24,15 @@ Review current deletion/import consequences without losing drafts, confirm an ac
 
 ## Acceptance criteria
 
-1. [ ] Separated/protected Delete prepares actual cascades read-only, resolves ownership at confirmation and recomputes/renews changed effects after another Apply.
-2. [ ] Cancel/validation publishes nothing.
-3. [ ] Clear deleted selections/per-view IDs/drafts/pending targets/references, retaining unrelated work and fresh subsequent creation contracts.
-4. [ ] Parse/validate import before draft resolution; show collisions/possible matches and confirm an independent ID-remapped copy with references/applicability correct and current work retained, never silent merge/replacement.
-5. [ ] Reuse freshness/resolution without a new global engine.
-6. [ ] Preserve cluster/system geometry/native/custom data and supported older route/circle/ellipse/applicability shapes under unchanged marker/version/no-fallback.
-7. [ ] Current JSON includes latest applied memory under failed saving and excludes drafts/previews/UI state.
-8. [ ] Invalid/canceled/download failures preserve work; successful export cannot clear save failure; valid application survives subsequent storage failure with Retry/recovery JSON.
-9. [ ] Verify downloads/reload/menu/review reachability.
+1. [x] Separated/protected Delete prepares actual cascades read-only, resolves ownership at confirmation and recomputes/renews changed effects after another Apply.
+2. [x] Cancel/validation publishes nothing.
+3. [x] Clear deleted selections/per-view IDs/drafts/pending targets/references, retaining unrelated work and fresh subsequent creation contracts.
+4. [x] Parse/validate import before draft resolution; show collisions/possible matches and confirm an independent ID-remapped copy with references/applicability correct and current work retained, never silent merge/replacement.
+5. [x] Reuse freshness/resolution without a new global engine.
+6. [x] Preserve cluster/system geometry/native/custom data and supported older route/circle/ellipse/applicability shapes under unchanged marker/version/no-fallback.
+7. [x] Current JSON includes latest applied memory under failed saving and excludes drafts/previews/UI state.
+8. [x] Invalid/canceled/download failures preserve work; successful export cannot clear save failure; valid application survives subsequent storage failure with Retry/recovery JSON.
+9. [x] Verify downloads/reload/menu/review reachability.
 
 ## Scope and exclusions
 
@@ -44,7 +45,7 @@ One reviewed workspace-change/files journey across existing cascade/import/codec
 
 Dependency rationale: 24 — route/endpoint owner and cluster pending targets must work; 26 — Fields owners and reviewed-plan freshness/resolution must work. Object/Orbit owners are inherited; no image/system-gesture prerequisite.
 
-Prerequisite24 is satisfied on2026-10-21. This ticket remains blocked by26 and unclaimed; the approved dependency graph is retained.
+Prerequisites 24 and 26 are complete. The approved dependency graph is retained.
 
 ## Specification and evidence mapping
 
@@ -72,4 +73,12 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Claimed on 2026-10-22 from `8379b2901c88ebe3fcd1198ffa8b0175ddecbbe2`, equal to fetched origin/codex/interface-revamp (0 main-only / 52 feature-only). See [execution](../research/implementation-27-2026-10-22.md). Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+
+## Resolution
+
+2026-10-22 — Implemented Nuxt UI reviews for deletion and independent JSON copies in the persisted B/Dock editor. Reviews prepare without mutation, resolve only affected drafts at confirmation and renew changed consequences. Route effects include endpoint dependencies; deleted pending creation targets are pruned through their owner. Import retains the current map and unrelated work, reconciles reusable definitions through their owners, remaps copied entities and acknowledges memory application before durability. Applied recovery JSON remains available after saving fails.
+
+Typecheck/build pass. All eight new product tests pass in the complete run. The complete run is **169/180**; its eleven obsolete legacy navigation/wording/tab-order expectations are corrected without weakening data assertions, then pass **11/11** on unchanged application/compiled hashes. No fresh 180/180 run is claimed. Independent technical/domain correction reviews and the focused test-preservation review have no remaining blockers. Exact identities, failed attempts, compiled compact captures and physical-device limits are in the [verification record](../implementation-lab/ticket-27-2026-10-22/qa/README.md).
+
+Tickets 28 and 29 remain separate. Source issue 3 stays open and PR 28 stays draft; no successor, merge or source closure is performed.

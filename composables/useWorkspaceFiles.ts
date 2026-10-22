@@ -1,7 +1,7 @@
 /**
  * Browser file actions use domain codecs and import preparation; persistence and selection remain page-owned.
  */
-import { ref, type Ref } from 'vue'
+import { readonly, ref, type Ref } from 'vue'
 import {
   exportJumpCluster,
   exportStarSystem,
@@ -10,21 +10,32 @@ import {
   type LocalWorkspace,
   type StarSystem,
 } from '../domain/workspace'
+import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
-import type { TransitionOptions } from './editor-workflows/types'
 
 type MapKind = 'jump-cluster' | 'star-system'
 
 interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
-  commit: (nextWorkspace: LocalWorkspace) => Promise<void>
-  resolveTransition: (options?: TransitionOptions) => Promise<boolean>
-  captureImportOrigin: () => { navigationStamp: string; selectedSystemId: string | null } | null
-  onImported: (
-    firstAddedSystemId: string | undefined,
-    origin: { navigationStamp: string; selectedSystemId: string | null },
-  ) => Promise<void>
+  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
+  resolveImportDefinitionChanges: (existingFieldIds: string[]) => Promise<boolean>
+}
+
+interface ImportReviewState {
+  open: boolean
+  suspended: boolean
+  summary: JsonImportSummary | null
+  confirming: boolean
+  error: string
+  fieldConflict: { message: string } | null
+}
+
+interface ImportEpoch {
+  workspaceId: string
+  clusterId: string
+  operation: number
 }
 
 /**
@@ -35,16 +46,87 @@ interface WorkspaceFileActionsOptions {
 export function useWorkspaceFiles({
   workspace,
   selectedSystem,
-  commit,
-  resolveTransition,
-  captureImportOrigin,
-  onImported,
+  applyWorkspace,
+  getFieldDefinitionImportConflict,
+  resolveImportDefinitionChanges,
 }: WorkspaceFileActionsOptions) {
   const exportError = ref('')
   const importError = ref('')
+  const mutableImportReview = ref<ImportReviewState>({
+    open: false,
+    suspended: false,
+    summary: null,
+    confirming: false,
+    error: '',
+    fieldConflict: null,
+  })
+  let operationCounter = 0
+  let currentImportEpoch: ImportEpoch | null = null
+  let importContent: unknown
+  let importReviewSignature = ''
+
+  const importReview = readonly(mutableImportReview)
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  /**
+   * Freezes parsed JSON recursively so the reviewed source cannot drift while a modal is open.
+   * @param value Parsed source JSON.
+   * @returns The same JSON value with all objects and arrays frozen.
+   */
+  function freezeJson<T>(value: T): T {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+      for (const child of Object.values(value)) freezeJson(child)
+      Object.freeze(value)
+    }
+    return value
+  }
+
+  function epochIsCurrent(epoch: ImportEpoch): boolean {
+    const currentWorkspace = workspace.value
+    return importOperationIsCurrent(epoch)
+      && currentWorkspace !== null
+      && currentWorkspace.id === epoch.workspaceId
+      && currentWorkspace.cluster.id === epoch.clusterId
+  }
+
+  function importOperationIsCurrent(epoch: ImportEpoch): boolean {
+    return currentImportEpoch?.operation === epoch.operation
+      && currentImportEpoch.workspaceId === epoch.workspaceId
+      && currentImportEpoch.clusterId === epoch.clusterId
+  }
+
+  function abandonStaleImport(epoch: ImportEpoch): void {
+    if (importOperationIsCurrent(epoch) && !epochIsCurrent(epoch)) clearImportReview()
+  }
+
+  function clearImportReview(): void {
+    operationCounter += 1
+    currentImportEpoch = null
+    importContent = undefined
+    importReviewSignature = ''
+    mutableImportReview.value = {
+      open: false,
+      suspended: false,
+      summary: null,
+      confirming: false,
+      error: '',
+      fieldConflict: null,
+    }
+  }
+
+  function refreshImportReview(
+    summary: JsonImportSummary,
+    signature: string,
+    error: string,
+    fieldConflict: { message: string } | null = null,
+  ): void {
+    importReviewSignature = signature
+    mutableImportReview.value.summary = summary
+    mutableImportReview.value.error = error
+    mutableImportReview.value.fieldConflict = fieldConflict
   }
 
   /**
@@ -159,77 +241,184 @@ export function useWorkspaceFiles({
   }
 
   /**
-   * Formats an import confirmation from counts, ID collisions, and informational possible matches.
-   * @param summary Preview data from domain validation; possible matches do not merge map entities.
-   * @returns Confirmation text describing the independent-copy behavior.
-   */
-  function importPreview(summary: JsonImportSummary): string {
-    const collisionLines = summary.idCollisions.length
-      ? summary.idCollisions.map(collision =>
-          `- ${collision.entity} "${collision.name}" [${collision.id}]`,
-        )
-      : ['- None']
-    const matchLines = summary.possibleMatches.length
-      ? summary.possibleMatches.map(match =>
-          `- ${match.entity} "${match.name}" in "${match.existingSystem}" (${match.reason})`,
-        )
-      : ['- None']
-    return [
-      `Import this ${summary.type === 'cluster' ? 'Jump Cluster' : 'star system'} as an independent copy?`,
-      '',
-      `Star systems: ${summary.systems}`,
-      `Map objects: ${summary.objects}`,
-      `Orbits: ${summary.orbits}`,
-      `Jump Routes: ${summary.routes}`,
-      `Custom fields: ${summary.customFields}`,
-      '',
-      `Original-ID collisions (${summary.idCollisions.length}):`,
-      ...collisionLines,
-      '',
-      `Possible existing matches by name or location key (${summary.possibleMatches.length}):`,
-      ...matchLines,
-      '',
-      'Map entities remain separate copies and receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.',
-    ].join('\n')
-  }
-
-  /**
-   * Parses a selected JSON file, prepares a validated independent copy, asks for confirmation, then commits.
+   * Parses and validates a selected JSON file before opening the independent-copy review.
    * The input is cleared immediately so selecting the same file again still emits a change event.
    * @param event File-input change event.
-   * @returns A promise that resolves after preparation and any confirmed commit; errors populate importError.
+   * @returns A promise that resolves after validation; invalid files populate importError.
    */
   async function importJsonFile(event: Event): Promise<void> {
     const input = event.target
     if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
-    if (!file || !workspace.value) return
+    const initialWorkspace = workspace.value
+    if (!file || !initialWorkspace) return
 
     importError.value = ''
+    clearImportReview()
+    const epoch: ImportEpoch = {
+      workspaceId: initialWorkspace.id,
+      clusterId: initialWorkspace.cluster.id,
+      operation: ++operationCounter,
+    }
+    currentImportEpoch = epoch
     try {
       let content: unknown
       try {
-        content = JSON.parse(await file.text())
+        content = freezeJson(JSON.parse(await file.text()))
       } catch (error) {
         throw new Error(`The selected file is not valid JSON: ${errorText(error)}`)
       }
-      // Validate the selected data before asking to resolve any inspector draft. This is read-only;
-      // the actual candidate is rebuilt from current applied memory after the guard completes.
-      prepareJsonImport(workspace.value, content)
-      if (!await resolveTransition({ leaveChart: false })) return
-      const latestWorkspace = workspace.value
-      if (!latestWorkspace) return
-      const prepared = prepareJsonImport(latestWorkspace, content)
-      if (!window.confirm(importPreview(prepared.summary))) return
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
+      const currentWorkspace = workspace.value
+      if (!currentWorkspace) return
+      const prepared = prepareJsonImport(currentWorkspace, content)
+      const effects = jsonImportReviewEffects(currentWorkspace, content, prepared)
+      if (!epochIsCurrent(epoch)) return
 
-      const origin = captureImportOrigin()
-      if (!origin) return
-      await commit(prepared.workspace)
-      await onImported(prepared.addedSystemIds[0], origin)
+      importContent = content
+      importReviewSignature = effects.signature
+      mutableImportReview.value = {
+        open: true,
+        suspended: false,
+        summary: prepared.summary,
+        confirming: false,
+        error: '',
+        fieldConflict: null,
+      }
     } catch (error) {
-      importError.value = errorText(error)
+      if (epochIsCurrent(epoch)) importError.value = errorText(error)
+      else abandonStaleImport(epoch)
     }
+  }
+
+  /**
+   * Confirms the current import review against latest applied memory and publishes one independent copy.
+   * Changed review effects are refreshed and require a second explicit confirmation.
+   */
+  async function confirmJsonImport(): Promise<void> {
+    const epoch = currentImportEpoch
+    const content = importContent
+    if (!epoch || content === undefined || !mutableImportReview.value.open
+      || mutableImportReview.value.confirming) return
+    if (!epochIsCurrent(epoch)) {
+      clearImportReview()
+      return
+    }
+
+    mutableImportReview.value.confirming = true
+    mutableImportReview.value.error = ''
+    mutableImportReview.value.fieldConflict = null
+
+    try {
+      const firstWorkspace = workspace.value
+      if (!firstWorkspace) return
+      const firstPrepared = prepareJsonImport(firstWorkspace, content)
+      const firstEffects = jsonImportReviewEffects(firstWorkspace, content, firstPrepared)
+      const initialConflict = getFieldDefinitionImportConflict(firstPrepared.workspace)
+      if (firstEffects.signature !== importReviewSignature) {
+        refreshImportReview(
+          firstPrepared.summary,
+          firstEffects.signature,
+          'The workspace changed while you reviewed this import. Review the updated effects before importing.',
+          initialConflict,
+        )
+        return
+      }
+
+      if (initialConflict) {
+        mutableImportReview.value.fieldConflict = initialConflict
+        return
+      }
+
+      if (firstEffects.existingFieldIds.length) {
+        const resolved = await resolveImportDefinitionChanges(firstEffects.existingFieldIds)
+        if (!epochIsCurrent(epoch)) {
+          abandonStaleImport(epoch)
+          return
+        }
+        if (!resolved) return
+
+        const latestWorkspace = workspace.value
+        if (!latestWorkspace) {
+          abandonStaleImport(epoch)
+          return
+        }
+        const latestPrepared = prepareJsonImport(latestWorkspace, content)
+        const latestEffects = jsonImportReviewEffects(latestWorkspace, content, latestPrepared)
+        const latestConflict = getFieldDefinitionImportConflict(latestPrepared.workspace)
+        if (latestEffects.signature !== importReviewSignature) {
+          refreshImportReview(
+            latestPrepared.summary,
+            latestEffects.signature,
+            'The workspace changed while resolving a draft. Review the updated effects before importing.',
+            latestConflict,
+          )
+          return
+        }
+        if (latestConflict) {
+          mutableImportReview.value.fieldConflict = latestConflict
+          return
+        }
+      }
+
+      if (!epochIsCurrent(epoch)) return
+      const finalWorkspace = workspace.value
+      if (!finalWorkspace) return
+      const finalPrepared = prepareJsonImport(finalWorkspace, content)
+      const finalEffects = jsonImportReviewEffects(finalWorkspace, content, finalPrepared)
+      const finalConflict = getFieldDefinitionImportConflict(finalPrepared.workspace)
+      if (finalEffects.signature !== importReviewSignature) {
+        refreshImportReview(
+          finalPrepared.summary,
+          finalEffects.signature,
+          'The workspace changed before this import could be applied. Review the updated effects before importing.',
+          finalConflict,
+        )
+        return
+      }
+      if (finalConflict) {
+        mutableImportReview.value.fieldConflict = finalConflict
+        return
+      }
+      if (!epochIsCurrent(epoch)) return
+
+      const { durable } = applyWorkspace(finalPrepared.workspace)
+      clearImportReview()
+      void durable.catch(() => {})
+    } catch (error) {
+      if (epochIsCurrent(epoch)) mutableImportReview.value.error = errorText(error)
+      else abandonStaleImport(epoch)
+    } finally {
+      if (epochIsCurrent(epoch) && mutableImportReview.value.open) {
+        mutableImportReview.value.confirming = false
+      }
+    }
+  }
+
+  /** Closes and invalidates the current review without applying its candidate. */
+  function cancelJsonImport(): void {
+    clearImportReview()
+    importError.value = ''
+  }
+
+  /** Temporarily hides the review while an authoritative draft or guard is open. */
+  function suspendImportReview(): void {
+    if (mutableImportReview.value.open) mutableImportReview.value.suspended = true
+  }
+
+  /** Hides the review before the parent opens its authoritative Fields editor. */
+  function reviewImportFields(): void {
+    suspendImportReview()
+  }
+
+  /** Resumes a suspended review; confirmation rechecks any Fields conflict before publishing. */
+  function resumeImportReview(): void {
+    if (!mutableImportReview.value.open) return
+    mutableImportReview.value.suspended = false
   }
 
   return {
@@ -239,5 +428,11 @@ export function useWorkspaceFiles({
     downloadSystemJson,
     downloadMapImage,
     importJsonFile,
+    importReview,
+    confirmJsonImport,
+    cancelJsonImport,
+    reviewImportFields,
+    suspendImportReview,
+    resumeImportReview,
   }
 }

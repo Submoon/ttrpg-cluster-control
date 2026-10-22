@@ -1126,11 +1126,12 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
   function isEntityCommandBlocked(command: EntityCommand): boolean {
     const session = entitySession.value
     const currentWorkspace = workspace.value
-    if (!session || !currentWorkspace || !hasModifiedEntitySession.value) return false
+    if (!session || !currentWorkspace) return false
 
     if (command.kind === 'deletion') {
       return deletionChangesOwnedDependencies(currentWorkspace, session, command.target, draftDependencies)
     }
+    if (!hasModifiedEntitySession.value) return false
     if (command.kind === 'definition-mutation') {
       if (session.kind !== 'object') return false
       if (sessionFieldDefinitionIds(session).has(command.fieldId)) return true

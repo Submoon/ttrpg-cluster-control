@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { importReviewDialog, resolveImportReview } from './helpers'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   activeWorkspaceFeedback,
@@ -25,11 +26,11 @@ async function importCampaignWorkspace(
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(fixture))
-  const preview = await importPreview
-  expect(preview.message()).toContain('Jump Routes: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(preview, 'confirm')
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')

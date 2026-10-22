@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { deletionReviewDialog, resolveDeletionReview } from './helpers'
 import { activeWorkspaceFeedback, addClusterSystem, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
@@ -412,8 +413,11 @@ test('custom field category and subtype scopes hide ineligible objects without d
   await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
 
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
-  page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Delete Iria' }).click()
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Iria')
+  await resolveDeletionReview(deletionReview, 'confirm')
   await expect(hierarchy.getByRole('button', { name: /Iria/ })).toHaveCount(0)
 
   await returnToClusterMap(page)

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
@@ -31,11 +32,11 @@ async function importCampaignWorkspace(page: import('@playwright/test').Page): P
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-  const preview = await importPreview
-  expect(preview.message()).toContain('Jump Routes: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(preview, 'confirm')
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
@@ -48,15 +49,15 @@ test('Add Jump Route retains its origin through pan and zoom, then clears both e
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(
     jsonMapImportInput(page),
     'campaign-baseline.json',
     JSON.stringify(campaignBaselineFixture),
   )
-  const preview = await importPreview
-  expect(preview.message()).toContain('Jump Routes: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(preview, 'confirm')
   await returnToClusterMap(page)
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
@@ -192,11 +193,11 @@ test('route staging survives view gestures and unrelated deletion, while Quit st
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  const importPreview = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'campaign-route-staging.json', JSON.stringify(stagingFixture))
-  const preview = await importPreview
-  expect(preview.message()).toContain('Jump Routes: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(preview, 'confirm')
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
@@ -275,8 +276,11 @@ test('route staging survives view gestures and unrelated deletion, while Quit st
   await expect.poll(() => readInspectorSelection(toPoint)).toBe('Harrow Arrival (Harrow)')
   await page.setViewportSize({ width: 1440, height: 960 })
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  page.once('dialog', dialog => dialog.accept())
   await hierarchy.getByRole('button', { name: 'Delete Unrelated system', exact: true }).click()
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Unrelated star system')
+  await resolveDeletionReview(deletionReview, 'confirm')
   await expect(clusterMap.getByRole('button', { name: /Unrelated system/ })).toHaveCount(0)
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })

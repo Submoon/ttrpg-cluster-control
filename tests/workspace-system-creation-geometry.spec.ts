@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
+import { importReviewDialog, resolveImportReview } from './helpers'
 import {
   captureMapExportBlobs,
   dockAction,
@@ -74,15 +75,15 @@ async function findUnobstructedMapTouchPair(map: Locator): Promise<[TouchPoint, 
 
 async function openDenseReach(page: Page): Promise<Locator> {
   await returnToClusterMap(page)
-  const importDialog = page.waitForEvent('dialog')
   await setJsonFile(
     jsonMapImportInput(page),
     'dense-reach.json',
     JSON.stringify(creationGeometryFixture),
   )
-  const preview = await importDialog
-  expect(preview.message()).toContain('Star systems: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Star systems: 1')
+  await resolveImportReview(preview, 'confirm')
   await setHeaderMapActionsOpen(page, false)
 
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')

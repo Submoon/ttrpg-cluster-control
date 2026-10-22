@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput } from './helpers'
+import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   createJumpRoute,
   createLocalWorkspace,
@@ -301,12 +302,12 @@ async function acceptImportWithHeldAcknowledgement(
   await page.getByRole('button', { name: 'Import JSON copy' }).click()
   await setHeaderMapActionsOpen(page, false)
   await setChartWriteGate(page, { holdCompletions: true })
-  const previewPromise = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'incoming-reach.json', fixture)
-  const preview = await previewPromise
-  expect(preview.message()).toContain('Star systems: 1')
-  expect(preview.message()).toContain('Jump Routes: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Star systems: 1')
+  expect(previewSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(preview, 'confirm')
   await setHeaderMapActionsOpen(page, false)
   await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
   await openWorkspaceHierarchy(page, hierarchyName)
@@ -821,14 +822,11 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   })
 
   try {
-    let confirmationMessage = ''
-    page.once('dialog', async (confirmation) => {
-      expect(confirmation.type()).toBe('confirm')
-      confirmationMessage = confirmation.message()
-      await confirmation.dismiss()
-    })
     await deleteSystemButton.click()
-    expect(confirmationMessage).toContain('New System 2')
+    const deletionReview = deletionReviewDialog(page)
+    const deletionSummary = await deletionReview.innerText()
+    expect(deletionSummary).toContain('New System 2')
+    await resolveDeletionReview(deletionReview, 'cancel')
     await expect(chartDialog).toBeHidden()
 
     await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
@@ -874,21 +872,22 @@ test('system deletion resolves its chart target after review and asks again for 
   await chartDialog.getByLabel('Star system').fill('Current System 2')
   await page.keyboard.press('Escape')
 
-  const confirmations: string[] = []
-  page.on('dialog', async (confirmation) => {
-    confirmations.push(confirmation.message())
-    await confirmation.accept()
-  })
   await deleteSystemButton.click()
+  const initialReview = deletionReviewDialog(page)
+  const initialSummary = await initialReview.innerText()
+  expect(initialSummary).toContain('New System 2')
+  await resolveDeletionReview(initialReview, 'confirm')
   await expect(chartDialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await chartDialog.getByRole('button', { name: 'Apply and continue' }).click()
+  const refreshedReview = deletionReviewDialog(page)
+  await expect(refreshedReview).toContainText('Current System 2')
+  const refreshedSummary = await refreshedReview.innerText()
+  expect(refreshedSummary).toContain('Current System 2')
+  await resolveDeletionReview(refreshedReview, 'confirm')
 
   await expect(hierarchy.getByRole('button', { name: 'Delete Current System 2 system' })).toHaveCount(0)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
     .getByRole('button', { name: 'Open Current System 2 system map' })).toHaveCount(0)
-  await expect.poll(() => confirmations.length).toBe(2)
-  expect(confirmations[0]).toContain('New System 2')
-  expect(confirmations[1]).toContain('Current System 2')
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -1030,7 +1029,7 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
   })
 }
 
-test('a delayed import navigation that meets an invalid new draft stays with its exact values and error', async ({ page }) => {
+test('a delayed import save stays on Vesper until explicit navigation meets an invalid draft', async ({ page }) => {
   await createWorkspace(page)
   await installChartWriteGate(page)
   try {
@@ -1046,6 +1045,10 @@ test('a delayed import navigation that meets an invalid new draft stays with its
     await expect(dialog).toBeHidden()
 
     await releaseFirstChartWriteNotification(page)
+    await expect(dialog.getByRole('button', { name: 'Stay here' })).toHaveCount(0)
+    const context = page.getByRole('navigation', { name: 'Map context and commands' })
+    await expect(context.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
+    await context.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
     await expect(dialog.getByRole('button', { name: 'Stay here' })).toBeVisible()
     await dialog.getByRole('button', { name: 'Stay here' }).click()
     await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('')
@@ -1067,7 +1070,7 @@ test('a delayed import navigation that meets an invalid new draft stays with its
 })
 
 for (const decision of ['apply', 'discard'] as const) {
-  test(`an import completion with a new chart draft honors ${decision} before navigation`, async ({ page }) => {
+  test(`a delayed import save honors ${decision} after explicit Back navigation`, async ({ page }) => {
     await createWorkspace(page)
     await installChartWriteGate(page)
     try {
@@ -1081,6 +1084,10 @@ for (const decision of ['apply', 'discard'] as const) {
       const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
       const expectedClusterName = decision === 'apply' ? 'Kestrel Reach Prime' : 'Kestrel Reach'
       const expectedSystemName = decision === 'apply' ? 'Vesper Prime' : 'Vesper'
+      await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toHaveCount(0)
+      const context = page.getByRole('navigation', { name: 'Map context and commands' })
+      await expect(context.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
+      await context.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
       await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
       await resolveSelectionGuard(page, decision)
       await expect(dialog).toBeHidden()

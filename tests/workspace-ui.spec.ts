@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { deletionReviewDialog, resolveDeletionReview } from './helpers'
 import {
   addCatalogueObject,
   addClusterSystem,
@@ -330,8 +331,11 @@ test('panel toggles preserve the active mode and Delete remains safe while editi
   await expect(primaryStar).toBeVisible()
   await page.getByRole('button', { name: 'Cancel map object edits' }).click()
   await primaryStar.click()
-  page.once('dialog', async dialog => dialog.accept())
   await page.keyboard.press('Delete')
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Primary Star')
+  await resolveDeletionReview(deletionReview, 'confirm')
   await expect(primaryStar).toBeHidden()
 })
 

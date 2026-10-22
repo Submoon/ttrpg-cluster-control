@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
+import { importReviewDialog, resolveImportReview } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
@@ -146,12 +147,13 @@ test('an attached Orbit with undersized imported radii is rejected without losin
       orbitRadii: { 'small-orbit': { horizontal: 39, vertical: 40 } },
     },
   }
-  const previewPromise = page.waitForEvent('dialog')
   await setJsonFile(input, 'small-orbit.json', JSON.stringify(correctedMap))
-  const preview = await previewPromise
-  expect(preview.message()).toContain('star system')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('star system')
+  await resolveImportReview(preview, 'confirm')
 
+  await returnToClusterMap(page)
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systems = page.getByRole('navigation', { name: 'Star systems' })
   await expect(systems.getByRole('button', { name: 'Open Small Orbit Test system map' })).toBeVisible()

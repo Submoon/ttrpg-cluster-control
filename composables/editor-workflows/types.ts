@@ -31,6 +31,21 @@ export interface TransitionOptions {
   leaveRouteSession?: boolean
 }
 
+/** Current human-readable cascade summary owned by the deletion review workflow. */
+export interface WorkspaceDeletionReview {
+  id: number
+  clusterId: string
+  open: boolean
+  suspended: boolean
+  confirming: boolean
+  target: MapDeletionTarget
+  entityLabel: string
+  affectedEntities: string[]
+  effectSignature: string
+  notice: string
+  error: string
+}
+
 /** String-backed form values owned above the object Inspector's presentation lifetime. */
 export interface ObjectDraft {
   locationKey: string
@@ -124,7 +139,14 @@ export type EntityCommand =
   | { kind: 'orbit-host'; orbitId: string; hostId: string | null }
   | { kind: 'orbit-create'; hostId: string | null }
   | { kind: 'definition-mutation'; fieldId: string }
-  | { kind: 'deletion'; target: MapDeletionTarget }
+  | {
+      kind: 'deletion'
+      target: MapDeletionTarget
+      /** IDs in the prepared cascade, including nested objects and routes removed through endpoints. */
+      affectedSystemIds?: readonly string[]
+      affectedObjectIds?: readonly string[]
+      affectedRouteIds?: readonly string[]
+    }
 
 /** Explicit destination for an existing object. */
 export type SystemObjectMoveTarget =

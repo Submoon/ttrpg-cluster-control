@@ -6,6 +6,7 @@ import {
   createLocalWorkspace,
   jumpPointsInCluster,
   renameLocalWorkspace,
+  type MapDeletionPlan,
   type JumpRoute,
 } from '../../domain/workspace'
 import type {
@@ -978,6 +979,54 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     editorError.value = ''
   }
 
+  /** Clears only selections, visits, and resumable sessions invalidated by an applied cascade. */
+  function cleanupAfterDeletion(plan: MapDeletionPlan): void {
+    const removedSystems = new Set(plan.removedSystemIds)
+    const removedObjects = new Set(plan.removedObjectIds)
+    const removedOrbits = new Set(plan.removedOrbitIds)
+    const removedRoutes = new Set(plan.removedRouteIds)
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) return
+
+    if (selectedSystemId.value && removedSystems.has(selectedSystemId.value)) {
+      selectedSystemId.value = currentWorkspace.cluster.systems[0]?.id ?? null
+    }
+    if (clusterSelectedSystemId.value && removedSystems.has(clusterSelectedSystemId.value)) {
+      clusterSelectedSystemId.value = null
+    }
+    if (inspectedClusterSystemId.value && removedSystems.has(inspectedClusterSystemId.value)) {
+      inspectedClusterSystemId.value = null
+    }
+    if (selectedObjectId.value && removedObjects.has(selectedObjectId.value)) selectedObjectId.value = null
+    if (selectedOrbitId.value && removedOrbits.has(selectedOrbitId.value)) selectedOrbitId.value = null
+    if (selectedRouteId.value && removedRoutes.has(selectedRouteId.value)) selectedRouteId.value = null
+
+    const entityDraft = entitySession.value
+    if (entityDraft && (removedSystems.has(entityDraft.systemId)
+      || (entityDraft.kind === 'object' ? removedObjects : removedOrbits).has(entityDraft.targetId))) {
+      discardEntitySession(entityDraft.id)
+    }
+    const routeDraft = routeSession.value
+    if (routeDraft && ((routeDraft.routeId && removedRoutes.has(routeDraft.routeId))
+      || [...plan.removedObjectIds].some(id => [
+        routeDraft.initial.fromPointId,
+        routeDraft.initial.toPointId,
+        routeDraft.draft.fromPointId,
+        routeDraft.draft.toPointId,
+      ].includes(id)))) {
+      discardRouteSession(routeDraft.id)
+    }
+
+    const nextVisits = new Map<string, MapVisitMemory>()
+    for (const [key, visit] of mapVisits.value) {
+      if (key.startsWith(`system:${currentWorkspace.cluster.id}:`)
+        && removedSystems.has(key.slice(`system:${currentWorkspace.cluster.id}:`.length))) continue
+      nextVisits.set(key, { ...visit, selection: validVisitSelection(key, visit.selection) })
+    }
+    mapVisits.value = nextVisits
+    storeCurrentSelection()
+  }
+
   return {
     clusterName,
     systemName,
@@ -1069,5 +1118,6 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     selectOrbit,
     selectRoute,
     showChartDetails,
+    cleanupAfterDeletion,
   }
 }

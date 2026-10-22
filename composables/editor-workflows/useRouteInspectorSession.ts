@@ -80,14 +80,6 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
   }
 }
 
-function deletionTouchesPoint(target: Extract<EntityCommand, { kind: 'deletion' }>['target'], point: JumpPointReference): boolean {
-  return target.kind === 'system'
-    ? target.systemId === point.system.id
-    : target.kind === 'object'
-      ? target.systemId === point.system.id && target.objectId === point.point.id
-      : false
-}
-
 /** Keeps route form values alive above the Inspector, validates against current workspace, and applies once. */
 export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteInspectorSessionOptions) {
   const session = ref<RouteInspectorSession | null>(null)
@@ -298,14 +290,23 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
   function isRouteCommandBlocked(command: EntityCommand): boolean {
     const active = session.value
     const current = workspace.value
-    if (!active || !current || current.cluster.id !== active.clusterId || !hasModifiedRouteSession.value) return false
+    if (!active || !current || current.cluster.id !== active.clusterId) return false
     if (command.kind !== 'deletion') return false
     const target = command.target
-    if (target.kind === 'route' && active.routeId === target.routeId) return true
-    const referenced = new Set([active.initial.fromPointId, active.initial.toPointId, active.draft.fromPointId, active.draft.toPointId].filter(Boolean))
-    if (!referenced.size) return false
-    return jumpPointsInCluster(current.cluster)
-      .some(point => referenced.has(point.point.id) && deletionTouchesPoint(target, point))
+    const removedRouteIds = new Set(command.affectedRouteIds ?? [])
+    if (active.routeId && ((target.kind === 'route' && active.routeId === target.routeId)
+      || removedRouteIds.has(active.routeId))) return true
+
+    const removedSystemIds = new Set(command.affectedSystemIds ?? [])
+    const removedObjectIds = new Set(command.affectedObjectIds ?? [])
+    if (target.kind === 'system') removedSystemIds.add(target.systemId)
+    if (target.kind === 'object') removedObjectIds.add(target.objectId)
+    const referenced = [active.initial.fromPointId, active.initial.toPointId, active.draft.fromPointId, active.draft.toPointId]
+      .filter((id): id is string => Boolean(id))
+    if (!referenced.length) return false
+    return referenced.some(pointId => removedObjectIds.has(pointId)
+      || jumpPointsInCluster(current.cluster).some(point => point.point.id === pointId
+        && removedSystemIds.has(point.system.id)))
   }
 
   return {

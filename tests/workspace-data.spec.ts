@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, addClusterSystem, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, ensureMapDragPointsReachable, panMap, dragBy, setHeaderMapActionsOpen, downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, downloadImage, inspectImageSvg, setJsonFile, addCatalogueObject } from './helpers'
@@ -70,14 +71,12 @@ test('deleting a map object without dependents still asks for confirmation', asy
   const hierarchy = await openWorkspaceHierarchy(page)
   const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })
   await primaryStar.click()
-  let confirmation = ''
-  page.once('dialog', async dialog => {
-    confirmation = dialog.message()
-    await dialog.dismiss()
-  })
   await page.getByRole('button', { name: 'Delete Primary Star' }).click()
-
-  expect(confirmation).toMatch(/^Delete Primary Star/)
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Primary Star (Star, A)')
+  await expect(deletionReview.getByRole('button', { name: 'Confirm deletion', exact: true })).toBeVisible()
+  await resolveDeletionReview(deletionReview, 'cancel')
   await expect(primaryStar).toBeVisible()
 })
 
@@ -291,12 +290,13 @@ test('custom field category and subtype scopes are united on independent system 
   }
 
   const input = jsonMapImportInput(page)
-  const previewPromise = page.waitForEvent('dialog')
   await setJsonFile(input, 'scoped-system.json', JSON.stringify(legacySystemExport))
-  const preview = await previewPromise
-  expect(preview.message()).toContain('Compatible custom field definitions are reused')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Compatible custom field definitions are reused')
+  await resolveImportReview(preview, 'confirm')
 
+  await returnToClusterMap(page)
   const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
   const importedSystem = importedExport.cluster!.systems.find(system =>
     system.id !== sourceSystem.id && system.name === sourceSystem.name,
@@ -319,6 +319,9 @@ test('custom field category and subtype scopes are united on independent system 
 })
 
 test('the Warden can review and safely confirm dependent map deletions', async ({ page }) => {
+  // This journey spans several review cycles and reloads, which pushes it past 30s with compiled UI.
+  test.setTimeout(60_000)
+
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -356,13 +359,11 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Orbit 1 around Vesper Exit/ }).click()
-  let orbitDeletionPreview = ''
-  page.once('dialog', async (dialog) => {
-    orbitDeletionPreview = dialog.message()
-    await dialog.dismiss()
-  })
   await page.getByRole('button', { name: 'Delete Orbit 1 around Vesper Exit' }).click()
-  expect(orbitDeletionPreview).toContain('Nix')
+  const orbitDeletionReview = deletionReviewDialog(page)
+  const orbitDeletionSummary = await orbitDeletionReview.innerText()
+  expect(orbitDeletionSummary).toContain('Nix')
+  await resolveDeletionReview(orbitDeletionReview, 'cancel')
   await expect(hierarchy.getByRole('button', { name: /Select .*Nix/ })).toBeVisible()
 
   await returnToClusterMap(page)
@@ -395,34 +396,25 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await page.getByRole('navigation', { name: 'Jump Routes' })
     .getByRole('button', { name: /Select Jump Level 2/ })
     .click()
-  let directRouteDeletionRequested = false
-  let directRouteDeletionPreview = ''
-  const routeDeletionDialog = async (dialog: import('@playwright/test').Dialog) => {
-    directRouteDeletionRequested = true
-    directRouteDeletionPreview = dialog.message()
-    await dialog.accept()
-  }
-  page.on('dialog', routeDeletionDialog)
   await page.getByRole('button', { name: 'Delete Jump Route (Level 2)' }).click()
-  await page.off('dialog', routeDeletionDialog)
-  expect(directRouteDeletionRequested).toBe(true)
-  expect(directRouteDeletionPreview).toContain('Level 2')
+  const routeDeletionReview = deletionReviewDialog(page)
+  const routeDeletionSummary = await routeDeletionReview.innerText()
+  expect(routeDeletionSummary).toContain('Level 2')
+  await resolveDeletionReview(routeDeletionReview, 'confirm')
   await expect(clusterMap.getByRole('button', { name: /Jump Level 2/ })).toHaveCount(0)
 
   await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
-  let deletionPreview = ''
-  page.once('dialog', async (dialog) => {
-    deletionPreview = dialog.message()
-    await dialog.dismiss()
-  })
   await page.getByRole('button', { name: 'Delete Iria' }).click()
-  expect(deletionPreview).toContain('Orbit 1 around Iria')
-  expect(deletionPreview).toContain('Vesper Exit')
-  expect(deletionPreview).toContain('Orbit 1 around Vesper Exit')
-  expect(deletionPreview).toContain('Nix')
-  expect(deletionPreview).toContain('Level 1')
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Orbit 1 around Iria')
+  expect(deletionSummary).toContain('Vesper Exit')
+  expect(deletionSummary).toContain('Orbit 1 around Vesper Exit')
+  expect(deletionSummary).toContain('Nix')
+  expect(deletionSummary).toContain('Level 1')
+  await resolveDeletionReview(deletionReview, 'cancel')
   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toBeVisible()
   await returnToClusterMap(page)
@@ -438,11 +430,11 @@ test('the Warden can review and safely confirm dependent map deletions', async (
 
   await restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
-  page.once('dialog', async (dialog) => {
-    deletionPreview = dialog.message()
-    await dialog.accept()
-  })
   await page.getByRole('button', { name: 'Delete Iria' }).click()
+  const confirmedDeletionReview = deletionReviewDialog(page)
+  const confirmedDeletionSummary = await confirmedDeletionReview.innerText()
+  expect(confirmedDeletionSummary).toContain('Orbit 1 around Iria')
+  await resolveDeletionReview(confirmedDeletionReview, 'confirm')
   await expect(hierarchy.getByRole('button', { name: /Select .*Iria/ })).toHaveCount(0)
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Exit/ })).toHaveCount(0)
   await returnToClusterMap(page)
@@ -456,12 +448,11 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await expect(reloadedClusterMap.getByRole('button', { name: /Jump Level 1/ })).toHaveCount(0)
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
   const reloadedClusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  page.once('dialog', async (dialog) => {
-    deletionPreview = dialog.message()
-    await dialog.accept()
-  })
   await reloadedClusterHierarchy.getByRole('button', { name: 'Delete New System 2 system' }).click()
-  expect(deletionPreview).toContain('Harrow Entry')
+  const systemDeletionReview = deletionReviewDialog(page)
+  const systemDeletionSummary = await systemDeletionReview.innerText()
+  expect(systemDeletionSummary).toContain('Harrow Entry')
+  await resolveDeletionReview(systemDeletionReview, 'confirm')
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toHaveCount(0)
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open Vesper system map' })).toBeVisible()
 })
@@ -489,14 +480,12 @@ test('deleting an associated physical Station clears the Jump Point association 
   await selectInspectorOption(physicalStation, { label: /Vesper Gate/ })
   await saveMapObject(page)
   await hierarchy.getByRole('button', { name: /Vesper Gate/ }).click()
-  let deletionPreview = ''
-  page.once('dialog', async (dialog) => {
-    deletionPreview = dialog.message()
-    await dialog.accept()
-  })
   await page.getByRole('button', { name: 'Delete Vesper Gate' }).click()
-  expect(deletionPreview).toContain('Vesper Arrival')
-  expect(deletionPreview).toContain('Vesper Gate')
+  const deletionReview = deletionReviewDialog(page)
+  const deletionSummary = await deletionReview.innerText()
+  expect(deletionSummary).toContain('Vesper Arrival')
+  expect(deletionSummary).toContain('Vesper Gate')
+  await resolveDeletionReview(deletionReview, 'confirm')
   await expect(hierarchy.getByRole('button', { name: /Select .*Vesper Gate/ })).toHaveCount(0)
   await hierarchy.getByRole('button', { name: /Select .*Vesper Arrival/ }).click()
   expect(await readInspectorSelection(physicalStation)).toBe('No physical Station')
@@ -873,10 +862,9 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await expect(page.getByRole('alert').last()).toContainText('valid version 1')
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
 
-  const previewPromise = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
-  const canceledPreview = await previewPromise
-  const previewText = canceledPreview.message()
+  const canceledPreview = importReviewDialog(page)
+  const previewText = await canceledPreview.innerText()
   expect(previewText).toContain('Star systems: 2')
   expect(previewText).toContain('Map objects: 5')
   expect(previewText).toContain('Orbits: 1')
@@ -885,12 +873,14 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   expect(previewText).toContain('Possible existing matches by name or location key')
   expect(previewText).toContain('Primary Star')
   expect(previewText).toContain('same name')
-  await canceledPreview.dismiss()
+  await resolveImportReview(canceledPreview, 'cancel')
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
 
-  const acceptedPreview = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
-  await (await acceptedPreview).accept()
+  const acceptedPreview = importReviewDialog(page)
+  const acceptedSummary = await acceptedPreview.innerText()
+  expect(acceptedSummary).toContain('Star systems: 2')
+  await resolveImportReview(acceptedPreview, 'confirm')
   const alphaNode = systemList.getByRole('button', { name: 'Open Vesper system map' }).last()
   const betaNode = systemList.getByRole('button', { name: 'Open Far Vesper system map' })
   await expect(alphaNode).toBeVisible()
@@ -951,12 +941,12 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await expect(page.getByLabel('Campaign notes')).toHaveValue('The key is hidden.')
   await returnToClusterMap(page)
 
-  const duplicatePreviewPromise = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'duplicate.json', JSON.stringify(firstImport))
-  const duplicatePreview = await duplicatePreviewPromise
-  expect(duplicatePreview.message()).toContain('Original-ID collisions')
-  expect(duplicatePreview.message()).toContain('Primary Star')
-  await duplicatePreview.accept()
+  const duplicatePreview = importReviewDialog(page)
+  const duplicateSummary = await duplicatePreview.innerText()
+  expect(duplicateSummary).toContain('Original-ID collisions')
+  expect(duplicateSummary).toContain('Primary Star')
+  await resolveImportReview(duplicatePreview, 'confirm')
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(4)
   await expect(systemList.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(2)
 })
@@ -978,14 +968,15 @@ test('the Warden can import a standalone system without adding cluster routes', 
 
   const exportedSystem = await downloadJson(page, 'Export star system JSON')
   const input = jsonMapImportInput(page)
-  const previewPromise = page.waitForEvent('dialog')
   await setJsonFile(input, 'system-copy.json', JSON.stringify(exportedSystem))
-  const preview = await previewPromise
-  expect(preview.message()).toContain('Star systems: 1')
-  expect(preview.message()).toContain('Jump Routes: 0')
-  expect(preview.message()).toContain('Primary Star')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Star systems: 1')
+  expect(previewSummary).toContain('Jump Routes: 0')
+  expect(previewSummary).toContain('Primary Star')
+  await resolveImportReview(preview, 'confirm')
 
+  await returnToClusterMap(page)
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systems = page.getByRole('navigation', { name: 'Star systems' })
   await expect(systems.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(2)
@@ -1145,18 +1136,21 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   const clusterName = 'Kestrel Reach Prime'
   const systemName = 'Vesper Prime'
   const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map` })
-  const baselineImport = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-  const baselinePreview = await baselineImport
-  expect(baselinePreview.message()).toContain('Star systems: 2')
-  expect(baselinePreview.message()).toContain('Map objects: 6')
-  expect(baselinePreview.message()).toContain('Jump Routes: 1')
-  await baselinePreview.accept()
+  const baselinePreview = importReviewDialog(page)
+  const baselineSummary = await baselinePreview.innerText()
+  expect(baselineSummary).toContain('Star systems: 2')
+  expect(baselineSummary).toContain('Map objects: 6')
+  expect(baselineSummary).toContain('Jump Routes: 1')
+  await resolveImportReview(baselinePreview, 'confirm')
 
   await returnToClusterMap(page)
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  page.once('dialog', dialog => dialog.accept())
   await clusterHierarchy.getByRole('button', { name: 'Delete Campaign staging system', exact: true }).click()
+  const stagingDeletionReview = deletionReviewDialog(page)
+  const stagingDeletionSummary = await stagingDeletionReview.innerText()
+  expect(stagingDeletionSummary).toContain('Campaign staging')
+  await resolveDeletionReview(stagingDeletionReview, 'confirm')
   await expect(clusterMap.getByRole('button', { name: 'Open Campaign staging system map' })).toHaveCount(0)
   await page.reload()
   await returnToClusterMap(page)
@@ -1269,24 +1263,26 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   const importFile = jsonMapImportInput(page)
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systemList = page.getByRole('navigation', { name: 'Star systems' })
-  const canceledImport = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
-  const preview = await canceledImport
-  expect(preview.message()).toContain('Star systems: 2')
-  expect(preview.message()).toContain('Map objects: 5')
-  expect(preview.message()).toContain('Original-ID collisions (2)')
-  expect(preview.message()).toContain('Primary Star')
-  expect(preview.message()).toContain('Possible existing matches by name or location key')
-  await preview.dismiss()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Star systems: 2')
+  expect(previewSummary).toContain('Map objects: 5')
+  expect(previewSummary).toContain('Original-ID collisions (2)')
+  expect(previewSummary).toContain('Primary Star')
+  expect(previewSummary).toContain('Possible existing matches by name or location key')
+  await resolveImportReview(preview, 'cancel')
   await expect(systemList.getByRole('button', { name: /Open .* system map/ }))
     .toHaveCount(originalSystemIds.length)
   const unchanged = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(unchanged.cluster!.systems.map(system => system.id)).toEqual(originalSystemIds)
   expect(unchanged.cluster!.routes.map(route => route.id)).toEqual([originalRoute.id])
 
-  const acceptedImport = page.waitForEvent('dialog')
   await setJsonFile(importFile, 'imported-reach.json', JSON.stringify(incoming))
-  await (await acceptedImport).accept()
+  const acceptedImport = importReviewDialog(page)
+  const acceptedSummary = await acceptedImport.innerText()
+  expect(acceptedSummary).toContain('Star systems: 2')
+  await resolveImportReview(acceptedImport, 'confirm')
   await expect(systemList.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(1)
   await page.reload()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
@@ -1372,14 +1368,12 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   await returnToClusterMap(page)
   const importedClusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteImportedSystem = importedClusterHierarchy.getByRole('button', { name: 'Delete Far Vesper system' })
-  let deletionPreview = ''
-  page.once('dialog', async (dialog) => {
-    deletionPreview = dialog.message()
-    await dialog.dismiss()
-  })
   await deleteImportedSystem.click()
-  expect(deletionPreview).toContain('Beta Gate')
-  expect(deletionPreview).toContain('Level 1')
+  const canceledDeletionReview = deletionReviewDialog(page)
+  const canceledDeletionSummary = await canceledDeletionReview.innerText()
+  expect(canceledDeletionSummary).toContain('Beta Gate')
+  expect(canceledDeletionSummary).toContain('Level 1')
+  await resolveDeletionReview(canceledDeletionReview, 'cancel')
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toBeVisible()
   const importedRouteMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Alpha Gate.*Beta Gate/ })
   await expect(importedRouteMark).toBeVisible()
@@ -1395,8 +1389,12 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   }
   page.on('pageerror', captureClusterPositionPageError)
   page.on('console', captureClusterPositionConsoleError)
-  page.once('dialog', dialog => dialog.accept())
   await deleteImportedSystem.click()
+  const confirmedDeletionReview = deletionReviewDialog(page)
+  const confirmedDeletionSummary = await confirmedDeletionReview.innerText()
+  expect(confirmedDeletionSummary).toContain('Beta Gate')
+  expect(confirmedDeletionSummary).toContain('Level 1')
+  await resolveDeletionReview(confirmedDeletionReview, 'confirm')
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)
   await expect(importedRouteMark).toHaveCount(0)
   expect(staleClusterPositionErrors).toEqual([])

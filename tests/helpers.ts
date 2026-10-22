@@ -497,6 +497,40 @@ export function jsonMapImportInput(page: import('@playwright/test').Page): impor
   return page.getByLabel('Import map JSON')
 }
 
+/** Returns the public review dialog for a prepared destructive change. */
+export function deletionReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('dialog', { name: 'Review deletion', exact: true })
+}
+
+/** Returns the public review dialog for a validated independent JSON import. */
+export function importReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('dialog', { name: 'Review import', exact: true })
+}
+
+/** Resolves a deletion review through its visible action. Read its summary before calling this helper. */
+export async function resolveDeletionReview(
+  review: import('@playwright/test').Locator,
+  choice: 'confirm' | 'cancel',
+): Promise<void> {
+  await expect(review).toBeVisible()
+  await review.getByRole('button', {
+    name: choice === 'confirm' ? 'Confirm deletion' : 'Cancel deletion',
+    exact: true,
+  }).click()
+}
+
+/** Resolves an import review through its visible action. Read its summary before calling this helper. */
+export async function resolveImportReview(
+  review: import('@playwright/test').Locator,
+  choice: 'confirm' | 'cancel',
+): Promise<void> {
+  await expect(review).toBeVisible()
+  await review.getByRole('button', {
+    name: choice === 'confirm' ? 'Import independent copy' : 'Cancel import',
+    exact: true,
+  }).click()
+}
+
 export async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
   await setHeaderMapActionsOpen(page, true)
   try {

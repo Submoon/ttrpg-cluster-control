@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
+import { importReviewDialog, resolveImportReview } from './helpers'
 import {
   beginDragToWorldPoint,
   captureMapExportBlobs,
@@ -89,11 +90,11 @@ async function openPlacementLab(
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
 
-  const importDialog = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'orbit-placement-lab.json', JSON.stringify(fixture))
-  const preview = await importDialog
-  expect(preview.message()).toContain('Star systems: 1')
-  await preview.accept()
+  const preview = importReviewDialog(page)
+  const previewSummary = await preview.innerText()
+  expect(previewSummary).toContain('Star systems: 1')
+  await resolveImportReview(preview, 'confirm')
   await setHeaderMapActionsOpen(page, false)
 
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')

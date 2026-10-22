@@ -61,6 +61,11 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const clusterWorkflows = useClusterWorkflows({
     workspace: options.workspace,
     commit: options.commit,
+    applyWorkspace: options.applyWorkspace,
+    onDeletionApplied: plan => {
+      editorState.cleanupAfterDeletion(plan)
+      systemCreation.pruneTargetsAfterDeletion(plan)
+    },
     saveState: options.saveState,
     activeView: editorState.activeView,
     selectedSystemId: editorState.selectedSystemId,

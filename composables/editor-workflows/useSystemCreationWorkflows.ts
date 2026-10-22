@@ -7,6 +7,7 @@ import {
   minimumOrbitRadius,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
+  type MapDeletionPlan,
   type LocalWorkspace,
   type Orbit,
   type OrbitRadii,
@@ -633,6 +634,58 @@ export function useSystemCreationWorkflows({
     creationSession.value = null
   }
 
+  /** Clears only pending Add targets invalidated by a published deletion cascade. */
+  function pruneTargetsAfterDeletion(plan: MapDeletionPlan): void {
+    const session = creationSession.value
+    if (!session) return
+
+    if (plan.removedSystemIds.includes(session.systemId)) {
+      creationSession.value = null
+      return
+    }
+
+    const removedObjects = new Set(plan.removedObjectIds)
+    const removedOrbits = new Set(plan.removedOrbitIds)
+    const targetWasRemoved = (target: SystemCreationTarget): boolean =>
+      target.kind === 'host'
+        ? removedObjects.has(target.objectId)
+        : target.kind === 'orbit' && removedOrbits.has(target.orbitId)
+
+    let pruned = false
+    if (session.type.kind === 'orbit' && session.inputs.hostId && removedObjects.has(session.inputs.hostId)) {
+      session.inputs.hostId = ''
+      pruned = true
+      const errors = { ...session.errors }
+      delete errors.hostId
+      session.errors = errors
+    }
+    if (session.type.kind === 'object' && session.inputs.orbitId && removedOrbits.has(session.inputs.orbitId)) {
+      session.inputs.orbitId = ''
+      session.inputs.angleDegrees = ''
+      pruned = true
+      const errors = { ...session.errors }
+      delete errors.orbitId
+      delete errors.angleDegrees
+      session.errors = errors
+    }
+
+    const retainedCandidates = session.candidates.filter(candidate => !targetWasRemoved(candidate.target))
+    if (retainedCandidates.length !== session.candidates.length) {
+      session.candidates = retainedCandidates
+      pruned = true
+    }
+    if (session.preview && targetWasRemoved(session.preview.target)) {
+      session.preview = null
+      pruned = true
+    }
+    if (pruned) {
+      const errors = { ...session.errors }
+      delete errors.target
+      session.errors = errors
+      session.notice = ''
+    }
+  }
+
   return {
     creationSession,
     chooseCreationType,
@@ -643,5 +696,6 @@ export function useSystemCreationWorkflows({
     addCreationFromInputs,
     cancelCreationPreview,
     quitAdd,
+    pruneTargetsAfterDeletion,
   }
 }

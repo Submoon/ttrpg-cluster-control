@@ -144,3 +144,13 @@ The human requests implement for the complete resumable Fields lifecycle, retain
 The resumable Fields lifecycle is implemented from `b97f4e07`, preserving the approved B/Dock composition through Nuxt UI and presentation-independent session ownership. Typecheck/build, 10/10 ticket tests and the complete affected Orbit journey pass. The complete one-worker predecessor is 171/172; its only failure is causally traced to native endpoint quantization and corrected in the test without changing application geometry. A later two-worker run is interrupted under deadline pressure, not represented as a pass. Exact outcomes and physical-device limits remain in the [verification record](implementation-lab/ticket-26-2026-10-22/qa/README.md). Independent reviews have no remaining source blockers.
 
 Current frontier: **18–26 closed; 27 and 28 open/unclaimed; 29 remains last after 27 and 28.** Ticket 27 is only unblocked by its completed dependency; no successor implementation is started. Source issue 3 remains open and PR 28 remains draft.
+
+## Ticket 27 explicit implementation — 2026-10-22
+
+The human requests reviewed deletion and JSON interchange with Luna XHIGH implementation, maximum Nuxt UI reuse and focused verification. Claimed from fetched feature baseline `8379b2901c88ebe3fcd1198ffa8b0175ddecbbe2` (0 main-only / 52 feature-only). Sensitive routing covers destructive cascades, independent copies and draft/persistence ownership. See [execution and bounded contract](research/implementation-27-2026-10-22.md). Current frontier: **18–26 closed; 27 in-progress; 28 open/unclaimed; 29 remains last.** No successor is started; source issue 3 stays open and PR 28 stays draft.
+
+## Ticket 27 completion — 2026-10-22
+
+[Reviewed deletion and JSON interchange](tickets/27-reviewed-deletion-and-json-interchange.md#resolution) is complete with retained work, current consequence reviews, independent copies and memory/save recovery separation. Typecheck/build and all eight new product checks pass. The single full run is 169/180; eleven legacy UI expectations are corrected and pass their focused 11/11 rerun on unchanged application hashes. No fresh 180/180 pass is claimed. Independent source and test-preservation reviews have no remaining blockers; [evidence and limits](implementation-lab/ticket-27-2026-10-22/qa/README.md) retain exact outcomes.
+
+Current frontier: **18–27 closed; 28 open/unclaimed; 29 remains last after 28.** No successor is started. Physical-device checks remain unavailable. Source issue 3 stays open and PR 28 stays draft.

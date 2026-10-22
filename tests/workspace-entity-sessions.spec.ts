@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import entitySessionFixture from './fixtures/workspace-entity-sessions.json' with { type: 'json' }
+import { importReviewDialog, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   beginDragToWorldPoint,
@@ -35,11 +36,11 @@ async function openSessionLab(page: Page): Promise<{
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
   await returnToClusterMap(page)
 
-  const preview = page.waitForEvent('dialog')
   await setJsonFile(jsonMapImportInput(page), 'entity-session-lab.json', JSON.stringify(entitySessionFixture))
-  const importPreview = await preview
-  expect(importPreview.message()).toContain('Star systems: 1')
-  await importPreview.accept()
+  const importPreview = importReviewDialog(page)
+  const importSummary = await importPreview.innerText()
+  expect(importSummary).toContain('Star systems: 1')
+  await resolveImportReview(importPreview, 'confirm')
   await setHeaderMapActionsOpen(page, false)
 
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')

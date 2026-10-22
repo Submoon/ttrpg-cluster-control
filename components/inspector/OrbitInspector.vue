@@ -252,7 +252,7 @@
         </p>
       </section>
 
-      <section v-if="!orbitSession" class="entity-inspector-delete" aria-labelledby="orbit-delete-heading">
+      <section class="entity-inspector-delete" aria-labelledby="orbit-delete-heading">
         <div>
           <p class="section-kicker">SEPARATE DESTRUCTIVE ACTION</p>
           <h3 id="orbit-delete-heading">Delete</h3>

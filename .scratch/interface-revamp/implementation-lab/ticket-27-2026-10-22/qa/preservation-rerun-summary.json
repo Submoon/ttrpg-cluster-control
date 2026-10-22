@@ -1,0 +1,156 @@
+{
+  "candidate": "CF5099AC9311C604A7A1DF6B10173C569E8B8DD1C50823A78158332DF97F6B6A",
+  "stats": {
+    "startTime": "2026-10-22T11:02:20.037Z",
+    "duration": 86815.845,
+    "expected": 11,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "file": "system-orbits.spec.ts",
+      "line": 214,
+      "title": "the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 20530,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "system-orbits.spec.ts",
+      "line": 918,
+      "title": "dropping an existing unoccupied Orbit center onto an object raises too-small radii and round-trips",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 18063,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "line": 1032,
+      "title": "a delayed import save stays on Vesper until explicit navigation meets an invalid draft",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 3796,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "line": 1073,
+      "title": "a delayed import save honors apply after explicit Back navigation",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 4323,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-chart-drafts.spec.ts",
+      "line": 1073,
+      "title": "a delayed import save honors discard after explicit Back navigation",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 4378,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-cluster-routes.spec.ts",
+      "line": 161,
+      "title": "route staging survives view gestures and unrelated deletion, while Quit starts a blank route",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 6767,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 65,
+      "title": "deleting a map object without dependents still asks for confirmation",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 1966,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 207,
+      "title": "custom field category and subtype scopes are united on independent system import",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 12251,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "line": 954,
+      "title": "the Warden can import a standalone system without adding cluster routes",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2903,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-entity-inspector.spec.ts",
+      "line": 159,
+      "title": "the Orbit Inspector footer stays visible and hittable after its body scrolls",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 6116,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "file": "workspace-recovery.spec.ts",
+      "line": 104,
+      "title": "an attached Orbit with undersized imported radii is rejected without losing current data",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2592,
+          "retry": 0
+        }
+      ]
+    }
+  ]
+}

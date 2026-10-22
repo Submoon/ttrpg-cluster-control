@@ -1,12 +1,13 @@
 /**
  * Cluster commands coordinate selection and confirmation, then delegate persistence through the injected commit.
  */
-import { onMounted, onUnmounted, type ComputedRef, type Ref, type ShallowRef } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import {
   addStarSystem,
   planMapEntityDeletion,
   type JumpRoute,
   type LocalWorkspace,
+  type MapDeletionPlan,
   type MapDeletionTarget,
   type Orbit,
   type StarSystem,
@@ -17,12 +18,15 @@ import type {
   EntityCommand,
   SaveState,
   TransitionOptions,
+  WorkspaceDeletionReview,
 } from './types'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
+  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  onDeletionApplied: (plan: MapDeletionPlan) => void
   saveState: Readonly<Ref<SaveState>>
   activeView: Ref<'cluster' | 'system'>
   selectedSystemId: Ref<string | null>
@@ -57,6 +61,8 @@ interface ClusterWorkflowOptions {
 export function useClusterWorkflows({
   workspace,
   commit,
+  applyWorkspace,
+  onDeletionApplied,
   saveState,
   activeView,
   selectedSystemId,
@@ -82,6 +88,9 @@ export function useClusterWorkflows({
   selectCreatedSystem,
   editorError,
 }: ClusterWorkflowOptions) {
+  const deletionReview = ref<WorkspaceDeletionReview | null>(null)
+  let deletionReviewSequence = 0
+
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
   }
@@ -145,84 +154,186 @@ export function useClusterWorkflows({
     editorError.value = ''
   }
 
-  /**
-   * Previews dependent effects, asks for confirmation, then commits the planned deletion.
-   * Deletion is skipped while a prior write is visibly pending.
-   * @param target Object, Orbit, route, or system selected for removal.
-   * @returns A promise that resolves after cancellation or the commit attempt; failures populate editorError.
-   */
-  async function deleteMapEntity(
-    target: MapDeletionTarget,
-    resolveBeforeCommit?: () => Promise<boolean>,
-  ): Promise<void> {
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace || saveState.value === 'saving') return
-
-    try {
-      const confirmationFor = (plan: ReturnType<typeof planMapEntityDeletion>) => plan.affectedEntities.length
-        ? `Delete ${plan.entityLabel}?\n\nThis also removes or updates:\n${plan.affectedEntities.map(entity => `- ${entity}`).join('\n')}`
-        : `Delete ${plan.entityLabel}?`
-      const initialPlan = planMapEntityDeletion(currentWorkspace, target)
-      if (!window.confirm(confirmationFor(initialPlan))) return
-
-      let acceptedPlan = initialPlan
-      const entityConflict = isEntityCommandBlocked({ kind: 'deletion', target })
-      if (resolveBeforeCommit || entityConflict) {
-        const accepted = resolveBeforeCommit
-          ? await resolveBeforeCommit()
-          : await resolveTransition({ leaveChart: false })
-        if (!accepted) return
-        const latestWorkspace = workspace.value
-        if (!latestWorkspace) return
-        const refreshedPlan = planMapEntityDeletion(latestWorkspace, target)
-        if (
-          latestWorkspace !== currentWorkspace
-          && !window.confirm(confirmationFor(refreshedPlan))
-        ) return
-        acceptedPlan = refreshedPlan
-      }
-
-      editorError.value = ''
-      await commit(acceptedPlan.workspace)
-    } catch (error) {
-      editorError.value = errorText(error)
+  function deletionCommand(target: MapDeletionTarget, plan: MapDeletionPlan): EntityCommand {
+    return {
+      kind: 'deletion',
+      target,
+      affectedSystemIds: plan.removedSystemIds,
+      affectedObjectIds: plan.removedObjectIds,
+      affectedRouteIds: plan.removedRouteIds,
     }
   }
 
-  /** Reviews a system cascade before resolving any draft that targets the system being removed. */
-  async function deleteSystem(systemId: string): Promise<void> {
-    const command: EntityCommand = { kind: 'deletion', target: { kind: 'system', systemId } }
-    await deleteMapEntity(
-      { kind: 'system', systemId },
-      () => resolveTransition({
-        leaveChart: isChartDraftTarget(systemId),
-        leaveEntitySession: isEntityDraftCommandBlocked(command),
-        leaveRouteSession: isRouteCommandBlocked(command),
-      }),
-    )
+  function makeDeletionReview(
+    id: number,
+    clusterId: string,
+    target: MapDeletionTarget,
+    plan: MapDeletionPlan,
+    notice = '',
+  ): WorkspaceDeletionReview {
+    return {
+      id,
+      clusterId,
+      open: true,
+      suspended: false,
+      confirming: false,
+      target,
+      entityLabel: plan.entityLabel,
+      affectedEntities: [...plan.affectedEntities],
+      effectSignature: plan.effectSignature,
+      notice,
+      error: '',
+    }
   }
 
-  function deleteSelectedObject(): Promise<void> {
+  function refreshDeletionReview(id: number, target: MapDeletionTarget, notice = ''): void {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) {
+      deletionReview.value = {
+        id, clusterId: '', open: true, suspended: false, confirming: false, target,
+        entityLabel: 'Deletion unavailable', affectedEntities: [], effectSignature: '', notice,
+        error: 'The workspace is no longer available.',
+      }
+      return
+    }
+    try {
+      deletionReview.value = makeDeletionReview(id, currentWorkspace.cluster.id, target, planMapEntityDeletion(currentWorkspace, target), notice)
+    } catch (error) {
+      deletionReview.value = {
+        id, clusterId: currentWorkspace.cluster.id, open: true, suspended: false, confirming: false, target,
+        entityLabel: 'Deletion unavailable', affectedEntities: [], effectSignature: '', notice,
+        error: errorText(error),
+      }
+    }
+  }
+
+  /** Prepares a current cascade without changing applied data or resolving any drafts. */
+  function openDeletionReview(target: MapDeletionTarget): void {
+    if (!workspace.value || saveState.value === 'saving' || deletionReview.value?.confirming) return
+    const id = ++deletionReviewSequence
+    editorError.value = ''
+    refreshDeletionReview(id, target)
+  }
+
+  function cancelDeletionReview(): void {
+    if (deletionReview.value?.confirming) return
+    deletionReviewSequence += 1
+    deletionReview.value = null
+  }
+
+  /** Confirms only the currently displayed effects, resolving intersecting drafts before publication. */
+  async function confirmDeletionReview(): Promise<void> {
+    const active = deletionReview.value
+    if (!active || !active.open || active.suspended || active.confirming || active.error) return
+    const reviewId = active.id
+    const target = active.target
+    active.confirming = true
+
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace || currentWorkspace.cluster.id !== active.clusterId) {
+      deletionReview.value = null
+      return
+    }
+
+    let prepared: MapDeletionPlan
+    try {
+      prepared = planMapEntityDeletion(currentWorkspace, target)
+    } catch (error) {
+      refreshDeletionReview(reviewId, target)
+      if (deletionReview.value?.id === reviewId) deletionReview.value.error = errorText(error)
+      return
+    }
+    if (prepared.effectSignature !== active.effectSignature) {
+      deletionReview.value = makeDeletionReview(
+        reviewId,
+        active.clusterId,
+        target,
+        prepared,
+        'The deletion effects changed. Review the updated consequences and confirm again.',
+      )
+      return
+    }
+
+    const command = deletionCommand(target, prepared)
+    const entityConflict = isEntityDraftCommandBlocked(command)
+    const routeConflict = isRouteCommandBlocked(command)
+    const chartConflict = target.kind === 'system' && isChartDraftTarget(target.systemId)
+    let acceptedPlan = prepared
+    if (entityConflict || routeConflict || chartConflict) {
+      active.open = false
+      active.suspended = true
+      await nextTick()
+      const accepted = await resolveTransition({
+        leaveChart: target.kind === 'system' && isChartDraftTarget(target.systemId),
+        leaveEntitySession: entityConflict,
+        leaveRouteSession: routeConflict,
+      })
+      if (deletionReview.value?.id !== reviewId) return
+      const latestWorkspace = workspace.value
+      if (!latestWorkspace || latestWorkspace.cluster.id !== active.clusterId) {
+        deletionReview.value = null
+        return
+      }
+      if (!accepted) {
+        refreshDeletionReview(reviewId, target)
+        return
+      }
+      try {
+        acceptedPlan = planMapEntityDeletion(latestWorkspace, target)
+      } catch (error) {
+        refreshDeletionReview(reviewId, target)
+        if (deletionReview.value?.id === reviewId) deletionReview.value.error = errorText(error)
+        return
+      }
+      if (acceptedPlan.effectSignature !== active.effectSignature) {
+        deletionReview.value = makeDeletionReview(
+          reviewId,
+          active.clusterId,
+          target,
+          acceptedPlan,
+          'Applying the Inspector draft changed the deletion effects. Review the updated consequences and confirm again.',
+        )
+        return
+      }
+      const refreshedCommand = deletionCommand(target, acceptedPlan)
+      if (isEntityDraftCommandBlocked(refreshedCommand) || isRouteCommandBlocked(refreshedCommand)) {
+        refreshDeletionReview(reviewId, target, 'Resolve the Inspector draft before confirming this deletion.')
+        return
+      }
+    }
+
+    if (deletionReview.value?.id !== reviewId) return
+    try {
+      const { durable } = applyWorkspace(acceptedPlan.workspace)
+      deletionReview.value = null
+      onDeletionApplied(acceptedPlan)
+      editorError.value = ''
+      void durable.catch(() => undefined)
+    } catch (error) {
+      refreshDeletionReview(reviewId, target)
+      if (deletionReview.value?.id === reviewId) deletionReview.value.error = errorText(error)
+    }
+  }
+
+  function deleteSystem(systemId: string): void {
+    openDeletionReview({ kind: 'system', systemId })
+  }
+
+  function deleteSelectedObject(): void {
     const system = selectedSystem.value
     const object = selectedObject.value
-    return system && object
-      ? deleteMapEntity({ kind: 'object', systemId: system.id, objectId: object.id })
-      : Promise.resolve()
+    if (system && object) openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
   }
 
-  function deleteSelectedOrbit(): Promise<void> {
+  function deleteSelectedOrbit(): void {
     const system = selectedSystem.value
     const orbit = selectedOrbit.value
-    return system && orbit
-      ? deleteMapEntity({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
-      : Promise.resolve()
+    if (system && orbit) openDeletionReview({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
   }
 
-  function deleteSelectedRoute(): Promise<void> {
+  function deleteSelectedRoute(): void {
     const route = selectedRoute.value
-    return route
-      ? deleteMapEntity({ kind: 'route', routeId: route.id })
-      : Promise.resolve()
+    if (route) openDeletionReview({ kind: 'route', routeId: route.id })
   }
 
   /**
@@ -275,5 +386,9 @@ export function useClusterWorkflows({
     deleteSelectedObject,
     deleteSelectedOrbit,
     deleteSelectedRoute,
+    deletionReview,
+    openDeletionReview,
+    cancelDeletionReview,
+    confirmDeletionReview,
   }
 }

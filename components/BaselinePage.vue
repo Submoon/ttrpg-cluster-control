@@ -425,6 +425,26 @@
       </section>
     </main>
 
+    <WorkspaceDeletionReview
+      v-if="workspace"
+      :review="deletionReview"
+      @cancel="cancelDeletionReview"
+      @confirm="confirmDeletionReview"
+    />
+
+    <WorkspaceImportReview
+      v-if="workspace"
+      :open="importReview.open"
+      :suspended="importReview.suspended"
+      :summary="importReview.summary"
+      :confirming="importReview.confirming"
+      :error="importReview.error"
+      :field-conflict="importReview.fieldConflict"
+      @cancel="cancelJsonImport"
+      @confirm="confirmJsonImport"
+      @review-fields="openImportFieldsDraft"
+    />
+
     <ChartNamesDialog
       v-if="workspace"
       :open="chartNamesDialogOpen"
@@ -460,6 +480,8 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import ChartNamesDialog from './ChartNamesDialog.vue'
+import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
+import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 
 const {
@@ -495,6 +517,7 @@ const {
   hasModifiedFieldDefinitionsSession,
   fieldDefinitionsDialog,
   openFieldDefinitions,
+  getFieldDefinitionImportConflict,
   formError,
   editorError,
   entitySession,
@@ -548,8 +571,6 @@ const {
   fitActiveMap,
   recordViewport,
   selectClusterSystem,
-  captureImportOrigin,
-  selectImportedWorkspace,
   moveSystem,
   moveMapObject,
   placeMapObjectInOrbit,
@@ -606,6 +627,9 @@ const {
   deleteSelectedObject,
   deleteSelectedOrbit,
   deleteSelectedRoute,
+  deletionReview,
+  cancelDeletionReview,
+  confirmDeletionReview,
   showChartDetails,
   beginObjectEdit,
   beginOrbitEdit,
@@ -894,6 +918,35 @@ function handleAddEscape(event: KeyboardEvent): void {
   quitSystemAdd()
 }
 
+let importReviewActions: ReturnType<typeof useWorkspaceFiles> | null = null
+
+async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promise<boolean> {
+  const hasConflictingEntityDraft = existingFieldIds.some(fieldId =>
+    isEntityCommandBlocked({ kind: 'definition-mutation', fieldId }),
+  )
+  if (!hasConflictingEntityDraft) return true
+
+  importReviewActions?.suspendImportReview()
+  try {
+    return await resolveTransition({
+      leaveChart: false,
+      leaveEntitySession: true,
+      leaveRouteSession: false,
+    })
+  } finally {
+    importReviewActions?.resumeImportReview()
+  }
+}
+
+const workspaceFiles = useWorkspaceFiles({
+  workspace,
+  selectedSystem,
+  applyWorkspace,
+  getFieldDefinitionImportConflict,
+  resolveImportDefinitionChanges,
+})
+importReviewActions = workspaceFiles
+
 const {
   exportError,
   importError,
@@ -901,14 +954,23 @@ const {
   downloadSystemJson,
   downloadMapImage,
   importJsonFile,
-} = useWorkspaceFiles({
-  workspace,
-  selectedSystem,
-  commit,
-  resolveTransition,
-  captureImportOrigin,
-  onImported: selectImportedWorkspace,
-})
+  importReview,
+  confirmJsonImport,
+  cancelJsonImport,
+  reviewImportFields,
+  resumeImportReview,
+} = workspaceFiles
+
+function openImportFieldsDraft(): void {
+  reviewImportFields()
+  fieldDefinitionsDialog.value?.open()
+}
+
+watch(fieldDefinitionDialogOpen, (open, wasOpen) => {
+  if (wasOpen && !open && importReview.value.open && importReview.value.suspended) {
+    resumeImportReview()
+  }
+}, { flush: 'sync' })
 
 function warnBeforeLeaving(event: BeforeUnloadEvent): void {
   const changedWelcomeDraft = !workspace.value
