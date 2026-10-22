@@ -92,7 +92,7 @@ import type {
   SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
-import type { MapImageFormat } from '../utils/map-image-export'
+import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
 import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
@@ -678,7 +678,7 @@ watch(
 )
 
 defineExpose({
-  exportImage: async (format: MapImageFormat) => currentMap()?.exportImage(format)
+  exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
     ?? Promise.reject(new Error('The map is not ready to export.')),
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),

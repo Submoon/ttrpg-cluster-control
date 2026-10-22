@@ -1,0 +1,10 @@
+[
+  {
+    "path": "tests/workspace-image-exports.spec.ts",
+    "sha256": "17712D8F357064A1CEFC7B6B24FA50797D9C92E82F76FAB54EB29CF16AEC9101"
+  },
+  {
+    "path": "tests/workspace-data.spec.ts",
+    "sha256": "0D1BF03B58F825AE3478549CB0E51CECCBBDDA0CF81CA0D867177E2963AD37D4"
+  }
+]

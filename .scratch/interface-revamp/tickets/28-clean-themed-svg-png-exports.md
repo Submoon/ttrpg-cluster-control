@@ -1,6 +1,7 @@
 ---
 title: 'Export clean complete SVG and PNG in active or print light palettes'
-status: open
+status: closed
+assignee: ticket28
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,12 +24,12 @@ Standalone SVG/matching PNG contain the full applied map in active light/dark or
 
 ## Acceptance criteria
 
-1. [ ] Applied-only scene/bounds include off-viewport geometry and long applied system title band.
-2. [ ] Exclude selection/focus/hover/handles/drafts/gesture/candidate previews **before bounds**, retaining meaningful map/unresolved cues.
-3. [ ] Resolve export palette without changing live preference; standalone SVG and PNG match arrangement/palette/title/bounds.
-4. [ ] Exercise both maps × active-light/active-dark/print × SVG/PNG with dense content/hidden draft/preview/failed save.
-5. [ ] Before/after applied JSON/live state proves no selection/view/tool/gesture/draft/theme/save mutation, implicit Apply/Discard or conflated export error.
-6. [ ] New target owners extend exclusion checks as introduced. Ticket 25 introduces parent-owned existing-object position and Orbit-host/geometry previews: exclude both from SVG cloning and PNG rasterization, verify applied geometry in the downloaded image, and verify the visible preview/draft survives export. Its adapters omit these transient overrides around the synchronous clone; that implementation is a handoff, not completion of this ticket's full clean-export acceptance.
+1. [x] Applied-only scene/bounds include off-viewport geometry and long applied system title band.
+2. [x] Exclude selection/focus/hover/handles/drafts/gesture/candidate previews **before bounds**, retaining meaningful map/unresolved cues.
+3. [x] Resolve export palette without changing live preference; standalone SVG and PNG match arrangement/palette/title/bounds.
+4. [x] Exercise both maps × active-light/active-dark/print × SVG/PNG with dense content/hidden draft/preview/failed save.
+5. [x] Before/after applied JSON/live state proves no selection/view/tool/gesture/draft/theme/save mutation, implicit Apply/Discard or conflated export error.
+6. [x] New target owners extend exclusion checks as introduced. Ticket 25 introduces parent-owned existing-object position and Orbit-host/geometry previews: exclude both from SVG cloning and PNG rasterization, verify applied geometry in the downloaded image, and verify the visible preview/draft survives export. Its adapters omit these transient overrides around the synchronous clone; that implementation is a handoff, not completion of this ticket's full clean-export acceptance.
 
 ## Scope and exclusions
 
@@ -66,8 +67,16 @@ The primary seam is the real integrated product through the existing Playwright 
 
 Coordination and analysis use `gpt-6.1-sol` at High effort; delegated implementation uses `gpt-6-luna` at XHigh effort, as requested by the human. Follow the [project-development workflow](../../../.agents/skills/project-development/SKILL.md), including complexity/risk routing, required architecture contracts and independent reviews; sensitive persistence, destructive operations and interchange require complementary technical and domain/data review. Delegated specialists stay within their assigned scope and do not restart routing.
 
-No implementation has started and no assignee is set. Work blockers-first; preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
+Claimed on 2026-10-22 from `8d98fa04c17e5b5444ae5f8c965029e0c89dd599`, equal to fetched origin/codex/interface-revamp; unchanged origin/main `629d2a98715c3a16b954e0f77c639b1f0c31212c` has 0 unique commits / 53 feature-only commits. See [execution](../research/implementation-28-2026-10-22.md). Preserve other agents' work. Return changed behavior, evidence identities/outcomes/limitations and unresolved findings to the coordinator. This ticket does not authorize GitHub writes, source-issue closure, merge or deployment.
 
 ## Current availability - 2026-10-19
 
 Ticket21 completes its scoped B/Dock reassessment. This ticket is now open and unclaimed; no implementation is started. Its predecessor preserves existing export capabilities and records their successful focused checks; that evidence does not implement this ticket's complete clean/export-palette contract. See [the ticket21 execution record](../research/implementation-21-resume-2026-10-19.md) for source identities and validation limits.
+
+## Resolution
+
+2026-10-22 — Implemented complete applied SVG/PNG exports through clone-only renderer projections, transient exclusion before feature bounds, measured applied system titles and active or export-only print-light palettes. Map files uses Nuxt UI `UCheckbox`; the print choice resets after dispatch without changing the browser theme. Live camera, selection, tools, previews, drafts and save/error owners remain intact. PNG uses the same clean serialized scene as SVG. No format, persistence, renderer or prototype cleanup is introduced.
+
+Typecheck and production build pass. The single complete suite is **185/190**; five test expectations/setup/budget issues are corrected and verified through focused reruns on unchanged application/compiled hashes. All ten new export cases pass across these runs, including exact baseline/preview bounds and representative decoded PNG pixel equality. No fresh 190/190 complete run is claimed. Independent technical/Standards, specification/image-interchange and correction reviews have no remaining blockers. See [final evidence and limits](../implementation-lab/ticket-28-2026-10-22/qa/README.md).
+
+Ticket 29 is the remaining cleanup/product-validation frontier, including final whole-interface Astra/Tools review. Physical Android Chrome checks remain unavailable. Source issue 3 stays open and PR 28 stays draft; no successor implementation, merge or source closure is performed.

@@ -154,3 +154,13 @@ The human requests reviewed deletion and JSON interchange with Luna XHIGH implem
 [Reviewed deletion and JSON interchange](tickets/27-reviewed-deletion-and-json-interchange.md#resolution) is complete with retained work, current consequence reviews, independent copies and memory/save recovery separation. Typecheck/build and all eight new product checks pass. The single full run is 169/180; eleven legacy UI expectations are corrected and pass their focused 11/11 rerun on unchanged application hashes. No fresh 180/180 pass is claimed. Independent source and test-preservation reviews have no remaining blockers; [evidence and limits](implementation-lab/ticket-27-2026-10-22/qa/README.md) retain exact outcomes.
 
 Current frontier: **18–27 closed; 28 open/unclaimed; 29 remains last after 28.** No successor is started. Physical-device checks remain unavailable. Source issue 3 stays open and PR 28 stays draft.
+
+## Ticket 28 explicit implementation — 2026-10-22
+
+The human requests complete clean SVG/PNG exports with Luna XHIGH, the approved prototype and maximum Nuxt UI reuse. Claimed from fetched feature `8d98fa04c17e5b5444ae5f8c965029e0c89dd599` (0 main-only / 53 feature-only). Architecture bounds the image-interchange contract to applied clone geometry, transient exclusion before bounds and an export-local print palette. See [execution](research/implementation-28-2026-10-22.md). Current frontier: **18–27 closed; 28 in-progress; 29 remains last.** No cleanup/successor is started; source issue 3 stays open and PR 28 stays draft.
+
+## Ticket 28 completion — 2026-10-22
+
+[Clean themed SVG/PNG exports](tickets/28-clean-themed-svg-png-exports.md#resolution) are complete in the real B/Dock editor using Nuxt UI controls. Full applied clone geometry and titles, three palettes, retained live work and independent save/export errors are verified. Typecheck/build pass. The single complete run is **185/190**; its five failures are corrected and verified in focused runs on unchanged application/compiled hashes. All ten new export cases pass across those runs; no fresh 190/190 complete run is claimed. Independent source and correction reviews have no remaining blockers. See [curated evidence](implementation-lab/ticket-28-2026-10-22/qa/README.md).
+
+Current frontier: **18–28 closed; 29 remains the unstarted final cleanup/product-validation ticket**, including documentation consolidation, prototype disconnection, performance verification and whole-interface Astra/Tools review. Source issue 3 remains open and PR 28 remains draft. Physical Android Chrome checks remain unavailable.

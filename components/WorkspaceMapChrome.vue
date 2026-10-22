@@ -187,6 +187,12 @@
               </UButton>
             </div>
 
+            <UCheckbox
+              v-model="printLightForPrinting"
+              class="workspace-map-print-light"
+              label="Light for printing"
+            />
+
             <UButton
               class="workspace-control workspace-map-import-button"
               color="neutral"
@@ -223,7 +229,7 @@
 import { computed, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
-import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
+import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -251,7 +257,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'export-cluster-json': []
   'export-system-json': []
-  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat]
+  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
   'import-file': [event: Event]
   'show-cluster': []
   'toggle-hierarchy': []
@@ -263,6 +269,7 @@ const emit = defineEmits<{
 }>()
 
 const headerMapActionsOpen = ref(false)
+const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
 const selectedSystem = computed(() => props.selectedSystem)
@@ -304,8 +311,10 @@ function exportMapImage(format: MapImageFormat): void {
   const map = activeMap.value
   const isCluster = activeView.value === 'cluster'
   const name = isCluster ? workspace.value?.cluster.name : selectedSystem.value?.name
+  const palette: MapImagePalette = printLightForPrinting.value ? 'print-light' : 'active'
+  printLightForPrinting.value = false
   headerMapActionsOpen.value = false
-  emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format)
+  emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format, palette)
 }
 
 function openJsonImportPicker(): void {

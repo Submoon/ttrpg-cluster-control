@@ -151,6 +151,8 @@ export interface SystemMapRendererOptions {
 /** Live D3 capabilities exposed to the Vue wrapper. */
 export interface SystemMapRenderer {
   zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>
+  /** Projects the saved object and Orbit geometry onto an isolated export copy. */
+  prepareExportClone(clone: SVGSVGElement): void
   /** Cancels and rolls back active local previews without publishing geometry. */
   cancelActiveGesture(): void
   /** Updates a parent-owned preview without publishing it to workspace state. */
@@ -380,6 +382,30 @@ export function renderSystemMap({
     orbitRotations: effectiveOrbitRotations,
   })
   const appliedPositions = () => objectPositions(system, geometry)
+  function prepareExportClone(clone: SVGSVGElement): void {
+    const positions = appliedPositions()
+    clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
+      const objectId = mark.getAttribute('data-object-id')
+      if (!objectId) return
+      const point = requiredPosition(positions, objectId)
+      mark.setAttribute('transform', `translate(${point.x} ${point.y})`)
+    })
+
+    clone.querySelectorAll<SVGGElement>('.orbit-mark[data-orbit-id]').forEach(mark => {
+      const orbitId = mark.getAttribute('data-orbit-id')
+      const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+      const ring = mark.querySelector<SVGEllipseElement>('.orbit-ring')
+      if (!orbit || !ring) return
+      const center = orbitCenter(orbit, positions)
+      const radii = orbitRadii(system, orbit, geometry)
+      const rotation = orbitRotation(orbit, geometry)
+      ring.setAttribute('cx', String(center.x))
+      ring.setAttribute('cy', String(center.y))
+      ring.setAttribute('rx', String(radii.horizontal))
+      ring.setAttribute('ry', String(radii.vertical))
+      ring.setAttribute('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+    })
+  }
   const objectPlacementCarriedOrbitIds = new Map<string, Set<string>>()
   function carriedOrbitIdsForObject(objectId: string): Set<string> {
     const cached = objectPlacementCarriedOrbitIds.get(objectId)
@@ -1528,6 +1554,7 @@ export function renderSystemMap({
 
   return {
     zoomBehavior,
+    prepareExportClone,
     cancelActiveGesture,
     setObjectPlacementPreview,
     setOrbitPlacementPreview,

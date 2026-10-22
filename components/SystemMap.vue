@@ -44,7 +44,7 @@ import type {
   SystemCreationType,
   SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
-import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
+import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import {
   clampMapViewport,
   fitMapViewport,
@@ -343,33 +343,16 @@ function cancelActiveMapGestureOnEscape(event: KeyboardEvent): void {
  * @returns Export blob.
  * @throws If the SVG is not mounted or scene export/rasterization fails.
  */
-async function exportImage(format: MapImageFormat): Promise<Blob> {
+async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The star system map is not ready to export.')
-  const placementPreviews = [...objectPlacementPreviews]
-  const orbitPreviews = [...orbitPlacementPreviews]
-  const previews = [...element.querySelectorAll<SVGGElement>('.system-creation-preview')]
-    .map(preview => ({ preview, parent: preview.parentNode, nextSibling: preview.nextSibling }))
-  let exportPromise: Promise<Blob>
-  try {
-    for (const [objectId] of placementPreviews) setObjectPlacementPreview(objectId, null)
-    for (const [orbitId] of orbitPreviews) mapRenderer?.setOrbitPlacementPreview(orbitId, null)
-    previews.forEach(({ preview }) => preview.remove())
-    exportPromise = exportMapImage(element, format, props.system.name)
-  } finally {
-    for (const { preview, parent, nextSibling } of [...previews].reverse()) {
-      if (!parent || !element.contains(parent)) continue
-      if (nextSibling?.parentNode === parent) parent.insertBefore(preview, nextSibling)
-      else parent.appendChild(preview)
-    }
-    for (const [objectId, scenePoint] of placementPreviews) {
-      setObjectPlacementPreview(objectId, scenePoint)
-    }
-    for (const [orbitId, preview] of orbitPreviews) {
-      mapRenderer?.setOrbitPlacementPreview(orbitId, preview)
-    }
-  }
-  return await exportPromise
+  return exportMapImage(
+    element,
+    format,
+    props.system.name,
+    palette,
+    clone => mapRenderer?.prepareExportClone(clone),
+  )
 }
 
 /**

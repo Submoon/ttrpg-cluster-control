@@ -38,7 +38,7 @@ import {
   clusterRouteLabel,
   clusterSystemPosition,
 } from '../utils/cluster-map-geometry'
-import { exportMapImage, type MapImageFormat } from '../utils/map-image-export'
+import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import {
   clampMapViewport,
   fitMapViewport,
@@ -130,10 +130,49 @@ function panBy(dx: number, dy: number): void {
  * @returns Export blob.
  * @throws If the SVG is not mounted or scene export/rasterization fails.
  */
-async function exportImage(format: MapImageFormat): Promise<Blob> {
+function prepareExportClone(clone: SVGSVGElement): void {
+  const jumpPoints = new Map(
+    jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]),
+  )
+
+  clone.querySelectorAll<SVGGElement>('.cluster-system-node[data-system-id]').forEach(mark => {
+    const systemId = mark.getAttribute('data-system-id')
+    if (!systemId) return
+    const position = clusterSystemPosition(props.systemPositions, systemId)
+    mark.setAttribute('transform', `translate(${position.x} ${position.y})`)
+  })
+
+  clone.querySelectorAll<SVGGElement>('.cluster-route[data-route-id]').forEach(mark => {
+    const routeId = mark.getAttribute('data-route-id')
+    const index = props.cluster.routes.findIndex(route => route.id === routeId)
+    const route = props.cluster.routes[index]
+    if (!route || index < 0) return
+
+    const geometry = clusterRouteGeometry(route, index, jumpPoints, props.systemPositions)
+    const label = `Jump-${route.jumpLevel}`
+    const labelWidth = Math.max(78, label.length * 7 + 18)
+    mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
+    const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
+    labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
+    labelBackground?.setAttribute('y', String(geometry.labelY - 12))
+    const routeLabel = mark.querySelector<SVGTextElement>('.cluster-route-label')
+    routeLabel?.setAttribute('x', String(geometry.labelX))
+    routeLabel?.setAttribute('y', String(geometry.labelY + 2))
+    const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
+    const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
+    if (geometry.exitPoint) {
+      exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
+      exitMark?.setAttribute('cy', String(geometry.exitPoint.y))
+      exitLabel?.setAttribute('x', String(geometry.exitPoint.x - 10))
+      exitLabel?.setAttribute('y', String(geometry.exitPoint.y + 24))
+    }
+  })
+}
+
+async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
   const element = svgElement.value
   if (!element) throw new Error('The Jump Cluster map is not ready to export.')
-  return exportMapImage(element, format)
+  return exportMapImage(element, format, undefined, palette, prepareExportClone)
 }
 
 /**

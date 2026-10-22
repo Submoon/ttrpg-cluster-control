@@ -11,7 +11,7 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
-import type { MapImageExporter, MapImageFormat } from '../utils/map-image-export'
+import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 
 type MapKind = 'jump-cluster' | 'star-system'
 
@@ -229,11 +229,12 @@ export function useWorkspaceFiles({
     name: string | undefined,
     kind: MapKind,
     format: MapImageFormat,
+    palette: MapImagePalette = 'active',
   ): Promise<void> {
     if (!map || !name) return
 
     try {
-      downloadFile(exportFileName(name, kind, format), await map.exportImage(format))
+      downloadFile(exportFileName(name, kind, format), await map.exportImage(format, palette))
       exportError.value = ''
     } catch (error) {
       exportError.value = errorText(error)

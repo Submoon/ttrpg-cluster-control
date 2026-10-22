@@ -32,19 +32,6 @@
   --error-border: #b34c3e;
   --add-bg: #deebdf;
   --add-bg-hover: #cfe1d1;
-  --map-bg: #f5f4ee;
-  --map-card: #fffefa;
-  --map-grid-line: #dedbd0;
-  --map-text: #26302c;
-  --map-muted: #53615a;
-  --map-route: #315e48;
-  --map-orbit: #596a60;
-  --map-unresolved: #9a3d11;
-  --map-label-bg: #fffefa;
-  --map-label-border: #718077;
-  --map-selected: #8f4a18;
-  --map-star-halo: #946719;
-  --map-installation: #2e674b;
   --ui-bg: var(--panel-bg);
   --ui-bg-muted: var(--app-bg);
   --ui-bg-elevated: var(--panel-raised);
@@ -92,6 +79,26 @@
   --error-border: #a65d5d;
   --add-bg: #436a55;
   --add-bg-hover: #4f785f;
+}
+
+:root,
+.map-export-host[data-map-export-palette="print-light"] {
+  --map-bg: #f5f4ee;
+  --map-card: #fffefa;
+  --map-grid-line: #dedbd0;
+  --map-text: #26302c;
+  --map-muted: #53615a;
+  --map-route: #315e48;
+  --map-orbit: #596a60;
+  --map-unresolved: #9a3d11;
+  --map-label-bg: #fffefa;
+  --map-label-border: #718077;
+  --map-selected: #8f4a18;
+  --map-star-halo: #946719;
+  --map-installation: #2e674b;
+}
+
+:root.dark {
   --map-bg: #0c1719;
   --map-card: #142225;
   --map-grid-line: #25383b;

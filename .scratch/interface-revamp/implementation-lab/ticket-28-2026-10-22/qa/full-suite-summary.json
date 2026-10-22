@@ -1,0 +1,51 @@
+{
+  "candidate": "ticket28-final-source-19B6FF7E-tests-56BA19DB",
+  "stats": {
+    "startTime": "2026-10-22T13:11:35.216Z",
+    "duration": 2032299.532,
+    "expected": 185,
+    "skipped": 0,
+    "unexpected": 5,
+    "flaky": 0
+  },
+  "failed": [
+    {
+      "file": "system-map.spec.ts",
+      "title": "the system map expands beyond its initial bounds and exports the full layout",
+      "errors": [
+        "Error: expect(received).toBeLessThan(expected)\n\nExpected: < 0\nReceived:   96\n\n  107 |   expect(svgInfo.texts).toContain('Far Planet')\n  108 |   expect(svgInfo.viewBox[0]).toBeLessThan(0)\n> 109 |   expect(svgInfo.viewBox[1]).toBeLessThan(0)\n      |                              ^\n  110 |   expect(svgInfo.viewBox[0] + svgInfo.viewBox[2]).toBeGreaterThan(farPosition.x)\n  111 |   expect(svgInfo.viewBox[1] + svgInfo.viewBox[3]).toBeGreaterThan(farPosition.y)\n  112 |   const png = await downloadImage(page, 'Export star system PNG', 'image/png')"
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can export a cluster and standalone system as versioned JSON",
+      "errors": [
+        "Test timeout of 30000ms exceeded.",
+        "Error: expect(locator).toBeVisible() failed\n\nLocator:  getByRole('group', { name: 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW star system map' })\nExpected: visible\nReceived: undefined\n\n\n  750 |   await chartNamesDialog.getByLabel('Star system').fill(renamedSystemName)\n  751 |   await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()\n> 752 |   await expect(page.getByRole('group', { name: `${renamedSystemName} star system map` })).toBeVisible()\n      |                                                                                           ^\n  753 |   const renamedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')"
+      ]
+    },
+    {
+      "file": "workspace-data.spec.ts",
+      "title": "the Warden can construct, edit, and reload the local campaign",
+      "errors": [
+        "Test timeout of 30000ms exceeded."
+      ]
+    },
+    {
+      "file": "workspace-image-exports.spec.ts",
+      "title": "system SVG and PNG exports preserve applied content in print-from-dark",
+      "errors": [
+        "Test timeout of 30000ms exceeded.",
+        "Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Chart details', exact: true })\n\n\n  626 |         await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()\n  627 |         expectedTitle = 'Vesper Prime — Outer Circumstellar Survey and Transit Observatory'\n> 628 |         await page.getByRole('button', { name: 'Chart details', exact: true }).click()\n      |                                                                                ^\n  629 |         const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })\n  630 |         await inspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()\n  631 |         const names = page.getByRole('dialog', { name: 'Edit chart names', exact: true })"
+      ]
+    },
+    {
+      "file": "workspace-image-exports.spec.ts",
+      "title": "system image exports retain applied geometry during local and parent-owned previews",
+      "errors": [
+        "Test timeout of 60000ms exceeded.",
+        "Error: locator.click: Test timeout of 60000ms exceeded.\nCall log:\n  - waiting for getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: /^Select PL-01, Iria \\(Planet\\)$/ })\n\n\n  863 |   const appliedBeforeObjectSvgInfo = await inspectImageSvg(page, appliedBeforeObjectSvg.text)\n  864 |   const objectHierarchy = await openWorkspaceHierarchy(page)\n> 865 |   await objectHierarchy.getByRole('button', { name: /^Select PL-01, Iria \\(Planet\\)$/ }).click()\n      |                                                                                          ^\n  866 |   const closeObjectHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })\n  867 |   if (await closeObjectHierarchy.isVisible()) await closeObjectHierarchy.click()\n  868 |   const hideObjectInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })"
+      ]
+    }
+  ]
+}

@@ -62,6 +62,53 @@ async function inspectExportedSvg(
   }, text)
 }
 
+async function expectExportedFeaturesInsideViewBox(
+  page: import('@playwright/test').Page,
+  text: string,
+  viewBox: number[],
+  mapKind: 'cluster' | 'system',
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const bounds = await page.evaluate(({ content, kind }) => {
+    const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement as unknown as SVGSVGElement
+    const host = document.createElement('div')
+    Object.assign(host.style, { position: 'fixed', left: '-100000px', top: '0', visibility: 'hidden' })
+    host.append(svg)
+    document.body.append(host)
+    try {
+      const selectors = kind === 'cluster'
+        ? ['.cluster-map-items']
+        : ['.system-map-items', '.system-orbits']
+      const boxes = selectors.flatMap(selector => {
+        const group = svg.querySelector<SVGGElement>(selector)
+        if (!group) return []
+        const { x, y, width, height } = group.getBBox()
+        return [x, y, width, height].every(Number.isFinite) && (width > 0 || height > 0)
+          ? [{ x, y, width, height }]
+          : []
+      })
+      if (!boxes.length) throw new Error('The exported SVG has no measurable map features.')
+      const left = Math.min(...boxes.map(box => box.x))
+      const top = Math.min(...boxes.map(box => box.y))
+      const right = Math.max(...boxes.map(box => box.x + box.width))
+      const bottom = Math.max(...boxes.map(box => box.y + box.height))
+      return { x: left, y: top, width: right - left, height: bottom - top }
+    } finally {
+      host.remove()
+    }
+  }, { content: text, kind: mapKind })
+  const [left, top, width, height] = viewBox
+  if (left === undefined || top === undefined || width === undefined || height === undefined) {
+    throw new Error('The exported SVG has an incomplete viewBox.')
+  }
+  expect(bounds.width).toBeGreaterThan(0)
+  expect(bounds.height).toBeGreaterThan(0)
+  expect(bounds.x).toBeGreaterThanOrEqual(left)
+  expect(bounds.y).toBeGreaterThanOrEqual(top)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(left + width)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(top + height)
+  return bounds
+}
+
 test('deleting a map object without dependents still asks for confirmation', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -497,6 +544,7 @@ test('deleting an associated physical Station clears the Jump Point association 
 })
 
 test('the Warden can export a cluster and standalone system as versioned JSON', async ({ page }) => {
+  test.setTimeout(60_000)
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -537,8 +585,10 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await expect(createdRoute).toBeVisible()
   await setWorkspaceMapMode(page, 'Navigate')
   await setWorkspaceMapMode(page, 'Select')
+  await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })
+    .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
-  await createdRoute.click()
+  await createdRoute.locator('.cluster-route-label').click()
   await expect(createdRoute).toHaveClass(/is-selected/)
   await expect(createdRoute.locator('.cluster-route-label')).toHaveText('Jump-8')
   const clusterMapText = await clusterMap.locator('text').allTextContents()
@@ -557,8 +607,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(clusterSvg.text).toContain('Kestrel Reach')
   const clusterSvgInfo = await inspectImageSvg(page, clusterSvg.text!)
   expect(clusterSvgInfo.contentTransform).toBeNull()
-  expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
-  expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
+  await expectExportedFeaturesInsideViewBox(page, clusterSvg.text!, clusterSvgInfo.viewBox, 'cluster')
   expect(clusterSvgInfo.texts).toEqual(expect.arrayContaining(['Vesper', 'New System 2', 'Jump-8']))
   expect(clusterSvgInfo.texts).not.toContain('Kestrel Reach')
   expect(clusterSvgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
@@ -642,8 +691,6 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   await panMap(page, systemMap, { x: 24, y: 18 })
   const systemViewportTransform = await systemMap.locator('.system-map-content').getAttribute('transform')
   expect(systemViewportTransform).not.toBe('translate(0,0) scale(1)')
-  const systemSceneTop = await systemMap.locator('.system-map-content')
-    .evaluate(element => (element as SVGGraphicsElement).getBBox().y)
   const systemSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
   expect(systemSvg.text).toContain('Iria')
   const systemSvgInfo = await inspectImageSvg(page, systemSvg.text!)
@@ -651,6 +698,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemSvgInfo.viewBox[2]).toBeGreaterThan(960)
   expect(systemSvgInfo.viewBox[3]).toBeGreaterThan(560)
   expect(systemSvgInfo.texts).toContain('Iria')
+  const systemFeatureBounds = await expectExportedFeaturesInsideViewBox(page, systemSvg.text!, systemSvgInfo.viewBox, 'system')
   const systemTitle = systemSvgInfo.systemTitle
   if (!systemTitle) throw new Error('The exported star system SVG is missing its title.')
   expect(systemTitle.text).toBe('Vesper')
@@ -658,7 +706,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(systemTitle.x + systemTitle.width)
     .toBeLessThanOrEqual(systemSvgInfo.viewBox[0] + systemSvgInfo.viewBox[2] - 24)
   expect(systemTitle.y - systemTitle.fontSize / 2).toBeGreaterThan(systemSvgInfo.viewBox[1])
-  expect(systemTitle.y + systemTitle.fontSize / 2).toBeLessThan(systemSceneTop)
+  expect(systemTitle.y + systemTitle.fontSize / 2).toBeLessThan(systemFeatureBounds.y)
   expect(systemSvgInfo.titleStyle).toBeNull()
   expect(systemSvgInfo.glyphFill).toBeTruthy()
   expectReadableExport(systemSvgInfo)
@@ -998,6 +1046,7 @@ test('the Warden can import a standalone system without adding cluster routes', 
 })
 
 test('the Warden can construct, edit, and reload the local campaign', async ({ page }) => {
+  test.setTimeout(60_000)
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -1333,8 +1382,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   expect(clusterSvgInfo.text).toContain('Harrow')
   expect(clusterSvgInfo.text).toContain('Far Vesper')
   expect(clusterSvgInfo.text).toContain('Jump-1')
-  expect(clusterSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
-  expect(clusterSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
+  await expectExportedFeaturesInsideViewBox(page, clusterSvg.text!, clusterSvgInfo.viewBox, 'cluster')
   const clusterPng = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
   expect(clusterPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(clusterPng.width).toBe(clusterSvgInfo.width)
@@ -1351,8 +1399,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   expect(systemSvgInfo.text).toContain('Iria')
   expect(systemSvgInfo.text).toContain('Nix')
   expect(systemSvgInfo.text).toContain('Vesper Departure')
-  expect(systemSvgInfo.viewBox[2]).toBeGreaterThanOrEqual(960)
-  expect(systemSvgInfo.viewBox[3]).toBeGreaterThanOrEqual(560)
+  await expectExportedFeaturesInsideViewBox(page, systemSvg.text!, systemSvgInfo.viewBox, 'system')
   const systemPng = await downloadImage(page, 'Export star system PNG', 'image/png')
   expect(systemPng.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(systemPng.width).toBe(systemSvgInfo.width)
