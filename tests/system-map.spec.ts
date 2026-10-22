@@ -1,6 +1,56 @@
 import { expect, test } from '@playwright/test'
+import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
+import { clickDockAction } from './helpers'
+import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'
 import { dragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, editMapObject, saveMapObject, downloadImage, inspectImageSvg, selectCatalogueObjectButton } from './helpers'
 import type { DownloadWindow } from './helpers'
+
+async function expectExportedSystemSceneInsideViewBox(
+  page: import('@playwright/test').Page,
+  text: string,
+  viewBox: number[],
+): Promise<void> {
+  const bounds = await page.evaluate((content) => {
+    const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement as unknown as SVGSVGElement
+    const host = document.createElement('div')
+    Object.assign(host.style, { position: 'fixed', left: '-100000px', top: '0', visibility: 'hidden' })
+    host.append(svg)
+    document.body.append(host)
+    try {
+      const boxes = ['.system-map-items', '.system-orbits'].flatMap(selector => {
+        const group = svg.querySelector<SVGGElement>(selector)
+        if (!group) return []
+        const { x, y, width, height } = group.getBBox()
+        return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0
+          ? [{ x, y, width, height }]
+          : []
+      })
+      const title = svg.querySelector<SVGTextElement>('.system-map-export-title')
+      if (!title) throw new Error('The exported system SVG is missing its title.')
+      const titleBounds = title.getBBox()
+      if ([titleBounds.x, titleBounds.y, titleBounds.width, titleBounds.height].every(Number.isFinite)
+        && titleBounds.width > 0 && titleBounds.height > 0) {
+        boxes.push({ x: titleBounds.x, y: titleBounds.y, width: titleBounds.width, height: titleBounds.height })
+      }
+      if (boxes.length !== 3) throw new Error('The exported system SVG has incomplete measurable feature bounds.')
+      const left = Math.min(...boxes.map(box => box.x))
+      const top = Math.min(...boxes.map(box => box.y))
+      const right = Math.max(...boxes.map(box => box.x + box.width))
+      const bottom = Math.max(...boxes.map(box => box.y + box.height))
+      return { x: left, y: top, width: right - left, height: bottom - top }
+    } finally {
+      host.remove()
+    }
+  }, text)
+  const [left, top, width, height] = viewBox
+  if (left === undefined || top === undefined || width === undefined || height === undefined) {
+    throw new Error('The exported system SVG has an incomplete viewBox.')
+  }
+  expect(bounds.x).toBeGreaterThanOrEqual(left)
+  expect(bounds.y).toBeGreaterThanOrEqual(top)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(left + width)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(top + height)
+}
 
 test('the system map can zoom well beyond 400 percent', async ({ page }) => {
   await page.goto('/')
@@ -8,12 +58,12 @@ test('the system map can zoom well beyond 400 percent', async ({ page }) => {
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const navigation = page.getByRole('toolbar', { name: 'Map navigation' })
+  const navigation = workspaceZoomControls(page)
   const zoomIn = navigation.getByRole('button', { name: 'Zoom in' })
   for (let step = 0; step < 25 && !(await zoomIn.isDisabled()); step += 1) {
     await zoomIn.click()
   }
-  await expect(navigation.getByLabel('Zoom level')).toHaveText('1600%')
+  await expect(navigation.locator('output')).toHaveText('1600%')
 })
 
 test('the system map expands beyond its initial bounds and exports the full layout', async ({ page }) => {
@@ -33,20 +83,23 @@ test('the system map expands beyond its initial bounds and exports the full layo
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
-  await page.getByRole('button', { name: 'Add orbit' }).click()
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  const navigation = workspaceZoomControls(page)
+  await zoomOutMapToMinimum(page)
+  await expect(navigation.locator('output')).toHaveText('25%')
+  await setWorkspaceMapMode(page, 'Move')
   const orbit = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
-  const navigation = page.getByRole('toolbar', { name: 'Map navigation' })
-  for (let index = 0; index < 8; index += 1) {
-    await navigation.getByRole('button', { name: 'Zoom out' }).click()
-  }
-  await expect(navigation.getByLabel('Zoom level')).toHaveText('25%')
   await dragOrbitToWorldPoint(page, orbit, { x: 1550, y: 280 })
   expect(Number(await orbit.getAttribute('aria-valuenow'))).toBeGreaterThan(960)
 
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
+  const objectCountBeforeDrop = await map.locator('.system-object').count()
   await dragHtmlElementToWorldPoint(page, planetButton, map, { x: 1400, y: 700 })
+  await expect(map.locator('.system-object')).toHaveCount(objectCountBeforeDrop + 1)
+  await quitSystemAdd(page)
+  await hierarchy.getByRole('button', { name: /Select PL-\d+, New planet/ }).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Far Planet')
   await saveMapObject(page)
@@ -100,7 +153,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
   const svgInfo = await inspectImageSvg(page, svg.text!)
   expect(svgInfo.texts).toContain('Far Planet')
   expect(svgInfo.viewBox[0]).toBeLessThan(0)
-  expect(svgInfo.viewBox[1]).toBeLessThan(0)
+  await expectExportedSystemSceneInsideViewBox(page, svg.text!, svgInfo.viewBox)
   expect(svgInfo.viewBox[0] + svgInfo.viewBox[2]).toBeGreaterThan(farPosition.x)
   expect(svgInfo.viewBox[1] + svgInfo.viewBox[3]).toBeGreaterThan(farPosition.y)
   const png = await downloadImage(page, 'Export star system PNG', 'image/png')
@@ -116,10 +169,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
     .toHaveAttribute('transform', 'translate(480 280)')
   const restoredPlanet = restoredMap.getByRole('button', { name: /Far Planet/ })
   await expect(restoredPlanet).toHaveAttribute('transform', farTransform)
-  const restoredNavigation = page.getByRole('toolbar', { name: 'Map navigation' })
-  for (let index = 0; index < 8; index += 1) {
-    await restoredNavigation.getByRole('button', { name: 'Zoom out' }).click()
-  }
+  await zoomOutMapToMinimum(page)
   await dragToWorldPoint(page, restoredMap, restoredPlanet.locator('.object-hit-target'), {
     x: 1850,
     y: 850,
@@ -127,5 +177,5 @@ test('the system map expands beyond its initial bounds and exports the full layo
   const editedPosition = await restoredPlanet.getAttribute('transform')
   expect(editedPosition).toContain('translate(')
   expect(Number(editedPosition?.match(/^translate\(([^ ]+)/)?.[1])).toBeGreaterThan(1800)
-  await expect(page.getByText('Saved on this device')).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 })

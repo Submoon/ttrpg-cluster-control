@@ -3,16 +3,236 @@
  */
 import type { Ref } from 'vue'
 import type {
+  CatalogueSubtype,
+  CustomFieldDefinition,
   CustomFieldApplicabilityTarget,
   CustomFieldType,
+  CustomFieldValue,
   LocalWorkspace,
+  MapDeletionTarget,
+  Orbit,
   OrbitRadii,
   Point,
+  SystemObject,
   SystemObjectChanges,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
+import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+export type TransitionGuard = 'chart' | 'inspector' | null
+export type TransitionDecision = 'apply' | 'discard' | 'stay'
+export interface TransitionOptions {
+  /** Keeps a resumable chart-name session open for a command independent of its captured chart target. */
+  leaveChart?: boolean
+  /** Lets a read-only dialog open while an entity draft remains owned by its Inspector session. */
+  leaveEntitySession?: boolean
+  /** Keeps a Jump Route draft open for a command independent of its captured route target. */
+  leaveRouteSession?: boolean
+}
+
+/** Current human-readable cascade summary owned by the deletion review workflow. */
+export interface WorkspaceDeletionReview {
+  id: number
+  clusterId: string
+  open: boolean
+  suspended: boolean
+  confirming: boolean
+  target: MapDeletionTarget
+  entityLabel: string
+  affectedEntities: string[]
+  effectSignature: string
+  notice: string
+  error: string
+}
+
+/** String-backed form values owned above the object Inspector's presentation lifetime. */
+export interface ObjectDraft {
+  locationKey: string
+  name: string
+  description: string
+  subtype: string
+  placement: string
+  x: string
+  y: string
+  atmosphere: string
+  portClass: string
+  jumpStationId: string
+  customFieldValues: Record<string, string>
+}
+
+/** String-backed Orbit inputs; Detach remains an explicit map command. */
+export interface OrbitDraft {
+  /** Proposed host for an Orbit whose committed center is unoccupied. */
+  hostId: string | null
+  targetOrder: string
+  horizontalRadius: string
+  verticalRadius: string
+  centerX: string
+  centerY: string
+  rotation: string
+}
+
+/** Transient scene-space geometry for previewing a proposed host on an unoccupied Orbit. */
+export interface OrbitPlacementPreview {
+  center: Point
+  radii: OrbitRadii
+  /** Optional draft rotation in degrees; omitted previews use the committed value. */
+  rotation?: number
+}
+
+/** Relationship values needed to detect changes to a captured host/placement chain. */
+export interface EntityDependencyBaseline {
+  objects: Array<Pick<SystemObject, 'id' | 'family' | 'subtype' | 'placement'>>
+  orbits: Orbit[]
+  orbitRadii: Record<string, OrbitRadii>
+  orbitRotations: Record<string, number>
+}
+
+/** Immutable object values and definitions used to create one object draft. */
+export interface ObjectEditBaseline {
+  object: SystemObject
+  values: ObjectDraft
+  dependencies: EntityDependencyBaseline
+  linkedStations: Array<Pick<SystemObject, 'id' | 'family' | 'subtype'>>
+  customFieldDefinitions: CustomFieldDefinition[]
+  nativeFieldOptions: {
+    atmosphereOptions?: string[]
+    portClassOptions?: string[]
+  }
+}
+
+/** Immutable Orbit geometry, sibling ordering, and host-chain values used to create one Orbit draft. */
+export interface OrbitEditBaseline {
+  orbit: Orbit
+  values: OrbitDraft
+  effectiveRadii: OrbitRadii
+  rotation: number
+  siblings: Array<Pick<Orbit, 'id' | 'hostId' | 'order'>>
+  dependencies: EntityDependencyBaseline
+}
+
+/** Parent-owned edit session that remains available while an Inspector is hidden or reflowed. */
+export type EntityInspectorSession = {
+  id: number
+  clusterId: string
+  systemId: string
+  targetId: string
+  errors: Record<string, string>
+  error: string
+} & (
+  | { kind: 'object'; initial: ObjectEditBaseline; draft: ObjectDraft }
+  | {
+      kind: 'orbit'
+      initial: OrbitEditBaseline
+      draft: OrbitDraft
+      /** Pending named choices raised by an ambiguous unoccupied-center drag. */
+      centerMoveCandidates: OrbitCenterMoveCandidate[] | null
+    }
+)
+
+/** Specific map/data commands checked against the active entity session's captured dependencies. */
+export type EntityCommand =
+  | { kind: 'object-placement'; objectId: string; fromOrbitId?: string | null; toOrbitId?: string | null }
+  | { kind: 'object-create'; orbitId: string | null }
+  | { kind: 'orbit-geometry'; orbitId: string }
+  | { kind: 'orbit-host'; orbitId: string; hostId: string | null }
+  | { kind: 'orbit-create'; hostId: string | null }
+  | { kind: 'definition-mutation'; fieldId: string }
+  | {
+      kind: 'deletion'
+      target: MapDeletionTarget
+      /** IDs in the prepared cascade, including nested objects and routes removed through endpoints. */
+      affectedSystemIds?: readonly string[]
+      affectedObjectIds?: readonly string[]
+      affectedRouteIds?: readonly string[]
+    }
+
+/** Explicit destination for an existing object. */
+export type SystemObjectMoveTarget =
+  | { kind: 'orbit'; orbitId: string; angle: number }
+  | { kind: 'free'; point: Point }
+
+export const FREE_SYSTEM_OBJECT_PLACEMENT = '__free__'
+
+/** Accessible label/value pair offered by the existing-object Destination selector. */
+export interface SystemObjectMoveDestinationOption {
+  label: string
+  value: string
+}
+
+/** One Orbit ring intersected by an existing-object drag release. */
+export interface SystemObjectMoveCandidate {
+  key: string
+  label: string
+  target: Extract<SystemObjectMoveTarget, { kind: 'orbit' }>
+  /** Null means the candidate remains eligible after the latest parent-side validation. */
+  error: string | null
+}
+
+/** One transient, single-use placement preview for an existing system object. */
+export interface SystemObjectMovePreview {
+  token: number
+  clusterId: string
+  systemId: string
+  objectId: string
+  target: SystemObjectMoveTarget
+}
+
+/** Persistent catalogue choice for one system-map creation session. */
+export type SystemCreationType =
+  | { kind: 'object'; subtype: CatalogueSubtype }
+  | { kind: 'orbit' }
+
+/** A normalized free point, Orbit parameter angle, or object host selected for creation. */
+export type SystemCreationTarget =
+  | { kind: 'free'; point: Point }
+  | { kind: 'orbit'; orbitId: string; angle: number }
+  | { kind: 'host'; objectId: string }
+
+/** Named target offered to the Warden, including any current Inspector conflict. */
+export interface SystemCreationCandidate {
+  key: string
+  label: string
+  target: SystemCreationTarget
+  error: string | null
+}
+
+/** Host or free-center choice raised when an Orbit center drag overlaps multiple candidates. */
+export type OrbitCenterMoveCandidate = Omit<SystemCreationCandidate, 'target'> & {
+  target: Extract<SystemCreationTarget, { kind: 'host' | 'free' }>
+}
+
+/** One transient, single-use target preview. Orbit geometry is expressed in scene units. */
+export interface SystemCreationPreview {
+  id: number
+  target: SystemCreationTarget
+  radii?: OrbitRadii
+  rotation?: number
+}
+
+/** Parent-owned Add state; presentation changes do not discard its type or form strings. */
+export interface SystemCreationSession {
+  id: number
+  clusterId: string
+  systemId: string
+  type: SystemCreationType
+  candidates: SystemCreationCandidate[]
+  preview: SystemCreationPreview | null
+  inputs: {
+    x: string
+    y: string
+    orbitId: string
+    angleDegrees: string
+    hostId: string
+    horizontalRadius: string
+    verticalRadius: string
+    rotation: string
+    otherType: string
+  }
+  errors: Record<string, string>
+  notice: string
+}
 
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
@@ -23,34 +243,82 @@ export interface EditorWorkflowOptions {
   saveError: Readonly<Ref<string | null>>
   /** Page-owned ordered persistence operation. */
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
+  /** Synchronously validates and publishes applied memory, returning its independent durable write. */
+  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
 }
 
 /** Imperative bridge from workflow commands to inspector-local draft state. */
 export interface MapInspectorHandle {
-  /** Whether any child inspector currently has unsaved form edits. */
+  /** Whether a legacy presentation-local inspector form currently has unsaved edits. */
   hasUnsavedEdits(): boolean
   /** Whether the specified object editor owns an active draft. */
   isEditingObject(objectId: string): boolean
   /** Discards all active inspector drafts. */
   cancelEdits(): void
-  /** Starts a route-creation draft. */
-  beginRoute(): void
   /** Starts the currently selected object draft. */
   startObjectEdit(): void
   /** Starts the currently selected Orbit draft. */
   startOrbitEdit(): void
-  /** Starts the currently selected route draft. */
-  startRouteEdit(): void
   /** Acknowledges a successful parent commit so the object editor may reset its draft. */
   objectSaveSucceeded(): void
   /** Acknowledges a successful parent commit so the Orbit editor may reset its draft. */
   orbitSaveSucceeded(): void
-  /** Acknowledges a successful parent commit so the route editor may reset its draft. */
-  routeSaveSucceeded(): void
+}
+
+/** Shared SVG-coordinate view controls exposed by both map wrappers. */
+export interface MapNavigationHandle extends MapImageExporter {
+  getViewport(): MapViewport
+  setViewport(viewport: MapViewport): void
+  zoomBy(factor: number): void
+  panBy(dx: number, dy: number): void
+  fitMap(usableRect?: SvgViewportRect): void
+  cancelActiveGesture(): void
+  startViewPan(event: MouseEvent): void
+  moveViewPan(event: MouseEvent): void
+  endViewPan(): void
+  startTouchNavigation(event: TouchEvent): void
+  moveTouchNavigation(event: TouchEvent): void
+  endTouchNavigation(event: TouchEvent): void
+  /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
+  setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
+}
+
+/** Session-only selection saved for one map visit. */
+export type MapInteractionMode = 'navigate' | 'select' | 'move'
+export type ClusterAddType = 'system' | 'route'
+export type ClusterSystemPositionInput = 'x' | 'y'
+export type ClusterSystemPositionInputs = Record<ClusterSystemPositionInput, string>
+export interface ClusterSystemMovePreview {
+  token: number
+  clusterId: string
+  sourceSystemId: string
+  /** Saved normalized origin position, used to reject a stale source before confirmation. */
+  originPosition: Point
+  /** Normalized destination position shared by the form, map API, and workspace layout. */
+  targetPosition: Point
+}
+export type WorkspacePanel = 'hierarchy' | 'inspector'
+export type TransitionResult = { accepted: boolean }
+
+export type MapVisitSelection =
+  | { kind: 'system'; id: string; inspect?: boolean }
+  | { kind: 'route'; id: string }
+  | { kind: 'object'; id: string }
+  | { kind: 'orbit'; id: string }
+  | { kind: 'none' }
+
+/** Session-only camera and selection, keyed by the owning cluster or system ID. */
+export interface MapVisitMemory {
+  viewport: MapViewport
+  selection: MapVisitSelection
 }
 
 /** Renderer capabilities needed by system-map workflows. */
-export interface SystemMapHandle extends MapImageExporter {
+export interface SystemMapHandle extends MapNavigationHandle {
+  /** Shows or clears one transient existing-object placement preview in SVG scene coordinates. */
+  setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  /** Shows or clears one transient proposed-host preview in SVG scene coordinates. */
+  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.
@@ -58,12 +326,93 @@ export interface SystemMapHandle extends MapImageExporter {
    * @returns Normalized map coordinates, or undefined when no candidate passes the point-clearance checks.
    */
   getDetachedOrbitCenter(orbitId: string): Point | undefined
+  /** Resolves all named creation targets near a raw SVG scene point. */
+  getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }
 
 /** Values submitted from a field-definition draft after the UI's confirmation step. */
+export type FieldDefinitionsScreen = 'list' | 'detail' | 'edit' | 'new'
+
+/** Raw strings owned by the parent session while a definition is being edited. */
+export interface FieldDefinitionDraft {
+  name: string
+  type: CustomFieldType
+  /** Newline-delimited option input, retained even while another type is selected. */
+  options: string
+  applicability: CustomFieldApplicabilityTarget[] | undefined
+}
+
+/** Read-only record for the two built-in object fields shown beside reusable definitions. */
+export interface NativeFieldDefinitionSnapshot {
+  id: 'native:atmosphere' | 'native:port-class'
+  name: string
+  type: 'single-select'
+  options: string[]
+  applicability?: undefined
+}
+
+export type FieldDefinitionSnapshot = CustomFieldDefinition | NativeFieldDefinitionSnapshot
+
+/** Parent-owned field management state; keeping this plain lets Vue props stay unwrapped. */
+export interface FieldDefinitionsSessionState {
+  open: boolean
+  screen: FieldDefinitionsScreen
+  selectedId: string | null
+  draft: (FieldDefinitionDraft & { baseline: FieldDefinitionSnapshot }) | null
+  createDraft: FieldDefinitionDraft | null
+  pendingGuard: FieldDefinitionsIntent | null
+  review: FieldDefinitionMutationReview | null
+  error: string | null
+  listPosition: { scrollTop: number; focusedFieldId: string | null }
+  /** Monotonic parent acknowledgement after a field mutation is applied in memory. */
+  appliedAck: number
+}
+
+/** User actions emitted by the field-management presentation for parent-side resolution. */
+export type FieldDefinitionsIntent =
+  | { kind: 'open' }
+  | { kind: 'close' }
+  | { kind: 'back' }
+  | { kind: 'select-field'; fieldId: string }
+  | { kind: 'edit-field'; fieldId: string }
+  | { kind: 'new-field' }
+  | { kind: 'cancel-create' }
+  | { kind: 'cancel-edit' }
+  | { kind: 'patch-definition'; patch: Partial<FieldDefinitionDraft> }
+  | { kind: 'patch-create'; patch: Partial<FieldDefinitionDraft> }
+  | { kind: 'remember-list'; position: { scrollTop: number; focusedFieldId: string | null } }
+  | { kind: 'save-field' }
+  | { kind: 'delete-field'; fieldId: string }
+  | { kind: 'confirm-review' }
+  | { kind: 'cancel-review' }
+  | { kind: 'resolve-transition'; decision: TransitionDecision }
+
+/** Consequence shown before resolving an entity draft or applying a field mutation. */
+export interface FieldDefinitionReviewImpact {
+  systemId: string
+  systemName: string
+  objectId: string
+  objectName: string
+  value: CustomFieldValue
+  nextValue?: CustomFieldValue
+  resolution: 'preserve' | 'clear' | 'remove'
+}
+
+/** Read-only prepared consequences for the currently selected field mutation. */
+export interface FieldDefinitionMutationReview {
+  fieldId: string
+  fieldName: string
+  operation: 'update' | 'remove'
+  fromType?: CustomFieldType
+  toType?: CustomFieldType
+  removedOptions?: string[]
+  impacts: FieldDefinitionReviewImpact[]
+}
+
 export interface FieldDefinitionUpdateRequest {
   fieldId: string
   name: string
+  type: CustomFieldType
   options: string[]
   applicability: CustomFieldApplicabilityTarget[] | undefined
 }

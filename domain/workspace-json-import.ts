@@ -427,6 +427,94 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
 }
 
 /**
+ * Captures the user-visible and settings effects of a prepared import without signing generated copy IDs.
+ * @param workspace Current workspace used to prepare the candidate.
+ * @param value Immutable parsed source JSON.
+ * @param prepared Candidate produced by `prepareJsonImport` from these inputs.
+ * @returns A stable review signature and existing object-field IDs changed by this import.
+ */
+export function jsonImportReviewEffects(
+  workspace: LocalWorkspace,
+  value: unknown,
+  prepared: PreparedJsonImport,
+): { signature: string; existingFieldIds: string[] } {
+  const map = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
+  if (!isImportedMap(map)) {
+    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+  }
+
+  const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({
+    ...(includeId ? { id: field.id } : {}),
+    name: field.name,
+    type: field.type,
+    ...(field.type === 'single-select' ? { options: [...field.options] } : {}),
+    applicability: field.applicability === undefined
+      ? null
+      : field.applicability.map(target => ({ ...target })),
+  })
+  const customFieldEffects = map.objectFieldSettings.customFields.map(sourceField => {
+    const existingField = workspace.objectFieldSettings.customFields.find(field =>
+      field.name.toLowerCase() === sourceField.name.toLowerCase(),
+    )
+    if (!existingField) {
+      return {
+        source: fieldState(sourceField, false),
+        before: null,
+        after: fieldState(sourceField, false),
+      }
+    }
+
+    const nextField = prepared.workspace.objectFieldSettings.customFields.find(field =>
+      field.id === existingField.id,
+    )
+    return {
+      source: fieldState(sourceField, false),
+      before: fieldState(existingField, true),
+      after: nextField ? fieldState(nextField, true) : null,
+    }
+  })
+  const existingFieldIds = customFieldEffects.flatMap((effect, index) => {
+    const sourceField = map.objectFieldSettings.customFields[index]
+    if (!sourceField) return []
+    const existingField = workspace.objectFieldSettings.customFields.find(field =>
+      field.name.toLowerCase() === sourceField.name.toLowerCase(),
+    )
+    if (!existingField) return []
+    return JSON.stringify(effect.before) === JSON.stringify(effect.after)
+      ? []
+      : [existingField.id]
+  })
+  if (JSON.stringify(workspace.objectFieldSettings.atmosphereOptions)
+    !== JSON.stringify(prepared.workspace.objectFieldSettings.atmosphereOptions)) {
+    existingFieldIds.push('native:atmosphere')
+  }
+  if (JSON.stringify(workspace.objectFieldSettings.portClassOptions)
+    !== JSON.stringify(prepared.workspace.objectFieldSettings.portClassOptions)) {
+    existingFieldIds.push('native:port-class')
+  }
+
+  const signature = JSON.stringify({
+    source: JSON.stringify(value),
+    summary: prepared.summary,
+    settings: {
+      atmosphereOptions: {
+        before: workspace.objectFieldSettings.atmosphereOptions,
+        after: prepared.workspace.objectFieldSettings.atmosphereOptions,
+      },
+      portClassOptions: {
+        before: workspace.objectFieldSettings.portClassOptions,
+        after: prepared.workspace.objectFieldSettings.portClassOptions,
+      },
+      customFields: customFieldEffects,
+    },
+    addedSystemPositions: prepared.addedSystemIds.map(systemId =>
+      prepared.workspace.layout.systemPositions[systemId] ?? null,
+    ),
+  })
+  return { signature, existingFieldIds }
+}
+
+/**
  * Merges built-in option lists by case-insensitive value while preserving existing order and spelling.
  * @param existing Current options, kept first.
  * @param incoming Imported options to append when new.

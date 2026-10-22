@@ -1,68 +1,67 @@
 <template>
-  <template v-if="props.mode === 'cluster'">
-    <span class="section-kicker">CLUSTER DETAILS</span>
-    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ props.workspace.cluster.name }}</h2>
-    <p class="inspector-intro mb-[1em]">
-      Choose a route to inspect its logical Jump Point endpoints, or edit the chart names.
-    </p>
-  </template>
-  <template v-else-if="props.selectedSystem">
-    <span class="section-kicker">CHART DETAILS</span>
-    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">{{ props.selectedSystem.name }}</h2>
-    <p class="inspector-intro mb-[1em]">
-      Choose a map object or Orbit to inspect it, or edit the chart names.
-    </p>
-  </template>
-
-  <form class="field-stack mt-4 grid gap-3" @submit.prevent="emit('submit-names')">
-    <fieldset class="m-0 grid gap-3 border-0 p-0" :disabled="!props.chartNamesEditing || props.saving">
-      <label :for="clusterNameId">Jump Cluster</label>
-      <input :id="clusterNameId" v-model="clusterName" maxlength="80" required>
-      <label :for="systemNameId">Star system</label>
-      <input :id="systemNameId" v-model="systemName" maxlength="80" required>
-    </fieldset>
-    <p v-if="props.formError" class="feedback m-0 error-text" role="alert">{{ props.formError }}</p>
-    <div class="flex flex-wrap gap-2">
-      <button
-        v-if="!props.chartNamesEditing"
-        class="primary-button"
-        type="button"
-        aria-label="Edit chart names"
-        @click="emit('edit-chart-names')"
-      >
-        Edit
-      </button>
-      <button v-else class="primary-button" type="submit" aria-label="Save chart names" :disabled="props.saving">
-        Save
-      </button>
-      <button v-if="props.chartNamesEditing" class="quiet-button" type="button" @click="emit('cancel-chart-names')">
-        Cancel
-      </button>
-    </div>
-  </form>
-
-  <div
-    v-if="props.mode === 'cluster' || props.selectedSystem"
-    class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]"
+  <UCard
+    class="chart-details-summary chart-details-card"
+    variant="outline"
+    :ui="{
+      root: 'rounded-[2px] overflow-hidden',
+      header: 'px-4 py-3 sm:px-5',
+      body: 'px-4 py-4 sm:px-5',
+    }"
+    role="region"
+    :aria-label="detailsRegionLabel"
   >
-    <template v-if="props.mode === 'cluster'">
-      <span>Star systems</span>
-      <strong>{{ props.workspace.cluster.systems.length }}</strong>
-      <span>Jump Routes</span>
-      <strong>{{ props.workspace.cluster.routes.length }}</strong>
-      <span>Logical Jump Points</span>
-      <strong>{{ jumpPointCount }}</strong>
+    <template #header>
+      <div class="chart-details-card-heading">
+        <span class="section-kicker">{{ props.mode === 'cluster' ? 'CLUSTER DETAILS' : 'CHART DETAILS' }}</span>
+        <h2 class="mt-2 mb-0 [overflow-wrap:anywhere] text-[1.65rem]">
+          {{ props.mode === 'cluster' ? props.workspace.cluster.name : props.selectedSystem?.name }}
+        </h2>
+      </div>
     </template>
-    <template v-else-if="props.selectedSystem">
-      <span>Map objects</span>
-      <strong>{{ props.selectedSystem.objects.length }}</strong>
-      <span>Nested Orbits</span>
-      <strong>{{ props.selectedSystem.orbits.length }}</strong>
-    </template>
-  </div>
-  <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">
-    {{ props.editorError }}
-  </p>
+
+    <p class="inspector-intro mb-0">
+      {{ props.mode === 'cluster'
+        ? 'Choose a route to inspect its logical Jump Point endpoints, or edit the chart names.'
+        : 'Choose a map object or Orbit to inspect it, or edit the chart names.' }}
+    </p>
+
+    <div class="chart-details-actions mt-4 flex flex-wrap items-center gap-2">
+      <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
+        Chart-name editing session
+      </span>
+    </div>
+
+    <USeparator v-if="props.mode === 'cluster' || props.selectedSystem" class="my-4" />
+    <div
+      v-if="props.mode === 'cluster' || props.selectedSystem"
+      role="region"
+      :aria-label="statisticsRegionLabel"
+      class="orbit-facts grid grid-cols-[1fr_auto] gap-[0.55rem]"
+    >
+      <template v-if="props.mode === 'cluster'">
+        <span>Star systems</span>
+        <strong>{{ props.workspace.cluster.systems.length }}</strong>
+        <span>Jump Routes</span>
+        <strong>{{ props.workspace.cluster.routes.length }}</strong>
+        <span>Logical Jump Points</span>
+        <strong>{{ jumpPointCount }}</strong>
+      </template>
+      <template v-else-if="props.selectedSystem">
+        <span>Map objects</span>
+        <strong>{{ props.selectedSystem.objects.length }}</strong>
+        <span>Stars</span>
+        <strong>{{ starCount }}</strong>
+        <span>Nested Orbits</span>
+        <strong>{{ props.selectedSystem.orbits.length }}</strong>
+      </template>
+    </div>
+    <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">
+      {{ props.editorError }}
+    </p>
+  </UCard>
 </template>
 
 <script setup lang="ts">
@@ -80,25 +79,19 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
-  chartNamesEditing: boolean
-  saving: boolean
-  formError: string
+  hasChartNameDraft: boolean
   editorError?: string
 }>()
 
 const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
 }>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
-const clusterNameId = computed(() =>
-  props.mode === 'cluster' ? 'cluster-detail-name' : 'detail-cluster-name',
-)
-const systemNameId = computed(() =>
-  props.mode === 'cluster' ? 'system-detail-name' : 'detail-system-name',
-)
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
+const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
+const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
+const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
 </script>
+
+<style scoped>
+.chart-details-card-heading { min-width: 0; }
+</style>

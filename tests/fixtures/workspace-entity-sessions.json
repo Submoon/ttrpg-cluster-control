@@ -1,0 +1,103 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "system",
+  "system": {
+    "id": "entity-session-lab",
+    "name": "Session Lab",
+    "objects": [
+      {
+        "id": "entity-session-primary-star",
+        "family": "CelestialBody",
+        "subtype": "star",
+        "locationKey": "A",
+        "name": "Primary Star",
+        "description": "",
+        "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+      },
+      {
+        "id": "entity-session-distant-star",
+        "family": "CelestialBody",
+        "subtype": "star",
+        "locationKey": "B",
+        "name": "Distant Star",
+        "description": "",
+        "placement": { "kind": "system", "x": 0.85, "y": 0.5 }
+      },
+      {
+        "id": "entity-session-planet",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL-01",
+        "name": "Iria",
+        "description": "A survey world.",
+        "placement": { "kind": "orbit", "orbitId": "entity-session-orbit-one" },
+        "customFieldValues": {
+          "entity-session-threat-level": 3,
+          "entity-session-hostile": true,
+          "entity-session-session-note": "Initial campaign note.",
+          "entity-session-hidden-installation-record": "Keep this out-of-scope assignment."
+        }
+      },
+      {
+        "id": "entity-session-moon",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO-01",
+        "name": "Nix",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "entity-session-orbit-two" }
+      }
+    ],
+    "orbits": [
+      { "id": "entity-session-orbit-one", "hostId": "entity-session-primary-star", "order": 1 },
+      { "id": "entity-session-orbit-two", "hostId": "entity-session-primary-star", "order": 2 },
+      { "id": "entity-session-distant-orbit", "hostId": "entity-session-distant-star", "order": 1 }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": ["Breathable", "Unbreathable", "Vacuum"],
+    "portClassOptions": ["Class I", "Class II", "Class III"],
+    "customFields": [
+      {
+        "id": "entity-session-threat-level",
+        "name": "Threat level",
+        "type": "number",
+        "applicability": [{ "kind": "category", "family": "CelestialBody" }]
+      },
+      {
+        "id": "entity-session-hostile",
+        "name": "Hostile",
+        "type": "boolean",
+        "applicability": [{ "kind": "category", "family": "CelestialBody" }]
+      },
+      {
+        "id": "entity-session-session-note",
+        "name": "Session note",
+        "type": "text",
+        "applicability": [{ "kind": "category", "family": "CelestialBody" }]
+      },
+      {
+        "id": "entity-session-hidden-installation-record",
+        "name": "Installation record",
+        "type": "text",
+        "applicability": [{ "kind": "category", "family": "Installation" }]
+      },
+      {
+        "id": "entity-session-unused-installation-notes",
+        "name": "Unused installation notes",
+        "type": "text",
+        "applicability": [{ "kind": "category", "family": "Installation" }]
+      }
+    ]
+  },
+  "layout": {
+    "version": 1,
+    "orbitRadii": {},
+    "orbitRotations": {},
+    "objectAngles": {
+      "entity-session-planet": 0.75,
+      "entity-session-moon": 0
+    }
+  }
+}

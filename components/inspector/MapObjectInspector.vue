@@ -1,496 +1,658 @@
 <template>
-  <template v-if="selectedObject">
-    <span class="section-kicker">MAP OBJECT / SELECTED</span>
-    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">{{ selectedObject.family }} / {{ selectedObject.subtype }}</span>
-    <h2 class="object-title mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
-      <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
-      <span>{{ selectedObject.name }}</span>
-    </h2>
-    <p class="inspector-intro mb-[1em]">
-      A stable map record. Edit its keyed description without leaving the current chart.
-    </p>
-
-    <form class="mt-4" @submit.prevent="saveObjectEdit">
-      <fieldset class="field-stack m-0 grid gap-3 border-0 p-0" :disabled="!objectEditing || props.saving">
-        <label v-if="selectedObject.family === 'Other'" :for="`object-type-${selectedObject.id}`">
-          Type label
-          <input
-            :id="`object-type-${selectedObject.id}`"
-            v-model="objectDraft.subtype"
-            autocomplete="off"
-            required
-          >
-        </label>
-        <label :for="`object-key-${selectedObject.id}`">
-          Location key
-          <input
-            :id="`object-key-${selectedObject.id}`"
-            v-model="objectDraft.locationKey"
-            autocomplete="off"
-            required
-          >
-        </label>
-        <label :for="`object-name-${selectedObject.id}`">
-          Name
-          <input
-            :id="`object-name-${selectedObject.id}`"
-            v-model="objectDraft.name"
-            autocomplete="off"
-            maxlength="80"
-            required
-          >
-        </label>
-        <label :for="`object-placement-${selectedObject.id}`">
-          Placement
-          <select
-            :id="`object-placement-${selectedObject.id}`"
-            v-model="objectDraft.placement"
-            @change="updateObjectPlacementDraft"
-          >
-            <option value="system">System-level position</option>
-            <optgroup v-if="placeableOrbits.length" label="Orbits">
-              <option
-                v-for="orbit in placeableOrbits"
-                :key="orbit.id"
-                :value="`orbit:${orbit.id}`"
-              >
-                Orbit {{ orbit.order }} around {{ orbit.hostId === null
-                  ? 'unoccupied center'
-                  : selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name }}
-              </option>
-            </optgroup>
-          </select>
-        </label>
-        <label v-if="selectedObject.family === 'JumpPoint'" :for="`jump-station-${selectedObject.id}`">
-          Physical Jump Station
-          <select
-            :id="`jump-station-${selectedObject.id}`"
-            v-model="objectDraft.jumpStationId"
-          >
-            <option value="">No physical station</option>
-            <option v-for="station in physicalStations" :key="station.id" :value="station.id">
-              {{ station.name }} ({{ station.locationKey }})
-            </option>
-          </select>
-        </label>
-        <p v-if="selectedObject.family === 'JumpPoint' && physicalStations.length === 0" class="empty-copy m-0">
-          Add a separate Station object from the catalogue to record its physical location.
+  <section v-if="selectedObject" class="entity-inspector" aria-label="Object inspector">
+    <header class="entity-inspector-header">
+      <div class="min-w-0">
+        <p class="section-kicker">{{ catalogueFamilyLabel(selectedObject.family) }}</p>
+        <h2 class="object-title mt-2 mb-1 [overflow-wrap:anywhere] text-[1.45rem]">
+          <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
+          <span>{{ selectedObject.name }}</span>
+        </h2>
+        <p class="entity-inspector-subtitle m-0">
+          {{ selectedObject.locationKey }} · {{ catalogueSubtypeLabel(selectedObject) }}
         </p>
-        <label v-if="selectedObject.family === 'CelestialBody' && (selectedObject.subtype === 'planet' || selectedObject.subtype === 'moon')" :for="`object-atmosphere-${selectedObject.id}`">
-          Atmosphere
-          <select
-            :id="`object-atmosphere-${selectedObject.id}`"
-            aria-label="Atmosphere"
-            v-model="objectDraft.atmosphere"
-          >
-            <option value="">Not set</option>
-            <option
-              v-for="option in props.workspace.objectFieldSettings.atmosphereOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option }}
-            </option>
-          </select>
-        </label>
-        <label v-if="selectedObject.family === 'Installation'" :for="`object-port-class-${selectedObject.id}`">
-          Port class
-          <select
-            :id="`object-port-class-${selectedObject.id}`"
-            aria-label="Port class"
-            v-model="objectDraft.portClass"
-          >
-            <option value="">Not set</option>
-            <option
-              v-for="option in props.workspace.objectFieldSettings.portClassOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option }}
-            </option>
-          </select>
-        </label>
-        <template v-for="field in applicableCustomFields" :key="field.id">
-          <label v-if="field.type === 'text'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <textarea
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-              rows="3"
-            />
-          </label>
-          <label v-else-if="field.type === 'number'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <input
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-              type="number"
-              step="any"
-            >
-          </label>
-          <label v-else-if="field.type === 'boolean'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <select
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-            >
-              <option value="">Not set</option>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </label>
-          <label v-else-if="field.type === 'single-select'" :for="`custom-field-value-${field.id}`">
-            {{ field.name }}
-            <select
-              :id="`custom-field-value-${field.id}`"
-              :aria-label="field.name"
-              v-model="objectDraft.customFieldValues[field.id]"
-            >
-              <option value="">Not set</option>
-              <option v-for="option in field.options" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </label>
-        </template>
-        <div v-if="objectDraft.placement === 'system'" class="coordinate-fields grid grid-cols-2 gap-[0.6rem]">
-          <label :for="`object-x-${selectedObject.id}`">
-            Schematic X
-            <input
-              :id="`object-x-${selectedObject.id}`"
-              type="number"
-              step="any"
-              v-model="objectDraft.x"
-              required
-            >
-          </label>
-          <label :for="`object-y-${selectedObject.id}`">
-            Schematic Y
-            <input
-              :id="`object-y-${selectedObject.id}`"
-              type="number"
-              step="any"
-              v-model="objectDraft.y"
-              required
-            >
-          </label>
+      </div>
+      <UButton
+        class="workspace-control shrink-0"
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        aria-label="Hide inspector"
+        @click="emit('hide')"
+      >
+        Hide
+      </UButton>
+    </header>
+
+    <form :id="formId" class="entity-inspector-body" novalidate @submit.prevent="applyObjectSession">
+      <div
+        v-if="summaryMessage || errorEntries.length"
+        id="object-inspector-validation-summary"
+        class="entity-inspector-feedback entity-inspector-feedback--error"
+        role="alert"
+        aria-live="assertive"
+        tabindex="-1"
+      >
+        <strong>{{ errorEntries.length ? `${errorEntries.length} form ${errorEntries.length === 1 ? 'issue' : 'issues'}` : 'Could not apply these changes' }}</strong>
+        <p v-if="summaryMessage">{{ summaryMessage }}</p>
+        <p v-else>Review the marked fields before applying.</p>
+        <ul v-if="errorEntries.length">
+          <li v-for="[key, message] in errorEntries" :key="key">
+            <UButton
+              class="entity-inspector-issue-action"
+              color="error"
+              variant="link"
+              size="xs"
+              type="button"
+              @click="focusControl(key)"
+            >{{ message }}</UButton>
+          </li>
+        </ul>
+      </div>
+
+      <section class="entity-inspector-section" aria-labelledby="object-details-heading">
+        <div class="entity-inspector-section-heading">
+          <div>
+            <p class="section-kicker">MAP OBJECT</p>
+            <h3 id="object-details-heading">Object details</h3>
+            <span class="entity-inspector-type-chip">{{ catalogueSubtypeLabel(selectedObject) }}</span>
+          </div>
+          <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
-        <label :for="`object-description-${selectedObject.id}`">
-          Description
-          <textarea
-            :id="`object-description-${selectedObject.id}`"
-            rows="5"
-            v-model="objectDraft.description"
-          />
-        </label>
-      </fieldset>
-      <p v-if="objectError || props.editorError" class="feedback mt-3 mb-0 error-text" role="alert">
-        {{ objectError || props.editorError }}
-      </p>
-      <div class="flex flex-wrap gap-2 mt-4">
-        <button
-          v-if="!objectEditing"
-          class="primary-button"
+        <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
+          <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
+            <UInput
+              :id="controlId('subtype')"
+              v-model="objectDraft.subtype"
+              class="entity-inspector-full"
+              autocomplete="off"
+              maxlength="80"
+            />
+          </UFormField>
+          <UFormField label="Location key" :error="fieldError('locationKey')">
+            <UInput
+              :id="controlId('locationKey')"
+              v-model="objectDraft.locationKey"
+              autocomplete="off"
+              maxlength="24"
+            />
+          </UFormField>
+          <UFormField label="Name" :error="fieldError('name')">
+            <UInput
+              :id="controlId('name')"
+              v-model="objectDraft.name"
+              class="entity-inspector-full"
+              autocomplete="off"
+              maxlength="80"
+            />
+          </UFormField>
+          <UFormField label="Description" class="entity-inspector-full-row" :error="fieldError('description')">
+            <UTextarea
+              :id="controlId('description')"
+              v-model="objectDraft.description"
+              class="entity-inspector-full"
+              :rows="5"
+              autoresize
+            />
+          </UFormField>
+        </fieldset>
+      </section>
+
+      <section class="entity-inspector-section" aria-labelledby="object-placement-heading">
+        <div class="entity-inspector-section-heading">
+          <div>
+            <p class="section-kicker">SYSTEM STRUCTURE</p>
+            <h3 id="object-placement-heading">Placement and relationships</h3>
+          </div>
+        </div>
+        <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
+          <UFormField label="Placement" class="entity-inspector-full-row" :error="fieldError('placement')">
+            <USelect
+              :id="controlId('placement')"
+              :model-value="objectDraft.placement"
+              :items="placementItems"
+              @update:model-value="updatePlacement"
+            />
+          </UFormField>
+          <UFormField v-if="objectDraft.placement === 'system'" label="Schematic X" :error="fieldError('x')">
+            <UInput
+              :id="controlId('x')"
+              :model-value="objectDraft.x"
+              @update:model-value="value => objectDraft.x = String(value ?? '')"
+              type="number"
+              step="any"
+              inputmode="decimal"
+            />
+          </UFormField>
+          <UFormField v-if="objectDraft.placement === 'system'" label="Schematic Y" :error="fieldError('y')">
+            <UInput
+              :id="controlId('y')"
+              :model-value="objectDraft.y"
+              @update:model-value="value => objectDraft.y = String(value ?? '')"
+              type="number"
+              step="any"
+              inputmode="decimal"
+            />
+          </UFormField>
+          <UFormField v-if="selectedObject.family === 'JumpPoint'" label="Physical Station association" class="entity-inspector-full-row" :error="fieldError('jumpStationId')">
+            <USelect
+              :id="controlId('jumpStationId')"
+              :model-value="stationSelectValue"
+              :items="stationItems"
+              @update:model-value="value => objectDraft.jumpStationId = decodeSelectValue('station', stationChoices, String(value))"
+            />
+          </UFormField>
+          <p v-if="selectedObject.family === 'JumpPoint' && physicalStations.length === 0" class="empty-copy entity-inspector-full-row m-0">
+            Add a separate Station object from the catalogue to record its physical location.
+          </p>
+        </fieldset>
+      </section>
+
+      <section v-if="hasNativeFields" class="entity-inspector-section" aria-labelledby="object-native-fields-heading">
+        <div class="entity-inspector-section-heading">
+          <div>
+            <p class="section-kicker">NATIVE VALUES</p>
+            <h3 id="object-native-fields-heading">Catalogue fields</h3>
+          </div>
+          <UBadge color="neutral" variant="subtle">Built-in</UBadge>
+        </div>
+        <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
+          <UFormField v-if="hasAtmosphere" label="Atmosphere" :error="fieldError('native:atmosphere')">
+            <USelect
+              :id="controlId('native:atmosphere')"
+              :model-value="atmosphereSelectValue"
+              :items="atmosphereItems"
+              @update:model-value="value => objectDraft.atmosphere = decodeSelectValue('native:atmosphere', atmosphereChoices, String(value))"
+            />
+          </UFormField>
+          <UFormField v-if="selectedObject.family === 'Installation'" label="Port class" :error="fieldError('native:portClass')">
+            <USelect
+              :id="controlId('native:portClass')"
+              :model-value="portClassSelectValue"
+              :items="portClassItems"
+              @update:model-value="value => objectDraft.portClass = decodeSelectValue('native:portClass', portClassChoices, String(value))"
+            />
+          </UFormField>
+        </fieldset>
+      </section>
+
+      <section class="entity-inspector-section" aria-labelledby="object-custom-fields-heading">
+        <div class="entity-inspector-section-heading">
+          <div>
+            <p class="section-kicker">CUSTOM VALUES</p>
+            <h3 id="object-custom-fields-heading">Custom fields</h3>
+          </div>
+          <UBadge color="neutral" variant="subtle">Reusable</UBadge>
+          <UButton
+            class="workspace-control"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            type="button"
+            aria-label="Manage field definitions"
+            @click="emit('open-field-definitions')"
+          >
+            Manage
+          </UButton>
+        </div>
+        <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
+          <UFormField
+            v-for="field in applicableCustomFields"
+            :key="field.id"
+            :label="field.name"
+            :error="fieldError(`custom:${field.id}`)"
+          >
+            <USelect
+              v-if="field.type === 'single-select' || field.type === 'boolean'"
+              :id="controlId(`custom:${field.id}`)"
+              :model-value="customSelectValue(field)"
+              :items="customSelectItems(field)"
+              @update:model-value="value => setCustomSelectValue(field, String(value))"
+            />
+            <UTextarea
+              v-else-if="field.type === 'text'"
+              :id="controlId(`custom:${field.id}`)"
+              :model-value="objectDraft.customFieldValues[field.id]"
+              @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
+              class="entity-inspector-full"
+              :rows="3"
+              autoresize
+            />
+            <UInput
+              v-else
+              :id="controlId(`custom:${field.id}`)"
+              :model-value="objectDraft.customFieldValues[field.id]"
+              @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
+              type="number"
+              step="any"
+              inputmode="decimal"
+            />
+          </UFormField>
+          <p v-if="applicableCustomFields.length === 0" class="empty-copy m-0">No custom fields apply to this object.</p>
+        </fieldset>
+      </section>
+
+      <section v-if="!objectSession" class="entity-inspector-section" aria-label="Object editing">
+        <p class="inspector-intro m-0">Edit the full object record, including its keyed description and typed catalogue values.</p>
+        <UButton
+          class="workspace-control"
+          color="primary"
+          size="sm"
           type="button"
           aria-label="Edit map object"
           :disabled="props.saving"
           @click="emit('request-object-edit')"
         >
           Edit
-        </button>
-        <button v-else class="primary-button" type="submit" aria-label="Save map object" :disabled="props.saving">
-          Save
-        </button>
-        <button v-if="objectEditing" class="quiet-button" type="button" aria-label="Cancel map object edits" @click="cancelObjectEdit()">
-          Cancel
-        </button>
-      </div>
+        </UButton>
+      </section>
+
+      <section id="object-inspector-save-details" class="entity-inspector-section" aria-label="Save details" tabindex="-1">
+        <div class="entity-inspector-section-heading">
+          <div>
+            <p class="section-kicker">LOCAL WORKSPACE</p>
+            <h3>Save details</h3>
+          </div>
+          <span class="workspace-save-indicator" :class="`is-${props.saveState}`" aria-hidden="true"></span>
+        </div>
+        <p class="entity-inspector-save-details m-0">{{ props.saveMessage }}</p>
+        <p v-if="props.saveState === 'error' && props.saveError" class="entity-inspector-save-details m-0 error-text" role="alert">
+          The applied changes are not saved on this device yet: {{ props.saveError }}
+        </p>
+      </section>
+
+      <section class="entity-inspector-delete" aria-labelledby="object-delete-heading">
+        <div>
+          <p class="section-kicker">SEPARATE DESTRUCTIVE ACTION</p>
+          <h3 id="object-delete-heading">Delete</h3>
+        </div>
+        <p>The existing impact review lists everything that will be removed or updated.</p>
+        <UButton
+          class="workspace-control entity-inspector-delete-button"
+          color="error"
+          variant="outline"
+          size="sm"
+          type="button"
+          :aria-label="`Delete ${selectedObject.name}`"
+          :disabled="props.saving"
+          @click="emit('delete-object')"
+        >
+          Delete object…
+        </UButton>
+      </section>
     </form>
-    <button
-      v-if="!objectEditing"
-      class="quiet-button mt-4"
-      type="button"
-      :aria-label="`Delete ${selectedObject.name}`"
-      :disabled="props.saving"
-      @click="emit('delete-object')"
-    >
-      Delete object
-    </button>
-    <p class="inspector-footnote mt-4 mb-0 border-t border-[var(--line-soft)] pt-3">Location keys are required and unique within this star system.</p>
-  </template>
+
+    <footer class="entity-inspector-footer">
+      <div class="entity-inspector-footer-status">
+        <span class="entity-inspector-draft-status" role="status" aria-live="polite">
+          {{ objectSession ? (props.hasModifiedEntitySession ? 'Unapplied changes' : 'No unapplied changes') : 'Object details' }}
+        </span>
+        <UButton
+          v-if="errorEntries.length || summaryMessage"
+          class="workspace-control entity-inspector-error-link"
+          color="error"
+          variant="ghost"
+          size="xs"
+          @click="focusSummary"
+        >
+          Review {{ errorEntries.length || 1 }} {{ (errorEntries.length || 1) === 1 ? 'issue' : 'issues' }}
+        </UButton>
+        <WorkspaceFeedback
+          class="entity-inspector-save-feedback"
+          :active="true"
+          :has-chart-name-draft="props.hasChartNameDraft"
+          :has-uncommitted-names="props.hasUncommittedNames"
+          :save-state="props.saveState"
+          :save-message="props.saveMessage"
+          :save-error="props.saveError"
+          :export-error="props.exportError"
+          @resume-chart-draft="emit('resume-chart-draft')"
+          @retry-save="emit('retry-save')"
+          @export-current-json="emit('export-current-json')"
+        />
+      </div>
+      <div class="entity-inspector-footer-actions">
+        <UButton
+          class="workspace-control"
+          color="primary"
+          type="submit"
+          :form="formId"
+          :disabled="!objectSession || (!props.hasModifiedEntitySession && !hasSessionErrors) || props.saving"
+          @click="applyObjectSession"
+        >
+          <span>Apply changes</span><span class="sr-only">Save map object</span>
+        </UButton>
+        <UButton
+          class="workspace-control"
+          color="neutral"
+          variant="outline"
+          type="button"
+          :disabled="!objectSession || !props.hasModifiedEntitySession"
+          @click="discardObjectSession"
+        >
+          <span>Discard changes</span><span class="sr-only">Cancel map object edits</span>
+        </UButton>
+      </div>
+    </footer>
+  </section>
 </template>
 
 <script setup lang="ts">
-/**
- * Owns local object-edit drafts; the parent controls commit acknowledgement and navigation guards.
- */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
 import {
   canPlaceObjectInOrbit,
   initialSystemPlacement,
   isCustomFieldApplicableToObject,
+  type CustomFieldDefinition,
   type LocalWorkspace,
   type StarSystem,
   type SystemObject,
-  type SystemObjectChanges,
 } from '../../domain/workspace'
+import type { EntityInspectorSession, ObjectDraft } from '../../composables/editor-workflows/types'
+import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
-import type { MapObjectInspectorHandle, MapObjectSaveRequest } from './contracts'
-
-interface SystemObjectDraft {
-  locationKey: string
-  name: string
-  description: string
-  subtype: string
-  placement: string
-  x: string
-  y: string
-  atmosphere: string
-  portClass: string
-  customFieldValues: Record<string, string>
-  jumpStationId: string
-}
+import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 
 const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
   selectedObject?: SystemObject
+  session: Extract<EntityInspectorSession, { kind: 'object' }> | null
+  hasModifiedEntitySession: boolean
   saving: boolean
   editorError: string
+  hasChartNameDraft: boolean
+  hasUncommittedNames: boolean
+  saveState: 'idle' | 'saving' | 'saved' | 'error'
+  saveMessage: string
+  saveError: string | null
+  exportError: string
 }>()
 
 const emit = defineEmits<{
   'request-object-edit': []
-  'save-object': [request: MapObjectSaveRequest]
+  'open-field-definitions': []
+  'apply-entity-session': [sessionId: number]
+  'discard-entity-session': [sessionId: number]
   'delete-object': []
   'clear-error': []
+  hide: []
+  'resume-chart-draft': []
+  'retry-save': []
+  'export-current-json': []
 }>()
 
-const selectedSystem = computed(() => props.selectedSystem)
 const selectedObject = computed(() => props.selectedObject)
-const objectDraft = reactive<SystemObjectDraft>({
-  locationKey: '',
-  name: '',
-  description: '',
-  subtype: '',
-  placement: 'system',
-  x: '',
-  y: '',
-  atmosphere: '',
-  portClass: '',
-  customFieldValues: {},
-  jumpStationId: '',
+const selectedSystem = computed(() => props.selectedSystem)
+const objectSession = computed(() => {
+  const session = props.session
+  if (!session || session.kind !== 'object' || session.targetId !== selectedObject.value?.id) return null
+  return session
 })
-const objectEditSnapshot = ref<SystemObject | null>(null)
-const objectEditing = computed(() =>
-  objectEditSnapshot.value?.id === selectedObject.value?.id && !!selectedObject.value,
-)
-const objectError = ref('')
-/** Applicability filters visible controls only; this draft retains values for every defined field. */
-const applicableCustomFields = computed(() => {
-  const object = selectedObject.value
-  return object
-    ? props.workspace.objectFieldSettings.customFields.filter(field =>
-        isCustomFieldApplicableToObject(field, object),
-      )
-    : []
-})
-const physicalStations = computed(() =>
-  selectedSystem.value?.objects.filter(object =>
-    object.family === 'Installation' && object.subtype === 'station',
-  ) ?? [],
-)
+const objectDraft = computed<ObjectDraft>(() => objectSession.value?.draft ?? readObjectValues(selectedObject.value))
+const unsetSelectValue = '__entity_inspector_unset__'
+const selectValuePrefix = '__entity_inspector_option__:'
+const formId = computed(() => `object-inspector-form-${selectedObject.value?.id ?? 'current'}`)
+const errorEntries = computed(() => Object.entries(objectSession.value?.errors ?? {}))
+const summaryMessage = computed(() => objectSession.value?.error || props.editorError)
+const hasSessionErrors = computed(() => errorEntries.value.length > 0 || !!objectSession.value?.error)
+const customFields = computed(() => props.workspace.objectFieldSettings.customFields)
+const applicableCustomFields = computed(() => selectedObject.value
+  ? customFields.value.filter(field => isCustomFieldApplicableToObject(field, selectedObject.value!))
+  : [])
+const physicalStations = computed(() => selectedSystem.value?.objects.filter(object =>
+  object.family === 'Installation' && object.subtype === 'station',
+) ?? [])
 const placeableOrbits = computed(() => {
   const system = selectedSystem.value
   const object = selectedObject.value
   if (!system || !object) return []
-
   return system.orbits
     .filter(orbit => canPlaceObjectInOrbit(system, object.id, orbit.id))
     .sort((left, right) => left.order - right.order)
 })
+const hasAtmosphere = computed(() => selectedObject.value?.family === 'CelestialBody'
+  && (selectedObject.value.subtype === 'planet' || selectedObject.value.subtype === 'moon'))
+const hasNativeFields = computed(() => hasAtmosphere.value || selectedObject.value?.family === 'Installation')
+type StoredSelectOption = { label: string; storedValue: string }
+const placementItems = computed(() => [
+  { label: 'System-level position', value: 'system' },
+  ...placeableOrbits.value.map(orbit => ({
+    label: `Orbit ${orbit.order} around ${orbit.hostId === null
+      ? 'unoccupied center'
+      : selectedSystem.value?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'}`,
+    value: `orbit:${orbit.id}`,
+  })),
+])
+const stationChoices = computed<StoredSelectOption[]>(() => physicalStations.value.map(station => ({
+  label: `${station.name} (${station.locationKey})`,
+  storedValue: station.id,
+})))
+const stationItems = computed(() => encodeSelectItems('station', stationChoices.value, 'No physical Station'))
+const stationSelectValue = computed(() => encodeSelectedValue('station', stationChoices.value, objectDraft.value.jumpStationId))
+const atmosphereChoices = computed<StoredSelectOption[]>(() => props.workspace.objectFieldSettings.atmosphereOptions.map(option => ({
+  label: option,
+  storedValue: option,
+})))
+const atmosphereItems = computed(() => encodeSelectItems('native:atmosphere', atmosphereChoices.value))
+const atmosphereSelectValue = computed(() => encodeSelectedValue('native:atmosphere', atmosphereChoices.value, objectDraft.value.atmosphere))
+const portClassChoices = computed<StoredSelectOption[]>(() => props.workspace.objectFieldSettings.portClassOptions.map(option => ({
+  label: option,
+  storedValue: option,
+})))
+const portClassItems = computed(() => encodeSelectItems('native:portClass', portClassChoices.value))
+const portClassSelectValue = computed(() => encodeSelectedValue('native:portClass', portClassChoices.value, objectDraft.value.portClass))
 
-/**
- * Loads a selected object's values into form strings, retaining slots for every current custom definition.
- * @param object Selected object, or undefined to clear the draft fields.
- */
-function syncObjectDraft(object: SystemObject | undefined): void {
-  objectDraft.locationKey = object?.locationKey ?? ''
-  objectDraft.name = object?.name ?? ''
-  objectDraft.description = object?.description ?? ''
-  objectDraft.subtype = object?.subtype ?? ''
-  objectDraft.placement = object?.placement.kind === 'orbit'
-    ? `orbit:${object.placement.orbitId}`
-    : 'system'
-  objectDraft.x = object?.placement.kind === 'system' ? String(object.placement.x) : ''
-  objectDraft.y = object?.placement.kind === 'system' ? String(object.placement.y) : ''
-  objectDraft.atmosphere = object?.atmosphere ?? ''
-  objectDraft.portClass = object?.portClass ?? ''
-  objectDraft.customFieldValues = Object.fromEntries(
+function readObjectValues(object: SystemObject | undefined): ObjectDraft {
+  const customFieldValues = Object.fromEntries(
     Object.entries(object?.customFieldValues ?? {}).map(([fieldId, value]) => [fieldId, String(value)]),
   )
-  for (const field of props.workspace.objectFieldSettings.customFields) {
-    objectDraft.customFieldValues[field.id] ??= ''
+  for (const field of customFields.value) customFieldValues[field.id] ??= ''
+  return {
+    locationKey: object?.locationKey ?? '',
+    name: object?.name ?? '',
+    description: object?.description ?? '',
+    subtype: object?.subtype ?? '',
+    placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
+    x: object?.placement.kind === 'system' ? String(object.placement.x) : '',
+    y: object?.placement.kind === 'system' ? String(object.placement.y) : '',
+    atmosphere: object?.atmosphere ?? '',
+    portClass: object?.portClass ?? '',
+    jumpStationId: object?.jumpStationId ?? '',
+    customFieldValues,
   }
-  objectDraft.jumpStationId = object?.jumpStationId ?? ''
 }
 
-/** Starts a local draft from the current selection without committing workspace state. */
-function startObjectEdit(): void {
-  if (!selectedObject.value) return
-  syncObjectDraft(selectedObject.value)
-  objectEditSnapshot.value = selectedObject.value
-  objectError.value = ''
-  emit('clear-error')
+function controlId(key: string): string {
+  return `object-inspector-${encodeURIComponent(selectedObject.value?.id ?? 'current')}-${encodeURIComponent(key)}`
 }
 
-/**
- * Discards the active object draft and reloads current props.
- * @param clearError Whether to ask the parent to clear its shared editor error.
- */
-function cancelObjectEdit(clearError = true): void {
-  objectEditSnapshot.value = null
-  syncObjectDraft(selectedObject.value)
-  objectError.value = ''
-  if (clearError) emit('clear-error')
+function fieldError(key: string): string | undefined {
+  return objectSession.value?.errors[key]
 }
 
-/**
- * Builds a sparse candidate request and parses custom number/boolean fields before handing off to the parent.
- * Unsupported local placement text sets objectError; finite-coordinate and domain validation remain parent/domain work.
- * A successful request remains a draft until the parent acknowledges its commit.
- */
-function saveObjectEdit(): void {
-  const snapshot = objectEditSnapshot.value
+function focusControl(key: string): void {
+  const control = document.getElementById(controlId(key))
+  if (!(control instanceof HTMLElement)) return
+  control.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  control.focus({ preventScroll: true })
+}
+
+function focusSummary(): void {
+  const summary = document.getElementById('object-inspector-validation-summary')
+  summary?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  summary?.focus({ preventScroll: true })
+}
+
+function updatePlacement(value: string | number): void {
+  const session = objectSession.value
   const object = selectedObject.value
-  if (!snapshot || !object) return
-
-  const changes: SystemObjectChanges = {}
-  if (objectDraft.locationKey !== snapshot.locationKey) changes.locationKey = objectDraft.locationKey
-  if (objectDraft.name !== snapshot.name) changes.name = objectDraft.name
-  if (objectDraft.description !== snapshot.description) changes.description = objectDraft.description
-  if (objectDraft.subtype !== snapshot.subtype) changes.subtype = objectDraft.subtype
-  if (objectDraft.atmosphere !== (snapshot.atmosphere ?? '')) {
-    changes.atmosphere = objectDraft.atmosphere || undefined
+  if (!session || !object) return
+  const nextPlacement = String(value)
+  const wasOrbitPlaced = session.draft.placement.startsWith('orbit:')
+  session.draft.placement = nextPlacement
+  if (wasOrbitPlaced && nextPlacement === 'system' && selectedSystem.value) {
+    const position = initialSystemPlacement(selectedSystem.value)
+    session.draft.x = String(position.x)
+    session.draft.y = String(position.y)
   }
-  if (objectDraft.portClass !== (snapshot.portClass ?? '')) {
-    changes.portClass = objectDraft.portClass || undefined
-  }
-  if (objectDraft.jumpStationId !== (snapshot.jumpStationId ?? '')) {
-    changes.jumpStationId = objectDraft.jumpStationId || null
-  }
-
-  const snapshotPlacement = snapshot.placement.kind === 'orbit'
-    ? `orbit:${snapshot.placement.orbitId}`
-    : 'system'
-  const draftX = String(objectDraft.x)
-  const draftY = String(objectDraft.y)
-  const systemPositionChanged = snapshot.placement.kind === 'system'
-    && (
-      draftX !== String(snapshot.placement.x)
-      || draftY !== String(snapshot.placement.y)
-    )
-  if (objectDraft.placement !== snapshotPlacement || systemPositionChanged) {
-    if (objectDraft.placement === 'system') {
-      changes.placement = {
-        kind: 'system',
-        x: draftX.trim() ? Number(draftX) : Number.NaN,
-        y: draftY.trim() ? Number(draftY) : Number.NaN,
-      }
-    } else if (objectDraft.placement.startsWith('orbit:')) {
-      changes.placement = {
-        kind: 'orbit',
-        orbitId: objectDraft.placement.slice('orbit:'.length),
-      }
-    } else {
-      objectError.value = 'Choose a valid map placement.'
-      return
-    }
-  }
-
-  const customFieldValues = { ...(object.customFieldValues ?? {}) }
-  let customFieldValuesChanged = false
-  for (const definition of props.workspace.objectFieldSettings.customFields) {
-    const draftValue = objectDraft.customFieldValues[definition.id] ?? ''
-    const savedValue = snapshot.customFieldValues?.[definition.id]
-    if (draftValue === (savedValue === undefined ? '' : String(savedValue))) continue
-
-    customFieldValuesChanged = true
-    if (!draftValue) {
-      delete customFieldValues[definition.id]
-    } else if (definition.type === 'number') {
-      const numberValue = Number(draftValue)
-      if (!Number.isFinite(numberValue)) {
-        objectError.value = `"${definition.name}" must be a finite number.`
-        return
-      }
-      customFieldValues[definition.id] = numberValue
-    } else if (definition.type === 'boolean') {
-      if (draftValue !== 'true' && draftValue !== 'false') {
-        objectError.value = `Choose a true or false value for "${definition.name}".`
-        return
-      }
-      customFieldValues[definition.id] = draftValue === 'true'
-    } else {
-      customFieldValues[definition.id] = draftValue
-    }
-  }
-  if (customFieldValuesChanged) {
-    changes.customFieldValues = Object.keys(customFieldValues).length ? customFieldValues : undefined
-  }
-
-  if (!Object.keys(changes).length) {
-    cancelObjectEdit()
-    return
-  }
-  objectError.value = ''
-  emit('save-object', { objectId: snapshot.id, changes })
 }
 
-/**
- * Seeds default normalized coordinates when an Orbit-placed object is switched to system-level placement.
- * The generated position remains a draft until the parent accepts and commits it.
- */
-function updateObjectPlacementDraft(): void {
-  const system = selectedSystem.value
-  if (!system || selectedObject.value?.placement.kind !== 'orbit' || objectDraft.placement !== 'system') return
-  const placement = initialSystemPlacement(system)
-  objectDraft.x = String(placement.x)
-  objectDraft.y = String(placement.y)
+function customSelectChoices(field: CustomFieldDefinition): StoredSelectOption[] {
+  if (field.type === 'single-select') {
+    return field.options.map(option => ({ label: option, storedValue: option }))
+  }
+  return [
+    { label: 'Yes', storedValue: 'true' },
+    { label: 'No', storedValue: 'false' },
+  ]
 }
 
-watch(selectedObject, object => {
-  if (objectEditSnapshot.value?.id !== object?.id) objectEditSnapshot.value = null
-  if (!objectEditing.value) syncObjectDraft(object)
-}, { immediate: true })
-watch(() => props.workspace.objectFieldSettings, (settings) => {
-  const fieldIds = new Set(settings.customFields.map(field => field.id))
-  for (const field of settings.customFields) {
-    if (!(field.id in objectDraft.customFieldValues)) {
-      const value = selectedObject.value?.customFieldValues?.[field.id]
-      objectDraft.customFieldValues[field.id] = value === undefined ? '' : String(value)
-    }
-  }
-  for (const fieldId of Object.keys(objectDraft.customFieldValues)) {
-    if (!fieldIds.has(fieldId)) delete objectDraft.customFieldValues[fieldId]
-  }
-}, { immediate: true })
+function customSelectItems(field: CustomFieldDefinition): Array<{ label: string; value: string }> {
+  const key = `custom:${field.id}`
+  return encodeSelectItems(key, customSelectChoices(field))
+}
 
-/** Parent save acknowledgement is the only path that clears a submitted draft. */
-const inspectorHandle = {
-  hasUnsavedEdits: () => objectEditing.value,
-  isEditingObject: (objectId: string) => objectEditSnapshot.value?.id === objectId,
-  cancelEdits: cancelObjectEdit,
-  startObjectEdit,
-  objectSaveSucceeded: () => {
-    objectEditSnapshot.value = null
-    syncObjectDraft(selectedObject.value)
-    objectError.value = ''
-  },
-} satisfies MapObjectInspectorHandle
+function customSelectValue(field: CustomFieldDefinition): string {
+  const value = objectDraft.value.customFieldValues[field.id] ?? ''
+  return encodeSelectedValue(`custom:${field.id}`, customSelectChoices(field), value)
+}
 
-defineExpose(inspectorHandle)
+function setCustomSelectValue(field: CustomFieldDefinition, value: string): void {
+  objectDraft.value.customFieldValues[field.id] = decodeSelectValue(
+    `custom:${field.id}`,
+    customSelectChoices(field),
+    value,
+  )
+}
+
+function encodeSelectItems(
+  key: string,
+  options: StoredSelectOption[],
+  emptyLabel = 'Not recorded',
+): Array<{ label: string; value: string }> {
+  return [
+    { label: emptyLabel, value: unsetSelectValue },
+    ...options.map((option, index) => ({
+      label: option.label,
+      value: `${selectValuePrefix}${encodeURIComponent(key)}:${index}`,
+    })),
+  ]
+}
+
+function encodeSelectedValue(key: string, options: StoredSelectOption[], storedValue: string): string {
+  if (storedValue === '') return unsetSelectValue
+  const index = options.findIndex(option => option.storedValue === storedValue)
+  return index < 0
+    ? `${selectValuePrefix}${encodeURIComponent(key)}:unavailable`
+    : `${selectValuePrefix}${encodeURIComponent(key)}:${index}`
+}
+
+function decodeSelectValue(key: string, options: StoredSelectOption[], encodedValue: string): string {
+  if (encodedValue === unsetSelectValue) return ''
+  const expectedPrefix = `${selectValuePrefix}${encodeURIComponent(key)}:`
+  if (!encodedValue.startsWith(expectedPrefix)) return ''
+  const index = Number(encodedValue.slice(expectedPrefix.length))
+  if (!Number.isInteger(index) || index < 0) return ''
+  return options[index]?.storedValue ?? ''
+}
+
+function applyObjectSession(): void {
+  const session = objectSession.value
+  if (session) emit('apply-entity-session', session.id)
+}
+
+function discardObjectSession(): void {
+  const session = objectSession.value
+  if (session) emit('discard-entity-session', session.id)
+}
+
+defineExpose({
+  hasUnsavedEdits: () => false,
+  isEditingObject: (objectId: string) => objectSession.value?.targetId === objectId,
+})
 </script>
+
+<style scoped>
+.entity-inspector {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+.entity-inspector-header,
+.entity-inspector-footer {
+  background: var(--panel-bg);
+}
+
+.entity-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .55rem;
+  border-bottom: 1px solid var(--line-soft);
+  padding: .8rem .9rem .65rem;
+}
+
+.entity-inspector-subtitle,
+.entity-inspector-save-details > p,
+.entity-inspector-delete > p {
+  color: var(--text-muted);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.entity-inspector-body {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: .8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .8rem .9rem;
+}
+
+.entity-inspector-section,
+.entity-inspector-delete,
+.entity-inspector-feedback { min-width: 0; }
+.entity-inspector-section { display: grid; gap: .65rem; }
+.entity-inspector-section + .entity-inspector-section,
+.entity-inspector-delete { border-top: 1px solid var(--line-soft); padding-top: .8rem; }
+.entity-inspector-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.entity-inspector-section-heading h3,
+.entity-inspector-delete h3 { margin: .18rem 0 0; font: 500 1rem/1.15 Georgia, serif; }
+.entity-inspector-type-chip { display: inline-block; margin-top: .2rem; border: 1px solid var(--line); border-radius: 999px; padding: .12rem .42rem; color: var(--text-muted); font-size: .65rem; }
+.entity-inspector-fields { display: grid; min-width: 0; gap: .7rem; margin: 0; border: 0; padding: 0; }
+.entity-inspector-fields--paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entity-inspector-full,
+.entity-inspector-full-row { width: 100%; }
+.entity-inspector-fields--paired :deep(.entity-inspector-full-row) { grid-column: 1 / -1; }
+.entity-inspector-feedback { border: 1px solid var(--line); border-radius: .4rem; padding: .65rem .75rem; background: var(--panel-soft); font-size: .74rem; line-height: 1.45; }
+.entity-inspector-feedback strong { display: block; margin-bottom: .2rem; }
+.entity-inspector-feedback p { margin: 0; color: var(--text-secondary); }
+.entity-inspector-feedback--error { border-color: color-mix(in srgb, var(--error) 60%, var(--line)); background: color-mix(in srgb, var(--error) 10%, var(--panel-bg)); }
+.entity-inspector-feedback--error strong,
+.entity-inspector-feedback--error li :deep(.entity-inspector-issue-action) { color: var(--error); }
+.entity-inspector-feedback ul { display: grid; gap: .16rem; margin: .35rem 0 0; padding-left: 1.1rem; }
+.entity-inspector-feedback li :deep(.entity-inspector-issue-action) { text-decoration: underline; text-underline-offset: .12em; }
+.entity-inspector-delete-button { justify-self: start; margin-top: .45rem; }
+.entity-inspector-footer { display: grid; gap: .55rem; border-top: 1px solid var(--line-soft); padding: .6rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -.2rem .8rem color-mix(in srgb, var(--map-bg) 35%, transparent); }
+.entity-inspector-footer-status { display: grid; min-width: 0; grid-template-columns: 1fr; gap: .25rem; color: var(--text-muted); font-size: .68rem; }
+.entity-inspector-draft-status { font-size: .68rem; }
+.entity-inspector-save-feedback { min-width: 0; }
+.entity-inspector-footer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+.entity-inspector-footer-actions :deep(button) { justify-content: center; }
+.entity-inspector-error-link { justify-self: start; }
+
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {
+  .entity-inspector-fields--paired { grid-template-columns: minmax(0, 1fr); }
+  .entity-inspector-header { padding-top: .55rem; }
+  .entity-inspector-body { padding-top: .65rem; }
+  .entity-inspector-footer { gap: .45rem; padding-top: .45rem; }
+  .entity-inspector-footer-actions { gap: .35rem; }
+}
+</style>

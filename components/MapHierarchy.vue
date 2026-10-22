@@ -7,6 +7,12 @@
       </div>
       <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
     </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+    </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
@@ -74,45 +80,12 @@
       </div>
     </div>
 
-    <details class="chart-names my-4 border-y border-[var(--line-soft)]">
-      <summary class="cursor-pointer py-[0.7rem]">Chart names</summary>
-      <form class="name-form grid gap-2 pb-[0.9rem]" @submit.prevent="emit('submit-names')">
-        <fieldset class="m-0 grid gap-2 border-0 p-0" :disabled="!props.chartNamesEditing || props.saving">
-          <label for="edit-cluster-name">Jump Cluster</label>
-          <input
-            id="edit-cluster-name"
-            v-model="clusterName"
-            maxlength="80"
-            required
-          >
-          <label for="edit-system-name">Star system</label>
-          <input
-            id="edit-system-name"
-            v-model="systemName"
-            maxlength="80"
-            required
-          >
-        </fieldset>
-        <p v-if="props.formError" class="feedback m-0 error-text" role="alert">{{ props.formError }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-if="!props.chartNamesEditing"
-            class="secondary-button mt-[0.3rem] min-h-[2.25rem] justify-center"
-            type="button"
-            aria-label="Edit chart names"
-            @click="emit('edit-chart-names')"
-          >
-            Edit
-          </button>
-          <button v-else class="primary-button mt-[0.3rem]" type="submit" aria-label="Save chart names" :disabled="props.saving">
-            Save
-          </button>
-          <button v-if="props.chartNamesEditing" class="quiet-button mt-[0.3rem]" type="button" @click="emit('cancel-chart-names')">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </details>
+    <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
+      <UButton color="primary" variant="outline" @click="emit('edit-chart-names')">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+    </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
@@ -151,7 +124,7 @@
           <span class="object-mark" aria-hidden="true">{{ objectMark(row.object) }}</span>
           <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
             {{ row.object.name }}
-            <small class="mt-[0.18rem] block">{{ row.object.family }} / {{ row.object.subtype }}</small>
+            <small class="mt-[0.18rem] block">{{ catalogueFamilyLabel(row.object.family) }} / {{ catalogueSubtypeLabel(row.object) }}</small>
           </span>
         </button>
         <button
@@ -172,7 +145,7 @@
         </button>
       </template>
     </nav>
-    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Drag Orbit from Add Object onto a map object to host it, or elsewhere on the map to place an unoccupied center. Empty Orbits stay on the chart.</p>
+    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Choose Add Orbit from Add, then click the map to place it, or drag Orbit onto a map object to host it. Empty Orbits stay on the chart.</p>
   </template>
 </template>
 
@@ -184,15 +157,10 @@ import { computed } from 'vue'
 import {
   type JumpRoute,
   type LocalWorkspace,
-  type Orbit,
-  type StarSystem,
-  type SystemObject,
 } from '../domain/workspace'
 import { objectMark } from '../utils/catalogue-marks'
-
-type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
-type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject | null; childCount: number; depth: number }
-type HierarchyRow = ObjectRow | OrbitRow
+import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../utils/catalogue-labels'
+import { buildMapHierarchy } from '../utils/map-hierarchy'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
@@ -201,9 +169,8 @@ const props = defineProps<{
   selectedObjectId: string | null
   selectedOrbitId: string | null
   selectedRouteId: string | null
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
   routeSummary: (route: JumpRoute) => string
 }>()
 
@@ -213,68 +180,15 @@ const emit = defineEmits<{
   'select-object': [objectId: string]
   'select-orbit': [orbitId: string]
   'select-route': [routeId: string]
-  'submit-names': []
   'edit-chart-names': []
-  'cancel-chart-names': []
   'show-cluster': []
 }>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
 
 const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),
 )
 
-/**
- * Flattens unoccupied Orbits and system-level objects into depth-first rows of their nested children.
- * Orbit siblings are ordered by their stored order; root objects retain system.objects order.
- * Expects the acyclic host/placement relationships enforced by workspace validation.
- * @param system Current selected system, if any.
- * @returns Display rows with host, child-count, and indentation metadata; empty when no system is selected.
- */
-function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
-  if (!system) return []
-
-  const rows: HierarchyRow[] = []
-  const orbitsByHost = new Map<string | null, Orbit[]>()
-  const objectsByOrbit = new Map<string, SystemObject[]>()
-  for (const orbit of system.orbits) {
-    const hosted = orbitsByHost.get(orbit.hostId) ?? []
-    hosted.push(orbit)
-    orbitsByHost.set(orbit.hostId, hosted)
-  }
-  for (const object of system.objects) {
-    if (object.placement.kind === 'orbit') {
-      const children = objectsByOrbit.get(object.placement.orbitId) ?? []
-      children.push(object)
-      objectsByOrbit.set(object.placement.orbitId, children)
-    }
-  }
-
-  function addOrbitBranch(orbit: Orbit, host: SystemObject | null, depth: number): void {
-    const children = objectsByOrbit.get(orbit.id) ?? []
-    rows.push({ kind: 'orbit', orbit, host, childCount: children.length, depth })
-    for (const child of children) addObjectBranch(child, depth + 1)
-  }
-
-  function addObjectBranch(object: SystemObject, depth: number): void {
-    rows.push({ kind: 'object', object, depth })
-    const hostedOrbits = orbitsByHost.get(object.id) ?? []
-    hostedOrbits.sort((left, right) => left.order - right.order)
-    for (const orbit of hostedOrbits) addOrbitBranch(orbit, object, depth + 1)
-  }
-
-  const unhostedOrbits = orbitsByHost.get(null) ?? []
-  unhostedOrbits.sort((left, right) => left.order - right.order)
-  for (const orbit of unhostedOrbits) addOrbitBranch(orbit, null, 0)
-  for (const object of system.objects) {
-    if (object.placement.kind === 'system') addObjectBranch(object, 0)
-  }
-  return rows
-}
-
-const hierarchyRows = computed(() => buildHierarchy(selectedSystem.value))
+const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
 </script>
 
 <style>

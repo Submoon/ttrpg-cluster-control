@@ -6,6 +6,7 @@ import type {
   CustomFieldDefinition,
   CustomFieldType,
   LocalWorkspace,
+  CustomFieldValue,
   SystemObject,
 } from './workspace-model'
 import { isCustomFieldApplicability, validFieldOptions, validName } from './workspace-validation'
@@ -246,6 +247,106 @@ export function updateCustomFieldOptions(
         field.id === fieldId && field.type === 'single-select'
           ? { ...field, options: normalized }
           : field,
+      ),
+    },
+  }
+}
+
+/**
+ * Checks whether a stored primitive value is valid for a destination field type without coercion.
+ * @param value Candidate stored value.
+ * @param type Destination field type.
+ * @param options Destination choices when the type is single-select.
+ * @returns True when the value can be retained unchanged.
+ */
+export function isCustomFieldValueCompatible(
+  value: unknown,
+  type: CustomFieldType,
+  options: string[] = [],
+): value is CustomFieldValue {
+  switch (type) {
+    case 'text':
+      return typeof value === 'string'
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value)
+    case 'boolean':
+      return typeof value === 'boolean'
+    case 'single-select':
+      return typeof value === 'string' && options.includes(value)
+  }
+  return false
+}
+
+/**
+ * Changes a reusable field's value type without coercing compatible assignments.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Definition to update.
+ * @param type Destination value type.
+ * @param options Allowed values when the destination is single-select.
+ * @param clearInvalidValues Explicitly opt in to clearing assignments incompatible with the destination.
+ * @returns Workspace with the updated definition and any opted-in cleanup.
+ * @throws If the field is missing, options are invalid, or any assignment would be cleared without opt-in.
+ */
+export function updateCustomFieldType(
+  workspace: LocalWorkspace,
+  fieldId: string,
+  type: CustomFieldType,
+  options: string[] = [],
+  clearInvalidValues = false,
+): LocalWorkspace {
+  const definition = workspace.objectFieldSettings.customFields.find(field => field.id === fieldId)
+  if (!definition) throw new Error('The selected custom field no longer exists.')
+
+  const normalizedOptions = type === 'single-select'
+    ? validFieldOptions(options, `${definition.name} option`)
+    : []
+  let hasInvalidValues = false
+  for (const system of workspace.cluster.systems) {
+    for (const object of system.objects) {
+      const value = object.customFieldValues?.[fieldId]
+      if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) continue
+      hasInvalidValues = true
+      if (!clearInvalidValues) {
+        throw new Error(`Cannot change the field type while an assigned value on ${object.name} is incompatible.`)
+      }
+    }
+  }
+
+  const systems = hasInvalidValues
+    ? workspace.cluster.systems.map(system => ({
+        ...system,
+        objects: system.objects.map(object => {
+          const value = object.customFieldValues?.[fieldId]
+          if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) return object
+          const customFieldValues = { ...object.customFieldValues }
+          delete customFieldValues[fieldId]
+          return { ...object, customFieldValues }
+        }),
+      }))
+    : workspace.cluster.systems
+
+  const updatedDefinition: CustomFieldDefinition = type === 'single-select'
+    ? {
+        id: definition.id,
+        name: definition.name,
+        ...(definition.applicability === undefined ? {} : { applicability: definition.applicability }),
+        type,
+        options: normalizedOptions,
+      }
+    : {
+        id: definition.id,
+        name: definition.name,
+        ...(definition.applicability === undefined ? {} : { applicability: definition.applicability }),
+        type,
+      }
+
+  return {
+    ...workspace,
+    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.map(field =>
+        field.id === fieldId ? updatedDefinition : field,
       ),
     },
   }

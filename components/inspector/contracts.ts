@@ -1,41 +1,15 @@
-/**
- * Typed commands and exposed handles connect draft-owning inspector panels to page-owned workflows.
- */
-import type {
-  OrbitRadii,
-  Point,
-  SystemObjectChanges,
-} from '../../domain/workspace'
-
-export interface MapObjectSaveRequest {
-  /** Stable object identity in the selected system. */
-  objectId: string
-  /** Changed object values; omitted fields retain their committed values. */
-  changes: SystemObjectChanges
-}
-
-/** Candidate Orbit form values sent to the parent after local validation. */
-export interface OrbitEditRequest {
-  /** Stable Orbit identity. */
-  orbitId: string
-  /** One-based sibling order under the same host. */
-  targetOrder: number
-  /** Horizontal/vertical radii in SVG scene units. */
-  radii: OrbitRadii
-  /** Normalized map center, present only for an unoccupied Orbit. */
-  center?: Point
-}
-
-/** Candidate route form values; destination null denotes an unresolved external exit. */
-export interface JumpRouteSaveRequest {
-  /** Existing route ID for edit, or null to create. */
-  routeId: string | null
-  jumpLevel: number
-  fromPointId: string
-  toPointId: string | null
-  /** Required domain label for an external destination; ignored for a known endpoint. */
-  unresolvedExit: string
-}
+/** Typed workflow requests and sessions are shared between the Inspector and editor owner. */
+export type {
+  EntityCommand,
+  EntityInspectorSession,
+  JumpRouteSaveRequest,
+  ObjectDraft,
+  ObjectEditBaseline,
+  ObjectEditRequest as MapObjectSaveRequest,
+  OrbitDraft,
+  OrbitEditBaseline,
+  OrbitEditRequest,
+} from '../../composables/editor-workflows/types'
 
 /** Imperative boundary for local object drafts and parent save acknowledgements. */
 export interface MapObjectInspectorHandle {

@@ -1,14 +1,18 @@
 <template>
-  <button
-    v-if="!routeFormOpen"
-    class="quiet-button chart-details-control mb-4"
+  <UButton
+    v-if="!props.session"
+    color="neutral"
+    variant="ghost"
+    size="sm"
+    class="chart-details-control mb-4"
     type="button"
     :aria-pressed="chartDetailsActive"
     @click="emit('show-chart-details')"
   >
     Chart details
-  </button>
-  <template v-if="selectedRoute">
+  </UButton>
+
+  <template v-if="selectedRoute && !props.session">
     <span class="section-kicker">JUMP ROUTE / SELECTED</span>
     <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
     <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
@@ -23,128 +27,168 @@
       <strong>Unknown destination: {{ selectedRoute.unresolvedExit }}</strong> is beyond the known Jump Cluster.
     </p>
     <div class="flex flex-wrap gap-2">
-      <button class="primary-button" type="button" aria-label="Edit Jump Route" :disabled="props.saving" @click="emit('request-route-edit', selectedRoute.id)">
+      <UButton color="primary" :disabled="props.saving" aria-label="Edit Jump Route" @click="emit('request-route-edit', selectedRoute.id)">
         Edit
-      </button>
-      <button
-        class="quiet-button"
-        type="button"
-        :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
+      </UButton>
+      <UButton
+        color="neutral"
+        variant="outline"
         :disabled="props.saving"
+        :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
         @click="emit('delete-route')"
       >
         Delete route
-      </button>
+      </UButton>
     </div>
   </template>
 
-  <template v-else-if="routeFormOpen">
-    <span class="section-kicker">{{ editingRouteId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
-    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
-    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">
-      {{ editingRouteId ? 'Edit Jump Route' : 'Connect Jump Points' }}
-    </h2>
-    <p class="inspector-intro mb-[1em]">
-      Routes reference logical Jump Points. A Station is a separate physical location.
-    </p>
-    <form class="field-stack mt-4 grid gap-3" @submit.prevent="submitRoute">
-      <template v-if="jumpPoints.length">
-        <label for="route-level">
-          Jump level
-          <input
+  <ChartDetailsPanel
+    v-else-if="props.inspectedSystem && !props.session"
+    mode="system"
+    :workspace="props.workspace"
+    :selected-system="props.inspectedSystem"
+    :has-chart-name-draft="props.hasChartNameDraft"
+    :editor-error="props.editorError"
+    @edit-chart-names="emit('edit-chart-names', props.inspectedSystem?.id)"
+  />
+
+  <section v-else-if="props.session" class="route-session-inspector" aria-label="Jump Route editor">
+    <header class="route-session-header">
+      <span class="section-kicker">{{ props.session.routeId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
+      <span class="type-chip mt-[0.45rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+      <h2 class="mt-2 mb-1 [overflow-wrap:anywhere]">
+        {{ props.session.routeId ? 'Edit Jump Route' : 'Connect Jump Points' }}
+      </h2>
+      <p class="inspector-intro m-0">
+        Routes reference logical Jump Points. A Station is a separate physical location.
+      </p>
+    </header>
+
+    <form id="route-session-form" class="route-session-form" novalidate @submit.prevent="applyRouteSession">
+      <div class="route-session-fields" aria-label="Jump Route fields">
+        <div
+          v-if="summaryMessage || errorEntries.length"
+          ref="validationSummary"
+          class="route-validation-summary"
+          role="alert"
+          aria-live="assertive"
+          tabindex="-1"
+        >
+          <strong>{{ errorEntries.length ? `${errorEntries.length} form ${errorEntries.length === 1 ? 'issue' : 'issues'}` : 'Could not apply this route' }}</strong>
+          <p class="m-0">{{ summaryMessage || 'Review the marked fields before applying.' }}</p>
+          <ul v-if="errorEntries.length" class="m-0 pl-5">
+            <li v-for="[field, message] in errorEntries" :key="field">
+              <UButton
+                v-if="field !== 'form'"
+                class="route-validation-issue"
+                color="error"
+                variant="link"
+                size="xs"
+                type="button"
+                @click="focusControl(field)"
+              >{{ fieldLabels[field] }}: {{ message }}</UButton>
+              <span v-else>{{ message }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <UFormField label="Jump level" :error="fieldError('jumpLevel')">
+          <UInput
             id="route-level"
-            v-model="routeDraft.jumpLevel"
+            :model-value="props.session.draft.jumpLevel"
             type="number"
             min="1"
             step="1"
-            required
-          >
-        </label>
-        <p class="inspector-intro m-0">Standard levels are 1-9; custom positive integer levels are supported.</p>
-        <label for="route-from">
-          From Jump Point
-          <select id="route-from" v-model="routeDraft.fromPointId" required>
-            <option v-for="reference in jumpPoints" :key="reference.point.id" :value="reference.point.id">
-              {{ reference.point.name }} ({{ reference.system.name }})
-            </option>
-          </select>
-        </label>
-        <label for="route-destination">
-          Route destination
-          <select id="route-destination" v-model="routeDraft.destination">
-            <option value="point" :disabled="routeDestinationPoints.length === 0">Known Jump Point</option>
-            <option value="external">Unresolved external exit</option>
-          </select>
-        </label>
-        <label v-if="routeDraft.destination === 'point'" for="route-to">
-          To Jump Point
-          <select id="route-to" v-model="routeDraft.toPointId" required>
-            <option value="" disabled>Select a different Jump Point</option>
-            <option v-for="reference in routeDestinationPoints" :key="reference.point.id" :value="reference.point.id">
-              {{ reference.point.name }} ({{ reference.system.name }})
-            </option>
-          </select>
-        </label>
-        <p v-if="routeDraft.destination === 'point'" class="inspector-intro m-0">
-          Destination system: {{ routeDraftDestination?.system.name ?? 'Select a Jump Point' }}
+            inputmode="numeric"
+            @update:model-value="update('jumpLevel', $event)"
+          />
+          <template #hint>Standard levels are 1–9; any positive integer level is supported.</template>
+        </UFormField>
+
+        <UFormField label="From Jump Point" :error="fieldError('fromPointId')">
+          <USelect
+            id="route-from"
+            :model-value="props.session.draft.fromPointId"
+            :items="sourcePointItems"
+            placeholder="Choose an origin Jump Point"
+            @update:model-value="updateFromPoint($event)"
+          />
+        </UFormField>
+
+        <UFormField label="Route destination" :error="fieldError('destination')">
+          <USelect
+            id="route-destination"
+            :model-value="props.session.draft.destination"
+            :items="destinationItems"
+            @update:model-value="update('destination', $event)"
+          />
+        </UFormField>
+
+        <template v-if="props.session.draft.destination === 'point'">
+          <UFormField label="To Jump Point" :error="fieldError('toPointId')">
+            <USelect
+              id="route-to"
+              :model-value="props.session.draft.toPointId"
+              :items="destinationPointItems"
+              placeholder="Choose a different Jump Point"
+              @update:model-value="updateToPoint($event)"
+            />
+          </UFormField>
+          <p class="inspector-intro m-0">
+            Destination system: {{ destinationReference?.system.name ?? 'Select a Jump Point' }}.
+            Routes connect Jump Points independently of any physical Station.
+          </p>
+        </template>
+        <template v-else>
+          <UFormField label="Unknown destination label" :error="fieldError('unresolvedExit')">
+            <UInput
+              id="route-exit"
+              :model-value="props.session.draft.unresolvedExit"
+              maxlength="80"
+              @update:model-value="update('unresolvedExit', $event)"
+            />
+          </UFormField>
+          <p v-if="props.session.draft.unresolvedExit" class="inspector-intro m-0" role="status">
+            <strong>Unknown destination: {{ props.session.draft.unresolvedExit }}</strong> is beyond the known Jump Cluster.
+          </p>
+        </template>
+
+        <p v-if="props.session.routeId === null && !jumpPointItems.length" class="empty-copy m-0" role="status">
+          Open a star system and add a Jump Point before creating a route.
         </p>
-        <p v-if="routeDraft.destination === 'point'" class="inspector-intro m-0">
-          This route connects Jump Points by stable identity, independently of any physical Station.
-        </p>
-        <label v-else for="route-exit">
-          Unknown destination label
-          <input
-            id="route-exit"
-            v-model="routeDraft.unresolvedExit"
-            maxlength="80"
-            required
-          >
-        </label>
-        <p v-if="routeDraft.destination === 'external'" class="inspector-intro m-0" role="status">
-          <strong>Unknown destination: {{ routeDraft.unresolvedExit }}</strong> is beyond the known Jump Cluster.
-        </p>
-        <p v-if="props.editorError || routeDraftError" class="feedback m-0 error-text" role="alert">
-          {{ routeDraftError || props.editorError }}
-        </p>
-        <div class="flex flex-wrap gap-2">
-          <button class="primary-button" type="submit" :disabled="props.saving">
-            {{ editingRouteId ? 'Save Jump Route' : 'Create Jump Route' }}
-          </button>
-          <button class="quiet-button" type="button" @click="cancelRouteForm()">
-            Cancel
-          </button>
+      </div>
+
+      <footer class="route-session-footer">
+        <div class="route-session-summary">
+          <span class="section-kicker">ROUTE DRAFT</span>
+          <p class="route-session-endpoints m-0" role="status" aria-live="polite">{{ routeDraftSummary }}</p>
+          <span class="route-session-state" role="status" aria-live="polite">{{ routeSessionState }}</span>
         </div>
-      </template>
-      <template v-else>
-        <p class="empty-copy m-0" role="status">Open a star system and add a Jump Point before creating a route.</p>
-        <button class="quiet-button justify-self-start" type="button" @click="cancelRouteForm()">
-          Cancel
-        </button>
-      </template>
+        <div class="flex flex-wrap gap-2">
+          <UButton color="primary" type="submit" :disabled="props.saving">
+            {{ props.session.routeId ? 'Apply Jump Route' : 'Create Jump Route' }}
+          </UButton>
+          <UButton color="neutral" variant="outline" type="button" @click="emit('discard-route-session', props.session!.id)">
+            Discard {{ props.session.routeId ? 'changes' : 'route draft' }}
+          </UButton>
+        </div>
+      </footer>
     </form>
-  </template>
+  </section>
 
   <ChartDetailsPanel
     v-else
-    v-model:cluster-name="clusterName"
-    v-model:system-name="systemName"
     mode="cluster"
     :workspace="props.workspace"
-    :chart-names-editing="props.chartNamesEditing"
-    :saving="props.saving"
-    :form-error="props.formError"
+    :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
-    @submit-names="emit('submit-names')"
     @edit-chart-names="emit('edit-chart-names')"
-    @cancel-chart-names="emit('cancel-chart-names')"
   />
 </template>
 
 <script setup lang="ts">
-/**
- * Owns route drafts and selection UI; persistence and route identity validation stay with the page and domain.
- */
-import { computed, reactive, ref, watch } from 'vue'
+/** Presents route details and the page-owned route session with Nuxt UI controls. */
+import { computed, nextTick, ref } from 'vue'
 import {
   jumpPointsInCluster,
   type JumpRoute,
@@ -153,16 +197,8 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
+import type { RouteDraftField, RouteInspectorSession } from '../../composables/editor-workflows/useRouteInspectorSession'
 import ChartDetailsPanel from './ChartDetailsPanel.vue'
-import type { JumpRouteInspectorHandle, JumpRouteSaveRequest } from './contracts'
-
-interface JumpRouteDraft {
-  jumpLevel: string
-  fromPointId: string
-  destination: 'point' | 'external'
-  toPointId: string
-  unresolvedExit: string
-}
 
 const props = defineProps<{
   workspace: LocalWorkspace
@@ -170,151 +206,198 @@ const props = defineProps<{
   selectedObject?: SystemObject
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
+  inspectedSystem?: StarSystem
   selectedRouteSummary: string
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
   editorError: string
+  session: RouteInspectorSession | null
 }>()
 
 const emit = defineEmits<{
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
+  'edit-chart-names': [targetSystemId?: string]
   'show-chart-details': []
   'request-route-edit': [routeId: string]
-  'save-route': [request: JumpRouteSaveRequest]
-  'cancel-route': [routeId: string | null]
   'delete-route': []
-  'clear-route-selection': []
   'clear-error': []
+  'update-route-input': [sessionId: number, field: RouteDraftField, value: string]
+  'choose-route-point': [sessionId: number, pointId: string]
+  'apply-route-session': [sessionId: number]
+  'discard-route-session': [sessionId: number]
 }>()
 
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
 const selectedRoute = computed(() => props.selectedRoute)
-const routeFormOpen = ref(false)
-const editingRouteId = ref<string | null>(null)
-const routeDraft = reactive<JumpRouteDraft>({
-  jumpLevel: '1',
-  fromPointId: '',
-  destination: 'external',
-  toPointId: '',
-  unresolvedExit: 'Uncharted exit',
+const chartDetailsActive = computed(() => !props.selectedObject && !props.selectedOrbit && !selectedRoute.value && !props.session)
+const pickFromMap = '__route-pick-from-map__'
+const pickToMap = '__route-pick-to-map__'
+const jumpPointItems = computed(() => jumpPointsInCluster(props.workspace.cluster).map(({ point, system }) => ({
+  label: `${point.name} (${system.name})`,
+  value: point.id,
+})))
+const sourcePointItems = computed(() => {
+  const active = props.session
+  const scope = active?.sourceSystemIds
+  const points = jumpPointsInCluster(props.workspace.cluster)
+    .filter(reference => scope == null || scope.includes(reference.system.id))
+    .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id }))
+  return active?.draft.fromPointId
+    ? [{ label: 'Choose on map…', value: pickFromMap }, ...points]
+    : points
 })
-const routeDraftError = ref('')
-const chartDetailsActive = computed(() =>
-  !props.selectedObject
-  && !props.selectedOrbit
-  && !selectedRoute.value
-  && !routeFormOpen.value,
-)
-const jumpPoints = computed(() => jumpPointsInCluster(props.workspace.cluster))
-const routeDestinationPoints = computed(() =>
-  jumpPoints.value.filter(({ point }) => point.id !== routeDraft.fromPointId),
-)
-const routeDraftDestination = computed(() =>
-  routeDestinationPoints.value.find(({ point }) => point.id === routeDraft.toPointId),
-)
-
-/**
- * Projects a committed route into form strings, using the first available Jump Point for a new draft.
- * @param route Selected route, or undefined to initialize a route-creation draft.
- */
-function syncRouteDraft(route: JumpRoute | undefined): void {
-  routeDraft.jumpLevel = String(route?.jumpLevel ?? 1)
-  routeDraft.fromPointId = route?.fromPointId ?? jumpPoints.value[0]?.point.id ?? ''
-  routeDraft.toPointId = route?.toPointId ?? ''
-  routeDraft.destination = route?.toPointId === null
-    ? 'external'
-    : route?.toPointId ? 'point' : (routeDestinationPoints.value.length ? 'point' : 'external')
-  routeDraft.unresolvedExit = route?.toPointId === null ? route.unresolvedExit : 'Uncharted exit'
+const destinationPointItems = computed(() => {
+  const active = props.session
+  const scope = active?.destinationSystemIds
+  const points = jumpPointsInCluster(props.workspace.cluster)
+    .filter(reference => (scope == null || scope.includes(reference.system.id))
+      && reference.point.id !== active?.draft.fromPointId)
+    .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id }))
+  return active?.draft.toPointId
+    ? [{ label: 'Choose on map…', value: pickToMap }, ...points]
+    : points
+})
+const destinationItems = [
+  { label: 'Known Jump Point', value: 'point' },
+  { label: 'Unresolved external exit', value: 'external' },
+]
+const destinationReference = computed(() => props.session
+  ? jumpPointsInCluster(props.workspace.cluster).find(({ point }) => point.id === props.session?.draft.toPointId)
+  : undefined)
+const fieldLabels: Record<RouteDraftField, string> = {
+  jumpLevel: 'Jump level',
+  fromPointId: 'From Jump Point',
+  destination: 'Route destination',
+  toPointId: 'To Jump Point',
+  unresolvedExit: 'Unknown destination label',
 }
-
-/**
- * Opens a new route draft seeded with available logical endpoints or an unresolved external exit.
- */
-function beginRoute(): void {
-  routeDraft.jumpLevel = '1'
-  routeDraft.fromPointId = jumpPoints.value[0]?.point.id ?? ''
-  routeDraft.toPointId = routeDestinationPoints.value[0]?.point.id ?? ''
-  routeDraft.destination = routeDestinationPoints.value.length ? 'point' : 'external'
-  routeDraft.unresolvedExit = 'Uncharted exit'
-  editingRouteId.value = null
-  routeFormOpen.value = true
-  routeDraftError.value = ''
-  emit('clear-error')
+const controlIds: Record<RouteDraftField, string> = {
+  jumpLevel: 'route-level',
+  fromPointId: 'route-from',
+  destination: 'route-destination',
+  toPointId: 'route-to',
+  unresolvedExit: 'route-exit',
 }
-
-/** Opens an edit draft for the selected route and temporarily clears its page selection. */
-function startRouteEdit(): void {
-  const route = selectedRoute.value
-  if (!route) return
-  syncRouteDraft(route)
-  editingRouteId.value = route.id
-  routeFormOpen.value = true
-  routeDraftError.value = ''
-  emit('clear-route-selection')
-  emit('clear-error')
-}
-
-/**
- * Closes the route form and asks the parent to restore the route selection that the form replaced.
- * @param clearError Whether to ask the parent to clear its shared editor error.
- */
-function cancelRouteForm(clearError = true): void {
-  const routeId = editingRouteId.value
-  editingRouteId.value = null
-  routeFormOpen.value = false
-  routeDraftError.value = ''
-  emit('cancel-route', routeId)
-  if (clearError) emit('clear-error')
-}
-
-/**
- * Emits the current route fields; numeric/domain validation and the commit remain parent/domain responsibilities.
- */
-function submitRoute(): void {
-  routeDraftError.value = ''
-  emit('save-route', {
-    routeId: editingRouteId.value,
-    jumpLevel: Number(routeDraft.jumpLevel),
-    fromPointId: routeDraft.fromPointId,
-    toPointId: routeDraft.destination === 'external' ? null : routeDraft.toPointId,
-    unresolvedExit: routeDraft.unresolvedExit,
-  })
-}
-
-/** Discards an active route form, leaving the parent to restore its prior selection. */
-function cancelEdits(clearError = true): void {
-  if (routeFormOpen.value) cancelRouteForm(clearError)
-}
-
-watch(selectedRoute, route => {
-  if (routeFormOpen.value) return
-  editingRouteId.value = null
-  syncRouteDraft(route)
-}, { immediate: true })
-watch(() => routeDraft.fromPointId, fromPointId => {
-  const firstDestination = routeDestinationPoints.value[0]?.point.id ?? ''
-  if (routeDraft.toPointId === fromPointId || !firstDestination) {
-    routeDraft.toPointId = firstDestination
-  }
-  if (!firstDestination) routeDraft.destination = 'external'
+const validationSummary = ref<HTMLElement | null>(null)
+const errorEntries = computed(() => Object.entries(props.session?.errors ?? {})
+  .filter((entry): entry is [RouteDraftField | 'form', string] => !!entry[1]))
+const summaryMessage = computed(() => props.session?.error || props.editorError)
+const routeDraftSummary = computed(() => {
+  const draft = props.session?.draft
+  if (!draft) return ''
+  const origin = jumpPointItems.value.find(item => item.value === draft.fromPointId)?.label ?? 'Choose origin'
+  const destination = draft.destination === 'external'
+    ? draft.unresolvedExit ? `Unknown destination: ${draft.unresolvedExit}` : 'Name external exit'
+    : jumpPointItems.value.find(item => item.value === draft.toPointId)?.label ?? 'Choose destination'
+  return `From ${origin} · To ${destination}`
+})
+const routeSessionState = computed(() => {
+  const session = props.session
+  if (!session) return ''
+  return JSON.stringify(session.draft) === JSON.stringify(session.initial)
+    ? session.routeId ? 'Route edit ready' : 'Route draft ready'
+    : session.routeId ? 'Unapplied route changes' : 'Unapplied route draft'
 })
 
-/** Parent invokes routeSaveSucceeded only after the associated workspace commit succeeds. */
-const inspectorHandle = {
-  hasUnsavedEdits: () => routeFormOpen.value,
-  cancelEdits,
-  beginRoute,
-  startRouteEdit,
-  routeSaveSucceeded: () => {
-    editingRouteId.value = null
-    routeFormOpen.value = false
-    routeDraftError.value = ''
-  },
-} satisfies JumpRouteInspectorHandle
+function fieldError(field: RouteDraftField): string | undefined {
+  return props.session?.errors[field] || undefined
+}
 
-defineExpose(inspectorHandle)
+async function applyRouteSession(): Promise<void> {
+  const session = props.session
+  if (!session) return
+  emit('apply-route-session', session.id)
+  await nextTick()
+  if (props.session?.id !== session.id || !summaryMessage.value && !errorEntries.value.length) return
+  validationSummary.value?.focus()
+}
+
+function focusControl(field: RouteDraftField | 'form'): void {
+  if (field === 'form') return
+  const wrapper = document.getElementById(controlIds[field])
+  const control = wrapper?.matches('input, button, [role="combobox"]')
+    ? wrapper
+    : wrapper?.querySelector<HTMLElement>('input, button, [role="combobox"]')
+  control?.focus()
+  control?.scrollIntoView({ block: 'center' })
+}
+
+function update(field: RouteDraftField, value: unknown): void {
+  const session = props.session
+  if (!session) return
+  emit('update-route-input', session.id, field, String(value ?? ''))
+}
+
+function updateFromPoint(value: unknown): void {
+  update('fromPointId', String(value ?? '') === pickFromMap ? '' : value)
+}
+
+function updateToPoint(value: unknown): void {
+  update('toPointId', String(value ?? '') === pickToMap ? '' : value)
+}
 </script>
+
+<style scoped>
+.route-session-inspector {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.route-session-header {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel-bg);
+  padding: .8rem .9rem .65rem;
+}
+
+.route-session-header h2 { font: 500 1.45rem/1.2 Georgia, serif; }
+
+.route-session-form {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.route-session-fields {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: .8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .8rem .9rem;
+}
+
+.route-validation-summary {
+  border: 1px solid var(--error-border);
+  border-radius: .6rem;
+  background: var(--error-bg);
+  padding: .7rem .8rem;
+  color: var(--text-primary);
+}
+
+.route-validation-summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.route-validation-summary p { margin-top: .3rem; }
+.route-validation-issue { padding: 0; text-align: left; }
+
+.route-session-footer {
+  display: grid;
+  gap: .55rem;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel-bg);
+  padding: .65rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px));
+}
+
+.route-session-summary { display: grid; gap: .15rem; min-width: 0; }
+.route-session-endpoints { overflow-wrap: anywhere; color: var(--text-secondary); font-size: .72rem; }
+.route-session-state { color: var(--text-muted); font-size: .68rem; }
+
+</style>

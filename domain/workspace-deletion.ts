@@ -24,6 +24,46 @@ function orbitLabel(system: StarSystem, orbit: Orbit): string {
   return `Orbit ${orbit.order} around ${hostName}`
 }
 
+function routePoint(workspace: LocalWorkspace, pointId: string) {
+  for (const system of workspace.cluster.systems) {
+    const point = system.objects.find(object => object.id === pointId && object.family === 'JumpPoint')
+    if (point) return { point, system }
+  }
+  return undefined
+}
+
+function routeLabel(workspace: LocalWorkspace, route: LocalWorkspace['cluster']['routes'][number]): string {
+  const origin = routePoint(workspace, route.fromPointId)
+  const originLabel = origin ? `${origin.point.name} (${origin.system.name})` : `Missing Jump Point (${route.fromPointId})`
+  let destinationLabel: string
+  if (route.toPointId === null) {
+    destinationLabel = `Unknown destination: ${route.unresolvedExit}`
+  } else {
+    const destination = routePoint(workspace, route.toPointId)
+    destinationLabel = destination
+      ? `${destination.point.name} (${destination.system.name})`
+      : `Missing Jump Point (${route.toPointId})`
+  }
+  return `Jump Route (Level ${route.jumpLevel}): ${originLabel} -> ${destinationLabel}`
+}
+
+function routeEffectSignature(workspace: LocalWorkspace, route: LocalWorkspace['cluster']['routes'][number]) {
+  const origin = routePoint(workspace, route.fromPointId)
+  const destination = route.toPointId === null ? undefined : routePoint(workspace, route.toPointId)
+  return {
+    id: route.id,
+    name: route.name ?? null,
+    jumpLevel: route.jumpLevel,
+    fromPointId: route.fromPointId,
+    fromPoint: origin ? { id: origin.point.id, name: origin.point.name, systemId: origin.system.id, systemName: origin.system.name } : null,
+    toPointId: route.toPointId,
+    toPoint: destination
+      ? { id: destination.point.id, name: destination.point.name, systemId: destination.system.id, systemName: destination.system.name }
+      : null,
+    unresolvedExit: route.toPointId === null ? route.unresolvedExit : null,
+  }
+}
+
 /** Reindexes surviving Orbits independently within each host group while preserving their relative order. */
 function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
   const byHost = new Map<string | null, Orbit[]>()
@@ -70,6 +110,7 @@ export function planMapEntityDeletion(
   const removedRouteIds = new Set<string>()
   const affectedEntities: string[] = []
   const addedEffects = new Set<string>()
+  const clearedStationLinks: Array<{ objectId: string; stationId: string }> = []
   const addEffect = (effect: string) => {
     if (!addedEffects.has(effect)) {
       addedEffects.add(effect)
@@ -143,7 +184,7 @@ export function planMapEntityDeletion(
   } else if (target.kind === 'route') {
     const route = workspace.cluster.routes.find(candidate => candidate.id === target.routeId)
     if (!route) throw new Error('The selected Jump Route no longer exists.')
-    entityLabel = `Jump Route (Level ${route.jumpLevel})`
+    entityLabel = routeLabel(workspace, route)
     removedRouteIds.add(route.id)
   } else if (target.kind === 'object') {
     const selectedSystem = requireSystem()
@@ -173,6 +214,7 @@ export function planMapEntityDeletion(
         && removedStations.has(object.jumpStationId)
       ) {
         const station = selectedSystem.objects.find(candidate => candidate.id === object.jumpStationId)
+        clearedStationLinks.push({ objectId: object.id, stationId: object.jumpStationId })
         addEffect(`Clear physical Station link from ${mapObjectLabel(object)}${station ? ` to ${mapObjectLabel(station)}` : ''}`)
       }
     }
@@ -182,7 +224,7 @@ export function planMapEntityDeletion(
     if (removedRouteIds.has(route.id)) continue
     if (removedObjectIds.has(route.fromPointId) || (route.toPointId && removedObjectIds.has(route.toPointId))) {
       removedRouteIds.add(route.id)
-      addEffect(`Jump Route (Level ${route.jumpLevel})`)
+      addEffect(routeLabel(workspace, route))
     }
   }
 
@@ -200,9 +242,51 @@ export function planMapEntityDeletion(
       return { ...candidate, objects, orbits }
     })
 
+  const reorderedOrbits = workspace.cluster.systems
+    .flatMap(candidate => candidate.orbits.flatMap(orbit => {
+      const nextOrbit = systems.find(systemCandidate => systemCandidate.id === candidate.id)
+        ?.orbits.find(remaining => remaining.id === orbit.id)
+      return nextOrbit && nextOrbit.order !== orbit.order
+        ? [{ orbitId: orbit.id, label: orbitLabel(candidate, orbit), fromOrder: orbit.order, toOrder: nextOrbit.order }]
+        : []
+    }))
+  for (const change of reorderedOrbits) {
+    addEffect(`${change.label} changes order from ${change.fromOrder} to ${change.toOrder}`)
+  }
+
+  const removedIds = {
+    systems: [...removedSystemIds].sort(),
+    objects: [...removedObjectIds].sort(),
+    orbits: [...removedOrbitIds].sort(),
+    routes: [...removedRouteIds].sort(),
+  }
+  const normalizedStationLinks = [...clearedStationLinks].sort((left, right) =>
+    left.objectId.localeCompare(right.objectId) || left.stationId.localeCompare(right.stationId))
+  const normalizedOrbitOrders = [...reorderedOrbits].sort((left, right) =>
+    left.orbitId.localeCompare(right.orbitId))
+  const removedRouteEffects = workspace.cluster.routes
+    .filter(route => removedRouteIds.has(route.id))
+    .map(route => routeEffectSignature(workspace, route))
+    .sort((left, right) => left.id.localeCompare(right.id))
+  const effectSignature = JSON.stringify({
+    entityLabel,
+    affectedEntities,
+    removedIds,
+    removedRouteEffects,
+    clearedStationLinks: normalizedStationLinks,
+    reorderedOrbits: normalizedOrbitOrders,
+  })
+
   return {
     entityLabel,
     affectedEntities,
+    removedSystemIds: [...removedSystemIds],
+    removedObjectIds: [...removedObjectIds],
+    removedOrbitIds: [...removedOrbitIds],
+    removedRouteIds: [...removedRouteIds],
+    clearedStationLinks,
+    reorderedOrbits,
+    effectSignature,
     workspace: {
       ...workspace,
       cluster: {

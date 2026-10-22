@@ -11,6 +11,11 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import type {
+  SystemCreationCandidate,
+  SystemCreationType,
+} from '../composables/editor-workflows/types'
+import { catalogueObjectLabel } from './catalogue-labels'
 
 export interface SystemMapGeometry {
   /** Saved object orbital parameter angles, in radians. */
@@ -31,6 +36,15 @@ export interface MapGeometryOverrides {
   orbitRadii: ReadonlyMap<string, OrbitRadii>
   /** Orbit rotations in degrees. */
   orbitRotations: ReadonlyMap<string, number>
+}
+
+/** Orbit ring hit used by existing-object move resolution, including cycle-invalid destinations. */
+export interface OrbitPlacementHit {
+  orbit: Orbit
+  angle: number
+  point: Point
+  distance: number
+  valid: boolean
 }
 
 /**
@@ -141,6 +155,20 @@ export function orbitPointAtAngle(
     x: center.x + Math.cos(angle) * radii.horizontal,
     y: center.y + Math.sin(angle) * radii.vertical,
   }, center, rotation)
+}
+
+/** Projects a scene point onto a rotated Orbit and returns the shared angle and rendered position. */
+export function projectPointToOrbit(
+  point: Point,
+  center: Point,
+  radii: OrbitRadii,
+  rotation: number,
+): { angle: number; point: Point } {
+  const angle = orbitAngleAtPoint(point, center, radii, rotation)
+  return {
+    angle,
+    point: orbitPointAtAngle(center, radii, angle, rotation),
+  }
 }
 
 /**
@@ -453,20 +481,149 @@ export function orbitAtPoint(
   orbitRotationsOverrides?: ReadonlyMap<string, number>,
   orbitCenterOverrides?: ReadonlyMap<string, Point>,
 ): Orbit | undefined {
+  return orbitPlacementHitsAtPoint(
+    system,
+    point,
+    positions,
+    geometry,
+    objectId,
+    orbitRadiiOverrides,
+    orbitRotationsOverrides,
+    orbitCenterOverrides,
+  ).find(candidate => candidate.valid)?.orbit
+}
+
+/**
+ * Returns every Orbit ring within the existing placement tolerance, retaining cycle-invalid hits.
+ * @param system System whose Orbit ellipses are tested.
+ * @param point Pointer location in SVG scene coordinates.
+ * @param positions Resolved object positions in SVG scene coordinates.
+ * @param geometry Saved radii, rotations, and object angles.
+ * @param objectId Optional object being moved; supplied IDs mark recursive host targets invalid.
+ * @param orbitRadiiOverrides Optional temporary drag radii.
+ * @param orbitRotationsOverrides Optional temporary degree-based drag rotations.
+ * @param orbitCenterOverrides Optional temporary scene-coordinate unoccupied centers.
+ * @returns All raw ring hits ordered by distance, then by their source system order.
+ * @throws If a required hosted-object position cannot be resolved.
+ */
+export function orbitPlacementHitsAtPoint(
+  system: StarSystem,
+  point: Point,
+  positions: ReadonlyMap<string, Point>,
+  geometry: SystemMapGeometry,
+  objectId?: string,
+  orbitRadiiOverrides?: ReadonlyMap<string, OrbitRadii>,
+  orbitRotationsOverrides?: ReadonlyMap<string, number>,
+  orbitCenterOverrides?: ReadonlyMap<string, Point>,
+): OrbitPlacementHit[] {
   return system.orbits
-    .map(orbit => {
+    .map((orbit, index) => {
       const center = orbitCenter(orbit, positions, orbitCenterOverrides)
       const radii = orbitRadii(system, orbit, geometry, orbitRadiiOverrides)
       const rotation = orbitRotation(orbit, geometry, orbitRotationsOverrides)
       const angle = orbitAngleAtPoint(point, center, radii, rotation)
-      const nearestPoint = orbitPointAtAngle(center, radii, angle, rotation)
+      const projectedPoint = orbitPointAtAngle(center, radii, angle, rotation)
+      const distance = Math.hypot(point.x - projectedPoint.x, point.y - projectedPoint.y)
       return {
         orbit,
-        distance: Math.hypot(point.x - nearestPoint.x, point.y - nearestPoint.y),
+        angle,
+        point: projectedPoint,
+        distance,
+        valid: !objectId || canPlaceObjectInOrbit(system, objectId, orbit.id),
+        index,
       }
     })
-    .filter(({ orbit, distance }) =>
-      distance <= 16 && (!objectId || canPlaceObjectInOrbit(system, objectId, orbit.id)),
-    )
-    .sort((left, right) => left.distance - right.distance)[0]?.orbit
+    .filter(candidate => candidate.distance <= 16)
+    .sort((left, right) => left.distance - right.distance || left.index - right.index)
+    .map(({ index: _index, ...candidate }) => candidate)
+}
+
+/**
+ * Resolves the first supported map-placement candidate for a catalogue object.
+ * The click point is raw SVG scene geometry; the returned free point uses the saved normalized map frame.
+ * Existing marks and their labels remain occupied targets instead of silently becoming free centers.
+ */
+export function creationCandidatesAtPoint(
+  system: StarSystem,
+  point: Point,
+  type: SystemCreationType,
+  geometry: SystemMapGeometry,
+): SystemCreationCandidate[] {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return []
+
+  const positions = objectPositions(system, geometry)
+  const nearbyObjects = system.objects
+    .map(object => ({ object, position: positions.get(object.id)! }))
+    // Glyph, key and name labels all belong to the same non-empty object mark.
+    .map(entry => ({ ...entry, distance: Math.hypot(point.x - entry.position.x, point.y - entry.position.y) }))
+    .filter(entry => entry.distance <= 52)
+    .sort((left, right) => left.distance - right.distance)
+
+  if (type.kind === 'object') {
+    const nearbyOrbits = system.orbits
+      .map(orbit => {
+        const center = orbitCenter(orbit, positions)
+        const radii = orbitRadii(system, orbit, geometry)
+        const rotation = orbitRotation(orbit, geometry)
+        const angle = orbitAngleAtPoint(point, center, radii, rotation)
+        const projected = orbitPointAtAngle(center, radii, angle, rotation)
+        return { orbit, angle, distance: Math.hypot(point.x - projected.x, point.y - projected.y) }
+      })
+      // Keep the manipulation resolver's existing scene-unit tolerance for placement targeting.
+      .filter(candidate => candidate.distance <= 16)
+      .sort((left, right) => left.distance - right.distance || left.orbit.order - right.orbit.order)
+
+    const orbitCandidates: SystemCreationCandidate[] = nearbyOrbits.map(({ orbit, angle }) => ({
+      key: `orbit:${orbit.id}`,
+      label: orbitLabel(system, orbit),
+      target: { kind: 'orbit', orbitId: orbit.id, angle },
+      error: null,
+    }))
+    const occupiedObjectCandidates: SystemCreationCandidate[] = nearbyObjects.map(({ object }) => ({
+      key: `occupied:${object.id}`,
+      label: `Object mark: ${catalogueObjectLabel(object)}`,
+      target: { kind: 'host', objectId: object.id },
+      error: `${catalogueObjectLabel(object)} already occupies this mark. Choose an Orbit or a clear map position.`,
+    }))
+
+    if (orbitCandidates.length > 0) return [...orbitCandidates, ...occupiedObjectCandidates]
+    if (occupiedObjectCandidates.length > 0) return occupiedObjectCandidates
+    return [{
+      key: `free:${point.x}:${point.y}`,
+      label: 'Free map position',
+      target: { kind: 'free', point: toNormalizedMapPoint(point) },
+      error: null,
+    }]
+  }
+
+  if (nearbyObjects.length > 0) {
+    return nearbyObjects.map(({ object }) => ({
+      key: `host:${object.id}`,
+      label: `Orbit around ${object.name}`,
+      target: { kind: 'host', objectId: object.id },
+      error: null,
+    }))
+  }
+
+  const nearbyCenter = system.orbits
+    .filter(orbit => orbit.hostId === null)
+    .map(orbit => ({ orbit, center: orbitCenter(orbit, positions) }))
+    .map(entry => ({ ...entry, distance: Math.hypot(point.x - entry.center.x, point.y - entry.center.y) }))
+    .find(entry => entry.distance < 40)
+
+  return [{
+    key: `center:${point.x}:${point.y}`,
+    label: 'New unoccupied Orbit center',
+    target: { kind: 'free', point: toNormalizedMapPoint(point) },
+    error: nearbyCenter
+      ? `This center is too close to ${orbitLabel(system, nearbyCenter.orbit)}. Choose another map position.`
+      : null,
+  }]
+}
+
+function orbitLabel(system: StarSystem, orbit: Orbit): string {
+  if (orbit.hostId === null) return `Orbit ${orbit.order} around unoccupied center`
+  const host = system.objects.find(object => object.id === orbit.hostId)
+  if (!host) throw new Error(`Orbit "${orbit.id}" has no host object.`)
+  return `Orbit ${orbit.order} around ${host.name}`
 }
