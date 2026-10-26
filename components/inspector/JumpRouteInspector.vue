@@ -41,7 +41,7 @@
         </div>
       </div>
       <footer class="jump-route-details-footer" aria-label="Jump Route actions">
-        <UButton color="primary" :disabled="props.saving" aria-label="Edit Jump Route" @click="emit('request-route-edit', selectedRoute.id)">
+        <UButton block class="w-full justify-center" color="primary" :disabled="props.saving" aria-label="Edit Jump Route" @click="emit('request-route-edit', selectedRoute.id)">
           Edit
         </UButton>
       </footer>

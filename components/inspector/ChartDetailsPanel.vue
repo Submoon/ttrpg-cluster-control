@@ -27,11 +27,11 @@
     </p>
 
     <template #footer>
-      <div class="chart-details-actions flex flex-wrap items-center justify-end gap-2">
-        <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
+      <div class="chart-details-actions grid gap-2">
+        <UButton block class="w-full justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
           {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
         </UButton>
-        <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
+        <span v-if="props.hasChartNameDraft" class="save-feedback text-center text-sm" role="status">
           Chart-name editing session
         </span>
       </div>

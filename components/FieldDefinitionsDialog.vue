@@ -226,6 +226,8 @@
           </template>
           <template v-else>
             <UButton
+              block
+              class="w-full flex-none justify-center"
               v-if="props.session.screen === 'detail' && selectedDefinition"
               color="primary"
               variant="outline"
