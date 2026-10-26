@@ -10,7 +10,10 @@
     <div
       v-if="props.mode === 'cluster'"
       class="map-inspector-route-content"
-      :class="{ 'map-inspector-route-content--session': props.routeSession !== null }"
+      :class="{
+        'map-inspector-route-content--session': props.routeSession !== null,
+        'map-inspector-route-content--consultation': props.routeSession === null,
+      }"
     >
       <JumpRouteInspector
         :workspace="props.workspace"
@@ -236,11 +239,15 @@ defineExpose({
 .map-inspector-resume-draft .section-kicker { margin-bottom: .15rem; }
 .map-inspector-route-content { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
 .map-inspector-route-content--session { overflow: hidden; }
+.map-inspector-route-content--consultation { display: flex; flex-direction: column; overflow: hidden; }
+.map-inspector-route-content--consultation > :deep(.chart-details-control) { flex: 0 0 auto; }
+.map-inspector-route-content--consultation > :deep(.chart-details-summary) { flex: 1 1 0; min-height: 0; }
 .map-inspector-system-content { display: grid; flex: 1 1 auto; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .map-inspector-entity-content,
 .map-inspector-details-content { min-height: 0; overflow: hidden; }
 .map-inspector-entity-content > :deep(*) { width: 100%; height: 100%; min-height: 0; }
-.map-inspector-details-content { overflow-y: auto; overscroll-behavior: contain; }
+.map-inspector-details-content { display: flex; flex-direction: column; }
+.map-inspector-details-content > :deep(.chart-details-summary) { flex: 1 1 0; min-height: 0; }
 </style>
 
 <style>

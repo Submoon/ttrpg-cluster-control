@@ -72,7 +72,7 @@
         </template>
         <template v-else>
           <UButton color="neutral" variant="ghost" @click="emit('discard')">Discard draft</UButton>
-          <UButton color="primary" type="submit" form="chart-names-form">Apply names</UButton>
+          <UButton color="primary" type="submit" form="chart-names-form" :disabled="!props.hasUncommittedNames">Apply names</UButton>
         </template>
       </div>
     </template>
@@ -91,6 +91,7 @@ const systemName = defineModel<string>('systemName', { required: true })
 const props = defineProps<{
   formError: string
   guardMode: TransitionGuard
+  hasUncommittedNames: boolean
   hasModifiedEntitySession: boolean
   targetSystemName?: string
 }>()

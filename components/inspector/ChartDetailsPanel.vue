@@ -3,9 +3,10 @@
     class="chart-details-summary chart-details-card"
     variant="outline"
     :ui="{
-      root: 'rounded-[2px] overflow-hidden',
-      header: 'px-4 py-3 sm:px-5',
-      body: 'px-4 py-4 sm:px-5',
+      root: 'flex h-full min-h-0 flex-col rounded-[2px] overflow-hidden',
+      header: 'shrink-0 px-4 py-3 sm:px-5',
+      body: 'min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5',
+      footer: 'shrink-0 border-t border-[var(--line-soft)] px-4 py-3 sm:px-5',
     }"
     role="region"
     :aria-label="detailsRegionLabel"
@@ -25,14 +26,16 @@
         : 'Choose a map object or Orbit to inspect it, or edit the chart names.' }}
     </p>
 
-    <div class="chart-details-actions mt-4 flex flex-wrap items-center gap-2">
-      <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
-        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
-      </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
-        Chart-name editing session
-      </span>
-    </div>
+    <template #footer>
+      <div class="chart-details-actions flex flex-wrap items-center justify-end gap-2">
+        <UButton color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
+          {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+        </UButton>
+        <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">
+          Chart-name editing session
+        </span>
+      </div>
+    </template>
 
     <USeparator v-if="props.mode === 'cluster' || props.selectedSystem" class="my-4" />
     <div

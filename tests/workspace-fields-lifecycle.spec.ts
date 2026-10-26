@@ -78,7 +78,16 @@ test('mobile Fields opens to its list and resumes the last valid screen', async 
     'Unbreathable',
     'Vacuum',
   ])
-  await expect(detail.getByRole('button', { name: 'Edit field definition' })).toBeEnabled()
+  await expect(detail.getByRole('button', { name: 'Edit field definition' })).toHaveCount(0)
+  const fieldActions = dialog.locator('.field-definitions-actions')
+  await expect(fieldActions.getByRole('button', { name: 'Edit field definition' })).toBeEnabled()
+  await expect(dialog.getByRole('button', { name: 'Edit field definition' })).toHaveCount(1)
+
+  await fieldActions.getByRole('button', { name: 'Edit field definition' }).click()
+  await expect(fieldActions.getByRole('button', { name: 'Apply field changes' })).toBeDisabled()
+  await expect(fieldActions.getByRole('button', { name: 'Discard field edits' })).toBeEnabled()
+  await fieldActions.getByRole('button', { name: 'Discard field edits' }).click()
+  await expect(detail.getByRole('heading', { name: 'Atmosphere', exact: true })).toBeVisible()
 
   await dialog.getByRole('button', { name: 'Back to definitions' }).click()
   await expect(fieldList).toBeVisible()

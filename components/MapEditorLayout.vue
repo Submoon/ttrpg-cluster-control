@@ -212,18 +212,18 @@ watch(() => props.compactPanel, async panel => {
 </script>
 
 <style>
-.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel {
+.map-editor-layout.compact-modal-open #workspace-inspector-panel {
   display: flex;
   flex-direction: column;
 }
 
-.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel > .workspace-panel-surface {
+.map-editor-layout.compact-modal-open #workspace-inspector-panel > .workspace-panel-surface {
   height: auto;
   min-height: 0;
   flex: 1 1 auto;
 }
 
-.map-editor-layout.compact-modal-open.compact-route-session-open #workspace-inspector-panel .workspace-compact-recovery {
+.map-editor-layout.compact-modal-open #workspace-inspector-panel .workspace-compact-recovery {
   position: relative;
   inset-inline: auto;
   bottom: auto;
@@ -233,7 +233,7 @@ watch(() => props.compactPanel, async panel => {
   box-shadow: none;
 }
 
-.map-editor-layout.compact-modal-open.compact-route-session-open .workspace-side-panel-content-inspector {
+.map-editor-layout.compact-modal-open #workspace-inspector-panel .workspace-side-panel-content-inspector {
   padding-bottom: 0;
 }
 </style>

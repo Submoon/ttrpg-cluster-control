@@ -107,16 +107,16 @@
       region-label="Existing field values"
       empty-message="No values are assigned to this field."
     />
-    <div v-if="!props.editing" class="field-definition-actions">
+    <div v-if="props.editing && props.definition.kind === 'custom'" class="field-definition-editor-delete">
       <UButton
-        color="primary"
+        color="error"
+        variant="outline"
         size="sm"
         type="button"
-        :disabled="props.saving || props.changePending"
-        aria-label="Edit field definition"
-        @click="emit('request-edit')"
+        :disabled="props.saving"
+        @click="emit('request-delete')"
       >
-        Edit definition
+        Delete field…
       </UButton>
     </div>
   </section>
@@ -150,7 +150,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'request-edit': []
+  'request-delete': []
   'patch-definition': [patch: Partial<FieldDefinitionDraft>]
 }>()
 
@@ -325,9 +325,10 @@ function toggleCustomFieldApplicabilityTarget(
   text-transform: uppercase;
 }
 
-.field-definition-actions {
+.field-definition-editor-delete {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
 }
 

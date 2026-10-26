@@ -92,7 +92,7 @@
             :saving="props.saving"
             :change-pending="props.session.review !== null"
             :editing="props.session.screen === 'edit'"
-            @request-edit="editField"
+            @request-delete="deleteField"
             @patch-definition="patchDefinition"
           />
 
@@ -210,19 +210,10 @@
           </template>
           <template v-else-if="props.session.screen === 'edit'">
             <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-edit' })">
-              Cancel field edits
+              Discard field edits
             </UButton>
-            <UButton color="primary" :disabled="props.saving || !props.session.draft" @click="emitIntent({ kind: 'save-field' })">
+            <UButton color="primary" :disabled="props.saving || !props.session.draft || props.hasModifiedDraft === false" @click="emitIntent({ kind: 'save-field' })">
               Apply field changes
-            </UButton>
-            <UButton
-              v-if="selectedDefinition?.kind === 'custom' && props.session.selectedId"
-              color="error"
-              variant="outline"
-              :disabled="props.saving"
-              @click="emitIntent({ kind: 'delete-field', fieldId: props.session.selectedId })"
-            >
-              Delete field…
             </UButton>
           </template>
           <template v-else-if="props.session.screen === 'new'">
@@ -234,6 +225,16 @@
             </UButton>
           </template>
           <template v-else>
+            <UButton
+              v-if="props.session.screen === 'detail' && selectedDefinition"
+              color="primary"
+              variant="outline"
+              :disabled="props.saving || props.session.review !== null"
+              aria-label="Edit field definition"
+              @click="editField"
+            >
+              Edit definition
+            </UButton>
             <UButton
               color="primary"
               :disabled="props.saving"
@@ -351,6 +352,12 @@ function selectField(fieldId: string): void {
 function editField(): void {
   if (!props.session.selectedId) return
   emitIntent({ kind: 'edit-field', fieldId: props.session.selectedId })
+}
+
+function deleteField(): void {
+  const fieldId = props.session.selectedId
+  if (!fieldId || selectedDefinition.value?.kind !== 'custom') return
+  emitIntent({ kind: 'delete-field', fieldId })
 }
 
 function patchCreate(patch: Partial<FieldDefinitionsSessionState['createDraft']>): void {

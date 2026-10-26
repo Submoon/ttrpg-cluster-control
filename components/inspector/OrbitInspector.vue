@@ -208,37 +208,20 @@
         <p class="inspector-footnote m-0">Orbit rings show structure, not measured distance. Drag controls remain available in Move mode.</p>
       </section>
 
-      <section v-if="!orbitSession" class="entity-inspector-section" aria-label="Orbit editing">
-        <p class="inspector-intro m-0">Edit axes, center, rotation, and order for this Orbit in one resumable session.</p>
-        <div class="flex flex-wrap gap-2">
-          <UButton
-            class="workspace-control"
-            color="primary"
-            size="sm"
-            type="button"
-            aria-label="Edit Orbit"
-            :disabled="props.saving"
-            @click="emit('request-orbit-edit')"
-          >
-            Edit
-          </UButton>
-          <UButton
-            v-if="selectedOrbit.hostId !== null"
-            class="workspace-control"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            type="button"
-            aria-label="Detach Orbit"
-            :disabled="props.saving"
-            @click="emit('detach-orbit')"
-          >
-            Detach
-          </UButton>
-        </div>
-      </section>
-
-      <section class="entity-inspector-delete">
+      <section class="entity-inspector-delete entity-inspector-secondary-actions" aria-label="Orbit actions">
+        <UButton
+          v-if="!orbitSession && selectedOrbit.hostId !== null"
+          class="workspace-control"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          type="button"
+          aria-label="Detach Orbit"
+          :disabled="props.saving"
+          @click="emit('detach-orbit')"
+        >
+          Detach
+        </UButton>
         <UButton
           class="workspace-control entity-inspector-delete-button"
           color="error"
@@ -284,22 +267,36 @@
           @export-current-json="emit('export-current-json')"
         />
       </div>
-      <div class="entity-inspector-footer-actions">
+      <div class="entity-inspector-footer-actions" :class="{ 'entity-inspector-footer-actions--editing': orbitSession }">
         <UButton
+          v-if="!orbitSession"
+          class="workspace-control"
+          color="primary"
+          size="sm"
+          type="button"
+          aria-label="Edit Orbit"
+          :disabled="props.saving"
+          @click="emit('request-orbit-edit')"
+        >
+          Edit
+        </UButton>
+        <UButton
+          v-else
           class="workspace-control"
           color="primary"
           type="submit"
           :form="formId"
-          :disabled="!orbitSession || hasPendingCenterMoveChoice || (!props.hasModifiedEntitySession && !hasSessionErrors) || props.saving"
+          :disabled="!props.hasModifiedEntitySession || hasPendingCenterMoveChoice || props.saving"
         >
           <span>Apply changes</span><span class="sr-only">Save Orbit</span>
         </UButton>
         <UButton
+          v-if="orbitSession"
           class="workspace-control"
           color="neutral"
           variant="outline"
           type="button"
-          :disabled="!orbitSession || (!props.hasModifiedEntitySession && !hasPendingCenterMoveChoice) || props.saving"
+          :disabled="props.saving"
           @click="discardOrbitSession"
         >
           <span>Discard changes</span><span class="sr-only">Cancel Orbit edits</span>
@@ -370,7 +367,6 @@ const orbitDraft = computed<OrbitDraft>(() => orbitSession.value?.draft ?? readO
 const unoccupiedCenterValue = '__unoccupied_orbit_center__'
 const errorEntries = computed(() => Object.entries(orbitSession.value?.errors ?? {}))
 const summaryMessage = computed(() => orbitSession.value?.error || props.editorError)
-const hasSessionErrors = computed(() => errorEntries.value.length > 0 || !!orbitSession.value?.error)
 const pendingCenterMoveCandidates = computed(() => orbitSession.value?.centerMoveCandidates ?? null)
 const hasPendingCenterMoveChoice = computed(() => pendingCenterMoveCandidates.value !== null)
 const pendingHostItems = computed(() =>
@@ -557,12 +553,14 @@ defineExpose(inspectorHandle)
 .entity-inspector-feedback ul { display: grid; gap: .16rem; margin: .35rem 0 0; padding-left: 1.1rem; }
 .entity-inspector-feedback li :deep(.entity-inspector-issue-action) { text-decoration: underline; text-underline-offset: .12em; }
 .entity-inspector-delete-button { justify-self: start; }
+.entity-inspector-secondary-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
 .entity-inspector-footer { display: grid; gap: .55rem; border-top: 1px solid var(--line-soft); padding: .6rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -.2rem .8rem color-mix(in srgb, var(--map-bg) 35%, transparent); }
 .entity-inspector-footer-status { display: grid; min-width: 0; grid-template-columns: 1fr; gap: .25rem; color: var(--text-muted); font-size: .68rem; }
 .entity-inspector-draft-status { font-size: .68rem; }
 .entity-inspector-save-feedback { min-width: 0; }
-.entity-inspector-footer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
-.entity-inspector-footer-actions :deep(button) { justify-content: center; }
+.entity-inspector-footer-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; }
+.entity-inspector-footer-actions--editing { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entity-inspector-footer-actions :deep(button) { width: 100%; justify-content: center; }
 .entity-inspector-error-link { justify-self: start; }
 
 @media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {

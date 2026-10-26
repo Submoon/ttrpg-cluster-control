@@ -231,21 +231,6 @@
         </fieldset>
       </section>
 
-      <section v-if="!objectSession" class="entity-inspector-section" aria-label="Object editing">
-        <p class="inspector-intro m-0">Edit the full object record, including its keyed description and typed catalogue values.</p>
-        <UButton
-          class="workspace-control"
-          color="primary"
-          size="sm"
-          type="button"
-          aria-label="Edit map object"
-          :disabled="props.saving"
-          @click="emit('request-object-edit')"
-        >
-          Edit
-        </UButton>
-      </section>
-
       <section class="entity-inspector-delete">
         <UButton
           class="workspace-control entity-inspector-delete-button"
@@ -291,23 +276,37 @@
           @export-current-json="emit('export-current-json')"
         />
       </div>
-      <div class="entity-inspector-footer-actions">
+      <div class="entity-inspector-footer-actions" :class="{ 'entity-inspector-footer-actions--editing': objectSession }">
         <UButton
+          v-if="!objectSession"
+          class="workspace-control"
+          color="primary"
+          size="sm"
+          type="button"
+          aria-label="Edit map object"
+          :disabled="props.saving"
+          @click="emit('request-object-edit')"
+        >
+          Edit
+        </UButton>
+        <UButton
+          v-else
           class="workspace-control"
           color="primary"
           type="submit"
           :form="formId"
-          :disabled="!objectSession || (!props.hasModifiedEntitySession && !hasSessionErrors) || props.saving"
+          :disabled="!props.hasModifiedEntitySession || props.saving"
           @click="applyObjectSession"
         >
           <span>Apply changes</span><span class="sr-only">Save map object</span>
         </UButton>
         <UButton
+          v-if="objectSession"
           class="workspace-control"
           color="neutral"
           variant="outline"
           type="button"
-          :disabled="!objectSession || !props.hasModifiedEntitySession"
+          :disabled="props.saving"
           @click="discardObjectSession"
         >
           <span>Discard changes</span><span class="sr-only">Cancel map object edits</span>
@@ -375,7 +374,6 @@ const selectValuePrefix = '__entity_inspector_option__:'
 const formId = computed(() => `object-inspector-form-${selectedObject.value?.id ?? 'current'}`)
 const errorEntries = computed(() => Object.entries(objectSession.value?.errors ?? {}))
 const summaryMessage = computed(() => objectSession.value?.error || props.editorError)
-const hasSessionErrors = computed(() => errorEntries.value.length > 0 || !!objectSession.value?.error)
 const customFields = computed(() => props.workspace.objectFieldSettings.customFields)
 const applicableCustomFields = computed(() => selectedObject.value
   ? customFields.value.filter(field => isCustomFieldApplicableToObject(field, selectedObject.value!))
@@ -631,8 +629,9 @@ defineExpose({
 .entity-inspector-footer-status { display: grid; min-width: 0; grid-template-columns: 1fr; gap: .25rem; color: var(--text-muted); font-size: .68rem; }
 .entity-inspector-draft-status { font-size: .68rem; }
 .entity-inspector-save-feedback { min-width: 0; }
-.entity-inspector-footer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
-.entity-inspector-footer-actions :deep(button) { justify-content: center; }
+.entity-inspector-footer-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; }
+.entity-inspector-footer-actions--editing { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entity-inspector-footer-actions :deep(button) { width: 100%; justify-content: center; }
 .entity-inspector-error-link { justify-self: start; }
 
 @media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {

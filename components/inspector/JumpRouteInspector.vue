@@ -13,33 +13,39 @@
   </UButton>
 
   <template v-if="selectedRoute && !props.session">
-    <span class="section-kicker">JUMP ROUTE / SELECTED</span>
-    <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
-    <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
-    <p class="inspector-intro mb-[1em]">
-      Routes reference logical Jump Points. A Station is a separate physical location.
-    </p>
-    <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
-      <span>Endpoints</span>
-      <strong class="text-right">{{ props.selectedRouteSummary }}</strong>
-    </div>
-    <p v-if="selectedRoute.toPointId === null" class="inspector-intro">
-      <strong>Unknown destination: {{ selectedRoute.unresolvedExit }}</strong> is beyond the known Jump Cluster.
-    </p>
-    <div class="flex flex-wrap gap-2">
-      <UButton color="primary" :disabled="props.saving" aria-label="Edit Jump Route" @click="emit('request-route-edit', selectedRoute.id)">
-        Edit
-      </UButton>
-      <UButton
-        color="neutral"
-        variant="outline"
-        :disabled="props.saving"
-        :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
-        @click="emit('delete-route')"
-      >
-        Delete route
-      </UButton>
-    </div>
+    <section class="jump-route-details" aria-label="Jump Route details">
+      <div class="jump-route-details-body">
+        <span class="section-kicker">JUMP ROUTE / SELECTED</span>
+        <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+        <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
+        <p class="inspector-intro mb-[1em]">
+          Routes reference logical Jump Points. A Station is a separate physical location.
+        </p>
+        <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
+          <span>Endpoints</span>
+          <strong class="text-right">{{ props.selectedRouteSummary }}</strong>
+        </div>
+        <p v-if="selectedRoute.toPointId === null" class="inspector-intro">
+          <strong>Unknown destination: {{ selectedRoute.unresolvedExit }}</strong> is beyond the known Jump Cluster.
+        </p>
+        <div class="jump-route-delete">
+          <UButton
+            color="neutral"
+            variant="outline"
+            :disabled="props.saving"
+            :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
+            @click="emit('delete-route')"
+          >
+            Delete route
+          </UButton>
+        </div>
+      </div>
+      <footer class="jump-route-details-footer" aria-label="Jump Route actions">
+        <UButton color="primary" :disabled="props.saving" aria-label="Edit Jump Route" @click="emit('request-route-edit', selectedRoute.id)">
+          Edit
+        </UButton>
+      </footer>
+    </section>
   </template>
 
   <ChartDetailsPanel
@@ -165,7 +171,7 @@
           <span class="route-session-state" role="status" aria-live="polite">{{ routeSessionState }}</span>
         </div>
         <div class="flex flex-wrap gap-2">
-          <UButton color="primary" type="submit" :disabled="props.saving">
+          <UButton color="primary" type="submit" :disabled="props.saving || (!!props.session.routeId && !hasRouteChanges)">
             {{ props.session.routeId ? 'Apply Jump Route' : 'Create Jump Route' }}
           </UButton>
           <UButton color="neutral" variant="outline" type="button" @click="emit('discard-route-session', props.session!.id)">
@@ -289,10 +295,14 @@ const routeDraftSummary = computed(() => {
     : jumpPointItems.value.find(item => item.value === draft.toPointId)?.label ?? 'Choose destination'
   return `From ${origin} · To ${destination}`
 })
+const hasRouteChanges = computed(() => {
+  const session = props.session
+  return !!session && JSON.stringify(session.draft) !== JSON.stringify(session.initial)
+})
 const routeSessionState = computed(() => {
   const session = props.session
   if (!session) return ''
-  return JSON.stringify(session.draft) === JSON.stringify(session.initial)
+  return !hasRouteChanges.value
     ? session.routeId ? 'Route edit ready' : 'Route draft ready'
     : session.routeId ? 'Unapplied route changes' : 'Unapplied route draft'
 })
@@ -304,6 +314,7 @@ function fieldError(field: RouteDraftField): string | undefined {
 async function applyRouteSession(): Promise<void> {
   const session = props.session
   if (!session) return
+  if (session.routeId && !hasRouteChanges.value) return
   emit('apply-route-session', session.id)
   await nextTick()
   if (props.session?.id !== session.id || !summaryMessage.value && !errorEntries.value.length) return
@@ -344,6 +355,40 @@ function updateToPoint(value: unknown): void {
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.jump-route-details {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.jump-route-details-body {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.8rem 0.9rem;
+}
+
+.jump-route-delete {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.75rem;
+}
+
+.jump-route-details-footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel-bg);
+  padding: 0.65rem 0.9rem max(0.65rem, env(safe-area-inset-bottom, 0px));
 }
 
 .route-session-header {

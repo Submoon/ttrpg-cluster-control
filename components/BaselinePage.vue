@@ -449,6 +449,7 @@
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
+      :has-uncommitted-names="hasUncommittedNames"
       :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
       v-model:cluster-name="clusterName"
       v-model:system-name="systemName"
