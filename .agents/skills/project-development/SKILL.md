@@ -1,59 +1,52 @@
 ---
 name: project-development
-description: Coordinate implementation, bug fixes, refactoring, and code review in ttrpg-cluster-control, selecting specialist subagents by complexity and risk. Use for project development work; delegated specialists follow their assigned scope.
+description: Coordinate implementation, fixes, refactoring, and review in ttrpg-cluster-control, selecting specialists and checks by the changed behavior and risk.
 ---
 
 # Project development
 
-The main chat is the coordinator. Follow the repository's AGENTS.md baseline rules and, for GitHub intake or local planning, docs/agents/issue-tracker.md. Specialist agents return evidence to the coordinator rather than recursively invoking this workflow.
+The main chat coordinates. Follow AGENTS.md for the baseline and conditional references. Reuse unchanged instructions and profiles already read in this session; reload them when edited or unavailable in context. Delegated specialists return results without restarting this workflow.
 
-## Classify and route
+## Route by changed behavior
 
-Inspect the request and relevant code, identify acceptance criteria, then state the selected route and its reason briefly. Evaluate uncertainty, coupling, and failure impact; file count alone does not determine complexity. Apply the highest applicable route and reclassify when new evidence appears.
-
-| Route | Trigger | Required workflow |
+| Route | Trigger | Required roles |
 | --- | --- | --- |
-| Trivial | Local text, cosmetic styling, or a mechanical change with no behavior, data, or shared-contract impact | Coordinator handles it directly; use developer_light only if delegation is useful. Focused verification. |
-| Standard | Clear behavior change or localized bug fix with understood dependencies | developer implements; reviewer independently reviews the integrated change. |
-| Complex | Unclear behavior, cross-module changes, new domain relationships, or interface design | architect resolves the design first; developer implements bounded tasks; reviewer reviews the integrated change. |
-| Sensitive | Persistence or save-format changes, import/export compatibility, migrations, destructive operations, security boundaries, or changes to established domain invariants | architect defines contracts and failure cases; developer implements; reviewer and reviewer_deep independently examine complementary technical and functional risks. |
+| Trivial | Documentation, cosmetic styling, or mechanical changes without behavior or data impact | Coordinator; developer_light if delegation helps. |
+| Standard | A localized behavior change with understood dependencies | Developer, then independent reviewer. |
+| Complex | Unclear behavior, cross-module design, or new relationships | Architect before implementation; developer, then reviewer. |
+| Sensitive | Changes to persistence, formats, migrations, destructive semantics, security, or domain invariants | Architect; developer; independent reviewer and reviewer_deep with complementary lenses. |
 
-A clear, small mechanical subtask may go to developer_light within any route; this does not remove the route's design or review requirements. For a review-only request, apply the required review lenses to the existing change without launching implementation or fixing findings unless requested. Consult architect only when understanding the requirements or design needs clarification.
+Use the highest applicable route. Exposing an existing guarded command through another UI entry is Standard when its mutation and guard semantics stay unchanged. Reclassify when new evidence changes risk. For review-only work, inspect the existing change without launching implementation unless requested.
 
-## Profiles and dispatch
+## Profiles and ownership
 
-Project settings live in .codex/config.toml. Specialist model and reasoning settings are authoritative in .codex/agents/<name>.toml; use the names in the routing table. The coordinator runs in the main session with the project defaults unless the user has chosen different settings.
+Model and effort settings live in `.codex/config.toml` and `.codex/agents/<role>.toml`; explicit user choices take precedence. When named custom roles are unavailable, read the profile and pass its instructions and settings through the available delegation tool. Report unavailable settings rather than substituting silently.
 
-Use the client's named custom-agent facility when available. If the available spawning tool only accepts a model, reasoning effort, and task prompt, read the selected TOML file and pass its model, model_reasoning_effort, and developer_instructions explicitly with the scoped brief. Where model overrides require a fresh context, use a fresh-context spawn and include the repository path, applicable instructions, source requirements, and relevant artifact paths.
+The configured concurrency ceiling is a limit, not a target. Start at most two implementation writers with disjoint ownership, and serialize overlapping edits. The coordinator alone dispatches agents and owns shared Git operations, runtime ports, browser sessions, and integration. Reviewers and architects are read-only.
 
-Respect explicit user model choices and runtime capacity. If a model, effort, or delegation facility is unavailable, report the limitation and agree on a substitution instead of claiming that the configured profile ran. Continue independent work while resolving it.
+Each brief supplies acceptance criteria, relevant references, baseline/candidate, owned files, shared-resource constraints, and the expected deliverable. Resolve interfaces before parallel work. Ask an agent to freeze its source before building or reviewing it; collect a concise result rather than repeatedly requesting unchanged status.
 
-The configured ceiling is six simultaneous subagents, excluding the coordinator; it is not a target. Honor any lower effective runtime limit and queue dependent work. Reuse or close finished agents when supported. The coordinator alone dispatches agents.
+Keep small-task briefs in the chat. For multi-session work, use the existing local specification/tickets. Record durable decisions and unresolved limits there; execution logs, screenshots and traces belong in test/CI artifacts or the PR, not new scratch journals.
 
-## Coordinate execution
+## Proportionate verification
 
-Before dispatch, give each agent:
-- The objective, acceptance criteria, source requirements, and relevant domain or design references.
-- The baseline commit and candidate snapshot when relevant.
-- Owned files or directories, allowed actions, shared resources, and dependencies.
-- The expected deliverable: decisions or changed files, evidence, validation outcomes, and unresolved questions.
+Use package.json and Playwright configuration as the command reference. Prefer maintained helpers and the existing runner over temporary browser scripts. Local layout checks use the development server; Vercel previews support human device testing.
 
-Resolve shared interfaces before parallel implementation. Allow at most two simultaneous implementation writers initially, with disjoint file ownership; serialize overlapping changes. Assign planning files to one writer as well. Worktrees are useful for genuinely independent changes, but they still require integration and testing.
+| Change | During iteration | Completion evidence |
+| --- | --- | --- |
+| Documentation/instructions | Check links, referenced paths and configuration parsing | Clean diff; discovery/routing still works. |
+| CSS or presentation only | Relevant `test:ui` cases or browser checks on development | Affected desktop/compact states; no build or broad suite solely for class changes. |
+| Behavior | Lint, typecheck and affected test files | Relevant scenarios, failure paths and UI states pass. |
+| Dependencies, tooling, integration, SSR or bundling | Appropriate focused checks | Lint, typecheck, production build and one full suite on the integrated candidate. CI may provide these results. |
 
-Keep Git checkout, staging, commits, merges, and integration under coordinator ownership in a shared checkout. Reviewers and architects do not modify application code. Serialize tests or browser operations that share ports, storage, fixtures, or output directories.
+Run the full suite once per logical delivery, not after every follow-up. Reuse successful evidence for unchanged code on the same candidate; after a correction, rerun affected checks and broaden only for new risk. Distinguish an initial failure from the corrected result. Existing retries remain explicit; a later pass alone does not explain a failure.
 
-For multi-session efforts, use the existing .scratch/<feature>/ map/specification and ticket lifecycle, recording baseline, decisions, dependencies, ownership, and verification there. For small tasks, keep the brief in the chat. Maintain domain terms and durable decisions through docs/agents/domain.md rather than agent memory.
+## Review and finish
 
-## Review, correct, and finish
+Freeze the integrated candidate before review and provide the original criteria, actual diff and verification evidence. For UI changes, the reviewer reads `docs/agents/ui.md` and compares affected related surfaces and states. Tooling handles mechanical checks; reviewers assess requirements, consistency, integration and risk.
 
-Integrate completed work, run the relevant checks, and identify a stable candidate for review. Use a commit ID or an explicit captured diff and file snapshot; if reviewing the working tree, freeze writes to the reviewed scope until findings return. Review the actual task change, separating unrelated pre-existing branch work.
+One integrated review covers both repository standards and the requested behavior. When another implementation skill requests a final code review, use this routed review as that step rather than repeating it. An explicitly requested separate or two-axis review still applies; sensitive work retains its complementary independent review.
 
-Give reviewers the original criteria and relevant evidence. For sensitive changes, assign reviewer the technical correctness/integration lens and reviewer_deep the domain/data compatibility lens, adjusted to the actual risk. Obtain their initial findings independently before synthesizing them.
+Send confirmed findings to the owning developer, verify the correction and surrounding risk, and ask the reviewer to close the finding. After two unsuccessful correction cycles, reassess the design or identify the concrete blocker instead of repeating the same loop.
 
-The coordinator adjudicates findings using evidence, sends confirmed defects back to the owning developer, and records the reason for any rejected finding. After corrections, rerun affected checks and have the reviewer verify the fixes and surrounding risks. Substantial changes require another broader review.
-
-After two unsuccessful correction cycles, reassess the design, narrow the work, or report the concrete blocking decision. This checkpoint does not waive unresolved defects or acceptance criteria.
-
-Select validation from the repository's current scripts and the behavior changed. Application changes normally require type checking, a build, and relevant behavioral tests; interface changes also need browser verification when applicable. Documentation and configuration changes need appropriate parsing, discovery, and instruction checks rather than unrelated application tests.
-
-Completion requires satisfied acceptance criteria, integrated code or artifacts, recorded validation results, and resolved blocking findings. Report any unavailable checks or runtime limitations accurately. Follow existing GitHub write authorization and completion rules; this workflow does not independently authorize publishing, merging, deployment, or issue closure.
+Finish when acceptance criteria, appropriate checks and blocking findings are resolved. Report unavailable checks honestly. Follow existing authorization for commits, pushes and PR updates; this workflow does not authorize merge, release or source-issue closure.

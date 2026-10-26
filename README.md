@@ -31,6 +31,8 @@ npm run dev
 | Command or variable | Purpose |
 | --- | --- |
 | `npm run dev` | Start the development server. Nuxt DevTools is disabled. |
+| `npm run lint` | Check Vue/TypeScript correctness with ESLint; warnings fail the check. |
+| `npm run test:ui` | Run the focused UI smoke selection, including desktop and compact layouts. |
 | `npm test` | Run Playwright against the development app; it starts the app when no external base URL is set. |
 | `PLAYWRIGHT_BASE_URL` | Optional URL of an already-running development app; disables Playwright's automatic web server. |
 | `PLAYWRIGHT_PRODUCTION_URL` | Optional compiled-app URL; enables split execution, with the Vite-only IndexedDB preservation case kept on development. |
@@ -43,6 +45,8 @@ npm run dev
 | `npx playwright install chromium` | Install the Chromium browser needed by browser tests. |
 
 For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only.
+
+GitHub Actions runs lint, type checking, a production build and the full Playwright suite on pull requests and pushes to `main`. Playwright reports and attachments are available as workflow artifacts. For local changes, start with the checks relevant to the affected behavior; see [the development workflow](.agents/skills/project-development/SKILL.md) and [UI guidance](docs/agents/ui.md).
 
 ## License
 

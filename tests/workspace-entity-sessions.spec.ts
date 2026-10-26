@@ -193,7 +193,6 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
   const { hierarchy, map } = await openSessionLab(page)
   const initial = await downloadJson(page, 'Export star system JSON')
   const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
-  const distant = initial.system!.objects.find(object => object.name === 'Distant Star')!
   const nix = initial.system!.objects.find(object => object.name === 'Nix')!
   const firstOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
   const secondOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!

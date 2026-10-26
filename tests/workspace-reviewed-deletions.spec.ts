@@ -9,6 +9,7 @@ import {
 } from '../domain/workspace'
 import {
   clickDockAction,
+  createSingleSystemWorkspace,
   deletionReviewDialog,
   dockAction,
   editMapObject,
@@ -60,7 +61,18 @@ function makeOrbitReviewWorkspace() {
   return appendNamedObject(workspace, system.id, 'planet', 'Iria').workspace
 }
 
-async function importWorkspaceSeed(
+async function expectClusterSystemCount(page: import('@playwright/test').Page, expectedCount: number): Promise<void> {
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
+    .getByRole('button', { name: /^Open .* system map$/ })
+  await expect(systems).toHaveCount(expectedCount)
+
+  const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+  await expect(hierarchy).toBeHidden()
+}
+
+async function createWorkspaceThenImportCopy(
   page: import('@playwright/test').Page,
   workspace: ReturnType<typeof createLocalWorkspace>,
 ): Promise<void> {
@@ -69,6 +81,7 @@ async function importWorkspaceSeed(
   await page.getByLabel('First star system', { exact: true }).fill('Temporary system')
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
   await returnToClusterMap(page)
+  await expectClusterSystemCount(page, 1)
   await setJsonFile(
     jsonMapImportInput(page),
     'review-seed.json',
@@ -77,6 +90,8 @@ async function importWorkspaceSeed(
   await resolveImportReview(importReviewDialog(page), 'confirm')
   await expect(page.getByRole('group', { name: `${workspace.cluster.name} Jump Cluster map`, exact: true }))
     .toBeVisible()
+  await returnToClusterMap(page)
+  await expectClusterSystemCount(page, 1 + workspace.cluster.systems.length)
 }
 
 test('object deletion reviews the current cascade before resolving its inspector draft', async ({ page }) => {
@@ -132,7 +147,7 @@ test('object deletion reviews the current cascade before resolving its inspector
 
 test('deletion review refreshes route endpoint effects after applying a changed route draft', async ({ page }) => {
   const workspace = makeRouteReviewWorkspace()
-  await importWorkspaceSeed(page, workspace)
+  await createWorkspaceThenImportCopy(page, workspace)
 
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await hierarchy.getByRole('button', { name: /Select Jump Level 1:.*A Origin.*B Entry/ }).click()
@@ -156,7 +171,7 @@ test('deletion review refreshes route endpoint effects after applying a changed 
 })
 
 test('deleting an Orbit host prunes only its pending Add target and keeps the other inputs', async ({ page }) => {
-  await importWorkspaceSeed(page, makeOrbitReviewWorkspace())
+  await createWorkspaceThenImportCopy(page, makeOrbitReviewWorkspace())
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
   await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open A system map', exact: true }).click()
@@ -194,7 +209,7 @@ test('deleting an Orbit host prunes only its pending Add target and keeps the ot
 
 test('current-system deletion uses the review flow and protects the final system', async ({ page }) => {
   const workspace = addStarSystem(createLocalWorkspace('Kestrel Reach', 'A'), 'B').workspace
-  await importWorkspaceSeed(page, workspace)
+  await createWorkspaceThenImportCopy(page, workspace)
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
   await setWorkspaceMapMode(page, 'Navigate')
@@ -216,10 +231,7 @@ test('current-system deletion uses the review flow and protects the final system
 })
 
 test('the current-system inspector disables deletion of the final system', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('A')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await createSingleSystemWorkspace(page, { clusterName: 'Kestrel Reach', systemName: 'A' })
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const inspector = page.locator('#workspace-inspector-panel')

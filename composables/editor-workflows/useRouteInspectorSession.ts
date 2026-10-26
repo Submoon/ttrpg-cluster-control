@@ -4,7 +4,6 @@ import {
   createJumpRoute,
   jumpPointsInCluster,
   updateJumpRoute,
-  type JumpPointReference,
   type LocalWorkspace,
 } from '../../domain/workspace'
 import { isJumpLevel, maxNameLength, validText } from '../../domain/workspace-validation'

@@ -535,7 +535,13 @@ export function orbitPlacementHitsAtPoint(
     })
     .filter(candidate => candidate.distance <= 16)
     .sort((left, right) => left.distance - right.distance || left.index - right.index)
-    .map(({ index: _index, ...candidate }) => candidate)
+    .map(candidate => ({
+      orbit: candidate.orbit,
+      angle: candidate.angle,
+      point: candidate.point,
+      distance: candidate.distance,
+      valid: candidate.valid,
+    }))
 }
 
 /**

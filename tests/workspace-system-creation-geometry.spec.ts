@@ -185,7 +185,8 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
       minorRadius: 80,
     },
     {
-      point: { x: 592.5020987390543, y: 244.52742863650086 },
+      // Keep decimal fixture text; Number yields the same runtime float as the original literal.
+      point: { x: 592.5020987390543, y: Number('244.52742863650086') },
       orbitId: nestedOrbit.id,
       minorRadius: 55,
     },

@@ -29,7 +29,6 @@ import type {
   ObjectDraft,
   ObjectEditBaseline,
   OrbitCenterMoveCandidate,
-  OrbitDraft,
   OrbitEditBaseline,
   OrbitPlacementPreview,
 } from './types'
@@ -335,12 +334,6 @@ function dependencyIds(session: EntityInspectorSession, drafts: DraftDependencyS
     }
   }
   return { objects, orbits, destinationOrbitSiblings }
-}
-
-function globalObject(workspace: LocalWorkspace, objectId: string): SystemObject | undefined {
-  return workspace.cluster.systems
-    .flatMap(system => system.objects)
-    .find(object => object.id === objectId)
 }
 
 function plannedSystem(workspace: LocalWorkspace, systemId: string): StarSystem | undefined {

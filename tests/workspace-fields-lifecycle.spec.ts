@@ -123,7 +123,6 @@ test('Fields modal geometry holds across mobile, short landscape, and desktop th
   for (const viewport of viewports) {
     await page.setViewportSize(viewport)
     await setWorkspaceTheme(page, viewport.theme)
-    const opener = page.getByRole('button', { name: 'Open field definitions' })
     const dialog = await openFieldDefinitionDialog(page)
     await expect(dialog).toBeVisible()
     await expectDialogGeometry(dialog, viewport.compact)

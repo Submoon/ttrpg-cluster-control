@@ -646,7 +646,7 @@ test('Select ring long-press leaves the map data and Select mode intact', async 
 test('blur restores an attached host drag and Move camera takeover changes only the view', async ({ page }) => {
   const cdp = await enableTouch(page)
   try {
-    const { map, orbit, ring } = await createHostedOrbit(page)
+    const { map, ring } = await createHostedOrbit(page)
     await addCatalogueObject(page, 'planet', {
       target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
     })

@@ -3,7 +3,6 @@
  */
 import { drag, pointer, select, zoom, zoomTransform, type ZoomBehavior } from 'd3'
 import {
-  canPlaceObjectInOrbit,
   catalogueTypes,
   minimumOrbitRadius,
   normalizeOrbitRotation,

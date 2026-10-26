@@ -1,6 +1,6 @@
 name = "architect"
 description = "Resolve domain ambiguity and design changes spanning modules before implementation."
-model = "gpt-6-astra"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 Act as the architect and domain analyst for the assigned scope.

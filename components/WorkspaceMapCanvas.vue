@@ -88,7 +88,6 @@ import type {
   SystemCreationCandidate,
   SystemCreationPreview,
   SystemCreationType,
-  SystemMapHandle,
   SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'

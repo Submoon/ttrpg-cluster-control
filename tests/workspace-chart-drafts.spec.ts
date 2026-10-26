@@ -81,6 +81,7 @@ async function installChartWriteGate(page: import('@playwright/test').Page): Pro
         return gate.originalAddEventListener.call(this, type, listener, options)
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-this-alias -- Deferred IDB listeners must retain the transaction receiver.
       const transaction = this
       const deferredListener: EventListener = (event) => {
         const release = () => {
@@ -101,6 +102,7 @@ async function installChartWriteGate(page: import('@playwright/test').Page): Pro
             requestErrorDescriptor.set?.call(this, listener)
             return
           }
+          // eslint-disable-next-line @typescript-eslint/no-this-alias -- Deferred IDB listeners must retain the request receiver.
           const request = this
           const transaction = request.transaction
           if (!transaction || transaction.db.name !== 'ttrpg-cluster-control'
@@ -387,8 +389,6 @@ test('hiding the chart-name dialog keeps the draft available to resume', async (
     .getByRole('button', { name: 'Edit chart names' })
     .click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
-  const editNames = page.getByRole('complementary', { name: 'Object inspector' })
-    .getByRole('button', { name: 'Edit chart names' })
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('Jump Cluster').fill('Unapplied Reach')
   await page.keyboard.press('Escape')

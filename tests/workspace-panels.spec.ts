@@ -37,7 +37,7 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop panels remain independent and the portaled Map files menu stays hit-testable', async ({ page }) => {
+test('desktop panels remain independent and the portaled Map files menu stays hit-testable @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
@@ -84,7 +84,7 @@ test('desktop panels remain independent and the portaled Map files menu stays hi
   await downloadPromise
 })
 
-test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus', async ({ page }) => {
+test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus @ui-smoke', async ({ page }) => {
   await createWorkspace(page, { width: 844, height: 390 })
 
   const dock = workspaceNavigation(page)
@@ -236,7 +236,7 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
 })
 
-test('a nested chart dialog pauses the compact panel focus trap and returns focus to its opener', async ({ page }) => {
+test('a nested chart dialog pauses the compact panel focus trap and returns focus to its opener @ui-smoke', async ({ page }) => {
   await createWorkspace(page, { width: 844, height: 390 })
 
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })

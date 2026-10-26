@@ -76,6 +76,7 @@ async function installWorkspaceWriteGate(
           return originalAddEventListener.call(this, type, listener, options)
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- Deferred IDB listeners must retain the transaction receiver.
         const transaction = this
         const deferredListener: EventListener = (event) => {
           const deliver = () => {

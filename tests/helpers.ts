@@ -328,6 +328,58 @@ export function workspaceZoomOutput(page: import('@playwright/test').Page): impo
   return workspaceZoomControls(page).locator('output').first()
 }
 
+export type SingleSystemWorkspaceOptions = {
+  clusterName?: string
+  systemName?: string
+  viewport?: { width: number; height: number }
+}
+
+/** Creates a fresh one-system workspace and leaves its system map ready for interaction. */
+export async function createSingleSystemWorkspace(
+  page: import('@playwright/test').Page,
+  options: SingleSystemWorkspaceOptions = {},
+): Promise<{ clusterName: string; systemName: string }> {
+  const clusterName = options.clusterName ?? 'Kestrel Reach'
+  const systemName = options.systemName ?? 'Vesper'
+  if (options.viewport) await page.setViewportSize(options.viewport)
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
+  await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
+  await page.getByLabel('First star system', { exact: true }).fill(systemName)
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+
+  await returnToClusterMap(page)
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
+  const systemEntry = systems.getByRole('button', { name: /^Open .* system map$/ })
+  await expect(systemEntry).toHaveCount(1)
+  await expect(systemEntry).toHaveAccessibleName(`Open ${systemName} system map`)
+  await systemEntry.click()
+  const compactHierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await compactHierarchyClose.isVisible().catch(() => false)) await compactHierarchyClose.click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+
+  for (const panel of ['hierarchy', 'inspector'] as const) {
+    const compactClose = page.getByRole('button', { name: `Close ${panel} panel`, exact: true })
+    if (await compactClose.isVisible().catch(() => false)) {
+      await compactClose.click()
+      continue
+    }
+
+    const toggleName = panel === 'hierarchy' ? 'Hierarchy' : 'Inspect'
+    const toggle = page.getByRole('button', { name: toggleName, exact: true })
+    if (await toggle.isVisible().catch(() => false) && await toggle.getAttribute('aria-expanded') === 'true') {
+      await toggle.click()
+    }
+  }
+
+  await expect(page.getByRole('group', { name: 'Map interaction mode' })
+    .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  return { clusterName, systemName }
+}
+
 /** Reaches the public minimum zoom without assuming a particular starting level. */
 export async function zoomOutMapToMinimum(page: import('@playwright/test').Page): Promise<void> {
   const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
@@ -363,9 +415,12 @@ export async function openWorkspaceHierarchy(
   if (await toggle.getAttribute('aria-expanded') !== 'true') {
     await toggle.click()
   }
-  const hierarchy = page.getByRole('complementary', { name })
-  await expect(hierarchy).toBeVisible()
-  return hierarchy
+  const desktopHierarchy = page.getByRole('complementary', { name, exact: true })
+  const compactHierarchy = page.getByRole('dialog', { name, exact: true })
+  await expect.poll(async () =>
+    await desktopHierarchy.isVisible() || await compactHierarchy.isVisible(),
+  ).toBe(true)
+  return await compactHierarchy.isVisible() ? compactHierarchy : desktopHierarchy
 }
 
 /** Shows the consultation summary in the inspector without changing map selection. */

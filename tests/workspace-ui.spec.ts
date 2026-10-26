@@ -4,7 +4,6 @@ import {
   addCatalogueObject,
   addClusterSystem,
   catalogueSubtypes,
-  clickDockAction,
   completeCatalogueObjectCreation,
   editMapObject,
   openChartDetails,

@@ -174,7 +174,7 @@ export function useWorkspaceFiles({
     kind: MapKind,
     extension = 'json',
   ): string {
-    const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim()
+    const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim() // eslint-disable-line no-control-regex -- Replace C0 controls because they cannot appear in downloaded filenames.
     return `${safeName || 'map'}-${kind}.${extension}`
   }
 
@@ -268,7 +268,7 @@ export function useWorkspaceFiles({
       try {
         content = freezeJson(JSON.parse(await file.text()))
       } catch (error) {
-        throw new Error(`The selected file is not valid JSON: ${errorText(error)}`)
+        throw new Error(`The selected file is not valid JSON: ${errorText(error)}`, { cause: error })
       }
       if (!epochIsCurrent(epoch)) {
         abandonStaleImport(epoch)

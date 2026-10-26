@@ -312,7 +312,6 @@ test('the Warden can configure native and reusable custom object fields', async 
   await expect(page.getByLabel('Campaign notes')).toHaveCount(0)
 
   await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   await addCatalogueObject(page, 'planet')

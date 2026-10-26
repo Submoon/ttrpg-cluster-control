@@ -1,7 +1,7 @@
 name = "developer_light"
 description = "Apply small, mechanical changes with clear acceptance criteria and a narrow file scope."
 model = "gpt-6-luna"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 Complete the assigned mechanical change within the allocated files and established patterns.
 Preserve other agents' changes and run focused validation.

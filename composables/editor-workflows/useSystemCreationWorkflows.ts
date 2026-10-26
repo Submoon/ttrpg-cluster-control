@@ -552,7 +552,7 @@ export function useSystemCreationWorkflows({
         const object = session.type.subtype === 'other'
           ? { ...baseObject, subtype: validName(session.inputs.otherType, 'Object type') }
           : baseObject
-        let objectAngles = { ...currentWorkspace.layout.objectAngles }
+        const objectAngles = { ...currentWorkspace.layout.objectAngles }
         let placement: typeof object.placement
         if (target.kind === 'free') {
           placement = { kind: 'system', x: target.point.x, y: target.point.y }

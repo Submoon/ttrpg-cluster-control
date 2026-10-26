@@ -17,7 +17,6 @@ import type {
   MapVisitMemory,
   MapVisitSelection,
   SystemMapHandle,
-  TransitionResult,
   TransitionDecision,
   TransitionGuard,
   TransitionOptions,
@@ -105,13 +104,6 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
 
   function contextStamp(): string {
     return JSON.stringify([navigationContextStamp(), chartNamesSession.value?.id ?? null])
-  }
-
-  /** Captures map state only after the draft guard accepts and before a context mutation begins. */
-  function acceptCurrentContext(expectedStamp: string): boolean {
-    if (contextStamp() !== expectedStamp) return false
-    captureActiveMap()
-    return true
   }
 
   /** Accepts guard-driven cleanup of the current draft, while rejecting a changed map or newly-owned draft. */
@@ -354,8 +346,6 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
   function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
   function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
-
-  function goBackToCluster(): Promise<void> { return showClusterMap() }
 
   function updateCompactViewport(isCompact: boolean): void {
     const wasCompact = isCompactViewport.value

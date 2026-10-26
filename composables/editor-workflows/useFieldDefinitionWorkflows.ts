@@ -13,7 +13,6 @@ import {
   updateCustomFieldType,
   updateNativeFieldOptions,
   type CustomFieldApplicabilityTarget,
-  type CustomFieldDefinition,
   type CustomFieldType,
   type CustomFieldValue,
   type LocalWorkspace,
@@ -528,7 +527,6 @@ export function useFieldDefinitionWorkflows({
 
       before = definition
       operation = 'update'
-      targetType = request.type
       targetOptions = request.type === 'single-select' ? request.options : []
       if (fieldId === 'native:atmosphere' || fieldId === 'native:port-class') {
         const nativeField = fieldId === 'native:atmosphere' ? 'atmosphere' : 'portClass'
