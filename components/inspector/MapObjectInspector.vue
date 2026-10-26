@@ -317,7 +317,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import {
   canPlaceObjectInOrbit,
   isCustomFieldApplicableToObject,
@@ -326,7 +326,7 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
-import type { EntityInspectorSession, ObjectDraft } from '../../composables/editor-workflows/types'
+import type { EntityInspectorSession, ObjectDraft, ObjectInspectorFocusRequest } from '../../composables/editor-workflows/types'
 import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-draft-values'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
@@ -336,6 +336,8 @@ const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
   selectedObject?: SystemObject
+  focusRequest: ObjectInspectorFocusRequest | null
+  focusEnabled: boolean
   session: Extract<EntityInspectorSession, { kind: 'object' }> | null
   hasModifiedEntitySession: boolean
   saving: boolean
@@ -350,6 +352,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'request-object-edit': []
+  'object-focus-request-consumed': [requestId: number]
   'open-field-definitions': []
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]
@@ -518,6 +521,38 @@ function discardObjectSession(): void {
   const session = objectSession.value
   if (session) emit('discard-entity-session', session.id)
 }
+
+watch(() => [
+  props.focusRequest?.id,
+  props.focusEnabled,
+  props.saving,
+  selectedObject.value?.id,
+  objectSession.value?.id,
+] as const, async ([requestId]) => {
+  if (requestId === undefined) return
+  await nextTick()
+  const request = props.focusRequest
+  if (!request || request.id !== requestId) return
+
+  const object = selectedObject.value
+  const session = objectSession.value
+  if (!props.focusEnabled || !object || request.objectId !== object.id) {
+    emit('object-focus-request-consumed', requestId)
+    return
+  }
+
+  // Keep the one-shot request pending until the active edit field is enabled. Save state is
+  // part of the watched source, so the request is retried when the durable write settles.
+  if (!session || props.saving) return
+
+  const firstField = object.family === 'Other' ? 'subtype' : 'locationKey'
+  const control = document.getElementById(controlId(firstField))
+  if (control instanceof HTMLElement && !control.matches(':disabled')) {
+    control.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    control.focus({ preventScroll: true })
+    emit('object-focus-request-consumed', requestId)
+  }
+}, { flush: 'post' })
 
 </script>
 

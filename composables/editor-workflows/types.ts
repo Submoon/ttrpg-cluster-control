@@ -280,6 +280,12 @@ export interface ClusterSystemMovePreview {
 }
 export type WorkspacePanel = 'hierarchy' | 'inspector'
 
+/** Single-use request to focus a newly created object's first edit field after its Inspector renders. */
+export interface ObjectInspectorFocusRequest {
+  id: number
+  objectId: string
+}
+
 export type MapVisitSelection =
   | { kind: 'system'; id: string; inspect?: boolean }
   | { kind: 'route'; id: string }

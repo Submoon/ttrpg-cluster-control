@@ -42,6 +42,8 @@ interface SystemCreationWorkflowOptions {
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   applyWorkspace: ApplyWorkspace
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  resolveObjectCreationTransition: () => Promise<boolean>
+  onObjectCreated: (objectId: string) => Promise<void>
 }
 
 function emptyInputs(): SystemCreationSession['inputs'] {
@@ -79,12 +81,15 @@ export function useSystemCreationWorkflows({
   systemMapRef,
   applyWorkspace,
   isEntityCommandBlocked,
+  resolveObjectCreationTransition,
+  onObjectCreated,
 }: SystemCreationWorkflowOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const creationSession = ref<SystemCreationSession | null>(null)
   let sessionSequence = 0
   let previewSequence = 0
+  let confirmingPreviewId: number | null = null
 
   function setError(key: string, message: string): void {
     if (!creationSession.value) return
@@ -119,12 +124,14 @@ export function useSystemCreationWorkflows({
     const system = selectedSystem.value
     return !!currentWorkspace
       && currentWorkspace.cluster.id === session.clusterId
+      && store.activeView === 'system'
       && !!system
       && system.id === session.systemId
       && currentWorkspace.cluster.systems.some(candidate => candidate.id === session.systemId)
   }
 
   function chooseCreationType(type: SystemCreationType): void {
+    if (confirmingPreviewId !== null) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system
@@ -399,13 +406,14 @@ export function useSystemCreationWorkflows({
     return true
   }
 
-  function completeCreation(target: SystemCreationTarget, fromMap = false): boolean {
+  async function completeCreation(target: SystemCreationTarget, fromMap = false): Promise<boolean> {
     if (!prepareCreation(target, fromMap)) return false
     const previewId = creationSession.value?.preview?.id
-    return previewId !== undefined && confirmCreation(previewId)
+    return previewId !== undefined && await confirmCreation(previewId)
   }
 
-  function addCreationFromInputs(): boolean {
+  async function addCreationFromInputs(): Promise<boolean> {
+    if (confirmingPreviewId !== null) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -455,7 +463,8 @@ export function useSystemCreationWorkflows({
     return completeCreation(target)
   }
 
-  function offerCreationCandidates(candidates: SystemCreationCandidate[]): boolean {
+  async function offerCreationCandidates(candidates: SystemCreationCandidate[]): Promise<boolean> {
+    if (confirmingPreviewId !== null) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -477,7 +486,7 @@ export function useSystemCreationWorkflows({
     const validCandidates = currentCandidates.filter(candidate => !candidate.error)
     if (validCandidates.length === 1) {
       const candidate = validCandidates[0]
-      return candidate ? completeCreation(candidate.target, true) : false
+      return candidate ? await completeCreation(candidate.target, true) : false
     }
 
     session.candidates = currentCandidates
@@ -494,14 +503,14 @@ export function useSystemCreationWorkflows({
     return false
   }
 
-  function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): boolean {
+  async function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): Promise<boolean> {
     let session = creationSession.value
     if (!session || !sameCreationType(session.type, type) || !sessionMatchesCurrentContext(session)) {
       chooseCreationType(type)
       session = creationSession.value
     }
     if (!session) return false
-    return offerCreationCandidates(candidates)
+    return await offerCreationCandidates(candidates)
   }
 
   function cancelCreationPreview(): void {
@@ -512,20 +521,20 @@ export function useSystemCreationWorkflows({
     session.notice = 'Choose another target or use Placement to add by coordinates.'
   }
 
-  function confirmCreation(previewId: number): boolean {
+  async function confirmCreation(previewId: number): Promise<boolean> {
+    if (confirmingPreviewId !== null) return false
     const session = creationSession.value
     if (!session?.preview || session.preview.id !== previewId) return false
-    const currentWorkspace = workspace.value
-    const system = currentSystemForSession(session)
+    let currentWorkspace = workspace.value
+    let system = currentSystemForSession(session)
     if (!currentWorkspace || !system) {
       invalidatePreview(session)
       setError('target', 'The star system for this Add session is no longer available.')
       return false
     }
 
-    const preview = session.preview
-    const target = preview.target
-    const correctionNotice = session.notice.trim()
+    let preview = session.preview
+    let target = preview.target
     const error = validateTarget(session, system, target)
     if (error) {
       invalidatePreview(session)
@@ -533,18 +542,53 @@ export function useSystemCreationWorkflows({
       return false
     }
 
+    let otherTypeLabel: string | null = null
+    if (session.type.kind === 'object' && session.type.subtype === 'other') {
+      try {
+        otherTypeLabel = validName(session.inputs.otherType, 'Object type')
+      } catch (error) {
+        invalidatePreview(session)
+        setError('otherType', error instanceof Error ? error.message : String(error))
+        return false
+      }
+    }
+
+    confirmingPreviewId = previewId
     try {
-      let nextWorkspace: LocalWorkspace
-      let successNotice: string
       if (session.type.kind === 'object') {
-        if (session.type.subtype === 'other' && !session.inputs.otherType.trim()) {
+        // Replacing the selected object's edit session is a guarded navigation. Resolve it
+        // before publishing the new object so Stay leaves Add, selection, and focus untouched.
+        if (!await resolveObjectCreationTransition()) return false
+        if (creationSession.value !== session || session.preview?.id !== previewId
+          || !sessionMatchesCurrentContext(session)) return false
+
+        currentWorkspace = workspace.value
+        system = currentSystemForSession(session)
+        if (!currentWorkspace || !system) {
           invalidatePreview(session)
-          setError('otherType', 'Type label is required.')
+          setError('target', 'The star system for this Add session is no longer available.')
           return false
         }
+        const latestPreview = session.preview
+        if (!latestPreview || latestPreview.id !== previewId) return false
+        preview = latestPreview
+        target = preview.target
+        const latestError = validateTarget(session, system, target)
+        if (latestError) {
+          invalidatePreview(session)
+          setTargetError(target, latestError)
+          return false
+        }
+      }
+
+      const correctionNotice = session.notice.trim()
+      let nextWorkspace: LocalWorkspace
+      let successNotice: string
+      let createdObjectId: string | null = null
+      if (session.type.kind === 'object') {
         const baseObject = createSystemObject(system, session.type.subtype)
         const object = session.type.subtype === 'other'
-          ? { ...baseObject, subtype: validName(session.inputs.otherType, 'Object type') }
+          ? { ...baseObject, subtype: otherTypeLabel! }
           : baseObject
         let objectAngles: Record<string, number> | undefined
         let placement: typeof object.placement
@@ -561,6 +605,7 @@ export function useSystemCreationWorkflows({
           throw new Error('Choose a clear map position or an existing Orbit for this object.')
         }
         const positionedObject = { ...object, placement }
+        createdObjectId = positionedObject.id
         nextWorkspace = replaceWorkspaceSystem(currentWorkspace, {
           ...system,
           objects: [...system.objects, positionedObject],
@@ -603,15 +648,26 @@ export function useSystemCreationWorkflows({
       const { durable } = applyWorkspace(nextWorkspace)
       session.notice = successNotice
       void durable.catch(() => undefined)
+      if (createdObjectId) {
+        try {
+          await onObjectCreated(createdObjectId)
+        } catch (error) {
+          // Workspace publication already succeeded; keep the Add result truthful if UI handoff fails.
+          setError('form', `Object was added, but Inspect could not be opened: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
       return true
     } catch (error) {
       invalidatePreview(session)
       setError('form', error instanceof Error ? error.message : String(error))
       return false
+    } finally {
+      if (confirmingPreviewId === previewId) confirmingPreviewId = null
     }
   }
 
-  function chooseCreationCandidate(key: string): boolean {
+  async function chooseCreationCandidate(key: string): Promise<boolean> {
+    if (confirmingPreviewId !== null) return false
     const session = creationSession.value
     const candidate = session?.candidates.find(item => item.key === key)
     if (!session || !candidate) return false
@@ -624,7 +680,7 @@ export function useSystemCreationWorkflows({
       setTargetError(candidate.target, error)
       return false
     }
-    return completeCreation(candidate.target, true)
+    return await completeCreation(candidate.target, true)
   }
 
   function quitAdd(): void {

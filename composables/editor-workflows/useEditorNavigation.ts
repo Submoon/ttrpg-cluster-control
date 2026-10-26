@@ -6,7 +6,7 @@ import {
   type MapDeletionPlan,
 } from '../../domain/workspace'
 import type { EditorUiSelection, useEditorUiStore } from '../../stores/editor-ui'
-import type { EntityCommand, MapInteractionMode } from './types'
+import type { EntityCommand, MapInteractionMode, TransitionOptions } from './types'
 import type { useEditorMapControls } from './useEditorMapControls'
 import type { useChartNamesSession } from './useChartNamesSession'
 import type { useEditorTransitions } from './useEditorTransitions'
@@ -234,7 +234,11 @@ export function useEditorNavigation(options: {
     editorError.value = ''
   }
 
-  async function selectObject(objectId: string, openInspector = true): Promise<void> {
+  async function selectObject(
+    objectId: string,
+    openInspector = true,
+    transitionOptions: TransitionOptions = {},
+  ): Promise<void> {
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
@@ -249,7 +253,10 @@ export function useEditorNavigation(options: {
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
     const returningToDraft = entity.isEntityDraftTarget('object', objectId)
-    if (!await transitions.resolveTransition({ leaveEntitySession: !returningToDraft })) return
+    if (!await transitions.resolveTransition({
+      ...transitionOptions,
+      leaveEntitySession: transitionOptions.leaveEntitySession ?? !returningToDraft,
+    })) return
     const latestWorkspace = workspace.value
     if (!latestWorkspace || !acceptNavigationTransition(startingStamp, startingSessionId)
       || latestWorkspace.cluster.id !== clusterId || store.selectedSystemId !== systemId

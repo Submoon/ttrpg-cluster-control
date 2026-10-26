@@ -47,6 +47,8 @@
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
+          :focus-request="props.objectFocusRequest"
+          :focus-enabled="props.inspectorVisible"
           :session="objectSession"
           :has-modified-entity-session="props.hasModifiedEntitySession"
           :saving="props.saving"
@@ -58,6 +60,7 @@
           :save-error="props.saveError"
           :export-error="props.exportError"
           @request-object-edit="emit('request-object-edit')"
+          @object-focus-request-consumed="emit('object-focus-request-consumed', $event)"
           @open-field-definitions="emit('open-field-definitions')"
           @apply-entity-session="emit('apply-entity-session', $event)"
           @discard-entity-session="emit('discard-entity-session', $event)"
@@ -121,8 +124,8 @@
  * Displays parent-owned entity and route sessions and forwards typed commands to their controllers.
  * Applying a session publishes accepted workspace memory; IndexedDB completion remains separate UI state.
  */
-import { computed } from 'vue'
-import type { EntityInspectorSession } from '../composables/editor-workflows/types'
+import { computed, watch } from 'vue'
+import type { EntityInspectorSession, ObjectInspectorFocusRequest } from '../composables/editor-workflows/types'
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type {
@@ -143,6 +146,8 @@ const props = defineProps<{
   selectedSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
+  objectFocusRequest: ObjectInspectorFocusRequest | null
+  inspectorVisible: boolean
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
   routeSession: RouteInspectorSession | null
@@ -167,6 +172,7 @@ const emit = defineEmits<{
   'show-chart-details': []
   hide: []
   'request-object-edit': []
+  'object-focus-request-consumed': [requestId: number]
   'open-field-definitions': []
   'resume-entity-session': [sessionId: number]
   'apply-entity-session': [sessionId: number]
@@ -207,6 +213,20 @@ function resumeEntitySession(): void {
   const session = props.entitySession
   if (session) emit('resume-entity-session', session.id)
 }
+
+watch(() => [
+  props.objectFocusRequest?.id,
+  props.mode,
+  props.inspectorVisible,
+  props.selectedObject?.id,
+] as const, ([requestId]) => {
+  if (requestId === undefined) return
+  const request = props.objectFocusRequest
+  if (!request || request.id !== requestId) return
+  if (!props.inspectorVisible || props.mode !== 'system' || request.objectId !== props.selectedObject?.id) {
+    emit('object-focus-request-consumed', requestId)
+  }
+}, { flush: 'post' })
 
 </script>
 

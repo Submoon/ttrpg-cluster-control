@@ -362,6 +362,8 @@
               :selected-system="selectedSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
+              :object-focus-request="objectInspectorFocusRequest"
+              :inspector-visible="inspectorPanelVisible"
               :selected-orbit="selectedOrbit"
               :selected-route="selectedRoute"
               :route-session="routeSession"
@@ -383,6 +385,7 @@
               @show-chart-details="showChartDetails"
               @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"
+              @object-focus-request-consumed="acknowledgeObjectInspectorFocusRequest"
               @resume-entity-session="resumeEntitySession"
               @apply-entity-session="applyEntitySession"
               @discard-entity-session="discardEntitySession"
@@ -499,6 +502,7 @@ const {
   fieldDefinitionsDialog, openFieldDefinitions, getFieldDefinitionImportConflict, handleFieldDefinitionsIntent,
 } = fields
 const {
+  objectInspectorFocusRequest, acknowledgeObjectInspectorFocusRequest,
   entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
   cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
@@ -654,10 +658,10 @@ function chooseOrbitCreationType(): void {
   creationChooserOpen.value = false
 }
 
-function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): boolean {
+async function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): Promise<boolean> {
   // Keep the palette mounted through the browser's drop dispatch; close it only after the shared
   // owner has accepted the exact candidate set or exposed an ambiguity for correction.
-  const completed = processCreationDrop(type, candidates)
+  const completed = await processCreationDrop(type, candidates)
   creationChooserOpen.value = false
   return completed
 }

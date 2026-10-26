@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { EditorWorkflowOptions } from './editor-workflows/types'
+import type { EditorWorkflowOptions, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
@@ -108,11 +108,35 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     resolveTransition: transitions.resolveTransition,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
+  const map = useMapWorkflows({
+    workspace,
+    commit,
+    applyWorkspace,
+    systemMapRef: mapControls.systemMapRef,
+    resolveTransition: transitions.resolveTransition,
+    beginObjectSession: entity.beginObjectSession,
+    beginOrbitSession: entity.beginOrbitSession,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    editorError,
+  })
+  const objectInspectorFocusRequest = ref<ObjectInspectorFocusRequest | null>(null)
+  let objectInspectorFocusSequence = 0
   const systemCreation = useSystemCreationWorkflows({
     workspace,
     systemMapRef: mapControls.systemMapRef,
     applyWorkspace,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    resolveObjectCreationTransition: () => transitions.resolveTransition({ leaveChart: false }),
+    onObjectCreated: async (objectId) => {
+      await navigation.selectObject(objectId, !viewport.isCompactViewport.value, { leaveChart: false })
+      if (store.activeView !== 'system' || store.selectedObjectId !== objectId) return
+      await map.beginObjectEdit()
+      const session = entity.entitySession.value
+      if (session?.kind !== 'object' || session.targetId !== objectId
+        || store.selectedObjectId !== objectId || !viewport.inspectorPanelVisible.value) return
+      objectInspectorFocusSequence += 1
+      objectInspectorFocusRequest.value = { id: objectInspectorFocusSequence, objectId }
+    },
   })
   const systemObjectPlacement = useSystemObjectPlacement({
     workspace,
@@ -151,17 +175,6 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     isChartDraftTarget: navigation.isChartDraftTarget,
     editorError,
   })
-  const map = useMapWorkflows({
-    workspace,
-    commit,
-    applyWorkspace,
-    systemMapRef: mapControls.systemMapRef,
-    resolveTransition: transitions.resolveTransition,
-    beginObjectSession: entity.beginObjectSession,
-    beginOrbitSession: entity.beginOrbitSession,
-    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
-    editorError,
-  })
   const interactions = useMapInteractionCoordinator({
     workspace,
     store,
@@ -181,8 +194,14 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     store.setMode('select')
   }
 
+  function acknowledgeObjectInspectorFocusRequest(requestId: number): void {
+    if (objectInspectorFocusRequest.value?.id === requestId) objectInspectorFocusRequest.value = null
+  }
+
   return {
     inspector: {
+      objectInspectorFocusRequest,
+      acknowledgeObjectInspectorFocusRequest,
       entitySession: entity.entitySession,
       hasModifiedEntitySession: entity.hasModifiedEntitySession,
       orbitPlacementPreview: entity.orbitPlacementPreview,
