@@ -354,7 +354,48 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     return !!hit && (hit === element || element.contains(hit))
   })
   expect(verticalHandleCenterIsHitTarget).toBe(true)
-  await dragToWorldPoint(page, map, verticalHandle, { x: geometry.cx, y: geometry.cy - 60 }, true)
+  // Playwright mouse coordinates are integral CSS pixels. Find the nearest delivered pixel
+  // that maps back to a world radius which rounds to 60, instead of letting the browser's
+  // screen-to-world quantization move the test across the 59.5 radius boundary.
+  const verticalResizeTarget = await map.evaluate((element, target) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const transform = content?.getScreenCTM()
+    if (!transform) throw new Error('Could not measure the vertical Orbit resize transform.')
+
+    const screenTarget = new DOMPoint(target.point.x, target.point.y).matrixTransform(transform)
+    const baseClientPoint = { x: Math.round(screenTarget.x), y: Math.round(screenTarget.y) }
+    const inverse = transform.inverse()
+    let nearest: { point: { x: number; y: number }; distance: number } | null = null
+
+    for (let offsetX = -4; offsetX <= 4; offsetX += 1) {
+      for (let offsetY = -4; offsetY <= 4; offsetY += 1) {
+        const clientPoint = {
+          x: baseClientPoint.x + offsetX,
+          y: baseClientPoint.y + offsetY,
+        }
+        const worldPoint = new DOMPoint(clientPoint.x, clientPoint.y).matrixTransform(inverse)
+        const verticalRadius = target.center.y - worldPoint.y
+        if (Math.round(verticalRadius) !== 60) continue
+
+        const distance = Math.hypot(
+          clientPoint.x - screenTarget.x,
+          clientPoint.y - screenTarget.y,
+        )
+        if (!nearest || distance < nearest.distance) {
+          nearest = { point: { x: worldPoint.x, y: worldPoint.y }, distance }
+        }
+      }
+    }
+
+    if (!nearest) {
+      throw new Error('Could not find an integral pointer position that produces a 60-unit vertical radius.')
+    }
+    return nearest.point
+  }, {
+    point: { x: geometry.cx, y: geometry.cy - 60 },
+    center: { x: geometry.cx, y: geometry.cy },
+  })
+  await dragToWorldPoint(page, map, verticalHandle, verticalResizeTarget, true)
   await expect(ring).toHaveAttribute('rx', '320')
   await expect(ring).toHaveAttribute('ry', '60')
 
