@@ -4,11 +4,20 @@
 
 A local-first campaign cartography app for Wardens to plan schematic, not-to-scale Jump Cluster and star-system maps.
 
-The saved-workspace editor opens at `/` and reads/writes the current workspace in this browser profile and site origin. It supports map navigation, catalogue objects and Orbits, logical Jump Routes, reusable Fields, JSON interchange, recovery, and SVG/PNG map images. Historical prototype experiments are retired from the product workflow.
+[Open the app on Vercel](https://ttrpg-cluster-control.vercel.app/)
+
+The editor supports desktop and mobile layouts, light/dark themes, catalogue objects and Orbits, logical Jump Routes, and reusable custom fields.
+
+## Using the editor
+
+- Use the bottom dock: **Select** (default) to inspect, **Navigate** to pan or enter systems, **Move** to reposition map elements, and **Add** for repeated placement.
+- Open **Hierarchy** to browse the map and **Inspect** for details. Panels fill the screen on mobile; closing a panel preserves its draft.
+- Choose **Edit** to make changes, then **Apply** or **Discard**. From a system's cluster inspector, **Open system** enters its map without changing tools. Deletions show their consequences before confirmation; the last system cannot be deleted.
+- Open **Fields** to manage reusable definitions. Use **Map files** for JSON import/export and clean SVG/PNG images, with an optional light print palette.
 
 ## Local data
 
-Committed workspace data is saved automatically in IndexedDB. A last-valid snapshot supports recovery when the current workspace cannot load. Unsaved inspector drafts and temporary pan/zoom are session state. Storage is local, not cloud-synced; clearing browser/site data can erase it. Export Cluster JSON for backup or transfer. Validated imports append an independent copy rather than overwrite existing work. SVG/PNG files are images, not data backups.
+Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load; failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Storage is local, not cloud-synced; clearing browser/site data can erase it. Export Jump Cluster JSON for backup or transfer. Validated imports append an independent copy rather than overwrite existing work. SVG/PNG files are images, not data backups.
 
 ## Development
 
@@ -33,7 +42,7 @@ npm run dev
 | `npm run preview` | Serve the production build locally; build first. |
 | `npx playwright install chromium` | Install the Chromium browser needed by browser tests. |
 
-For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only. Nuxt DevTools is disabled in development and production builds.
+For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only.
 
 ## License
 
