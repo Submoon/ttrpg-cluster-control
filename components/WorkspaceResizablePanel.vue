@@ -15,8 +15,8 @@
         class="workspace-side-panel-content"
         :class="{ 'workspace-side-panel-content-inspector': props.panelId === 'workspace-inspector-panel' }"
       >
-        <div v-if="props.showHeaderActions" class="workspace-side-panel-header">
-          <div class="workspace-side-panel-header-actions">
+        <div v-if="props.showHeaderActions || props.showCloseButton" class="workspace-side-panel-header">
+          <div v-if="props.showHeaderActions" class="workspace-side-panel-header-actions">
             <slot name="header-actions" />
           </div>
           <UButton
@@ -26,22 +26,12 @@
             variant="outline"
             size="sm"
             type="button"
+            icon="i-lucide-x"
             :aria-label="props.panelId.includes('hierarchy') ? 'Close hierarchy panel' : 'Close inspector panel'"
             :aria-controls="props.panelId"
             @click="emit('close')"
-          >×</UButton>
+          />
         </div>
-        <UButton
-          v-else-if="props.showCloseButton"
-          class="workspace-control panel-close-button"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          type="button"
-          :aria-label="props.panelId.includes('hierarchy') ? 'Close hierarchy panel' : 'Close inspector panel'"
-          :aria-controls="props.panelId"
-          @click="emit('close')"
-        >×</UButton>
         <slot />
       </div>
     </UDashboardPanel>
@@ -214,7 +204,10 @@ onBeforeUnmount(() => {
   top: auto;
   float: none;
   flex: 0 0 2.2rem;
+  width: 2.2rem;
+  height: 2.2rem;
   align-self: auto;
   margin: 0;
+  padding: 0;
 }
 </style>

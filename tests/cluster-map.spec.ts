@@ -62,6 +62,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await panMap(page, clusterMap, { x: 36, y: 24 })
   await expect(clusterContent).not.toHaveAttribute('transform', beforePan!)
 
+  await setWorkspaceMapMode(page, 'Navigate')
   const systemNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   const nodeBeforeDrag = await systemNode.getAttribute('transform')
   await dragBy(page, systemNode.locator('.cluster-system-card'), { x: 48, y: 24 })
@@ -215,6 +216,7 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
   const routeMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Departure.*Arrival/ })
   const routeLine = routeMark.locator('.cluster-route-line')
   const routeBefore = await routeLine.getAttribute('d')
+  await setWorkspaceMapMode(page, 'Navigate')
   const sourceNode = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   const nodeBefore = await sourceNode.getAttribute('transform')
   const source = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
@@ -339,6 +341,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await expect(restoredMap.getByRole('button', {
     name: /Jump Level 15.*Vesper Arrival.*unknown destination.*Unknown Rim/i,
   })).toBeVisible()
+  await setWorkspaceMapMode(page, 'Navigate')
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const restoredHierarchy = await openWorkspaceHierarchy(page)
   await restoredHierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()

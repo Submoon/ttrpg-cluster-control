@@ -158,6 +158,7 @@ test('deletion review refreshes route endpoint effects after applying a changed 
 test('deleting an Orbit host prunes only its pending Add target and keeps the other inputs', async ({ page }) => {
   await importWorkspaceSeed(page, makeOrbitReviewWorkspace())
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open A system map', exact: true }).click()
 
   const hierarchy = await openWorkspaceHierarchy(page)

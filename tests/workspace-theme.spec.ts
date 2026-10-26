@@ -229,6 +229,7 @@ test('theme changes recolor both maps without changing workspace drafts or writi
   expect(clusterDark).not.toBe(clusterLight)
   await switchTheme(page, 'dark')
 
+  await setWorkspaceMapMode(page, 'Navigate')
   await page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
     .getByRole('button', { name: 'Open Vesper system map' })
     .click()

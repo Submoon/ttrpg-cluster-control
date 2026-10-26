@@ -15,15 +15,15 @@
       <div class="flex shrink-0 items-center gap-2">
         <UBadge color="neutral" variant="subtle">Orbit</UBadge>
         <UButton
-          class="workspace-control"
+          class="workspace-control panel-close-button"
           color="neutral"
-          variant="ghost"
+          variant="outline"
           size="sm"
+          type="button"
+          icon="i-lucide-x"
           aria-label="Hide inspector"
           @click="emit('hide')"
-        >
-          Hide
-        </UButton>
+        />
       </div>
     </header>
 
@@ -238,26 +238,7 @@
         </div>
       </section>
 
-      <section id="orbit-inspector-save-details" class="entity-inspector-section" aria-label="Save details" tabindex="-1">
-        <div class="entity-inspector-section-heading">
-          <div>
-            <p class="section-kicker">LOCAL WORKSPACE</p>
-            <h3>Save details</h3>
-          </div>
-          <span class="workspace-save-indicator" :class="`is-${props.saveState}`" aria-hidden="true"></span>
-        </div>
-        <p class="entity-inspector-save-details m-0">{{ props.saveMessage }}</p>
-        <p v-if="props.saveState === 'error' && props.saveError" class="entity-inspector-save-details m-0 error-text" role="alert">
-          The applied changes are not saved on this device yet: {{ props.saveError }}
-        </p>
-      </section>
-
-      <section class="entity-inspector-delete" aria-labelledby="orbit-delete-heading">
-        <div>
-          <p class="section-kicker">SEPARATE DESTRUCTIVE ACTION</p>
-          <h3 id="orbit-delete-heading">Delete</h3>
-        </div>
-        <p>Existing impact review lists everything that will be removed or updated.</p>
+      <section class="entity-inspector-delete">
         <UButton
           class="workspace-control entity-inspector-delete-button"
           color="error"
@@ -550,8 +531,8 @@ defineExpose(inspectorHandle)
 .entity-inspector-header,
 .entity-inspector-footer { background: var(--panel-bg); }
 .entity-inspector-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .55rem; border-bottom: 1px solid var(--line-soft); padding: .8rem .9rem .65rem; }
-.entity-inspector-subtitle,
-.entity-inspector-save-details { color: var(--text-muted); font-size: .72rem; line-height: 1.45; }
+.entity-inspector-header .panel-close-button { position: relative; top: auto; float: none; flex: 0 0 2.2rem; align-self: flex-start; margin: 0; }
+.entity-inspector-subtitle { color: var(--text-muted); font-size: .72rem; line-height: 1.45; }
 .orbit-title { overflow-wrap: anywhere; font: 500 1.45rem/1.2 Georgia, serif; }
 .entity-inspector-body { display: grid; min-height: 0; align-content: start; gap: .8rem; overflow-y: auto; overscroll-behavior: contain; padding: .8rem .9rem; }
 .entity-inspector-section,
@@ -561,8 +542,7 @@ defineExpose(inspectorHandle)
 .entity-inspector-section + .entity-inspector-section,
 .entity-inspector-delete { border-top: 1px solid var(--line-soft); padding-top: .8rem; }
 .entity-inspector-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.entity-inspector-section-heading h3,
-.entity-inspector-delete h3 { margin: .18rem 0 0; font: 500 1rem/1.15 Georgia, serif; }
+.entity-inspector-section-heading h3 { margin: .18rem 0 0; font: 500 1rem/1.15 Georgia, serif; }
 .entity-inspector-type-chip { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: .12rem .42rem; color: var(--text-muted); font-size: .65rem; }
 .entity-inspector-fields { display: grid; min-width: 0; gap: .7rem; margin: 0; border: 0; padding: 0; }
 .entity-inspector-fields--paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -576,8 +556,7 @@ defineExpose(inspectorHandle)
 .entity-inspector-placement-preview { border-left: 2px solid var(--line); padding-left: .55rem; color: var(--text-secondary); font-size: .72rem; line-height: 1.45; }
 .entity-inspector-feedback ul { display: grid; gap: .16rem; margin: .35rem 0 0; padding-left: 1.1rem; }
 .entity-inspector-feedback li :deep(.entity-inspector-issue-action) { text-decoration: underline; text-underline-offset: .12em; }
-.entity-inspector-delete-button { justify-self: start; margin-top: .45rem; }
-.entity-inspector-delete > p { color: var(--text-muted); font-size: .72rem; line-height: 1.45; }
+.entity-inspector-delete-button { justify-self: start; }
 .entity-inspector-footer { display: grid; gap: .55rem; border-top: 1px solid var(--line-soft); padding: .6rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -.2rem .8rem color-mix(in srgb, var(--map-bg) 35%, transparent); }
 .entity-inspector-footer-status { display: grid; min-width: 0; grid-template-columns: 1fr; gap: .25rem; color: var(--text-muted); font-size: .68rem; }
 .entity-inspector-draft-status { font-size: .68rem; }

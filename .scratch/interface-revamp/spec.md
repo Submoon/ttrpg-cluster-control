@@ -31,7 +31,7 @@ The source request is [Revamp the interface](https://github.com/Submoon/ttrpg-cl
 7. As a Warden revisiting a map, I want its own temporary pan/zoom and last still-valid selection restored, so that moving between maps retains my place.
 8. As a Warden opening a map for the first time, I want a useful fitted view, so that I can find its contents immediately.
 9. As a Warden, I want stale selections and remembered IDs cleared after deletion, so that the interface never resumes a deleted target.
-10. As a Warden, I want a readable bottom Dock distinguishing Navigate, Select, Move and creation from panel/file commands, so that I can predict what the next map interaction will do.
+10. As a Warden, I want Select as the default and leftmost bottom Dock mode, followed by Navigate and Move, with creation and panel/file commands distinguished, so that ordinary object inspection is immediately available.
 11. As a Warden, I want optional Hierarchy reflecting hosted and nested Orbits, so that I can locate and target crowded or obscured entities without directly hitting their marks.
 12. As a desktop Warden, I want Inspect and optional Hierarchy overlaid on the full map board, so that editing a draft does not replace the map with a narrow column or disable unrelated navigation.
 13. As a phone Warden, I want fullscreen Inspect or Hierarchy with only one visible at a time and dock/zoom hidden, so that the selected task has usable space.
@@ -56,7 +56,7 @@ The source request is [Revamp the interface](https://github.com/Submoon/ttrpg-cl
 29. As a phone Warden, I want Add status to reuse the context banner while retaining current context and Back, so that creation does not add another permanent obstruction.
 30. As a Warden, I want dismissing the chooser to retain Add, type and progress, so that browsing or closing choices does not cancel creation.
 31. As a Warden, I want chooser dismissal consumed before map actions, so that Escape or an outside click cannot also quit Add or place an entity.
-32. As a Warden, I want Quit Add or Escape on the map to abandon unfinished creation and return to Navigate, so that canceling leaves completed entities and Inspector drafts intact.
+32. As a Warden, I want Quit Add or Escape on the map to abandon unfinished creation and return to Select, so that canceling leaves completed entities and Inspector drafts intact.
 33. As a Warden, I want the full existing catalogue, including all 15 subtypes and an Other object's custom type text, so that compact icons do not reduce what I can map.
 34. As a Warden, I want to place a catalogue object in empty space or at the chosen position on an Orbit, so that touch creation uses my intended destination rather than a fixed default angle.
 35. As a Warden, I want Add Orbit to target an object host or an unoccupied center in empty space, so that both existing Orbit structures remain available.
@@ -78,12 +78,12 @@ The source request is [Revamp the interface](https://github.com/Submoon/ttrpg-cl
 51. As a Warden, I want keyboard and single-pointer alternatives to every placement/manipulation result, so that no operation requires drag, pinch, hover, right-click or a modifier.
 52. As a Warden moving an existing entity, I want source/destination placement with an indicated preview and Confirm/Cancel, coordinates/Orbit position and named geometry controls, so that precision is possible without gestures. Creation uses the single-action Add contract below.
 53. As a Warden, I want zoom in/out, Fit, view movement, wheel zoom and the existing 25–1600% range, so that navigation remains available through touch, pointer and keyboard.
-54. As a Warden, I want accepted context changes to reset to Navigate while refused changes retain the current tool and view, so that navigation and draft guards agree.
+54. As a Warden, I want accepted context changes to reset to Select while refused changes retain the current tool and view, so that navigation and draft guards agree.
 
 ### Complete data editing and Fields
 
 55. As a Warden, I want Inspector sections visible in one responsive form with full-width Name/Description and multiline custom text, so that essential content is readable without hunting through tabs or collapsed sections.
-56. As a Warden, I want top Hide and persistent bottom Apply/Discard changes with reachable validation/save feedback, so that long forms and reduced-height screens retain their ordinary actions.
+56. As a Warden, I want a top close control that hides the panel without discarding work, and persistent bottom Apply/Discard changes with reachable validation/save feedback, so that long forms and reduced-height screens retain their ordinary actions.
 57. As a Warden, I want field-level errors and feedback that leads to the affected control, so that invalid Apply preserves my work and tells me how to repair it.
 58. As a Warden, I want Delete separated at the end of the form with consequence review, so that destructive work is distinct from ordinary application.
 59. As a Warden, I want readable established catalogue/domain labels in Inspector, Hierarchy, controls and accessible map names, so that internal identifiers do not become product terminology.
@@ -160,7 +160,7 @@ The source request is [Revamp the interface](https://github.com/Submoon/ttrpg-cl
 1. **Product and library boundary.** Refactor the persisted editor at `/`; do not promote the disposable prototype. Use Nuxt UI wherever it fits. D3/SVG maps, domain commands, validation, workspace state, persistence and interchange remain application-owned.
 2. **Baseline parity.** Preserve existing domain meaning, commands, validation, formats, recovery and map operations. No new schema, remote workspace or product capability is implied.
 3. **Navigation.** Keep Cluster and system maps separate, show context and explicit Back, and remember each view's temporary pan/zoom and valid selection. Fit first visits and clear deleted selections; this memory is not exported or saved.
-4. **Map intent.** Navigate, Select, Move and Add remain distinct visible modes. Navigate opens systems; Select opens data editing; Move manipulates geometry. Accepted context changes reset to Navigate only after draft guards pass.
+4. **Map intent.** Select is the default and leftmost mode, followed by Navigate and Move; Add remains distinct. Navigate pans the view and opens systems; Select opens data editing; Move manipulates entity geometry. Accepted context changes reset to Select only after draft guards pass; leaving Add through Quit Add or Escape returns to Select without discarding editor drafts.
 5. **Creation and targeting.** Add remains active for repeated same-type creation, does not force Inspect or system entry, and starts completed routes fresh. Indicate targets; require explicit choice for ambiguity and reject invalid targets without mutation.
 6. **Gestures and alternatives.** Panning/zooming never edits data. View takeover cancels and suppresses only the in-progress gesture; earlier commits, drafts and route progress survive. Provide keyboard and single-pointer alternatives for every operation.
 7. **Available space.** Desktop panels may coexist with and not disable map navigation. On compact screens Inspect and Hierarchy are fullscreen and exclusive. Fit, targeting, actions and feedback must use the unobstructed area and remain reachable.

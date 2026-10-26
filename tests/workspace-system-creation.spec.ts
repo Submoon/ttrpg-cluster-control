@@ -145,7 +145,7 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   expectSystemPlacement(addedObject?.placement, mapPoint)
   await expect(controls).toBeVisible()
   await expect(inspector).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
 })
 
 async function clickNormalizedSystemPoint(
@@ -280,7 +280,7 @@ test('explicit Move exits Add when Move is already active', async ({ page }) => 
 
   await move.click()
   await expect(controls).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true }))
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true }))
     .toHaveCount(0)
   await expect(addTrigger).toHaveText('Add')
   await expect(move).toHaveAttribute('aria-pressed', 'true')

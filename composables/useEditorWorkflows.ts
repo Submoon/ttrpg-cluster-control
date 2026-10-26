@@ -111,7 +111,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     editorState.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
-    editorState.setMapMode('navigate')
+    editorState.setMapMode('select')
   }
 
   return {

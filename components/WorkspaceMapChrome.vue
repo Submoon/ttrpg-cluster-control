@@ -19,7 +19,7 @@
             color="neutral"
             variant="ghost"
             size="xs"
-            aria-label="Quit Add and return to Navigate"
+            aria-label="Quit Add and return to Select"
             @click="emit('quit-add')"
           >
             Quit Add

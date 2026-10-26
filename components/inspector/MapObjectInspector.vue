@@ -12,15 +12,15 @@
         </p>
       </div>
       <UButton
-        class="workspace-control shrink-0"
+        class="workspace-control panel-close-button shrink-0"
         color="neutral"
-        variant="ghost"
+        variant="outline"
         size="sm"
+        type="button"
+        icon="i-lucide-x"
         aria-label="Hide inspector"
         @click="emit('hide')"
-      >
-        Hide
-      </UButton>
+      />
     </header>
 
     <form :id="formId" class="entity-inspector-body" novalidate @submit.prevent="applyObjectSession">
@@ -246,26 +246,7 @@
         </UButton>
       </section>
 
-      <section id="object-inspector-save-details" class="entity-inspector-section" aria-label="Save details" tabindex="-1">
-        <div class="entity-inspector-section-heading">
-          <div>
-            <p class="section-kicker">LOCAL WORKSPACE</p>
-            <h3>Save details</h3>
-          </div>
-          <span class="workspace-save-indicator" :class="`is-${props.saveState}`" aria-hidden="true"></span>
-        </div>
-        <p class="entity-inspector-save-details m-0">{{ props.saveMessage }}</p>
-        <p v-if="props.saveState === 'error' && props.saveError" class="entity-inspector-save-details m-0 error-text" role="alert">
-          The applied changes are not saved on this device yet: {{ props.saveError }}
-        </p>
-      </section>
-
-      <section class="entity-inspector-delete" aria-labelledby="object-delete-heading">
-        <div>
-          <p class="section-kicker">SEPARATE DESTRUCTIVE ACTION</p>
-          <h3 id="object-delete-heading">Delete</h3>
-        </div>
-        <p>The existing impact review lists everything that will be removed or updated.</p>
+      <section class="entity-inspector-delete">
         <UButton
           class="workspace-control entity-inspector-delete-button"
           color="error"
@@ -598,9 +579,16 @@ defineExpose({
   padding: .8rem .9rem .65rem;
 }
 
-.entity-inspector-subtitle,
-.entity-inspector-save-details > p,
-.entity-inspector-delete > p {
+.entity-inspector-header .panel-close-button {
+  position: relative;
+  top: auto;
+  float: none;
+  flex: 0 0 2.2rem;
+  align-self: flex-start;
+  margin: 0;
+}
+
+.entity-inspector-subtitle {
   color: var(--text-muted);
   font-size: .72rem;
   line-height: 1.45;
@@ -623,8 +611,7 @@ defineExpose({
 .entity-inspector-section + .entity-inspector-section,
 .entity-inspector-delete { border-top: 1px solid var(--line-soft); padding-top: .8rem; }
 .entity-inspector-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.entity-inspector-section-heading h3,
-.entity-inspector-delete h3 { margin: .18rem 0 0; font: 500 1rem/1.15 Georgia, serif; }
+.entity-inspector-section-heading h3 { margin: .18rem 0 0; font: 500 1rem/1.15 Georgia, serif; }
 .entity-inspector-type-chip { display: inline-block; margin-top: .2rem; border: 1px solid var(--line); border-radius: 999px; padding: .12rem .42rem; color: var(--text-muted); font-size: .65rem; }
 .entity-inspector-fields { display: grid; min-width: 0; gap: .7rem; margin: 0; border: 0; padding: 0; }
 .entity-inspector-fields--paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -639,7 +626,7 @@ defineExpose({
 .entity-inspector-feedback--error li :deep(.entity-inspector-issue-action) { color: var(--error); }
 .entity-inspector-feedback ul { display: grid; gap: .16rem; margin: .35rem 0 0; padding-left: 1.1rem; }
 .entity-inspector-feedback li :deep(.entity-inspector-issue-action) { text-decoration: underline; text-underline-offset: .12em; }
-.entity-inspector-delete-button { justify-self: start; margin-top: .45rem; }
+.entity-inspector-delete-button { justify-self: start; }
 .entity-inspector-footer { display: grid; gap: .55rem; border-top: 1px solid var(--line-soft); padding: .6rem .9rem calc(.65rem + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -.2rem .8rem color-mix(in srgb, var(--map-bg) 35%, transparent); }
 .entity-inspector-footer-status { display: grid; min-width: 0; grid-template-columns: 1fr; gap: .25rem; color: var(--text-muted); font-size: .68rem; }
 .entity-inspector-draft-status { font-size: .68rem; }

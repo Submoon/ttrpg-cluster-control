@@ -638,6 +638,7 @@ for (const mapCase of mapCases) {
       let expectedTitle: string | null = null
       if (mapCase.kind === 'system') {
         await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+        await setWorkspaceMapMode(page, 'Navigate')
         await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
         expectedTitle = 'Vesper Prime — Outer Circumstellar Survey and Transit Observatory'
         const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -821,6 +822,7 @@ test('system image exports retain applied geometry during local and parent-owned
     throw new Error('The imported preview fixture is missing one or more named objects.')
   }
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
   const map = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
   await expect(map).toBeVisible()
@@ -1021,6 +1023,7 @@ test('failed saves preserve the latest applied image and separate PNG export err
   test.setTimeout(60_000)
   const clusterMap = await createImportedCampaign(page, 'light')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
   const map = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
   await expect(map).toBeVisible()

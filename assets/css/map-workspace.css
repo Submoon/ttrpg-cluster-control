@@ -172,9 +172,13 @@ textarea[aria-invalid="true"] {
 .workspace-feedback-content {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.25rem 0.35rem;
+}
+
+.workspace-feedback-content .save-feedback {
+  margin: 0;
+  padding: 0;
 }
 
 .workspace-feedback-draft {
@@ -1100,8 +1104,11 @@ p-note {
   top: auto;
   float: none;
   flex: 0 0 2.2rem;
+  width: 2.2rem;
+  height: 2.2rem;
   align-self: flex-end;
   margin: 0.4rem 0.55rem 0.1rem;
+  padding: 0;
 }
 .workspace-side-panel-content-inspector > .map-inspector-layout {
   flex: 1 1 auto;
@@ -1152,6 +1159,7 @@ p-note {
   margin: -0.5rem -0.45rem 0.25rem 0.45rem;
   border: 1px solid var(--line-strong);
   border-radius: 3px;
+  padding: 0;
   background: var(--control-bg);
   color: var(--text-primary);
   font-size: 1.25rem;

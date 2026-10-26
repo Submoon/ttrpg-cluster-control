@@ -236,7 +236,7 @@ async function expectAddMode(page: Page, label: RegExp): Promise<void> {
     await expect(navigation.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'false')
   }
   await expect(page.getByRole('button', {
-    name: 'Quit Add and return to Navigate',
+    name: 'Quit Add and return to Select',
     exact: true,
   })).toBeVisible()
 }
@@ -735,7 +735,7 @@ test('Object Add suppresses long-press inspection and second-contact takeover pr
 
     await workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true }).click()
     await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
     await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true }))
       .toHaveText('Add')
     await expectWorkspaceMode(page, 'Move')
@@ -773,10 +773,10 @@ test('Orbit Add ring drag cancels on Escape and camera takeover stays navigation
     await expect.poll(() => scene.getAttribute('transform')).not.toBe(transformBeforeRingDrag)
     await page.keyboard.press('Escape')
     await expect(controls).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true }))
+    await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true }))
       .toHaveCount(0)
     await expect(addToggle).toHaveText('Add')
-    await expectWorkspaceMode(page, 'Navigate')
+    await expectWorkspaceMode(page, 'Select')
     await page.mouse.up()
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)

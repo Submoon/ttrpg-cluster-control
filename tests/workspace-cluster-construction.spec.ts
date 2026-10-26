@@ -85,7 +85,7 @@ function expectSystemAddArmed(page: import('@playwright/test').Page): Promise<vo
   return Promise.all([
     expect(addButton).toContainText(/system/i),
     expect(context.getByRole('status')).toContainText(/add.*system/i),
-    expect(context.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })).toBeVisible(),
+    expect(context.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible(),
   ])
 }
 

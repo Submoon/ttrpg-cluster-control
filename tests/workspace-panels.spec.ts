@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { activeWorkspaceFeedback, openWorkspaceZoomNavigation, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -138,6 +138,7 @@ test('touch long press keeps focus inside the compact inspector after the touch 
   await expect(filesToggle).toBeFocused()
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await setWorkspaceMapMode(page, 'Navigate')
   const system = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   const bounds = await system.boundingBox()
   if (!bounds) throw new Error('The system long-press target has no visible bounds.')

@@ -251,6 +251,7 @@ test('cluster creation actions and Map files follow the active map context', asy
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await addClusterSystem(page, { open: true })
   await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(context.getByRole('heading', { name: 'Vesper' })).toBeVisible()
   await setHeaderMapActionsOpen(page, true)
@@ -288,6 +289,7 @@ test('Map context and consultation details retain chart names and counts outside
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await addCatalogueObject(page, 'star')
   const updatedDetails = await openChartDetails(page)

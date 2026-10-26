@@ -37,7 +37,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
   const activeView = ref<'cluster' | 'system'>('system')
-  const mapMode = ref<MapInteractionMode>('navigate')
+  const mapMode = ref<MapInteractionMode>('select')
   const selectedSystemId = ref<string | null>(null)
   const clusterSelectedSystemId = ref<string | null>(null)
   const inspectedClusterSystemId = ref<string | null>(null)
@@ -792,7 +792,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       : latestWorkspace.cluster.systems[0]?.id ?? null
     selectedSystemId.value = importedSystem?.id ?? retainedSystemId
     activeView.value = 'cluster'
-    mapMode.value = 'navigate'
+    mapMode.value = 'select'
     restoreActiveSelection()
   }
 
@@ -802,7 +802,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
     const startingSessionId = chartNamesSession.value?.id ?? null
     if (!await resolveTransition() || !acceptNavigationTransition(startingNavigationStamp, startingSessionId)) return
     activeView.value = 'cluster'
-    mapMode.value = 'navigate'
+    mapMode.value = 'select'
     restoreActiveSelection()
     editorError.value = ''
   }
@@ -820,7 +820,7 @@ export function useEditorState({ workspace, saveState, saveError, commit, applyW
       || !workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     selectedSystemId.value = systemId
     activeView.value = 'system'
-    mapMode.value = 'navigate'
+    mapMode.value = 'select'
     restoreActiveSelection()
     editorError.value = ''
   }

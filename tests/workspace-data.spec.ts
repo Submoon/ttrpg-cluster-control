@@ -283,6 +283,7 @@ test('custom field category and subtype scopes are united on independent system 
   await page.getByLabel('Campaign notes').fill('Remote survey.')
   await saveMapObject(page)
   await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
 
   const definitionDialog = await openFieldDefinitionDialog(page)
@@ -299,6 +300,7 @@ test('custom field category and subtype scopes are united on independent system 
   const sourcePlanet = sourceSystem.objects.find(object => object.name === 'Iria')!
   const remoteSystem = sourceExport.cluster!.systems.find(system => system.name === 'New System 2')!
   const remotePlanet = remoteSystem.objects.find(object => object.name === 'Aster')!
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const systemExport = await downloadJson(page, 'Export star system JSON')
   const exportedField = systemExport.objectFieldSettings.customFields
@@ -359,6 +361,7 @@ test('custom field category and subtype scopes are united on independent system 
   expect(importedPlanet.customFieldValues?.[importedField.id]).toBe('Planet survey.')
 
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).last().click()
   const importedHierarchy = await openWorkspaceHierarchy(page)
   await importedHierarchy.getByRole('button', { name: /Iria/ }).click()
@@ -377,6 +380,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await returnToClusterMap(page)
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await expect(page.getByRole('button', { name: 'Delete Vesper system' })).toBeDisabled()
+  await setWorkspaceMapMode(page, 'Navigate')
   await page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
     .getByRole('button', { name: 'Open Vesper system map' })
     .click()
@@ -475,6 +479,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await expect(restoredClusterMap.getByRole('button', { name: /Jump Level 1/ })).toBeVisible()
 
+  await setWorkspaceMapMode(page, 'Navigate')
   await restoredClusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
   await page.getByRole('button', { name: 'Delete Iria' }).click()
@@ -493,6 +498,7 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await returnToClusterMap(page)
   const reloadedClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await expect(reloadedClusterMap.getByRole('button', { name: /Jump Level 1/ })).toHaveCount(0)
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(reloadedClusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
   const reloadedClusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await reloadedClusterHierarchy.getByRole('button', { name: 'Delete New System 2 system' }).click()
@@ -685,6 +691,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   expect(updatedClusterExport).not.toHaveProperty('selectedSystemId')
   expect(updatedClusterExport).not.toHaveProperty('selectedObjectId')
 
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await hierarchy.getByRole('button', { name: /Iria/ }).click()
   await workspaceZoomControls(page).getByRole('button', { name: 'Zoom in' }).click()
@@ -1145,6 +1152,7 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
 
   await returnToClusterMap(page)
   const clusterNavigation = workspaceZoomControls(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   const harrowNode = clusterMap.getByRole('button', { name: 'Open Harrow system map' })
   await harrowNode.focus()
   await harrowNode.press('Enter')
@@ -1200,6 +1208,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   const stagingDeletionSummary = await stagingDeletionReview.innerText()
   expect(stagingDeletionSummary).toContain('Campaign staging')
   await resolveDeletionReview(stagingDeletionReview, 'confirm')
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: 'Open Campaign staging system map' })).toHaveCount(0)
   await page.reload()
   await returnToClusterMap(page)
@@ -1389,6 +1398,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   expect(clusterPng.height).toBe(clusterSvgInfo.height)
 
   await clusterNavigation.getByRole('button', { name: 'Fit map' }).click()
+  await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: `Open ${systemName} system map` }).first().click()
   const activeSystemMap = page.getByRole('group', { name: `${systemName} star system map` })
   const activeSystemNavigation = workspaceZoomControls(page)
@@ -1413,6 +1423,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
     ?.customFieldValues?.[existingField.id]).toBe('Existing campaign record.')
 
   await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   const importedClusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteImportedSystem = importedClusterHierarchy.getByRole('button', { name: 'Delete Far Vesper system' })
   await deleteImportedSystem.click()
@@ -1449,6 +1460,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   page.off('console', captureClusterPositionConsoleError)
   await page.reload()
   await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(0)
   await expect(clusterMap.getByRole('button', { name: /Jump Level 1/ })).toBeVisible()
   const finalExport = await downloadJson(page, 'Export Jump Cluster JSON')

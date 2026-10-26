@@ -177,8 +177,8 @@ const emit = defineEmits<{
 }>()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [
-  { value: 'navigate', label: 'Navigate' },
   { value: 'select', label: 'Select' },
+  { value: 'navigate', label: 'Navigate' },
   { value: 'move', label: 'Move' },
 ]
 const addActive = computed(() => !!(props.creationSession || props.clusterAddLabel))

@@ -441,10 +441,15 @@ export async function addClusterSystem(
   options: { open?: boolean; position?: WorldPoint } = {},
 ): Promise<string | undefined> {
   const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
-  const existingSystemActions = clusterMap.getByRole('button', { name: /^Open .* system map$/ })
-  const existingLabels = await Promise.all(
-    (await existingSystemActions.all()).map(button => button.getAttribute('aria-label')),
-  )
+  const existingSystemNames = options.open
+    ? await Promise.all((await clusterMap.locator('.cluster-system-node').all()).map(async button => {
+      const label = await button.getAttribute('aria-label')
+      const match = label?.match(/^(?:Select (.+) system|Open (.+) system map)$/)
+      const systemName = match?.[1] ?? match?.[2]
+      if (!systemName) throw new Error(`Could not read a system name from "${label}".`)
+      return systemName
+    }))
+    : []
 
   await clickDockAction(page, 'Add star system')
 
@@ -462,13 +467,15 @@ export async function addClusterSystem(
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap).toBeVisible()
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(existingSystemActions).toHaveCount(existingLabels.length + 1)
+  const existingSystemActions = clusterMap.getByRole('button', { name: /^Open .* system map$/ })
+  await expect(existingSystemActions).toHaveCount(existingSystemNames.length + 1)
   const currentSystemActions = await existingSystemActions.all()
   let createdAction: import('@playwright/test').Locator | undefined
   let createdLabel: string | null = null
   for (const action of currentSystemActions) {
     const label = await action.getAttribute('aria-label')
-    if (label && !existingLabels.includes(label)) {
+    const systemName = label?.match(/^Open (.+) system map$/)?.[1]
+    if (systemName && !existingSystemNames.includes(systemName)) {
       createdAction = action
       createdLabel = label
       break
@@ -1002,7 +1009,7 @@ async function defaultOrbitCreationTarget(
 export async function quitSystemAdd(page: import('@playwright/test').Page): Promise<void> {
   await dismissAddChooser(page)
   const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-  const quit = context.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })
+  const quit = context.getByRole('button', { name: 'Quit Add and return to Select', exact: true })
   await expect(quit).toBeVisible()
   await quit.click()
 }

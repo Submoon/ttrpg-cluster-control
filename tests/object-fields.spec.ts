@@ -337,6 +337,7 @@ test('the Warden can configure native and reusable custom object fields', async 
 
   await returnToClusterMap(page)
   const restoredClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await setWorkspaceMapMode(page, 'Navigate')
   await restoredClusterMap.getByRole('button', { name: 'Open New System 2 system map' }).click()
   const secondSystemHierarchy = await openWorkspaceHierarchy(page)
   await secondSystemHierarchy.getByRole('button', { name: /New planet 1/ }).click()

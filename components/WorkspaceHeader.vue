@@ -3,7 +3,6 @@
     <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
       <span class="workspace-header-mark" aria-hidden="true">✦</span>
       <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
-      <span class="workspace-header-local">LOCAL ONLY</span>
     </div>
 
     <section v-if="workspace" class="workspace-header-cluster" aria-label="Current Jump Cluster">
@@ -84,18 +83,11 @@ const colorMode = useColorMode()
   letter-spacing: 0.015em;
 }
 
-.workspace-header-local,
 .workspace-header-eyebrow {
   color: var(--text-muted);
   font: 0.625rem Consolas, monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-
-.workspace-header-local {
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0.18rem 0.28rem;
 }
 
 .workspace-header-cluster {
@@ -148,7 +140,6 @@ const colorMode = useColorMode()
     flex: 1 1 auto;
   }
 
-  .workspace-header-local,
   .workspace-header-theme-status {
     display: none;
   }

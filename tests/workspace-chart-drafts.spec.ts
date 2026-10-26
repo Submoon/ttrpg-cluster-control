@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput } from './helpers'
+import { activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   createJumpRoute,
@@ -450,6 +450,7 @@ test('adding a system preserves a dirty chart-name draft while committing the sy
   await expect(dialog).toBeHidden()
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
 
   const persisted = await readCurrentWorkspace(page)
@@ -886,6 +887,7 @@ test('system deletion resolves its chart target after review and asks again for 
   await resolveDeletionReview(refreshedReview, 'confirm')
 
   await expect(hierarchy.getByRole('button', { name: 'Delete Current System 2 system' })).toHaveCount(0)
+  await setWorkspaceMapMode(page, 'Navigate')
   await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
     .getByRole('button', { name: 'Open Current System 2 system map' })).toHaveCount(0)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
@@ -1093,6 +1095,7 @@ for (const decision of ['apply', 'discard'] as const) {
       await expect(dialog).toBeHidden()
       const importedClusterMap = page.getByRole('group', { name: `${expectedClusterName} Jump Cluster map` })
       await expect(importedClusterMap).toBeVisible()
+      await setWorkspaceMapMode(page, 'Navigate')
       await expect(importedClusterMap.getByRole('button', { name: 'Open Incoming Vesper system map' })).toBeVisible()
       await expect(page.getByRole('navigation', { name: 'Map context and commands' })
         .getByRole('heading', { name: expectedClusterName })).toBeVisible()

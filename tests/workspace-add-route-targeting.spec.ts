@@ -53,7 +53,7 @@ test('Add Jump Route deselects ordinary map modes and switching mode exits Add',
   await modeGroup.getByRole('button', { name: 'Select', exact: true }).click()
   await expect(modeGroup.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(addButton).toHaveAttribute('aria-pressed', 'false')
-  await expect(mapContext.getByRole('button', { name: 'Quit Add and return to Navigate', exact: true })).toHaveCount(0)
+  await expect(mapContext.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
   await expect(mapContext.getByRole('status').filter({ hasText: /ADD Jump Route/ })).toHaveCount(0)
 })
 
