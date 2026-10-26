@@ -191,3 +191,38 @@ test('deleting an Orbit host prunes only its pending Add target and keeps the ot
   await page.getByRole('form', { name: 'Placement', exact: true }).getByRole('button', { name: 'Add', exact: true }).click()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ })).toBeVisible()
 })
+
+test('current-system deletion uses the review flow and protects the final system', async ({ page }) => {
+  const workspace = addStarSystem(createLocalWorkspace('Kestrel Reach', 'A'), 'B').workspace
+  await importWorkspaceSeed(page, workspace)
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  await setWorkspaceMapMode(page, 'Navigate')
+  await clusterMap.getByRole('button', { name: 'Open A system map', exact: true }).click()
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  const deleteCurrent = inspector.getByRole('button', { name: 'Delete A system', exact: true })
+  await expect(deleteCurrent).toBeVisible()
+  await deleteCurrent.click()
+  const review = deletionReviewDialog(page)
+  await expect(review).toContainText('A')
+  await resolveDeletionReview(review, 'cancel')
+  await expect(page.getByRole('group', { name: 'A star system map', exact: true })).toBeVisible()
+
+  await deleteCurrent.click()
+  await resolveDeletionReview(review, 'confirm')
+  await expect(page.getByRole('group', { name: 'A star system map', exact: true })).toHaveCount(0)
+})
+
+test('the current-system inspector disables deletion of the final system', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('A')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector.getByRole('button', { name: 'Delete A system', exact: true })).toBeDisabled()
+  await expect(inspector.getByText('A Jump Cluster must keep at least one star system.', { exact: true })).toBeVisible()
+})

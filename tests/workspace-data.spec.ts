@@ -378,8 +378,8 @@ test('the Warden can review and safely confirm dependent map deletions', async (
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await returnToClusterMap(page)
-  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await expect(page.getByRole('button', { name: 'Delete Vesper system' })).toBeDisabled()
+  const initialHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await expect(initialHierarchy.getByRole('button', { name: 'Delete Vesper system', exact: true })).toBeDisabled()
   await setWorkspaceMapMode(page, 'Navigate')
   await page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
     .getByRole('button', { name: 'Open Vesper system map' })

@@ -27,11 +27,20 @@
     </p>
 
     <template #footer>
-      <div class="chart-details-actions grid gap-2">
-        <UButton block class="w-full justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
+      <div class="chart-details-actions grid gap-2" :class="{ 'chart-details-actions--system': props.allowOpenSystem && props.mode === 'system' && props.selectedSystem }">
+        <UButton block class="w-full min-w-0 justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
           {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
         </UButton>
-        <span v-if="props.hasChartNameDraft" class="save-feedback text-center text-sm" role="status">
+        <UButton
+          v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
+          block
+          class="w-full min-w-0 justify-center"
+          color="primary"
+          @click="emit('open-system', props.selectedSystem.id)"
+        >
+          Open system
+        </UButton>
+        <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-center text-sm" role="status">
           Chart-name editing session
         </span>
       </div>
@@ -64,6 +73,21 @@
     <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">
       {{ props.editorError }}
     </p>
+    <div v-if="props.mode === 'system' && props.selectedSystem" class="chart-details-system-delete">
+      <p v-if="props.workspace.cluster.systems.length <= 1" id="chart-details-system-delete-restriction" class="inspector-intro m-0" role="status">
+        A Jump Cluster must keep at least one star system.
+      </p>
+      <UButton
+        color="error"
+        variant="outline"
+        :disabled="props.saving || props.workspace.cluster.systems.length <= 1"
+        :aria-label="`Delete ${props.selectedSystem.name} system`"
+        :aria-describedby="props.workspace.cluster.systems.length <= 1 ? 'chart-details-system-delete-restriction' : undefined"
+        @click="emit('delete-system', props.selectedSystem.id)"
+      >
+        Delete system…
+      </UButton>
+    </div>
   </UCard>
 </template>
 
@@ -84,10 +108,14 @@ const props = defineProps<{
   selectedSystem?: StarSystem
   hasChartNameDraft: boolean
   editorError?: string
+  saving: boolean
+  allowOpenSystem?: boolean
 }>()
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
+  'open-system': [systemId: string]
+  'delete-system': [systemId: string]
 }>()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
@@ -97,4 +125,15 @@ const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cl
 
 <style scoped>
 .chart-details-card-heading { min-width: 0; }
+.chart-details-actions--system { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chart-details-draft-status { grid-column: 1 / -1; }
+.chart-details-system-delete {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.75rem;
+}
 </style>

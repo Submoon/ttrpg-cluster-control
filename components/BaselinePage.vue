@@ -396,6 +396,8 @@
               :save-error="saveError"
               :export-error="exportError"
               @edit-chart-names="beginChartNamesEdit"
+              @open-system="selectSystem"
+              @delete-system="deleteSystem"
               @show-chart-details="showChartDetails"
               @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"

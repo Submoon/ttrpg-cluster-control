@@ -28,6 +28,8 @@
         :editor-error="props.editorError"
         :session="props.routeSession"
         @edit-chart-names="emit('edit-chart-names', $event)"
+        @open-system="emit('open-system', $event)"
+        @delete-system="emit('delete-system', $event)"
         @show-chart-details="emit('show-chart-details')"
         @request-route-edit="emit('request-route-edit', $event)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
@@ -105,7 +107,9 @@
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
           :has-chart-name-draft="props.hasChartNameDraft"
-          @edit-chart-names="emit('edit-chart-names', props.selectedSystem.id)"
+          :saving="props.saving"
+          @edit-chart-names="emit('edit-chart-names', $event)"
+          @delete-system="emit('delete-system', $event)"
         />
       </div>
     </div>
@@ -161,6 +165,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
+  'open-system': [systemId: string]
+  'delete-system': [systemId: string]
   'show-chart-details': []
   hide: []
   'request-object-edit': []

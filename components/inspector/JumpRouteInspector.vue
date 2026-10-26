@@ -30,7 +30,7 @@
         </p>
         <div class="jump-route-delete">
           <UButton
-            color="neutral"
+            color="error"
             variant="outline"
             :disabled="props.saving"
             :aria-label="`Delete Jump Route (Level ${selectedRoute.jumpLevel})`"
@@ -53,9 +53,13 @@
     mode="system"
     :workspace="props.workspace"
     :selected-system="props.inspectedSystem"
+    :allow-open-system="true"
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
-    @edit-chart-names="emit('edit-chart-names', props.inspectedSystem?.id)"
+    :saving="props.saving"
+    @edit-chart-names="emit('edit-chart-names', $event)"
+    @open-system="emit('open-system', $event)"
+    @delete-system="emit('delete-system', $event)"
   />
 
   <section v-else-if="props.session" class="route-session-inspector" aria-label="Jump Route editor">
@@ -188,6 +192,7 @@
     :workspace="props.workspace"
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
+    :saving="props.saving"
     @edit-chart-names="emit('edit-chart-names')"
   />
 </template>
@@ -222,6 +227,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
+  'open-system': [systemId: string]
+  'delete-system': [systemId: string]
   'show-chart-details': []
   'request-route-edit': [routeId: string]
   'delete-route': []
