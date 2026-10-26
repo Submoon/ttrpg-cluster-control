@@ -544,13 +544,26 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     await installOneCurrentWriteFailure(page)
     let appliedMemory: Awaited<ReturnType<typeof exportSystemJson>> | undefined
     try {
-      await beginDragToWorldPoint(page, map, centerHandle, hostPoint)
+      const retryStart = await pointAtCenter(centerHandle)
+      const retryDestination = await map.evaluate((element, worldPoint) => {
+        const content = element.querySelector<SVGGElement>('.system-map-content')
+        const transform = content?.getScreenCTM()
+        if (!transform) throw new Error('The system map content is not attached to the document.')
+        const screenPoint = new DOMPoint(worldPoint.x, worldPoint.y).matrixTransform(transform)
+        return { x: screenPoint.x, y: screenPoint.y }
+      }, hostPoint)
+      await dispatchTouch(cdp, 'touchStart', [retryStart])
+      await dispatchTouch(cdp, 'touchMove', [{
+        ...retryStart,
+        x: retryDestination.x,
+        y: retryDestination.y,
+      }])
       await expect(centerHandle).toHaveClass(/is-moving/)
       await expect.poll(async () => Number(await ring.getAttribute('cx')))
         .toBeCloseTo(hostPoint.x, 0)
       await expect(ring).toHaveAttribute('rx', '39')
       await expect(ring).toHaveAttribute('ry', '60')
-      await page.mouse.up()
+      await dispatchTouch(cdp, 'touchEnd', [])
 
       const attachedOrbitMark = map.locator(`.orbit-mark[data-orbit-id="${originalOrbitId}"]`)
       const hostedRing = attachedOrbitMark.locator('.orbit-ring')

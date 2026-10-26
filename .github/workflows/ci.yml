@@ -15,8 +15,20 @@ concurrency:
 
 jobs:
   quality:
+    name: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      matrix:
+        playwright_version: ['1.64.0']
+    container:
+      image: mcr.microsoft.com/playwright:v${{ matrix.playwright_version }}-noble
+      options: --init --ipc=host
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
 
     steps:
       - uses: actions/checkout@v7
@@ -27,10 +39,16 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - name: Verify Playwright package matches browser image
+        run: |
+          installed_version="$(node -p 'require("@playwright/test/package.json").version')"
+          if [[ "$installed_version" != "$PLAYWRIGHT_IMAGE_VERSION" ]]; then
+            echo "Playwright package $installed_version does not match browser image $PLAYWRIGHT_IMAGE_VERSION" >&2
+            exit 1
+          fi
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
       - run: npm test -- --reporter=github,html
 
       - name: Upload Playwright reports
