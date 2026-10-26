@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, campaignTest } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
@@ -25,22 +26,7 @@ type RouteWriteGateWindow = Window & {
   }
 }
 
-async function importCampaignWorkspace(page: import('@playwright/test').Page): Promise<void> {
-  await captureMapExportBlobs(page)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
-  await page.getByLabel('First star system').fill('Campaign staging')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-  const preview = importReviewDialog(page)
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('Jump Routes: 1')
-  await resolveImportReview(preview, 'confirm')
-  await returnToClusterMap(page)
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-}
+campaignTest.use({ campaignPreparation: 'prepared-snapshot' })
 
 test('Add Jump Route retains its origin through pan and zoom, then clears both endpoints after applying', async ({ page }) => {
   await captureMapExportBlobs(page)
@@ -117,8 +103,7 @@ test('Add Jump Route retains its origin through pan and zoom, then clears both e
   }))
 })
 
-test('invalid route edits focus the validation summary and Stay preserves the edit context', async ({ page }) => {
-  await importCampaignWorkspace(page)
+campaignTest('invalid route edits focus the validation summary and Stay preserves the edit context', async ({ campaignWorkspacePage: page }) => {
   await setWorkspaceMapMode(page, 'Select')
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
@@ -187,20 +172,7 @@ test('route staging survives view gestures and unrelated deletion, while Quit st
     'campaign-baseline-unrelated-system': { x: 0.92, y: 0.78 },
   } as typeof stagingFixture.layout.systemPositions
 
-  await captureMapExportBlobs(page)
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
-  await page.getByLabel('First star system').fill('Campaign staging')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await setJsonFile(jsonMapImportInput(page), 'campaign-route-staging.json', JSON.stringify(stagingFixture))
-  const preview = importReviewDialog(page)
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('Jump Routes: 1')
-  await resolveImportReview(preview, 'confirm')
-  await returnToClusterMap(page)
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const originalExport = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -310,8 +282,7 @@ test('route staging survives view gestures and unrelated deletion, while Quit st
   expect(afterQuit.cluster?.routes).toEqual(originalExport.cluster?.routes)
 })
 
-test('a failed route save keeps the applied route and Retry persists it once', async ({ page }) => {
-  await importCampaignWorkspace(page)
+campaignTest('a failed route save keeps the applied route and Retry persists it once', async ({ campaignWorkspacePage: page }) => {
   const initialExport = await downloadJson(page, 'Export Jump Cluster JSON')
   const originPointId = initialExport.cluster?.systems
     .flatMap(system => system.objects)

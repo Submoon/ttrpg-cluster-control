@@ -10,15 +10,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: quality
+  checks:
+    name: checks (${{ matrix.playwright_version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         playwright_version: ['1.64.0']
     container:
@@ -29,35 +30,182 @@ jobs:
         shell: bash
     env:
       PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
-
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
-      - run: npm ci
-      - name: Verify Playwright package matches browser image
-        run: |
-          installed_version="$(node -p 'require("@playwright/test/package.json").version')"
-          if [[ "$installed_version" != "$PLAYWRIGHT_IMAGE_VERSION" ]]; then
-            echo "Playwright package $installed_version does not match browser image $PLAYWRIGHT_IMAGE_VERSION" >&2
-            exit 1
-          fi
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run build
-      - run: npm test -- --reporter=github,html
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Upload Playwright reports
+      - name: Verify Playwright image and package versions match
+        run: |
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; const { version } = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')); if (version !== process.env.PLAYWRIGHT_IMAGE_VERSION) { console.error('Playwright image/package mismatch:', process.env.PLAYWRIGHT_IMAGE_VERSION, version); process.exit(1); } console.log('Playwright image and package version:', version);"
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Run pure and development-storage tests
+        env:
+          PLAYWRIGHT_SUITE: checks
+        run: npm test -- --reporter=github,html
+
+      - name: Upload checks Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-reports
+          name: playwright-checks-${{ matrix.playwright_version }}
           path: |
             playwright-report/
             test-results/
-          retention-days: 7
           if-no-files-found: ignore
+          retention-days: 7
+
+  resolve-preview:
+    name: resolve Vercel preview
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: read
+    outputs:
+      deployment_id: ${{ steps.preview.outputs.deployment_id }}
+      deployment_sha: ${{ steps.preview.outputs.sha }}
+      preview_url: ${{ steps.preview.outputs.preview_url }}
+    steps:
+      - name: Check out resolver
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Resolve successful Vercel Preview for the exact PR head
+        id: preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VERCEL_PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          VERCEL_PREVIEW_TIMEOUT_MS: 600000
+        run: node scripts/ci/vercel-preview.mjs
+
+  browser-e2e:
+    name: browser-e2e (${{ matrix.playwright_version }}, shard ${{ matrix.shard }}/2)
+    needs: [checks, resolve-preview]
+    if: >-
+      always() && needs.checks.result == 'success' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.resolve-preview.result == 'success') ||
+      ((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository) && needs.resolve-preview.result == 'skipped'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        playwright_version: ['1.64.0']
+        shard: [1, 2]
+    container:
+      image: mcr.microsoft.com/playwright:v${{ matrix.playwright_version }}-noble
+      options: --init --ipc=host
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
+    steps:
+      - name: Check out PR head or current ref
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Playwright image and package versions match
+        run: |
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; const { version } = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')); if (version !== process.env.PLAYWRIGHT_IMAGE_VERSION) { console.error('Playwright image/package mismatch:', process.env.PLAYWRIGHT_IMAGE_VERSION, version); process.exit(1); } console.log('Playwright image and package version:', version);"
+
+      - name: Run browser tests against the exact Vercel Preview
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          PLAYWRIGHT_SUITE: browser
+          PLAYWRIGHT_PRODUCTION_URL: ${{ needs.resolve-preview.outputs.preview_url }}
+          PLAYWRIGHT_BASE_URL: ${{ needs.resolve-preview.outputs.preview_url }}
+          PLAYWRIGHT_SHARD: ${{ matrix.shard }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm test -- --reporter=github,html --shard=${{ matrix.shard }}/2
+
+      - name: Run browser tests against a local development server
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+        env:
+          PLAYWRIGHT_SUITE: browser
+          PLAYWRIGHT_SHARD: ${{ matrix.shard }}
+        run: npm test -- --reporter=github,html --shard=${{ matrix.shard }}/2
+
+      - name: Upload browser shard report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-browser-${{ matrix.playwright_version }}-shard-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  quality:
+    name: quality (1.64.0)
+    if: always()
+    needs: [checks, resolve-preview, browser-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require checks, preview resolution when applicable, and both browser shards
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          PREVIEW_RESULT: ${{ needs.resolve-preview.result }}
+          BROWSER_RESULT: ${{ needs.browser-e2e.result }}
+          PREVIEW_REQUIRED: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        shell: bash
+        run: |
+          if [[ "$CHECKS_RESULT" != "success" ]]; then
+            echo "Checks job did not succeed: $CHECKS_RESULT"
+            exit 1
+          fi
+          if [[ "$PREVIEW_REQUIRED" == "true" && "$PREVIEW_RESULT" != "success" ]]; then
+            echo "Vercel Preview resolution did not succeed: $PREVIEW_RESULT"
+            exit 1
+          fi
+          if [[ "$PREVIEW_REQUIRED" != "true" && "$PREVIEW_RESULT" != "skipped" ]]; then
+            echo "Unexpected Vercel Preview job result: $PREVIEW_RESULT"
+            exit 1
+          fi
+          if [[ "$BROWSER_RESULT" != "success" ]]; then
+            echo "Browser E2E shards did not both succeed: $BROWSER_RESULT"
+            exit 1
+          fi
+          echo "Required CI checks passed."

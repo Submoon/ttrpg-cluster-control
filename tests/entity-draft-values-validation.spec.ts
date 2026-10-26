@@ -3,7 +3,7 @@ import { createLocalWorkspace } from '../domain/workspace'
 import { objectDraftValuesFor } from '../composables/editor-workflows/entity-draft-values'
 import { validateObjectDraft } from '../composables/editor-workflows/entity-draft-validation'
 
-test('draft projection includes current custom definitions and retained orphan values', () => {
+test('draft projection includes current custom definitions and retained orphan values @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const star = system.objects[0]!
@@ -37,7 +37,7 @@ test('draft projection includes current custom definitions and retained orphan v
   })
 })
 
-test('draft validation applies valid values and rejects non-finite system coordinates without mutation', () => {
+test('draft validation applies valid values and rejects non-finite system coordinates without mutation @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!

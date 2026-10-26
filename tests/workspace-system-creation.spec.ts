@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
 import { importReviewDialog, resolveImportReview } from './helpers'
 import {

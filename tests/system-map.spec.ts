@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'
 import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'

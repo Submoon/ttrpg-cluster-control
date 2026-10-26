@@ -1,35 +1,49 @@
 import { defineConfig, type ReporterDescription } from '@playwright/test'
 import process from 'node:process'
+import { validatePreviewUrl } from './scripts/ci/vercel-preview.mjs'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3100'
 const productionURL = process.env.PLAYWRIGHT_PRODUCTION_URL
+  ? validatePreviewUrl(process.env.PLAYWRIGHT_PRODUCTION_URL).toString()
+  : undefined
+const suite = process.env.PLAYWRIGHT_SUITE ?? 'all'
 const channel = process.env.PLAYWRIGHT_CHANNEL
-const storageOnlyCase = /a failed IndexedDB save preserves current and backup snapshots$/
 const browserOptions = channel ? { channel } : {}
 const jsonOutputName = process.env.PLAYWRIGHT_JSON_OUTPUT_NAME
 const reporter: ReporterDescription[] | 'list' = jsonOutputName
   ? [['list'], ['json', { outputFile: jsonOutputName }]]
   : 'list'
 
-const projects = productionURL
-  ? [
-      {
-        name: 'compiled',
-        grepInvert: storageOnlyCase,
-        use: { ...browserOptions, baseURL: productionURL },
-      },
-      {
-        name: 'development-storage',
-        grep: storageOnlyCase,
-        use: { ...browserOptions, baseURL },
-      },
-    ]
-  : [
-      {
-        name: 'development',
-        use: { ...browserOptions, baseURL },
-      },
-    ]
+if (!['checks', 'browser', 'all'].includes(suite)) {
+  throw new Error('PLAYWRIGHT_SUITE must be checks, browser, or all.')
+}
+
+const checksProjects = [
+  {
+    name: 'pure',
+    grep: /@pure/,
+  },
+  {
+    name: 'development-storage',
+    grep: /@development-storage/,
+    use: { ...browserOptions, baseURL },
+  },
+]
+const browserProject = {
+  name: 'browser',
+  grepInvert: /@pure|@development-storage/,
+  use: { ...browserOptions, baseURL: productionURL ?? baseURL },
+}
+const allProjects = [
+  ...checksProjects,
+  browserProject,
+]
+const projects = suite === 'checks'
+  ? checksProjects
+  : suite === 'browser'
+    ? [browserProject]
+    : allProjects
+const needsLocalServer = suite !== 'browser' || !productionURL
 
 export default defineConfig({
   testDir: './tests',
@@ -38,7 +52,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   projects,
-  webServer: process.env.PLAYWRIGHT_BASE_URL
+  webServer: process.env.PLAYWRIGHT_BASE_URL || !needsLocalServer
     ? undefined
     : {
         command: 'npm run dev -- --host 127.0.0.1 --port 3100',

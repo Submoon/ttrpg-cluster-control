@@ -7,7 +7,7 @@ test.beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-test('accepted selections and map mode retain their distinct navigation meanings', () => {
+test('accepted selections and map mode retain their distinct navigation meanings @pure', () => {
   const store = useEditorUiStore()
 
   store.setSelection({
@@ -42,7 +42,7 @@ test('accepted selections and map mode retain their distinct navigation meanings
   })
 })
 
-test('panel actions preserve independent visibility and compact intent', () => {
+test('panel actions preserve independent visibility and compact intent @pure', () => {
   const store = useEditorUiStore()
 
   store.requestPanel('hierarchy')
@@ -60,7 +60,7 @@ test('panel actions preserve independent visibility and compact intent', () => {
   expect(store.compactPanel).toBeNull()
 })
 
-test('visit pruning normalizes saved selections and reset starts a fresh workspace lifetime', () => {
+test('visit pruning normalizes saved selections and reset starts a fresh workspace lifetime @pure', () => {
   const store = useEditorUiStore()
   const clusterVisit: MapVisitMemory = {
     viewport: { x: 120, y: -35, k: 1.7 },
@@ -98,7 +98,7 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.visits).toEqual({})
 })
 
-test('map visits retain a bounded recent history while protecting the active key', () => {
+test('map visits retain a bounded recent history while protecting the active key @pure', () => {
   const store = useEditorUiStore()
   const visit: MapVisitMemory = { viewport: { x: 0, y: 0, k: 1 }, selection: { kind: 'none' } }
   for (let index = 0; index < 25; index += 1) {
@@ -110,7 +110,7 @@ test('map visits retain a bounded recent history while protecting the active key
   expect(store.visits['system:cluster-a:system-1']).toBeUndefined()
 })
 
-test('separate Pinia instances keep workspace selections and visits isolated', () => {
+test('separate Pinia instances keep workspace selections and visits isolated @pure', () => {
   const first = useEditorUiStore(createPinia())
   const second = useEditorUiStore(createPinia())
   const firstVisit: MapVisitMemory = { viewport: { x: 4, y: 8, k: 1.2 }, selection: { kind: 'object', id: 'object-a' } }

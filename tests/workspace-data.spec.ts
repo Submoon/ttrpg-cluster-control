@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, addClusterSystem, readInspectorSelection, selectInspectorOption } from './helpers'
@@ -127,7 +127,7 @@ test('deleting a map object without dependents still asks for confirmation', asy
   await expect(primaryStar).toBeVisible()
 })
 
-test('older saved Jump Routes and circle/ellipse layouts restore and reject invalid levels', () => {
+test('older saved Jump Routes and circle/ellipse layouts restore and reject invalid levels @pure', () => {
   const savedWorkspace = {
     id: 'workspace',
     cluster: {
@@ -213,7 +213,7 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
   }
 })
 
-test('restoring a workspace removes legacy object targets without deleting values', () => {
+test('restoring a workspace removes legacy object targets without deleting values @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!

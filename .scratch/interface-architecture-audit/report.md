@@ -1,6 +1,6 @@
 # Editor architecture audit and implementation
 
-Date: 2026-10-26. Implementation and independent source reviews are complete; the current PR checks supply full-suite acceptance.
+Date: 2026-10-26. Architecture implementation and independent source reviews are complete. The integrated application passed the full CI suite; the CI follow-up below has separate acceptance evidence.
 
 ## Baseline and scope
 
@@ -41,3 +41,11 @@ SOL and Astra verified substantive ownership and interface changes. Their compac
 The first complete CI run passed 216/217, including the Linux Orbit case. The remaining test mixed a touch cancellation with an immediate mouse retry, making it sensitive to D3's post-touch mouse guard. It now retries with touch and preserves all failure/recovery assertions; all ten surrounding gesture cases pass locally. CI now uses the official Playwright image with an installed-package version guard: the previous setup spent 10m30 fetching Linux dependencies but approximately seven seconds fetching browser binaries. Independent review accepted both follow-up changes; current PR checks verify their runner execution.
 
 Physical Android keyboard behavior and screen-reader speech are outside the collected evidence. Unrelated `.codex/environments/` files are preserved.
+
+## CI follow-up
+
+Commit `c366660c6d085a43e9ff0371cfe4cc062949852c` passed [all 217 tests](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/40354008558), with no retries or skips. The job took 18m02, including 16m30 of tests; container preparation took 26 seconds. The CI follow-up intentionally starts from this feature commit and the same `origin/main` baseline (0 main-only / 65 feature-only).
+
+The follow-up separates 15 existing pure tests, one development-only storage regression and 201 public browser cases, adds 12 resolver/authentication contract checks, and divides the browser cases into two shards (104 and 97). SOL and Astra source reviews found no remaining material issues. The exact-SHA resolver also successfully selected the existing deployment through GitHub's real API. Three campaign route cases share an immutable, in-memory IndexedDB snapshot while retaining isolated contexts; the focused local comparison took 22.1s with repeated public imports and 18.8s with snapshot preparation, including worker setup. This small sample is indicative, not a prediction of total CI duration.
+
+Lint and typecheck pass. All 28 checks-partition cases and all seven affected route scenarios pass locally with the final fixtures; discovery finds 229 cases without duplication. The protected-preview browser run still requires the repository's `VERCEL_AUTOMATION_BYPASS_SECRET`; deployed authentication and final shard timings are not yet verified. [Verification guidance](../../docs/agents/testing.md) records the maintained setup and isolation contracts.

@@ -5,7 +5,7 @@ import {
   releaseD3MouseGestureOwner,
 } from '../components/maps/d3-mouse-gesture'
 
-test('releasing an inactive mouse-gesture owner leaves the newer gesture intact', () => {
+test('releasing an inactive mouse-gesture owner leaves the newer gesture intact @pure', () => {
   const view = {}
   const oldGesture = claimD3MouseGestureOwner(view)
   const activeGesture = claimD3MouseGestureOwner(view)

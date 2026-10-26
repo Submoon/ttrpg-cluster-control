@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures'
 import { activeWorkspaceFeedback, downloadJson, setWorkspaceMapMode, workspaceZoomOutput } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }

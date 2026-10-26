@@ -91,7 +91,7 @@ function expectUnchangedPositions(
   }
 }
 
-test('moving an object preserves effective angles for unaffected source and destination occupants', () => {
+test('moving an object preserves effective angles for unaffected source and destination occupants @pure', () => {
   const fixture = createPlacementFixture()
   const before = projectedPositions(fixture.workspace, fixture.system)
 
@@ -111,7 +111,7 @@ test('moving an object preserves effective angles for unaffected source and dest
   expect(fixture.workspace.layout.objectAngles['old-moon']).toBeUndefined()
 })
 
-test('moving between Orbits honors an explicit angle and keeps both sibling groups in place', () => {
+test('moving between Orbits honors an explicit angle and keeps both sibling groups in place @pure', () => {
   const fixture = createPlacementFixture()
   const before = projectedPositions(fixture.workspace, fixture.system)
   const chosenAngle = 1.15
@@ -135,7 +135,7 @@ test('moving between Orbits honors an explicit angle and keeps both sibling grou
     .toEqual({ kind: 'orbit', orbitId: fixture.destinationOrbitId })
 })
 
-test('metadata-only edits preserve layout without materializing default angles', () => {
+test('metadata-only edits preserve layout without materializing default angles @pure', () => {
   const fixture = createPlacementFixture()
 
   const after = updateWorkspaceObject(

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures'
 import entitySessionFixture from './fixtures/workspace-entity-sessions.json' with { type: 'json' }
 import { importReviewDialog, resolveImportReview } from './helpers'
 import {

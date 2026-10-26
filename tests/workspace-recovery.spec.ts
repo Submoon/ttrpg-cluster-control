@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
@@ -331,7 +331,7 @@ test('the recovery screen explains when no local backup is available', async ({ 
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
 })
 
-test('a failed IndexedDB save preserves current and backup snapshots', async ({ page }) => {
+test('a failed IndexedDB save preserves current and backup snapshots @development-storage', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')

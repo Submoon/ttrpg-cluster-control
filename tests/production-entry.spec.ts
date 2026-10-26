@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback } from './helpers'
 
 for (const variant of ['A', 'B', 'C', 'baseline'] as const) {

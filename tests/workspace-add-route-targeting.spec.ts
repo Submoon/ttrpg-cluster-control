@@ -1,43 +1,20 @@
-import { expect, test } from '@playwright/test'
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { expect, test, campaignTest } from './fixtures'
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
-  activeWorkspaceFeedback,
-  captureMapExportBlobs,
   clickDockAction,
   downloadJson,
-  jsonMapImportInput,
   readInspectorSelection,
-  returnToClusterMap,
   selectInspectorOption,
-  setJsonFile,
   workspaceNavigation,
-  workspaceZoomControls,
 } from './helpers'
 
-async function importCampaignWorkspace(
-  page: import('@playwright/test').Page,
-  fixture = campaignBaselineFixture,
-): Promise<void> {
-  await captureMapExportBlobs(page)
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
-  await page.getByLabel('First star system').fill('Campaign staging')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+campaignTest.use({
+  campaignViewport: { width: 1440, height: 960 },
+  campaignPreparation: 'prepared-snapshot',
+})
 
-  await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(fixture))
-  const preview = importReviewDialog(page)
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('Jump Routes: 1')
-  await resolveImportReview(preview, 'confirm')
-  await returnToClusterMap(page)
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-}
-
-test('Add Jump Route deselects ordinary map modes and switching mode exits Add', async ({ page }) => {
-  await importCampaignWorkspace(page)
+campaignTest('Add Jump Route deselects ordinary map modes and switching mode exits Add', async ({ campaignWorkspacePage: page }) => {
   const modeGroup = workspaceNavigation(page).getByRole('group', { name: 'Map interaction mode', exact: true })
   await modeGroup.getByRole('button', { name: 'Move', exact: true }).click()
 
@@ -69,7 +46,7 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
     name: 'Vesper Alternate',
   })
 
-  await importCampaignWorkspace(page, stagingFixture)
+  await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(before.cluster?.routes).toHaveLength(1)
   const originPointId = before.cluster?.systems.flatMap(system => system.objects)
@@ -146,7 +123,7 @@ test('Resetting either route endpoint returns that choice to map targeting and p
     name: 'Vesper Alternate',
   })
 
-  await importCampaignWorkspace(page, stagingFixture)
+  await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
   await clickDockAction(page, 'Add Jump Route')
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })

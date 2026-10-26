@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures'
 import { activeWorkspaceFeedback, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {

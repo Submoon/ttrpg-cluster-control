@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import {
   addCustomFieldDefinition,
   createLocalWorkspace,
@@ -39,7 +39,7 @@ function customValue(workspace: LocalWorkspace, objectId: string, fieldId: strin
   return object?.customFieldValues?.[fieldId]
 }
 
-test('custom field values keep their type and hidden assignments remain valid', () => {
+test('custom field values keep their type and hidden assignments remain valid @pure', () => {
   let workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const { workspace: withPlanet, object: planet } = addDomainObject(workspace, 'planet')
   const { workspace: withStation, object: station } = addDomainObject(withPlanet, 'station')
@@ -90,7 +90,7 @@ test('custom field values keep their type and hidden assignments remain valid', 
   expect(isCustomFieldValueCompatible('Mauve', 'single-select', ['Amber', 'Blue'])).toBe(false)
 })
 
-test('field type changes preserve compatible strings and clear incompatible values only with opt-in', () => {
+test('field type changes preserve compatible strings and clear incompatible values only with opt-in @pure', () => {
   let workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const { workspace: withPlanet, object: planet } = addDomainObject(workspace, 'planet')
   const { workspace: withStation, object: station } = addDomainObject(withPlanet, 'station')

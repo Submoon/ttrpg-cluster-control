@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures'
 
 async function createWorkspace(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 900 })

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'

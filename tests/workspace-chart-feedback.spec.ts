@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback, addCatalogueObject, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
 import { addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'

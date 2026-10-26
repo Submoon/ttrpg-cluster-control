@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   activeWorkspaceFeedback,
