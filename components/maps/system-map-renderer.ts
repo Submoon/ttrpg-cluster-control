@@ -2,6 +2,7 @@
  * D3 owns the system SVG scene and gestures; Vue receives selection and completed-edit actions through handlers.
  */
 import { drag, pointer, select, zoom, zoomTransform, type ZoomBehavior } from 'd3'
+import { captureD3MouseGesture, type D3MouseGestureDisposer } from './d3-mouse-gesture'
 import {
   catalogueTypes,
   minimumOrbitRadius,
@@ -265,6 +266,7 @@ export function renderSystemMap({
   const effectiveOrbitRadii = new Map(previewOrbitRadii)
   const effectiveOrbitRotations = new Map(previewOrbitRotations)
   const activeGestures = new Map<Element, () => void>()
+  const activeGestureDisposers = new Map<Element, D3MouseGestureDisposer>()
   const cancelledGestures = new WeakSet<Element>()
   const draftBlockedObjectGestures = new WeakSet<SVGGElement>()
   const draftBlockFeedbackShown = new WeakSet<SVGGElement>()
@@ -301,16 +303,30 @@ export function renderSystemMap({
     if (previewRotation !== undefined) effectiveOrbitRotations.set(orbitId, previewRotation)
     else effectiveOrbitRotations.delete(orbitId)
   }
-  function beginGesture(element: Element, rollback: () => void, cancelPlacementPreview = true): void {
+  function beginGesture(
+    element: Element,
+    rollback: () => void,
+    cancelPlacementPreview = true,
+    sourceEvent?: Event,
+  ): void {
+    // D3 installs the new window listeners before this callback; claim ownership first so an old
+    // gesture's cancellation cannot send its mouseup into the newly installed transport.
+    const mouseGesture = sourceEvent
+      ? captureD3MouseGesture(sourceEvent)
+      : { cancel: () => undefined, complete: () => undefined }
+    if (activeGestures.size) cancelActiveGesture()
     if (cancelPlacementPreview) {
       handlers.cancelObjectPlacementPreview()
       handlers.cancelOrbitPlacementPreview()
     }
     cancelledGestures.delete(element)
     activeGestures.set(element, rollback)
+    activeGestureDisposers.set(element, mouseGesture)
   }
   function finishGesture(element: Element): boolean {
+    activeGestureDisposers.get(element)?.complete()
     activeGestures.delete(element)
+    activeGestureDisposers.delete(element)
     const cancelled = cancelledGestures.has(element)
     if (cancelled) cancelledGestures.delete(element)
     return cancelled
@@ -319,8 +335,10 @@ export function renderSystemMap({
     for (const [element, rollback] of activeGestures) {
       cancelledGestures.add(element)
       rollback()
+      activeGestureDisposers.get(element)?.cancel()
     }
     activeGestures.clear()
+    activeGestureDisposers.clear()
     updateLiveGeometry()
   }
   function cancelGesture(element: Element): void {
@@ -329,6 +347,9 @@ export function renderSystemMap({
     cancelledGestures.add(element)
     activeGestures.delete(element)
     rollback()
+    // This dispatches D3's end callback synchronously; callers must snapshot needed drag data first.
+    activeGestureDisposers.get(element)?.cancel()
+    activeGestureDisposers.delete(element)
     updateLiveGeometry()
   }
   function setLivePosition(objectId: string, scenePoint: Point): void {
@@ -565,6 +586,11 @@ export function renderSystemMap({
 
   const svg = select(element)
   const currentTransform = zoomTransform(element)
+  const focusedElement = element.ownerDocument.activeElement
+  const sceneOwnedFocus = focusedElement instanceof Element && element.contains(focusedElement)
+  const focusedObjectId = sceneOwnedFocus
+    ? focusedElement.closest<SVGGElement>('.system-object[data-object-id]')?.getAttribute('data-object-id')
+    : null
   const focusedOrbitCenterId = element.querySelector<SVGElement>('.orbit-center-handle:focus')
     ?.getAttribute('data-orbit-id')
   const focusedOrbitId = element.querySelector<SVGElement>('.orbit-hit-target:focus')
@@ -1104,25 +1130,31 @@ export function renderSystemMap({
         movedObjects.delete(this)
         clearLivePosition(object.id)
         select(this).classed('is-dragging', false)
-      }, false)
+      }, false, event.sourceEvent)
       select(this).classed('is-dragging', true)
       const command = objectPlacementCommand(object, { x: event.x, y: event.y })
       if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
         draftBlockedObjectGestures.add(this)
         blockedObjectCommands.set(this, command)
-        cancelGesture(this)
       }
     })
     .on('drag', function (event, object) {
+      let becameBlocked = false
       if (!draftBlockedObjectGestures.has(this) && !cancelledGestures.has(this)) {
         const command = objectPlacementCommand(object, { x: event.x, y: event.y })
         if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
           draftBlockedObjectGestures.add(this)
           blockedObjectCommands.set(this, command)
+          becameBlocked = true
         }
       }
       if (draftBlockedObjectGestures.has(this)) {
-        cancelGesture(this)
+        // Once a mid-drag dependency becomes blocked, roll back its preview but retain D3's
+        // transport until the pointer crosses the established attempt threshold.
+        if (becameBlocked) {
+          activeGestures.get(this)?.()
+          updateLiveGeometry()
+        }
         const start = objectDragStartClient.get(this)
         const current = dragClientPoint(event.sourceEvent)
         if (start && current && !draftBlockFeedbackShown.has(this)
@@ -1131,6 +1163,7 @@ export function renderSystemMap({
           const blockedCommand = blockedObjectCommands.get(this)
           if (blockedCommand) handlers.entityCommandBlocked(blockedCommand)
           else handlers.objectMoveBlocked(object.id)
+          cancelGesture(this)
         }
         return
       }
@@ -1146,6 +1179,7 @@ export function renderSystemMap({
     .on('end', function (event, object) {
       draftBlockedObjectGestures.delete(this)
       draftBlockFeedbackShown.delete(this)
+      blockedObjectCommands.delete(this)
       objectDragStartClient.delete(this)
       if (finishGesture(this)) {
         select(this).classed('is-dragging', false)
@@ -1325,7 +1359,7 @@ export function renderSystemMap({
           orbitResizeGestures.delete(this)
           clearLiveOrbitRadii(orbit.id)
           select(this).classed('is-resizing', false)
-        })
+        }, true, event.sourceEvent)
         const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
         const handleAxis = this.getAttribute('data-resize-axis')
         const axis: OrbitResizeAxis = handleAxis === 'horizontal' || handleAxis === 'vertical'
@@ -1381,14 +1415,14 @@ export function renderSystemMap({
       .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
-      .on('start', function (_event, orbit) {
+      .on('start', function (event, orbit) {
         movedOrbitCenters.delete(this)
         beginGesture(this, () => {
           movedOrbitCenters.delete(this)
           clearLiveOrbitCenter(orbit.id)
           clearLiveOrbitRadii(orbit.id)
           select(this).classed('is-moving', false)
-        })
+        }, true, event.sourceEvent)
         select(this).classed('is-moving', true)
       })
       .on('drag', function (event, orbit) {
@@ -1463,7 +1497,7 @@ export function renderSystemMap({
           orbitRotationGestures.delete(this)
           clearLiveOrbitRotation(orbit.id)
           select(this).classed('is-rotating', false)
-        })
+        }, true, event.sourceEvent)
         const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
         orbitRotationGestures.set(this, {
           center,
@@ -1539,16 +1573,23 @@ export function renderSystemMap({
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())
   setZoomLevel(Math.round(currentTransform.k * 100))
-  if (focusedOrbitAxisId) {
-    orbitAxisHandles.filter(function (orbit) {
-      return orbit.id === focusedOrbitAxisId && this.getAttribute('data-resize-axis') === focusedOrbitAxisDirection
-    }).node()?.focus()
-  } else if (focusedOrbitRotationId) {
-    orbitRotationHandles.filter(orbit => orbit.id === focusedOrbitRotationId).node()?.focus()
-  } else if (focusedOrbitCenterId) {
-    orbitCenterHandles.filter(orbit => orbit.id === focusedOrbitCenterId).node()?.focus()
-  } else if (focusedOrbitId) {
-    orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
+  const activeAfterRedraw = element.ownerDocument.activeElement
+  const focusMayBeRestored = sceneOwnedFocus
+    && (activeAfterRedraw === element.ownerDocument.body || activeAfterRedraw === focusedElement)
+  if (focusMayBeRestored) {
+    if (focusedOrbitAxisId) {
+      orbitAxisHandles.filter(function (orbit) {
+        return orbit.id === focusedOrbitAxisId && this.getAttribute('data-resize-axis') === focusedOrbitAxisDirection
+      }).node()?.focus()
+    } else if (focusedOrbitRotationId) {
+      orbitRotationHandles.filter(orbit => orbit.id === focusedOrbitRotationId).node()?.focus()
+    } else if (focusedOrbitCenterId) {
+      orbitCenterHandles.filter(orbit => orbit.id === focusedOrbitCenterId).node()?.focus()
+    } else if (focusedOrbitId) {
+      orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
+    } else if (focusedObjectId) {
+      objectMarks.filter(object => object.id === focusedObjectId).node()?.focus()
+    }
   }
 
   return {

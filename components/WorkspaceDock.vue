@@ -6,11 +6,11 @@
           v-for="mode in modes"
           :key="mode.value"
           color="neutral"
-          :variant="!addActive && props.mode === mode.value ? 'solid' : 'outline'"
+          :variant="!addActive && store.mapMode === mode.value ? 'solid' : 'outline'"
           size="sm"
-          :aria-pressed="!addActive && props.mode === mode.value"
+          :aria-pressed="!addActive && store.mapMode === mode.value"
           class="workspace-control"
-          @click="emit('mode-change', mode.value)"
+          @click="commands.map.changeMode(mode.value)"
         >
           {{ mode.label }}
         </UButton>
@@ -108,6 +108,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { useEditorUiStore } from '../stores/editor-ui'
+import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type {
   ClusterSystemPositionInput,
   ClusterSystemPositionInputs,
@@ -123,8 +125,6 @@ import SystemObjectPlacementControls from './SystemObjectPlacementControls.vue'
 import SystemCreationControls from './SystemCreationControls.vue'
 
 const props = withDefaults(defineProps<{
-  mode: MapInteractionMode
-  closeSignal?: string
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
   clusterAddLabel?: string | null
@@ -143,7 +143,6 @@ const props = withDefaults(defineProps<{
   systemObjectMovePreview?: SystemObjectMovePreview | null
   systemObjectMoveError?: string
 }>(), {
-  closeSignal: '',
   creationSession: null,
   creationTypeLabel: 'object',
   systemObjectMoveAvailable: false,
@@ -159,7 +158,6 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'mode-change': [mode: MapInteractionMode]
   'update-creation-input': [key: keyof SystemCreationSession['inputs'], value: string]
   'add-from-inputs': []
   'choose-creation-candidate': [key: string]
@@ -175,6 +173,9 @@ const emit = defineEmits<{
   'confirm-system-object-move': [token: number]
   'cancel-system-object-move': []
 }>()
+
+const store = useEditorUiStore()
+const commands = useEditorCommands()
 
 const modes: Array<{ value: MapInteractionMode; label: string }> = [
   { value: 'select', label: 'Select' },
@@ -343,7 +344,15 @@ function removeAddDismissalAdapter(): void {
 onMounted(installAddDismissalAdapter)
 onBeforeUnmount(removeAddDismissalAdapter)
 
-watch(() => props.closeSignal, () => closeAdd())
+watch(() => [
+  store.activeView,
+  store.selectedSystemId,
+  store.clusterSelectedSystemId,
+  store.mapMode,
+  store.hierarchyPanelOpen,
+  store.inspectorPanelOpen,
+  store.compactPanel,
+], () => closeAdd())
 
 function closeAdd(): void {
   addOpen.value = false

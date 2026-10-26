@@ -11,6 +11,7 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import { defaultObjectOrbitAngle } from '../domain/workspace-placement'
 import type {
   SystemCreationCandidate,
   SystemCreationType,
@@ -331,7 +332,7 @@ export function objectPositions(
       const siblings = childrenByOrbit.get(orbit.id) ?? []
       const index = siblings.findIndex(candidate => candidate.id === object.id)
       const angle = geometry.objectAngles[object.id]
-        ?? -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
+        ?? defaultObjectOrbitAngle(index, siblings.length)
       point = orbitPointAtAngle(
         center,
         orbitRadii(system, orbit, geometry, overrides?.orbitRadii),

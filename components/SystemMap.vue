@@ -443,9 +443,11 @@ function getCreationCandidates(point: Point, type: SystemCreationType): SystemCr
 onMounted(() => {
   render()
   document.addEventListener('keydown', cancelActiveMapGestureOnEscape, true)
+  window.addEventListener('blur', cancelActiveGesture)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', cancelActiveMapGestureOnEscape, true)
+  window.removeEventListener('blur', cancelActiveGesture)
   cancelActiveGesture()
 })
 watch(() => props.system, () => render(), { deep: true })

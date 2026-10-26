@@ -1,41 +1,31 @@
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
-import { ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
+import { computed, ref, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
   defaultOrbitRadius,
   detachOrbit,
   minimumOrbitRadius,
-  moveOrbit,
   moveOrbitCenter,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
-  updateSystemObject,
+  updateWorkspaceObject,
   type LocalWorkspace,
-  type Orbit,
   type OrbitRadii,
   type Point,
-  type StarSystem,
-  type SystemObject,
 } from '../../domain/workspace'
 import type {
-  MapInspectorHandle,
   EntityCommand,
-  ObjectEditRequest,
-  OrbitEditRequest,
   SystemMapHandle,
   TransitionOptions,
 } from './types'
+import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface MapWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   commit: (nextWorkspace: LocalWorkspace) => Promise<void>
   applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
-  selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
-  selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
-  selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
-  mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   systemMapRef: ShallowRef<SystemMapHandle | null>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
@@ -45,7 +35,7 @@ interface MapWorkflowOptions {
 }
 
 /**
- * Builds system-map commands around the page publication and inspector draft-acknowledgement boundaries.
+ * Builds system-map commands around the page publication and parent-owned draft-session boundaries.
  * @param options Current selection refs, renderer handles, draft-transition resolver, and persistence callback.
  * @returns Map edit commands; rejected edits are exposed through editorError rather than thrown to the UI.
  */
@@ -53,10 +43,6 @@ export function useMapWorkflows({
   workspace,
   commit,
   applyWorkspace,
-  selectedSystem,
-  selectedObject,
-  selectedOrbit,
-  mapInspectorRef,
   systemMapRef,
   resolveTransition,
   beginObjectSession,
@@ -64,6 +50,10 @@ export function useMapWorkflows({
   isEntityCommandBlocked,
   editorError,
 }: MapWorkflowOptions) {
+  const store = useEditorUiStore()
+  const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
+  const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
+  const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
   const orbitAdjustmentNotice = ref('')
 
   function rejectBlockedEntityCommand(command: EntityCommand): boolean {
@@ -74,29 +64,6 @@ export function useMapWorkflows({
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
-  }
-
-  function materializeEffectiveAngles(system: StarSystem, orbitId: string, objectAngles: Record<string, number>): void {
-    const siblings = system.objects.filter(object =>
-      object.placement.kind === 'orbit' && object.placement.orbitId === orbitId,
-    )
-    siblings.forEach((object, index) => {
-      if (objectAngles[object.id] !== undefined) return
-      objectAngles[object.id] = -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
-    })
-  }
-
-  /**
-   * Replaces one system in the current workspace and waits for the page-owned durable commit.
-   * @param system Complete updated system.
-   * @throws If the workspace is unavailable, the system replacement is invalid, or persistence fails.
-   */
-  async function saveSystem(system: StarSystem): Promise<void> {
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace) {
-      throw new Error('Create a local workspace before editing a star system.')
-    }
-    await commit(replaceWorkspaceSystem(currentWorkspace, system))
   }
 
   /**
@@ -144,8 +111,7 @@ export function useMapWorkflows({
     const selectedSystemId = selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
-    const objectFieldSettings = currentWorkspace?.objectFieldSettings
-    if (!currentWorkspace || !system || !object || !objectFieldSettings) return
+    if (!currentWorkspace || !system || !object) return
     if (rejectBlockedEntityCommand({
       kind: 'object-placement',
       objectId,
@@ -157,21 +123,14 @@ export function useMapWorkflows({
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
         throw new Error('A map position must contain finite coordinates.')
       }
-      const objectAngles = { ...currentWorkspace.layout.objectAngles }
-      const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
-      if (fromOrbitId) materializeEffectiveAngles(system, fromOrbitId, objectAngles)
-      const workspaceWithAngles: LocalWorkspace = {
-        ...currentWorkspace,
-        layout: { ...currentWorkspace.layout, objectAngles },
-      }
-      const updatedSystem = updateSystemObject(system, object.id, {
+      const nextWorkspace = updateWorkspaceObject(currentWorkspace, system.id, object.id, {
         placement: {
           kind: 'system',
           x: position.x,
           y: position.y,
         },
-      }, objectFieldSettings)
-      await commit(replaceWorkspaceSystem(workspaceWithAngles, updatedSystem))
+      })
+      await commit(nextWorkspace)
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -191,8 +150,7 @@ export function useMapWorkflows({
     const selectedSystemId = selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
-    const objectFieldSettings = currentWorkspace?.objectFieldSettings
-    if (!currentWorkspace || !system || !object || !objectFieldSettings) return
+    if (!currentWorkspace || !system || !object) return
     if (rejectBlockedEntityCommand({
       kind: 'object-placement',
       objectId,
@@ -205,30 +163,10 @@ export function useMapWorkflows({
       if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
         throw new Error('Choose a valid Orbit for this object.')
       }
-      const objectAngles = { ...currentWorkspace.layout.objectAngles }
-      const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
-      if (fromOrbitId !== orbitId) {
-        if (fromOrbitId) materializeEffectiveAngles(system, fromOrbitId, objectAngles)
-        materializeEffectiveAngles(system, orbitId, objectAngles)
-      }
-      const workspaceWithAngles: LocalWorkspace = {
-        ...currentWorkspace,
-        layout: { ...currentWorkspace.layout, objectAngles },
-      }
-      const updatedSystem = updateSystemObject(system, object.id, {
+      const nextWorkspace = updateWorkspaceObject(currentWorkspace, system.id, object.id, {
         placement: { kind: 'orbit', orbitId },
-      }, objectFieldSettings)
-      const nextWorkspace = replaceWorkspaceSystem(workspaceWithAngles, updatedSystem)
-      await commit({
-        ...nextWorkspace,
-        layout: {
-          ...nextWorkspace.layout,
-          objectAngles: {
-            ...nextWorkspace.layout.objectAngles,
-            [objectId]: angle,
-          },
-        },
-      })
+      }, { angle })
+      await commit(nextWorkspace)
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -485,88 +423,6 @@ export function useMapWorkflows({
     editorError.value = ''
   }
 
-  /**
-   * Validates and commits the inspector's object candidate, acknowledging the draft only after success.
-   * @param request Object ID and proposed field changes.
-   * @returns A promise that resolves after the attempt; errors populate editorError and leave the draft active.
-   */
-  async function saveObjectEdit(request: ObjectEditRequest): Promise<void> {
-    const system = selectedSystem.value
-    const currentWorkspace = workspace.value
-    const object = system?.objects.find(candidate => candidate.id === request.objectId)
-    if (!system || !currentWorkspace || !object) return
-    if (rejectBlockedEntityCommand({ kind: 'object-placement', objectId: request.objectId })) return
-
-    try {
-      await saveSystem(updateSystemObject(
-        system,
-        object.id,
-        request.changes,
-        currentWorkspace.objectFieldSettings,
-      ))
-      mapInspectorRef.value?.objectSaveSucceeded()
-      editorError.value = ''
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
-  }
-
-  /**
-   * Applies sibling order, optional unoccupied center, and scene-unit radii from the Orbit draft.
-   * The inspector receives a save acknowledgement only after the workspace commit succeeds.
-   * @param request Orbit ID, target sibling order, radii, and optional normalized center.
-   * @returns A promise that resolves after the attempt; failures populate editorError and retain the draft.
-   */
-  async function saveOrbitEdit(request: OrbitEditRequest): Promise<void> {
-    const currentWorkspace = workspace.value
-    const system = selectedSystem.value
-    const orbit = system?.orbits.find(candidate => candidate.id === request.orbitId)
-    if (!currentWorkspace || !system || !orbit) return
-    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId: request.orbitId })) return
-
-    try {
-      let updatedSystem = system
-      let currentOrder = orbit.order
-      while (currentOrder !== request.targetOrder) {
-        const direction = currentOrder < request.targetOrder ? 1 : -1
-        updatedSystem = moveOrbit(updatedSystem, orbit.id, direction)
-        currentOrder += direction
-      }
-      if (request.center) {
-        updatedSystem = {
-          ...updatedSystem,
-          orbits: updatedSystem.orbits.map(candidate =>
-            candidate.id === orbit.id && candidate.hostId === null
-              ? { ...candidate, center: request.center! }
-              : candidate,
-          ),
-        }
-      }
-      const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
-      const orbitRadii = { ...nextWorkspace.layout.orbitRadii }
-      const defaultRadius = defaultOrbitRadius(system, orbit)
-      const savedRadii = currentWorkspace.layout.orbitRadii[orbit.id]
-        ?? { horizontal: defaultRadius, vertical: defaultRadius }
-      if (
-        savedRadii.horizontal !== request.radii.horizontal
-        || savedRadii.vertical !== request.radii.vertical
-      ) {
-        orbitRadii[orbit.id] = request.radii
-      }
-      await commit({
-        ...nextWorkspace,
-        layout: {
-          ...nextWorkspace.layout,
-          orbitRadii,
-        },
-      })
-      mapInspectorRef.value?.orbitSaveSucceeded()
-      editorError.value = ''
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
-  }
-
   return {
     orbitAdjustmentNotice,
     moveSystem,
@@ -579,7 +435,5 @@ export function useMapWorkflows({
     detachSelectedOrbit,
     beginObjectEdit,
     beginOrbitEdit,
-    saveObjectEdit,
-    saveOrbitEdit,
   }
 }

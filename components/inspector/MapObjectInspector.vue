@@ -320,7 +320,6 @@
 import { computed } from 'vue'
 import {
   canPlaceObjectInOrbit,
-  initialSystemPlacement,
   isCustomFieldApplicableToObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -328,6 +327,7 @@ import {
   type SystemObject,
 } from '../../domain/workspace'
 import type { EntityInspectorSession, ObjectDraft } from '../../composables/editor-workflows/types'
+import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-draft-values'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
@@ -353,6 +353,7 @@ const emit = defineEmits<{
   'open-field-definitions': []
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]
+  'update-object-placement': [sessionId: number, placement: string]
   'delete-object': []
   'clear-error': []
   hide: []
@@ -368,7 +369,8 @@ const objectSession = computed(() => {
   if (!session || session.kind !== 'object' || session.targetId !== selectedObject.value?.id) return null
   return session
 })
-const objectDraft = computed<ObjectDraft>(() => objectSession.value?.draft ?? readObjectValues(selectedObject.value))
+const objectDraft = computed<ObjectDraft>(() => objectSession.value?.draft
+  ?? objectDraftValuesFor(selectedObject.value, props.workspace.objectFieldSettings))
 const unsetSelectValue = '__entity_inspector_unset__'
 const selectValuePrefix = '__entity_inspector_option__:'
 const formId = computed(() => `object-inspector-form-${selectedObject.value?.id ?? 'current'}`)
@@ -421,26 +423,6 @@ const portClassChoices = computed<StoredSelectOption[]>(() => props.workspace.ob
 const portClassItems = computed(() => encodeSelectItems('native:portClass', portClassChoices.value))
 const portClassSelectValue = computed(() => encodeSelectedValue('native:portClass', portClassChoices.value, objectDraft.value.portClass))
 
-function readObjectValues(object: SystemObject | undefined): ObjectDraft {
-  const customFieldValues = Object.fromEntries(
-    Object.entries(object?.customFieldValues ?? {}).map(([fieldId, value]) => [fieldId, String(value)]),
-  )
-  for (const field of customFields.value) customFieldValues[field.id] ??= ''
-  return {
-    locationKey: object?.locationKey ?? '',
-    name: object?.name ?? '',
-    description: object?.description ?? '',
-    subtype: object?.subtype ?? '',
-    placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
-    x: object?.placement.kind === 'system' ? String(object.placement.x) : '',
-    y: object?.placement.kind === 'system' ? String(object.placement.y) : '',
-    atmosphere: object?.atmosphere ?? '',
-    portClass: object?.portClass ?? '',
-    jumpStationId: object?.jumpStationId ?? '',
-    customFieldValues,
-  }
-}
-
 function controlId(key: string): string {
   return `object-inspector-${encodeURIComponent(selectedObject.value?.id ?? 'current')}-${encodeURIComponent(key)}`
 }
@@ -464,16 +446,8 @@ function focusSummary(): void {
 
 function updatePlacement(value: string | number): void {
   const session = objectSession.value
-  const object = selectedObject.value
-  if (!session || !object) return
-  const nextPlacement = String(value)
-  const wasOrbitPlaced = session.draft.placement.startsWith('orbit:')
-  session.draft.placement = nextPlacement
-  if (wasOrbitPlaced && nextPlacement === 'system' && selectedSystem.value) {
-    const position = initialSystemPlacement(selectedSystem.value)
-    session.draft.x = String(position.x)
-    session.draft.y = String(position.y)
-  }
+  if (!session) return
+  emit('update-object-placement', session.id, String(value))
 }
 
 function customSelectChoices(field: CustomFieldDefinition): StoredSelectOption[] {
@@ -545,10 +519,6 @@ function discardObjectSession(): void {
   if (session) emit('discard-entity-session', session.id)
 }
 
-defineExpose({
-  hasUnsavedEdits: () => false,
-  isEditingObject: (objectId: string) => objectSession.value?.targetId === objectId,
-})
 </script>
 
 <style scoped>

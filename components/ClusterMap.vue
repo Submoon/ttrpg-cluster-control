@@ -26,6 +26,7 @@
  * D3 owns the SVG scene and gestures; Vue owns controls/events, with unscoped styles targeting D3-created nodes.
  */
 import { drag, pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
+import { captureD3MouseGesture, type D3MouseGestureDisposer } from './maps/d3-mouse-gesture'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -92,7 +93,7 @@ type ClusterTouchGesture =
 let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
-const activeSystemGestures = new Map<SVGGElement, () => void>()
+const activeSystemGestures = new Map<SVGGElement, { rollback: () => void; mouseGesture: D3MouseGestureDisposer }>()
 const cancelledSystemGestures = new WeakSet<SVGGElement>()
 let refreshLiveRouteGeometry: (() => void) | undefined
 let applyClusterSystemPositionPreview: ((systemId: string, position: Point | null) => void) | undefined
@@ -266,9 +267,10 @@ function endTouchNavigation(event: TouchEvent): void {
 function cancelActiveGesture(): void {
   touchGesture = null
   viewPan = null
-  for (const [node, rollback] of activeSystemGestures) {
+  for (const [node, gesture] of activeSystemGestures) {
     cancelledSystemGestures.add(node)
-    rollback()
+    gesture.rollback()
+    gesture.mouseGesture.cancel()
   }
   activeSystemGestures.clear()
   refreshLiveRouteGeometry?.()
@@ -342,6 +344,13 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
+  const focusedElement = element.ownerDocument.activeElement
+  const focusedSystemId = focusedElement instanceof Element && element.contains(focusedElement)
+    ? focusedElement.closest<SVGGElement>('.cluster-system-node[data-system-id]')?.getAttribute('data-system-id')
+    : null
+  const focusedRouteId = focusedElement instanceof Element && element.contains(focusedElement)
+    ? focusedElement.closest<SVGGElement>('.cluster-route[data-route-id]')?.getAttribute('data-route-id')
+    : null
   refreshLiveRouteGeometry = undefined
   applyClusterSystemPositionPreview = undefined
   cancelActiveGesture()
@@ -550,16 +559,23 @@ function render(): void {
     .clickDistance(6)
     .container(() => content.node()!)
     .subject((_event, system) => clusterSystemPosition(props.systemPositions, system.id))
-    .on('start', function (_event, system) {
+    .on('start', function (event, system) {
+      // D3 has already installed its next window listeners when start runs. Claim first so
+      // cancelling a stale drag cannot feed its mouseup into the replacement gesture.
+      const mouseGesture = captureD3MouseGesture(event.sourceEvent)
+      if (activeSystemGestures.size) cancelActiveGesture()
       if (liveSystemPositions.has(system.id)) emit('cancel-cluster-preview')
       movedSystems.delete(this)
       cancelledSystemGestures.delete(this)
       const committedPosition = clusterSystemPosition(props.systemPositions, system.id)
-      activeSystemGestures.set(this, () => {
-        movedSystems.delete(this)
-        liveSystemPositions.delete(system.id)
-        select(this).classed('is-dragging', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
-        refreshLiveRouteGeometry?.()
+      activeSystemGestures.set(this, {
+        rollback: () => {
+          movedSystems.delete(this)
+          liveSystemPositions.delete(system.id)
+          select(this).classed('is-dragging', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+          refreshLiveRouteGeometry?.()
+        },
+        mouseGesture,
       })
       select(this).classed('is-dragging', true)
     })
@@ -571,6 +587,7 @@ function render(): void {
       updateRouteGeometry()
     })
     .on('end', function (event, system) {
+      activeSystemGestures.get(this)?.mouseGesture.complete()
       activeSystemGestures.delete(this)
       select(this).classed('is-dragging', false)
       if (cancelledSystemGestures.has(this)) {
@@ -646,10 +663,21 @@ function render(): void {
   })
   content.attr('transform', currentTransform.toString())
   zoomLevel.value = Math.round(currentTransform.k * 100)
+
+  const focusMayBeRestored = focusedSystemId !== null || focusedRouteId !== null
+  const activeAfterRedraw = element.ownerDocument.activeElement
+  if (focusMayBeRestored && (activeAfterRedraw === element.ownerDocument.body || activeAfterRedraw === focusedElement)) {
+    if (focusedSystemId) systemMarks.filter(system => system.id === focusedSystemId).node()?.focus()
+    else if (focusedRouteId) routeMarks.filter(route => route.id === focusedRouteId).node()?.focus()
+  }
 }
 
-onMounted(render)
+onMounted(() => {
+  render()
+  window.addEventListener('blur', cancelActiveGesture)
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('blur', cancelActiveGesture)
   refreshLiveRouteGeometry = undefined
   applyClusterSystemPositionPreview = undefined
   cancelActiveGesture()

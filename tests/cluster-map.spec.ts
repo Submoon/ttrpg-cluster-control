@@ -236,6 +236,81 @@ test('the Jump Route line follows a system while it is being dragged', async ({ 
   await page.mouse.up()
 })
 
+test('keyboard system selection keeps focus on its logical cluster mark after redraw', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Select')
+
+  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const system = map.getByRole('button', { name: 'Select Vesper system' })
+  await system.focus()
+  await page.keyboard.press('Enter')
+
+  await expect(map.getByRole('button', { name: 'Select Vesper system' })).toBeFocused()
+})
+
+test('cluster blur cancels a replacement mouse drag and a later drag still works', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await returnToClusterMap(page)
+  await setWorkspaceMapMode(page, 'Move')
+
+  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const system = map.getByRole('button', { name: 'Select Vesper system' })
+  const bounds = await system.boundingBox()
+  if (!bounds) throw new Error('Could not find the system card for the cancellation test.')
+  const originalTransform = await system.getAttribute('transform')
+  const selectionStateBefore = await page.evaluate(() => ({
+    mozUserSelect: document.documentElement.style.getPropertyValue('-moz-user-select'),
+    hasSavedMozUserSelect: Object.hasOwn(document.documentElement, '__noselect'),
+  }))
+  const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 72, start.y + 36, { steps: 4 })
+  await expect.poll(() => system.getAttribute('transform')).not.toBe(originalTransform)
+
+  // A second mousedown replaces D3's window transport before its start callback runs.
+  // The first drag's cancellation must leave the replacement transport owned by the second drag.
+  await system.evaluate((element, point) => {
+    element.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      clientX: point.x,
+      clientY: point.y,
+      view: window,
+    }))
+  }, start)
+
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(system).toHaveAttribute('transform', originalTransform!)
+  const remainingD3DragResources = await page.evaluate(() => {
+    const d3Window = window as Window & { __on?: Array<{ type: string; name: string }> }
+    const listeners = (d3Window.__on ?? [])
+      .filter(listener => listener.name === 'drag'
+        && ['mousemove', 'mouseup', 'dragstart', 'selectstart'].includes(listener.type))
+      .map(listener => listener.type)
+    return {
+      listeners,
+      mozUserSelect: document.documentElement.style.getPropertyValue('-moz-user-select'),
+      hasSavedMozUserSelect: Object.hasOwn(document.documentElement, '__noselect'),
+    }
+  })
+  expect(remainingD3DragResources.listeners).toEqual([])
+  expect(remainingD3DragResources.mozUserSelect).toBe(selectionStateBefore.mozUserSelect)
+  expect(remainingD3DragResources.hasSavedMozUserSelect).toBe(selectionStateBefore.hasSavedMozUserSelect)
+
+  await page.mouse.up()
+  await dragBy(page, system.locator('.cluster-system-card'), { x: 36, y: 20 })
+  await expect(system).not.toHaveAttribute('transform', originalTransform!)
+})
+
 test('the Warden can connect Jump Points across a cluster and record an unresolved exit', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')

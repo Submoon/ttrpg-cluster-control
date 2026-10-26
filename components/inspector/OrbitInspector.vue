@@ -318,7 +318,6 @@ import {
   type StarSystem,
 } from '../../domain/workspace'
 import type { EntityInspectorSession, OrbitDraft, SaveState } from '../../composables/editor-workflows/types'
-import type { OrbitInspectorHandle } from './contracts'
 import { objectsMovedWithOrbit } from '../../utils/system-map-geometry'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
@@ -502,14 +501,6 @@ function discardOrbitSession(): void {
   if (session) emit('discard-entity-session', session.id)
 }
 
-const inspectorHandle = {
-  hasUnsavedEdits: () => false,
-  cancelEdits: () => undefined,
-  startOrbitEdit: () => emit('request-orbit-edit'),
-  orbitSaveSucceeded: () => undefined,
-} satisfies OrbitInspectorHandle
-
-defineExpose(inspectorHandle)
 </script>
 
 <style scoped>

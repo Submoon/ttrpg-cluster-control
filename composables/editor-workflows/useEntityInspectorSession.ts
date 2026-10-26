@@ -3,15 +3,14 @@
  */
 import { computed, ref, watch, type Ref } from 'vue'
 import {
-  canPlaceObjectInOrbit,
   defaultOrbitRadius,
+  initialSystemPlacement,
   isCustomFieldApplicableToObject,
   minimumOrbitRadius,
   moveOrbitCenter,
   normalizeOrbitRotation,
   planMapEntityDeletion,
   replaceWorkspaceSystem,
-  updateSystemObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
   type MapDeletionTarget,
@@ -26,12 +25,13 @@ import type {
   EntityCommand,
   EntityDependencyBaseline,
   EntityInspectorSession,
-  ObjectDraft,
   ObjectEditBaseline,
   OrbitCenterMoveCandidate,
   OrbitEditBaseline,
   OrbitPlacementPreview,
 } from './types'
+import { objectDraftValuesFor } from './entity-draft-values'
+import { parseFiniteInput, validateObjectDraft } from './entity-draft-validation'
 import { objectPositions, objectsMovedWithOrbit } from '../../utils/system-map-geometry'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 
@@ -74,34 +74,6 @@ function sameValue(left: unknown, right: unknown): boolean {
 
 function isPhysicalStation(object: SystemObject): boolean {
   return object.family === 'Installation' && object.subtype === 'station'
-}
-
-function objectDraftFor(object: SystemObject, settings: ObjectFieldSettings): ObjectDraft {
-  const placement = object.placement.kind === 'orbit'
-    ? `orbit:${object.placement.orbitId}`
-    : 'system'
-  const customFieldIds = new Set([
-    ...settings.customFields.map(field => field.id),
-    ...Object.keys(object.customFieldValues ?? {}),
-  ])
-  const customFieldValues = Object.fromEntries([...customFieldIds].map(fieldId => {
-    const value = object.customFieldValues?.[fieldId]
-    return [fieldId, value === undefined ? '' : String(value)]
-  }))
-
-  return {
-    locationKey: object.locationKey,
-    name: object.name,
-    description: object.description,
-    subtype: object.subtype,
-    placement,
-    x: object.placement.kind === 'system' ? String(object.placement.x) : '',
-    y: object.placement.kind === 'system' ? String(object.placement.y) : '',
-    atmosphere: object.atmosphere ?? '',
-    portClass: object.portClass ?? '',
-    jumpStationId: object.jumpStationId ?? '',
-    customFieldValues,
-  }
 }
 
 function effectiveOrbitRadii(workspace: LocalWorkspace, system: StarSystem, orbit: Orbit): OrbitRadii {
@@ -244,7 +216,7 @@ function captureObjectBaseline(
 
   return {
     object: clone(object),
-    values: clone(objectDraftFor(object, settings)),
+    values: clone(objectDraftValuesFor(object, settings)),
     dependencies: captureObjectPlacementDependencies(workspace, system, object),
     linkedStations: system.objects.filter(isPhysicalStation).map(station => ({
       id: station.id,
@@ -409,154 +381,6 @@ function deletionChangesOwnedDependencies(
     }
   }
   return false
-}
-
-function customValueForDraft(
-  value: string,
-  definition: CustomFieldDefinition,
-): { value: string | number | boolean } | { error: string } | null {
-  if (value === '') return null
-  if (definition.type === 'number') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? { value: parsed } : { error: `${definition.name} must be a finite number.` }
-  }
-  if (definition.type === 'boolean') {
-    if (value === 'true') return { value: true }
-    if (value === 'false') return { value: false }
-    return { error: `Choose Yes, No, or Not recorded for ${definition.name}.` }
-  }
-  if (definition.type === 'single-select' && !definition.options.includes(value)) {
-    return { error: `Choose an available ${definition.name} option.` }
-  }
-  return { value }
-}
-
-function parseFiniteInput(value: string, label: string, errors: Record<string, string>, key: string): number | null {
-  if (!value.trim()) {
-    errors[key] = `${label} is required.`
-    return null
-  }
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    errors[key] = `${label} must be a finite number.`
-    return null
-  }
-  return parsed
-}
-
-function resolveObjectDraft(
-  workspace: LocalWorkspace,
-  system: StarSystem,
-  object: SystemObject,
-  session: Extract<EntityInspectorSession, { kind: 'object' }>,
-): { object: SystemObject | null; errors: Record<string, string> } {
-  const errors: Record<string, string> = {}
-  const draft = session.draft
-  const initial = session.initial.values
-  const changes: Parameters<typeof updateSystemObject>[2] = {}
-  const locationKey = draft.locationKey.trim()
-  const name = draft.name.trim()
-  const subtype = draft.subtype.trim()
-  if (!locationKey) errors.locationKey = 'Location key is required.'
-  if (system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)) {
-    errors.locationKey = `Location key "${locationKey}" is already used in this star system.`
-  }
-  if (!name) errors.name = 'Object name is required.'
-  if (name.length > 80) errors.name = 'Object name must be 80 characters or fewer.'
-  if (!subtype) errors.subtype = 'Object type is required.'
-  if (object.family !== 'Other' && subtype !== object.subtype) {
-    errors.subtype = 'This catalogue type cannot be changed.'
-  }
-  if (locationKey !== initial.locationKey) changes.locationKey = locationKey
-  if (name !== initial.name) changes.name = name
-  if (draft.description !== initial.description) changes.description = draft.description
-  if (subtype !== initial.subtype) changes.subtype = subtype
-
-  if (draft.placement === 'system') {
-    const x = parseFiniteInput(draft.x, 'Schematic X', errors, 'x')
-    const y = parseFiniteInput(draft.y, 'Schematic Y', errors, 'y')
-    const wasSystemPlacement = object.placement.kind === 'system'
-    const placementChanged = draft.placement !== initial.placement
-      || (wasSystemPlacement && (
-        draft.x !== initial.x
-        || draft.y !== initial.y
-      ))
-    if (placementChanged && x !== null && y !== null) {
-      changes.placement = { kind: 'system', x, y }
-    }
-  } else {
-    const orbitId = parseOrbitPlacement(draft.placement)
-    if (!orbitId) {
-      errors.placement = 'Choose a valid map placement.'
-    } else if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
-      errors.placement = 'Choose an Orbit that does not create a circular relationship.'
-    } else if (draft.placement !== initial.placement) {
-      changes.placement = { kind: 'orbit', orbitId }
-    }
-  }
-
-  const jumpStationId = draft.jumpStationId
-  if (jumpStationId && !system.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
-    errors.jumpStationId = 'Choose an existing Physical Station.'
-  }
-  if (jumpStationId !== initial.jumpStationId) changes.jumpStationId = jumpStationId || null
-
-  const settings = workspace.objectFieldSettings
-  if (draft.atmosphere !== initial.atmosphere) {
-    if (draft.atmosphere && !settings.atmosphereOptions.includes(draft.atmosphere)) {
-      errors['native:atmosphere'] = 'Choose an available Atmosphere option.'
-    } else if (draft.atmosphere && (object.family !== 'CelestialBody' || (subtype !== 'planet' && subtype !== 'moon'))) {
-      errors['native:atmosphere'] = 'Atmosphere is only available for planets and moons.'
-    } else {
-      changes.atmosphere = draft.atmosphere || undefined
-    }
-  }
-  if (draft.portClass !== initial.portClass) {
-    if (draft.portClass && !settings.portClassOptions.includes(draft.portClass)) {
-      errors['native:portClass'] = 'Choose an available Port class option.'
-    } else if (draft.portClass && object.family !== 'Installation') {
-      errors['native:portClass'] = 'Port class is only available for Physical Stations and other installations.'
-    } else {
-      changes.portClass = draft.portClass || undefined
-    }
-  }
-
-  const customFieldValues = { ...(object.customFieldValues ?? {}) }
-  let customFieldValuesChanged = false
-  const definitionIds = new Set([
-    ...Object.keys(initial.customFieldValues),
-    ...Object.keys(draft.customFieldValues),
-  ])
-  for (const fieldId of definitionIds) {
-    const currentValue = draft.customFieldValues[fieldId] ?? ''
-    const originalValue = initial.customFieldValues[fieldId] ?? ''
-    if (currentValue === originalValue) continue
-    const definition = settings.customFields.find(field => field.id === fieldId)
-    if (!definition) {
-      errors[`custom:${fieldId}`] = 'This custom field definition is no longer available.'
-      continue
-    }
-    const parsed = customValueForDraft(currentValue, definition)
-    if (parsed && 'error' in parsed) {
-      errors[`custom:${fieldId}`] = parsed.error
-      continue
-    }
-    customFieldValuesChanged = true
-    if (parsed === null) delete customFieldValues[fieldId]
-    else customFieldValues[fieldId] = parsed.value
-  }
-  if (customFieldValuesChanged) changes.customFieldValues = customFieldValues
-
-  if (Object.keys(errors).length) return { object: null, errors }
-  try {
-    const updatedSystem = updateSystemObject(system, object.id, changes, settings)
-    return { object: updatedSystem.objects.find(candidate => candidate.id === object.id) ?? null, errors }
-  } catch (error) {
-    return {
-      object: null,
-      errors: { form: error instanceof Error ? error.message : String(error) },
-    }
-  }
 }
 
 export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityInspectorSessionOptions) {
@@ -783,6 +607,36 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       errors: {},
       error: '',
     }
+  }
+
+  /** Updates placement and its dependent free-position defaults only for the current object draft. */
+  function updateObjectPlacement(expectedId: number, placement: string): void {
+    const session = entitySession.value
+    if (!session || session.id !== expectedId || session.kind !== 'object') return
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
+    if (!system) return
+
+    const wasOrbitPlaced = session.draft.placement.startsWith('orbit:')
+    session.draft.placement = placement
+    if (wasOrbitPlaced && placement === 'system') {
+      if (session.initial.values.placement !== 'system') {
+        const position = initialSystemPlacement(system)
+        if (!session.draft.x.trim()) session.draft.x = String(position.x)
+        if (!session.draft.y.trim()) session.draft.y = String(position.y)
+      }
+    }
+
+    const errors = { ...session.errors }
+    delete errors.placement
+    if (placement !== 'system') {
+      delete errors.x
+      delete errors.y
+    } else if (wasOrbitPlaced) {
+      delete errors.x
+      delete errors.y
+    }
+    session.errors = errors
   }
 
   function beginOrbitSession(clusterId: string, systemId: string, orbitId: string): void {
@@ -1022,6 +876,10 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     draftDependencies = null
   }
 
+  /**
+   * Applies a validated draft snapshot to workspace memory and starts its ordered save.
+   * A true result means the writer accepted the snapshot; the durable acknowledgement is tracked separately.
+   */
   function applyEntitySession(expectedId?: number): boolean {
     const session = entitySession.value
     if (!session || (expectedId !== undefined && session.id !== expectedId)) return false
@@ -1056,17 +914,13 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
           session.error = 'The map object for this draft no longer exists.'
           return false
         }
-        const result = resolveObjectDraft(currentWorkspace, system, object, session)
+        const result = validateObjectDraft(currentWorkspace, system, object, session.initial.values, session.draft)
         session.errors = result.errors
-        if (!result.object) {
+        if (!result.workspace) {
           session.error = Object.values(result.errors).join(' ')
           return false
         }
-        const updatedSystem = {
-          ...system,
-          objects: system.objects.map(candidate => candidate.id === object.id ? result.object! : candidate),
-        }
-        nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
+        nextWorkspace = result.workspace
       } else {
         if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
           const preview = orbitPlacementPreview.value
@@ -1208,6 +1062,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     hasModifiedEntitySession,
     orbitPlacementPreview,
     beginObjectSession,
+    updateObjectPlacement,
     beginOrbitSession,
     offerOrbitCenterCandidates,
     updateOrbitHost,

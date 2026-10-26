@@ -10,6 +10,7 @@ import {
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
   quitSystemAdd,
+  selectCatalogueObjectButton,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
@@ -477,7 +478,7 @@ test('legacy Object and Orbit palette drags still add to the active map in every
     await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: mode }).click()
 
     const objectCount = await map.locator('.system-object').count()
-    const addPlanet = page.getByRole('button', { name: 'Add Planet', exact: true })
+    const addPlanet = await selectCatalogueObjectButton(page, 'planet')
     await ensureMapDragPointsReachable(page, map, addPlanet, objectPoint)
     await dragHtmlElementToWorldPoint(page, addPlanet, map, objectPoint)
     await expect(map.locator('.system-object')).toHaveCount(objectCount + 1)

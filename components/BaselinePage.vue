@@ -132,8 +132,6 @@
 
           <template #dock>
             <WorkspaceDock
-              :mode="mapMode"
-              :close-signal="dockCloseSignal"
               v-model:add-open="creationChooserOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
@@ -152,7 +150,6 @@
               :system-object-move-preview="systemObjectMovePreview"
               :system-object-move-error="systemObjectMoveError"
               :selected-system="selectedSystem"
-              @mode-change="changeMapMode"
               @update-creation-input="updateCreationInput"
               @add-from-inputs="addCreationFromInputs"
               @choose-creation-candidate="chooseCreationCandidate"
@@ -202,22 +199,9 @@
 
           <template #hierarchy>
             <MapHierarchy
-              :mode="activeView"
               :workspace="workspace"
-              :selected-system-id="activeView === 'cluster' ? clusterSelectedSystemId : selectedSystemId"
-              :selected-object-id="selectedObjectId"
-              :selected-orbit-id="selectedOrbitId"
-              :selected-route-id="selectedRouteId"
               :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
-              :route-summary="routeEndpointSummary"
-              @select-system="selectSystem"
-              @delete-system="deleteSystem"
-              @select-object="selectObject"
-              @select-orbit="selectOrbit"
-              @select-route="selectRoute"
-              @edit-chart-names="beginChartNamesEdit"
-              @show-cluster="showClusterMap"
             />
           </template>
 
@@ -266,7 +250,7 @@
                     @cancel-cluster-preview="cancelSystemMovePreview"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
-                    @orbit-center-candidates="handleOrbitCenterCandidates"
+                    @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
@@ -303,11 +287,11 @@
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-object="moveMapObject"
-                    @object-move-candidates="handleObjectMoveCandidates"
+                    @object-move-candidates="placement.interactions.handleObjectMoveCandidates"
                     @object-move-blocked="handleBlockedObjectMove"
                     @entity-command-blocked="handleBlockedEntityCommand"
                     @move-orbit-center="moveMapOrbitCenter"
-                    @orbit-center-candidates="handleOrbitCenterCandidates"
+                    @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
@@ -373,7 +357,6 @@
 
           <template #inspector>
             <MapInspector
-              ref="mapInspectorRef"
               :mode="activeView"
               :workspace="workspace"
               :selected-system="selectedSystem"
@@ -388,7 +371,6 @@
               :entity-session="entitySession"
               :has-modified-entity-session="hasModifiedEntitySession"
               :has-orbit-placement-preview="Boolean(orbitPlacementPreview && entitySession?.kind === 'orbit' && orbitPlacementPreview.sessionId === entitySession.id && orbitPlacementPreview.orbitId === selectedOrbit?.id)"
-              :is-entity-draft-target="isEntityDraftTarget"
               :saving="saveState === 'saving'"
               :editor-error="editorError"
               :save-state="saveState"
@@ -404,6 +386,7 @@
               @resume-entity-session="resumeEntitySession"
               @apply-entity-session="applyEntitySession"
               @discard-entity-session="discardEntitySession"
+              @update-object-placement="updateObjectPlacement"
               @delete-object="deleteSelectedObject"
               @request-orbit-edit="beginOrbitEdit"
               @update-orbit-host="updateOrbitHost"
@@ -472,13 +455,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
-import type {
-  EntityCommand,
-  OrbitCenterMoveCandidate,
-  SystemCreationCandidate,
-  SystemCreationType,
-  SystemObjectMoveCandidate,
-} from '../composables/editor-workflows/types'
+import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
+import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -501,272 +479,95 @@ const {
   restoreBackup,
 } = useLocalWorkspace()
 
+const workflows = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback } = workflows
+
 const {
-  clusterName,
-  systemName,
-  chartDraftSystemName,
-  activeView,
-  mapMode,
-  selectedSystemId,
-  clusterSelectedSystemId,
-  selectedObjectId,
-  selectedOrbitId,
-  selectedRouteId,
-  chartNamesDialogOpen,
-  transitionGuard,
-  fieldDefinitionDialogOpen,
-  fieldDefinitionError,
-  fieldDefinitionsSession,
-  hasModifiedFieldDefinitionsSession,
-  fieldDefinitionsDialog,
-  openFieldDefinitions,
-  getFieldDefinitionImportConflict,
-  formError,
-  editorError,
-  entitySession,
-  hasModifiedEntitySession,
-  orbitPlacementPreview,
-  routeSession,
-  hasModifiedRouteSession,
-  offerRouteSystems,
-  chooseRoutePoint,
-  updateRouteInput,
-  applyRouteSession,
-  discardRouteSession,
-  cancelRouteCreation,
-  isEntityCommandBlocked,
-  isEntityDraftTarget,
-  applyEntitySession,
-  discardEntitySession,
-  orbitAdjustmentNotice,
-  mapInspectorRef,
-  clusterMapRef,
-  systemMapRef,
-  activeMapKey,
-  initialViewport,
-  clusterSelectedSystem,
-  inspectedClusterSystem,
-  hierarchyPanelVisible,
-  inspectorPanelVisible,
-  isCompactViewport,
-  compactPanelOpen,
-  compactPanel,
-  zoomLevel,
-  selectedSystem,
-  selectedObject,
-  selectedOrbit,
-  selectedRoute,
-  routeEndpointSummary,
-  hasUncommittedNames,
-  hasChartNameDraft,
-  saveMessage,
-  handleFieldDefinitionsIntent,
-  resolveTransition,
-  resolveTransitionChoice,
-  setChartNamesDialogOpen,
-  setMapMode,
-  togglePanel,
-  requestPanel,
-  closePanel,
-  zoomActiveMap,
-  panActiveMap,
-  setViewportPercentage,
-  fitActiveMap,
-  recordViewport,
-  selectClusterSystem,
-  moveSystem,
-  moveMapObject,
-  placeMapObjectInOrbit,
-  rotateMapObject,
-  resizeMapOrbit,
-  rotateMapOrbit,
-  moveMapOrbitCenter,
-  detachSelectedOrbit,
-  submitNames,
-  beginChartNamesEdit,
-  cancelChartNamesEdit,
-  clusterAddType,
-  clusterAddError,
-  clusterMoveTargeting,
-  clusterSystemMovePreview,
-  clusterSystemMoveError,
-  clusterSystemPositionInputs,
-  clusterSystemPositionInputErrors,
-  systemObjectMoveAvailable,
-  systemObjectMoveDestination,
-  systemObjectMoveDestinationOptions,
-  systemObjectPositionInput,
-  systemObjectPositionXInput,
-  systemObjectPositionYInput,
-  systemObjectMoveCandidates,
-  systemObjectMoveCandidateRequest,
-  systemObjectMovePreview,
-  systemObjectMoveError,
-  updateSystemObjectMoveDestination,
-  updateSystemObjectPositionInput,
-  updateSystemObjectPositionXInput,
-  updateSystemObjectPositionYInput,
-  offerObjectMoveCandidates,
-  chooseObjectMoveCandidate,
-  previewSystemObjectMoveFromInputs,
-  confirmSystemObjectMove,
-  cancelSystemObjectMovePreview,
-  armSystemAdd,
-  updateClusterSystemPositionInput,
-  addSystemAt,
-  addSystemFromInputs,
-  previewSystemMoveAt,
-  previewSystemMoveFromInputs,
-  cancelSystemMovePreview,
-  confirmSystemMove,
-  showClusterMap,
-  selectSystem,
-  selectObject,
-  selectOrbit,
-  selectRoute,
-  beginRoute,
-  beginRouteEdit,
-  deleteSystem,
-  deleteSelectedObject,
-  deleteSelectedOrbit,
-  deleteSelectedRoute,
-  deletionReview,
-  cancelDeletionReview,
-  confirmDeletionReview,
-  showChartDetails,
-  beginObjectEdit,
-  beginOrbitEdit,
-  updateOrbitHost,
-  previewOrbitPlacement,
-  offerOrbitCenterCandidates,
-  cancelOrbitPlacementPreview,
-  creationSession,
-  chooseCreationType,
-  chooseCreationCandidate,
-  updateCreationInput,
-  offerCreationCandidates,
-  addCreationFromInputs,
-  cancelCreationPreview,
+  activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedOrbitId,
+  selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
+  inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
+  selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
+} = navigation
+const {
+  clusterName, systemName, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
+  transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
+  cancelNamesEdit: cancelChartNamesEdit, setDialogOpen: setChartNamesDialogOpen,
+  resolveTransition, resolveTransitionChoice, beginNamesEdit: beginChartNamesEdit,
+} = charts
+const {
+  fieldDefinitionsSession, fieldDefinitionDialogOpen, fieldDefinitionError, hasModifiedFieldDefinitionsSession,
+  fieldDefinitionsDialog, openFieldDefinitions, getFieldDefinitionImportConflict, handleFieldDefinitionsIntent,
+} = fields
+const {
+  entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
+  updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
+  cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
+  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRoutePoint, updateRouteInput,
+  applyRouteSession, discardRouteSession, cancelRouteCreation,
+} = inspector
+const { editorError, orbitAdjustmentNotice } = feedback
+const {
+  clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
+  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, requestPanel, closePanel, togglePanel,
+  zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
+} = mapControls
+const {
+  map: mapPlacement,
+  creation,
+  systemObject: objectPlacement,
+  clusterSystem,
   quitAdd,
+} = placement
+const {
+  moveSystem, moveMapObject, placeMapObjectInOrbit, rotateMapObject, resizeMapOrbit, rotateMapOrbit,
+  moveMapOrbitCenter, detachSelectedOrbit,
+} = mapPlacement
+const {
+  clusterAddType, clusterAddError, clusterMoveTargeting, clusterSystemMovePreview, clusterSystemMoveError,
+  clusterSystemPositionInputs, clusterSystemPositionInputErrors, armSystemAdd, updateClusterSystemPositionInput,
+  addSystemAt, addSystemFromInputs, previewSystemMoveAt, previewSystemMoveFromInputs, cancelSystemMovePreview,
+  confirmSystemMove,
+} = clusterSystem
+const {
+  systemObjectMoveAvailable, systemObjectMoveDestination, systemObjectMoveDestinationOptions,
+  systemObjectPositionInput, systemObjectPositionXInput, systemObjectPositionYInput,
+  systemObjectMoveCandidates, systemObjectMoveCandidateRequest, systemObjectMovePreview,
+  systemObjectMoveError, updateSystemObjectMoveDestination, updateSystemObjectPositionInput,
+  updateSystemObjectPositionXInput, updateSystemObjectPositionYInput,
+  chooseObjectMoveCandidate, previewSystemObjectMoveFromInputs, confirmSystemObjectMove,
+  cancelSystemObjectMovePreview,
+} = objectPlacement
+const {
+  creationSession, chooseCreationType, chooseCreationCandidate, updateCreationInput,
+  offerCreationCandidates, addCreationFromInputs, cancelCreationPreview,
   handleCreationDrop: processCreationDrop,
-} = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
+} = creation
+const {
+  beginRoute, beginRouteEdit, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
+  deletionReview, cancelDeletionReview, confirmDeletionReview,
+} = cluster
+
+provideEditorCommands({
+  navigation: {
+    selectSystem,
+    selectObject,
+    selectOrbit,
+    selectRoute,
+    showClusterMap,
+    routeSummary: routeEndpointSummary,
+  },
+  charts: { beginNamesEdit: beginChartNamesEdit },
+  cluster: { deleteSystem },
+  map: { changeMode: changeMapMode },
+})
 
 const fieldDefinitionInspectorConflict = computed(() => {
   const fieldId = fieldDefinitionsSession.selectedId
   return fieldId !== null && isEntityCommandBlocked({ kind: 'definition-mutation', fieldId })
 })
 
-function resumeEntitySession(sessionId: number): void {
-  const session = entitySession.value
-  if (!session || session.id !== sessionId) return
-  if (session.kind === 'object') void selectObject(session.targetId)
-  else void selectOrbit(session.targetId)
-}
-
 function isObjectMoveBlocked(objectId: string): boolean {
   return isEntityCommandBlocked({ kind: 'object-placement', objectId })
-}
-
-let objectMoveCandidateRequestId = 0
-let orbitCenterCandidateRequestId = 0
-let appliedOrbitPreview: { map: NonNullable<typeof systemMapRef.value>; orbitId: string } | null = null
-watch(() => [systemMapRef.value, orbitPlacementPreview.value, activeView.value, selectedSystemId.value, entitySession.value] as const,
-  ([map, preview, view, systemId, session]) => {
-    const activePreview = preview !== null
-      && view === 'system'
-      && session?.kind === 'orbit'
-      && session.id === preview.sessionId
-      && session.systemId === systemId
-      ? preview
-      : null
-    if (appliedOrbitPreview && (appliedOrbitPreview.map !== map
-      || !activePreview || appliedOrbitPreview.orbitId !== activePreview.orbitId)) {
-      appliedOrbitPreview.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
-      appliedOrbitPreview = null
-    }
-    if (map && activePreview) {
-      map.setOrbitPlacementPreview(activePreview.orbitId, activePreview.preview)
-      appliedOrbitPreview = { map, orbitId: activePreview.orbitId }
-    }
-  }, { flush: 'post', immediate: true })
-watch([() => workspace.value?.cluster.id, activeView, selectedSystemId, mapMode], () => {
-  objectMoveCandidateRequestId += 1
-  orbitCenterCandidateRequestId += 1
-}, { flush: 'sync' })
-
-async function handleObjectMoveCandidates(objectId: string, candidates: SystemObjectMoveCandidate[]): Promise<void> {
-  const requestId = ++objectMoveCandidateRequestId
-  const clusterId = workspace.value?.cluster.id
-  const systemId = selectedSystemId.value
-  const view = activeView.value
-  const mode = mapMode.value
-  if (!clusterId || !systemId || view !== 'system' || mode !== 'move') return
-  const sourceObject = selectedSystem.value?.objects.find(object => object.id === objectId)
-  if (!sourceObject) return
-  const sourcePlacement = JSON.stringify(sourceObject.placement)
-
-  await selectObject(objectId, false)
-  const latestSystem = selectedSystem.value
-  const latestObject = latestSystem?.objects.find(object => object.id === objectId)
-  if (requestId !== objectMoveCandidateRequestId
-    || workspace.value?.cluster.id !== clusterId
-    || activeView.value !== view
-    || selectedSystemId.value !== systemId
-    || mapMode.value !== mode
-    || selectedObjectId.value !== objectId
-    || !latestObject
-    || JSON.stringify(latestObject.placement) !== sourcePlacement) return
-
-  offerObjectMoveCandidates(objectId, candidates)
-}
-
-async function handleOrbitCenterCandidates(orbitId: string, candidates: OrbitCenterMoveCandidate[]): Promise<void> {
-  const requestId = ++orbitCenterCandidateRequestId
-  const clusterId = workspace.value?.cluster.id
-  const systemId = selectedSystemId.value
-  const view = activeView.value
-  const mode = mapMode.value
-  if (!clusterId || !systemId || view !== 'system' || mode !== 'move' || creationSession.value) return
-  const sourceOrbit = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
-  if (!sourceOrbit || sourceOrbit.hostId !== null) return
-  const sourceSnapshot = JSON.stringify(sourceOrbit)
-  const startingSession = entitySession.value
-  if (startingSession && !(startingSession.kind === 'orbit' && startingSession.targetId === orbitId)) return
-
-  const matchesCurrentContext = (): boolean => requestId === orbitCenterCandidateRequestId
-    && workspace.value?.cluster.id === clusterId
-    && activeView.value === view
-    && selectedSystemId.value === systemId
-    && mapMode.value === mode
-    && creationSession.value === null
-  const sourceIsUnchanged = (): boolean => {
-    const current = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
-    return current?.hostId === null && JSON.stringify(current) === sourceSnapshot
-  }
-
-  await selectOrbit(orbitId, false)
-  if (!matchesCurrentContext() || selectedOrbitId.value !== orbitId || !sourceIsUnchanged()) return
-  const selectedSession = entitySession.value
-  if (selectedSession && !(selectedSession.kind === 'orbit' && selectedSession.targetId === orbitId)) return
-
-  const sessionIdBeforeBegin = entitySession.value?.id ?? null
-  await beginOrbitEdit()
-  if (creationSession.value) {
-    const newlyStarted = entitySession.value
-    if (sessionIdBeforeBegin === null && newlyStarted?.kind === 'orbit'
-      && newlyStarted.targetId === orbitId && !hasModifiedEntitySession.value) {
-      discardEntitySession(newlyStarted.id)
-    }
-    return
-  }
-  if (!matchesCurrentContext() || selectedOrbitId.value !== orbitId || !sourceIsUnchanged()) return
-  const session = entitySession.value
-  if (!session || session.kind !== 'orbit' || session.targetId !== orbitId
-    || session.initial.orbit.hostId !== null) return
-  if (startingSession?.kind === 'orbit' && startingSession.targetId === orbitId
-    && session.id !== startingSession.id) return
-  if (!offerOrbitCenterCandidates(session.id, candidates)) return
-  requestPanel('inspector')
 }
 
 function handleBlockedObjectMove(objectId: string): void {
@@ -810,7 +611,6 @@ const creationTypeLabel = computed(() => {
   if (type.kind === 'orbit') return 'Orbit'
   return catalogueTypes.find(candidate => candidate.value === type.subtype)?.label ?? type.subtype
 })
-const dockCloseSignal = computed(() => `${activeView.value}:${selectedSystemId.value ?? ''}:${clusterSelectedSystemId.value ?? ''}:${mapMode.value}:${hierarchyPanelVisible.value}:${inspectorPanelVisible.value}:${isCompactViewport.value}`)
 const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
   ? {
       label: 'System',
@@ -836,7 +636,10 @@ const clusterMovePresentation = computed(() => {
     previewing: preview !== null,
   }
 })
-watch(dockCloseSignal, () => { creationChooserOpen.value = false })
+watch(
+  [activeView, selectedSystemId, clusterSelectedSystemId, mapMode, hierarchyPanelVisible, inspectorPanelVisible, isCompactViewport],
+  () => { creationChooserOpen.value = false },
+)
 watch([activeView, selectedSystemId], () => {
   if (creationSession.value || clusterAddType.value) quitSystemAdd()
 })
@@ -993,8 +796,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  appliedOrbitPreview?.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
-  appliedOrbitPreview = null
   window.removeEventListener('beforeunload', warnBeforeLeaving)
   window.removeEventListener('keydown', handleAddEscape)
 })

@@ -63,6 +63,8 @@ GPT-6.1 Sol (XHigh) reviewed the remaining large modules after the first pass. A
 
 ### Pinia decision
 
+This historical decision was superseded on 2026-10-26 by [ADR 0001: shared editor UI state with Pinia](../../../docs/adr/0001-editor-state-with-pinia.md).
+
 Do not add Pinia in this refactor. This is currently a single editor route; workspace load/save state already uses Nuxt's SSR-safe `useState`, IndexedDB remains the persistence layer, and most selection, draft, and panel state is scoped to the page or owning UI module. Component extraction alone does not justify a global store. Keep `pages/index.vue` as the single `useLocalWorkspace()` owner and pass the workspace, commit operation, and needed status to workflow composables rather than invoking that composable again. Its save queue and revision guard are per invocation, so correctness currently relies on that single owner. Reconsider Pinia if multiple routes or autonomous long-lived consumers need to coordinate workspace mutations beyond the editor's lifetime.
 
 ## Blocked by

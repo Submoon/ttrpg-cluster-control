@@ -2,14 +2,12 @@
 import { computed, nextTick, reactive, ref, watch, type Ref } from 'vue'
 import { addStarSystem, type LocalWorkspace, type Point } from '../../domain/workspace'
 import { clusterSystemPosition } from '../../utils/cluster-map-geometry'
-import type { ClusterAddType, ClusterSystemMovePreview, ClusterSystemPositionInput, ClusterSystemPositionInputs, MapInteractionMode, MapNavigationHandle } from './types'
+import type { ClusterAddType, ClusterSystemMovePreview, ClusterSystemPositionInput, ClusterSystemPositionInputs, MapNavigationHandle } from './types'
 import type { EditorWorkflowOptions } from './types'
+import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface ClusterSystemPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  activeView: Readonly<Ref<'cluster' | 'system'>>
-  mapMode: Readonly<Ref<MapInteractionMode>>
-  selectedSystemId: Readonly<Ref<string | null>>
   clusterMapRef: Readonly<Ref<MapNavigationHandle | null>>
   applyWorkspace: EditorWorkflowOptions['applyWorkspace']
 }
@@ -19,7 +17,8 @@ const CLUSTER_SYSTEM_CARD_HEIGHT = 76
 const CLUSTER_MAP_POSITION_ORIGIN = { x: 112, y: 96 }
 const CLUSTER_MAP_POSITION_SIZE = { x: 736, y: 368 }
 
-export function useClusterSystemPlacement({ workspace, activeView, mapMode, selectedSystemId, clusterMapRef, applyWorkspace }: ClusterSystemPlacementOptions) {
+export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorkspace }: ClusterSystemPlacementOptions) {
+  const store = useEditorUiStore()
   const clusterAddType = ref<ClusterAddType | null>(null)
   const inputs = reactive<ClusterSystemPositionInputs>({ x: '0.5', y: '0.5' })
   const inputErrors = reactive<Record<ClusterSystemPositionInput, string>>({ x: '', y: '' })
@@ -29,9 +28,9 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
   const nextPreviewToken = ref(0)
   const clusterAddError = computed(() => formError.value || inputErrors.x || inputErrors.y)
   const clusterSystemMoveError = computed(() => systemMoveError.value || inputErrors.x || inputErrors.y)
-  const clusterMoveTargeting = computed(() => activeView.value === 'cluster'
-    && mapMode.value === 'move'
-    && selectedSystemId.value !== null)
+  const clusterMoveTargeting = computed(() => store.activeView === 'cluster'
+    && store.mapMode === 'move'
+    && store.clusterSelectedSystemId !== null)
 
   function clearErrors(): void {
     inputErrors.x = ''
@@ -62,14 +61,14 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
   }
 
   function armSystemAdd(): void {
-    if (!workspace.value || activeView.value !== 'cluster') return
+    if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
     clusterAddType.value = 'system'
     clearErrors()
   }
 
   function armRouteAdd(): void {
-    if (!workspace.value || activeView.value !== 'cluster') return
+    if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
     clusterAddType.value = 'route'
     clearErrors()
@@ -129,7 +128,7 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
   }
 
   function addSystemAt(point: Point, systemIds: string[] = []): boolean {
-    if (clusterAddType.value !== 'system' || activeView.value !== 'cluster') return false
+    if (clusterAddType.value !== 'system' || store.activeView !== 'cluster') return false
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return false
     clearErrors()
@@ -170,7 +169,7 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
   }
 
   function addSystemFromInputs(): boolean {
-    if (clusterAddType.value !== 'system' || activeView.value !== 'cluster') return false
+    if (clusterAddType.value !== 'system' || store.activeView !== 'cluster') return false
     clearErrors()
     const x = validateCoordinate('x')
     const y = validateCoordinate('y')
@@ -182,7 +181,7 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
   }
 
   function previewSystemMoveAt(point: Point, systemIds: string[] = []): boolean {
-    const sourceSystemId = selectedSystemId.value
+    const sourceSystemId = store.clusterSelectedSystemId
     if (!clusterMoveTargeting.value || !sourceSystemId) return false
     clearSystemMovePreview()
     systemMoveError.value = ''
@@ -255,9 +254,9 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
       && currentSource !== undefined
       && currentOrigin?.x === preview.originPosition.x
       && currentOrigin?.y === preview.originPosition.y
-      && activeView.value === 'cluster'
-      && mapMode.value === 'move'
-      && selectedSystemId.value === preview.sourceSystemId
+      && store.activeView === 'cluster'
+      && store.mapMode === 'move'
+      && store.clusterSelectedSystemId === preview.sourceSystemId
     if (!isCurrent) {
       cancelSystemMovePreview()
       systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
@@ -294,7 +293,7 @@ export function useClusterSystemPlacement({ workspace, activeView, mapMode, sele
     }
   }
 
-  watch([activeView, mapMode, selectedSystemId], ([view, mode, systemId]) => {
+  watch([() => store.activeView, () => store.mapMode, () => store.clusterSelectedSystemId], ([view, mode, systemId]) => {
     const preview = systemMovePreview.value
     if (preview && (view !== 'cluster' || mode !== 'move' || systemId !== preview.sourceSystemId)) {
       cancelSystemMovePreview()

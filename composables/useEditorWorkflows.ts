@@ -1,127 +1,359 @@
-import { computed, watch } from 'vue'
-
-/**
- * Composes editor state and focused commands around the page's commit boundary; it does not own persistence.
- */
-import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { EditorWorkflowOptions } from './editor-workflows/types'
+import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
-import { useEditorState } from './editor-workflows/useEditorState'
+import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
+import { useChartNamesSession } from './editor-workflows/useChartNamesSession'
+import { useEditorMapControls } from './editor-workflows/useEditorMapControls'
+import { useEditorNavigation } from './editor-workflows/useEditorNavigation'
+import { useEditorTransitions } from './editor-workflows/useEditorTransitions'
+import { useEditorViewport } from './editor-workflows/useEditorViewport'
+import { useEntityInspectorSession } from './editor-workflows/useEntityInspectorSession'
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
+import { useMapInteractionCoordinator } from './editor-workflows/useMapInteractionCoordinator'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
+import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
-import type { EditorWorkflowOptions } from './editor-workflows/types'
 
-/**
- * Builds the state and action surface consumed by the workspace page.
- * @param options Shared refs and the single persistence callback provided by the page owner.
- * @returns Combined editor state, field-definition, cluster, and system-map workflows.
- */
+/** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
-  const editorState = useEditorState(options)
-  const fieldDefinitions = useFieldDefinitionWorkflows({
-    workspace: options.workspace,
-    applyWorkspace: options.applyWorkspace,
-    resolveTransition: editorState.resolveTransition,
-    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+  const { workspace, saveState, saveError, commit, applyWorkspace } = options
+  const store = useEditorUiStore()
+  const editorError = ref('')
+  const workspaceContextId = computed(() => {
+    const current = workspace.value
+    return current ? `${current.id}:${current.cluster.id}` : null
+  })
+
+  watch(workspaceContextId, contextId => {
+    if (store.workspaceId !== contextId) store.reset(contextId)
+  }, { immediate: true, flush: 'sync' })
+  onBeforeUnmount(() => store.reset(null))
+
+  const entity = useEntityInspectorSession({ workspace, applyWorkspace })
+  const route = useRouteInspectorSession({ workspace, applyWorkspace })
+  const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
+  const charts = useChartNamesSession({
+    workspace,
+    saveState,
+    saveError,
+    commit,
+    applyWorkspace,
+    selectedSystem: selectedSystemForChart,
+  })
+
+  function applyEntitySession(sessionId?: number): boolean {
+    const applied = entity.applyEntitySession(sessionId)
+    if (applied) editorError.value = ''
+    return applied
+  }
+
+  function discardEntitySession(sessionId?: number): void {
+    const active = entity.entitySession.value
+    if (!active || (sessionId !== undefined && active.id !== sessionId)) return
+    entity.discardEntitySession(active.id)
+    if (entity.entitySession.value === null) editorError.value = ''
+  }
+
+  function applyRouteSession(sessionId: number): boolean {
+    const applied = route.applyRouteSession(sessionId)
+    if (applied) editorError.value = ''
+    return applied
+  }
+
+  function discardRouteSession(sessionId?: number): void {
+    const active = route.routeSession.value
+    if (!active || (sessionId !== undefined && active.id !== sessionId)) return
+    route.discardRouteSession(active.id)
+    if (route.routeSession.value === null) editorError.value = ''
+  }
+
+  const transitions = useEditorTransitions({
+    chart: charts,
+    entity: {
+      session: entity.entitySession,
+      hasModified: entity.hasModifiedEntitySession,
+      apply: applyEntitySession,
+      discard: discardEntitySession,
+    },
+    route: {
+      session: route.routeSession,
+      hasModified: route.hasModifiedRouteSession,
+      apply: applyRouteSession,
+      discard: discardRouteSession,
+    },
+    clearEditorError: () => { editorError.value = '' },
+  })
+  const mapControls = useEditorMapControls(workspace, store, {
+    orbitPlacementPreview: entity.orbitPlacementPreview,
+    entitySession: entity.entitySession,
+  })
+  const viewport = useEditorViewport(store)
+  const navigation = useEditorNavigation({
+    workspace,
+    store,
+    mapControls,
+    chart: charts,
+    transitions,
+    viewport,
+    entity,
+    route,
+    editorError,
+  })
+
+  const fields = useFieldDefinitionWorkflows({
+    workspace,
+    applyWorkspace,
+    resolveTransition: transitions.resolveTransition,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
   const systemCreation = useSystemCreationWorkflows({
-    workspace: options.workspace,
-    selectedSystem: editorState.selectedSystem,
-    systemMapRef: editorState.systemMapRef,
-    applyWorkspace: options.applyWorkspace,
-    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+    workspace,
+    systemMapRef: mapControls.systemMapRef,
+    applyWorkspace,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
   const systemObjectPlacement = useSystemObjectPlacement({
-    workspace: options.workspace,
-    activeView: editorState.activeView,
-    mapMode: editorState.mapMode,
+    workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
-    selectedSystemId: editorState.selectedSystemId,
-    selectedObjectId: editorState.selectedObjectId,
-    selectedSystem: editorState.selectedSystem,
-    selectedObject: editorState.selectedObject,
-    systemMapRef: editorState.systemMapRef,
-    applyWorkspace: options.applyWorkspace,
-    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
+    systemMapRef: mapControls.systemMapRef,
+    applyWorkspace,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
   const clusterSystemPlacement = useClusterSystemPlacement({
-    workspace: options.workspace,
-    activeView: editorState.activeView,
-    mapMode: editorState.mapMode,
-    selectedSystemId: editorState.clusterSelectedSystemId,
-    clusterMapRef: editorState.clusterMapRef,
-    applyWorkspace: options.applyWorkspace,
+    workspace,
+    clusterMapRef: mapControls.clusterMapRef,
+    applyWorkspace,
   })
-  watch(editorState.routeSession, session => {
+  watch(route.routeSession, session => {
     if (!session && clusterSystemPlacement.clusterAddType.value === 'route') {
       clusterSystemPlacement.quitClusterAdd()
     }
   }, { flush: 'sync' })
-  const clusterWorkflows = useClusterWorkflows({
-    workspace: options.workspace,
-    commit: options.commit,
-    applyWorkspace: options.applyWorkspace,
+
+  const cluster = useClusterWorkflows({
+    workspace,
+    applyWorkspace,
     onDeletionApplied: plan => {
-      editorState.cleanupAfterDeletion(plan)
+      navigation.cleanupAfterDeletion(plan)
       systemCreation.pruneTargetsAfterDeletion(plan)
     },
-    saveState: options.saveState,
-    activeView: editorState.activeView,
-    selectedSystemId: editorState.selectedSystemId,
-    selectedObjectId: editorState.selectedObjectId,
-    selectedOrbitId: editorState.selectedOrbitId,
-    selectedRouteId: editorState.selectedRouteId,
-    chartNamesDialogOpen: editorState.chartNamesDialogOpen,
-    fieldDefinitionDialogOpen: fieldDefinitions.fieldDefinitionDialogOpen,
-    selectedSystem: editorState.selectedSystem,
-    selectedObject: editorState.selectedObject,
-    selectedOrbit: editorState.selectedOrbit,
-    selectedRoute: editorState.selectedRoute,
-    mapInspectorRef: editorState.mapInspectorRef,
-    beginRouteSession: editorState.beginRouteSession,
-    routeSession: editorState.routeSession,
+    saveState,
+    chartNamesDialogOpen: transitions.chartNamesDialogOpen,
+    fieldDefinitionDialogOpen: fields.fieldDefinitionDialogOpen,
+    beginRouteSession: route.beginRouteSession,
+    routeSession: route.routeSession,
     armRouteAdd: clusterSystemPlacement.armRouteAdd,
-    resolveTransition: editorState.resolveTransition,
-    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
-    isEntityDraftCommandBlocked: editorState.isEntityDraftCommandBlocked,
-    isRouteCommandBlocked: editorState.isRouteCommandBlocked,
-    isChartDraftTarget: editorState.isChartDraftTarget,
-    contextStamp: editorState.contextStamp,
-    selectCreatedSystem: editorState.selectCreatedSystem,
-    editorError: editorState.editorError,
+    resolveTransition: transitions.resolveTransition,
+    isEntityDraftCommandBlocked: entity.isEntityCommandBlocked,
+    isRouteCommandBlocked: route.isRouteCommandBlocked,
+    isChartDraftTarget: navigation.isChartDraftTarget,
+    editorError,
   })
-  const mapWorkflows = useMapWorkflows({
-    workspace: options.workspace,
-    commit: options.commit,
-    applyWorkspace: options.applyWorkspace,
-    selectedSystem: editorState.selectedSystem,
-    selectedObject: editorState.selectedObject,
-    selectedOrbit: editorState.selectedOrbit,
-    mapInspectorRef: editorState.mapInspectorRef,
-    systemMapRef: editorState.systemMapRef,
-    resolveTransition: editorState.resolveTransition,
-    beginObjectSession: editorState.beginObjectSession,
-    beginOrbitSession: editorState.beginOrbitSession,
-    isEntityCommandBlocked: editorState.isEntityCommandBlocked,
-    editorError: editorState.editorError,
+  const map = useMapWorkflows({
+    workspace,
+    commit,
+    applyWorkspace,
+    systemMapRef: mapControls.systemMapRef,
+    resolveTransition: transitions.resolveTransition,
+    beginObjectSession: entity.beginObjectSession,
+    beginOrbitSession: entity.beginOrbitSession,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    editorError,
+  })
+  const interactions = useMapInteractionCoordinator({
+    workspace,
+    store,
+    selectedSystem: navigation.selectedSystem,
+    entity,
+    navigation,
+    placement: systemObjectPlacement,
+    creation: systemCreation,
+    viewport,
+    beginOrbitEdit: map.beginOrbitEdit,
   })
 
   function quitAdd(): void {
-    editorState.cancelRouteCreation()
+    route.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
-    editorState.setMapMode('select')
+    store.setMode('select')
   }
 
   return {
-    ...editorState,
-    ...fieldDefinitions,
-    ...clusterWorkflows,
-    ...mapWorkflows,
-    ...systemCreation,
-    ...systemObjectPlacement,
-    ...clusterSystemPlacement,
-    quitAdd,
+    inspector: {
+      entitySession: entity.entitySession,
+      hasModifiedEntitySession: entity.hasModifiedEntitySession,
+      orbitPlacementPreview: entity.orbitPlacementPreview,
+      isEntityCommandBlocked: entity.isEntityCommandBlocked,
+      resumeEntitySession: navigation.resumeEntitySession,
+      beginObjectEdit: map.beginObjectEdit,
+      beginOrbitEdit: map.beginOrbitEdit,
+      updateObjectPlacement: entity.updateObjectPlacement,
+      updateOrbitHost: entity.updateOrbitHost,
+      previewOrbitPlacement: entity.previewOrbitPlacement,
+      cancelOrbitPlacementPreview: entity.cancelOrbitPlacementPreview,
+      applyEntitySession,
+      discardEntitySession,
+      routeSession: route.routeSession,
+      hasModifiedRouteSession: route.hasModifiedRouteSession,
+      offerRouteSystems: route.offerRouteSystems,
+      chooseRoutePoint: route.chooseRoutePoint,
+      updateRouteInput: route.updateRouteInput,
+      applyRouteSession,
+      discardRouteSession,
+      cancelRouteCreation: route.cancelRouteCreation,
+    },
+    charts: {
+      clusterName: charts.clusterName,
+      systemName: charts.systemName,
+      draftSystemName: charts.draftSystemName,
+      dialogOpen: transitions.chartNamesDialogOpen,
+      transitionGuard: transitions.transitionGuard,
+      formError: charts.formError,
+      hasUncommittedNames: charts.hasUncommittedNames,
+      hasChartNameDraft: charts.hasDraft,
+      saveMessage: charts.saveMessage,
+      submitNames: charts.submit,
+      cancelNamesEdit: charts.discard,
+      beginNamesEdit: navigation.beginChartNamesEdit,
+      setDialogOpen: transitions.setChartNamesDialogOpen,
+      resolveTransition: transitions.resolveTransition,
+      resolveTransitionChoice: transitions.resolveTransitionChoice,
+    },
+    fields: {
+      fieldDefinitionsSession: fields.fieldDefinitionsSession,
+      getFieldDefinitionImportConflict: fields.getFieldDefinitionImportConflict,
+      fieldDefinitionDialogOpen: fields.fieldDefinitionDialogOpen,
+      fieldDefinitionError: fields.fieldDefinitionError,
+      hasModifiedFieldDefinitionsSession: fields.hasModifiedFieldDefinitionsSession,
+      fieldDefinitionsDialog: fields.fieldDefinitionsDialog,
+      openFieldDefinitions: fields.openFieldDefinitions,
+      handleFieldDefinitionsIntent: fields.handleFieldDefinitionsIntent,
+    },
+    cluster: {
+      beginRoute: cluster.beginRoute,
+      beginRouteEdit: cluster.beginRouteEdit,
+      deleteSystem: cluster.deleteSystem,
+      deleteSelectedObject: cluster.deleteSelectedObject,
+      deleteSelectedOrbit: cluster.deleteSelectedOrbit,
+      deleteSelectedRoute: cluster.deleteSelectedRoute,
+      deletionReview: cluster.deletionReview,
+      cancelDeletionReview: cluster.cancelDeletionReview,
+      confirmDeletionReview: cluster.confirmDeletionReview,
+    },
+    placement: {
+      map: {
+        moveSystem: map.moveSystem,
+        moveMapObject: map.moveMapObject,
+        placeMapObjectInOrbit: map.placeMapObjectInOrbit,
+        rotateMapObject: map.rotateMapObject,
+        resizeMapOrbit: map.resizeMapOrbit,
+        rotateMapOrbit: map.rotateMapOrbit,
+        moveMapOrbitCenter: map.moveMapOrbitCenter,
+        detachSelectedOrbit: map.detachSelectedOrbit,
+      },
+      creation: {
+        creationSession: systemCreation.creationSession,
+        chooseCreationType: systemCreation.chooseCreationType,
+        chooseCreationCandidate: systemCreation.chooseCreationCandidate,
+        updateCreationInput: systemCreation.updateCreationInput,
+        offerCreationCandidates: systemCreation.offerCreationCandidates,
+        addCreationFromInputs: systemCreation.addCreationFromInputs,
+        handleCreationDrop: systemCreation.handleCreationDrop,
+        cancelCreationPreview: systemCreation.cancelCreationPreview,
+      },
+      systemObject: {
+        systemObjectMoveAvailable: systemObjectPlacement.systemObjectMoveAvailable,
+        systemObjectMoveDestination: systemObjectPlacement.systemObjectMoveDestination,
+        systemObjectMoveDestinationOptions: systemObjectPlacement.systemObjectMoveDestinationOptions,
+        systemObjectPositionInput: systemObjectPlacement.systemObjectPositionInput,
+        systemObjectPositionXInput: systemObjectPlacement.systemObjectPositionXInput,
+        systemObjectPositionYInput: systemObjectPlacement.systemObjectPositionYInput,
+        systemObjectMoveCandidates: systemObjectPlacement.systemObjectMoveCandidates,
+        systemObjectMoveCandidateRequest: systemObjectPlacement.systemObjectMoveCandidateRequest,
+        systemObjectMovePreview: systemObjectPlacement.systemObjectMovePreview,
+        systemObjectMoveError: systemObjectPlacement.systemObjectMoveError,
+        updateSystemObjectMoveDestination: systemObjectPlacement.updateSystemObjectMoveDestination,
+        updateSystemObjectPositionInput: systemObjectPlacement.updateSystemObjectPositionInput,
+        updateSystemObjectPositionXInput: systemObjectPlacement.updateSystemObjectPositionXInput,
+        updateSystemObjectPositionYInput: systemObjectPlacement.updateSystemObjectPositionYInput,
+        chooseObjectMoveCandidate: systemObjectPlacement.chooseObjectMoveCandidate,
+        previewSystemObjectMoveFromInputs: systemObjectPlacement.previewSystemObjectMoveFromInputs,
+        confirmSystemObjectMove: systemObjectPlacement.confirmSystemObjectMove,
+        cancelSystemObjectMovePreview: systemObjectPlacement.cancelSystemObjectMovePreview,
+      },
+      clusterSystem: {
+        clusterAddType: clusterSystemPlacement.clusterAddType,
+        clusterAddError: clusterSystemPlacement.clusterAddError,
+        clusterMoveTargeting: clusterSystemPlacement.clusterMoveTargeting,
+        clusterSystemMovePreview: clusterSystemPlacement.clusterSystemMovePreview,
+        clusterSystemMoveError: clusterSystemPlacement.clusterSystemMoveError,
+        clusterSystemPositionInputs: clusterSystemPlacement.clusterSystemPositionInputs,
+        clusterSystemPositionInputErrors: clusterSystemPlacement.clusterSystemPositionInputErrors,
+        armSystemAdd: clusterSystemPlacement.armSystemAdd,
+        updateClusterSystemPositionInput: clusterSystemPlacement.updateClusterSystemPositionInput,
+        addSystemAt: clusterSystemPlacement.addSystemAt,
+        addSystemFromInputs: clusterSystemPlacement.addSystemFromInputs,
+        previewSystemMoveAt: clusterSystemPlacement.previewSystemMoveAt,
+        previewSystemMoveFromInputs: clusterSystemPlacement.previewSystemMoveFromInputs,
+        cancelSystemMovePreview: clusterSystemPlacement.cancelSystemMovePreview,
+        confirmSystemMove: clusterSystemPlacement.confirmSystemMove,
+      },
+      interactions: {
+        handleObjectMoveCandidates: interactions.handleObjectMoveCandidates,
+        handleOrbitCenterCandidates: interactions.handleOrbitCenterCandidates,
+      },
+      quitAdd,
+    },
+    mapControls: {
+      clusterMapRef: mapControls.clusterMapRef,
+      systemMapRef: mapControls.systemMapRef,
+      activeMapKey: mapControls.activeMapKey,
+      initialViewport: mapControls.initialViewport,
+      zoomLevel: mapControls.zoomLevel,
+      isCompactViewport: viewport.isCompactViewport,
+      hierarchyPanelVisible: viewport.hierarchyPanelVisible,
+      inspectorPanelVisible: viewport.inspectorPanelVisible,
+      compactPanelOpen: viewport.compactPanelOpen,
+      compactPanel: computed(() => store.compactPanel),
+      requestPanel: viewport.requestPanel,
+      closePanel: viewport.closePanel,
+      togglePanel: viewport.togglePanel,
+      recordViewport: mapControls.recordViewport,
+      setViewportPercentage: mapControls.setViewportPercentage,
+      fitActiveMap: mapControls.fitActiveMap,
+      zoomActiveMap: mapControls.zoomActiveMap,
+      panActiveMap: mapControls.panActiveMap,
+      setMapMode: navigation.setMapMode,
+    },
+    feedback: {
+      editorError,
+      orbitAdjustmentNotice: map.orbitAdjustmentNotice,
+    },
+    navigation: {
+      activeView: navigation.activeView,
+      mapMode: navigation.mapMode,
+      selectedSystemId: navigation.selectedSystemId,
+      clusterSelectedSystemId: navigation.clusterSelectedSystemId,
+      selectedObjectId: navigation.selectedObjectId,
+      selectedOrbitId: navigation.selectedOrbitId,
+      selectedRouteId: navigation.selectedRouteId,
+      selectedSystem: navigation.selectedSystem,
+      clusterSelectedSystem: navigation.clusterSelectedSystem,
+      inspectedClusterSystem: navigation.inspectedClusterSystem,
+      selectedObject: navigation.selectedObject,
+      selectedOrbit: navigation.selectedOrbit,
+      selectedRoute: navigation.selectedRoute,
+      routeEndpointSummary: navigation.routeEndpointSummary,
+      showClusterMap: navigation.showClusterMap,
+      selectSystem: navigation.selectSystem,
+      selectClusterSystem: navigation.selectClusterSystem,
+      selectObject: navigation.selectObject,
+      selectOrbit: navigation.selectOrbit,
+      selectRoute: navigation.selectRoute,
+      showChartDetails: navigation.showChartDetails,
+    },
   }
 }

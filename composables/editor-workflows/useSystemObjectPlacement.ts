@@ -2,8 +2,8 @@
 import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import {
   canPlaceObjectInOrbit,
-  replaceWorkspaceSystem,
-  updateSystemObject,
+  defaultObjectOrbitAngle,
+  updateWorkspaceObject,
   type LocalWorkspace,
   type Orbit,
   type Point,
@@ -21,7 +21,6 @@ import {
 } from '../../utils/system-map-geometry'
 import type {
   EntityCommand,
-  MapInteractionMode,
   SystemObjectMoveCandidate,
   SystemMapHandle,
   SystemObjectMoveDestinationOption,
@@ -29,16 +28,11 @@ import type {
   SystemObjectMoveTarget,
 } from './types'
 import { FREE_SYSTEM_OBJECT_PLACEMENT } from './types'
+import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface SystemObjectPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  activeView: Readonly<Ref<'cluster' | 'system'>>
-  mapMode: Readonly<Ref<MapInteractionMode>>
   creationActive: Readonly<ComputedRef<boolean>>
-  selectedSystemId: Readonly<Ref<string | null>>
-  selectedObjectId: Readonly<Ref<string | null>>
-  selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
-  selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   applyWorkspace: (workspace: LocalWorkspace) => { durable: Promise<void> }
   isEntityCommandBlocked: (command: EntityCommand) => boolean
@@ -72,7 +66,7 @@ function effectiveObjectAngle(workspace: LocalWorkspace, system: StarSystem, obj
     candidate.placement.kind === 'orbit' && candidate.placement.orbitId === orbitId,
   )
   const index = siblings.findIndex(candidate => candidate.id === object.id)
-  return -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
+  return defaultObjectOrbitAngle(index, siblings.length)
 }
 
 function sourceOrbitId(object: SystemObject): string | null {
@@ -88,16 +82,6 @@ function orbitPlacementLabel(system: StarSystem, orbit: Orbit): string {
     ? 'unoccupied center'
     : system.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown host'
   return `Orbit ${orbit.order} around ${host}`
-}
-
-function materializeEffectiveAngles(system: StarSystem, orbitId: string, objectAngles: Record<string, number>): void {
-  const siblings = system.objects.filter(object =>
-    object.placement.kind === 'orbit' && object.placement.orbitId === orbitId,
-  )
-  siblings.forEach((object, index) => {
-    if (objectAngles[object.id] !== undefined) return
-    objectAngles[object.id] = -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
-  })
 }
 
 function orbitGeometryFingerprint(current: CurrentObject, orbitId: string): unknown {
@@ -202,17 +186,14 @@ function errorMessage(error: unknown): string {
 /** Builds explicit existing-object placement around the page-owned memory publication boundary. */
 export function useSystemObjectPlacement({
   workspace,
-  activeView,
-  mapMode,
   creationActive,
-  selectedSystemId,
-  selectedObjectId,
-  selectedSystem,
-  selectedObject,
   systemMapRef,
   applyWorkspace,
   isEntityCommandBlocked,
 }: SystemObjectPlacementOptions) {
+  const store = useEditorUiStore()
+  const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
+  const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const systemObjectMoveDestination = ref(FREE_SYSTEM_OBJECT_PLACEMENT)
   const systemObjectPositionInput = ref('0')
   const systemObjectPositionXInput = ref('')
@@ -231,8 +212,8 @@ export function useSystemObjectPlacement({
     const system = selectedSystem.value
     const object = selectedObject.value
     if (!currentWorkspace || !system || !object
-      || system.id !== selectedSystemId.value
-      || object.id !== selectedObjectId.value
+      || system.id !== store.selectedSystemId
+      || object.id !== store.selectedObjectId
       || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)
       || !system.objects.some(candidate => candidate.id === object.id)) return null
     return { workspace: currentWorkspace, system, object }
@@ -251,8 +232,8 @@ export function useSystemObjectPlacement({
     return null
   }
 
-  const systemObjectMoveAvailable = computed(() => activeView.value === 'system'
-    && mapMode.value === 'move'
+  const systemObjectMoveAvailable = computed(() => store.activeView === 'system'
+    && store.mapMode === 'move'
     && !creationActive.value
     && currentObject() !== null)
 
@@ -535,36 +516,16 @@ export function useSystemObjectPlacement({
     }
 
     try {
-      const fromOrbitId = sourceOrbitId(current.object)
-      const toOrbitId = targetOrbitId(preview.target)
-      const objectAngles = { ...current.workspace.layout.objectAngles }
-      if (fromOrbitId && fromOrbitId !== toOrbitId) {
-        materializeEffectiveAngles(current.system, fromOrbitId, objectAngles)
-      }
-      if (toOrbitId && toOrbitId !== fromOrbitId) {
-        materializeEffectiveAngles(current.system, toOrbitId, objectAngles)
-      }
-
       const placement = preview.target.kind === 'orbit'
         ? { kind: 'orbit' as const, orbitId: preview.target.orbitId }
         : { kind: 'system' as const, x: preview.target.point.x, y: preview.target.point.y }
-      const updatedSystem = updateSystemObject(
-        current.system,
+      const nextWorkspace = updateWorkspaceObject(
+        current.workspace,
+        current.system.id,
         current.object.id,
         { placement },
-        current.workspace.objectFieldSettings,
+        preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
       )
-      const workspaceWithSystem = replaceWorkspaceSystem(current.workspace, updatedSystem)
-      if (preview.target.kind === 'orbit') objectAngles[current.object.id] = preview.target.angle
-      else delete objectAngles[current.object.id]
-
-      const nextWorkspace: LocalWorkspace = {
-        ...workspaceWithSystem,
-        layout: {
-          ...workspaceWithSystem.layout,
-          objectAngles,
-        },
-      }
       clearPreview()
       clearMoveCandidates()
       systemObjectMoveError.value = ''
@@ -588,7 +549,7 @@ export function useSystemObjectPlacement({
     }
   })
 
-  watch([workspace, activeView, mapMode, creationActive, selectedSystemId, selectedObjectId], () => {
+  watch([workspace, () => store.activeView, () => store.mapMode, creationActive, () => store.selectedSystemId, () => store.selectedObjectId], () => {
     const current = currentObject()
     const nextOwnerKey = ownerKeyFor(current)
     if (nextOwnerKey !== ownerKey) {
@@ -618,7 +579,7 @@ export function useSystemObjectPlacement({
       }
       return
     }
-    if (activeView.value !== 'system' || mapMode.value !== 'move') {
+    if (store.activeView !== 'system' || store.mapMode !== 'move') {
       clearPreview()
       clearMoveCandidates()
       systemObjectMoveError.value = ''

@@ -1,7 +1,14 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-08',
   ssr: true,
-  modules: ['@nuxt/ui'],
+  modules: ['@nuxt/ui', '@pinia/nuxt'],
+  pinia: {
+    storesDirs: ['./stores/**'],
+  },
+  vite: {
+    // Keep the Nuxt plugin and application stores on the same Pinia SSR runtime.
+    ssr: { noExternal: ['pinia'] },
+  },
   ui: { fonts: false },
   colorMode: {
     preference: 'system',

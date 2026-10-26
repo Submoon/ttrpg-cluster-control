@@ -61,6 +61,7 @@
           @open-field-definitions="emit('open-field-definitions')"
           @apply-entity-session="emit('apply-entity-session', $event)"
           @discard-entity-session="emit('discard-entity-session', $event)"
+          @update-object-placement="(sessionId, placement) => emit('update-object-placement', sessionId, placement)"
           @delete-object="emit('delete-object')"
           @clear-error="emit('clear-error')"
           @hide="emit('hide')"
@@ -72,7 +73,6 @@
       <div v-else-if="props.selectedOrbit" class="map-inspector-entity-content">
         <OrbitInspector
           :key="props.selectedOrbit?.id ?? 'current'"
-          ref="orbitInspectorRef"
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
           :selected-orbit="props.selectedOrbit"
@@ -118,9 +118,10 @@
 
 <script setup lang="ts">
 /**
- * Entity drafts are owned by the editor session; this boundary exposes route-local save acknowledgements and edit guards to the page.
+ * Displays parent-owned entity and route sessions and forwards typed commands to their controllers.
+ * Applying a session publishes accepted workspace memory; IndexedDB completion remains separate UI state.
  */
-import { computed, shallowRef } from 'vue'
+import { computed } from 'vue'
 import type { EntityInspectorSession } from '../composables/editor-workflows/types'
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
@@ -131,9 +132,6 @@ import type {
   StarSystem,
   SystemObject,
 } from '../domain/workspace'
-import type {
-  OrbitInspectorHandle,
-} from './inspector/contracts'
 import ChartDetailsPanel from './inspector/ChartDetailsPanel.vue'
 import JumpRouteInspector from './inspector/JumpRouteInspector.vue'
 import MapObjectInspector from './inspector/MapObjectInspector.vue'
@@ -154,7 +152,6 @@ const props = defineProps<{
   entitySession: EntityInspectorSession | null
   hasModifiedEntitySession: boolean
   hasOrbitPlacementPreview: boolean
-  isEntityDraftTarget: (kind: 'object' | 'orbit', id: string) => boolean
   saving: boolean
   editorError: string
   saveState: SaveState
@@ -174,6 +171,7 @@ const emit = defineEmits<{
   'resume-entity-session': [sessionId: number]
   'apply-entity-session': [sessionId: number]
   'discard-entity-session': [sessionId: number]
+  'update-object-placement': [sessionId: number, placement: string]
   'delete-object': []
   'request-orbit-edit': []
   'update-orbit-host': [sessionId: number, hostId: string | null]
@@ -192,7 +190,6 @@ const emit = defineEmits<{
   'export-current-json': []
 }>()
 
-const orbitInspectorRef = shallowRef<OrbitInspectorHandle | null>(null)
 const objectSession = computed(() => props.entitySession?.kind === 'object' ? props.entitySession : null)
 const orbitSession = computed(() => props.entitySession?.kind === 'orbit' ? props.entitySession : null)
 const hasResumableEntitySession = computed(() => {
@@ -206,27 +203,11 @@ const hasResumableEntitySession = computed(() => {
   }
   return props.selectedOrbit?.id !== session.targetId
 })
-/** Discards every child inspector draft and clears the parent-visible editor error. */
-function cancelEdits(): void {
-  orbitInspectorRef.value?.cancelEdits(false)
-  emit('clear-error')
-}
-
 function resumeEntitySession(): void {
   const session = props.entitySession
   if (session) emit('resume-entity-session', session.id)
 }
 
-defineExpose({
-  hasUnsavedEdits: () => false,
-  isEditingObject: (objectId: string) =>
-    props.isEntityDraftTarget('object', objectId),
-  cancelEdits,
-  startObjectEdit: () => emit('request-object-edit'),
-  startOrbitEdit: () => emit('request-orbit-edit'),
-  objectSaveSucceeded: () => undefined,
-  orbitSaveSucceeded: () => undefined,
-})
 </script>
 
 <style scoped>

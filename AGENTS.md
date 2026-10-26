@@ -9,6 +9,8 @@ Before GitHub-driven analysis or implementation, fetch `origin` and compare with
 ## References
 
 - Development and review: the coordinator follows `.agents/skills/project-development/SKILL.md`; delegated specialists execute only their assigned scope.
+- Source changes and review: read `docs/agents/conventions.md`.
+- Editor state, commands, persistence or map integration: read `docs/architecture/editor.md`.
 - UI changes and UI review: read `docs/agents/ui.md` for component boundaries and consistency decisions.
 - GitHub intake and local planning: read `docs/agents/issue-tracker.md`.
 - Triage roles and labels: read `docs/agents/triage-labels.md`.

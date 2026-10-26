@@ -1,8 +1,9 @@
 /** Owns persistent Add intent and one transient, single-use completion token. */
-import { ref, type ComputedRef, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import {
   createOrbit,
   createSystemObject,
+  captureEffectiveObjectAngles,
   defaultOrbitRadius,
   minimumOrbitRadius,
   normalizeOrbitRotation,
@@ -31,13 +32,13 @@ import type {
   SystemCreationType,
   SystemMapHandle,
 } from './types'
+import { useEditorUiStore } from '../../stores/editor-ui'
 
 type CreationInputKey = keyof SystemCreationSession['inputs']
 type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
 
 interface SystemCreationWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   applyWorkspace: ApplyWorkspace
   isEntityCommandBlocked: (command: EntityCommand) => boolean
@@ -75,11 +76,12 @@ function parseFinite(value: string): number | undefined {
  */
 export function useSystemCreationWorkflows({
   workspace,
-  selectedSystem,
   systemMapRef,
   applyWorkspace,
   isEntityCommandBlocked,
 }: SystemCreationWorkflowOptions) {
+  const store = useEditorUiStore()
+  const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const creationSession = ref<SystemCreationSession | null>(null)
   let sessionSequence = 0
   let previewSequence = 0
@@ -510,14 +512,6 @@ export function useSystemCreationWorkflows({
     session.notice = 'Choose another target or use Placement to add by coordinates.'
   }
 
-  function materializeEffectiveAngles(system: StarSystem, orbitId: string, objectAngles: Record<string, number>): void {
-    const siblings = system.objects.filter(object => object.placement.kind === 'orbit' && object.placement.orbitId === orbitId)
-    siblings.forEach((object, index) => {
-      if (objectAngles[object.id] !== undefined) return
-      objectAngles[object.id] = -Math.PI / 2 + (index / Math.max(1, siblings.length)) * Math.PI * 2
-    })
-  }
-
   function confirmCreation(previewId: number): boolean {
     const session = creationSession.value
     if (!session?.preview || session.preview.id !== previewId) return false
@@ -552,12 +546,15 @@ export function useSystemCreationWorkflows({
         const object = session.type.subtype === 'other'
           ? { ...baseObject, subtype: validName(session.inputs.otherType, 'Object type') }
           : baseObject
-        const objectAngles = { ...currentWorkspace.layout.objectAngles }
+        let objectAngles: Record<string, number> | undefined
         let placement: typeof object.placement
         if (target.kind === 'free') {
           placement = { kind: 'system', x: target.point.x, y: target.point.y }
         } else if (target.kind === 'orbit') {
-          materializeEffectiveAngles(system, target.orbitId, objectAngles)
+          objectAngles = {
+            ...currentWorkspace.layout.objectAngles,
+            ...captureEffectiveObjectAngles(currentWorkspace, system, [target.orbitId]),
+          }
           placement = { kind: 'orbit', orbitId: target.orbitId }
           objectAngles[object.id] = target.angle
         } else {
@@ -568,7 +565,7 @@ export function useSystemCreationWorkflows({
           ...system,
           objects: [...system.objects, positionedObject],
         })
-        if (target.kind === 'orbit') {
+        if (objectAngles) {
           nextWorkspace = {
             ...nextWorkspace,
             layout: { ...nextWorkspace.layout, objectAngles },

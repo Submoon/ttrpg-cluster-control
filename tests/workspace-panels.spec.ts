@@ -125,6 +125,11 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   await expect(hierarchy).toBeHidden()
   await expect(hierarchyToggle).toBeFocused()
   await expect(dock).toBeVisible()
+
+  await hierarchyToggle.click()
+  await expectCompactPanel(page, 'hierarchy')
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await expectCompactPanel(page, 'inspector')
 })
 
 test('touch long press keeps focus inside the compact inspector after the touch is released', async ({ page }) => {

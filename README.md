@@ -46,7 +46,9 @@ npm run dev
 
 For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only.
 
-GitHub Actions runs lint, type checking, a production build and the full Playwright suite on pull requests and pushes to `main`. Playwright reports and attachments are available as workflow artifacts. For local changes, start with the checks relevant to the affected behavior; see [the development workflow](.agents/skills/project-development/SKILL.md) and [UI guidance](docs/agents/ui.md).
+GitHub Actions runs lint, type checking, a production build and the full Playwright suite on pull requests and pushes to `main`. Playwright reports and attachments are available as workflow artifacts. For local changes, see [verification guidance](docs/agents/testing.md).
+
+Technical references: [editor architecture](docs/architecture/editor.md), [source conventions](docs/agents/conventions.md), and [UI guidance](docs/agents/ui.md). Agent coordination follows [the development workflow](.agents/skills/project-development/SKILL.md).
 
 ## License
 

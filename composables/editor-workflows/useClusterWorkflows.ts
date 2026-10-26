@@ -1,78 +1,51 @@
 /**
  * Cluster commands coordinate selection and confirmation, then delegate persistence through the injected commit.
  */
-import { nextTick, onMounted, onUnmounted, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, type ComputedRef, type Ref } from 'vue'
 import {
-  addStarSystem,
   planMapEntityDeletion,
-  type JumpRoute,
   type LocalWorkspace,
   type MapDeletionPlan,
   type MapDeletionTarget,
-  type Orbit,
-  type StarSystem,
-  type SystemObject,
 } from '../../domain/workspace'
 import type {
-  MapInspectorHandle,
   EntityCommand,
   SaveState,
   TransitionOptions,
   WorkspaceDeletionReview,
 } from './types'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
+import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  commit: (nextWorkspace: LocalWorkspace) => Promise<void>
   applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
   onDeletionApplied: (plan: MapDeletionPlan) => void
   saveState: Readonly<Ref<SaveState>>
-  activeView: Ref<'cluster' | 'system'>
-  selectedSystemId: Ref<string | null>
-  selectedObjectId: Ref<string | null>
-  selectedOrbitId: Ref<string | null>
-  selectedRouteId: Ref<string | null>
   chartNamesDialogOpen: Readonly<ComputedRef<boolean>>
   fieldDefinitionDialogOpen: Ref<boolean>
-  selectedSystem: Readonly<ComputedRef<StarSystem | undefined>>
-  selectedObject: Readonly<ComputedRef<SystemObject | undefined>>
-  selectedOrbit: Readonly<ComputedRef<Orbit | undefined>>
-  selectedRoute: Readonly<ComputedRef<JumpRoute | undefined>>
-  mapInspectorRef: ShallowRef<MapInspectorHandle | null>
   beginRouteSession: (routeId?: string | null) => number | null
   routeSession: Readonly<Ref<RouteInspectorSession | null>>
   armRouteAdd: () => void
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
-  isEntityCommandBlocked: (command: EntityCommand) => boolean
   isEntityDraftCommandBlocked: (command: EntityCommand) => boolean
   isRouteCommandBlocked: (command: EntityCommand) => boolean
   isChartDraftTarget: (systemId: string) => boolean
-  contextStamp: () => string
-  selectCreatedSystem: (systemId: string, originStamp: string) => Promise<void>
   editorError: Ref<string>
 }
 
 /**
- * Composes cluster/system creation, route editing, dependent deletion, and keyboard-delete behavior.
- * @param options Editor refs, inspector bridge, draft-transition resolver, and page-owned commit.
- * @returns Cluster commands; commit and validation failures are surfaced through editorError.
+ * Composes guarded route editing, dependent deletion, and keyboard-delete behavior.
+ * @param options Workspace, draft guards, deletion lifecycle, and page-owned writer.
+ * @returns Guarded route and deletion commands; validation failures are surfaced through editorError.
  */
 export function useClusterWorkflows({
   workspace,
-  commit,
   applyWorkspace,
   onDeletionApplied,
   saveState,
-  activeView,
-  selectedRouteId,
   chartNamesDialogOpen,
   fieldDefinitionDialogOpen,
-  selectedSystem,
-  selectedObject,
-  selectedOrbit,
-  selectedRoute,
-  mapInspectorRef,
   beginRouteSession,
   routeSession,
   armRouteAdd,
@@ -80,10 +53,13 @@ export function useClusterWorkflows({
   isEntityDraftCommandBlocked,
   isRouteCommandBlocked,
   isChartDraftTarget,
-  contextStamp,
-  selectCreatedSystem,
   editorError,
 }: ClusterWorkflowOptions) {
+  const store = useEditorUiStore()
+  const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
+  const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
+  const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
+  const selectedRoute = computed(() => workspace.value?.cluster.routes.find(route => route.id === store.selectedRouteId))
   const deletionReview = ref<WorkspaceDeletionReview | null>(null)
   let deletionReviewSequence = 0
 
@@ -91,47 +67,21 @@ export function useClusterWorkflows({
     return error instanceof Error ? error.message : String(error)
   }
 
-  /**
-   * Creates and selects a new system before committing it to the workspace.
-   * @returns A promise that resolves after the attempt; commit failures populate editorError.
-   */
-  async function createSystem(): Promise<void> {
-    if (!workspace.value || !await resolveTransition()) return
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace) return
-    const originStamp = contextStamp()
-
-    let createdSystemId: string | null = null
-    try {
-      const result = addStarSystem(currentWorkspace)
-      createdSystemId = result.system.id
-      editorError.value = ''
-      await commit(result.workspace)
-    } catch (error) {
-      editorError.value = errorText(error)
-    }
-    // Commit publishes memory before waiting for durability. If the user changed context while
-    // that write was pending, the new chart remains saved in the cluster without stealing focus.
-    if (createdSystemId && contextStamp() === originStamp) {
-      await selectCreatedSystem(createdSystemId, originStamp)
-    }
-  }
-
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
   async function beginRoute(): Promise<void> {
     const currentWorkspace = workspace.value
     const existing = routeSession.value
-    if (currentWorkspace && activeView.value === 'cluster'
+    if (currentWorkspace && store.activeView === 'cluster'
       && existing?.routeId === null && existing.clusterId === currentWorkspace.cluster.id) {
-      selectedRouteId.value = null
+      store.setSelection({ selectedRouteId: null })
       armRouteAdd()
       editorError.value = ''
       return
     }
     if (!await resolveTransition({ leaveChart: false })) return
     const latestWorkspace = workspace.value
-    if (!latestWorkspace || activeView.value !== 'cluster') return
-    selectedRouteId.value = null
+    if (!latestWorkspace || store.activeView !== 'cluster') return
+    store.setSelection({ selectedRouteId: null })
     const sessionId = beginRouteSession(null)
     if (sessionId === null) return
     armRouteAdd()
@@ -351,12 +301,11 @@ export function useClusterWorkflows({
         || target.closest('input, textarea, select, [contenteditable="true"]')
       ))
       || saveState.value === 'saving'
-      || (mapInspectorRef.value?.hasUnsavedEdits() ?? false)
       || chartNamesDialogOpen.value
       || fieldDefinitionDialogOpen.value
     ) return
 
-    const removeSelected = activeView.value === 'cluster'
+    const removeSelected = store.activeView === 'cluster'
       ? selectedRoute.value ? deleteSelectedRoute : undefined
       : selectedObject.value
         ? deleteSelectedObject
@@ -375,7 +324,6 @@ export function useClusterWorkflows({
   onUnmounted(() => window.removeEventListener('keydown', handleDeleteShortcut))
 
   return {
-    createSystem,
     beginRoute,
     beginRouteEdit,
     deleteSystem,
@@ -383,7 +331,6 @@ export function useClusterWorkflows({
     deleteSelectedOrbit,
     deleteSelectedRoute,
     deletionReview,
-    openDeletionReview,
     cancelDeletionReview,
     confirmDeletionReview,
   }

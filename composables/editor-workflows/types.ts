@@ -1,5 +1,5 @@
 /**
- * Shared editor contracts. Refs cross workflow boundaries; imperative handles acknowledge draft saves.
+ * Shared editor contracts for parent-owned sessions and map interactions.
  */
 import type { Ref } from 'vue'
 import type {
@@ -14,7 +14,6 @@ import type {
   OrbitRadii,
   Point,
   SystemObject,
-  SystemObjectChanges,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
@@ -247,24 +246,6 @@ export interface EditorWorkflowOptions {
   applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
 }
 
-/** Imperative bridge from workflow commands to inspector-local draft state. */
-export interface MapInspectorHandle {
-  /** Whether a legacy presentation-local inspector form currently has unsaved edits. */
-  hasUnsavedEdits(): boolean
-  /** Whether the specified object editor owns an active draft. */
-  isEditingObject(objectId: string): boolean
-  /** Discards all active inspector drafts. */
-  cancelEdits(): void
-  /** Starts the currently selected object draft. */
-  startObjectEdit(): void
-  /** Starts the currently selected Orbit draft. */
-  startOrbitEdit(): void
-  /** Acknowledges a successful parent commit so the object editor may reset its draft. */
-  objectSaveSucceeded(): void
-  /** Acknowledges a successful parent commit so the Orbit editor may reset its draft. */
-  orbitSaveSucceeded(): void
-}
-
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */
 export interface MapNavigationHandle extends MapImageExporter {
   getViewport(): MapViewport
@@ -298,7 +279,6 @@ export interface ClusterSystemMovePreview {
   targetPosition: Point
 }
 export type WorkspacePanel = 'hierarchy' | 'inspector'
-export type TransitionResult = { accepted: boolean }
 
 export type MapVisitSelection =
   | { kind: 'system'; id: string; inspect?: boolean }
@@ -422,27 +402,4 @@ export interface CustomFieldCreateRequest {
   name: string
   type: CustomFieldType
   options: string[]
-}
-
-/** One validated candidate object edit awaiting a parent commit. */
-export interface ObjectEditRequest {
-  objectId: string
-  changes: SystemObjectChanges
-}
-
-/** Orbit form values; radii use scene units and center, when present, is normalized map position. */
-export interface OrbitEditRequest {
-  orbitId: string
-  targetOrder: number
-  radii: OrbitRadii
-  center?: Point
-}
-
-/** Route form values; null destination requires an unresolved-exit label. */
-export interface JumpRouteSaveRequest {
-  routeId: string | null
-  jumpLevel: number
-  fromPointId: string
-  toPointId: string | null
-  unresolvedExit: string
 }

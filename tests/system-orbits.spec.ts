@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
-import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation } from './helpers'
+import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 
 type DragPreviewWindow = Window & {
@@ -354,50 +354,31 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     return !!hit && (hit === element || element.contains(hit))
   })
   expect(verticalHandleCenterIsHitTarget).toBe(true)
-  // Playwright mouse coordinates are integral CSS pixels. Find the nearest delivered pixel
-  // that maps back to a world radius which rounds to 60, instead of letting the browser's
-  // screen-to-world quantization move the test across the 59.5 radius boundary.
+  // Playwright delivers integral CSS pixels. Drive the nearest representable pixel and
+  // derive its exact world radius instead of searching for an impossible exact 60-unit input.
   const verticalResizeTarget = await map.evaluate((element, target) => {
     const content = element.querySelector<SVGGElement>('.system-map-content')
     const transform = content?.getScreenCTM()
     if (!transform) throw new Error('Could not measure the vertical Orbit resize transform.')
 
     const screenTarget = new DOMPoint(target.point.x, target.point.y).matrixTransform(transform)
-    const baseClientPoint = { x: Math.round(screenTarget.x), y: Math.round(screenTarget.y) }
+    const clientPoint = { x: Math.round(screenTarget.x), y: Math.round(screenTarget.y) }
     const inverse = transform.inverse()
-    let nearest: { point: { x: number; y: number }; distance: number } | null = null
-
-    for (let offsetX = -4; offsetX <= 4; offsetX += 1) {
-      for (let offsetY = -4; offsetY <= 4; offsetY += 1) {
-        const clientPoint = {
-          x: baseClientPoint.x + offsetX,
-          y: baseClientPoint.y + offsetY,
-        }
-        const worldPoint = new DOMPoint(clientPoint.x, clientPoint.y).matrixTransform(inverse)
-        const verticalRadius = target.center.y - worldPoint.y
-        if (Math.round(verticalRadius) !== 60) continue
-
-        const distance = Math.hypot(
-          clientPoint.x - screenTarget.x,
-          clientPoint.y - screenTarget.y,
-        )
-        if (!nearest || distance < nearest.distance) {
-          nearest = { point: { x: worldPoint.x, y: worldPoint.y }, distance }
-        }
-      }
+    const worldPoint = new DOMPoint(clientPoint.x, clientPoint.y).matrixTransform(inverse)
+    return {
+      point: { x: worldPoint.x, y: worldPoint.y },
+      radius: Math.round(Math.abs(worldPoint.y - target.center.y)),
+      screenDistance: Math.hypot(clientPoint.x - screenTarget.x, clientPoint.y - screenTarget.y),
     }
-
-    if (!nearest) {
-      throw new Error('Could not find an integral pointer position that produces a 60-unit vertical radius.')
-    }
-    return nearest.point
   }, {
     point: { x: geometry.cx, y: geometry.cy - 60 },
     center: { x: geometry.cx, y: geometry.cy },
   })
-  await dragToWorldPoint(page, map, verticalHandle, verticalResizeTarget, true)
+  expect(verticalResizeTarget.screenDistance).toBeLessThanOrEqual(Math.SQRT1_2)
+  await dragToWorldPoint(page, map, verticalHandle, verticalResizeTarget.point, true)
   await expect(ring).toHaveAttribute('rx', '320')
-  await expect(ring).toHaveAttribute('ry', '60')
+  await expect(ring).toHaveAttribute('ry', String(verticalResizeTarget.radius))
+  const axisResizedVerticalRadius = verticalResizeTarget.radius
 
   const globalScale = 1.25
   const globalStartAngle = 1.4
@@ -406,7 +387,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     orbit.locator('.orbit-hit-target'),
     {
       x: geometry.cx + 320 * globalScale * Math.cos(globalStartAngle),
-      y: geometry.cy + 60 * globalScale * Math.sin(globalStartAngle),
+      y: geometry.cy + axisResizedVerticalRadius * globalScale * Math.sin(globalStartAngle),
     },
     globalStartAngle,
   )
@@ -414,7 +395,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const globallyResizedVerticalRadius = Number(await ring.getAttribute('ry'))
   expect(Math.abs(globallyResizedHorizontalRadius - 400)).toBeLessThanOrEqual(3)
   expect(Math.abs(globallyResizedVerticalRadius - 75)).toBeLessThanOrEqual(3)
-  expect(Math.abs(globallyResizedHorizontalRadius / 320 - globallyResizedVerticalRadius / 60))
+  expect(Math.abs(globallyResizedHorizontalRadius / 320
+    - globallyResizedVerticalRadius / axisResizedVerticalRadius))
     .toBeLessThan(0.02)
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))
     .toBeCloseTo(angleBeforeResize, 2)
@@ -442,24 +424,25 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     x: geometry.cx + 90 * Math.sin(handleRotationRadians),
     y: geometry.cy - 90 * Math.cos(handleRotationRadians),
   }
-  const roundedClientVerticalRadius = await map.evaluate((element, target) => {
+  const rotatedResizeRadius = await map.evaluate((element, target) => {
     const content = element.querySelector<SVGGElement>('.system-map-content')
     const transform = content?.getScreenCTM()
     if (!transform) throw new Error('Could not measure the rotated Orbit drag transform.')
     const screenPoint = new DOMPoint(target.point.x, target.point.y).matrixTransform(transform)
     const roundedClientPoint = new DOMPoint(Math.round(screenPoint.x), Math.round(screenPoint.y))
     const deliveredWorldPoint = roundedClientPoint.matrixTransform(transform.inverse())
-    return (deliveredWorldPoint.x - target.center.x) * Math.sin(target.rotationRadians)
+    const verticalRadius = (deliveredWorldPoint.x - target.center.x) * Math.sin(target.rotationRadians)
       - (deliveredWorldPoint.y - target.center.y) * Math.cos(target.rotationRadians)
+    return Math.round(Math.abs(verticalRadius))
   }, {
     point: rotatedVerticalDropPoint,
     center: { x: geometry.cx, y: geometry.cy },
     rotationRadians: handleRotationRadians,
   })
-  expect(Math.round(roundedClientVerticalRadius)).toBe(90)
+  // The delivered radius is exact for the nearest integral client pixel under this map transform.
   await dragToWorldPoint(page, map, verticalHandle, rotatedVerticalDropPoint, true)
   await expect(ring).toHaveAttribute('rx', String(globallyResizedHorizontalRadius))
-  await expect(ring).toHaveAttribute('ry', '90')
+  await expect(ring).toHaveAttribute('ry', String(rotatedResizeRadius))
   const resizedHorizontalRadius = Number(await ring.getAttribute('rx'))
   const resizedVerticalRadius = Number(await ring.getAttribute('ry'))
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))
@@ -1296,4 +1279,56 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
     { kind: 'orbit', orbitId },
     { kind: 'orbit', orbitId },
   ])
+})
+
+test('keyboard object selection keeps focus on its logical system mark after redraw', async ({ page }) => {
+  const { systemName } = await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: `${systemName} star system map` })
+  const primaryStar = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+
+  await primaryStar.focus()
+  await page.keyboard.press('Enter')
+
+  await expect(map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })).toBeFocused()
+})
+
+test('system map blur cancels an active object drag and the next drag still works', async ({ page }) => {
+  const { systemName } = await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: `${systemName} star system map` })
+  const primaryStar = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+  await setWorkspaceMapMode(page, 'Move')
+
+  const bounds = await primaryStar.boundingBox()
+  if (!bounds) throw new Error('Could not find the primary star for the cancellation test.')
+  const originalTransform = await primaryStar.getAttribute('transform')
+  const selectionStateBefore = await page.evaluate(() => ({
+    mozUserSelect: document.documentElement.style.getPropertyValue('-moz-user-select'),
+    hasSavedMozUserSelect: Object.hasOwn(document.documentElement, '__noselect'),
+  }))
+  const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 72, start.y + 36, { steps: 4 })
+  await expect.poll(() => primaryStar.getAttribute('transform')).not.toBe(originalTransform)
+
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(primaryStar).toHaveAttribute('transform', originalTransform!)
+  const remainingD3DragResources = await page.evaluate(() => {
+    const d3Window = window as Window & { __on?: Array<{ type: string; name: string }> }
+    const listeners = (d3Window.__on ?? [])
+      .filter(listener => listener.name === 'drag'
+        && ['mousemove', 'mouseup', 'dragstart', 'selectstart'].includes(listener.type))
+      .map(listener => listener.type)
+    return {
+      listeners,
+      mozUserSelect: document.documentElement.style.getPropertyValue('-moz-user-select'),
+      hasSavedMozUserSelect: Object.hasOwn(document.documentElement, '__noselect'),
+    }
+  })
+  expect(remainingD3DragResources.listeners).toEqual([])
+  expect(remainingD3DragResources.mozUserSelect).toBe(selectionStateBefore.mozUserSelect)
+  expect(remainingD3DragResources.hasSavedMozUserSelect).toBe(selectionStateBefore.hasSavedMozUserSelect)
+  await page.mouse.up()
+  await dragBy(page, primaryStar, { x: 36, y: 20 })
+  await expect(primaryStar).not.toHaveAttribute('transform', originalTransform!)
 })
