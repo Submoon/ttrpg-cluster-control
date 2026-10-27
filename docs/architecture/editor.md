@@ -18,7 +18,11 @@ Screens and map interactions read shared UI state and call focused editor comman
 
 A guarded navigation illustrates the order: capture the starting context, ask the relevant draft sessions to resolve, then verify that the context and target still exist after the asynchronous wait. Only an accepted transition updates selection or map state. An editing command computes and validates a complete workspace change before asking the writer to apply it. This keeps stale requests from changing a newer selection and keeps related placement rules consistent across entry points.
 
+Ordinary editing commands submit a bounded action descriptor, a proposal calculation and an operation-owned current-context check to the page's shared mutation executor. It validates a detached proposal, checks the captured applied-data revision and ownership before publication, and reports an applied, unchanged or rejected verdict. Mutation-facing callers await that verdict before closing a draft, consuming a preview or continuing a transition; an applied verdict still carries its separate durable acknowledgement. Initial creation, hydration and backup restoration establish baselines outside ordinary mutation execution. The executor does not currently maintain undo/redo history.
+
 `useLocalWorkspace` remains the single owner of hydrated workspace data and ordered IndexedDB writes. Its `applyWorkspace` operation validates and publishes a snapshot in memory, then enqueues that snapshot for durable saving. These are separate completion points: a command can report an applied in-memory change while the UI continues to display saving or save-error status. Keep its ordered queue, save recovery, and durable workspace outside Pinia; do not add a parallel persistence path.
+
+Its read-only applied-data revision advances when memory is published or a hydrated/recovered baseline is installed. This is distinct from the queue revision used for save feedback: retrying durability does not create another applied-data revision. The page creates and disposes one mutation executor and injects it into both editor workflows and separately composed import actions.
 
 Nuxt renders with SSR enabled. Store creation and state must remain isolated to the Nuxt application/request and compatible with hydration. Use the Nuxt Pinia integration, expose setup-store state in the form Pinia expects, and preserve reactivity when extracting state. Do not access `window` or create browser subscriptions during server module evaluation. See [Pinia's Nuxt integration](https://pinia.vuejs.org/ssr/nuxt.html) and [setup-store concepts](https://pinia.vuejs.org/core-concepts/).
 
@@ -32,6 +36,7 @@ The store does not enforce action-only mutation, session ownership, or domain in
 | --- | --- |
 | Shared UI state and accepted-state actions | [editor-ui store](../../stores/editor-ui.ts) |
 | Feature composition and single workspace writer injection | [useEditorWorkflows](../../composables/useEditorWorkflows.ts) |
+| Validated mutation proposals and truthful memory-application verdicts | [workspace mutation executor](../../composables/editor-workflows/workspace-mutations.ts) |
 | Guarded navigation and remembered visits | [useEditorNavigation](../../composables/editor-workflows/useEditorNavigation.ts) |
 | Draft-resolution sequencing | [useEditorTransitions](../../composables/editor-workflows/useEditorTransitions.ts) |
 | Chart-name draft lifetime | [useChartNamesSession](../../composables/editor-workflows/useChartNamesSession.ts) |

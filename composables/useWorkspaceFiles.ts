@@ -12,13 +12,14 @@ import {
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
 type MapKind = 'jump-cluster' | 'star-system'
 
 interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
   resolveImportDefinitionChanges: (existingFieldIds: string[]) => Promise<boolean>
 }
@@ -46,7 +47,7 @@ interface ImportEpoch {
 export function useWorkspaceFiles({
   workspace,
   selectedSystem,
-  applyWorkspace,
+  mutations,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
 }: WorkspaceFileActionsOptions) {
@@ -387,9 +388,52 @@ export function useWorkspaceFiles({
       }
       if (!epochIsCurrent(epoch)) return
 
-      const { durable } = applyWorkspace(finalPrepared.workspace)
+      const submittedSignature = finalEffects.signature
+      const isSubmittedImportCurrent = (): boolean => importOperationIsCurrent(epoch)
+        && epochIsCurrent(epoch)
+        && importContent === content
+        && importReviewSignature === submittedSignature
+        && mutableImportReview.value.open
+        && mutableImportReview.value.confirming
+      const result = await mutations.execute({
+        action: {
+          kind: 'import',
+          label: 'Import independent copy',
+          target: { kind: 'cluster', id: finalWorkspace.cluster.id },
+        },
+        prepare: current => prepareJsonImport(current, content).workspace,
+        isCurrent: isSubmittedImportCurrent,
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedImportCurrent()) {
+        abandonStaleImport(epoch)
+        return
+      }
+      if (result.status === 'rejected') {
+        if (result.reason === 'stale') {
+          const latestWorkspace = workspace.value
+          if (!latestWorkspace) {
+            abandonStaleImport(epoch)
+            return
+          }
+          const latestPrepared = prepareJsonImport(latestWorkspace, content)
+          const latestEffects = jsonImportReviewEffects(latestWorkspace, content, latestPrepared)
+          const latestConflict = getFieldDefinitionImportConflict(latestPrepared.workspace)
+          if (latestEffects.signature !== submittedSignature) {
+            refreshImportReview(
+              latestPrepared.summary,
+              latestEffects.signature,
+              'The workspace changed before this import could be applied. Review the updated effects before importing.',
+              latestConflict,
+            )
+            return
+          }
+        }
+        mutableImportReview.value.error = result.message
+        return
+      }
+
       clearImportReview()
-      void durable.catch(() => {})
     } catch (error) {
       if (epochIsCurrent(epoch)) mutableImportReview.value.error = errorText(error)
       else abandonStaleImport(epoch)

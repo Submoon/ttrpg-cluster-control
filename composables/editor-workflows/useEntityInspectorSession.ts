@@ -30,16 +30,15 @@ import type {
   OrbitEditBaseline,
   OrbitPlacementPreview,
 } from './types'
+import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { objectDraftValuesFor } from './entity-draft-values'
 import { parseFiniteInput, validateObjectDraft } from './entity-draft-validation'
 import { objectPositions, objectsMovedWithOrbit } from '../../utils/system-map-geometry'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 
-type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
-
 interface EntityInspectorSessionOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: ApplyWorkspace
+  mutations: WorkspaceMutationExecutor
 }
 
 interface DraftDependencySnapshots {
@@ -383,7 +382,7 @@ function deletionChangesOwnedDependencies(
   return false
 }
 
-export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityInspectorSessionOptions) {
+export function useEntityInspectorSession({ workspace, mutations }: EntityInspectorSessionOptions) {
   const entitySession = ref<EntityInspectorSession | null>(null)
   const orbitPlacementPreview = ref<OrbitPlacementPreviewState | null>(null)
   let sessionSequence = 0
@@ -879,9 +878,9 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
   /**
    * Validates the active draft before finishing its session. Changed drafts publish to memory and start an
    * ordered save; a clean draft finishes after the same target and dependency guards without publishing.
-   * A true result means the session completed or the writer accepted the snapshot; durability is tracked separately.
+   * A true result means this exact draft was applied or validated unchanged; durability is tracked separately.
    */
-  function applyEntitySession(expectedId?: number): boolean {
+  async function applyEntitySession(expectedId?: number): Promise<boolean> {
     const session = entitySession.value
     if (!session || (expectedId !== undefined && session.id !== expectedId)) return false
     const currentWorkspace = workspace.value
@@ -906,6 +905,41 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       session.error = error
       return false
     }
+
+    const submittedSignature = JSON.stringify({
+      id: session.id,
+      clusterId: session.clusterId,
+      systemId: session.systemId,
+      targetId: session.targetId,
+      kind: session.kind,
+      initial: session.initial,
+      draft: session.draft,
+      centerMoveCandidates: session.kind === 'orbit' ? session.centerMoveCandidates : null,
+    })
+    const submittedPreview = orbitPlacementPreview.value?.sessionId === session.id
+      ? JSON.stringify(orbitPlacementPreview.value)
+      : null
+    const isSubmittedDraftCurrent = (): boolean => {
+      const active = entitySession.value
+      return active?.id === session.id
+        && JSON.stringify({
+          id: active.id,
+          clusterId: active.clusterId,
+          systemId: active.systemId,
+          targetId: active.targetId,
+          kind: active.kind,
+          initial: active.initial,
+          draft: active.draft,
+          centerMoveCandidates: active.kind === 'orbit' ? active.centerMoveCandidates : null,
+        }) === submittedSignature
+    }
+    const isSubmittedPreviewCurrent = (): boolean => {
+      const currentPreview = orbitPlacementPreview.value?.sessionId === session.id
+        ? JSON.stringify(orbitPlacementPreview.value)
+        : null
+      return currentPreview === submittedPreview
+    }
+    const isSubmittedMutationCurrent = (): boolean => isSubmittedDraftCurrent() && isSubmittedPreviewCurrent()
 
     try {
       let nextWorkspace: LocalWorkspace
@@ -959,16 +993,27 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
         return true
       }
 
-      const { durable } = applyWorkspace(nextWorkspace)
-      if (entitySession.value?.id === session.id) {
-        if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
-        entitySession.value = null
-        draftDependencies = null
+      const target = session.kind === 'object'
+        ? { kind: 'object' as const, id: session.targetId, systemId: session.systemId }
+        : { kind: 'orbit' as const, id: session.targetId, systemId: session.systemId }
+      const result = await mutations.execute({
+        action: { kind: 'update', label: session.kind === 'object' ? 'Edit map object' : 'Edit Orbit', target },
+        prepare: () => nextWorkspace,
+        isCurrent: isSubmittedMutationCurrent,
+      })
+      if (result.status === 'rejected') {
+        if (isSubmittedDraftCurrent()) session.error = result.message
+        return false
       }
-      void durable.catch(() => undefined)
+
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedDraftCurrent()) return false
+      if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
+      entitySession.value = null
+      draftDependencies = null
       return true
     } catch (error) {
-      session.error = error instanceof Error ? error.message : String(error)
+      if (isSubmittedDraftCurrent()) session.error = error instanceof Error ? error.message : String(error)
       return false
     }
   }

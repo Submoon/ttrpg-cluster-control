@@ -15,11 +15,12 @@ import type {
   WorkspaceDeletionReview,
 } from './types'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
+import type { WorkspaceMutationExecutor, WorkspaceMutationResult, WorkspaceMutationTarget } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   onDeletionApplied: (plan: MapDeletionPlan) => void
   saveState: Readonly<Ref<SaveState>>
   chartNamesDialogOpen: Readonly<ComputedRef<boolean>>
@@ -41,7 +42,7 @@ interface ClusterWorkflowOptions {
  */
 export function useClusterWorkflows({
   workspace,
-  applyWorkspace,
+  mutations,
   onDeletionApplied,
   saveState,
   chartNamesDialogOpen,
@@ -65,6 +66,35 @@ export function useClusterWorkflows({
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  function throwIfRejected(result: WorkspaceMutationResult): void {
+    if (result.status === 'rejected') throw new Error(result.message)
+  }
+
+  function mutationTarget(target: MapDeletionTarget, clusterId: string): { target: WorkspaceMutationTarget; parent: WorkspaceMutationTarget } {
+    switch (target.kind) {
+      case 'system':
+        return {
+          target: { kind: 'system', id: target.systemId },
+          parent: { kind: 'cluster', id: clusterId },
+        }
+      case 'route':
+        return {
+          target: { kind: 'route', id: target.routeId },
+          parent: { kind: 'cluster', id: clusterId },
+        }
+      case 'object':
+        return {
+          target: { kind: 'object', id: target.objectId, systemId: target.systemId },
+          parent: { kind: 'system', id: target.systemId },
+        }
+      case 'orbit':
+        return {
+          target: { kind: 'orbit', id: target.orbitId, systemId: target.systemId },
+          parent: { kind: 'system', id: target.systemId },
+        }
+    }
   }
 
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
@@ -250,12 +280,42 @@ export function useClusterWorkflows({
 
     if (deletionReview.value?.id !== reviewId) return
     try {
-      const { durable } = applyWorkspace(acceptedPlan.workspace)
+      const selectedTarget = mutationTarget(target, active.clusterId)
+      let appliedPlan: MapDeletionPlan | null = null
+      const result = await mutations.execute({
+        action: {
+          kind: 'delete',
+          label: `Delete ${acceptedPlan.entityLabel}`,
+          target: selectedTarget.target,
+          parent: selectedTarget.parent,
+        },
+        isCurrent: () => {
+          const currentReview = deletionReview.value
+          const latestWorkspace = workspace.value
+          return currentReview?.id === reviewId
+            && currentReview.confirming
+            && currentReview.clusterId === active.clusterId
+            && latestWorkspace !== null
+            && latestWorkspace.cluster.id === active.clusterId
+        },
+        prepare: (latest) => {
+          if (latest.cluster.id !== active.clusterId) throw new Error('The Jump Cluster changed before this deletion could be applied.')
+          const freshPlan = planMapEntityDeletion(latest, target)
+          if (freshPlan.effectSignature !== acceptedPlan.effectSignature) {
+            throw new Error('The deletion effects changed. Review the updated consequences and confirm again.')
+          }
+          appliedPlan = freshPlan
+          return freshPlan.workspace
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
+      if (deletionReview.value?.id !== reviewId) return
       deletionReview.value = null
-      onDeletionApplied(acceptedPlan)
+      if (result.status === 'applied' && appliedPlan) onDeletionApplied(appliedPlan)
       editorError.value = ''
-      void durable.catch(() => undefined)
     } catch (error) {
+      if (deletionReview.value?.id !== reviewId) return
       refreshDeletionReview(reviewId, target)
       if (deletionReview.value?.id === reviewId) deletionReview.value.error = errorText(error)
     }

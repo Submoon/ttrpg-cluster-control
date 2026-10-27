@@ -29,10 +29,11 @@ import type {
   FieldDefinitionsSessionState,
 } from './types'
 import type { TransitionOptions } from './types'
+import type { WorkspaceMutationAction, WorkspaceMutationExecutor, WorkspaceMutationKind, WorkspaceMutationResult } from './workspace-mutations'
 
 interface FieldDefinitionWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   isEntityCommandBlocked: (command: EntityCommand) => boolean
 }
@@ -50,6 +51,7 @@ interface PreparedFieldMutation {
   signature: string
   requiresReview: boolean
   listNeighborId: string | null
+  mutationKind: WorkspaceMutationKind
 }
 
 /**
@@ -59,7 +61,7 @@ interface PreparedFieldMutation {
  */
 export function useFieldDefinitionWorkflows({
   workspace,
-  applyWorkspace,
+  mutations,
   resolveTransition,
   isEntityCommandBlocked,
 }: FieldDefinitionWorkflowOptions) {
@@ -82,6 +84,7 @@ export function useFieldDefinitionWorkflows({
   let preparedFieldMutation: PreparedFieldMutation | null = null
   let confirmingFieldMutation = false
   let fieldMutationEpoch = 0
+  let pendingFieldDeletionId: string | null = null
 
   function currentDefinition(fieldId: string | null): FieldDefinitionSnapshot | null {
     if (!fieldId) return null
@@ -339,7 +342,8 @@ export function useFieldDefinitionWorkflows({
     }
   }
 
-  watch(workspace, () => {
+  function reconcileFieldSessionAfterWorkspaceChange(): void {
+    if (pendingFieldDeletionId && !currentDefinition(pendingFieldDeletionId)) return
     const editDraft = fieldDefinitionsSession.draft
     const latestDefinition = editDraft ? currentDefinition(editDraft.baseline.id) : null
     if (editDraft && latestDefinition
@@ -366,10 +370,16 @@ export function useFieldDefinitionWorkflows({
       }
       if (fieldDefinitionsSession.screen !== 'new') fieldDefinitionsSession.screen = 'list'
     }
-  }, { flush: 'sync' })
+  }
+
+  watch(workspace, reconcileFieldSessionAfterWorkspaceChange, { flush: 'sync' })
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  function throwIfRejected(result: WorkspaceMutationResult): void {
+    if (result.status === 'rejected') throw new Error(result.message)
   }
 
   function optionsFromDraft(value: string): string[] {
@@ -483,8 +493,9 @@ export function useFieldDefinitionWorkflows({
   function prepareFieldMutation(
     action: FieldMutationAction,
     afterApply?: FieldDefinitionsIntent,
+    sourceWorkspace = workspace.value,
   ): PreparedFieldMutation {
-    const currentWorkspace = workspace.value
+    const currentWorkspace = sourceWorkspace
     if (!currentWorkspace) throw new Error('The workspace is no longer available.')
 
     let candidate = currentWorkspace
@@ -588,6 +599,14 @@ export function useFieldDefinitionWorkflows({
       after,
       impacts: review.impacts,
     })
+    const mutationKind: WorkspaceMutationKind = operation === 'remove'
+      ? 'delete'
+      : after?.name !== before.name
+        && after?.type === before.type
+        && sameFieldOptions(after?.type === 'single-select' ? after.options : [], before.type === 'single-select' ? before.options : [])
+        && sameCustomFieldApplicability(after?.applicability, before.applicability)
+        ? 'rename'
+        : 'update'
 
     return {
       action,
@@ -598,6 +617,7 @@ export function useFieldDefinitionWorkflows({
       signature,
       requiresReview,
       listNeighborId: operation === 'remove' ? neighborAfterRemoval(currentWorkspace, fieldId) : null,
+      mutationKind,
     }
   }
 
@@ -608,16 +628,21 @@ export function useFieldDefinitionWorkflows({
     fieldDefinitionsSession.error = null
   }
 
-  function publishPreparedMutation(prepared: PreparedFieldMutation): boolean {
-    const currentWorkspace = workspace.value
-    if (!currentWorkspace) return false
-
-    let durable: Promise<void> | null = null
-    if (prepared.candidate !== currentWorkspace) {
-      durable = applyWorkspace(prepared.candidate).durable
-      fieldDefinitionsSession.appliedAck += 1
+  function preparedMutationAction(prepared: PreparedFieldMutation, clusterId: string): WorkspaceMutationAction {
+    const label = prepared.mutationKind === 'delete'
+      ? `Delete ${prepared.review.fieldName}`
+      : prepared.mutationKind === 'rename'
+        ? `Rename ${prepared.review.fieldName}`
+        : `Update ${prepared.review.fieldName}`
+    return {
+      kind: prepared.mutationKind,
+      label,
+      target: { kind: 'field', id: prepared.fieldId },
+      parent: { kind: 'cluster', id: clusterId },
     }
+  }
 
+  function completePreparedMutation(prepared: PreparedFieldMutation): void {
     if (prepared.action.kind === 'remove') {
       fieldDefinitionsSession.selectedId = null
       fieldDefinitionsSession.screen = 'list'
@@ -640,9 +665,10 @@ export function useFieldDefinitionWorkflows({
       fieldDefinitionsSession.error = null
     }
     preparedFieldMutation = null
-    if (prepared.afterApply) completeNavigation(prepared.afterApply)
-    if (durable) void durable.catch(() => undefined)
-    return true
+    if (prepared.afterApply) {
+      fieldDefinitionsSession.pendingGuard = null
+      completeNavigation(prepared.afterApply)
+    }
   }
 
   async function applyPreparedMutation(
@@ -650,6 +676,8 @@ export function useFieldDefinitionWorkflows({
     confirmedSignature?: string,
   ): Promise<boolean> {
     const epochAtStart = fieldMutationEpoch
+    let workspaceAtStart: LocalWorkspace | null = null
+    let mutationApplied = false
     let prepared: PreparedFieldMutation
     try {
       prepared = prepareFieldMutation(initial.action, initial.afterApply)
@@ -680,11 +708,42 @@ export function useFieldDefinitionWorkflows({
         }
       }
 
-      return publishPreparedMutation(prepared)
+      const currentWorkspace = workspace.value
+      if (!currentWorkspace) return false
+      workspaceAtStart = currentWorkspace
+      pendingFieldDeletionId = prepared.action.kind === 'remove' ? prepared.fieldId : null
+      let executedPreparation: PreparedFieldMutation | null = null
+      const result = await mutations.execute({
+        action: preparedMutationAction(prepared, currentWorkspace.cluster.id),
+        isCurrent: () => fieldMutationEpoch === epochAtStart
+          && (!confirmedSignature || preparedFieldMutation?.signature === confirmedSignature),
+        prepare: (latestWorkspace) => {
+          const latest = prepareFieldMutation(prepared.action, prepared.afterApply, latestWorkspace)
+          if (latest.signature !== prepared.signature) {
+            throw new Error('The field changed while its update was being applied. Review the current effects and try again.')
+          }
+          executedPreparation = latest
+          return latest.candidate
+        },
+      })
+      if (result.status === 'applied') {
+        void result.durable.catch(() => undefined)
+        fieldDefinitionsSession.appliedAck += 1
+        mutationApplied = true
+      }
+      throwIfRejected(result)
+      if (fieldMutationEpoch !== epochAtStart
+        || (confirmedSignature && preparedFieldMutation?.signature !== confirmedSignature)) return false
+      completePreparedMutation(executedPreparation ?? prepared)
+      return true
     } catch (error) {
       fieldDefinitionsSession.error = errorText(error)
-      if (confirmedSignature) invalidatePreparedMutation()
       return false
+    } finally {
+      pendingFieldDeletionId = null
+      if (!mutationApplied && workspaceAtStart && workspace.value !== workspaceAtStart) {
+        reconcileFieldSessionAfterWorkspaceChange()
+      }
     }
   }
 
@@ -711,41 +770,86 @@ export function useFieldDefinitionWorkflows({
       await applyPreparedMutation(fresh, staged.signature)
     } catch (error) {
       fieldDefinitionsSession.error = errorText(error)
-      invalidatePreparedMutation()
     } finally {
       confirmingFieldMutation = false
     }
   }
 
-  function publishCreatedDefinition(
+  async function publishCreatedDefinition(
     request: CustomFieldCreateRequest,
     afterApply?: FieldDefinitionsIntent,
-  ): boolean {
+  ): Promise<boolean> {
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return false
 
     try {
-      let candidate = addCustomFieldDefinition(
+      const initialCandidate = addCustomFieldDefinition(
         currentWorkspace,
         request.name,
         request.type,
         request.options,
       )
       const oldFieldIds = new Set(currentWorkspace.objectFieldSettings.customFields.map(field => field.id))
-      const createdField = candidate.objectFieldSettings.customFields.find(field => !oldFieldIds.has(field.id))
-      if (!createdField) throw new Error('The new field definition could not be identified.')
-      if (fieldDefinitionsSession.createDraft?.applicability !== undefined) {
-        candidate = updateCustomFieldApplicability(
-          candidate,
-          createdField.id,
-          fieldDefinitionsSession.createDraft.applicability,
-        )
+      const initialField = initialCandidate.objectFieldSettings.customFields.find(field => !oldFieldIds.has(field.id))
+      if (!initialField) throw new Error('The new field definition could not be identified.')
+      const fieldId = initialField.id
+      const applicability = fieldDefinitionsSession.createDraft?.applicability?.map(target => ({ ...target }))
+      const epochAtStart = fieldMutationEpoch
+      const draftSignature = JSON.stringify({ request, applicability })
+      const result = await mutations.execute({
+        action: {
+          kind: 'create',
+          label: `Create ${request.name}`,
+          target: { kind: 'field', id: fieldId },
+          parent: { kind: 'cluster', id: currentWorkspace.cluster.id },
+        },
+        isCurrent: () => {
+          const latest = workspace.value
+          return fieldMutationEpoch === epochAtStart
+            && latest !== null && latest.cluster.id === currentWorkspace.cluster.id
+            && JSON.stringify({
+            request: {
+              name: fieldDefinitionsSession.createDraft?.name,
+              type: fieldDefinitionsSession.createDraft?.type,
+              options: fieldDefinitionsSession.createDraft?.type === 'single-select'
+                ? optionsFromDraft(fieldDefinitionsSession.createDraft.options)
+                : [],
+            },
+            applicability: fieldDefinitionsSession.createDraft?.applicability,
+            }) === draftSignature
+        },
+        prepare: (latestWorkspace) => {
+          if (latestWorkspace.cluster.id !== currentWorkspace.cluster.id) throw new Error('The workspace changed before this field could be created.')
+          let candidate = addCustomFieldDefinition(latestWorkspace, request.name, request.type, request.options)
+          const previousIds = new Set(latestWorkspace.objectFieldSettings.customFields.map(field => field.id))
+          const generatedField = candidate.objectFieldSettings.customFields.find(field => !previousIds.has(field.id))
+          if (!generatedField) throw new Error('The new field definition could not be identified.')
+          candidate = {
+            ...candidate,
+            objectFieldSettings: {
+              ...candidate.objectFieldSettings,
+              customFields: candidate.objectFieldSettings.customFields.map(field =>
+                field.id === generatedField.id ? { ...field, id: fieldId } : field,
+              ),
+            },
+          }
+          if (applicability !== undefined) {
+            candidate = updateCustomFieldApplicability(candidate, fieldId, applicability)
+          }
+          if (!isLocalWorkspace(candidate)) throw new Error('The proposed field is not a valid workspace update.')
+          return candidate
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
+      if (result.status === 'applied') fieldDefinitionsSession.appliedAck += 1
+      if (fieldMutationEpoch !== epochAtStart
+        || fieldDefinitionsSession.createDraft === null
+        || JSON.stringify({ request, applicability: fieldDefinitionsSession.createDraft.applicability }) !== draftSignature) return false
+      if (result.status !== 'applied') {
+        throw new Error('The new field did not change the workspace. Keep the draft and try again.')
       }
-      if (!isLocalWorkspace(candidate)) throw new Error('The proposed field is not a valid workspace update.')
-
-      const { durable } = applyWorkspace(candidate)
-      fieldDefinitionsSession.appliedAck += 1
-      fieldDefinitionsSession.selectedId = createdField.id
+      fieldDefinitionsSession.selectedId = fieldId
       fieldDefinitionsSession.screen = 'detail'
       fieldDefinitionsSession.draft = null
       fieldDefinitionsSession.createDraft = null
@@ -753,7 +857,6 @@ export function useFieldDefinitionWorkflows({
       fieldDefinitionsSession.review = null
       fieldDefinitionsSession.error = null
       if (afterApply) completeNavigation(afterApply)
-      void durable.catch(() => undefined)
       return true
     } catch (error) {
       fieldDefinitionsSession.error = errorText(error)
@@ -826,13 +929,6 @@ export function useFieldDefinitionWorkflows({
       return
     }
 
-    fieldDefinitionsSession.pendingGuard = null
-    if (fieldDefinitionsSession.createDraft && !fieldDefinitionsSession.draft) {
-      fieldDefinitionsSession.screen = 'new'
-    } else if (fieldDefinitionsSession.draft) {
-      fieldDefinitionsSession.selectedId = fieldDefinitionsSession.draft.baseline.id
-      fieldDefinitionsSession.screen = 'edit'
-    }
     await saveActiveDraft(pendingIntent)
   }
 

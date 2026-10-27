@@ -18,7 +18,7 @@ import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlac
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
-  const { workspace, saveState, saveError, commit, applyWorkspace } = options
+  const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
   const workspaceContextId = computed(() => {
@@ -31,21 +31,22 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }, { immediate: true, flush: 'sync' })
   onBeforeUnmount(() => store.reset(null))
 
-  const entity = useEntityInspectorSession({ workspace, applyWorkspace })
-  const route = useRouteInspectorSession({ workspace, applyWorkspace })
+  const entity = useEntityInspectorSession({ workspace, mutations })
+  const route = useRouteInspectorSession({ workspace, mutations })
   const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const charts = useChartNamesSession({
     workspace,
     saveState,
     saveError,
-    commit,
-    applyWorkspace,
+    initializeWorkspace,
+    mutations,
     selectedSystem: selectedSystemForChart,
   })
 
-  function applyEntitySession(sessionId?: number): boolean {
-    const applied = entity.applyEntitySession(sessionId)
-    if (applied) editorError.value = ''
+  async function applyEntitySession(sessionId?: number): Promise<boolean> {
+    const startingError = editorError.value
+    const applied = await entity.applyEntitySession(sessionId)
+    if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
 
@@ -56,9 +57,10 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     if (entity.entitySession.value === null) editorError.value = ''
   }
 
-  function applyRouteSession(sessionId: number): boolean {
-    const applied = route.applyRouteSession(sessionId)
-    if (applied) editorError.value = ''
+  async function applyRouteSession(sessionId: number): Promise<boolean> {
+    const startingError = editorError.value
+    const applied = await route.applyRouteSession(sessionId)
+    if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
 
@@ -104,14 +106,13 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
-    applyWorkspace,
+    mutations,
     resolveTransition: transitions.resolveTransition,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
   const map = useMapWorkflows({
     workspace,
-    commit,
-    applyWorkspace,
+    mutations,
     systemMapRef: mapControls.systemMapRef,
     resolveTransition: transitions.resolveTransition,
     beginObjectSession: entity.beginObjectSession,
@@ -124,7 +125,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const systemCreation = useSystemCreationWorkflows({
     workspace,
     systemMapRef: mapControls.systemMapRef,
-    applyWorkspace,
+    mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     resolveObjectCreationTransition: () => transitions.resolveTransition({ leaveChart: false }),
     onObjectCreated: async (objectId) => {
@@ -142,13 +143,13 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
     systemMapRef: mapControls.systemMapRef,
-    applyWorkspace,
+    mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
   })
   const clusterSystemPlacement = useClusterSystemPlacement({
     workspace,
     clusterMapRef: mapControls.clusterMapRef,
-    applyWorkspace,
+    mutations,
   })
   watch(route.routeSession, session => {
     if (!session && clusterSystemPlacement.clusterAddType.value === 'route') {
@@ -158,7 +159,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
 
   const cluster = useClusterWorkflows({
     workspace,
-    applyWorkspace,
+    mutations,
     onDeletionApplied: plan => {
       navigation.cleanupAfterDeletion(plan)
       systemCreation.pruneTargetsAfterDeletion(plan)

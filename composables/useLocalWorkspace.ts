@@ -2,7 +2,7 @@
  * Shared browser workspace state with a single route-level owner for ordered IndexedDB writes.
  * Nuxt state is shared by key, but the write queue and stale-status revision belong to each invocation.
  */
-import { computed, readonly } from 'vue'
+import { computed, readonly, ref } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import {
   createWorkspaceSnapshot,
@@ -32,7 +32,8 @@ export function useLocalWorkspace() {
   const saveError = useState<string | null>('local-workspace-save-error', () => null)
   // Queue and revision are per invocation, so the page must keep one composable owner.
   let saveQueue: Promise<void> = Promise.resolve()
-  let revision = 0
+  let saveRevision = 0
+  const appliedRevision = ref(0)
 
   /**
    * Loads and validates the durable workspace, publishing a ready or load-error state.
@@ -45,6 +46,7 @@ export function useLocalWorkspace() {
 
     try {
       workspace.value = await loadWorkspace()
+      appliedRevision.value += 1
       saveState.value = workspace.value ? 'saved' : 'idle'
       saveError.value = null
       hydrationState.value = 'ready'
@@ -57,7 +59,7 @@ export function useLocalWorkspace() {
 
   /** Enqueues a detached snapshot and lets only its newest revision update visible save feedback. */
   function enqueueSnapshot(snapshot: LocalWorkspace): Promise<void> {
-    const currentRevision = ++revision
+    const currentRevision = ++saveRevision
     saveState.value = 'saving'
 
     const write = saveQueue.then(() => saveWorkspace(snapshot))
@@ -65,13 +67,13 @@ export function useLocalWorkspace() {
 
     return write.then(
       () => {
-        if (currentRevision === revision) {
+        if (currentRevision === saveRevision) {
           saveState.value = 'saved'
           saveError.value = null
         }
       },
       error => {
-        if (currentRevision === revision) {
+        if (currentRevision === saveRevision) {
           saveState.value = 'error'
           saveError.value = errorText(error)
         }
@@ -93,6 +95,7 @@ export function useLocalWorkspace() {
 
     const snapshot = createWorkspaceSnapshot(nextWorkspace)
     workspace.value = snapshot
+    appliedRevision.value += 1
     return { durable: enqueueSnapshot(snapshot) }
   }
 
@@ -125,6 +128,7 @@ export function useLocalWorkspace() {
       }
 
       workspace.value = restored
+      appliedRevision.value += 1
       saveState.value = 'saved'
       saveError.value = null
       loadError.value = null
@@ -138,6 +142,7 @@ export function useLocalWorkspace() {
 
   return {
     workspace: computed(() => workspace.value),
+    appliedRevision: readonly(appliedRevision),
     hydrationState: readonly(hydrationState),
     loadError: readonly(loadError),
     recoveryError: readonly(recoveryError),

@@ -11,10 +11,10 @@ export interface ChartNamesSession {
 }
 
 /** Owns the resumable chart-name draft; Apply validates before publishing changes or finishing a clean edit. */
-export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'workspace' | 'saveState' | 'saveError' | 'commit' | 'applyWorkspace'> & {
+export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'workspace' | 'saveState' | 'saveError' | 'mutations' | 'initializeWorkspace'> & {
   selectedSystem: ComputedRef<StarSystem | undefined>
 }) {
-  const { workspace, saveState, saveError, commit, applyWorkspace, selectedSystem } = options
+  const { workspace, saveState, saveError, mutations, initializeWorkspace, selectedSystem } = options
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
   const editing = ref(false)
@@ -76,14 +76,20 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     formError.value = ''
   }
 
-  /** Publishes a validated rename to memory synchronously; its durable write continues on the workspace owner. */
-  function apply(): boolean {
+  /** Applies a valid rename to memory and only then completes the owning chart-name session. */
+  async function apply(): Promise<boolean> {
     const currentWorkspace = workspace.value
     const active = session.value
     if (!currentWorkspace || !active) {
       formError.value = 'Start a chart-name edit before applying these names.'
       return false
     }
+
+    const submittedClusterName = clusterName.value
+    const submittedSystemName = systemName.value
+    const submittedSignature = JSON.stringify([submittedClusterName, submittedSystemName])
+    const isSubmittedSessionCurrent = (): boolean => session.value?.id === active.id
+      && JSON.stringify([clusterName.value, systemName.value]) === submittedSignature
 
     try {
       if (currentWorkspace.cluster.id !== active.clusterId) {
@@ -92,28 +98,46 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
       if (!currentWorkspace.cluster.systems.some(system => system.id === active.systemId)) {
         throw new Error('The star system for this draft no longer exists.')
       }
-      const nextWorkspace = renameLocalWorkspace(currentWorkspace, clusterName.value, systemName.value, active.systemId)
+      renameLocalWorkspace(currentWorkspace, submittedClusterName, submittedSystemName, active.systemId)
       if (!hasUncommittedNames.value) {
-        if (session.value?.id === active.id) {
-          session.value = null
-          editing.value = false
-          formError.value = ''
-          syncNames(active.systemId)
-        }
-        return true
-      }
-      const { durable } = applyWorkspace(nextWorkspace)
-      if (session.value?.id === active.id) {
+        if (!isSubmittedSessionCurrent()) return false
         session.value = null
         editing.value = false
         formError.value = ''
         syncNames(active.systemId)
+        return true
       }
-      void durable.catch(() => undefined)
+
+      const result = await mutations.execute({
+        action: {
+          kind: 'rename',
+          label: 'Rename Jump Cluster and star system',
+          target: { kind: 'cluster', id: active.clusterId },
+          parent: { kind: 'system', id: active.systemId },
+        },
+        prepare: current => renameLocalWorkspace(current, submittedClusterName, submittedSystemName, active.systemId),
+        isCurrent: isSubmittedSessionCurrent,
+      })
+      if (result.status === 'rejected') {
+        if (isSubmittedSessionCurrent()) {
+          formError.value = result.message
+          editing.value = true
+        }
+        return false
+      }
+
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedSessionCurrent()) return false
+      session.value = null
+      editing.value = false
+      formError.value = ''
+      syncNames(active.systemId)
       return true
     } catch (error) {
-      formError.value = errorText(error)
-      editing.value = true
+      if (isSubmittedSessionCurrent()) {
+        formError.value = errorText(error)
+        editing.value = true
+      }
       return false
     }
   }
@@ -121,11 +145,11 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   async function submit(): Promise<void> {
     formError.value = ''
     if (workspace.value) {
-      apply()
+      await apply()
       return
     }
     try {
-      await commit(createLocalWorkspace(clusterName.value, systemName.value))
+      await initializeWorkspace(createLocalWorkspace(clusterName.value, systemName.value))
     } catch (error) {
       formError.value = errorText(error)
     }
@@ -139,9 +163,11 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   }
 
   /** Restores committed names for the captured target and discards the chart-name draft. */
-  function discard(): void {
+  function discard(expectedId?: number): void {
+    const active = session.value
+    if (!active || (expectedId !== undefined && active.id !== expectedId)) return
     const current = workspace.value
-    const targetId = session.value?.systemId
+    const targetId = active.systemId
     const target = current?.cluster.systems.find(system => system.id === targetId) ?? selectedSystem.value
     if (current && target) {
       clusterName.value = current.cluster.name

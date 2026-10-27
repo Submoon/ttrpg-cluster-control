@@ -17,6 +17,7 @@ import type {
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
+import type { WorkspaceMutationExecutor } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type TransitionGuard = 'chart' | 'inspector' | null
@@ -236,14 +237,14 @@ export interface SystemCreationSession {
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  /** Shared application boundary for ordinary editor mutations. */
+  mutations: WorkspaceMutationExecutor
+  /** Publishes the first workspace as an explicit baseline, not as an editing action. */
+  initializeWorkspace: (nextWorkspace: LocalWorkspace) => Promise<void>
   /** Current durable-save status, distinct from immediate in-memory publication. */
   saveState: Readonly<Ref<SaveState>>
   /** Most recent durable-save failure, if any. */
   saveError: Readonly<Ref<string | null>>
-  /** Page-owned ordered persistence operation. */
-  commit: (nextWorkspace: LocalWorkspace) => Promise<void>
-  /** Synchronously validates and publishes applied memory, returning its independent durable write. */
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
 }
 
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */

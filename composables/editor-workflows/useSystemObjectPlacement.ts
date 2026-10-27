@@ -27,6 +27,7 @@ import type {
   SystemObjectMovePreview,
   SystemObjectMoveTarget,
 } from './types'
+import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
 import { FREE_SYSTEM_OBJECT_PLACEMENT } from './types'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
@@ -34,7 +35,7 @@ interface SystemObjectPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   creationActive: Readonly<ComputedRef<boolean>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
-  applyWorkspace: (workspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
 }
 
@@ -183,12 +184,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function throwIfRejected(result: WorkspaceMutationResult): void {
+  if (result.status === 'rejected') throw new Error(result.message)
+}
+
 /** Builds explicit existing-object placement around the page-owned memory publication boundary. */
 export function useSystemObjectPlacement({
   workspace,
   creationActive,
   systemMapRef,
-  applyWorkspace,
+  mutations,
   isEntityCommandBlocked,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
@@ -203,6 +208,7 @@ export function useSystemObjectPlacement({
   const systemObjectMovePreview = ref<SystemObjectMovePreview | null>(null)
   const systemObjectMoveError = ref('')
   const nextPreviewToken = ref(0)
+  let pendingConfirmationToken: number | null = null
   let ownerKey = ''
   let preparedBaseline: PreparedPlacementBaseline | null = null
   let candidateBaselines = new Map<string, string>()
@@ -468,7 +474,7 @@ export function useSystemObjectPlacement({
     }
   }
 
-  function confirmSystemObjectMove(token: number): boolean {
+  async function confirmSystemObjectMove(token: number): Promise<boolean> {
     const preview = systemObjectMovePreview.value
     const baseline = preparedBaseline
     const current = currentObject()
@@ -515,27 +521,77 @@ export function useSystemObjectPlacement({
       return false
     }
 
+    pendingConfirmationToken = preview.token
     try {
-      const placement = preview.target.kind === 'orbit'
-        ? { kind: 'orbit' as const, orbitId: preview.target.orbitId }
-        : { kind: 'system' as const, x: preview.target.point.x, y: preview.target.point.y }
-      const nextWorkspace = updateWorkspaceObject(
-        current.workspace,
-        current.system.id,
-        current.object.id,
-        { placement },
-        preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
-      )
-      clearPreview()
-      clearMoveCandidates()
-      systemObjectMoveError.value = ''
-      const { durable } = applyWorkspace(nextWorkspace)
-      void durable.catch(() => undefined)
+      const result = await mutations.execute({
+        action: {
+          kind: preview.target.kind === 'orbit' ? 'place' : 'move',
+          label: preview.target.kind === 'orbit'
+            ? `Place ${current.object.name} in Orbit`
+            : `Move ${current.object.name}`,
+          target: { kind: 'object', id: current.object.id, systemId: current.system.id },
+          parent: preview.target.kind === 'orbit'
+            ? { kind: 'orbit', id: preview.target.orbitId, systemId: current.system.id }
+            : { kind: 'system', id: current.system.id },
+        },
+        isCurrent: () => {
+          if (systemObjectMovePreview.value?.token !== preview.token
+            || creationActive.value
+            || store.activeView !== 'system'
+            || store.mapMode !== 'move') return false
+          const latest = currentObject()
+          if (!latest || latest.workspace.cluster.id !== preview.clusterId
+            || latest.system.id !== preview.systemId || latest.object.id !== preview.objectId
+            || isEntityCommandBlocked(moveCommand(latest, preview.target))) return false
+          try {
+            return placementFingerprint(latest, preview.target) === baseline.fingerprint
+          } catch {
+            return false
+          }
+        },
+        prepare: (latestWorkspace) => {
+          const latestSystem = latestWorkspace.cluster.systems.find(system => system.id === preview.systemId)
+          const latestObject = latestSystem?.objects.find(object => object.id === preview.objectId)
+          if (!latestSystem || !latestObject) throw new Error('The selected object is no longer available.')
+          const latest: CurrentObject = { workspace: latestWorkspace, system: latestSystem, object: latestObject }
+          if (isEntityCommandBlocked(moveCommand(latest, preview.target))) {
+            throw new Error('Resolve the Inspector draft before changing this object or its placement.')
+          }
+          if (placementFingerprint(latest, preview.target) !== baseline.fingerprint) {
+            throw new Error('The object placement or Orbit geometry changed. Preview the position again.')
+          }
+          const placement = preview.target.kind === 'orbit'
+            ? { kind: 'orbit' as const, orbitId: preview.target.orbitId }
+            : { kind: 'system' as const, x: preview.target.point.x, y: preview.target.point.y }
+          return updateWorkspaceObject(
+            latestWorkspace,
+            latestSystem.id,
+            latestObject.id,
+            { placement },
+            preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
+          )
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
+      if (systemObjectMovePreview.value?.token === preview.token) {
+        clearPreview()
+        clearMoveCandidates()
+        systemObjectMoveError.value = ''
+        const latest = currentObject()
+        if (latest) {
+          ownerKey = ownerKeyFor(latest)
+          setInputsToCurrentObject(latest)
+        }
+      }
       return true
     } catch (error) {
-      clearPreview()
-      systemObjectMoveError.value = errorMessage(error)
+      if (systemObjectMovePreview.value?.token === preview.token) {
+        systemObjectMoveError.value = errorMessage(error)
+      }
       return false
+    } finally {
+      if (pendingConfirmationToken === preview.token) pendingConfirmationToken = null
     }
   }
 
@@ -550,6 +606,7 @@ export function useSystemObjectPlacement({
   })
 
   watch([workspace, () => store.activeView, () => store.mapMode, creationActive, () => store.selectedSystemId, () => store.selectedObjectId], () => {
+    if (pendingConfirmationToken !== null) return
     const current = currentObject()
     const nextOwnerKey = ownerKeyFor(current)
     if (nextOwnerKey !== ownerKey) {

@@ -463,6 +463,7 @@ import { provideEditorCommands } from '../composables/editor-workflows/editor-co
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+import { createWorkspaceMutationExecutor } from '../composables/editor-workflows/workspace-mutations'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -475,6 +476,7 @@ const {
   recoveryError,
   saveState,
   saveError,
+  appliedRevision,
   hydrate,
   applyWorkspace,
   commit,
@@ -482,7 +484,12 @@ const {
   restoreBackup,
 } = useLocalWorkspace()
 
-const workflows = useEditorWorkflows({ workspace, saveState, saveError, commit, applyWorkspace })
+const mutations = createWorkspaceMutationExecutor({
+  getWorkspace: () => workspace.value,
+  getRevision: () => appliedRevision.value,
+  publishWorkspace: applyWorkspace,
+})
+const workflows = useEditorWorkflows({ workspace, saveState, saveError, mutations, initializeWorkspace: commit })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback } = workflows
 
 const {
@@ -751,7 +758,7 @@ async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promi
 const workspaceFiles = useWorkspaceFiles({
   workspace,
   selectedSystem,
-  applyWorkspace,
+  mutations,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
 })
@@ -800,6 +807,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  mutations.dispose()
   window.removeEventListener('beforeunload', warnBeforeLeaving)
   window.removeEventListener('keydown', handleAddEscape)
 })

@@ -32,15 +32,15 @@ import type {
   SystemCreationType,
   SystemMapHandle,
 } from './types'
+import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 type CreationInputKey = keyof SystemCreationSession['inputs']
-type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
 
 interface SystemCreationWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
-  applyWorkspace: ApplyWorkspace
+  mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   resolveObjectCreationTransition: () => Promise<boolean>
   onObjectCreated: (objectId: string) => Promise<void>
@@ -79,7 +79,7 @@ function parseFinite(value: string): number | undefined {
 export function useSystemCreationWorkflows({
   workspace,
   systemMapRef,
-  applyWorkspace,
+  mutations,
   isEntityCommandBlocked,
   resolveObjectCreationTransition,
   onObjectCreated,
@@ -111,6 +111,10 @@ export function useSystemCreationWorkflows({
 
   function clearErrors(): void {
     if (creationSession.value) creationSession.value.errors = {}
+  }
+
+  function throwIfRejected(result: WorkspaceMutationResult): void {
+    if (result.status === 'rejected') throw new Error(result.message)
   }
 
   function invalidatePreview(session: SystemCreationSession): void {
@@ -582,83 +586,122 @@ export function useSystemCreationWorkflows({
       }
 
       const correctionNotice = session.notice.trim()
-      let nextWorkspace: LocalWorkspace
-      let successNotice: string
-      let createdObjectId: string | null = null
+      const targetSignature = JSON.stringify(target)
+      let identityId: string
+      let identityName = ''
+      let identityOrder = 0
       if (session.type.kind === 'object') {
-        const baseObject = createSystemObject(system, session.type.subtype)
-        const object = session.type.subtype === 'other'
-          ? { ...baseObject, subtype: otherTypeLabel! }
-          : baseObject
-        let objectAngles: Record<string, number> | undefined
-        let placement: typeof object.placement
-        if (target.kind === 'free') {
-          placement = { kind: 'system', x: target.point.x, y: target.point.y }
-        } else if (target.kind === 'orbit') {
-          objectAngles = {
-            ...currentWorkspace.layout.objectAngles,
-            ...captureEffectiveObjectAngles(currentWorkspace, system, [target.orbitId]),
-          }
-          placement = { kind: 'orbit', orbitId: target.orbitId }
-          objectAngles[object.id] = target.angle
-        } else {
-          throw new Error('Choose a clear map position or an existing Orbit for this object.')
-        }
-        const positionedObject = { ...object, placement }
-        createdObjectId = positionedObject.id
-        nextWorkspace = replaceWorkspaceSystem(currentWorkspace, {
-          ...system,
-          objects: [...system.objects, positionedObject],
-        })
-        if (objectAngles) {
-          nextWorkspace = {
-            ...nextWorkspace,
-            layout: { ...nextWorkspace.layout, objectAngles },
-          }
-        }
-        successNotice = `${correctionNotice ? `${correctionNotice} ` : ''}${positionedObject.name} added. Choose another location or Quit Add.`
+        const identity = createSystemObject(system, session.type.subtype)
+        identityId = identity.id
+        identityName = identity.name
       } else {
-        const rotation = preview.rotation
-        if (!preview.radii || typeof rotation !== 'number' || !Number.isFinite(rotation)) {
-          throw new Error('Enter valid Orbit radii and rotation before adding.')
-        }
-        const hostId = target.kind === 'host' ? target.objectId : null
-        const orbit = createOrbit(system, hostId)
-        const placedOrbit: Orbit = hostId === null && target.kind === 'free'
-          ? { ...orbit, hostId: null, center: target.point }
-          : orbit
-        const withOrbit = replaceWorkspaceSystem(currentWorkspace, {
-          ...system,
-          orbits: [...system.orbits, placedOrbit],
-        })
-        nextWorkspace = {
-          ...withOrbit,
-          layout: {
-            ...withOrbit.layout,
-            orbitRadii: { ...withOrbit.layout.orbitRadii, [placedOrbit.id]: preview.radii },
-            orbitRotations: { ...withOrbit.layout.orbitRotations, [placedOrbit.id]: rotation },
-          },
-        }
-        successNotice = `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${placedOrbit.order} added. Choose another target or Quit Add.`
+        const identity = createOrbit(system, target.kind === 'host' ? target.objectId : null)
+        identityId = identity.id
+        identityOrder = identity.order
       }
+      const actionLabel = session.type.kind === 'object'
+        ? `Add ${identityName}`
+        : `Add Orbit ${identityOrder}`
+      const result = await mutations.execute({
+        action: {
+          kind: 'create',
+          label: actionLabel,
+          target: session.type.kind === 'object'
+            ? { kind: 'object', id: identityId, systemId: session.systemId }
+            : { kind: 'orbit', id: identityId, systemId: session.systemId },
+          parent: { kind: 'system', id: session.systemId },
+        },
+        isCurrent: () => creationSession.value === session
+          && confirmingPreviewId === previewId
+          && session.preview?.id === previewId
+          && JSON.stringify(session.preview.target) === targetSignature
+          && sessionMatchesCurrentContext(session),
+        prepare: (latestWorkspace) => {
+          const latestSystem = latestWorkspace.cluster.systems.find(candidate => candidate.id === session.systemId)
+          if (latestWorkspace.cluster.id !== session.clusterId || !latestSystem
+            || creationSession.value !== session || session.preview?.id !== previewId
+            || JSON.stringify(session.preview.target) !== targetSignature) {
+            throw new Error('The star system or Add preview changed before this item could be added.')
+          }
+          const latestError = validateTarget(session, latestSystem, target)
+          if (latestError) throw new Error(latestError)
 
-      // Consume this preparation before synchronous memory publication or any durable work begins.
+          if (session.type.kind === 'object') {
+            if (target.kind !== 'free' && target.kind !== 'orbit') {
+              throw new Error('Choose a clear map position or an existing Orbit for this object.')
+            }
+            const generated = createSystemObject(latestSystem, session.type.subtype)
+            const object = {
+              ...generated,
+              id: identityId,
+              ...(session.type.subtype === 'other' ? { subtype: otherTypeLabel! } : {}),
+              placement: target.kind === 'free'
+                ? { kind: 'system' as const, x: target.point.x, y: target.point.y }
+                : { kind: 'orbit' as const, orbitId: target.orbitId },
+            }
+            let candidate = replaceWorkspaceSystem(latestWorkspace, {
+              ...latestSystem,
+              objects: [...latestSystem.objects, object],
+            })
+            if (target.kind === 'orbit') {
+              const objectAngles = {
+                ...latestWorkspace.layout.objectAngles,
+                ...captureEffectiveObjectAngles(latestWorkspace, latestSystem, [target.orbitId]),
+                [object.id]: target.angle,
+              }
+              candidate = { ...candidate, layout: { ...candidate.layout, objectAngles } }
+            }
+            return candidate
+          }
+
+          const rotation = preview.rotation
+          if (!preview.radii || typeof rotation !== 'number' || !Number.isFinite(rotation)) {
+            throw new Error('Enter valid Orbit radii and rotation before adding.')
+          }
+          const hostId = target.kind === 'host' ? target.objectId : null
+          const generated = createOrbit(latestSystem, hostId)
+          let orbit: Orbit
+          if (target.kind === 'free') {
+            orbit = { id: identityId, order: generated.order, hostId: null, center: target.point }
+          } else if (target.kind === 'host') {
+            orbit = { id: identityId, order: generated.order, hostId: target.objectId }
+          } else {
+            throw new Error('Choose an unoccupied center or an object host for this Orbit.')
+          }
+          const candidate = replaceWorkspaceSystem(latestWorkspace, {
+            ...latestSystem,
+            orbits: [...latestSystem.orbits, orbit],
+          })
+          return {
+            ...candidate,
+            layout: {
+              ...candidate.layout,
+              orbitRadii: { ...candidate.layout.orbitRadii, [orbit.id]: preview.radii },
+              orbitRotations: { ...candidate.layout.orbitRotations, [orbit.id]: rotation },
+            },
+          }
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
+      if (creationSession.value !== session || session.preview?.id !== previewId) return false
       session.preview = null
       session.candidates = []
-      const { durable } = applyWorkspace(nextWorkspace)
-      session.notice = successNotice
-      void durable.catch(() => undefined)
-      if (createdObjectId) {
-        try {
-          await onObjectCreated(createdObjectId)
-        } catch (error) {
-          // Workspace publication already succeeded; keep the Add result truthful if UI handoff fails.
-          setError('form', `Object was added, but Inspect could not be opened: ${error instanceof Error ? error.message : String(error)}`)
+      if (result.status === 'applied') {
+        session.notice = session.type.kind === 'object'
+          ? `${correctionNotice ? `${correctionNotice} ` : ''}${identityName} added. Choose another location or Quit Add.`
+          : `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${identityOrder} added. Choose another target or Quit Add.`
+        if (session.type.kind === 'object') {
+          try {
+            await onObjectCreated(identityId)
+          } catch (error) {
+            // Workspace publication already succeeded; keep the Add result truthful if UI handoff fails.
+            setError('form', `Object was added, but Inspect could not be opened: ${error instanceof Error ? error.message : String(error)}`)
+          }
         }
       }
       return true
     } catch (error) {
-      invalidatePreview(session)
       setError('form', error instanceof Error ? error.message : String(error))
       return false
     } finally {
