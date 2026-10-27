@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   createSingleSystemWorkspace,
+  clickNormalizedSystemPoint,
   openWorkspaceHierarchy,
   selectCatalogueObjectButton,
   selectInspectorOption,
@@ -70,10 +71,8 @@ async function addObjectAt(page: import('@playwright/test').Page, subtype: 'plan
   const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await page.getByLabel('Placement X', { exact: true }).fill(String(point.x))
-  await page.getByLabel('Placement Y', { exact: true }).fill(String(point.y))
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
+  await placementToggle.click()
+  await clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), point)
 }
 
 async function beginObjectAdd(page: import('@playwright/test').Page, subtype: 'planet' | 'moon'): Promise<void> {

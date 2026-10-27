@@ -1,9 +1,9 @@
 import { expect, test } from './fixtures'
 import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
-import { clickDockAction } from './helpers'
+import { clickDockAction, dockAction, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
-import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation } from './helpers'
+import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation, clickNormalizedSystemPoint } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -268,11 +268,15 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('50')
-  await page.getByLabel('Center X').fill('0.2')
-  await page.getByLabel('Center Y').fill('0.5')
+  await expect(page.getByRole('spinbutton', { name: 'Center X', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('spinbutton', { name: 'Center Y', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Save Orbit' }).click()
   await expect(ring).toHaveAttribute('rx', '300')
   await expect(ring).toHaveAttribute('ry', '50')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(movedCenter.x, 2)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(movedCenter.y, 2)
 
   await addCatalogueObject(page, 'star', {
     target: { kind: 'orbit', label: 'Orbit 1 around unoccupied center' },
@@ -735,6 +739,121 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   expect(roundTripStars).toHaveLength(2)
   expect(roundTripStars.every(object => object.placement.kind === 'orbit'
     && object.placement.orbitId === roundTripOrbit.id)).toBe(true)
+})
+
+test('the Warden can preview and confirm an unoccupied Orbit center move without losing Orbit drafts', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  const { systemName } = await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: `${systemName} star system map` })
+  await (await dockAction(page, 'Add orbit')).click()
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') await addToggle.click()
+  const creationControls = page.getByRole('group', { name: 'Orbit creation controls' })
+  const placementToggle = creationControls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const centerOrHost = page.getByLabel('Orbit center or host', { exact: true })
+  await selectInspectorOption(centerOrHost, 'Unoccupied center')
+  await expect(page.getByLabel('X', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Y', { exact: true })).toHaveCount(0)
+  await clickNormalizedSystemPoint(page, map, { x: 0.24, y: 0.31 })
+  await quitSystemAdd(page)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const orbitItem = hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ })
+  await orbitItem.click()
+  const orbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
+  const ring = orbit.locator('.orbit-ring')
+  const initialCenter = {
+    x: Number(await ring.getAttribute('cx')),
+    y: Number(await ring.getAttribute('cy')),
+  }
+  await setWorkspaceMapMode(page, 'Move')
+  const centerHandle = orbit.locator('.orbit-center-handle')
+  await centerHandle.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(initialCenter.x, 2)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(initialCenter.y, 2)
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  const controls = page.getByRole('group', { name: 'Orbit center placement controls' })
+  const moveButton = controls.getByRole('button', { name: 'Move center on map', exact: true })
+  await expect(moveButton).toBeVisible()
+  await moveButton.click()
+  const originalExport = await downloadJson(page, 'Export star system JSON')
+  const originalExportCenter = originalExport.system?.orbits.find(candidate => candidate.hostId === null)?.center
+  if (!originalExportCenter) throw new Error('The unoccupied Orbit did not export its applied center.')
+
+  const clickedPoint = await clickNormalizedSystemPoint(page, map, { x: 0.69, y: 0.61 })
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + clickedPoint.x * 832, 1)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(72 + clickedPoint.y * 416, 1)
+  const previewExport = await downloadJson(page, 'Export star system JSON')
+  expect(previewExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
+    .toEqual(originalExportCenter)
+
+  await map.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(65 + clickedPoint.x * 832, 1)
+  await controls.getByRole('button', { name: 'Cancel preview', exact: true }).click()
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(initialCenter.x, 2)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(initialCenter.y, 2)
+  const canceledExport = await downloadJson(page, 'Export star system JSON')
+  expect(canceledExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
+    .toEqual(originalExportCenter)
+
+  await moveButton.click()
+  const confirmedTarget = await clickNormalizedSystemPoint(page, map, { x: 0.72, y: 0.58 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + confirmedTarget.x * 832, 1)
+  const confirmedExport = await downloadJson(page, 'Export star system JSON')
+  const confirmedCenter = confirmedExport.system?.orbits.find(candidate => candidate.hostId === null)?.center
+  expect(confirmedCenter?.x).toBeCloseTo(confirmedTarget.x, 5)
+  expect(confirmedCenter?.y).toBeCloseTo(confirmedTarget.y, 5)
+
+  await page.getByLabel('Horizontal radius', { exact: true }).fill('240')
+  await moveButton.click()
+  const applyDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.64, y: 0.73 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await expect(page.getByLabel('Horizontal radius', { exact: true })).toHaveValue('240')
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  await expect(ring).toHaveAttribute('rx', '240')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + applyDraftTarget.x * 832, 1)
+
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByLabel('Vertical radius', { exact: true }).fill('250')
+  await moveButton.click()
+  const discardDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.34, y: 0.68 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await page.getByRole('button', { name: 'Discard changes' }).click()
+  await expect(ring).toHaveAttribute('rx', '240')
+  await expect(ring).not.toHaveAttribute('ry', '250')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
+
+  await page.reload()
+  await openWorkspaceHierarchy(page)
+  const restoredMap = page.getByRole('group', { name: `${systemName} star system map` })
+  const restoredRing = restoredMap.getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')
+  await expect.poll(async () => Number(await restoredRing.getAttribute('cx')))
+    .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
+  await expect(restoredRing).toHaveAttribute('rx', '240')
 })
 
 test('the Warden can detach a hosted Orbit and move its unoccupied center', async ({ page }) => {

@@ -258,9 +258,12 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
       const routes = current.cluster.routes.some(candidate => candidate.id === route.id)
         ? current.cluster.routes.map(candidate => candidate.id === route.id ? route : candidate)
         : [...current.cluster.routes, route]
+      const unresolvedExitPositions = { ...(current.layout.unresolvedExitPositions ?? {}) }
+      if (toPointId !== null) delete unresolvedExitPositions[route.id]
       const nextWorkspace: LocalWorkspace = {
         ...current,
         cluster: { ...current.cluster, routes },
+        layout: { ...current.layout, unresolvedExitPositions },
       }
       const nextSession = active.routeId === null
         ? createSession(++sequence, current.cluster.id, null, blankDraft())

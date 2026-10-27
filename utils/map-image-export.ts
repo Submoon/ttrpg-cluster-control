@@ -45,7 +45,7 @@ const styleProperties = [
 /** Removes visible interaction state and edit-only targets from the export copy. */
 function cleanExportClone(clone: SVGSVGElement): void {
   clone.querySelectorAll(
-    '.system-creation-preview, .orbit-edit-control, .object-hit-target, .orbit-hit-target',
+    '.system-creation-preview, .orbit-edit-control, .object-hit-target, .orbit-hit-target, .cluster-exit-hit-target',
   ).forEach(node => node.remove())
 
   for (const className of [

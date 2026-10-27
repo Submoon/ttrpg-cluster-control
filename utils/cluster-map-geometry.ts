@@ -1,5 +1,5 @@
 /**
- * Pure Cluster-map scene geometry; drag overrides preview moved systems without changing saved positions.
+ * Pure Cluster-map scene geometry; drag overrides preview moved endpoints without changing saved positions.
  */
 import type { JumpPointReference, JumpRoute, Point } from '../domain/workspace'
 
@@ -9,6 +9,15 @@ export interface ClusterRouteGeometry {
   labelX: number
   labelY: number
   exitPoint?: Point
+}
+
+/** Checks the numeric SVG geometry produced for one route before it enters durable layout. */
+export function hasFiniteClusterRouteGeometry(geometry: ClusterRouteGeometry): boolean {
+  return Number.isFinite(geometry.labelX)
+    && Number.isFinite(geometry.labelY)
+    && (geometry.exitPoint === undefined
+      || (Number.isFinite(geometry.exitPoint.x) && Number.isFinite(geometry.exitPoint.y)))
+    && !/(?:NaN|Infinity)/i.test(geometry.path)
 }
 
 /**
@@ -59,6 +68,8 @@ export function requiredJumpPoint(
  * @param jumpPoints Current logical endpoints.
  * @param systemPositions Durable normalized positions for endpoint systems.
  * @param positionOverrides Optional temporary scene-space positions while systems are dragged.
+ * @param unresolvedExitPositions Optional durable scene-space targets keyed by unresolved route ID.
+ * @param exitPositionOverrides Optional temporary scene-space targets keyed by unresolved route ID.
  * @returns SVG path data and label coordinates in Cluster-map scene units.
  * @throws If a referenced Jump Point or required system position is missing.
  */
@@ -68,6 +79,8 @@ export function clusterRouteGeometry(
   jumpPoints: ReadonlyMap<string, JumpPointReference>,
   systemPositions: Readonly<Record<string, Point>>,
   positionOverrides?: ReadonlyMap<string, Point>,
+  unresolvedExitPositions?: Readonly<Record<string, Point>>,
+  exitPositionOverrides?: ReadonlyMap<string, Point>,
 ): ClusterRouteGeometry {
   const from = requiredJumpPoint(jumpPoints, route.fromPointId)
   const start = clusterSystemPosition(systemPositions, from.system.id, positionOverrides)
@@ -84,9 +97,14 @@ export function clusterRouteGeometry(
     }
   }
 
+  const savedExitPoint = route.toPointId === null
+    ? unresolvedExitPositions?.[route.id]
+    : undefined
   const exitPoint = to
     ? undefined
-    : { x: 860, y: Math.min(500, Math.max(88, start.y + 128 + (index % 3) * 24)) }
+    : exitPositionOverrides?.get(route.id)
+      ?? savedExitPoint
+      ?? { x: 860, y: Math.min(500, Math.max(88, start.y + 128 + (index % 3) * 24)) }
   const end = to
     ? clusterSystemPosition(systemPositions, to.system.id, positionOverrides)
     : exitPoint!

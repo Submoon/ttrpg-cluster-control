@@ -305,7 +305,7 @@ export function useSystemCreationWorkflows({
 
     if (target.kind === 'free') {
       if (!Number.isFinite(target.point.x) || !Number.isFinite(target.point.y)) {
-        return 'Enter finite X and Y coordinates for the unoccupied center.'
+        return 'Click a free map location to place the Orbit center.'
       }
       const geometryError = validateFreeGeometry(session, system, target)
       if (geometryError) return geometryError
@@ -387,10 +387,12 @@ export function useSystemCreationWorkflows({
     if (session.type.kind === 'orbit' && !geometry) return false
 
     if (target.kind === 'free') {
-      session.inputs.x = String(target.point.x)
-      session.inputs.y = String(target.point.y)
-      session.inputs.orbitId = ''
-      session.inputs.hostId = ''
+      if (session.type.kind === 'object') {
+        session.inputs.x = String(target.point.x)
+        session.inputs.y = String(target.point.y)
+        session.inputs.orbitId = ''
+        session.inputs.hostId = ''
+      }
     } else if (target.kind === 'orbit') {
       session.inputs.orbitId = target.orbitId
       session.inputs.angleDegrees = String(target.angle * 180 / Math.PI)
@@ -436,12 +438,8 @@ export function useSystemCreationWorkflows({
         }
         target = { kind: 'orbit', orbitId: session.inputs.orbitId, angle: angleDegrees * Math.PI / 180 }
       } else {
-        const x = parseFinite(session.inputs.x)
-        const y = parseFinite(session.inputs.y)
-        if (x === undefined) setError('x', 'X must be a finite number.')
-        if (y === undefined) setError('y', 'Y must be a finite number.')
-        if (x === undefined || y === undefined) return false
-        target = { kind: 'free', point: { x, y } }
+        setError('target', 'Click a free location on the map to add this object.')
+        return false
       }
       return completeCreation(target)
     }
@@ -453,12 +451,8 @@ export function useSystemCreationWorkflows({
     if (hostId) {
       target = { kind: 'host', objectId: hostId }
     } else {
-      const x = parseFinite(session.inputs.x)
-      const y = parseFinite(session.inputs.y)
-      if (x === undefined) setError('x', 'X must be a finite number.')
-      if (y === undefined) setError('y', 'Y must be a finite number.')
-      if (x === undefined || y === undefined) return false
-      target = { kind: 'free', point: { x, y } }
+      setError('target', 'Click a free map location to place this Orbit center.')
+      return false
     }
     return completeCreation(target)
   }
@@ -518,7 +512,9 @@ export function useSystemCreationWorkflows({
     if (!session) return
     session.preview = null
     session.candidates = []
-    session.notice = 'Choose another target or use Placement to add by coordinates.'
+    session.notice = session.type.kind === 'object'
+      ? 'Choose another free map location, or use Placement to add this object to an Orbit.'
+      : 'Choose another map target or adjust the Orbit geometry in Placement.'
   }
 
   async function confirmCreation(previewId: number): Promise<boolean> {

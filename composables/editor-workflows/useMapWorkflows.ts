@@ -31,6 +31,18 @@ interface MapWorkflowOptions {
   beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
   beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  acceptCommittedPosition?: (change: {
+    objectId: string
+    previous: Point
+    next: Point
+    command: Extract<EntityCommand, { kind: 'object-placement' }>
+  }) => void
+  acceptCommittedOrbitCenter?: (change: {
+    orbitId: string
+    previous: Point
+    next: Point
+    command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
+  }) => void
   editorError: Ref<string>
 }
 
@@ -48,6 +60,8 @@ export function useMapWorkflows({
   beginObjectSession,
   beginOrbitSession,
   isEntityCommandBlocked,
+  acceptCommittedPosition,
+  acceptCommittedOrbitCenter,
   editorError,
 }: MapWorkflowOptions) {
   const store = useEditorUiStore()
@@ -112,12 +126,13 @@ export function useMapWorkflows({
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
     if (!currentWorkspace || !system || !object) return
-    if (rejectBlockedEntityCommand({
+    const command: Extract<EntityCommand, { kind: 'object-placement' }> = {
       kind: 'object-placement',
       objectId,
       fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
       toOrbitId: null,
-    })) return
+    }
+    if (rejectBlockedEntityCommand(command)) return
 
     try {
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
@@ -130,7 +145,16 @@ export function useMapWorkflows({
           y: position.y,
         },
       })
-      await commit(nextWorkspace)
+      const { durable } = applyWorkspace(nextWorkspace)
+      if (object.placement.kind === 'system') {
+        acceptCommittedPosition?.({
+          objectId,
+          previous: { x: object.placement.x, y: object.placement.y },
+          next: { x: position.x, y: position.y },
+          command: { ...command, fromOrbitId: null, toOrbitId: null },
+        })
+      }
+      await durable
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -294,9 +318,13 @@ export function useMapWorkflows({
     if (!currentWorkspace || !system) return
     const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
     if (!currentOrbit) return
-    const command: EntityCommand = currentOrbit.hostId === hostId
-      ? { kind: 'orbit-geometry', orbitId }
-      : { kind: 'orbit-host', orbitId, hostId }
+    const isFreeCenterMove = currentOrbit.hostId === null && hostId === null
+    const previousCenter = isFreeCenterMove ? { ...currentOrbit.center } : null
+    const command: EntityCommand = isFreeCenterMove
+      ? { kind: 'orbit-center-position', orbitId }
+      : currentOrbit.hostId === hostId
+        ? { kind: 'orbit-geometry', orbitId }
+        : { kind: 'orbit-host', orbitId, hostId }
     if (rejectBlockedEntityCommand(command)) return
 
     try {
@@ -341,6 +369,14 @@ export function useMapWorkflows({
         }
       }
       const { durable } = applyWorkspace(nextWorkspace)
+      if (isFreeCenterMove && previousCenter) {
+        acceptCommittedOrbitCenter?.({
+          orbitId,
+          previous: previousCenter,
+          next: { ...center },
+          command: { kind: 'orbit-center-position', orbitId },
+        })
+      }
       editorError.value = ''
       orbitAdjustmentNotice.value = ''
       if (adjusted && minimum !== undefined) {

@@ -80,6 +80,7 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
       objectFieldSettings: settings,
       layout: {
         systemPositions: layout.systemPositions,
+        unresolvedExitPositions: layout.unresolvedExitPositions,
         orbitRadii,
         orbitRotations,
         objectAngles: layout.objectAngles,
@@ -360,6 +361,7 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
   )
   const layout = {
     systemPositions: { ...workspace.layout.systemPositions },
+    unresolvedExitPositions: { ...(workspace.layout.unresolvedExitPositions ?? {}) },
     orbitRadii: { ...workspace.layout.orbitRadii },
     orbitRotations: { ...workspace.layout.orbitRotations },
     objectAngles: { ...workspace.layout.objectAngles },
@@ -368,6 +370,9 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
   if (map.type === 'cluster') {
     for (const [sourceId, position] of Object.entries(map.layout.systemPositions)) {
       layout.systemPositions[ids.get(sourceId)!] = position
+    }
+    for (const [sourceId, position] of Object.entries(map.layout.unresolvedExitPositions ?? {})) {
+      layout.unresolvedExitPositions[ids.get(sourceId)!] = position
     }
   } else {
     const addedSystemId = addedSystemIds[0]

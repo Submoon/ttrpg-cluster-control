@@ -76,11 +76,7 @@
       <ClusterSystemPlacementControls
         v-if="props.clusterAddLabel === 'System' || props.clusterMoveTargeting"
         :purpose="props.clusterAddLabel === 'System' ? 'add' : 'move'"
-        :inputs="props.clusterSystemPositionInputs"
-        :input-errors="props.clusterSystemPositionInputErrors"
-        @update-input="(key, value) => emit('update-cluster-system-input', key, value)"
-        @add-from-inputs="emit('add-cluster-system-from-inputs')"
-        @preview-move-from-inputs="emit('preview-cluster-system-move-from-inputs')"
+        @begin-map-move="emit('begin-cluster-system-map-move')"
       />
       <SystemObjectPlacementControls
         v-if="props.systemObjectMoveAvailable && !addActive"
@@ -89,18 +85,33 @@
         :candidates="props.systemObjectMoveCandidates"
         :candidate-request="props.systemObjectMoveCandidateRequest"
         :position-input="props.systemObjectPositionInput"
-        :position-x-input="props.systemObjectPositionXInput"
-        :position-y-input="props.systemObjectPositionYInput"
         :preview="props.systemObjectMovePreview"
         :error="props.systemObjectMoveError"
         @update-destination="emit('update-system-object-move-destination', $event)"
         @update-position-input="emit('update-system-object-position-input', $event)"
-        @update-position-x-input="emit('update-system-object-position-x-input', $event)"
-        @update-position-y-input="emit('update-system-object-position-y-input', $event)"
         @choose-candidate="emit('choose-system-object-move-candidate', $event)"
         @preview-position="emit('preview-system-object-move')"
         @confirm-position="emit('confirm-system-object-move', $event)"
         @cancel-preview="emit('cancel-system-object-move')"
+        @begin-map-move="emit('begin-system-object-map-move')"
+      />
+      <UnresolvedExitPlacementControls
+        v-if="props.unresolvedExitAvailable && store.mapMode === 'move' && !addActive"
+        :preview="props.unresolvedExitPreview"
+        :error="props.unresolvedExitError"
+        @begin="emit('begin-unresolved-exit-move')"
+        @confirm="emit('confirm-unresolved-exit-move')"
+        @cancel="emit('cancel-unresolved-exit-move')"
+      />
+      <OrbitCenterPlacementControls
+        v-if="props.orbitCenterMoveAvailable && !addActive"
+        :available="props.orbitCenterMoveAvailable"
+        :targeting="props.orbitCenterMapMoveTargeting"
+        :preview="props.orbitCenterMovePreview"
+        :error="props.orbitCenterMoveError"
+        @begin="emit('begin-orbit-center-move')"
+        @confirm="emit('confirm-orbit-center-move', $event)"
+        @cancel="emit('cancel-orbit-center-move')"
       />
     </div>
   </nav>
@@ -111,26 +122,26 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicI
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type {
-  ClusterSystemPositionInput,
-  ClusterSystemPositionInputs,
   MapInteractionMode,
   SystemObjectMoveCandidate,
   SystemCreationSession,
   SystemObjectMoveDestinationOption,
   SystemObjectMovePreview,
+  OrbitCenterMovePreview,
 } from '../composables/editor-workflows/types'
 import type { StarSystem } from '../domain/workspace'
 import ClusterSystemPlacementControls from './ClusterSystemPlacementControls.vue'
 import SystemObjectPlacementControls from './SystemObjectPlacementControls.vue'
 import SystemCreationControls from './SystemCreationControls.vue'
+import UnresolvedExitPlacementControls from './UnresolvedExitPlacementControls.vue'
+import OrbitCenterPlacementControls from './OrbitCenterPlacementControls.vue'
+import type { UnresolvedExitMovePreview } from '../composables/editor-workflows/useUnresolvedExitPlacement'
 
 const props = withDefaults(defineProps<{
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
   clusterAddLabel?: string | null
   clusterMoveTargeting?: boolean
-  clusterSystemPositionInputs?: ClusterSystemPositionInputs
-  clusterSystemPositionInputErrors?: Record<ClusterSystemPositionInput, string>
   selectedSystem?: StarSystem
   systemObjectMoveAvailable?: boolean
   systemObjectMoveDestination?: string
@@ -138,10 +149,15 @@ const props = withDefaults(defineProps<{
   systemObjectMoveCandidates?: SystemObjectMoveCandidate[]
   systemObjectMoveCandidateRequest?: number
   systemObjectPositionInput?: string
-  systemObjectPositionXInput?: string
-  systemObjectPositionYInput?: string
   systemObjectMovePreview?: SystemObjectMovePreview | null
   systemObjectMoveError?: string
+  unresolvedExitAvailable?: boolean
+  unresolvedExitPreview?: UnresolvedExitMovePreview | null
+  unresolvedExitError?: string
+  orbitCenterMoveAvailable?: boolean
+  orbitCenterMapMoveTargeting?: boolean
+  orbitCenterMovePreview?: OrbitCenterMovePreview | null
+  orbitCenterMoveError?: string
 }>(), {
   creationSession: null,
   creationTypeLabel: 'object',
@@ -151,27 +167,35 @@ const props = withDefaults(defineProps<{
   systemObjectMoveCandidates: () => [],
   systemObjectMoveCandidateRequest: 0,
   systemObjectPositionInput: '',
-  systemObjectPositionXInput: '',
-  systemObjectPositionYInput: '',
   systemObjectMovePreview: null,
   systemObjectMoveError: '',
+  unresolvedExitAvailable: false,
+  unresolvedExitPreview: null,
+  unresolvedExitError: '',
+  orbitCenterMoveAvailable: false,
+  orbitCenterMapMoveTargeting: false,
+  orbitCenterMovePreview: null,
+  orbitCenterMoveError: '',
 })
 
 const emit = defineEmits<{
   'update-creation-input': [key: keyof SystemCreationSession['inputs'], value: string]
   'add-from-inputs': []
   'choose-creation-candidate': [key: string]
-  'update-cluster-system-input': [key: ClusterSystemPositionInput, value: string]
-  'add-cluster-system-from-inputs': []
-  'preview-cluster-system-move-from-inputs': []
+  'begin-cluster-system-map-move': []
   'update-system-object-position-input': [value: string]
   'update-system-object-move-destination': [value: string]
-  'update-system-object-position-x-input': [value: string]
-  'update-system-object-position-y-input': [value: string]
   'choose-system-object-move-candidate': [key: string]
   'preview-system-object-move': []
   'confirm-system-object-move': [token: number]
   'cancel-system-object-move': []
+  'begin-system-object-map-move': []
+  'begin-unresolved-exit-move': []
+  'confirm-unresolved-exit-move': []
+  'cancel-unresolved-exit-move': []
+  'begin-orbit-center-move': []
+  'confirm-orbit-center-move': [token: number]
+  'cancel-orbit-center-move': []
 }>()
 
 const store = useEditorUiStore()

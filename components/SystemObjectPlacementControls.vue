@@ -2,7 +2,14 @@
   <UPopover
     v-model:open="open"
     :modal="false"
-    :content="{ side: 'top', align: 'start', sideOffset: 8, collisionPadding: 12, avoidCollisions: true }"
+    :content="{
+      side: 'top',
+      align: 'start',
+      sideOffset: 8,
+      collisionPadding: 12,
+      avoidCollisions: true,
+      onCloseAutoFocus: handleCloseAutoFocus,
+    }"
     :ui="{ content: 'system-object-placement-content' }"
   >
     <UButton
@@ -47,7 +54,7 @@
         <template v-else>
           <UFormField
             label="Destination"
-            description="Choose Free placement for precise positioning, or drag an attached object into empty space to detach."
+            description="Choose an Orbit, or move a free object directly on the map."
             class="system-object-placement-wide"
           >
             <USelect
@@ -57,30 +64,9 @@
               @update:model-value="emit('update-destination', String($event ?? ''))"
             />
           </UFormField>
-          <template v-if="props.destination === freePlacementValue">
-            <UFormField label="Object position X" :error="props.error || undefined">
-              <UInput
-                :model-value="props.positionXInput"
-                type="number"
-                step="any"
-                inputmode="decimal"
-                autocomplete="off"
-                aria-label="Object position X"
-                @update:model-value="emit('update-position-x-input', String($event))"
-              />
-            </UFormField>
-            <UFormField label="Object position Y" :error="props.error || undefined">
-              <UInput
-                :model-value="props.positionYInput"
-                type="number"
-                step="any"
-                inputmode="decimal"
-                autocomplete="off"
-                aria-label="Object position Y"
-                @update:model-value="emit('update-position-y-input', String($event))"
-              />
-            </UFormField>
-          </template>
+          <p v-if="props.destination === freePlacementValue" class="system-object-placement-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+            Choose a destination on the map. Use the arrow keys to adjust it.
+          </p>
           <UFormField v-else label="Orbit position (degrees)" class="system-object-placement-wide" :error="props.error || undefined">
             <UInput
               :model-value="props.positionInput"
@@ -93,13 +79,24 @@
             />
           </UFormField>
           <div v-if="props.preview" class="system-object-placement-actions system-object-placement-wide">
-            <UButton class="workspace-control" color="primary" variant="solid" size="sm" type="button" @click="emit('confirm-position', props.preview.token)">
+            <UButton class="workspace-control" color="primary" variant="solid" size="sm" type="button" @click="confirmPosition(props.preview.token)">
               Confirm position
             </UButton>
-            <UButton class="workspace-control" color="neutral" variant="outline" size="sm" type="button" @click="emit('cancel-preview')">
+            <UButton class="workspace-control" color="neutral" variant="outline" size="sm" type="button" @click="cancelPreview">
               Cancel preview
             </UButton>
           </div>
+          <UButton
+            v-else-if="props.destination === freePlacementValue"
+            class="workspace-control system-object-placement-wide"
+            color="primary"
+            variant="solid"
+            size="sm"
+            type="button"
+            @click="beginMapMove"
+          >
+            Move on map
+          </UButton>
           <UButton v-else class="workspace-control system-object-placement-wide" color="primary" variant="solid" size="sm" type="submit">
             Preview position
           </UButton>
@@ -128,8 +125,6 @@ const props = defineProps<{
   candidates: SystemObjectMoveCandidate[]
   candidateRequest: number
   positionInput: string
-  positionXInput: string
-  positionYInput: string
   preview: SystemObjectMovePreview | null
   error: string
 }>()
@@ -137,15 +132,38 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update-destination': [value: string]
   'update-position-input': [value: string]
-  'update-position-x-input': [value: string]
-  'update-position-y-input': [value: string]
   'choose-candidate': [key: string]
+  'begin-map-move': []
   'preview-position': []
   'confirm-position': [token: number]
   'cancel-preview': []
 }>()
 
 const open = ref(false)
+let suppressAutoFocusReturn = false
+
+function handleCloseAutoFocus(event: Event): void {
+  if (!suppressAutoFocusReturn) return
+  suppressAutoFocusReturn = false
+  event.preventDefault()
+}
+
+function beginMapMove(): void {
+  suppressAutoFocusReturn = true
+  open.value = false
+  emit('begin-map-move')
+}
+
+function confirmPosition(token: number): void {
+  emit('confirm-position', token)
+  open.value = false
+}
+
+function cancelPreview(): void {
+  emit('cancel-preview')
+  open.value = false
+}
+
 watch(() => props.candidateRequest, request => {
   if (request > 0 && props.candidates.length > 0) open.value = true
 }, { immediate: true })

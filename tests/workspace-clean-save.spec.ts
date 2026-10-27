@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import {
   activeWorkspaceFeedback,
   createSingleSystemWorkspace,
+  clickNormalizedSystemPoint,
   selectCatalogueObjectButton,
   selectInspectorOption,
 } from './helpers'
@@ -56,9 +57,8 @@ test('Save finishes a clean new object edit without another workspace write or l
   const placementToggle = placement.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await page.getByLabel('Placement X', { exact: true }).fill('0.25')
-  await page.getByLabel('Placement Y', { exact: true }).fill('0.25')
-  await page.getByRole('form', { name: 'Placement', exact: true }).getByRole('button', { name: 'Add', exact: true }).click()
+  await placementToggle.click()
+  await clickNormalizedSystemPoint(page, map, { x: 0.25, y: 0.25 })
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const save = inspector.getByRole('button', { name: 'Apply changes Save map object', exact: true })

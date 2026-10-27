@@ -2,13 +2,14 @@
  * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
  */
 import { defaultObjectFieldSettings } from './workspace-model'
-import type { LocalWorkspace, ObjectFieldSettings, StarSystem } from './workspace-model'
+import type { JumpCluster, LocalWorkspace, ObjectFieldSettings, Point, StarSystem } from './workspace-model'
 import {
   isArrayOf,
   isJumpRoute,
   isObjectFieldSettings,
   isOrbit,
   isPoint,
+  isPointRecord,
   isRecord,
   isSystemObject,
   maxNameLength,
@@ -21,6 +22,8 @@ import {
   normalizeOrbitRotations,
   orbitRadiiMeetMinimum,
 } from './workspace-orbits'
+import { jumpPointsInCluster } from './workspace-cluster'
+import { clusterRouteGeometry, hasFiniteClusterRouteGeometry } from '../utils/cluster-map-geometry'
 
 /**
  * Checks references and cross-entity invariants that cannot be verified by individual object guards.
@@ -111,6 +114,7 @@ export function isStarSystem(value: unknown): value is StarSystem {
 
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
   & {
+    unresolvedExitPositions?: Record<string, Point>
     orbitRadii?: Record<string, unknown>
     orbitEllipseRadii?: Record<string, unknown>
     orbitRotations?: Record<string, number>
@@ -133,20 +137,26 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   }
 
   const cluster = value.cluster
+  const clusterId = cluster.id
+  const clusterName = cluster.name
   const systems = cluster.systems
+  const routes = cluster.routes
   const layout = value.layout
+  const systemPositionsValue = isRecord(layout) ? layout.systemPositions : undefined
+  const unresolvedExitPositionsValue = isRecord(layout) ? layout.unresolvedExitPositions : undefined
   if (
-    typeof cluster.id !== 'string'
-    || !cluster.id
-    || typeof cluster.name !== 'string'
-    || !cluster.name.trim()
-    || cluster.name !== cluster.name.trim()
-    || cluster.name.length > maxNameLength
+    typeof clusterId !== 'string'
+    || !clusterId
+    || typeof clusterName !== 'string'
+    || !clusterName.trim()
+    || clusterName !== clusterName.trim()
+    || clusterName.length > maxNameLength
     || !isArrayOf(systems, isStarSystem)
     || systems.length === 0
-    || !isArrayOf(cluster.routes, isJumpRoute)
+    || !isArrayOf(routes, isJumpRoute)
     || !isRecord(layout)
-    || !isRecord(layout.systemPositions)
+    || !isPointRecord(systemPositionsValue)
+    || (unresolvedExitPositionsValue !== undefined && !isPointRecord(unresolvedExitPositionsValue))
     || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
     || (layout.orbitEllipseRadii !== undefined && !isRecord(layout.orbitEllipseRadii))
     || (layout.orbitRotations !== undefined && !isRecord(layout.orbitRotations))
@@ -162,7 +172,7 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     return false
   }
 
-  const entityIds = new Set<string>([value.id, cluster.id])
+  const entityIds = new Set<string>([value.id, clusterId])
   const systemIds = new Set<string>()
   const jumpPointIds = new Set<string>()
   for (const system of systems) {
@@ -195,7 +205,7 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   }
 
   const routeIds = new Set<string>()
-  for (const route of cluster.routes) {
+  for (const route of routes) {
     if (
       entityIds.has(route.id)
       || routeIds.has(route.id)
@@ -208,7 +218,10 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     routeIds.add(route.id)
   }
 
-  const positions = layout.systemPositions
+  const positions = systemPositionsValue
+  const unresolvedExitPositions = unresolvedExitPositionsValue ?? {}
+  const validatedCluster: JumpCluster = { id: clusterId, name: clusterName, systems, routes }
+  const jumpPoints = new Map(jumpPointsInCluster(validatedCluster).map(reference => [reference.point.id, reference]))
   const orbitRadii = normalizeOrbitRadii(
     layout.orbitRadii ?? {},
     layout.orbitEllipseRadii ?? {},
@@ -227,6 +240,27 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
       .map(object => object.id),
   ))
   return Object.values(positions).every(isPoint)
+    && Object.values(unresolvedExitPositions).every(isPoint)
+    && Object.entries(unresolvedExitPositions).every(([routeId]) =>
+      routes.some(route => route.id === routeId && route.toPointId === null),
+    )
+    && Object.entries(unresolvedExitPositions).every(([routeId]) => {
+      const index = routes.findIndex(route => route.id === routeId)
+      const route = routes[index]
+      if (!route || route.toPointId !== null) return false
+      try {
+        return hasFiniteClusterRouteGeometry(clusterRouteGeometry(
+          route,
+          index,
+          jumpPoints,
+          positions,
+          undefined,
+          unresolvedExitPositions,
+        ))
+      } catch {
+        return false
+      }
+    })
     && Object.entries(orbitRadii).every(([orbitId, radii]) => {
       const entry = orbits.find(candidate => candidate.orbit.id === orbitId)
       return entry !== undefined
@@ -328,6 +362,7 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
     ...restored,
     layout: {
       systemPositions: restored.layout.systemPositions,
+      unresolvedExitPositions: restored.layout.unresolvedExitPositions ?? {},
       orbitRadii,
       orbitRotations,
       objectAngles: restored.layout.objectAngles ?? {},

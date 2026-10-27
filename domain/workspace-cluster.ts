@@ -74,6 +74,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
     },
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
+      unresolvedExitPositions: {},
       orbitRadii: {},
       orbitRotations: {},
       objectAngles: {},

@@ -124,7 +124,7 @@ test('an object inspector keeps its draft across Hide and offers persistent Appl
   await expect(hierarchy.getByRole('button', { name: 'Select A, Primary Star, edited', exact: true })).toBeVisible()
 })
 
-test('an Orbit Inspector applies rotation and numeric geometry in Select mode', async ({ page }) => {
+test('an Orbit Inspector applies rotation and numeric geometry without position fields', async ({ page }) => {
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -161,30 +161,30 @@ test('an Orbit Inspector applies rotation and numeric geometry in Select mode', 
   await expect(inspector.locator('.entity-inspector-body').getByRole('button', { name: 'Edit Orbit' })).toHaveCount(0)
 
   await expect(page.getByRole('spinbutton', { name: 'Rotation', exact: true })).toBeVisible()
-  await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('250')
+  await expect(page.getByRole('spinbutton', { name: 'Center X', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('spinbutton', { name: 'Center Y', exact: true })).toHaveCount(0)
+  const horizontalRadius = page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true })
+  await horizontalRadius.fill('250')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('75')
-  await page.getByRole('spinbutton', { name: 'Center X', exact: true }).fill('0.2')
-  await page.getByRole('spinbutton', { name: 'Center Y', exact: true }).fill('0.5')
   await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('45')
   await expect(apply).toBeEnabled()
   const committedBeforeInvalidApply = await downloadJson(page, 'Export star system JSON')
-  const centerX = page.getByRole('spinbutton', { name: 'Center X', exact: true })
-  await centerX.fill('')
+  await horizontalRadius.fill('')
   await apply.click()
   const validation = page.getByRole('alert')
-  await expect(validation).toContainText('Center X is required.')
-  const centerXIssue = validation.getByRole('button', { name: 'Center X is required.' })
-  await centerXIssue.click()
-  await expect(centerX).toBeFocused()
+  await expect(validation).toContainText('Horizontal radius is required.')
+  const horizontalRadiusIssue = validation.getByRole('button', { name: 'Horizontal radius is required.' })
+  await horizontalRadiusIssue.click()
+  await expect(horizontalRadius).toBeFocused()
   const committedAfterInvalidApply = await downloadJson(page, 'Export star system JSON')
   expect(committedAfterInvalidApply).toEqual(committedBeforeInvalidApply)
 
-  await centerX.fill('0.2')
+  await horizontalRadius.fill('250')
   await page.getByRole('button', { name: 'Apply changes' }).click()
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const orbit = exported.system?.orbits[0]
-  expect(orbit).toMatchObject({ center: { x: 0.2, y: 0.5 } })
+  expect(orbit?.center).toEqual(committedBeforeInvalidApply.system?.orbits[0]?.center)
   const orbitId = orbit?.id
   expect(orbitId).toBeTruthy()
   expect(exported.layout.orbitRadii[orbitId!]).toEqual({ horizontal: 250, vertical: 75 })
@@ -243,9 +243,9 @@ test('the Orbit Inspector footer stays visible and hittable after its body scrol
       return !!target && (target === element || element.contains(target))
     })
     expect(receivesPointer, `${viewport.width}x${viewport.height} Apply is the hit target`).toBe(true)
-    await page.getByLabel('Center Y', { exact: true }).focus()
+    await page.getByLabel('Host', { exact: true }).focus()
     await page.keyboard.press('Tab')
-    await expect(deleteOrbit, `${viewport.width}x${viewport.height} Delete is reachable after Center Y`).toBeFocused()
+    await expect(deleteOrbit, `${viewport.width}x${viewport.height} Delete is reachable after Host`).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(apply, `${viewport.width}x${viewport.height} Apply can receive keyboard focus`).toBeFocused()
   }

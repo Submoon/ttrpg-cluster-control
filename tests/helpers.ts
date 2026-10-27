@@ -76,6 +76,7 @@ export type ExportedMap = {
   layout: {
     version: number
     systemPositions?: Record<string, WorldPoint>
+    unresolvedExitPositions?: Record<string, WorldPoint>
     orbitRadii: Record<string, number | { horizontal: number; vertical: number }>
     orbitEllipseRadii?: Record<string, { horizontal: number; vertical: number }>
     orbitRotations?: Record<string, number>
@@ -84,6 +85,62 @@ export type ExportedMap = {
 }
 
 type ScreenPoint = { x: number; y: number }
+
+/** Chooses a map point through a real pointer, accounting for the current view and pixel rounding. */
+async function clickNormalizedMapPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+  kind: 'cluster' | 'system',
+): Promise<WorldPoint> {
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const target = await map.evaluate((element, request) => {
+      const content = element.querySelector<SVGGElement>(request.kind === 'cluster' ? '.cluster-map-content' : '.system-map-content')
+      const transform = content?.getScreenCTM()
+      if (!transform) throw new Error('The map content is not attached to the document.')
+      const origin = request.kind === 'cluster' ? { x: 112, y: 96 } : { x: 64, y: 72 }
+      const size = request.kind === 'cluster' ? { x: 736, y: 368 } : { x: 832, y: 416 }
+      const screen = new DOMPoint(origin.x + request.point.x * size.x, origin.y + request.point.y * size.y)
+        .matrixTransform(transform)
+      const clickPoint = { x: Math.floor(screen.x), y: Math.floor(screen.y) }
+      const bounds = element.getBoundingClientRect()
+      const hit = document.elementFromPoint(clickPoint.x, clickPoint.y)
+      const delivered = new DOMPoint(clickPoint.x, clickPoint.y).matrixTransform(transform.inverse())
+      return {
+        clickPoint,
+        point: { x: (delivered.x - origin.x) / size.x, y: (delivered.y - origin.y) / size.y },
+        reachable: clickPoint.x >= Math.max(0, bounds.left) && clickPoint.y >= Math.max(0, bounds.top)
+          && clickPoint.x < Math.min(window.innerWidth, bounds.right)
+          && clickPoint.y < Math.min(window.innerHeight, bounds.bottom)
+          && !!hit && (hit === element || element.contains(hit)),
+      }
+    }, { point, kind })
+    if (target.reachable) {
+      await page.mouse.click(target.clickPoint.x, target.clickPoint.y)
+      return target.point
+    }
+    if (await zoomOut.isDisabled()) break
+    await zoomOut.click()
+  }
+  throw new Error(`Map point (${point.x}, ${point.y}) is unreachable through public zoom controls.`)
+}
+
+export function clickNormalizedSystemPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<WorldPoint> {
+  return clickNormalizedMapPoint(page, map, point, 'system')
+}
+
+export function clickNormalizedClusterPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<WorldPoint> {
+  return clickNormalizedMapPoint(page, map, point, 'cluster')
+}
 
 async function worldPointOnScreen(
   map: import('@playwright/test').Locator,
@@ -490,7 +547,7 @@ export async function clickDockAction(
   if (name === 'Add orbit') await completeOrbitCreation(page, options)
 }
 
-/** Creates a cluster system through its public placement controls and optionally enters it. */
+/** Creates a Cluster system at a public map point and optionally enters it. */
 export async function addClusterSystem(
   page: import('@playwright/test').Page,
   options: { open?: boolean; position?: WorldPoint } = {},
@@ -508,13 +565,10 @@ export async function addClusterSystem(
 
   await clickDockAction(page, 'Add star system')
 
-  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
-  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   const position = options.position ?? { x: 0.75, y: 0.75 }
-  await page.getByLabel('System position X', { exact: true }).fill(String(position.x))
-  await page.getByLabel('System position Y', { exact: true }).fill(String(position.y))
-  await page.getByRole('form', { name: 'System placement coordinates', exact: true })
-    .getByRole('button', { name: 'Add at coordinates', exact: true }).click()
+  const previousSystemCount = await clusterMap.locator('.cluster-system-node').count()
+  await clickNormalizedClusterPoint(page, clusterMap, position)
+  await expect(clusterMap.locator('.cluster-system-node')).toHaveCount(previousSystemCount + 1)
   await quitSystemAdd(page)
 
   if (!options.open) return undefined
@@ -958,12 +1012,14 @@ export async function completeCatalogueObjectCreation(
     await page.getByLabel('Angle (degrees)', { exact: true }).fill(String(target.angleDegrees ?? 0))
   } else {
     await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
-    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+    if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+    await clickNormalizedSystemPoint(page, map, target)
   }
 
-  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
-  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  if (target.kind === 'orbit') {
+    const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+    await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  }
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 
@@ -1021,12 +1077,14 @@ export async function completeOrbitCreation(
     await selectInspectorOption(targetControl, `Around ${target.name}`)
   } else {
     await selectInspectorOption(targetControl, 'Unoccupied center')
-    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
-    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+    if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+    await clickNormalizedSystemPoint(page, map, target)
   }
 
-  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
-  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  if (target.kind === 'host') {
+    const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+    await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  }
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 

@@ -113,26 +113,6 @@
               @update:model-value="updatePlacement"
             />
           </UFormField>
-          <UFormField v-if="objectDraft.placement === 'system'" label="Schematic X" :error="fieldError('x')">
-            <UInput
-              :id="controlId('x')"
-              :model-value="objectDraft.x"
-              @update:model-value="value => objectDraft.x = String(value ?? '')"
-              type="number"
-              step="any"
-              inputmode="decimal"
-            />
-          </UFormField>
-          <UFormField v-if="objectDraft.placement === 'system'" label="Schematic Y" :error="fieldError('y')">
-            <UInput
-              :id="controlId('y')"
-              :model-value="objectDraft.y"
-              @update:model-value="value => objectDraft.y = String(value ?? '')"
-              type="number"
-              step="any"
-              inputmode="decimal"
-            />
-          </UFormField>
           <UFormField v-if="selectedObject.family === 'JumpPoint'" label="Physical Station association" class="entity-inspector-full-row" :error="fieldError('jumpStationId')">
             <USelect
               :id="controlId('jumpStationId')"

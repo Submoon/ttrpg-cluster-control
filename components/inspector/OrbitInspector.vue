@@ -166,37 +166,6 @@
         </template>
       </section>
 
-      <section v-if="selectedOrbit.hostId === null && orbitDraft.hostId === null" class="entity-inspector-section" aria-labelledby="orbit-center-heading">
-        <div class="entity-inspector-section-heading">
-          <div>
-            <p class="section-kicker">UNHOSTED ORBIT</p>
-            <h3 id="orbit-center-heading">Center coordinates</h3>
-          </div>
-        </div>
-        <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!orbitSession || props.saving">
-          <UFormField label="Center X" :error="fieldError('centerX')">
-            <UInput
-              :id="controlId('centerX')"
-              :model-value="orbitDraft.centerX"
-              @update:model-value="value => orbitDraft.centerX = String(value ?? '')"
-              type="number"
-              step="any"
-              inputmode="decimal"
-            />
-          </UFormField>
-          <UFormField label="Center Y" :error="fieldError('centerY')">
-            <UInput
-              :id="controlId('centerY')"
-              :model-value="orbitDraft.centerY"
-              @update:model-value="value => orbitDraft.centerY = String(value ?? '')"
-              type="number"
-              step="any"
-              inputmode="decimal"
-            />
-          </UFormField>
-        </fieldset>
-      </section>
-
       <section class="entity-inspector-section" aria-label="Orbit contents">
         <div class="entity-inspector-section-heading">
           <div>
@@ -205,7 +174,7 @@
           </div>
           <UBadge color="neutral" variant="subtle">{{ placedObjectCount }} {{ placedObjectCount === 1 ? 'object' : 'objects' }}</UBadge>
         </div>
-        <p class="inspector-footnote m-0">Orbit rings show structure, not measured distance. Drag controls remain available in Move mode.</p>
+        <p class="inspector-footnote m-0">Orbit rings show structure, not measured distance. In Move mode, drag an unoccupied center or use its map placement controls.</p>
       </section>
 
       <section class="entity-inspector-delete entity-inspector-secondary-actions" aria-label="Orbit actions">
@@ -447,8 +416,6 @@ function readOrbitValues(orbit: Orbit | undefined): OrbitDraft {
     targetOrder: String(orbit?.order ?? ''),
     horizontalRadius: String(radii.horizontal),
     verticalRadius: String(radii.vertical),
-    centerX: orbit?.hostId === null ? String(orbit.center.x) : '',
-    centerY: orbit?.hostId === null ? String(orbit.center.y) : '',
     rotation: String(orbit ? props.workspace.layout.orbitRotations[orbit.id] ?? 0 : 0),
   }
 }

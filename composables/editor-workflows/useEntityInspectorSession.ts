@@ -4,7 +4,6 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import {
   defaultOrbitRadius,
-  initialSystemPlacement,
   isCustomFieldApplicableToObject,
   minimumOrbitRadius,
   moveOrbitCenter,
@@ -42,6 +41,20 @@ interface EntityInspectorSessionOptions {
   applyWorkspace: ApplyWorkspace
 }
 
+interface CommittedFreeObjectPosition {
+  objectId: string
+  previous: Point
+  next: Point
+  command: Extract<EntityCommand, { kind: 'object-placement' }>
+}
+
+interface CommittedOrbitCenterPosition {
+  orbitId: string
+  previous: Point
+  next: Point
+  command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
+}
+
 interface DraftDependencySnapshots {
   sessionId: number
   placements: Map<string, EntityDependencyBaseline>
@@ -70,6 +83,48 @@ function clone<T>(value: T): T {
 
 function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function systemPlacementAt(point: Point): SystemObject['placement'] {
+  return { kind: 'system', x: point.x, y: point.y }
+}
+
+function matchesSystemPlacement(placement: SystemObject['placement'], point: Point): boolean {
+  return placement.kind === 'system' && placement.x === point.x && placement.y === point.y
+}
+
+function samePoint(left: Point, right: Point): boolean {
+  return left.x === right.x && left.y === right.y
+}
+
+function rebaseDependencyPosition(
+  baseline: EntityDependencyBaseline,
+  objectId: string,
+  previous: Point,
+  next: Point,
+): { baseline: EntityDependencyBaseline; matched: boolean } {
+  let matched = false
+  const objects = baseline.objects.map(object => {
+    if (object.id !== objectId || !matchesSystemPlacement(object.placement, previous)) return object
+    matched = true
+    return { ...object, placement: systemPlacementAt(next) }
+  })
+  return { baseline: matched ? { ...baseline, objects } : baseline, matched }
+}
+
+function rebaseDependencyOrbitCenter(
+  baseline: EntityDependencyBaseline,
+  orbitId: string,
+  previous: Point,
+  next: Point,
+): { baseline: EntityDependencyBaseline; matched: boolean } {
+  let matched = false
+  const orbits = baseline.orbits.map(orbit => {
+    if (orbit.id !== orbitId || orbit.hostId !== null || !samePoint(orbit.center, previous)) return orbit
+    matched = true
+    return { ...orbit, center: { ...next } }
+  })
+  return { baseline: matched ? { ...baseline, orbits } : baseline, matched }
 }
 
 function isPhysicalStation(object: SystemObject): boolean {
@@ -246,8 +301,6 @@ function captureOrbitBaseline(
       targetOrder: String(orbit.order),
       horizontalRadius: String(radii.horizontal),
       verticalRadius: String(radii.vertical),
-      centerX: orbit.hostId === null ? String(orbit.center.x) : '',
-      centerY: orbit.hostId === null ? String(orbit.center.y) : '',
       rotation: String(rotation),
     },
     effectiveRadii: radii,
@@ -446,8 +499,6 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
           session.draft.targetOrder,
           session.draft.horizontalRadius,
           session.draft.verticalRadius,
-          session.draft.centerX,
-          session.draft.centerY,
           session.draft.rotation,
         ] as const
       : null
@@ -572,6 +623,123 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     return null
   }
 
+  function hasPositionBaseline(session: EntityInspectorSession, objectId: string, point: Point): boolean {
+    if (session.kind === 'object' && session.targetId === objectId
+      && matchesSystemPlacement(session.initial.object.placement, point)) return true
+    if (session.initial.dependencies.objects.some(object => object.id === objectId
+      && matchesSystemPlacement(object.placement, point))) return true
+    if (draftDependencies?.sessionId !== session.id) return false
+
+    for (const baseline of draftDependencies.placements.values()) {
+      if (baseline.objects.some(object => object.id === objectId
+        && matchesSystemPlacement(object.placement, point))) return true
+    }
+    const host = draftDependencies.orbitHosts.get(objectId)
+    return !!host && (matchesSystemPlacement(host.object.placement, point)
+      || host.placement.objects.some(object => object.id === objectId
+        && matchesSystemPlacement(object.placement, point)))
+  }
+
+  function canMoveFreeObjectWithoutChangingDraftRelationship(command: Extract<EntityCommand, { kind: 'object-placement' }>): boolean {
+    if (command.fromOrbitId !== null || command.toOrbitId !== null) return false
+    const session = entitySession.value
+    const currentWorkspace = workspace.value
+    const system = session && currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
+    const object = system?.objects.find(candidate => candidate.id === command.objectId)
+    if (!session || !object || object.placement.kind !== 'system') return false
+    if (session.kind === 'object' && session.targetId === object.id
+      && (session.draft.placement !== session.initial.values.placement
+        || session.initial.values.placement !== 'system')) return false
+    return hasPositionBaseline(session, object.id, { x: object.placement.x, y: object.placement.y })
+  }
+
+  /** Rebases only positions captured by this session after an independently published free-to-free move. */
+  function acceptCommittedPosition(change: CommittedFreeObjectPosition): boolean {
+    const { objectId, previous, next, command } = change
+    const session = entitySession.value
+    const currentWorkspace = workspace.value
+    if (!session || !currentWorkspace || command.kind !== 'object-placement'
+      || command.objectId !== objectId || command.fromOrbitId !== null || command.toOrbitId !== null
+      || ![previous.x, previous.y, next.x, next.y].every(Number.isFinite)) return false
+    if (currentWorkspace.cluster.id !== session.clusterId) return false
+    const system = plannedSystem(currentWorkspace, session.systemId)
+    const object = system?.objects.find(candidate => candidate.id === objectId)
+    if (!object || !matchesSystemPlacement(object.placement, next)) return false
+
+    let matched = false
+    if (session.kind === 'object' && session.targetId === objectId) {
+      if (session.draft.placement !== session.initial.values.placement
+        || session.initial.values.placement !== 'system'
+        || !matchesSystemPlacement(session.initial.object.placement, previous)) return false
+      session.initial = {
+        ...session.initial,
+        object: { ...session.initial.object, placement: systemPlacementAt(next) },
+      }
+      matched = true
+    }
+
+    const initialDependencies = rebaseDependencyPosition(session.initial.dependencies, objectId, previous, next)
+    if (initialDependencies.matched) {
+      session.initial = { ...session.initial, dependencies: initialDependencies.baseline }
+      matched = true
+    }
+
+    if (draftDependencies?.sessionId === session.id) {
+      for (const [orbitId, baseline] of draftDependencies.placements) {
+        const rebased = rebaseDependencyPosition(baseline, objectId, previous, next)
+        if (!rebased.matched) continue
+        draftDependencies.placements.set(orbitId, rebased.baseline)
+        matched = true
+      }
+      const host = draftDependencies.orbitHosts.get(objectId)
+      if (host && matchesSystemPlacement(host.object.placement, previous)) {
+        draftDependencies.orbitHosts.set(objectId, {
+          ...host,
+          object: { ...host.object, placement: systemPlacementAt(next) },
+          placement: rebaseDependencyPosition(host.placement, objectId, previous, next).baseline,
+          scenePosition: { x: 64 + next.x * 832, y: 72 + next.y * 416 },
+        })
+        matched = true
+      }
+      for (const [hostId, snapshot] of draftDependencies.orbitHosts) {
+        const rebased = rebaseDependencyPosition(snapshot.placement, objectId, previous, next)
+        if (!rebased.matched) continue
+        draftDependencies.orbitHosts.set(hostId, { ...snapshot, placement: rebased.baseline })
+        matched = true
+      }
+    }
+
+    if (!matched) return false
+    if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
+    return true
+  }
+
+  /** Rebases only an unoccupied Orbit center after its independent position has been published. */
+  function acceptCommittedOrbitCenter(change: CommittedOrbitCenterPosition): boolean {
+    const { orbitId, previous, next, command } = change
+    const session = entitySession.value
+    const currentWorkspace = workspace.value
+    if (!session || session.kind !== 'orbit' || !currentWorkspace
+      || command.kind !== 'orbit-center-position' || command.orbitId !== orbitId
+      || ![previous.x, previous.y, next.x, next.y].every(Number.isFinite)
+      || session.targetId !== orbitId || session.initial.orbit.hostId !== null
+      || session.draft.hostId !== null || session.centerMoveCandidates !== null
+      || !samePoint(session.initial.orbit.center, previous)) return false
+    if (currentWorkspace.cluster.id !== session.clusterId) return false
+    const system = plannedSystem(currentWorkspace, session.systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+    if (!orbit || orbit.hostId !== null || !samePoint(orbit.center, next)) return false
+
+    const dependencies = rebaseDependencyOrbitCenter(session.initial.dependencies, orbitId, previous, next)
+    if (!dependencies.matched) return false
+    session.initial = {
+      ...session.initial,
+      orbit: { ...session.initial.orbit, center: { ...next } },
+      dependencies: dependencies.baseline,
+    }
+    return true
+  }
+
   function beginObjectSession(clusterId: string, systemId: string, objectId: string): void {
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
@@ -609,7 +777,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     }
   }
 
-  /** Updates placement and its dependent free-position defaults only for the current object draft. */
+  /** Updates the object's relationship only for the current object draft. */
   function updateObjectPlacement(expectedId: number, placement: string): void {
     const session = entitySession.value
     if (!session || session.id !== expectedId || session.kind !== 'object') return
@@ -617,25 +785,10 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     const system = currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
     if (!system) return
 
-    const wasOrbitPlaced = session.draft.placement.startsWith('orbit:')
     session.draft.placement = placement
-    if (wasOrbitPlaced && placement === 'system') {
-      if (session.initial.values.placement !== 'system') {
-        const position = initialSystemPlacement(system)
-        if (!session.draft.x.trim()) session.draft.x = String(position.x)
-        if (!session.draft.y.trim()) session.draft.y = String(position.y)
-      }
-    }
 
     const errors = { ...session.errors }
     delete errors.placement
-    if (placement !== 'system') {
-      delete errors.x
-      delete errors.y
-    } else if (wasOrbitPlaced) {
-      delete errors.x
-      delete errors.y
-    }
     session.errors = errors
   }
 
@@ -850,8 +1003,6 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
         session.draft.targetOrder,
         session.draft.horizontalRadius,
         session.draft.verticalRadius,
-        session.draft.centerX,
-        session.draft.centerY,
         session.draft.rotation,
       ])
       orbitPlacementPreview.value = {
@@ -930,8 +1081,6 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
             session.draft.targetOrder,
             session.draft.horizontalRadius,
             session.draft.verticalRadius,
-            session.draft.centerX,
-            session.draft.centerY,
             session.draft.rotation,
           ])
           if (!preview || preview.sessionId !== session.id || preview.orbitId !== session.targetId
@@ -1003,6 +1152,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
 
     const ids = dependencyIds(session, draftDependencies)
     if (command.kind === 'object-placement') {
+      if (canMoveFreeObjectWithoutChangingDraftRelationship(command)) return false
       // An occupant's placement or angle can change independently of the Orbit's geometry and sibling order.
       // Conflicts are limited to editing an object whose own state anchors this draft's dependencies.
       return ids.objects.has(command.objectId)
@@ -1023,6 +1173,21 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
         && ids.orbits.has(command.orbitId)
     }
     if (command.kind === 'orbit-geometry') {
+      return ids.orbits.has(command.orbitId)
+    }
+    if (command.kind === 'orbit-center-position') {
+      if (session.kind === 'orbit' && session.targetId === command.orbitId) {
+        const currentOrbit = plannedSystem(currentWorkspace, session.systemId)?.orbits
+          .find(orbit => orbit.id === command.orbitId)
+        if (!currentOrbit || currentOrbit.hostId !== null
+          || session.initial.orbit.hostId !== null || session.draft.hostId !== null
+          || session.centerMoveCandidates !== null
+          || !samePoint(currentOrbit.center, session.initial.orbit.center)) return true
+        return !sameValue(
+          { ...currentOrbit, center: session.initial.orbit.center },
+          session.initial.orbit,
+        )
+      }
       return ids.orbits.has(command.orbitId)
     }
 
@@ -1082,6 +1247,8 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     discardEntitySession,
     isEntityCommandBlocked,
     isEntityDraftTarget,
+    acceptCommittedPosition,
+    acceptCommittedOrbitCenter,
   }
 }
 
@@ -1134,12 +1301,6 @@ function applyOrbitDraft(
     }
   }
 
-  let center: Point | undefined
-  if (orbit.hostId === null && !attaching) {
-    const centerX = parseFiniteInput(draft.centerX, 'Center X', errors, 'centerX')
-    const centerY = parseFiniteInput(draft.centerY, 'Center Y', errors, 'centerY')
-    if (centerX !== null && centerY !== null) center = { x: centerX, y: centerY }
-  }
   if (Object.keys(errors).length || (!attaching && targetOrder === null) || horizontalRadius === null
     || verticalRadius === null || rotation === null) return { workspace: null, errors }
 
@@ -1156,15 +1317,6 @@ function applyOrbitDraft(
       currentOrder += direction
     }
   }
-  if (center && orbit.hostId === null && !attaching) {
-    updatedSystem = {
-      ...updatedSystem,
-      orbits: updatedSystem.orbits.map(candidate => candidate.id === orbit.id && candidate.hostId === null
-        ? { ...candidate, center }
-        : candidate),
-    }
-  }
-
   const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
   const updatedOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbit.id)!
   const updatedLayout = { ...nextWorkspace.layout }

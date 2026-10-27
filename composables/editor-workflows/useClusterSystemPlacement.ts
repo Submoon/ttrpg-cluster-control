@@ -1,8 +1,8 @@
-/** Owns the independent Cluster Add System intent and its single-use placement inputs. */
-import { computed, nextTick, reactive, ref, watch, type Ref } from 'vue'
+/** Owns Cluster-system creation and explicit map-based movement previews. */
+import { computed, nextTick, ref, watch, type Ref } from 'vue'
 import { addStarSystem, type LocalWorkspace, type Point } from '../../domain/workspace'
 import { clusterSystemPosition } from '../../utils/cluster-map-geometry'
-import type { ClusterAddType, ClusterSystemMovePreview, ClusterSystemPositionInput, ClusterSystemPositionInputs, MapNavigationHandle } from './types'
+import type { ClusterAddType, ClusterSystemMovePreview, MapNavigationHandle } from './types'
 import type { EditorWorkflowOptions } from './types'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
@@ -17,24 +17,37 @@ const CLUSTER_SYSTEM_CARD_HEIGHT = 76
 const CLUSTER_MAP_POSITION_ORIGIN = { x: 112, y: 96 }
 const CLUSTER_MAP_POSITION_SIZE = { x: 736, y: 368 }
 
+function scenePositionForNormalizedPoint(point: Point): Point {
+  return {
+    x: CLUSTER_MAP_POSITION_ORIGIN.x + point.x * CLUSTER_MAP_POSITION_SIZE.x,
+    y: CLUSTER_MAP_POSITION_ORIGIN.y + point.y * CLUSTER_MAP_POSITION_SIZE.y,
+  }
+}
+
+function normalizedPointForScenePosition(point: Point): Point {
+  return {
+    x: (point.x - CLUSTER_MAP_POSITION_ORIGIN.x) / CLUSTER_MAP_POSITION_SIZE.x,
+    y: (point.y - CLUSTER_MAP_POSITION_ORIGIN.y) / CLUSTER_MAP_POSITION_SIZE.y,
+  }
+}
+
 export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorkspace }: ClusterSystemPlacementOptions) {
   const store = useEditorUiStore()
   const clusterAddType = ref<ClusterAddType | null>(null)
-  const inputs = reactive<ClusterSystemPositionInputs>({ x: '0.5', y: '0.5' })
-  const inputErrors = reactive<Record<ClusterSystemPositionInput, string>>({ x: '', y: '' })
   const formError = ref('')
   const systemMoveError = ref('')
   const systemMovePreview = ref<ClusterSystemMovePreview | null>(null)
+  const clusterSystemMapMoveTargeting = ref(false)
+  const systemMoveCandidateScene = ref<Point | null>(null)
+  const systemMoveOrigin = ref<{ clusterId: string; systemId: string; position: Point } | null>(null)
   const nextPreviewToken = ref(0)
-  const clusterAddError = computed(() => formError.value || inputErrors.x || inputErrors.y)
-  const clusterSystemMoveError = computed(() => systemMoveError.value || inputErrors.x || inputErrors.y)
+  const clusterAddError = computed(() => formError.value)
+  const clusterSystemMoveError = computed(() => systemMoveError.value)
   const clusterMoveTargeting = computed(() => store.activeView === 'cluster'
     && store.mapMode === 'move'
     && store.clusterSelectedSystemId !== null)
 
   function clearErrors(): void {
-    inputErrors.x = ''
-    inputErrors.y = ''
     formError.value = ''
     systemMoveError.value = ''
   }
@@ -46,18 +59,13 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
   }
 
   function cancelSystemMovePreview(): void {
-    const preview = systemMovePreview.value
+    const wasTargeting = clusterSystemMapMoveTargeting.value || systemMovePreview.value !== null
     clearSystemMovePreview()
+    systemMoveCandidateScene.value = null
+    systemMoveOrigin.value = null
+    clusterSystemMapMoveTargeting.value = false
     systemMoveError.value = ''
-    if (!preview) return
-    const currentWorkspace = workspace.value
-    const currentPosition = currentWorkspace?.cluster.systems.some(system => system.id === preview.sourceSystemId)
-      ? currentWorkspace.layout.systemPositions[preview.sourceSystemId]
-      : null
-    if (currentPosition) {
-      inputs.x = String(currentPosition.x)
-      inputs.y = String(currentPosition.y)
-    }
+    if (wasTargeting) clusterMapRef.value?.focusMap?.()
   }
 
   function armSystemAdd(): void {
@@ -65,6 +73,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     cancelSystemMovePreview()
     clusterAddType.value = 'system'
     clearErrors()
+    clusterMapRef.value?.focusMap?.()
   }
 
   function armRouteAdd(): void {
@@ -80,50 +89,16 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     clearErrors()
   }
 
-  function updateInput(key: ClusterSystemPositionInput, value: string): void {
-    inputs[key] = value
-    inputErrors[key] = ''
-    formError.value = ''
-    systemMoveError.value = ''
-  }
-
-  function validateCoordinate(key: ClusterSystemPositionInput): number | null {
-    const raw = inputs[key].trim()
-    const label = key.toUpperCase()
-    if (!raw) {
-      inputErrors[key] = `${label} is required.`
-      return null
-    }
-
-    const value = Number(raw)
-    if (!Number.isFinite(value)) {
-      inputErrors[key] = `${label} must be a finite number.`
-      return null
-    }
-    if (value < 0 || value > 1) {
-      inputErrors[key] = `${label} must be between 0 and 1.`
-      return null
-    }
-
-    inputErrors[key] = ''
-    return value
-  }
-
   function pointOverlapsSystem(
-    point: Point,
+    scenePoint: Point,
     currentWorkspace: LocalWorkspace,
     ignoredSystemId?: string,
   ): boolean {
-    const target = {
-      x: CLUSTER_MAP_POSITION_ORIGIN.x + point.x * CLUSTER_MAP_POSITION_SIZE.x,
-      y: CLUSTER_MAP_POSITION_ORIGIN.y + point.y * CLUSTER_MAP_POSITION_SIZE.y,
-    }
-
     return currentWorkspace.cluster.systems.some((system) => {
       if (system.id === ignoredSystemId) return false
       const existing = clusterSystemPosition(currentWorkspace.layout.systemPositions, system.id)
-      return Math.abs(target.x - existing.x) < CLUSTER_SYSTEM_CARD_WIDTH
-        && Math.abs(target.y - existing.y) < CLUSTER_SYSTEM_CARD_HEIGHT
+      return Math.abs(scenePoint.x - existing.x) < CLUSTER_SYSTEM_CARD_WIDTH
+        && Math.abs(scenePoint.y - existing.y) < CLUSTER_SYSTEM_CARD_HEIGHT
     })
   }
 
@@ -139,8 +114,9 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
       return false
     }
 
+    const targetScenePosition = scenePositionForNormalizedPoint(point)
     const liveSystemIds = new Set(currentWorkspace.cluster.systems.map(system => system.id))
-    if (systemIds.some(id => liveSystemIds.has(id)) || pointOverlapsSystem(point, currentWorkspace)) {
+    if (systemIds.some(id => liveSystemIds.has(id)) || pointOverlapsSystem(targetScenePosition, currentWorkspace)) {
       formError.value = 'Choose an open point clear of existing systems.'
       return false
     }
@@ -158,8 +134,6 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
         },
       }
       const { durable } = applyWorkspace(nextWorkspace)
-      inputs.x = String(point.x)
-      inputs.y = String(point.y)
       void durable.catch(() => undefined)
       return true
     } catch (error) {
@@ -168,40 +142,13 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     }
   }
 
-  function addSystemFromInputs(): boolean {
-    if (clusterAddType.value !== 'system' || store.activeView !== 'cluster') return false
-    clearErrors()
-    const x = validateCoordinate('x')
-    const y = validateCoordinate('y')
-    if (x === null || y === null) {
-      formError.value = inputErrors.x || inputErrors.y
-      return false
-    }
-    return addSystemAt({ x, y })
-  }
-
-  function previewSystemMoveAt(point: Point, systemIds: string[] = []): boolean {
-    const sourceSystemId = store.clusterSelectedSystemId
-    if (!clusterMoveTargeting.value || !sourceSystemId) return false
-    clearSystemMovePreview()
-    systemMoveError.value = ''
-    inputErrors.x = ''
-    inputErrors.y = ''
+  function beginClusterSystemMapMove(): boolean {
+    if (!clusterMoveTargeting.value || clusterAddType.value !== null) return false
     const currentWorkspace = workspace.value
-    if (!currentWorkspace) return false
-    const sourceSystem = currentWorkspace.cluster.systems.find(system => system.id === sourceSystemId)
-    if (!sourceSystem) {
+    const sourceSystemId = store.clusterSelectedSystemId
+    const sourceSystem = currentWorkspace?.cluster.systems.find(system => system.id === sourceSystemId)
+    if (!currentWorkspace || !sourceSystem || !sourceSystemId) {
       systemMoveError.value = 'Choose a system that is still on this Cluster.'
-      return false
-    }
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)
-      || point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) {
-      systemMoveError.value = 'Choose a point inside the Cluster map.'
-      return false
-    }
-    if (systemIds.some(id => id !== sourceSystemId)
-      || pointOverlapsSystem(point, currentWorkspace, sourceSystemId)) {
-      systemMoveError.value = 'Choose an open point clear of other systems.'
       return false
     }
 
@@ -210,7 +157,59 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
       systemMoveError.value = 'The selected system has no saved Cluster position.'
       return false
     }
-    if (point.x === originPosition.x && point.y === originPosition.y) {
+
+    clearSystemMovePreview()
+    systemMoveError.value = ''
+    systemMoveOrigin.value = {
+      clusterId: currentWorkspace.cluster.id,
+      systemId: sourceSystemId,
+      position: { ...originPosition },
+    }
+    systemMoveCandidateScene.value = scenePositionForNormalizedPoint(originPosition)
+    clusterSystemMapMoveTargeting.value = true
+    clusterMapRef.value?.focusMap?.()
+    return true
+  }
+
+  function previewSystemMoveAt(scenePoint: Point, systemIds: string[] = []): boolean {
+    if (!clusterSystemMapMoveTargeting.value) return false
+    if (Number.isFinite(scenePoint.x) && Number.isFinite(scenePoint.y)) {
+      // Keep the keyboard candidate even when the current point is invalid, so arrows can leave
+      // an occupied or out-of-bounds location and reach a valid destination.
+      systemMoveCandidateScene.value = { ...scenePoint }
+    }
+    clearSystemMovePreview()
+    systemMoveError.value = ''
+
+    const currentWorkspace = workspace.value
+    const origin = systemMoveOrigin.value
+    if (!currentWorkspace || !origin) return false
+    const sourceSystem = currentWorkspace.cluster.systems.find(system => system.id === origin.systemId)
+    const currentOrigin = currentWorkspace.layout.systemPositions[origin.systemId]
+    if (currentWorkspace.cluster.id !== origin.clusterId
+      || !sourceSystem
+      || currentOrigin?.x !== origin.position.x
+      || currentOrigin?.y !== origin.position.y
+      || store.clusterSelectedSystemId !== origin.systemId) {
+      systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+      return false
+    }
+    if (!Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) {
+      systemMoveError.value = 'Choose a finite map destination.'
+      return false
+    }
+
+    const point = normalizedPointForScenePosition(scenePoint)
+    if (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) {
+      systemMoveError.value = 'Choose a point inside the Cluster map.'
+      return false
+    }
+    if (systemIds.some(id => id !== origin.systemId)
+      || pointOverlapsSystem(scenePoint, currentWorkspace, origin.systemId)) {
+      systemMoveError.value = 'Choose an open point clear of other systems.'
+      return false
+    }
+    if (point.x === origin.position.x && point.y === origin.position.y) {
       systemMoveError.value = 'Choose a different point from the current location.'
       return false
     }
@@ -218,27 +217,22 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     const preview: ClusterSystemMovePreview = {
       token: ++nextPreviewToken.value,
       clusterId: currentWorkspace.cluster.id,
-      sourceSystemId,
-      originPosition: { ...originPosition },
-      targetPosition: { x: point.x, y: point.y },
+      sourceSystemId: origin.systemId,
+      originPosition: { ...origin.position },
+      targetPosition: point,
     }
     systemMovePreview.value = preview
-    inputs.x = String(point.x)
-    inputs.y = String(point.y)
-    clusterMapRef.value?.setClusterSystemPositionPreview?.(sourceSystemId, preview.targetPosition)
+    clusterMapRef.value?.setClusterSystemPositionPreview?.(origin.systemId, point)
     return true
   }
 
-  function previewSystemMoveFromInputs(): boolean {
-    if (!clusterMoveTargeting.value) return false
-    systemMoveError.value = ''
-    const x = validateCoordinate('x')
-    const y = validateCoordinate('y')
-    if (x === null || y === null) {
-      systemMoveError.value = inputErrors.x || inputErrors.y
-      return false
-    }
-    return previewSystemMoveAt({ x, y })
+  function nudgeClusterSystemMove(delta: Point): boolean {
+    if (!clusterSystemMapMoveTargeting.value
+      || !Number.isFinite(delta.x)
+      || !Number.isFinite(delta.y)) return false
+    const candidate = systemMoveCandidateScene.value
+    if (!candidate) return false
+    return previewSystemMoveAt({ x: candidate.x + delta.x, y: candidate.y + delta.y })
   }
 
   function confirmSystemMove(): boolean {
@@ -249,7 +243,8 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     const currentOrigin = currentSource
       ? currentWorkspace.layout.systemPositions[preview.sourceSystemId]
       : undefined
-    const isCurrent = systemMovePreview.value?.token === preview.token
+    const isCurrent = clusterSystemMapMoveTargeting.value
+      && systemMovePreview.value?.token === preview.token
       && currentWorkspace.cluster.id === preview.clusterId
       && currentSource !== undefined
       && currentOrigin?.x === preview.originPosition.x
@@ -262,7 +257,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
       systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
       return false
     }
-    if (pointOverlapsSystem(preview.targetPosition, currentWorkspace, preview.sourceSystemId)) {
+    if (pointOverlapsSystem(scenePositionForNormalizedPoint(preview.targetPosition), currentWorkspace, preview.sourceSystemId)) {
       cancelSystemMovePreview()
       systemMoveError.value = 'That destination is no longer clear. Choose another point.'
       return false
@@ -278,59 +273,55 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
         },
       },
     }
+    // The map's live marker should remain at the candidate until the new committed workspace
+    // redraws it; clearing the preview here would briefly jump the marker back to its origin.
     systemMovePreview.value = null
+    systemMoveCandidateScene.value = null
+    systemMoveOrigin.value = null
+    clusterSystemMapMoveTargeting.value = false
     systemMoveError.value = ''
     try {
       const { durable } = applyWorkspace(nextWorkspace)
-      inputs.x = String(preview.targetPosition.x)
-      inputs.y = String(preview.targetPosition.y)
       void durable.catch(() => undefined)
+      clusterMapRef.value?.focusMap?.()
       return true
     } catch (error) {
       clusterMapRef.value?.setClusterSystemPositionPreview?.(preview.sourceSystemId, null)
       systemMoveError.value = error instanceof Error ? error.message : String(error)
+      clusterMapRef.value?.focusMap?.()
       return false
     }
   }
 
   watch([() => store.activeView, () => store.mapMode, () => store.clusterSelectedSystemId], ([view, mode, systemId]) => {
     const preview = systemMovePreview.value
-    if (preview && (view !== 'cluster' || mode !== 'move' || systemId !== preview.sourceSystemId)) {
+    const origin = systemMoveOrigin.value
+    if (origin && (view !== 'cluster' || mode !== 'move' || systemId !== origin.systemId)) {
       cancelSystemMovePreview()
-    }
-    if (view === 'cluster' && mode === 'move' && systemId) {
-      const currentWorkspace = workspace.value
-      if (currentWorkspace?.cluster.systems.some(system => system.id === systemId)) {
-        const normalized = currentWorkspace.layout.systemPositions[systemId]
-        if (!normalized) {
-          systemMoveError.value = 'The selected system has no saved Cluster position.'
-          return
-        }
-        inputs.x = String(normalized.x)
-        inputs.y = String(normalized.y)
-      }
+    } else if (preview && (view !== 'cluster' || mode !== 'move' || systemId !== preview.sourceSystemId)) {
+      cancelSystemMovePreview()
     }
   }, { flush: 'sync' })
 
   watch(workspace, (currentWorkspace) => {
     const preview = systemMovePreview.value
-    if (!preview) return
+    const origin = systemMoveOrigin.value
+    if (!origin) return
     if (!currentWorkspace) {
       cancelSystemMovePreview()
       systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
       return
     }
-    const sourceExists = currentWorkspace.cluster.id === preview.clusterId
-      && currentWorkspace.cluster.systems.some(system => system.id === preview.sourceSystemId)
-    const currentOrigin = sourceExists
-      ? currentWorkspace.layout.systemPositions[preview.sourceSystemId]
-      : undefined
-    if (currentOrigin?.x !== preview.originPosition.x || currentOrigin?.y !== preview.originPosition.y) {
+    const sourceExists = currentWorkspace.cluster.id === origin.clusterId
+      && currentWorkspace.cluster.systems.some(system => system.id === origin.systemId)
+    const currentOrigin = sourceExists ? currentWorkspace.layout.systemPositions[origin.systemId] : undefined
+    if (currentOrigin?.x !== origin.position.x || currentOrigin?.y !== origin.position.y) {
       cancelSystemMovePreview()
       systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
       return
     }
 
+    if (!preview) return
     // Workspace edits rebuild the SVG. Reapply the still-valid transient preview after that render.
     void nextTick(() => {
       if (systemMovePreview.value?.token !== preview.token) return
@@ -351,18 +342,16 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, applyWorks
     clusterAddType,
     clusterAddError,
     clusterMoveTargeting,
+    clusterSystemMapMoveTargeting,
     clusterSystemMovePreview: systemMovePreview,
     clusterSystemMoveError,
-    clusterSystemPositionInputs: inputs,
-    clusterSystemPositionInputErrors: inputErrors,
     armSystemAdd,
     armRouteAdd,
     quitClusterAdd,
-    updateClusterSystemPositionInput: updateInput,
     addSystemAt,
-    addSystemFromInputs,
+    beginClusterSystemMapMove,
     previewSystemMoveAt,
-    previewSystemMoveFromInputs,
+    nudgeClusterSystemMove,
     cancelSystemMovePreview,
     confirmSystemMove,
   }

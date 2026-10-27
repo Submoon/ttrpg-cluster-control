@@ -52,8 +52,6 @@ export interface ObjectDraft {
   description: string
   subtype: string
   placement: string
-  x: string
-  y: string
   atmosphere: string
   portClass: string
   jumpStationId: string
@@ -67,8 +65,6 @@ export interface OrbitDraft {
   targetOrder: string
   horizontalRadius: string
   verticalRadius: string
-  centerX: string
-  centerY: string
   rotation: string
 }
 
@@ -135,6 +131,7 @@ export type EntityCommand =
   | { kind: 'object-placement'; objectId: string; fromOrbitId?: string | null; toOrbitId?: string | null }
   | { kind: 'object-create'; orbitId: string | null }
   | { kind: 'orbit-geometry'; orbitId: string }
+  | { kind: 'orbit-center-position'; orbitId: string }
   | { kind: 'orbit-host'; orbitId: string; hostId: string | null }
   | { kind: 'orbit-create'; hostId: string | null }
   | { kind: 'definition-mutation'; fieldId: string }
@@ -176,6 +173,16 @@ export interface SystemObjectMovePreview {
   systemId: string
   objectId: string
   target: SystemObjectMoveTarget
+}
+
+/** A single-use unoccupied-center preview; both centers use normalized system-map coordinates. */
+export interface OrbitCenterMovePreview {
+  token: number
+  clusterId: string
+  systemId: string
+  orbitId: string
+  previousCenter: Point
+  targetCenter: Point
 }
 
 /** Persistent catalogue choice for one system-map creation session. */
@@ -248,6 +255,8 @@ export interface EditorWorkflowOptions {
 
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */
 export interface MapNavigationHandle extends MapImageExporter {
+  /** Focuses the current SVG so a map-based placement can use keyboard targeting. */
+  focusMap?(): void
   getViewport(): MapViewport
   setViewport(viewport: MapViewport): void
   zoomBy(factor: number): void
@@ -262,20 +271,20 @@ export interface MapNavigationHandle extends MapImageExporter {
   endTouchNavigation(event: TouchEvent): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
   setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
+  /** Shows or clears a transient unresolved target in scene coordinates. */
+  setUnresolvedExitPositionPreview?(routeId: string, position: Point | null): void
 }
 
 /** Session-only selection saved for one map visit. */
 export type MapInteractionMode = 'navigate' | 'select' | 'move'
 export type ClusterAddType = 'system' | 'route'
-export type ClusterSystemPositionInput = 'x' | 'y'
-export type ClusterSystemPositionInputs = Record<ClusterSystemPositionInput, string>
 export interface ClusterSystemMovePreview {
   token: number
   clusterId: string
   sourceSystemId: string
   /** Saved normalized origin position, used to reject a stale source before confirmation. */
   originPosition: Point
-  /** Normalized destination position shared by the form, map API, and workspace layout. */
+  /** Normalized destination shared by the map preview and durable workspace layout. */
   targetPosition: Point
 }
 export type WorkspacePanel = 'hierarchy' | 'inspector'
@@ -301,10 +310,13 @@ export interface MapVisitMemory {
 
 /** Renderer capabilities needed by system-map workflows. */
 export interface SystemMapHandle extends MapNavigationHandle {
+  focusMap(): void
   /** Shows or clears one transient existing-object placement preview in SVG scene coordinates. */
   setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
   /** Shows or clears one transient proposed-host preview in SVG scene coordinates. */
   setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
+  /** Owns a center-move overlay independently from an Inspector's proposed-host preview. */
+  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.

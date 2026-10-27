@@ -15,6 +15,8 @@ import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
 import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
+import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExitPlacement'
+import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
@@ -117,6 +119,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    acceptCommittedPosition: entity.acceptCommittedPosition,
+    acceptCommittedOrbitCenter: entity.acceptCommittedOrbitCenter,
     editorError,
   })
   const objectInspectorFocusRequest = ref<ObjectInspectorFocusRequest | null>(null)
@@ -144,6 +148,20 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     systemMapRef: mapControls.systemMapRef,
     applyWorkspace,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    acceptCommittedPosition: entity.acceptCommittedPosition,
+  })
+  const unresolvedExitPlacement = useUnresolvedExitPlacement({
+    workspace,
+    selectedRouteId: computed(() => store.selectedRouteId),
+    clusterMapRef: mapControls.clusterMapRef,
+    applyWorkspace,
+  })
+  const orbitCenterPlacement = useOrbitCenterPlacement({
+    workspace,
+    creationActive: computed(() => systemCreation.creationSession.value !== null),
+    systemMapRef: mapControls.systemMapRef,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    moveOrbitCenter: map.moveMapOrbitCenter,
   })
   const clusterSystemPlacement = useClusterSystemPlacement({
     workspace,
@@ -263,6 +281,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       confirmDeletionReview: cluster.confirmDeletionReview,
     },
     placement: {
+      unresolvedExit: unresolvedExitPlacement,
+      orbitCenter: orbitCenterPlacement,
       map: {
         moveSystem: map.moveSystem,
         moveMapObject: map.moveMapObject,
@@ -284,20 +304,20 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
         cancelCreationPreview: systemCreation.cancelCreationPreview,
       },
       systemObject: {
+        systemObjectMapMoveTargeting: systemObjectPlacement.systemObjectMapMoveTargeting,
+        beginSystemObjectMapMove: systemObjectPlacement.beginSystemObjectMapMove,
+        previewSystemObjectMoveAt: systemObjectPlacement.previewSystemObjectMoveAt,
+        nudgeSystemObjectMove: systemObjectPlacement.nudgeSystemObjectMove,
         systemObjectMoveAvailable: systemObjectPlacement.systemObjectMoveAvailable,
         systemObjectMoveDestination: systemObjectPlacement.systemObjectMoveDestination,
         systemObjectMoveDestinationOptions: systemObjectPlacement.systemObjectMoveDestinationOptions,
         systemObjectPositionInput: systemObjectPlacement.systemObjectPositionInput,
-        systemObjectPositionXInput: systemObjectPlacement.systemObjectPositionXInput,
-        systemObjectPositionYInput: systemObjectPlacement.systemObjectPositionYInput,
         systemObjectMoveCandidates: systemObjectPlacement.systemObjectMoveCandidates,
         systemObjectMoveCandidateRequest: systemObjectPlacement.systemObjectMoveCandidateRequest,
         systemObjectMovePreview: systemObjectPlacement.systemObjectMovePreview,
         systemObjectMoveError: systemObjectPlacement.systemObjectMoveError,
         updateSystemObjectMoveDestination: systemObjectPlacement.updateSystemObjectMoveDestination,
         updateSystemObjectPositionInput: systemObjectPlacement.updateSystemObjectPositionInput,
-        updateSystemObjectPositionXInput: systemObjectPlacement.updateSystemObjectPositionXInput,
-        updateSystemObjectPositionYInput: systemObjectPlacement.updateSystemObjectPositionYInput,
         chooseObjectMoveCandidate: systemObjectPlacement.chooseObjectMoveCandidate,
         previewSystemObjectMoveFromInputs: systemObjectPlacement.previewSystemObjectMoveFromInputs,
         confirmSystemObjectMove: systemObjectPlacement.confirmSystemObjectMove,
@@ -307,16 +327,14 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
         clusterAddType: clusterSystemPlacement.clusterAddType,
         clusterAddError: clusterSystemPlacement.clusterAddError,
         clusterMoveTargeting: clusterSystemPlacement.clusterMoveTargeting,
+        clusterSystemMapMoveTargeting: clusterSystemPlacement.clusterSystemMapMoveTargeting,
         clusterSystemMovePreview: clusterSystemPlacement.clusterSystemMovePreview,
         clusterSystemMoveError: clusterSystemPlacement.clusterSystemMoveError,
-        clusterSystemPositionInputs: clusterSystemPlacement.clusterSystemPositionInputs,
-        clusterSystemPositionInputErrors: clusterSystemPlacement.clusterSystemPositionInputErrors,
         armSystemAdd: clusterSystemPlacement.armSystemAdd,
-        updateClusterSystemPositionInput: clusterSystemPlacement.updateClusterSystemPositionInput,
         addSystemAt: clusterSystemPlacement.addSystemAt,
-        addSystemFromInputs: clusterSystemPlacement.addSystemFromInputs,
+        beginClusterSystemMapMove: clusterSystemPlacement.beginClusterSystemMapMove,
         previewSystemMoveAt: clusterSystemPlacement.previewSystemMoveAt,
-        previewSystemMoveFromInputs: clusterSystemPlacement.previewSystemMoveFromInputs,
+        nudgeClusterSystemMove: clusterSystemPlacement.nudgeClusterSystemMove,
         cancelSystemMovePreview: clusterSystemPlacement.cancelSystemMovePreview,
         confirmSystemMove: clusterSystemPlacement.confirmSystemMove,
       },

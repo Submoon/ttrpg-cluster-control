@@ -1,6 +1,7 @@
 /** Pure object-draft parsing and validation, separate from session identity and async guards. */
 import {
   canPlaceObjectInOrbit,
+  initialSystemPlacement,
   updateWorkspaceObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -85,12 +86,7 @@ export function validateObjectDraft(
   if (subtype !== initial.subtype) changes.subtype = subtype
 
   if (draft.placement === 'system') {
-    const x = parseFiniteInput(draft.x, 'Schematic X', errors, 'x')
-    const y = parseFiniteInput(draft.y, 'Schematic Y', errors, 'y')
-    const wasSystemPlacement = object.placement.kind === 'system'
-    const placementChanged = draft.placement !== initial.placement
-      || (wasSystemPlacement && (draft.x !== initial.x || draft.y !== initial.y))
-    if (placementChanged && x !== null && y !== null) changes.placement = { kind: 'system', x, y }
+    if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(system)
   } else {
     const orbitId = parseOrbitPlacement(draft.placement)
     if (!orbitId) {

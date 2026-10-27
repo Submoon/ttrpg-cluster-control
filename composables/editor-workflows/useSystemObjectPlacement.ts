@@ -36,6 +36,12 @@ interface SystemObjectPlacementOptions {
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   applyWorkspace: (workspace: LocalWorkspace) => { durable: Promise<void> }
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  acceptCommittedPosition?: (change: {
+    objectId: string
+    previous: Point
+    next: Point
+    command: Extract<EntityCommand, { kind: 'object-placement' }>
+  }) => void
 }
 
 interface CurrentObject {
@@ -190,18 +196,19 @@ export function useSystemObjectPlacement({
   systemMapRef,
   applyWorkspace,
   isEntityCommandBlocked,
+  acceptCommittedPosition,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const systemObjectMoveDestination = ref(FREE_SYSTEM_OBJECT_PLACEMENT)
   const systemObjectPositionInput = ref('0')
-  const systemObjectPositionXInput = ref('')
-  const systemObjectPositionYInput = ref('')
   const systemObjectMoveCandidates = ref<SystemObjectMoveCandidate[]>([])
   const systemObjectMoveCandidateRequest = ref(0)
   const systemObjectMovePreview = ref<SystemObjectMovePreview | null>(null)
   const systemObjectMoveError = ref('')
+  const systemObjectMapMoveTargeting = ref(false)
+  const systemObjectMapMoveTarget = ref<Point | null>(null)
   const nextPreviewToken = ref(0)
   let ownerKey = ''
   let preparedBaseline: PreparedPlacementBaseline | null = null
@@ -279,12 +286,14 @@ export function useSystemObjectPlacement({
     return toNormalizedMapPoint(scenePoint)
   }
 
+  function scenePointForFreePoint(point: Point): Point {
+    return { x: 64 + point.x * 832, y: 72 + point.y * 416 }
+  }
+
   function setInputsToCurrentObject(current: CurrentObject | null): void {
     if (!current) {
       systemObjectMoveDestination.value = FREE_SYSTEM_OBJECT_PLACEMENT
       systemObjectPositionInput.value = '0'
-      systemObjectPositionXInput.value = ''
-      systemObjectPositionYInput.value = ''
       return
     }
     if (current.object.placement.kind === 'orbit') {
@@ -298,14 +307,6 @@ export function useSystemObjectPlacement({
       systemObjectMoveDestination.value = FREE_SYSTEM_OBJECT_PLACEMENT
       systemObjectPositionInput.value = '0'
     }
-    try {
-      const point = freePointForObject(current)
-      systemObjectPositionXInput.value = String(point.x)
-      systemObjectPositionYInput.value = String(point.y)
-    } catch {
-      systemObjectPositionXInput.value = ''
-      systemObjectPositionYInput.value = ''
-    }
   }
 
   function updateSystemObjectMoveDestination(value: string): void {
@@ -313,24 +314,14 @@ export function useSystemObjectPlacement({
     clearPreview()
     clearMoveCandidates()
     systemObjectMoveError.value = ''
+    if (systemObjectMoveDestination.value !== FREE_SYSTEM_OBJECT_PLACEMENT) {
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMapMoveTarget.value = null
+    }
   }
 
   function updateSystemObjectPositionInput(value: string): void {
     systemObjectPositionInput.value = String(value ?? '')
-    clearPreview()
-    clearMoveCandidates()
-    systemObjectMoveError.value = ''
-  }
-
-  function updateSystemObjectPositionXInput(value: string): void {
-    systemObjectPositionXInput.value = String(value ?? '')
-    clearPreview()
-    clearMoveCandidates()
-    systemObjectMoveError.value = ''
-  }
-
-  function updateSystemObjectPositionYInput(value: string): void {
-    systemObjectPositionYInput.value = String(value ?? '')
     clearPreview()
     clearMoveCandidates()
     systemObjectMoveError.value = ''
@@ -402,14 +393,7 @@ export function useSystemObjectPlacement({
 
   function targetFromInputs(current: CurrentObject): SystemObjectMoveTarget {
     if (systemObjectMoveDestination.value === FREE_SYSTEM_OBJECT_PLACEMENT) {
-      const rawX = systemObjectPositionXInput.value.trim()
-      const rawY = systemObjectPositionYInput.value.trim()
-      const x = rawX ? Number(rawX) : Number.NaN
-      const y = rawY ? Number(rawY) : Number.NaN
-      if (!Number.isFinite(x) || !Number.isFinite(y)) {
-        throw new Error('Enter finite X and Y coordinates for free placement.')
-      }
-      return { kind: 'free', point: { x, y } }
+      throw new Error('Choose a free destination on the map.')
     }
 
     const orbitId = systemObjectMoveDestination.value
@@ -430,6 +414,8 @@ export function useSystemObjectPlacement({
     clearPreview()
     clearMoveCandidates()
     systemObjectMoveError.value = ''
+    systemObjectMapMoveTargeting.value = false
+    systemObjectMapMoveTarget.value = null
     if (!preview) return
     const current = currentObject()
     if (current?.object.id === preview.objectId && current.system.id === preview.systemId) {
@@ -449,6 +435,15 @@ export function useSystemObjectPlacement({
       if (isEntityCommandBlocked(moveCommand(current, target))) {
         throw new Error('Resolve the Inspector draft before changing this object or its placement.')
       }
+      return previewSystemObjectMoveTarget(current, target)
+    } catch (error) {
+      systemObjectMoveError.value = errorMessage(error)
+      return false
+    }
+  }
+
+  function previewSystemObjectMoveTarget(current: CurrentObject, target: SystemObjectMoveTarget): boolean {
+    try {
       const fingerprint = placementFingerprint(current, target)
       const scenePoint = scenePointForTarget(current, target)
       const preview: SystemObjectMovePreview = {
@@ -466,6 +461,62 @@ export function useSystemObjectPlacement({
       systemObjectMoveError.value = errorMessage(error)
       return false
     }
+  }
+
+  /** Arms a selected object for a free scene-space destination and focuses the map for keyboard input. */
+  function beginSystemObjectMapMove(): boolean {
+    clearPreview()
+    clearMoveCandidates()
+    systemObjectMoveError.value = ''
+    const current = currentObject()
+    if (!systemObjectMoveAvailable.value || !current
+      || systemObjectMoveDestination.value !== FREE_SYSTEM_OBJECT_PLACEMENT) return false
+    const command = moveCommand(current, { kind: 'free', point: freePointForObject(current) })
+    if (isEntityCommandBlocked(command)) {
+      systemObjectMoveError.value = 'Resolve the Inspector relationship draft before moving this object.'
+      return false
+    }
+    try {
+      systemObjectMapMoveTarget.value = scenePointForFreePoint(freePointForObject(current))
+      systemObjectMapMoveTargeting.value = true
+      systemMapRef.value?.focusMap?.()
+      return true
+    } catch (error) {
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMoveError.value = errorMessage(error)
+      return false
+    }
+  }
+
+  /** Previews one unbounded SVG scene point as a free system-map position. */
+  function previewSystemObjectMoveAt(point: Point): boolean {
+    clearPreview()
+    clearMoveCandidates()
+    systemObjectMoveError.value = ''
+    const current = currentObject()
+    if (!systemObjectMoveAvailable.value || !current
+      || systemObjectMoveDestination.value !== FREE_SYSTEM_OBJECT_PLACEMENT) return false
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      systemObjectMoveError.value = 'Choose a finite map destination.'
+      return false
+    }
+    const target = { kind: 'free' as const, point: toNormalizedMapPoint(point) }
+    if (isEntityCommandBlocked(moveCommand(current, target))) {
+      systemObjectMoveError.value = 'Resolve the Inspector draft before changing this object or its placement.'
+      return false
+    }
+    systemObjectMapMoveTarget.value = { ...point }
+    systemObjectMapMoveTargeting.value = true
+    return previewSystemObjectMoveTarget(current, target)
+  }
+
+  /** Moves the active scene-space destination by an unclamped arrow-key delta and refreshes its preview. */
+  function nudgeSystemObjectMove(delta: Point): boolean {
+    if (!Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return false
+    if (!systemObjectMapMoveTargeting.value && !beginSystemObjectMapMove()) return false
+    const current = systemObjectMapMoveTarget.value
+    if (!current) return false
+    return previewSystemObjectMoveAt({ x: current.x + delta.x, y: current.y + delta.y })
   }
 
   function confirmSystemObjectMove(token: number): boolean {
@@ -494,7 +545,7 @@ export function useSystemObjectPlacement({
       }
     } else if (!Number.isFinite(preview.target.point.x) || !Number.isFinite(preview.target.point.y)) {
       clearPreview()
-      systemObjectMoveError.value = 'Enter finite X and Y coordinates for free placement.'
+      systemObjectMoveError.value = 'Choose a finite map destination.'
       return false
     }
     if (isEntityCommandBlocked(moveCommand(current, preview.target))) {
@@ -530,6 +581,21 @@ export function useSystemObjectPlacement({
       clearMoveCandidates()
       systemObjectMoveError.value = ''
       const { durable } = applyWorkspace(nextWorkspace)
+      if (current.object.placement.kind === 'system' && preview.target.kind === 'free') {
+        acceptCommittedPosition?.({
+          objectId: current.object.id,
+          previous: { x: current.object.placement.x, y: current.object.placement.y },
+          next: { x: preview.target.point.x, y: preview.target.point.y },
+          command: {
+            kind: 'object-placement',
+            objectId: current.object.id,
+            fromOrbitId: null,
+            toOrbitId: null,
+          },
+        })
+      }
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMapMoveTarget.value = null
       void durable.catch(() => undefined)
       return true
     } catch (error) {
@@ -558,6 +624,8 @@ export function useSystemObjectPlacement({
       clearMoveCandidates()
       ownerKey = nextOwnerKey
       setInputsToCurrentObject(current)
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMapMoveTarget.value = null
       systemObjectMoveError.value = hadPreview
         ? 'The selected object or placement changed. Preview the position again.'
         : ''
@@ -568,6 +636,8 @@ export function useSystemObjectPlacement({
       clearPreview()
       clearMoveCandidates()
       systemObjectMoveError.value = ''
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMapMoveTarget.value = null
       return
     }
 
@@ -583,6 +653,8 @@ export function useSystemObjectPlacement({
       clearPreview()
       clearMoveCandidates()
       systemObjectMoveError.value = ''
+      systemObjectMapMoveTargeting.value = false
+      systemObjectMapMoveTarget.value = null
       return
     }
     if (!current || preview.clusterId !== current.workspace.cluster.id
@@ -632,23 +704,24 @@ export function useSystemObjectPlacement({
   }, { flush: 'sync' })
 
   return {
+    systemObjectMapMoveTargeting,
+    systemObjectMapMoveTarget,
     systemObjectMoveAvailable,
     systemObjectMoveDestination,
     systemObjectMoveDestinationOptions,
     systemObjectPositionInput,
-    systemObjectPositionXInput,
-    systemObjectPositionYInput,
     systemObjectMoveCandidates,
     systemObjectMoveCandidateRequest,
     systemObjectMovePreview,
     systemObjectMoveError,
     updateSystemObjectMoveDestination,
     updateSystemObjectPositionInput,
-    updateSystemObjectPositionXInput,
-    updateSystemObjectPositionYInput,
     offerObjectMoveCandidates,
     chooseObjectMoveCandidate,
     previewSystemObjectMoveFromInputs,
+    beginSystemObjectMapMove,
+    previewSystemObjectMoveAt,
+    nudgeSystemObjectMove,
     confirmSystemObjectMove,
     cancelSystemObjectMovePreview,
   }

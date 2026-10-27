@@ -25,8 +25,6 @@ export function objectDraftValuesFor(
     description: object?.description ?? '',
     subtype: object?.subtype ?? '',
     placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
-    x: object?.placement.kind === 'system' ? String(object.placement.x) : '',
-    y: object?.placement.kind === 'system' ? String(object.placement.y) : '',
     atmosphere: object?.atmosphere ?? '',
     portClass: object?.portClass ?? '',
     jumpStationId: object?.jumpStationId ?? '',
