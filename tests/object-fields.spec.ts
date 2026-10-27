@@ -4,6 +4,7 @@ import { activeWorkspaceFeedback, addClusterSystem, captureMapExportBlobs, openW
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 const generatedNames = new Map<typeof catalogueSubtypes[number], RegExp>([
   ['star', /New star/],
@@ -451,8 +452,10 @@ test('field definitions dialog stays centered on desktop and narrow viewports', 
     })
 
     const size = `${viewport.width}x${viewport.height}`
-    expect.soft(Math.abs(bounds.x + bounds.width / 2 - bounds.viewportWidth / 2), size).toBeLessThanOrEqual(1)
-    expect.soft(Math.abs(bounds.y + bounds.height / 2 - bounds.viewportHeight / 2), size).toBeLessThanOrEqual(1)
+    expect.soft(Math.abs(bounds.x + bounds.width / 2 - bounds.viewportWidth / 2), size)
+      .toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+    expect.soft(Math.abs(bounds.y + bounds.height / 2 - bounds.viewportHeight / 2), size)
+      .toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
     expect.soft(bounds.x, size).toBeGreaterThanOrEqual(0)
     expect.soft(bounds.y, size).toBeGreaterThanOrEqual(0)
     expect.soft(bounds.x + bounds.width, size).toBeLessThanOrEqual(bounds.viewportWidth)

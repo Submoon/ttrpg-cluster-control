@@ -63,7 +63,12 @@ export function createSystemObject(
     throw new Error(`Unsupported catalogue type "${subtype}".`)
   }
 
-  const count = system.objects.filter(object => object.subtype === subtype).length + 1
+  let count = system.objects.filter(object => object.subtype === subtype).length + 1
+  let name = `New ${catalogueType.label.toLowerCase()} ${count}`
+  while (system.objects.some(object => object.name === name)) {
+    count += 1
+    name = `New ${catalogueType.label.toLowerCase()} ${count}`
+  }
   const objectId = crypto.randomUUID()
   const placement: ObjectPlacement = orbitId === undefined
     ? initialSystemPlacement(system)
@@ -78,7 +83,7 @@ export function createSystemObject(
     family: catalogueType.family,
     subtype,
     locationKey: nextLocationKey(system, catalogueType.keyPrefix),
-    name: `New ${catalogueType.label.toLowerCase()} ${count}`,
+    name,
     description: '',
     placement,
   }

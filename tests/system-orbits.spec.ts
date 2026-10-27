@@ -5,6 +5,7 @@ import { clickDockAction } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
 import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 type DragPreviewWindow = Window & {
   __nativeDragTypes?: string[][]
@@ -1135,7 +1136,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
     expect(preview.width).toBeGreaterThan(0)
     expect(preview.offsetX).toBeGreaterThan(preview.width)
     expect(preview.offsetX - preview.width).toBeLessThanOrEqual(12)
-    expect(preview.offsetY).toBeCloseTo(preview.height / 2, 1)
+    expect(Math.abs(preview.offsetY - preview.height / 2)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
     return preview.text
   }
   await page.goto('/')

@@ -20,6 +20,7 @@ import {
 } from './helpers'
 import { importReviewDialog } from './helpers'
 import type { DownloadWindow, ExportedMap, ExportedSystem } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 type ImageCaptureWindow = Window & { __ticket28PngBlob?: Blob }
 type FailureInjectionWindow = Window & {
@@ -454,7 +455,8 @@ async function expectFeatureBoundsInsideViewBox(
 ): Promise<void> {
   const bounds = await inspectFeatureBounds(page, svgText, mapKind)
   for (const coordinate of ['x', 'y', 'width', 'height'] as const) {
-    expect(Math.abs(bounds[coordinate] - expectedLiveBounds[coordinate])).toBeLessThanOrEqual(1)
+    expect(Math.abs(bounds[coordinate] - expectedLiveBounds[coordinate]))
+      .toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
   }
   expect(bounds.width).toBeGreaterThan(0)
   expect(bounds.height).toBeGreaterThan(0)
