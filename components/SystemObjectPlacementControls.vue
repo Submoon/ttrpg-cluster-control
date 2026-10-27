@@ -1,116 +1,125 @@
 <template>
-  <UPopover
-    v-model:open="open"
-    :modal="false"
-    :content="{
-      side: 'top',
-      align: 'start',
-      sideOffset: 8,
-      collisionPadding: 12,
-      avoidCollisions: true,
-      onCloseAutoFocus: handleCloseAutoFocus,
-    }"
-    :ui="{ content: 'system-object-placement-content' }"
-  >
-    <UButton
-      class="workspace-control system-object-placement-trigger"
-      color="neutral"
-      variant="outline"
-      size="sm"
-      aria-label="Placement"
-      aria-controls="system-object-placement-form"
-      :aria-expanded="open"
+  <div ref="controlRoot" class="system-object-placement-control">
+    <UPopover
+      v-model:open="open"
+      :modal="false"
+      :content="{
+        side: 'top',
+        align: 'start',
+        sideOffset: 8,
+        collisionPadding: 12,
+        avoidCollisions: true,
+        onCloseAutoFocus: handleCloseAutoFocus,
+      }"
+      :ui="{ content: 'system-object-placement-content' }"
     >
-      <UIcon name="i-lucide-crosshair" aria-hidden="true" />
-      Placement
-    </UButton>
-    <template #content>
-      <form
-        id="system-object-placement-form"
-        class="system-object-placement-form"
-        aria-label="Object placement"
-        @submit.prevent="emit('preview-position')"
+      <UButton
+        class="workspace-control system-object-placement-trigger"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        aria-label="Placement"
+        aria-controls="system-object-placement-form"
+        :aria-expanded="open"
       >
-        <p class="system-object-placement-heading">OBJECT PLACEMENT</p>
-        <div v-if="props.candidates.length" class="system-object-placement-candidates system-object-placement-wide" role="group" aria-label="Choose destination Orbit">
-          <div v-for="candidate in props.candidates" :key="candidate.key" class="system-object-placement-candidate">
+        <UIcon name="i-lucide-crosshair" aria-hidden="true" />
+        Placement
+      </UButton>
+      <template #content>
+        <form
+          id="system-object-placement-form"
+          class="system-object-placement-form"
+          aria-label="Object placement"
+          @submit.prevent="emit('preview-position')"
+        >
+          <p class="system-object-placement-heading">OBJECT PLACEMENT</p>
+          <div v-if="props.candidates.length" class="system-object-placement-candidates system-object-placement-wide" role="group" aria-label="Choose destination Orbit">
+            <div v-for="candidate in props.candidates" :key="candidate.key" class="system-object-placement-candidate">
+              <UButton
+                class="workspace-control system-object-placement-wide"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                type="button"
+                :disabled="candidate.error !== null"
+                :aria-describedby="candidate.error ? `system-object-placement-candidate-error-${candidate.key}` : undefined"
+                @click="emit('choose-candidate', candidate.key)"
+              >
+                {{ candidate.label }}
+              </UButton>
+              <p v-if="candidate.error" :id="`system-object-placement-candidate-error-${candidate.key}`" class="system-object-placement-candidate-error" role="note">
+                {{ candidate.error }}
+              </p>
+            </div>
+          </div>
+          <template v-else>
+            <UFormField
+              label="Destination"
+              description="Choose an Orbit, or move a free object directly on the map."
+              class="system-object-placement-wide"
+            >
+              <USelect
+                :model-value="props.destination"
+                :items="props.destinationOptions"
+                aria-label="Destination"
+                @update:model-value="emit('update-destination', String($event ?? ''))"
+              />
+            </UFormField>
+            <p v-if="props.destination === freePlacementValue" class="system-object-placement-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              Choose a destination on the map. Use the arrow keys to adjust it.
+            </p>
+            <p
+              v-if="props.error && props.destination === freePlacementValue"
+              class="system-object-placement-error system-object-placement-feedback system-object-placement-wide"
+              role="alert"
+            >
+              {{ props.error }}
+            </p>
+            <UFormField v-if="props.destination !== freePlacementValue" label="Orbit position (degrees)" class="system-object-placement-wide" :error="props.error || undefined">
+              <UInput
+                :model-value="props.positionInput"
+                type="number"
+                step="any"
+                inputmode="decimal"
+                autocomplete="off"
+                aria-label="Orbit position (degrees)"
+                @update:model-value="emit('update-position-input', String($event))"
+              />
+            </UFormField>
+            <div v-if="props.preview" class="system-object-placement-actions system-object-placement-wide">
+              <UButton class="workspace-control" color="primary" variant="solid" size="sm" type="button" @click="confirmPosition(props.preview.token)">
+                Confirm position
+              </UButton>
+              <UButton class="workspace-control" color="neutral" variant="outline" size="sm" type="button" @click="cancelPreview">
+                Cancel preview
+              </UButton>
+            </div>
             <UButton
+              v-else-if="props.destination === freePlacementValue"
               class="workspace-control system-object-placement-wide"
-              color="neutral"
-              variant="outline"
+              color="primary"
+              variant="solid"
               size="sm"
               type="button"
-              :disabled="candidate.error !== null"
-              :aria-describedby="candidate.error ? `system-object-placement-candidate-error-${candidate.key}` : undefined"
-              @click="emit('choose-candidate', candidate.key)"
+              @click="beginMapMove"
             >
-              {{ candidate.label }}
+              Move on map
             </UButton>
-            <p v-if="candidate.error" :id="`system-object-placement-candidate-error-${candidate.key}`" class="system-object-placement-candidate-error" role="note">
-              {{ candidate.error }}
-            </p>
-          </div>
-        </div>
-        <template v-else>
-          <UFormField
-            label="Destination"
-            description="Choose an Orbit, or move a free object directly on the map."
-            class="system-object-placement-wide"
-          >
-            <USelect
-              :model-value="props.destination"
-              :items="props.destinationOptions"
-              aria-label="Destination"
-              @update:model-value="emit('update-destination', String($event ?? ''))"
-            />
-          </UFormField>
-          <p v-if="props.destination === freePlacementValue" class="system-object-placement-wide m-0 text-xs text-[var(--text-muted)]" role="status">
-            Choose a destination on the map. Use the arrow keys to adjust it.
+            <UButton v-else class="workspace-control system-object-placement-wide" color="primary" variant="solid" size="sm" type="submit">
+              Preview position
+            </UButton>
+          </template>
+          <p v-if="props.error && props.candidates.length" class="system-object-placement-error system-object-placement-wide" role="alert">
+            {{ props.error }}
           </p>
-          <UFormField v-else label="Orbit position (degrees)" class="system-object-placement-wide" :error="props.error || undefined">
-            <UInput
-              :model-value="props.positionInput"
-              type="number"
-              step="any"
-              inputmode="decimal"
-              autocomplete="off"
-              aria-label="Orbit position (degrees)"
-              @update:model-value="emit('update-position-input', String($event))"
-            />
-          </UFormField>
-          <div v-if="props.preview" class="system-object-placement-actions system-object-placement-wide">
-            <UButton class="workspace-control" color="primary" variant="solid" size="sm" type="button" @click="confirmPosition(props.preview.token)">
-              Confirm position
-            </UButton>
-            <UButton class="workspace-control" color="neutral" variant="outline" size="sm" type="button" @click="cancelPreview">
-              Cancel preview
-            </UButton>
-          </div>
-          <UButton
-            v-else-if="props.destination === freePlacementValue"
-            class="workspace-control system-object-placement-wide"
-            color="primary"
-            variant="solid"
-            size="sm"
-            type="button"
-            @click="beginMapMove"
-          >
-            Move on map
-          </UButton>
-          <UButton v-else class="workspace-control system-object-placement-wide" color="primary" variant="solid" size="sm" type="submit">
-            Preview position
-          </UButton>
-        </template>
-        <p v-if="props.error && props.candidates.length" class="system-object-placement-error system-object-placement-wide" role="alert">
-          {{ props.error }}
-        </p>
-      </form>
-    </template>
-  </UPopover>
+        </form>
+      </template>
+    </UPopover>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import {
   FREE_SYSTEM_OBJECT_PLACEMENT,
   type SystemObjectMoveCandidate,
@@ -119,6 +128,7 @@ import {
 } from '../composables/editor-workflows/types'
 
 const freePlacementValue = FREE_SYSTEM_OBJECT_PLACEMENT
+const controlRoot = ref<HTMLElement | null>(null)
 const props = defineProps<{
   destination: string
   destinationOptions: SystemObjectMoveDestinationOption[]
@@ -152,6 +162,12 @@ function beginMapMove(): void {
   suppressAutoFocusReturn = true
   open.value = false
   emit('begin-map-move')
+  void nextTick(async () => {
+    if (!props.error || props.destination !== freePlacementValue) return
+    open.value = true
+    await nextTick()
+    controlRoot.value?.querySelector<HTMLButtonElement>('.system-object-placement-trigger')?.focus()
+  })
 }
 
 function confirmPosition(token: number): void {
@@ -187,6 +203,14 @@ watch(() => props.candidateRequest, request => {
   border-radius: 0.35rem;
   background: var(--panel-raised);
   color: var(--text-primary);
+}
+
+.system-object-placement-control {
+  display: contents;
+}
+
+.system-object-placement-feedback {
+  color: var(--error);
 }
 
 .system-object-placement-heading,

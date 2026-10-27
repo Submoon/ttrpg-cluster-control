@@ -650,6 +650,15 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (session.kind === 'object' && session.targetId === object.id
       && (session.draft.placement !== session.initial.values.placement
         || session.initial.values.placement !== 'system')) return false
+    if (session.kind === 'orbit') {
+      const orbitRelationshipDraft = session.draft.hostId !== session.initial.values.hostId
+        || session.draft.targetOrder !== session.initial.values.targetOrder
+      const relatedObjects = dependencyIds(session, draftDependencies).objects
+      const pendingHostChoice = session.centerMoveCandidates?.some(candidate =>
+        candidate.target.kind === 'host' && candidate.target.objectId === object.id,
+      ) ?? false
+      if (pendingHostChoice || (orbitRelationshipDraft && relatedObjects.has(object.id))) return false
+    }
     return hasPositionBaseline(session, object.id, { x: object.placement.x, y: object.placement.y })
   }
 

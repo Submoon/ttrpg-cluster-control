@@ -48,6 +48,7 @@ async function createCatalogueWorkspace(page: import('@playwright/test').Page): 
 }
 
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
+  await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -250,6 +251,8 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
 })
 
 test('the Warden can configure native and reusable custom object fields', async ({ page }) => {
+  // This round trip edits six definitions and creates objects in two systems through the public UI.
+  test.slow()
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')

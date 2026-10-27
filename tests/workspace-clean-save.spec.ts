@@ -52,12 +52,15 @@ test('Save finishes a clean new object edit without another workspace write or l
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   const addObject = await selectCatalogueObjectButton(page, 'planet')
   await addObject.click()
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') await addToggle.click()
 
   const placement = page.getByRole('group', { name: 'Planet creation controls', exact: true })
   const placementToggle = placement.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
   await placementToggle.click()
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
   await clickNormalizedSystemPoint(page, map, { x: 0.25, y: 0.25 })
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })

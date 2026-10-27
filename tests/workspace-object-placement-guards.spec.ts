@@ -1,13 +1,21 @@
 import { expect, test } from './fixtures'
+import entitySessionFixture from './fixtures/workspace-entity-sessions.json' with { type: 'json' }
 import {
   captureMapExportBlobs,
   clickNormalizedSystemPoint,
   downloadJson,
   editMapObject,
+  importReviewDialog,
+  jsonMapImportInput,
   openWorkspaceHierarchy,
   quitSystemAdd,
+  resolveImportReview,
+  returnToClusterMap,
   saveMapObject,
   selectCatalogueObjectButton,
+  selectInspectorOption,
+  setHeaderMapActionsOpen,
+  setJsonFile,
   setWorkspaceMapMode,
   workspaceNavigation,
 } from './helpers'
@@ -153,6 +161,46 @@ test('map movement commits independently while object changes stay in their draf
   if (movedObject?.placement.kind !== 'system') throw new Error('The moved Primary Star is not free on the map.')
   expect(movedObject.placement.x).toBeGreaterThan(positionBeforeKeyboardMove.x)
   expect(movedObject.placement.y).toBeCloseTo(positionBeforeKeyboardMove.y)
+})
+
+test('a refused free placement move leaves visible feedback and restores reachable focus', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await returnToClusterMap(page)
+
+  await setJsonFile(jsonMapImportInput(page), 'placement-guard-session.json', JSON.stringify(entitySessionFixture))
+  const importReview = importReviewDialog(page)
+  await expect(importReview).toBeVisible()
+  await resolveImportReview(importReview, 'confirm')
+  await setHeaderMapActionsOpen(page, false)
+  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await clusterHierarchy.getByRole('button', { name: 'Open Session Lab system map', exact: true }).click()
+  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+
+  const map = page.getByRole('group', { name: 'Session Lab star system map', exact: true })
+  await setWorkspaceMapMode(page, 'Move')
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  await editMapObject(page)
+  await selectInspectorOption(inspector.getByLabel('Placement', { exact: true }), 'Orbit 1 around Distant Star')
+  await expect(inspector.getByLabel('Placement', { exact: true })).toContainText('Orbit 1 around Distant Star')
+
+  const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
+  await placement.click()
+  const form = page.getByRole('form', { name: 'Object placement', exact: true })
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+
+  await expect(map).not.toHaveAttribute('data-system-object-move-targeting', 'true')
+  const refusal = form.getByRole('alert').filter({ hasText: 'Resolve the Inspector relationship draft before moving this object.' })
+  await expect(refusal).toBeVisible()
+  await expect(refusal).toBeInViewport()
+  await expect(placement).toBeFocused()
+
+  await page.setViewportSize({ width: 844, height: 390 })
+  await expect(refusal).toBeInViewport()
 })
 
 test('armed object Add owns Placement and cancels an existing-object preview', async ({ page }) => {

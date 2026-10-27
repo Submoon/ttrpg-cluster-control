@@ -264,6 +264,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     Math.abs(Number(await ring.getAttribute('cy')) - movedCenter.y),
   ).toBeLessThan(2)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  const committedCenter = {
+    x: Number(await ring.getAttribute('cx')),
+    y: Number(await ring.getAttribute('cy')),
+  }
 
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
@@ -274,9 +278,9 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect(ring).toHaveAttribute('rx', '300')
   await expect(ring).toHaveAttribute('ry', '50')
   await expect.poll(async () => Number(await ring.getAttribute('cx')))
-    .toBeCloseTo(movedCenter.x, 2)
+    .toBe(committedCenter.x)
   await expect.poll(async () => Number(await ring.getAttribute('cy')))
-    .toBeCloseTo(movedCenter.y, 2)
+    .toBe(committedCenter.y)
 
   await addCatalogueObject(page, 'star', {
     target: { kind: 'orbit', label: 'Orbit 1 around unoccupied center' },

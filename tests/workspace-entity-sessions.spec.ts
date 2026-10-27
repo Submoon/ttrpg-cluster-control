@@ -189,6 +189,36 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   expect(exported.system!.objects.map(object => object.name)).not.toContain('Discarded Iria draft')
 })
 
+test('a geometry-only Orbit draft preserves an independently moved free host', async ({ page }) => {
+  const { hierarchy, map, inspector } = await openSessionLab(page)
+  const initial = await downloadJson(page, 'Export star system JSON')
+  const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
+  const orbit = initial.system!.orbits.find(candidate => candidate.hostId === primary.id && candidate.order === 2)!
+
+  await hierarchy.getByRole('button', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
+  await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('45')
+
+  const primaryNode = map.locator(`.system-object[data-object-id="${primary.id}"]`)
+  const originalTransform = await primaryNode.getAttribute('transform')
+  if (!originalTransform) throw new Error('The Primary Star has no rendered map position.')
+  await ensureMapDragPointsReachable(page, map, primaryNode, { x: 650, y: 430 })
+  await dragToWorldPoint(page, map, primaryNode, { x: 650, y: 430 })
+  await expect(primaryNode).not.toHaveAttribute('transform', originalTransform)
+
+  const moved = await downloadJson(page, 'Export star system JSON')
+  const movedPrimary = moved.system!.objects.find(object => object.id === primary.id)!
+  expect(movedPrimary.placement.kind).toBe('system')
+  expect(movedPrimary.placement).not.toEqual(primary.placement)
+
+  await inspector.getByRole('button', { name: /Apply changes/ }).click()
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  const applied = await downloadJson(page, 'Export star system JSON')
+  expect(applied.system!.orbits.find(candidate => candidate.id === orbit.id)?.id).toBe(orbit.id)
+  expect(applied.layout.orbitRotations[orbit.id]).toBe(45)
+  expect(applied.system!.objects.find(object => object.id === primary.id)?.placement).toEqual(movedPrimary.placement)
+})
+
 test('Orbit sessions allow occupant-angle and unrelated-host changes, block related creation, and preserve both radii when reordered', async ({ page }) => {
   const { hierarchy, map } = await openSessionLab(page)
   const initial = await downloadJson(page, 'Export star system JSON')
