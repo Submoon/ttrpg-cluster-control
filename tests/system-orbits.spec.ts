@@ -212,7 +212,7 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
     .not.toBe(planetBefore)
 })
 
-test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }, testInfo) => {
+test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -267,6 +267,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const committedCenter = {
     x: Number(await ring.getAttribute('cx')),
     y: Number(await ring.getAttribute('cy')),
+  }
+  const committedCenterNormalized = {
+    x: (committedCenter.x - 64) / 832,
+    y: (committedCenter.y - 72) / 416,
   }
 
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
@@ -490,11 +494,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     return { x: screenPoint.x, y: screenPoint.y }
   }, newPlanetDropPoint)
   await map.evaluate((element, label) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
     const orbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
       .find(candidate => candidate.getAttribute('aria-label') === label)
     const ellipse = orbit?.querySelector<SVGEllipseElement>('.orbit-ring')
-    if (!content || !ellipse) throw new Error('Could not observe the native Orbit drop geometry.')
+    if (!orbit || !ellipse) throw new Error('Could not observe the native Orbit drop geometry.')
 
     const document = element.ownerDocument
     const dropWindow = document.defaultView as DragPreviewWindow | null
@@ -504,6 +507,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
       if (!(event instanceof DragEvent)
         || !(event.target instanceof Node)
         || !element.contains(event.target)) return
+      const content = element.querySelector<SVGGElement>('.system-map-content')
+      const currentOrbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
+        .find(candidate => candidate.getAttribute('aria-label') === label)
+      const currentEllipse = currentOrbit?.querySelector<SVGEllipseElement>('.orbit-ring')
+      if (!content || !currentEllipse) return
       const matrix = content.getScreenCTM()
       if (!matrix) return
       dropWindow.__nativeEllipseDrop = {
@@ -517,11 +525,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
           f: matrix.f,
         },
         ellipse: {
-          cx: Number(ellipse.getAttribute('cx')),
-          cy: Number(ellipse.getAttribute('cy')),
-          rx: Number(ellipse.getAttribute('rx')),
-          ry: Number(ellipse.getAttribute('ry')),
-          rotation: Number(ellipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0),
+          cx: Number(currentEllipse.getAttribute('cx')),
+          cy: Number(currentEllipse.getAttribute('cy')),
+          rx: Number(currentEllipse.getAttribute('rx')),
+          ry: Number(currentEllipse.getAttribute('ry')),
+          rotation: Number(currentEllipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0),
         },
       }
       document.removeEventListener('drop', captureDrop, true)
@@ -562,14 +570,6 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
       intendedScreenPoint: target.intendedScreenPoint,
     }
   }, { intendedScreenPoint: intendedDropScreenPoint })
-  await testInfo.attach('native-ellipse-drop-probe.json', {
-    body: JSON.stringify({
-      intendedAngle: newPlanetAngle,
-      intendedWorldPoint: newPlanetDropPoint,
-      ...nativeDropProbe,
-    }, null, 2),
-    contentType: 'application/json',
-  })
   const nativeDrop = nativeDropProbe.nativeDrop
   const renderedDrop = nativeDropProbe.rendered
   if (!nativeDrop || !renderedDrop?.scenePoint || !renderedDrop.screenPoint) {
@@ -635,7 +635,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const system = systemExport.system!
   const exportedOrbit = system.orbits.find(candidate => candidate.hostId === null)!
   const exportedNewPlanet = system.objects.find(object => object.name === 'New planet 1')!
-  expect(exportedOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(exportedOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(exportedOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(exportedNewPlanet.placement).toEqual({ kind: 'orbit', orbitId: exportedOrbit.id })
   expect(systemExport.layout.objectAngles[exportedNewPlanet.id]).toBeCloseTo(renderedNewPlanetAngle, 10)
   expect(systemExport.layout).not.toHaveProperty('orbitEllipseRadii')
@@ -712,7 +713,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     candidate.id !== system.id && candidate.name === system.name,
   )!
   const importedOrbit = importedSystem.orbits.find(candidate => candidate.hostId === null)!
-  expect(importedOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(importedOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(importedOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(clusterExport.layout.orbitRadii[importedOrbit.id])
     .toEqual({ horizontal: resizedHorizontalRadius, vertical: resizedVerticalRadius })
   expect(clusterExport.layout.orbitRotations?.[importedOrbit.id]).toBeCloseTo(finalRotation, 4)
@@ -734,7 +736,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     .filter(candidate => !sourceSystemIds.has(candidate.id))
     .find(candidate => candidate.orbits.some(orbit => orbit.hostId === null))!
   const roundTripOrbit = roundTripSystem.orbits.find(orbit => orbit.hostId === null)!
-  expect(roundTripOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(roundTripOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(roundTripOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(clusterRoundTrip.layout.orbitRadii[roundTripOrbit.id])
     .toEqual({ horizontal: resizedHorizontalRadius, vertical: resizedVerticalRadius })
   expect(clusterRoundTrip.layout.orbitRotations?.[roundTripOrbit.id])

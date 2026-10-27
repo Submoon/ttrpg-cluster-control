@@ -229,4 +229,4 @@ Additional decisions:
 - Movement and Inspector sessions must be integrated without restoring stale coordinates or silently applying unrelated relationship drafts. This is an architecture and behavioral-review focus.
 - Issue #5 is a related contract dependency, not an established blocker. If its design lands first, reconcile semantic operation boundaries and position snapshots before implementing either integration; this specification does not decide its history design.
 - GitHub remains authoritative for incoming requests and global completion; this local effort is authoritative for the approved expanded scope and specification. Local readiness does not change the state or labels of issue #27.
-- The effort remains open and locally ready for an agent. Later implementation requires a new instruction and a refreshed repository/source baseline.
+- The effort remains open. The user subsequently authorized implementation of the initial frontier; its baseline, delivery and checks are recorded in [implementation.md](implementation.md). Tickets 03 and 05 remain open for a separately authorized continuation.

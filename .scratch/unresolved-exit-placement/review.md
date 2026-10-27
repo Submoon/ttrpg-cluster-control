@@ -31,6 +31,16 @@ No additional blocking findings were identified in optional-layout restoration, 
 
 ## Correction and closure
 
-Pending completion of the frozen integrated suite, targeted corrections, affected checks and reviewer closure. No ticket is marked complete based on the initial review.
+Correction candidate: `6c0e570a6e0a683511106675887d5771134ad000`.
 
-Initial totals: Standards 1 P2; Spec 2 P2; complementary review 1 shared P2. There are two unique product defects to resolve.
+The guard correction distinguishes intentional host/order drafts from geometry-only drafts. The refusal error now stays inside the collision-managed Placement popover, which reopens on refusal and restores its own trigger focus. Successful movement keeps map focus.
+
+Both defects were reproduced by failing public tests before production changes. Three focused cases then passed: proposed-host movement refusal; host movement during a radius/rotation draft with Apply retaining the position; and visible, focused refusal feedback contained in desktop and short-landscape viewports. Existing order protection and successful movement focus checks also passed.
+
+All three independent reviewers closed their original findings on the correction candidate without identifying a consequential new defect. Their static review does not replace the coordinator's remaining runtime verification.
+
+The Spec and deep reviewers qualified one broader claim: this correction does not establish blanket protection of a pristine, unmodified pending host-choice session. Existing early-return/dependency behavior remains; no broader guarantee is claimed. The verified restoration concerns explicit modified host/order drafts and their related objects.
+
+The final elliptical-Orbit test migration was independently reviewed: live SVG references replace detached ones, while committed-position preservation, screen accuracy, ellipse membership and round-trip assertions remain. No findings were raised. All initial integrated failures have successful affected reruns; adjacent controls, final lint/typecheck and production build passed. The detailed evidence and verification boundary are in [implementation.md](implementation.md).
+
+Initial totals: Standards 1 P2; Spec 2 P2; complementary review 1 shared P2 (two unique defects). Remaining findings: Standards 0; Spec 0; complementary persistence/domain 0. No blocking review item remains.

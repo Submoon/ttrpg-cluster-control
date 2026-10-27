@@ -215,7 +215,7 @@ test('a geometry-only Orbit draft preserves an independently moved free host', a
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
   const applied = await downloadJson(page, 'Export star system JSON')
   expect(applied.system!.orbits.find(candidate => candidate.id === orbit.id)?.id).toBe(orbit.id)
-  expect(applied.layout.orbitRotations[orbit.id]).toBe(45)
+  expect(applied.layout.orbitRotations?.[orbit.id]).toBe(45)
   expect(applied.system!.objects.find(object => object.id === primary.id)?.placement).toEqual(movedPrimary.placement)
 })
 
