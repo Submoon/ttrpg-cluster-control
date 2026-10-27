@@ -18,6 +18,7 @@ import {
   setHeaderMapActionsOpen,
   setJsonFile,
 } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 type Viewport = { width: number; height: number }
 
@@ -70,10 +71,14 @@ async function expectFooterActionToFit(
   const panelBounds = await panel.boundingBox()
   const actionBounds = await action.boundingBox()
   if (!panelBounds || !actionBounds) throw new Error('A visible footer action has no measurable bounds.')
-  expect(actionBounds.x).toBeGreaterThanOrEqual(Math.max(0, panelBounds.x) - 1)
-  expect(actionBounds.y).toBeGreaterThanOrEqual(Math.max(0, panelBounds.y) - 1)
-  expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(Math.min(viewport.width, panelBounds.x + panelBounds.width) + 1)
-  expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(Math.min(viewport.height, panelBounds.y + panelBounds.height) + 1)
+  expect(actionBounds.x).toBeGreaterThanOrEqual(Math.max(0, panelBounds.x) - RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(actionBounds.y).toBeGreaterThanOrEqual(Math.max(0, panelBounds.y) - RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(
+    Math.min(viewport.width, panelBounds.x + panelBounds.width) + RENDER_GEOMETRY_TOLERANCE_PX,
+  )
+  expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(
+    Math.min(viewport.height, panelBounds.y + panelBounds.height) + RENDER_GEOMETRY_TOLERANCE_PX,
+  )
   expect(await action.evaluate(element => {
     const bounds = element.getBoundingClientRect()
     const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
@@ -90,8 +95,8 @@ async function expectFullWidthFooterAction(
   const actionsBounds = await actions.boundingBox()
   const actionBounds = await action.boundingBox()
   if (!actionsBounds || !actionBounds) throw new Error('A full-width footer action has no measurable bounds.')
-  expect(Math.abs(actionBounds.x - actionsBounds.x)).toBeLessThanOrEqual(1)
-  expect(Math.abs(actionBounds.width - actionsBounds.width)).toBeLessThanOrEqual(1)
+  expect(Math.abs(actionBounds.x - actionsBounds.x)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(Math.abs(actionBounds.width - actionsBounds.width)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
 }
 
 async function expectEqualWidthFooterActions(
@@ -107,10 +112,12 @@ async function expectEqualWidthFooterActions(
   if (!actionsBounds || !firstBounds || !secondBounds) {
     throw new Error('The paired footer actions have no measurable bounds.')
   }
-  expect(Math.abs(firstBounds.width - secondBounds.width)).toBeLessThanOrEqual(1)
-  expect(Math.abs(firstBounds.y - secondBounds.y)).toBeLessThanOrEqual(1)
-  expect(firstBounds.x).toBeGreaterThanOrEqual(actionsBounds.x - 1)
-  expect(secondBounds.x + secondBounds.width).toBeLessThanOrEqual(actionsBounds.x + actionsBounds.width + 1)
+  expect(Math.abs(firstBounds.width - secondBounds.width)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(Math.abs(firstBounds.y - secondBounds.y)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(firstBounds.x).toBeGreaterThanOrEqual(actionsBounds.x - RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(secondBounds.x + secondBounds.width).toBeLessThanOrEqual(
+    actionsBounds.x + actionsBounds.width + RENDER_GEOMETRY_TOLERANCE_PX,
+  )
   expect(secondBounds.x).toBeGreaterThan(firstBounds.x + firstBounds.width)
 }
 

@@ -15,6 +15,7 @@ import {
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 async function createWorkspace(page: import('@playwright/test').Page): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 960 })
@@ -49,7 +50,7 @@ test('Hierarchy starts closed, desktop panels overlay the map, and compact panel
   const boardBounds = await page.locator('[data-map-board]').boundingBox()
   const mapBounds = await map.boundingBox()
   if (!boardBounds || !mapBounds) throw new Error('The full-map board did not render.')
-  expect(boardBounds.x).toBeLessThanOrEqual(1)
+  expect(boardBounds.x).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
   expect(boardBounds.width).toBeGreaterThanOrEqual(1400)
   expect(mapBounds.width).toBeGreaterThan(900)
 
@@ -101,10 +102,10 @@ test('Hierarchy starts closed, desktop panels overlay the map, and compact panel
   await expect(page.getByRole('slider', { name: 'Map zoom level' })).toBeHidden()
   const hierarchyBounds = await hierarchy.boundingBox()
   if (!hierarchyBounds) throw new Error('The compact Hierarchy panel has no visible bounds.')
-  expect(hierarchyBounds.x).toBeLessThanOrEqual(1)
-  expect(hierarchyBounds.y).toBeLessThanOrEqual(1)
-  expect(hierarchyBounds.width).toBeGreaterThanOrEqual(388)
-  expect(hierarchyBounds.height).toBeGreaterThanOrEqual(842)
+  expect(hierarchyBounds.x).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(hierarchyBounds.y).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(hierarchyBounds.width).toBeGreaterThanOrEqual(390 - RENDER_GEOMETRY_TOLERANCE_PX)
+  expect(hierarchyBounds.height).toBeGreaterThanOrEqual(844 - RENDER_GEOMETRY_TOLERANCE_PX)
   await page.getByRole('button', { name: 'Close hierarchy panel' }).click()
   await expect(hierarchyToggle).toBeFocused()
   await expect(workspaceNavigation(page)).toBeVisible()

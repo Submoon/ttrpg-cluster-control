@@ -6,6 +6,7 @@ import {
   openFieldDefinitionDialog,
   selectInspectorOption,
 } from './helpers'
+import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 async function setWorkspaceTheme(page: import('@playwright/test').Page, target: 'light' | 'dark'): Promise<void> {
   const theme = page.getByRole('group', { name: 'Theme' })
@@ -21,7 +22,8 @@ async function expectDialogGeometry(
   dialog: import('@playwright/test').Locator,
   compact: boolean,
 ): Promise<void> {
-  await expect.poll(async () => dialog.evaluate((element, isCompact) => {
+  await expect.poll(async () => dialog.evaluate((element, options: { compact: boolean; tolerancePx: number }) => {
+    const { compact, tolerancePx } = options
     const { x, y, width, height } = element.getBoundingClientRect()
     const actions = element.querySelector<HTMLElement>('.field-definitions-actions')
     if (!actions) return null
@@ -30,19 +32,19 @@ async function expectDialogGeometry(
     const actionsBottomGap = dialogBottom - (actionsBounds.y + actionsBounds.height)
     const withinViewport = x >= 0
       && y >= 0
-      && x + width <= innerWidth + 1
-      && y + height <= innerHeight + 1
-    const aligned = isCompact
-      ? x <= 1 && y <= 1 && width >= innerWidth - 1
-      : Math.abs(x + width / 2 - innerWidth / 2) <= 1
-        && Math.abs(y + height / 2 - innerHeight / 2) <= 1
+      && x + width <= innerWidth + tolerancePx
+      && y + height <= innerHeight + tolerancePx
+    const aligned = compact
+      ? x <= tolerancePx && y <= tolerancePx && width >= innerWidth - tolerancePx
+      : Math.abs(x + width / 2 - innerWidth / 2) <= tolerancePx
+        && Math.abs(y + height / 2 - innerHeight / 2) <= tolerancePx
     const actionsWithinViewport = actionsBounds.x >= 0
       && actionsBounds.y >= 0
-      && actionsBounds.x + actionsBounds.width <= innerWidth + 1
-      && actionsBounds.y + actionsBounds.height <= innerHeight + 1
+      && actionsBounds.x + actionsBounds.width <= innerWidth + tolerancePx
+      && actionsBounds.y + actionsBounds.height <= innerHeight + tolerancePx
     const actionsAtDialogBottom = actionsBottomGap >= 0 && actionsBottomGap <= 32
     return { withinViewport, aligned, actionsWithinViewport, actionsAtDialogBottom }
-  }, compact)).toEqual({
+  }, { compact, tolerancePx: RENDER_GEOMETRY_TOLERANCE_PX })).toEqual({
     withinViewport: true,
     aligned: true,
     actionsWithinViewport: true,
