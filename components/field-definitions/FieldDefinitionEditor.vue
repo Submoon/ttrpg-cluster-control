@@ -1,5 +1,5 @@
 <template>
-  <section class="field-definition-editor" aria-label="Field definition editor">
+  <section class="field-definition-editor" aria-label="Field definition editor" tabindex="-1">
     <header class="field-definition-editor-heading">
       <div>
         <span class="section-kicker">{{ props.definition.kind }} field / {{ props.definition.type }}</span>
@@ -8,88 +8,98 @@
       <span class="field-definition-value-count">{{ props.assignments.length }} saved values</span>
     </header>
 
-    <label v-if="props.definition.kind === 'custom'" for="field-definition-name">
-      Custom field name
-      <input
-        id="field-definition-name"
-        v-model="fieldDefinitionNameDraft"
-        aria-label="Custom field name"
-        maxlength="80"
-        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-      >
-    </label>
-
-    <label
-      v-if="props.definition.type === 'single-select'"
-      for="field-definition-options"
-    >
-      {{ props.definition.name }} choices
-      <textarea
-        id="field-definition-options"
-        v-model="fieldDefinitionOptionsDraft"
-        :aria-label="`${props.definition.name} choices`"
-        rows="4"
-        :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-      />
-    </label>
-
-    <fieldset
-      v-if="props.definition.kind === 'custom'"
-      class="field-definition-applicability"
-      :disabled="!fieldDefinitionEditing || props.saving || props.changePending"
-    >
-      <legend>Field applicability</legend>
-      <label class="field-definition-target-choice">
-        <input
-          v-model="fieldDefinitionAppliesToAll"
-          type="radio"
-          name="field-applicability-mode"
-          :value="true"
-        >
-        All catalogue objects
-      </label>
-      <label class="field-definition-target-choice">
-        <input
-          v-model="fieldDefinitionAppliesToAll"
-          type="radio"
-          name="field-applicability-mode"
-          :value="false"
-        >
-        Selected catalogue targets
-      </label>
-      <div v-if="!fieldDefinitionAppliesToAll" class="field-definition-target-groups">
-        <section>
-          <h4>Categories</h4>
-          <label
-            v-for="group in applicabilityGroups"
-            :key="group.family"
-            class="field-definition-target-choice"
-          >
-            <input
-              type="checkbox"
-              :checked="hasCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
-              @change="toggleCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
-            >
-            Category {{ group.label }}
-          </label>
-        </section>
-        <section>
-          <h4>Subtypes</h4>
-          <label
-            v-for="type in catalogueTypes"
-            :key="`${type.family}:${type.value}`"
-            class="field-definition-target-choice"
-          >
-            <input
-              type="checkbox"
-              :checked="hasCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
-              @change="toggleCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
-            >
-            Subtype {{ type.label }}
-          </label>
-        </section>
+    <section v-if="!props.editing" class="field-definition-saved-details" aria-label="Saved definition details">
+      <dl>
+        <div>
+          <dt>Definition type</dt>
+          <dd>{{ props.definition.type }}</dd>
+        </div>
+        <div v-if="props.definition.kind === 'custom'">
+          <dt>Applicability</dt>
+          <dd>{{ fieldApplicabilitySummary(props.definition) }}</dd>
+        </div>
+      </dl>
+      <div v-if="props.definition.type === 'single-select'" class="field-definition-saved-choices">
+        <h4>Saved choices</h4>
+        <ul>
+          <li v-for="(option, index) in props.definition.options" :key="`${index}:${option}`">{{ option }}</li>
+        </ul>
       </div>
-    </fieldset>
+    </section>
+
+    <template v-else>
+      <UFormField v-if="props.definition.kind === 'custom'" label="Custom field name">
+        <UInput
+          id="field-definition-name"
+          aria-label="Custom field name"
+          :model-value="props.draft?.name ?? props.definition.name"
+          maxlength="80"
+          autocomplete="off"
+          :disabled="props.saving || props.changePending"
+          @update:model-value="updateName"
+        />
+      </UFormField>
+
+      <UFormField v-if="props.definition.kind === 'custom'" label="Value type">
+        <USelect
+          id="field-definition-type"
+          aria-label="Value type"
+          :model-value="props.draft?.type ?? props.definition.type"
+          :items="customFieldTypeItems"
+          :disabled="props.saving || props.changePending"
+          @update:model-value="updateType"
+        />
+      </UFormField>
+
+      <UFormField
+        v-if="props.definition.kind === 'custom' ? props.draft?.type === 'single-select' : props.definition.type === 'single-select'"
+        :label="`${props.draft?.name ?? props.definition.name} choices`"
+      >
+        <UTextarea
+          id="field-definition-options"
+          :aria-label="`${props.draft?.name ?? props.definition.name} choices`"
+          :model-value="props.draft?.options ?? props.definition.options.join('\n')"
+          :rows="4"
+          :disabled="props.saving || props.changePending"
+          @update:model-value="updateOptions"
+        />
+      </UFormField>
+
+      <fieldset
+        v-if="props.definition.kind === 'custom'"
+        class="field-definition-applicability"
+        :disabled="props.saving || props.changePending"
+      >
+        <legend>Field applicability</legend>
+        <UCheckbox
+          :model-value="appliesToAllObjects"
+          label="All catalogue objects"
+          @update:model-value="setAllObjects"
+        />
+        <div v-if="!appliesToAllObjects" class="field-definition-target-groups">
+          <section>
+            <h4>Categories</h4>
+            <UCheckbox
+              v-for="group in applicabilityGroups"
+              :key="group.family"
+              :model-value="hasCustomFieldApplicabilityTarget({ kind: 'category', family: group.family })"
+              :label="`Category ${group.label}`"
+              @update:model-value="value => toggleCustomFieldApplicabilityTarget({ kind: 'category', family: group.family }, value)"
+            />
+          </section>
+          <section>
+            <h4>Subtypes</h4>
+            <UCheckbox
+              v-for="type in catalogueTypes"
+              :key="`${type.family}:${type.value}`"
+              :model-value="hasCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value })"
+              :label="`Subtype ${type.label}`"
+              @update:model-value="value => toggleCustomFieldApplicabilityTarget({ kind: 'subtype', family: type.family, subtype: type.value }, value)"
+            />
+          </section>
+        </div>
+      </fieldset>
+    </template>
 
     <FieldDefinitionValues
       :assignments="props.assignments"
@@ -97,226 +107,95 @@
       region-label="Existing field values"
       empty-message="No values are assigned to this field."
     />
-    <FieldDefinitionValues
-      v-if="affectedFieldAssignments.length"
-      :assignments="affectedFieldAssignments"
-      heading="Values that will be cleared"
-      region-label="Affected values preview"
-      affected
-    />
-
-    <div class="field-definition-actions">
-      <button
-        v-if="!fieldDefinitionEditing"
-        class="primary-button"
+    <div v-if="props.editing && props.definition.kind === 'custom'" class="field-definition-editor-delete">
+      <UButton
+        color="error"
+        variant="outline"
+        size="sm"
         type="button"
-        :disabled="props.saving || props.changePending"
-        aria-label="Edit field definition"
-        @click="beginFieldDefinitionEdit"
+        :disabled="props.saving"
+        @click="emit('request-delete')"
       >
-        Edit
-      </button>
-      <button
-        v-else
-        class="primary-button"
-        type="button"
-        :disabled="props.saving || props.changePending"
-        @click="saveFieldDefinitionChanges"
-      >
-        Save changes
-      </button>
-      <button
-        v-if="fieldDefinitionEditing"
-        class="quiet-button"
-        type="button"
-        :disabled="props.changePending"
-        @click="cancelFieldDefinitionEdit"
-      >
-        Cancel
-      </button>
-      <button
-        v-if="props.definition.kind === 'custom' && fieldDefinitionEditing"
-        class="quiet-button"
-        type="button"
-        :disabled="props.saving || props.changePending"
-        @click="requestFieldDefinitionRemoval"
-      >
-        Delete field definition
-      </button>
+        Delete field…
+      </UButton>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-/**
- * Holds one definition's edit draft and emits requests; the dialog coordinates confirmation and persistence.
- */
-import { computed, ref, watch } from 'vue'
+/** Parent-owned field-definition drafts flow into this controlled presentation as raw strings. */
+import { computed } from 'vue'
 import {
   catalogueTypes,
   customFieldApplicabilityTargetKey,
+  type CustomFieldType,
   type CustomFieldApplicabilityTarget,
 } from '../../domain/workspace'
+import type { FieldDefinitionDraft } from '../../composables/editor-workflows/types'
 import FieldDefinitionValues from './FieldDefinitionValues.vue'
 import {
   applicabilityGroups,
-  fieldOptionsFromText,
-  sameCustomFieldApplicability,
+  fieldApplicabilitySummary,
   type FieldDefinitionSummary,
-  type FieldDefinitionUpdate,
   type FieldValueAssignment,
-  type PendingFieldDefinitionChange,
 } from './model'
 
 const props = defineProps<{
   definition: FieldDefinitionSummary
   assignments: FieldValueAssignment[]
+  draft: FieldDefinitionDraft | null
   saving: boolean
   changePending: boolean
+  editing: boolean
 }>()
 
 const emit = defineEmits<{
-  'clear-error': []
-  'request-change': [change: PendingFieldDefinitionChange]
+  'request-delete': []
+  'patch-definition': [patch: Partial<FieldDefinitionDraft>]
 }>()
 
-const fieldDefinitionNameDraft = ref('')
-const fieldDefinitionOptionsDraft = ref('')
-const fieldDefinitionAppliesToAll = ref(true)
-const fieldDefinitionApplicabilityTargets = ref<CustomFieldApplicabilityTarget[]>([])
-const fieldDefinitionEditing = ref(false)
+const customFieldTypeItems = [
+  { label: 'Text', value: 'text' },
+  { label: 'Number', value: 'number' },
+  { label: 'Boolean', value: 'boolean' },
+  { label: 'Single-select', value: 'single-select' },
+]
 
-const affectedFieldAssignments = computed(() => {
-  if (props.definition.type !== 'single-select') return []
-  const options = fieldOptionsFromText(fieldDefinitionOptionsDraft.value)
-  return props.assignments.filter(assignment =>
-    typeof assignment.value === 'string' && !options.includes(assignment.value),
-  )
-})
+const appliesToAllObjects = computed(() => props.draft?.applicability === undefined)
+const applicabilityTargets = computed(() => props.draft?.applicability ?? [])
 
-/**
- * Checks a target by its canonical category/subtype identity rather than object reference.
- * @param target Category or subtype shown by the selector.
- * @returns True when the local scope draft currently includes that target.
- */
+function updateName(value: unknown): void {
+  emit('patch-definition', { name: String(value ?? '') })
+}
+
+function updateOptions(value: unknown): void {
+  emit('patch-definition', { options: String(value ?? '') })
+}
+
+function updateType(value: unknown): void {
+  if (value === 'text' || value === 'number' || value === 'boolean' || value === 'single-select') {
+    emit('patch-definition', { type: value as CustomFieldType })
+  }
+}
+
 function hasCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): boolean {
   const targetKey = customFieldApplicabilityTargetKey(target)
-  return fieldDefinitionApplicabilityTargets.value.some(candidate =>
-    customFieldApplicabilityTargetKey(candidate) === targetKey,
-  )
+  return applicabilityTargets.value.some(candidate => customFieldApplicabilityTargetKey(candidate) === targetKey)
 }
 
-/**
- * Adds or removes one explicit scope target in the local draft without changing saved field values.
- * @param target Category or subtype selected by the user.
- */
-function toggleCustomFieldApplicabilityTarget(target: CustomFieldApplicabilityTarget): void {
+function setAllObjects(value: boolean | 'indeterminate'): void {
+  emit('patch-definition', { applicability: value === true ? undefined : [] })
+}
+
+function toggleCustomFieldApplicabilityTarget(
+  target: CustomFieldApplicabilityTarget,
+  value: boolean | 'indeterminate',
+): void {
   const targetKey = customFieldApplicabilityTargetKey(target)
-  const index = fieldDefinitionApplicabilityTargets.value.findIndex(candidate =>
-    customFieldApplicabilityTargetKey(candidate) === targetKey,
-  )
-  if (index === -1) fieldDefinitionApplicabilityTargets.value.push(target)
-  else fieldDefinitionApplicabilityTargets.value.splice(index, 1)
+  const targets = applicabilityTargets.value.filter(candidate => customFieldApplicabilityTargetKey(candidate) !== targetKey)
+  if (value === true) targets.push(target)
+  emit('patch-definition', { applicability: targets })
 }
-
-/**
- * Copies the selected definition into editable strings and scope controls.
- * Undefined custom applicability is represented as the global/all-objects mode.
- */
-function syncFieldDefinitionDraft(): void {
-  const definition = props.definition
-  fieldDefinitionNameDraft.value = definition.kind === 'custom' ? definition.name : ''
-  fieldDefinitionOptionsDraft.value = definition.type === 'single-select'
-    ? definition.options.join('\n')
-    : ''
-  fieldDefinitionAppliesToAll.value = definition.kind === 'native' || definition.applicability === undefined
-  fieldDefinitionApplicabilityTargets.value = definition.kind === 'custom'
-    ? [...(definition.applicability ?? [])]
-    : []
-}
-
-/** Ends local editing and reloads the draft from the current definition props. */
-function reset(): void {
-  fieldDefinitionEditing.value = false
-  syncFieldDefinitionDraft()
-}
-
-watch(() => props.definition.id, reset, { immediate: true })
-watch(() => props.definition, () => {
-  if (!fieldDefinitionEditing.value) syncFieldDefinitionDraft()
-})
-
-/** Starts editing the current definition and clears any parent-visible error. */
-function beginFieldDefinitionEdit(): void {
-  fieldDefinitionEditing.value = true
-  emit('clear-error')
-}
-
-/** Discards local changes by reloading current props, then clears the parent-visible error. */
-function cancelFieldDefinitionEdit(): void {
-  reset()
-  emit('clear-error')
-}
-
-/**
- * Emits only changed field properties and includes every assignment affected by removed select options.
- * The dialog, not this editor, decides whether that request requires confirmation or may be committed.
- */
-function saveFieldDefinitionChanges(): void {
-  const definition = props.definition
-  const name = definition.kind === 'custom' ? fieldDefinitionNameDraft.value.trim() : definition.name
-  const options = definition.type === 'single-select'
-    ? fieldOptionsFromText(fieldDefinitionOptionsDraft.value)
-    : definition.options
-  const applicability = definition.kind === 'custom' && !fieldDefinitionAppliesToAll.value
-    ? fieldDefinitionApplicabilityTargets.value
-    : undefined
-  const nameChanged = definition.kind === 'custom' && name !== definition.name
-  const optionsChanged = definition.type === 'single-select'
-    && (definition.options.length !== options.length
-      || definition.options.some((option, index) => option !== options[index]))
-  const applicabilityChanged = definition.kind === 'custom'
-    && !sameCustomFieldApplicability(definition.applicability, applicability)
-  if (!nameChanged && !optionsChanged && !applicabilityChanged) {
-    reset()
-    return
-  }
-
-  const update: FieldDefinitionUpdate = {
-    fieldId: definition.id,
-    name,
-    options,
-    applicability: applicability === undefined ? undefined : [...applicability],
-  }
-  const affectedAssignments = definition.type === 'single-select'
-    ? props.assignments.filter(assignment =>
-        typeof assignment.value === 'string' && !options.includes(assignment.value),
-      )
-    : []
-  emit('request-change', {
-    kind: 'save',
-    update,
-    fieldName: definition.name,
-    affectedAssignments,
-  })
-}
-
-/** Requests removal of a custom definition together with all its saved assignments for confirmation. */
-function requestFieldDefinitionRemoval(): void {
-  const definition = props.definition
-  if (definition.kind !== 'custom') return
-  emit('request-change', {
-    kind: 'remove',
-    fieldId: definition.id,
-    fieldName: definition.name,
-    affectedAssignments: props.assignments,
-  })
-}
-
-defineExpose({
-  isEditing: () => fieldDefinitionEditing.value,
-  reset,
-})
 </script>
 
 <style scoped>
@@ -325,6 +204,7 @@ defineExpose({
   align-content: start;
   gap: 0.9rem;
   min-width: 0;
+  min-height: 0;
   padding: 1rem;
 }
 
@@ -352,29 +232,56 @@ defineExpose({
   text-align: right;
 }
 
-.field-definition-editor > label {
+.field-definition-saved-details {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.75rem;
+  border: 1px solid var(--line-soft);
+  padding: 0.75rem;
+  background: var(--panel-bg);
+}
+
+.field-definition-saved-details dl {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.field-definition-saved-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.field-definition-saved-details dt,
+.field-definition-saved-choices h4 {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field-definition-saved-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
 }
 
-.field-definition-editor input,
-.field-definition-editor textarea {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0.55rem 0.65rem;
-  background: var(--control-bg);
+.field-definition-saved-choices ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field-definition-saved-choices li {
+  border: 1px solid var(--line-soft);
+  padding: 0.35rem 0.5rem;
   color: var(--text-primary);
-  font: inherit;
-}
-
-.field-definition-editor input:focus,
-.field-definition-editor textarea:focus {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 1px;
+  font-size: 0.72rem;
 }
 
 .field-definition-applicability {
@@ -393,26 +300,6 @@ defineExpose({
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.field-definition-target-choice {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  color: var(--text-secondary);
-  font-size: 0.68rem;
-  line-height: 1.4;
-}
-
-.field-definition-applicability input[type="radio"],
-.field-definition-applicability input[type="checkbox"] {
-  flex: 0 0 auto;
-  width: auto;
-  margin: 0.1rem 0 0;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  accent-color: var(--accent);
 }
 
 .field-definition-target-groups {
@@ -438,13 +325,15 @@ defineExpose({
   text-transform: uppercase;
 }
 
-@media (max-width: 760px) {
-  .field-definition-editor {
-    padding: 0.75rem;
-  }
+.field-definition-editor-delete {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
 
-  .field-definition-target-groups {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 760px) {
+  .field-definition-editor { padding: 0.75rem; }
+  .field-definition-target-groups { grid-template-columns: 1fr; }
 }
 </style>

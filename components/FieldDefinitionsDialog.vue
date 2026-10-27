@@ -1,518 +1,736 @@
 <template>
-  <button
-    ref="trigger"
-    class="field-definitions-trigger"
+  <UButton
+    v-if="!props.hideTrigger"
+    class="field-definitions-trigger workspace-control"
+    color="neutral"
+    variant="outline"
+    size="sm"
     type="button"
     aria-haspopup="dialog"
     aria-controls="field-definitions-dialog"
-    :aria-expanded="dialogOpen"
+    :aria-expanded="props.session.open"
     aria-label="Open field definitions"
-    title="Manage native and custom field definitions"
-    @click="emit('request-open')"
+    :aria-description="props.hasModifiedDraft ? 'An unsaved field draft is retained.' : undefined"
+    :title="props.hasModifiedDraft ? 'An unsaved field draft is retained.' : 'Manage native and custom field definitions'"
+    @click="open"
   >
-    <span>FIELD DEFINITIONS</span>
-    <small>MAP DATA</small>
-  </button>
+    <UIcon name="i-lucide-list" aria-hidden="true" />
+    Fields
+    <UBadge v-if="props.hasModifiedDraft" color="warning" variant="subtle">Draft</UBadge>
+  </UButton>
 
-  <Teleport to="body">
-    <dialog
-      v-if="dialogOpen"
-      id="field-definitions-dialog"
-      ref="dialog"
-      class="field-definitions-dialog"
-      aria-labelledby="field-definitions-title"
-      aria-modal="true"
-      @cancel="cancelDialog"
-      @click.self="close"
-    >
-      <div class="field-definitions-content">
+  <UModal
+    id="field-definitions-dialog"
+    :open="props.session.open"
+    :fullscreen="isCompact"
+    :dismissible="true"
+    :unmount-on-hide="false"
+    title="Field definitions"
+    description="Inspect, edit, and create reusable field definitions for this map."
+    :content="modalContentProps"
+    :ui="{ content: `field-definitions-modal ${isCompact ? 'field-definitions-modal--compact' : ''}` }"
+    @update:open="onOpenChange"
+    @after:enter="focusActivePane"
+    @after:leave="restoreOpenerFocus"
+  >
+    <template #content>
+      <div ref="contentRoot" class="field-definitions-content" :data-screen="props.session.screen">
         <header class="field-definitions-header">
-          <div>
+          <div class="field-definitions-title">
+            <UButton
+              v-if="props.session.screen !== 'list'"
+              class="field-definitions-back"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Back to definitions"
+              @click="goBack"
+            >
+              ← Back
+            </UButton>
             <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
             <h2 id="field-definitions-title">Field definitions</h2>
-            <p>Manage values available across this map without changing the active system or selection.</p>
+            <p>Inspect saved values and manage definitions shared across this map.</p>
           </div>
-          <button
-            class="quiet-button field-definitions-close"
-            type="button"
+          <UButton
+            class="field-definitions-close"
+            color="neutral"
+            variant="ghost"
+            size="sm"
             aria-label="Close field definitions"
-            autofocus
             @click="close"
           >
             Close
-          </button>
+          </UButton>
         </header>
 
-        <div class="field-definitions-layout">
+        <UAlert
+          v-if="visibleError"
+          color="error"
+          variant="subtle"
+          role="alert"
+          :description="visibleError"
+        />
+
+        <div class="field-definitions-workspace">
           <FieldDefinitionList
-            :native-fields="nativeFieldDefinitions"
-            :custom-fields="customFieldDefinitions"
-            :selected-field-id="selectedFieldDefinitionId"
-            @select="selectFieldDefinition"
-            @create-custom-field="openNewCustomFieldForm"
+            ref="fieldList"
+            v-show="showListPane && !props.session.review && !props.session.pendingGuard"
+            :native-fields="nativeFields"
+            :custom-fields="customFields"
+            :selected-field-id="props.session.selectedId ?? ''"
+            @select="selectField"
+            @position-change="rememberListPosition"
           />
+
           <FieldDefinitionEditor
-            v-if="selectedFieldDefinition"
-            ref="fieldDefinitionEditor"
-            :definition="selectedFieldDefinition"
-            :assignments="selectedFieldAssignments"
+            v-if="selectedDefinition"
+            v-show="showDetailPane && !props.session.review && !props.session.pendingGuard"
+            :definition="selectedDefinition"
+            :assignments="selectedAssignments"
+            :draft="props.session.draft"
             :saving="props.saving"
-            :change-pending="pendingFieldDefinitionChange !== null"
-            @clear-error="emit('clear-error')"
-            @request-change="requestFieldDefinitionChange"
+            :change-pending="props.session.review !== null"
+            :editing="props.session.screen === 'edit'"
+            @request-delete="deleteField"
+            @patch-definition="patchDefinition"
           />
+
+          <section
+            v-else-if="showDetailPane"
+            class="field-definition-empty-detail"
+            role="region"
+            aria-label="Field definition editor"
+            tabindex="-1"
+          >
+            <p>Choose a field to inspect its saved values.</p>
+          </section>
+
+          <form
+            v-if="props.session.screen === 'new' && !props.session.review && !props.session.pendingGuard"
+            class="field-definition-create-form"
+            tabindex="-1"
+            @submit.prevent="submitField"
+          >
+            <span class="section-kicker">NEW REUSABLE FIELD</span>
+            <h3>Add custom field</h3>
+            <UFormField label="Custom field label">
+              <UInput
+                id="new-custom-field-name"
+                :model-value="props.session.createDraft?.name ?? ''"
+                maxlength="80"
+                autocomplete="off"
+                required
+                @update:model-value="patchCreate({ name: String($event) })"
+              />
+            </UFormField>
+            <UFormField label="Value type">
+              <USelect
+                id="new-custom-field-type"
+                aria-label="Value type"
+                :model-value="props.session.createDraft?.type ?? 'text'"
+                :items="customFieldTypeItems"
+                @update:model-value="patchCreate({ type: $event as CustomFieldType })"
+              />
+            </UFormField>
+            <UFormField v-if="props.session.createDraft?.type === 'single-select'" label="New field choices">
+              <UTextarea
+                id="new-custom-field-options"
+                aria-label="New field choices"
+                :model-value="props.session.createDraft.options"
+                :rows="4"
+                @update:model-value="patchCreate({ options: String($event) })"
+              />
+            </UFormField>
+          </form>
+
+          <section
+            v-if="props.session.review"
+            class="field-definition-review"
+            role="region"
+            aria-label="Field change review"
+            tabindex="-1"
+          >
+            <span class="section-kicker">REVIEW FIELD CHANGE</span>
+            <h3>{{ props.session.review.operation === 'remove' ? 'Delete' : 'Update' }} {{ props.session.review.fieldName }}?</h3>
+            <p>Review the saved values affected by this change before applying it.</p>
+            <p v-if="props.session.review.fromType && props.session.review.toType && props.session.review.fromType !== props.session.review.toType">
+              Type: {{ props.session.review.fromType }} → {{ props.session.review.toType }}
+            </p>
+            <div v-if="props.session.review.removedOptions?.length" class="field-definition-removed-choices">
+              <p>Removed choices</p>
+              <ul aria-label="Removed field choices">
+                <li v-for="option in props.session.review.removedOptions" :key="option">{{ option }}</li>
+              </ul>
+            </div>
+            <ul v-if="props.session.review.impacts.length">
+              <li v-for="impact in props.session.review.impacts" :key="`${impact.systemId}:${impact.objectId}`">
+                <span>{{ impact.objectName }} / {{ impact.systemName }}</span>
+                <strong>{{ impact.value }}</strong>
+                <span v-if="impact.resolution === 'preserve'">Retain as {{ impact.nextValue }}</span>
+                <span v-else-if="impact.resolution === 'remove'">Remove with definition</span>
+                <span v-else>Clear this value</span>
+              </li>
+            </ul>
+            <p v-else>No saved values are affected.</p>
+          </section>
+
+          <section
+            v-if="props.session.pendingGuard"
+            class="field-definition-pending-guard"
+            role="status"
+            aria-label="Unsaved field draft"
+            tabindex="-1"
+          >
+            <span class="section-kicker">UNSAVED FIELD DRAFT</span>
+            <h3>Apply this draft before switching?</h3>
+            <p>Your current field work stays here until you choose an action.</p>
+          </section>
         </div>
 
-        <p v-if="props.saveError" class="feedback field-definition-error" role="alert">
-          {{ props.saveError }}
-        </p>
-
-        <form
-          v-if="newCustomFieldFormOpen"
-          class="field-definition-create-form"
-          @submit.prevent="createCustomField"
-        >
-          <div class="field-definition-section-heading">
-            <div>
-              <span class="section-kicker">NEW REUSABLE FIELD</span>
-              <h3>Add custom field</h3>
-            </div>
-            <button
-              class="quiet-button"
-              type="button"
-              @click="newCustomFieldFormOpen = false"
-            >
-              Cancel
-            </button>
-          </div>
-          <label for="new-custom-field-name">
-            Custom field label
-            <input
-              id="new-custom-field-name"
-              v-model="newCustomFieldName"
-              maxlength="80"
-              required
-              autofocus
-            >
-          </label>
-          <label for="new-custom-field-type">
-            Value type
-            <select id="new-custom-field-type" v-model="newCustomFieldType">
-              <option value="text">Text</option>
-              <option value="number">Number</option>
-              <option value="boolean">Boolean</option>
-              <option value="single-select">Single-select</option>
-            </select>
-          </label>
-          <label v-if="newCustomFieldType === 'single-select'" for="new-custom-field-options">
-            New field choices
-            <textarea id="new-custom-field-options" v-model="newCustomFieldOptions" rows="3" />
-          </label>
-          <div class="field-definition-actions">
-            <button class="primary-button" type="submit" :disabled="props.saving">
+        <footer class="field-definitions-actions" aria-label="Field actions">
+          <template v-if="props.session.pendingGuard">
+            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'resolve-transition', decision: 'stay' })">
+              Stay here
+            </UButton>
+            <UButton color="error" variant="outline" @click="emitIntent({ kind: 'resolve-transition', decision: 'discard' })">
+              Discard and continue
+            </UButton>
+            <UButton color="primary" @click="emitIntent({ kind: 'resolve-transition', decision: 'apply' })">
+              Apply and continue
+            </UButton>
+          </template>
+          <template v-else-if="props.session.review">
+            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-review' })">
+              Cancel field changes
+            </UButton>
+            <UButton color="error" @click="emitIntent({ kind: 'confirm-review' })">
+              {{ props.session.review.operation === 'remove' ? 'Delete field and clear values' : 'Apply field changes' }}
+            </UButton>
+          </template>
+          <template v-else-if="props.session.screen === 'edit'">
+            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-edit' })">
+              Discard field edits
+            </UButton>
+            <UButton color="primary" :disabled="props.saving || !props.session.draft || props.hasModifiedDraft === false" @click="emitIntent({ kind: 'save-field' })">
+              Apply field changes
+            </UButton>
+          </template>
+          <template v-else-if="props.session.screen === 'new'">
+            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-create' })">
+              Cancel creation
+            </UButton>
+            <UButton color="primary" :disabled="props.saving" @click="submitField">
               Add custom field
-            </button>
-          </div>
-        </form>
-
-        <FieldDefinitionChangeConfirmation
-          v-if="pendingFieldDefinitionChange"
-          :change="pendingFieldDefinitionChange"
-          @cancel="cancelFieldDefinitionChange"
-          @confirm="confirmFieldDefinitionChange"
-        />
+            </UButton>
+          </template>
+          <template v-else>
+            <UButton
+              block
+              class="w-full flex-none justify-center"
+              v-if="props.session.screen === 'detail' && selectedDefinition"
+              color="primary"
+              variant="outline"
+              :disabled="props.saving || props.session.review !== null"
+              aria-label="Edit field definition"
+              @click="editField"
+            >
+              Edit definition
+            </UButton>
+            <UButton
+              color="primary"
+              :disabled="props.saving"
+              @click="emitIntent({ kind: 'new-field' })"
+            >
+              New custom field
+            </UButton>
+          </template>
+        </footer>
       </div>
-    </dialog>
-  </Teleport>
+    </template>
+  </UModal>
 </template>
 
 <script setup lang="ts">
-/**
- * The dialog owns selection and confirmation; submitted drafts reset only after the parent's save revision advances.
- */
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import type { CustomFieldType, LocalWorkspace } from '../domain/workspace'
-import FieldDefinitionChangeConfirmation from './field-definitions/FieldDefinitionChangeConfirmation.vue'
-import FieldDefinitionEditor from './field-definitions/FieldDefinitionEditor.vue'
-import FieldDefinitionList from './field-definitions/FieldDefinitionList.vue'
+import type {
+  FieldDefinitionDraft,
+  FieldDefinitionsIntent,
+  FieldDefinitionsSessionState,
+} from '../composables/editor-workflows/types'
 import {
   fieldDefinitionSummaries,
-  fieldOptionsFromText,
   fieldValueAssignments,
-  type CustomFieldCreate,
-  type FieldDefinitionUpdate,
-  type PendingFieldDefinitionChange,
+  type FieldDefinitionSummary,
 } from './field-definitions/model'
+import FieldDefinitionEditor from './field-definitions/FieldDefinitionEditor.vue'
+import FieldDefinitionList from './field-definitions/FieldDefinitionList.vue'
 
 const props = defineProps<{
+  session: FieldDefinitionsSessionState
   workspace: LocalWorkspace
   saving: boolean
-  saveError: string
-  saveRevision: number
+  saveError?: string
+  inspectorConflict?: boolean
+  inspectorConflictError?: string
+  hideTrigger?: boolean
+  hasModifiedDraft?: boolean
 }>()
 
 const emit = defineEmits<{
-  'request-open': []
-  'open-change': [open: boolean]
-  'clear-error': []
-  'create-custom-field': [request: CustomFieldCreate]
-  'save-field-definition': [request: FieldDefinitionUpdate]
-  'remove-field-definition': [fieldId: string]
+  intent: [intent: FieldDefinitionsIntent]
 }>()
 
-const trigger = ref<HTMLButtonElement | null>(null)
-const dialog = ref<HTMLDialogElement | null>(null)
-const dialogOpen = ref(false)
-const selectedFieldDefinitionId = ref<string>('native:atmosphere')
-const pendingFieldDefinitionChange = ref<PendingFieldDefinitionChange | null>(null)
-const fieldDefinitionEditor = shallowRef<{ isEditing(): boolean; reset(): void } | null>(null)
-const newCustomFieldName = ref('')
-const newCustomFieldType = ref<CustomFieldType>('text')
-const newCustomFieldOptions = ref('')
-const newCustomFieldFormOpen = ref(false)
-const pendingAction = ref<'create' | 'save' | 'remove' | null>(null)
-
-const fieldDefinitions = computed(() => fieldDefinitionSummaries(props.workspace))
-const nativeFieldDefinitions = computed(() =>
-  fieldDefinitions.value.filter(field => field.kind === 'native'),
+const contentRoot = ref<HTMLElement | null>(null)
+const fieldList = ref<ComponentPublicInstance | null>(null)
+const isCompact = ref(false)
+const visualViewportMetrics = ref({ height: 0, offsetTop: 0 })
+const nativeFields = computed(() => fieldDefinitionSummaries(props.workspace).filter(field => field.kind === 'native'))
+const customFields = computed(() => fieldDefinitionSummaries(props.workspace).filter(field => field.kind === 'custom'))
+const allFields = computed(() => [...nativeFields.value, ...customFields.value])
+const selectedDefinition = computed<FieldDefinitionSummary | null>(() =>
+  allFields.value.find(field => field.id === props.session.selectedId) ?? null,
 )
-const customFieldDefinitions = computed(() =>
-  fieldDefinitions.value.filter(field => field.kind === 'custom'),
-)
-const selectedFieldDefinition = computed(() =>
-  fieldDefinitions.value.find(field => field.id === selectedFieldDefinitionId.value),
-)
-const selectedFieldAssignments = computed(() => {
-  const definition = selectedFieldDefinition.value
-  return definition ? fieldValueAssignments(props.workspace, definition) : []
-})
+const selectedAssignments = computed(() => selectedDefinition.value
+  ? fieldValueAssignments(props.workspace, selectedDefinition.value)
+  : [])
+const showListPane = computed(() => !isCompact.value || props.session.screen === 'list')
+const showDetailPane = computed(() => isCompact.value
+  ? props.session.screen === 'detail' || props.session.screen === 'edit'
+  : props.session.screen !== 'new')
+const visibleError = computed(() => props.session.error || props.saveError || '')
+const customFieldTypeItems = [
+  { label: 'Text', value: 'text' },
+  { label: 'Number', value: 'number' },
+  { label: 'Boolean', value: 'boolean' },
+  { label: 'Single-select', value: 'single-select' },
+]
 
-/**
- * Selects an existing definition, confirming before discarding another definition's active draft.
- * @param fieldId Native or custom definition ID to display.
- */
-function selectFieldDefinition(fieldId: string): void {
-  if (!fieldDefinitions.value.some(field => field.id === fieldId)) return
-  const editor = fieldDefinitionEditor.value
-  if (editor?.isEditing()) {
-    if (fieldId === selectedFieldDefinitionId.value) return
-    if (!window.confirm('Discard unsaved field definition edits?')) return
-    editor.reset()
-  }
+let compactQuery: MediaQueryList | null = null
+let visualViewport: VisualViewport | null = null
+let viewportFrame = 0
+let actualOpener: HTMLElement | null = null
 
-  selectedFieldDefinitionId.value = fieldId
-  emit('clear-error')
-  pendingFieldDefinitionChange.value = null
+const modalContentProps = computed(() => ({
+  'aria-labelledby': 'field-definitions-title',
+  style: isCompact.value
+    ? {
+        '--field-viewport-height': `${visualViewportMetrics.value.height || window.innerHeight}px`,
+        '--field-viewport-top': `${visualViewportMetrics.value.offsetTop}px`,
+      }
+    : undefined,
+  onOpenAutoFocus: onOpenAutoFocus,
+  onCloseAutoFocus: onCloseAutoFocus,
+}))
+
+function emitIntent(intent: FieldDefinitionsIntent): void {
+  emit('intent', intent)
 }
 
-/** Resets dialog-local creation state and opens on the Atmosphere definition after the next render tick. */
-function show(): void {
-  if (dialogOpen.value) return
-  newCustomFieldFormOpen.value = false
-  newCustomFieldName.value = ''
-  newCustomFieldType.value = 'text'
-  newCustomFieldOptions.value = ''
-  selectFieldDefinition('native:atmosphere')
-  dialogOpen.value = true
-  void nextTick(() => {
-    dialog.value?.showModal()
-    emit('open-change', true)
+function open(): void {
+  emitIntent({ kind: 'open' })
+}
+
+function close(): void {
+  rememberListPosition()
+  emitIntent({ kind: 'close' })
+}
+
+function onOpenChange(openState: boolean): void {
+  if (openState !== props.session.open) emitIntent({ kind: openState ? 'open' : 'close' })
+}
+
+function goBack(): void {
+  rememberListPosition()
+  emitIntent({ kind: 'back' })
+}
+
+function selectField(fieldId: string): void {
+  rememberListPosition(fieldId)
+  emitIntent({ kind: 'select-field', fieldId })
+}
+
+function editField(): void {
+  if (!props.session.selectedId) return
+  emitIntent({ kind: 'edit-field', fieldId: props.session.selectedId })
+}
+
+function deleteField(): void {
+  const fieldId = props.session.selectedId
+  if (!fieldId || selectedDefinition.value?.kind !== 'custom') return
+  emitIntent({ kind: 'delete-field', fieldId })
+}
+
+function patchCreate(patch: Partial<FieldDefinitionsSessionState['createDraft']>): void {
+  if (!patch) return
+  emitIntent({ kind: 'patch-create', patch })
+}
+
+function submitField(): void {
+  emitIntent({ kind: 'save-field' })
+}
+
+function patchDefinition(patch: Partial<FieldDefinitionDraft>): void {
+  emitIntent({ kind: 'patch-definition', patch })
+}
+
+function listElement(): HTMLElement | null {
+  const element = fieldList.value?.$el
+  return typeof HTMLElement !== 'undefined' && element instanceof HTMLElement ? element : null
+}
+
+function rememberListPosition(focusedFieldId?: string): void {
+  const list = listElement()
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  const activeRow = activeElement instanceof HTMLElement ? activeElement.closest<HTMLElement>('[data-field-id]') : null
+  const activeFieldId = activeRow && list?.contains(activeRow) ? activeRow.dataset.fieldId ?? null : null
+  emitIntent({
+    kind: 'remember-list',
+    position: {
+      scrollTop: list?.scrollTop ?? props.session.listPosition.scrollTop,
+      focusedFieldId: focusedFieldId ?? activeFieldId ?? props.session.listPosition.focusedFieldId,
+    },
   })
 }
 
-/**
- * Closes after any active definition draft is accepted for discard, clears pending actions, and restores focus.
- */
-function close(): void {
-  if (
-    fieldDefinitionEditor.value?.isEditing()
-    && !window.confirm('Discard unsaved field definition edits?')
-  ) return
-  if (dialog.value?.open) dialog.value.close()
-  dialogOpen.value = false
-  pendingFieldDefinitionChange.value = null
-  newCustomFieldFormOpen.value = false
-  pendingAction.value = null
-  emit('open-change', false)
-  void nextTick(() => trigger.value?.focus())
+async function restoreListPosition(): Promise<void> {
+  await nextTick()
+  const list = listElement()
+  if (!list) return
+  list.scrollTop = props.session.listPosition.scrollTop
+  const focusedId = props.session.listPosition.focusedFieldId ?? props.session.selectedId
+  const row = focusedId
+    ? [...list.querySelectorAll<HTMLElement>('[data-field-id]')].find(element => element.dataset.fieldId === focusedId)
+    : null
+  ;(row ?? list).focus({ preventScroll: true })
 }
 
-/** Prevents the native dialog cancel path from bypassing the draft-discard confirmation. */
-function cancelDialog(event: Event): void {
-  event.preventDefault()
-  close()
-}
-
-/** Opens a fresh create draft after confirming and discarding an active definition edit, if present. */
-function openNewCustomFieldForm(): void {
-  if (fieldDefinitionEditor.value?.isEditing()) {
-    if (!window.confirm('Discard unsaved field definition edits?')) return
-    fieldDefinitionEditor.value.reset()
-    pendingFieldDefinitionChange.value = null
+function focusableElement(active: Element | null): HTMLElement | null {
+  if (active instanceof HTMLElement) return active
+  if (typeof SVGElement !== 'undefined' && active instanceof SVGElement) {
+    return active.closest<HTMLElement>('button, a[href], [tabindex]')
   }
-  newCustomFieldName.value = ''
-  newCustomFieldType.value = 'text'
-  newCustomFieldOptions.value = ''
-  newCustomFieldFormOpen.value = true
-  emit('clear-error')
+  return null
 }
 
-/**
- * Dispatches safe edits immediately but retains destructive requests for explicit assignment review.
- * @param change Proposed definition save/removal and the assignments it could clear.
- */
-function requestFieldDefinitionChange(change: PendingFieldDefinitionChange): void {
-  if (change.kind === 'save' && !change.affectedAssignments.length) {
-    pendingAction.value = 'save'
-    emit('clear-error')
-    emit('save-field-definition', change.update)
+function isVisibleFocusTarget(element: HTMLElement): boolean {
+  return element.isConnected
+    && !element.matches(':disabled')
+    && !element.closest('[inert]')
+    && element.getClientRects().length > 0
+    && getComputedStyle(element).visibility !== 'hidden'
+}
+
+function onOpenAutoFocus(event: Event): void {
+  event.preventDefault()
+}
+
+function onCloseAutoFocus(event: Event): void {
+  event.preventDefault()
+}
+
+function restoreOpenerFocus(): void {
+  if (props.session.open) return
+  if (actualOpener && isVisibleFocusTarget(actualOpener)) actualOpener.focus({ preventScroll: true })
+  actualOpener = null
+}
+
+async function focusActivePane(): Promise<void> {
+  await nextTick()
+  if (props.session.screen === 'list') {
+    await restoreListPosition()
     return
   }
-  pendingFieldDefinitionChange.value = change
-  emit('clear-error')
+  const target = props.session.screen === 'new'
+    ? contentRoot.value?.querySelector<HTMLElement>('.field-definition-create-form')
+    : contentRoot.value?.querySelector<HTMLElement>('.field-definition-editor, .field-definition-empty-detail')
+  target?.focus({ preventScroll: true })
 }
 
-/** Drops the pending destructive request without changing the selected definition. */
-function cancelFieldDefinitionChange(): void {
-  pendingFieldDefinitionChange.value = null
-  emit('clear-error')
-}
-
-/** Dispatches the reviewed save/removal; drafts remain until the parent reports commit success. */
-function confirmFieldDefinitionChange(): void {
-  const change = pendingFieldDefinitionChange.value
-  if (!change) return
-  pendingAction.value = change.kind
-  emit('clear-error')
-  if (change.kind === 'remove') emit('remove-field-definition', change.fieldId)
-  else emit('save-field-definition', change.update)
-}
-
-/**
- * Emits a new custom-field request with blank option lines removed by the shared parser.
- * The form resets only when the parent's save revision advances.
- */
-function createCustomField(): void {
-  pendingAction.value = 'create'
-  emit('clear-error')
-  emit('create-custom-field', {
-    name: newCustomFieldName.value,
-    type: newCustomFieldType.value,
-    options: fieldOptionsFromText(newCustomFieldOptions.value),
+function updateViewportMetrics(): void {
+  if (viewportFrame) cancelAnimationFrame(viewportFrame)
+  viewportFrame = requestAnimationFrame(() => {
+    visualViewportMetrics.value = {
+      height: visualViewport?.height ?? window.innerHeight,
+      offsetTop: visualViewport?.offsetTop ?? 0,
+    }
+    viewportFrame = 0
   })
 }
 
-watch(() => props.saveRevision, () => {
-  const action = pendingAction.value
-  if (!action) return
-  if (action === 'create') {
-    const lastField = props.workspace.objectFieldSettings.customFields.at(-1)
-    if (lastField) selectFieldDefinition(lastField.id)
-    newCustomFieldFormOpen.value = false
-    newCustomFieldName.value = ''
-    newCustomFieldType.value = 'text'
-    newCustomFieldOptions.value = ''
-  } else if (action === 'remove') {
-    fieldDefinitionEditor.value?.reset()
-    selectFieldDefinition('native:atmosphere')
-  } else {
-    fieldDefinitionEditor.value?.reset()
-  }
-  pendingFieldDefinitionChange.value = null
-  pendingAction.value = null
-  emit('clear-error')
-})
-watch(() => props.saveError, (error) => {
-  if (error) pendingAction.value = null
+function onCompactChange(event: MediaQueryListEvent): void {
+  isCompact.value = event.matches
+  if (event.matches) updateViewportMetrics()
+}
+
+watch(
+  () => props.session.open,
+  (openState, wasOpen) => {
+    if (openState && !wasOpen) actualOpener = focusableElement(document.activeElement)
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  () => props.session.screen,
+  async (screen, previousScreen) => {
+    if (!props.session.open || screen === previousScreen) return
+    await nextTick()
+    if (screen === 'list') await restoreListPosition()
+    else await focusActivePane()
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => [props.session.review, props.session.pendingGuard] as const,
+  async ([review, pendingGuard]) => {
+    if (!props.session.open || (!review && !pendingGuard)) return
+    await nextTick()
+    contentRoot.value
+      ?.querySelector<HTMLElement>('.field-definition-review, .field-definition-pending-guard')
+      ?.focus({ preventScroll: true })
+  },
+  { flush: 'post' },
+)
+
+onMounted(() => {
+  compactQuery = window.matchMedia('(max-width: 760px), (max-width: 1024px) and (max-height: 600px)')
+  isCompact.value = compactQuery.matches
+  compactQuery.addEventListener('change', onCompactChange)
+  visualViewport = window.visualViewport
+  updateViewportMetrics()
+  visualViewport?.addEventListener('resize', updateViewportMetrics)
+  visualViewport?.addEventListener('scroll', updateViewportMetrics)
+  window.addEventListener('resize', updateViewportMetrics)
 })
 
-defineExpose({
-  open: show,
-  isOpen: () => dialogOpen.value,
+onUnmounted(() => {
+  compactQuery?.removeEventListener('change', onCompactChange)
+  visualViewport?.removeEventListener('resize', updateViewportMetrics)
+  visualViewport?.removeEventListener('scroll', updateViewportMetrics)
+  window.removeEventListener('resize', updateViewportMetrics)
+  if (viewportFrame) cancelAnimationFrame(viewportFrame)
 })
+
+defineExpose({ open })
 </script>
 
 <style>
-.field-definitions-trigger {
-  display: grid;
-  min-height: 2.45rem;
-  gap: 0.12rem;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0.34rem 0.55rem;
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.field-definitions-trigger:hover {
-  border-color: var(--accent);
-  background: var(--control-hover);
-  color: var(--accent-hover);
-}
-
-.field-definitions-trigger span {
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-}
-
-.field-definitions-trigger small {
-  color: var(--accent);
-  font-size: 0.5rem;
-  letter-spacing: 0.12em;
-}
-
-.field-definitions-dialog {
-  width: min(60rem, calc(100vw - 2rem));
+.field-definitions-modal {
+  display: flex;
+  width: min(68rem, calc(100vw - 2rem));
   max-width: none;
+  height: min(44rem, calc(100dvh - 2rem));
   max-height: calc(100dvh - 2rem);
-  margin: auto;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 0.45rem;
   padding: 0;
   background: var(--panel-bg);
   color: var(--text-primary);
-  box-shadow: 0 1.8rem 5rem rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1.8rem 5rem rgb(0 0 0 / 0.55);
 }
 
-.field-definitions-dialog::backdrop {
-  background: rgba(4, 9, 11, 0.76);
-  backdrop-filter: blur(4px);
+/* Nuxt UI owns desktop centering; this adapter only follows compact visual-viewport keyboard changes. */
+.field-definitions-modal--compact {
+  top: var(--field-viewport-top, 0px) !important;
+  right: 0 !important;
+  bottom: auto !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: var(--field-viewport-height, 100dvh) !important;
+  max-height: var(--field-viewport-height, 100dvh) !important;
+  border: 0;
+  border-radius: 0;
 }
 
 .field-definitions-content {
-  display: grid;
-  gap: 1rem;
-  padding: clamp(1rem, 3vw, 1.5rem);
-}
-
-.field-definitions-header,
-.field-definition-section-heading,
-.field-definition-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: inherit;
+  flex-direction: column;
   gap: 0.75rem;
+  padding: clamp(0.85rem, 2vw, 1.25rem);
 }
 
 .field-definitions-header {
+  display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
   border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
 }
 
-.field-definitions-header h2,
-.field-definition-section-heading h4,
-.field-definition-create-form h3 {
-  margin: 0.4rem 0 0;
+.field-definitions-title {
+  min-width: 0;
+}
+
+.field-definitions-title h2 {
+  margin: 0.35rem 0;
   font-family: Georgia, serif;
+  font-size: clamp(1.25rem, 2.7vw, 1.75rem);
   font-weight: 500;
+  line-height: 1.15;
 }
 
-.field-definitions-header h2 {
-  font-size: clamp(1.4rem, 3vw, 1.9rem);
-}
-
-.field-definitions-header p {
-  margin: 0.45rem 0 0;
+.field-definitions-title p {
+  margin: 0;
   color: var(--text-muted);
   font-size: 0.75rem;
-  line-height: 1.5;
 }
 
-.field-definitions-close {
-  flex: 0 0 auto;
-}
-
-.field-definitions-layout {
+.field-definitions-workspace {
   display: grid;
-  grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 1.5fr);
-  min-height: 19rem;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(13rem, 0.72fr) minmax(0, 1.5fr);
+  overflow: hidden;
   border: 1px solid var(--line-soft);
   background: var(--panel-raised);
 }
 
-.field-definition-create-form > label {
-  display: grid;
-  gap: 0.35rem;
-  color: var(--text-secondary);
-  font-size: 0.68rem;
+.field-definition-list,
+.field-definition-editor,
+.field-definition-empty-detail,
+.field-definition-create-form {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.field-definition-create-form input,
-.field-definition-create-form select,
-.field-definition-create-form textarea {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0.55rem 0.65rem;
-  background: var(--control-bg);
-  color: var(--text-primary);
-  font: inherit;
+.field-definition-empty-detail,
+.field-definition-create-form {
+  padding: 0.9rem;
 }
 
-.field-definition-create-form input:focus,
-.field-definition-create-form select:focus,
-.field-definition-create-form textarea:focus {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 1px;
+.field-definition-empty-detail {
+  color: var(--text-muted);
 }
 
 .field-definition-create-form {
-  border: 1px solid var(--line-soft);
-  padding: 0.8rem;
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+}
+
+.field-definition-create-form h3 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+
+.field-definition-review {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--error-border);
+  padding: 0.75rem;
+}
+
+.field-definition-review h3,
+.field-definition-review p {
+  margin: 0.35rem 0;
+}
+
+.field-definition-pending-guard {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  padding: 0.75rem;
   background: var(--panel-bg);
 }
 
-.field-definition-section-heading h4 {
-  margin: 0;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.field-definition-pending-guard h3,
+.field-definition-pending-guard p {
+  margin: 0.35rem 0;
 }
 
-.field-definition-section-heading > span {
+.field-definition-pending-guard p {
   color: var(--text-muted);
-  font: 0.58rem Consolas, monospace;
+  font-size: 0.72rem;
 }
 
-.field-definition-actions {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-.field-definition-error {
-  margin: 0;
-}
-
-.field-definition-create-form {
+.field-definition-review ul {
   display: grid;
-  gap: 0.8rem;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.field-definition-create-form .section-kicker {
-  display: block;
+.field-definition-review li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(3rem, auto) minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.35rem;
+  font-size: 0.7rem;
 }
 
-@media (max-width: 760px) {
-  .field-definitions-dialog {
-    width: calc(100vw - 1rem);
-    max-height: calc(100dvh - 1rem);
-  }
+.field-definition-review li strong {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
 
+.field-definitions-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.65rem;
+  padding-bottom: max(0.1rem, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) {
   .field-definitions-content {
-    gap: 0.75rem;
+    gap: 0.55rem;
     padding: 0.75rem;
   }
 
-  .field-definitions-layout {
-    grid-template-columns: 1fr;
+  .field-definitions-header {
+    gap: 0.5rem;
+    padding-bottom: 0.55rem;
   }
 
+  .field-definitions-title p {
+    font-size: 0.7rem;
+  }
+
+  .field-definitions-title h2 {
+    margin: 0.2rem 0;
+    font-size: 1.25rem;
+  }
+
+  .field-definitions-title p {
+    display: none;
+  }
+
+  .field-definitions-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-definitions-actions {
+    justify-content: stretch;
+  }
+
+  .field-definitions-actions > button {
+    flex: 1 1 auto;
+  }
 }
 </style>

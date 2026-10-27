@@ -2,37 +2,68 @@
  * D3 owns the system SVG scene and gestures; Vue receives selection and completed-edit actions through handlers.
  */
 import { drag, pointer, select, zoom, zoomTransform, type ZoomBehavior } from 'd3'
+import { captureD3MouseGesture, type D3MouseGestureDisposer } from './d3-mouse-gesture'
 import {
-  canPlaceObjectInOrbit,
   catalogueTypes,
   minimumOrbitRadius,
   normalizeOrbitRotation,
-  type CatalogueSubtype,
   type Orbit,
   type OrbitRadii,
   type Point,
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
-import { objectMark } from '../../utils/catalogue-marks'
-import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../../utils/map-zoom'
+import type {
+  EntityCommand,
+  OrbitCenterMoveCandidate,
+  OrbitPlacementPreview,
+  SystemObjectMoveCandidate,
+} from '../../composables/editor-workflows/types'
+import type {
+  SystemCreationCandidate,
+  SystemCreationPreview,
+  SystemCreationType,
+} from '../../composables/editor-workflows/types'
+import { catalogueMarks, objectMark } from '../../utils/catalogue-marks'
+import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import {
-  orbitAngleAtPoint,
+  getSvgViewportRect,
+  MAP_ZOOM_MAX_SCALE,
+  MAP_ZOOM_MIN_SCALE,
+  svgViewportExtent,
+  type MapViewport,
+} from '../../utils/map-zoom'
+import {
   orbitAtPoint,
   orbitAxisCursor,
   orbitCenter,
   objectPositions,
   orbitPointAtAngle,
+  orbitPlacementHitsAtPoint,
   orbitRadii,
   orbitRotation,
   orbitRotationHandlePoint,
   requiredPosition,
   rotatePoint,
+  creationCandidatesAtPoint,
+  objectsMovedWithOrbit,
   toNormalizedMapPoint,
   type SystemMapGeometry,
 } from '../../utils/system-map-geometry'
 
 const mapSurfacePadding = 160
+const objectHitRadius = 28
+
+function dragClientPoint(sourceEvent: Event): Point | null {
+  if (sourceEvent instanceof MouseEvent) {
+    return { x: sourceEvent.clientX, y: sourceEvent.clientY }
+  }
+  if (sourceEvent instanceof TouchEvent) {
+    const touch = sourceEvent.changedTouches[0] ?? sourceEvent.touches[0]
+    return touch ? { x: touch.clientX, y: touch.clientY } : null
+  }
+  return null
+}
 
 type OrbitResizeAxis = 'global' | 'horizontal' | 'vertical'
 
@@ -52,6 +83,22 @@ interface OrbitRotationGesture {
 export interface SystemMapEventHandlers {
   /** Select an existing system object. */
   selectObject(id: string): void
+  /** Checks whether a pending entity command touches an active inspector draft. */
+  isEntityCommandBlocked(command: EntityCommand): boolean
+  /** Reports a blocked pending entity command before the map preview changes. */
+  entityCommandBlocked(command: EntityCommand): void
+  /** Cancels a parent-owned object placement preview before direct map manipulation begins. */
+  cancelObjectPlacementPreview(): void
+  /** Cancels a parent-owned Orbit geometry preview before direct map manipulation begins. */
+  cancelOrbitPlacementPreview(): void
+  /** Checks whether the inspector currently owns a draft for this object. */
+  isObjectMoveBlocked(id: string): boolean
+  /** Reports a blocked drag after the pointer has crossed D3's client-pixel click threshold. */
+  objectMoveBlocked(id: string): void
+  /** Offers every raw Orbit hit for an ambiguous or cycle-invalid existing-object drop. */
+  objectMoveCandidates(id: string, candidates: SystemObjectMoveCandidate[]): void
+  /** Offers named host or free-center choices when moving an unoccupied Orbit is ambiguous or blocked. */
+  orbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[]): void
   /** Select an existing Orbit. */
   selectOrbit(id: string): void
   /** Commit a system-level object position in normalized initial-scene coordinates. */
@@ -66,15 +113,10 @@ export interface SystemMapEventHandlers {
   rotateOrbit(id: string, rotation: number): void
   /** Commit object placement into an Orbit using a parameter angle in radians. */
   placeObjectInOrbit(id: string, orbitId: string, angle: number): void
-  /** Handle Orbit drops at an SVG scene point, with an optional object host. */
-  dropOrbit(point: Point, hostId: string | null): void
-  /** Handle catalogue-object drops in scene coordinates; angle is radians or null outside an Orbit. */
-  dropObject(
-    subtype: CatalogueSubtype,
-    point: Point,
-    orbitId: string | null,
-    angle: number | null,
-  ): void
+  /** Offers the named map targets for a user click while Add is armed. */
+  creationTarget(candidates: SystemCreationCandidate[]): void
+  /** Resolves a native palette release through the same creation candidate path as an armed Add click. */
+  creationDropTarget(type: SystemCreationType, candidates: SystemCreationCandidate[]): void
 }
 
 export interface SystemMapRendererOptions {
@@ -86,21 +128,45 @@ export interface SystemMapRendererOptions {
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  /** Persistent map Add type and its transient placement preview. */
+  creationType: SystemCreationType | null
+  creationPreview: SystemCreationPreview | null
+  creationChooserOpen: boolean
+  /** Parent-owned object position previews retained across renderer rebuilds by the wrapper. */
+  objectPlacementPreviews: ReadonlyMap<string, Point>
+  /** Parent-owned Orbit center and radii previews retained across renderer rebuilds by the wrapper. */
+  orbitPlacementPreviews: ReadonlyMap<string, OrbitPlacementPreview>
+  /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
+  moveEnabled: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
   orbitRotationWheelEvents: WeakSet<Event>
   /** Callbacks for selection and completed edits; gesture previews remain local to the renderer. */
   handlers: SystemMapEventHandlers
   /** Receives the current percentage zoom for Vue's accessible controls. */
   setZoomLevel(zoomLevel: number): void
+  /** Publishes every D3 viewport change, including changes applied by the Vue wrapper. */
+  onViewportChange(viewport: MapViewport): void
 }
 
 /** Live D3 capabilities exposed to the Vue wrapper. */
 export interface SystemMapRenderer {
   zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>
+  /** Projects the saved object and Orbit geometry onto an isolated export copy. */
+  prepareExportClone(clone: SVGSVGElement): void
+  /** Cancels and rolls back active local previews without publishing geometry. */
+  cancelActiveGesture(): void
+  /** Updates a parent-owned preview without publishing it to workspace state. */
+  setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  /** Updates a parent-owned proposed-host Orbit preview without publishing workspace geometry. */
+  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
   /** Captures Ctrl+wheel rotation before the same event reaches D3's zoom behavior. */
   captureOrbitRotationWheel(event: WheelEvent): void
   /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
   handleObjectDrop(event: DragEvent): void
+  /** Consumes a map click in Add and offers its candidates in raw scene coordinates. */
+  handleCreationClick(event: MouseEvent): void
+  /** Resolves candidates from an unclamped SVG scene point using the same calculation as map clicks. */
+  getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }
 
 function orbitLabel(system: StarSystem, orbit: Orbit): string {
@@ -126,18 +192,31 @@ export function renderSystemMap({
   geometry,
   selectedObjectId,
   selectedOrbitId,
+  creationType,
+  creationPreview,
+  creationChooserOpen,
+  objectPlacementPreviews,
+  orbitPlacementPreviews,
+  moveEnabled,
   orbitRotationWheelEvents,
   handlers,
   setZoomLevel,
+  onViewportChange,
 }: SystemMapRendererOptions): SystemMapRenderer {
   let rotateOrbitFromWheel: (event: WheelEvent) => boolean = () => false
+
+  function blockEntityCommand(command: EntityCommand): boolean {
+    if (!handlers.isEntityCommandBlocked(command)) return false
+    handlers.entityCommandBlocked(command)
+    return true
+  }
 
   /**
    * Prevents selected-Orbit Ctrl+wheel rotation from also becoming a D3 map-zoom gesture.
    * @param event Native wheel event captured by Vue on the SVG.
    */
   function captureOrbitRotationWheel(event: WheelEvent): void {
-    if (!rotateOrbitFromWheel(event)) return
+    if (!moveEnabled || !rotateOrbitFromWheel(event)) return
     event.preventDefault()
     orbitRotationWheelEvents.add(event)
   }
@@ -155,10 +234,8 @@ export function renderSystemMap({
       if (!content) return
 
       const [x, y] = pointer(event, content)
-      const hostId = event.target instanceof Element
-        ? event.target.closest('.system-object')?.getAttribute('data-object-id') ?? null
-        : null
-      handlers.dropOrbit({ x, y }, hostId)
+      const type: SystemCreationType = { kind: 'orbit' }
+      handlers.creationDropTarget(type, creationCandidatesAtPoint(system, { x, y }, type, geometry))
       return
     }
 
@@ -168,45 +245,360 @@ export function renderSystemMap({
     if (!catalogueType || !content) return
 
     const [x, y] = pointer(event, content)
-    const point = { x, y }
-    const positions = objectPositions(system, geometry)
-    const targetOrbitId = event.target instanceof Element
-      ? event.target.closest('.orbit-hit-target')?.getAttribute('data-orbit-id')
-      : null
-    const orbit = system.orbits.find(candidate => candidate.id === targetOrbitId)
-      ?? orbitAtPoint(system, point, positions, geometry)
-    const center = orbit ? orbitCenter(orbit, positions) : undefined
-    handlers.dropObject(
-      catalogueType.value,
-      point,
-      orbit?.id ?? null,
-      orbit && center
-        ? orbitAngleAtPoint(
-            point,
-            center,
-            orbitRadii(system, orbit, geometry),
-            orbitRotation(orbit, geometry),
-          )
-        : null,
-    )
+    const type: SystemCreationType = { kind: 'object', subtype: catalogueType.value }
+    handlers.creationDropTarget(type, creationCandidatesAtPoint(system, { x, y }, type, geometry))
   }
 
   const livePositions = new Map<string, Point>()
+  const effectivePositions = new Map(objectPlacementPreviews)
+  const previewOrbitCenters = new Map<string, Point>()
+  const previewOrbitRadii = new Map<string, OrbitRadii>()
+  const previewOrbitRotations = new Map<string, number>()
+  for (const [orbitId, preview] of orbitPlacementPreviews) {
+    previewOrbitCenters.set(orbitId, { ...preview.center })
+    previewOrbitRadii.set(orbitId, { ...preview.radii })
+    if (preview.rotation !== undefined) previewOrbitRotations.set(orbitId, preview.rotation)
+  }
   const liveOrbitCenters = new Map<string, Point>()
   const liveOrbitRadii = new Map<string, OrbitRadii>()
   const liveOrbitRotations = new Map<string, number>()
+  const effectiveOrbitCenters = new Map(previewOrbitCenters)
+  const effectiveOrbitRadii = new Map(previewOrbitRadii)
+  const effectiveOrbitRotations = new Map(previewOrbitRotations)
+  const activeGestures = new Map<Element, () => void>()
+  const activeGestureDisposers = new Map<Element, D3MouseGestureDisposer>()
+  const cancelledGestures = new WeakSet<Element>()
+  const draftBlockedObjectGestures = new WeakSet<SVGGElement>()
+  const draftBlockFeedbackShown = new WeakSet<SVGGElement>()
+  const blockedObjectCommands = new WeakMap<SVGGElement, EntityCommand>()
+  const objectDragStartClient = new WeakMap<SVGGElement, Point>()
+  const objectDragOriginalPositions = new WeakMap<SVGGElement, Point>()
+  function setLiveOrbitCenter(orbitId: string, center: Point): void {
+    liveOrbitCenters.set(orbitId, center)
+    effectiveOrbitCenters.set(orbitId, center)
+  }
+  function clearLiveOrbitCenter(orbitId: string): void {
+    liveOrbitCenters.delete(orbitId)
+    const previewCenter = previewOrbitCenters.get(orbitId)
+    if (previewCenter) effectiveOrbitCenters.set(orbitId, previewCenter)
+    else effectiveOrbitCenters.delete(orbitId)
+  }
+  function setLiveOrbitRadii(orbitId: string, radii: OrbitRadii): void {
+    liveOrbitRadii.set(orbitId, radii)
+    effectiveOrbitRadii.set(orbitId, radii)
+  }
+  function clearLiveOrbitRadii(orbitId: string): void {
+    liveOrbitRadii.delete(orbitId)
+    const previewRadii = previewOrbitRadii.get(orbitId)
+    if (previewRadii) effectiveOrbitRadii.set(orbitId, previewRadii)
+    else effectiveOrbitRadii.delete(orbitId)
+  }
+  function setLiveOrbitRotation(orbitId: string, rotation: number): void {
+    liveOrbitRotations.set(orbitId, rotation)
+    effectiveOrbitRotations.set(orbitId, rotation)
+  }
+  function clearLiveOrbitRotation(orbitId: string): void {
+    liveOrbitRotations.delete(orbitId)
+    const previewRotation = previewOrbitRotations.get(orbitId)
+    if (previewRotation !== undefined) effectiveOrbitRotations.set(orbitId, previewRotation)
+    else effectiveOrbitRotations.delete(orbitId)
+  }
+  function beginGesture(
+    element: Element,
+    rollback: () => void,
+    cancelPlacementPreview = true,
+    sourceEvent?: Event,
+  ): void {
+    // D3 installs the new window listeners before this callback; claim ownership first so an old
+    // gesture's cancellation cannot send its mouseup into the newly installed transport.
+    const mouseGesture = sourceEvent
+      ? captureD3MouseGesture(sourceEvent)
+      : { cancel: () => undefined, complete: () => undefined }
+    if (activeGestures.size) cancelActiveGesture()
+    if (cancelPlacementPreview) {
+      handlers.cancelObjectPlacementPreview()
+      handlers.cancelOrbitPlacementPreview()
+    }
+    cancelledGestures.delete(element)
+    activeGestures.set(element, rollback)
+    activeGestureDisposers.set(element, mouseGesture)
+  }
+  function finishGesture(element: Element): boolean {
+    activeGestureDisposers.get(element)?.complete()
+    activeGestures.delete(element)
+    activeGestureDisposers.delete(element)
+    const cancelled = cancelledGestures.has(element)
+    if (cancelled) cancelledGestures.delete(element)
+    return cancelled
+  }
+  function cancelActiveGesture(): void {
+    for (const [element, rollback] of activeGestures) {
+      cancelledGestures.add(element)
+      rollback()
+      activeGestureDisposers.get(element)?.cancel()
+    }
+    activeGestures.clear()
+    activeGestureDisposers.clear()
+    updateLiveGeometry()
+  }
+  function cancelGesture(element: Element): void {
+    const rollback = activeGestures.get(element)
+    if (!rollback) return
+    cancelledGestures.add(element)
+    activeGestures.delete(element)
+    rollback()
+    // This dispatches D3's end callback synchronously; callers must snapshot needed drag data first.
+    activeGestureDisposers.get(element)?.cancel()
+    activeGestureDisposers.delete(element)
+    updateLiveGeometry()
+  }
+  function setLivePosition(objectId: string, scenePoint: Point): void {
+    livePositions.set(objectId, scenePoint)
+    effectivePositions.set(objectId, scenePoint)
+  }
+  function clearLivePosition(objectId: string): void {
+    livePositions.delete(objectId)
+    const placementPreview = objectPlacementPreviews.get(objectId)
+    if (placementPreview) effectivePositions.set(objectId, placementPreview)
+    else effectivePositions.delete(objectId)
+  }
+  function setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void {
+    if (scenePoint) effectivePositions.set(objectId, scenePoint)
+    else {
+      const livePosition = livePositions.get(objectId)
+      if (livePosition) effectivePositions.set(objectId, livePosition)
+      else effectivePositions.delete(objectId)
+    }
+    updateLiveGeometry()
+  }
+  function setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void {
+    if (preview) {
+      const center = { ...preview.center }
+      const radii = { ...preview.radii }
+      previewOrbitCenters.set(orbitId, center)
+      previewOrbitRadii.set(orbitId, radii)
+      if (preview.rotation !== undefined) previewOrbitRotations.set(orbitId, preview.rotation)
+      else previewOrbitRotations.delete(orbitId)
+      if (!liveOrbitCenters.has(orbitId)) effectiveOrbitCenters.set(orbitId, center)
+      if (!liveOrbitRadii.has(orbitId)) effectiveOrbitRadii.set(orbitId, radii)
+      if (!liveOrbitRotations.has(orbitId)) {
+        if (preview.rotation !== undefined) effectiveOrbitRotations.set(orbitId, preview.rotation)
+        else effectiveOrbitRotations.delete(orbitId)
+      }
+    } else {
+      previewOrbitCenters.delete(orbitId)
+      previewOrbitRadii.delete(orbitId)
+      previewOrbitRotations.delete(orbitId)
+      if (!liveOrbitCenters.has(orbitId)) effectiveOrbitCenters.delete(orbitId)
+      if (!liveOrbitRadii.has(orbitId)) effectiveOrbitRadii.delete(orbitId)
+      if (!liveOrbitRotations.has(orbitId)) effectiveOrbitRotations.delete(orbitId)
+    }
+    updateLiveGeometry()
+  }
   const currentPositions = () => objectPositions(system, geometry, {
-    positions: livePositions,
-    orbitCenters: liveOrbitCenters,
-    orbitRadii: liveOrbitRadii,
-    orbitRotations: liveOrbitRotations,
+    positions: effectivePositions,
+    orbitCenters: effectiveOrbitCenters,
+    orbitRadii: effectiveOrbitRadii,
+    orbitRotations: effectiveOrbitRotations,
   })
+  const appliedPositions = () => objectPositions(system, geometry)
+  function prepareExportClone(clone: SVGSVGElement): void {
+    const positions = appliedPositions()
+    clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
+      const objectId = mark.getAttribute('data-object-id')
+      if (!objectId) return
+      const point = requiredPosition(positions, objectId)
+      mark.setAttribute('transform', `translate(${point.x} ${point.y})`)
+    })
+
+    clone.querySelectorAll<SVGGElement>('.orbit-mark[data-orbit-id]').forEach(mark => {
+      const orbitId = mark.getAttribute('data-orbit-id')
+      const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+      const ring = mark.querySelector<SVGEllipseElement>('.orbit-ring')
+      if (!orbit || !ring) return
+      const center = orbitCenter(orbit, positions)
+      const radii = orbitRadii(system, orbit, geometry)
+      const rotation = orbitRotation(orbit, geometry)
+      ring.setAttribute('cx', String(center.x))
+      ring.setAttribute('cy', String(center.y))
+      ring.setAttribute('rx', String(radii.horizontal))
+      ring.setAttribute('ry', String(radii.vertical))
+      ring.setAttribute('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+    })
+  }
+  const objectPlacementCarriedOrbitIds = new Map<string, Set<string>>()
+  function carriedOrbitIdsForObject(objectId: string): Set<string> {
+    const cached = objectPlacementCarriedOrbitIds.get(objectId)
+    if (cached) return cached
+
+    const carriedObjectIds = new Set([objectId])
+    for (const orbit of system.orbits) {
+      if (orbit.hostId !== objectId) continue
+      for (const carriedObjectId of objectsMovedWithOrbit(system, orbit.id)) {
+        carriedObjectIds.add(carriedObjectId)
+      }
+    }
+    const carriedOrbitIds = new Set(system.orbits
+      .filter(orbit => orbit.hostId !== null && carriedObjectIds.has(orbit.hostId))
+      .map(orbit => orbit.id))
+    objectPlacementCarriedOrbitIds.set(objectId, carriedOrbitIds)
+    return carriedOrbitIds
+  }
+  function objectPlacementHits(objectId: string, point: Point) {
+    return orbitPlacementHitsAtPoint(
+      system,
+      point,
+      appliedPositions(),
+      geometry,
+      objectId,
+      effectiveOrbitRadii,
+      effectiveOrbitRotations,
+      effectiveOrbitCenters,
+    ).filter(hit => !carriedOrbitIdsForObject(objectId).has(hit.orbit.id))
+  }
+  function objectPlacementCommand(object: SystemObject, point: Point): EntityCommand {
+    const targetOrbit = objectPlacementHits(object.id, point).find(hit => hit.valid)?.orbit
+    return {
+      kind: 'object-placement',
+      objectId: object.id,
+      fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
+      toOrbitId: targetOrbit?.id ?? null,
+    }
+  }
+  function objectDragPreviewPosition(object: SystemObject, point: Point, originalPosition: Point): Point {
+    const hits = objectPlacementHits(object.id, point)
+    const eligibleHits = hits.filter(hit => hit.valid)
+    if (eligibleHits.length > 1 || (hits.length > 0 && eligibleHits.length === 0)) return originalPosition
+    if (eligibleHits.length === 1) return eligibleHits[0]!.point
+    return point
+  }
+
+  function resolveOrbitCenterMove(orbit: Orbit, point: Point): {
+    candidates: OrbitCenterMoveCandidate[]
+    candidate: OrbitCenterMoveCandidate | null
+    center: Point | null
+    radii: OrbitRadii
+  } {
+    const positions = appliedPositions()
+    const movingObjectIds = objectsMovedWithOrbit(system, orbit.id)
+    const geometryBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-geometry', orbitId: orbit.id })
+    const candidates: OrbitCenterMoveCandidate[] = []
+    const nearbyHosts = Number.isFinite(point.x) && Number.isFinite(point.y)
+      ? system.objects
+        .map((object, index) => {
+          const position = requiredPosition(positions, object.id)
+          return {
+            object,
+            index,
+            distance: Math.hypot(point.x - position.x, point.y - position.y),
+          }
+        })
+        .filter(candidate => candidate.distance <= objectHitRadius)
+        .sort((left, right) => left.distance - right.distance || left.index - right.index)
+      : []
+
+    for (const { object } of nearbyHosts) {
+      const hostId = object.id
+      const hostBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-host', orbitId: orbit.id, hostId })
+      const cycleError = movingObjectIds.has(hostId)
+        ? 'This Orbit cannot be hosted by an object in its own hierarchy.'
+        : null
+      candidates.push({
+        key: `host:${hostId}`,
+        label: `Center on ${object.name}`,
+        target: { kind: 'host', objectId: hostId },
+        error: cycleError
+          ?? (geometryBlocked ? 'Resolve the Inspector draft before moving this Orbit.' : null)
+          ?? (hostBlocked ? 'Resolve the Inspector draft before changing this Orbit host.' : null),
+      })
+    }
+
+    if (nearbyHosts.length === 0 && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+      const hostBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })
+      candidates.push({
+        key: `free:${point.x}:${point.y}`,
+        label: 'Free Orbit center',
+        target: { kind: 'free', point: toNormalizedMapPoint(point) },
+        error: geometryBlocked
+          ? 'Resolve the Inspector draft before moving this Orbit.'
+          : hostBlocked
+            ? 'Resolve the Inspector draft before changing this Orbit host.'
+            : null,
+      })
+    }
+    const eligible = candidates.filter(candidate => candidate.error === null)
+    if (eligible.length !== 1) {
+      return { candidates, candidate: null, center: null, radii: orbitRadii(system, orbit, geometry) }
+    }
+
+    const candidate = eligible[0]!
+    if (candidate.target.kind === 'host') {
+      const center = requiredPosition(positions, candidate.target.objectId)
+      const hostedOrbit: Orbit = {
+        id: orbit.id,
+        hostId: candidate.target.objectId,
+        order: orbit.order,
+      }
+      const minimum = minimumOrbitRadius(system, hostedOrbit)
+      const radii = orbitRadii(system, orbit, geometry)
+      return {
+        candidates,
+        candidate,
+        center,
+        radii: {
+          horizontal: Math.max(radii.horizontal, minimum),
+          vertical: Math.max(radii.vertical, minimum),
+        },
+      }
+    }
+
+    return {
+      candidates,
+      candidate,
+      center: point,
+      radii: orbitRadii(system, orbit, geometry),
+    }
+  }
+
   const positions = currentPositions()
+
+  function getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[] {
+    return creationCandidatesAtPoint(system, point, type, geometry)
+  }
+
+  function offerCreationTarget(point: Point): void {
+    if (!creationType || creationChooserOpen) return
+    handlers.creationTarget(getCreationCandidates(point, creationType))
+  }
+
+  function handleCreationClick(event: MouseEvent): void {
+    if (!creationType) return
+    if (event.detail === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    if (creationChooserOpen) return
+    const contentNode = element.querySelector<SVGGElement>('.system-map-content')
+    if (!contentNode) return
+    const [x, y] = pointer(event, contentNode)
+    offerCreationTarget({ x, y })
+  }
+
   const svg = select(element)
   const currentTransform = zoomTransform(element)
+  const focusedElement = element.ownerDocument.activeElement
+  const sceneOwnedFocus = focusedElement instanceof Element && element.contains(focusedElement)
+  const focusedObjectId = sceneOwnedFocus
+    ? focusedElement.closest<SVGGElement>('.system-object[data-object-id]')?.getAttribute('data-object-id')
+    : null
   const focusedOrbitCenterId = element.querySelector<SVGElement>('.orbit-center-handle:focus')
     ?.getAttribute('data-orbit-id')
   const focusedOrbitId = element.querySelector<SVGElement>('.orbit-hit-target:focus')
+    ?.getAttribute('data-orbit-id')
+  const focusedOrbitAxis = element.querySelector<SVGElement>('.orbit-axis-handle:focus')
+  const focusedOrbitAxisId = focusedOrbitAxis?.getAttribute('data-orbit-id')
+  const focusedOrbitAxisDirection = focusedOrbitAxis?.getAttribute('data-resize-axis')
+  const focusedOrbitRotationId = element.querySelector<SVGElement>('.orbit-rotation-handle:focus')
     ?.getAttribute('data-orbit-id')
   svg.selectAll('*').remove()
 
@@ -235,9 +627,9 @@ export function renderSystemMap({
 
   orbitMarks.each(function (orbit) {
     const mark = select(this)
-    const center = orbitCenter(orbit, positions, liveOrbitCenters)
-    const radii = orbitRadii(system, orbit, geometry)
-    const rotation = orbitRotation(orbit, geometry, liveOrbitRotations)
+    const center = orbitCenter(orbit, positions, effectiveOrbitCenters)
+    const radii = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
+    const rotation = orbitRotation(orbit, geometry, effectiveOrbitRotations)
     const rotationTransform = `rotate(${rotation} ${center.x} ${center.y})`
     const horizontalHandle = orbitPointAtAngle(center, radii, 0, rotation)
     const verticalHandle = orbitPointAtAngle(center, radii, -Math.PI / 2, rotation)
@@ -257,9 +649,9 @@ export function renderSystemMap({
       .attr('rx', radii.horizontal)
       .attr('ry', radii.vertical)
       .attr('transform', rotationTransform)
-      .attr('role', 'slider')
+      .attr('role', moveEnabled ? 'slider' : 'button')
       .attr('tabindex', 0)
-      .attr('aria-label', `Resize ${orbitLabel(system, orbit)}`)
+      .attr('aria-label', `${moveEnabled ? 'Resize' : 'Inspect'} ${orbitLabel(system, orbit)}`)
       .attr('aria-valuemin', minimumOrbitRadius(system, orbit))
       .attr('aria-valuemax', radii.horizontal + 400)
       .attr('aria-valuenow', Math.round(radii.horizontal))
@@ -270,12 +662,21 @@ export function renderSystemMap({
     ] as const) {
       mark.append('circle')
         .attr('class', `orbit-edit-control orbit-axis-handle orbit-axis-handle--${axis}`)
+        .attr('data-orbit-id', orbit.id)
         .attr('data-resize-axis', axis)
         .attr('cx', x)
         .attr('cy', y)
         .attr('r', 6)
         .style('cursor', orbitAxisCursor(axis, rotation))
-        .attr('aria-hidden', 'true')
+        .attr('role', moveEnabled ? 'slider' : 'button')
+        .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
+        .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
+        .attr('aria-label', moveEnabled
+          ? `Resize ${axis} radius of ${orbitLabel(system, orbit)}`
+          : `Inspect ${orbitLabel(system, orbit)}`)
+        .attr('aria-valuemin', minimumOrbitRadius(system, orbit))
+        .attr('aria-valuemax', radii[axis] + 400)
+        .attr('aria-valuenow', Math.round(radii[axis]))
         .append('title')
         .text(label)
     }
@@ -289,7 +690,9 @@ export function renderSystemMap({
         .attr('role', 'button')
         .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
         .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
-        .attr('aria-label', `Move center of ${orbitLabel(system, orbit)}`)
+        .attr('aria-label', moveEnabled
+          ? `Move center of ${orbitLabel(system, orbit)}`
+          : `Inspect ${orbitLabel(system, orbit)}`)
         .append('title')
         .text('Drag to move the Orbit center')
     }
@@ -299,16 +702,17 @@ export function renderSystemMap({
       .attr('y1', verticalHandle.y)
       .attr('x2', rotationHandle.x)
       .attr('y2', rotationHandle.y)
+      .style('pointer-events', 'none')
     mark.append<SVGCircleElement>('circle')
       .attr('class', 'orbit-edit-control orbit-rotation-handle')
       .attr('data-orbit-id', orbit.id)
       .attr('cx', rotationHandle.x)
       .attr('cy', rotationHandle.y)
       .attr('r', 7)
-      .attr('role', 'slider')
+      .attr('role', moveEnabled ? 'slider' : 'button')
       .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
       .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
-      .attr('aria-label', `Rotate ${orbitLabel(system, orbit)}`)
+      .attr('aria-label', `${moveEnabled ? 'Rotate' : 'Inspect'} ${orbitLabel(system, orbit)}`)
       .attr('aria-valuemin', 0)
       .attr('aria-valuemax', 359)
       .attr('aria-valuenow', Math.round(rotation))
@@ -332,16 +736,20 @@ export function renderSystemMap({
   orbitSelectors
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', (event, orbit) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
       }
 
-      const current = orbitRadii(system, orbit, geometry, liveOrbitRadii)
+      if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+      handlers.cancelOrbitPlacementPreview()
+      const current = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
       const step = event.shiftKey ? 10 : 1
       const minimum = minimumOrbitRadius(system, orbit)
       let horizontal = current.horizontal
@@ -357,15 +765,41 @@ export function renderSystemMap({
       } else return
 
       event.preventDefault()
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
       handlers.resizeOrbit(orbit.id, { horizontal, vertical })
     })
-  orbitAxisHandles.on('click', (event, orbit) => {
-    event.stopPropagation()
-    handlers.selectOrbit(orbit.id)
-  })
+  orbitAxisHandles
+    .on('click', (event, orbit) => {
+      event.stopPropagation()
+      if (event.defaultPrevented) return
+      handlers.selectOrbit(orbit.id)
+    })
+    .on('keydown', function (event, orbit) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
+        event.preventDefault()
+        handlers.selectOrbit(orbit.id)
+        return
+      }
+      if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+      handlers.cancelOrbitPlacementPreview()
+      const axis = this.getAttribute('data-resize-axis') === 'vertical' ? 'vertical' : 'horizontal'
+      const current = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
+      const step = event.shiftKey ? 10 : 1
+      let radius = current[axis]
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') radius -= step
+      else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') radius += step
+      else if (event.key === 'Home') radius = minimumOrbitRadius(system, orbit)
+      else if (event.key === 'End') radius += 400
+      else return
+      event.preventDefault()
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
+      handlers.resizeOrbit(orbit.id, { ...current, [axis]: Math.max(minimumOrbitRadius(system, orbit), radius) })
+    })
   orbitCenterHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       const handle = event.currentTarget as SVGCircleElement
       if (movedOrbitCenters.has(handle)) {
         movedOrbitCenters.delete(handle)
@@ -375,13 +809,16 @@ export function renderSystemMap({
     })
     .on('keydown', (event, orbit) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectOrbit(orbit.id)
         return
       }
 
+      if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+      handlers.cancelOrbitPlacementPreview()
       const step = event.shiftKey ? 10 : 1
-      const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
+      const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
       let x = center.x
       let y = center.y
       if (event.key === 'ArrowLeft') x -= step
@@ -392,24 +829,35 @@ export function renderSystemMap({
 
       event.preventDefault()
       const nextCenter = { x, y }
-      liveOrbitCenters.set(orbit.id, nextCenter)
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
+        || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })) return
+      setLiveOrbitCenter(orbit.id, nextCenter)
       updateLiveGeometry()
       handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(nextCenter), null)
     })
   orbitRotationHandles
     .on('click', (event, orbit) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       handlers.selectOrbit(orbit.id)
     })
     .on('keydown', (event, orbit) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
+        event.preventDefault()
+        handlers.selectOrbit(orbit.id)
+        return
+      }
+      if (!moveEnabled || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
       event.preventDefault()
       const step = event.shiftKey ? 10 : 1
       const direction = event.key === 'ArrowRight' ? 1 : -1
+      handlers.cancelOrbitPlacementPreview()
       const rotation = normalizeOrbitRotation(
-        orbitRotation(orbit, geometry, liveOrbitRotations) + step * direction,
+        orbitRotation(orbit, geometry, effectiveOrbitRotations) + step * direction,
       )
-      liveOrbitRotations.set(orbit.id, rotation)
+      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
+      setLiveOrbitRotation(orbit.id, rotation)
       updateLiveGeometry()
       handlers.rotateOrbit(orbit.id, rotation)
     })
@@ -426,13 +874,13 @@ export function renderSystemMap({
     })
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', object => `Select ${object.locationKey}, ${object.name} (${object.family} / ${object.subtype})`)
+    .attr('aria-label', object => `Select ${catalogueObjectLabel(object)}`)
 
   objectMarks.each(function (object) {
     const mark = select(this)
     mark.append('circle')
       .attr('class', 'object-hit-target')
-      .attr('r', 28)
+      .attr('r', objectHitRadius)
       .attr('aria-hidden', 'true')
 
     if (object.subtype === 'star') mark.append('circle')
@@ -459,6 +907,106 @@ export function renderSystemMap({
       .attr('text-anchor', 'start')
       .text(objectMark(object))
   })
+
+  if (creationType && creationPreview) {
+    const previewGroup = content.append('g')
+      .attr('class', 'system-creation-preview')
+      .attr('aria-hidden', 'true')
+      .style('pointer-events', 'none')
+
+    if (creationType.kind === 'object') {
+      const subtypeLabel = catalogueTypes.find(candidate => candidate.value === creationType.subtype)?.label
+        ?? creationType.subtype
+      let point: Point | undefined
+      let targetLabel: string
+      if (creationPreview.target.kind === 'free') {
+        point = {
+          x: 64 + creationPreview.target.point.x * 832,
+          y: 72 + creationPreview.target.point.y * 416,
+        }
+        targetLabel = 'Free map position'
+      } else if (creationPreview.target.kind === 'orbit') {
+        const orbitTarget = creationPreview.target
+        const orbit = system.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
+        if (orbit) {
+          const center = orbitCenter(orbit, positions, effectiveOrbitCenters)
+          const radii = creationPreview.radii ?? orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
+          const rotation = creationPreview.rotation ?? orbitRotation(orbit, geometry, effectiveOrbitRotations)
+          point = orbitPointAtAngle(center, radii, orbitTarget.angle, rotation)
+          previewGroup.append('ellipse')
+            .attr('class', 'system-creation-preview-orbit')
+            .attr('cx', center.x)
+            .attr('cy', center.y)
+            .attr('rx', radii.horizontal)
+            .attr('ry', radii.vertical)
+            .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+          targetLabel = orbitLabel(system, orbit)
+        } else {
+          targetLabel = 'Orbit'
+        }
+      } else {
+        targetLabel = 'Unavailable target'
+      }
+
+      if (point) {
+        const marker = previewGroup.append('g')
+          .attr('class', 'system-creation-preview-object')
+          .attr('transform', `translate(${point.x} ${point.y})`)
+        marker.append('circle')
+          .attr('class', 'system-creation-preview-ring')
+          .attr('r', 24)
+        marker.append('text')
+          .attr('class', 'system-creation-preview-glyph')
+          .attr('y', 7)
+          .attr('text-anchor', 'middle')
+          .text(catalogueMarks[creationType.subtype])
+        marker.append('text')
+          .attr('class', 'system-creation-preview-label')
+          .attr('y', -30)
+          .attr('text-anchor', 'middle')
+          .text(`Preview · ${subtypeLabel} · ${targetLabel}`)
+      }
+    } else {
+      let center: Point | undefined
+      let targetLabel: string
+      if (creationPreview.target.kind === 'free') {
+        center = {
+          x: 64 + creationPreview.target.point.x * 832,
+          y: 72 + creationPreview.target.point.y * 416,
+        }
+        targetLabel = 'New unoccupied center'
+      } else if (creationPreview.target.kind === 'host') {
+        const hostTarget = creationPreview.target
+        center = positions.get(hostTarget.objectId)
+        const host = system.objects.find(object => object.id === hostTarget.objectId)
+        targetLabel = host ? `around ${host.name}` : 'Unavailable host'
+      } else {
+        targetLabel = 'Unavailable target'
+      }
+
+      if (center && creationPreview.radii) {
+        const rotation = creationPreview.rotation ?? 0
+        previewGroup.append('ellipse')
+          .attr('class', 'system-creation-preview-orbit')
+          .attr('cx', center.x)
+          .attr('cy', center.y)
+          .attr('rx', creationPreview.radii.horizontal)
+          .attr('ry', creationPreview.radii.vertical)
+          .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
+        previewGroup.append('circle')
+          .attr('class', 'system-creation-preview-center')
+          .attr('cx', center.x)
+          .attr('cy', center.y)
+          .attr('r', 6)
+        previewGroup.append('text')
+          .attr('class', 'system-creation-preview-label')
+          .attr('x', center.x)
+          .attr('y', center.y - creationPreview.radii.vertical - 30)
+          .attr('text-anchor', 'middle')
+          .text(`Preview · Orbit ${targetLabel}`)
+      }
+    }
+  }
 
   /**
    * Expands the background and grid around both object and Orbit bounds beyond the initial SVG viewBox.
@@ -494,9 +1042,9 @@ export function renderSystemMap({
       return `translate(${point.x} ${point.y})`
     })
     orbitMarks.each(function (orbit) {
-      const center = orbitCenter(orbit, positions, liveOrbitCenters)
-      const radii = orbitRadii(system, orbit, geometry, liveOrbitRadii)
-      const rotation = orbitRotation(orbit, geometry, liveOrbitRotations)
+      const center = orbitCenter(orbit, positions, effectiveOrbitCenters)
+      const radii = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
+      const rotation = orbitRotation(orbit, geometry, effectiveOrbitRotations)
       const rotationTransform = `rotate(${rotation} ${center.x} ${center.y})`
       const horizontalHandle = orbitPointAtAngle(center, radii, 0, rotation)
       const verticalHandle = orbitPointAtAngle(center, radii, -Math.PI / 2, rotation)
@@ -514,10 +1062,14 @@ export function renderSystemMap({
       mark.select<SVGCircleElement>('.orbit-axis-handle--horizontal')
         .attr('cx', horizontalHandle.x)
         .attr('cy', horizontalHandle.y)
+        .attr('aria-valuenow', Math.round(radii.horizontal))
+        .attr('aria-valuemax', radii.horizontal + 400)
         .style('cursor', orbitAxisCursor('horizontal', rotation))
       mark.select<SVGCircleElement>('.orbit-axis-handle--vertical')
         .attr('cx', verticalHandle.x)
         .attr('cy', verticalHandle.y)
+        .attr('aria-valuenow', Math.round(radii.vertical))
+        .attr('aria-valuemax', radii.vertical + 400)
         .style('cursor', orbitAxisCursor('vertical', rotation))
       mark.select<SVGLineElement>('.orbit-rotation-stem')
         .attr('x1', verticalHandle.x)
@@ -531,10 +1083,10 @@ export function renderSystemMap({
         .attr('aria-valuetext', `${Math.round(rotation)} degrees`)
     })
     orbitSelectors
-      .attr('aria-valuenow', orbit => Math.round(orbitRadii(system, orbit, geometry, liveOrbitRadii).horizontal))
-      .attr('aria-valuemax', orbit => orbitRadii(system, orbit, geometry, liveOrbitRadii).horizontal + 400)
+      .attr('aria-valuenow', orbit => Math.round(orbitRadii(system, orbit, geometry, effectiveOrbitRadii).horizontal))
+      .attr('aria-valuemax', orbit => orbitRadii(system, orbit, geometry, effectiveOrbitRadii).horizontal + 400)
       .attr('aria-valuetext', orbit => {
-        const radii = orbitRadii(system, orbit, geometry, liveOrbitRadii)
+        const radii = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
         return `${Math.round(radii.horizontal)} by ${Math.round(radii.vertical)} map units`
       })
     updateMapSurface()
@@ -544,6 +1096,7 @@ export function renderSystemMap({
   objectMarks
     .on('click', (event, object) => {
       event.stopPropagation()
+      if (event.defaultPrevented) return
       if (movedObjects.has(event.currentTarget as SVGGElement)) {
         movedObjects.delete(event.currentTarget as SVGGElement)
         return
@@ -552,91 +1105,149 @@ export function renderSystemMap({
     })
     .on('keydown', (event, object) => {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         handlers.selectObject(object.id)
       }
     })
   const objectDrag = drag<SVGGElement, SystemObject>()
+    .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+      && (!('touches' in event) || event.touches.length === 1))
+    .clickDistance(6)
     .container(() => content.node()!)
-    .subject((_event, object) => requiredPosition(positions, object.id))
-    .on('start', function () {
+    .subject((_event, object) => {
+      // Clear parent-owned precision before D3 captures the object subject.
+      handlers.cancelObjectPlacementPreview()
+      handlers.cancelOrbitPlacementPreview()
+      return requiredPosition(appliedPositions(), object.id)
+    })
+    .on('start', function (event, object) {
       movedObjects.delete(this)
+      objectDragOriginalPositions.set(this, { ...requiredPosition(appliedPositions(), object.id) })
+      const startPoint = dragClientPoint(event.sourceEvent)
+      if (startPoint) objectDragStartClient.set(this, startPoint)
+      beginGesture(this, () => {
+        movedObjects.delete(this)
+        clearLivePosition(object.id)
+        select(this).classed('is-dragging', false)
+      }, false, event.sourceEvent)
       select(this).classed('is-dragging', true)
+      const command = objectPlacementCommand(object, { x: event.x, y: event.y })
+      if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
+        draftBlockedObjectGestures.add(this)
+        blockedObjectCommands.set(this, command)
+      }
     })
     .on('drag', function (event, object) {
+      let becameBlocked = false
+      if (!draftBlockedObjectGestures.has(this) && !cancelledGestures.has(this)) {
+        const command = objectPlacementCommand(object, { x: event.x, y: event.y })
+        if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
+          draftBlockedObjectGestures.add(this)
+          blockedObjectCommands.set(this, command)
+          becameBlocked = true
+        }
+      }
+      if (draftBlockedObjectGestures.has(this)) {
+        // Once a mid-drag dependency becomes blocked, roll back its preview but retain D3's
+        // transport until the pointer crosses the established attempt threshold.
+        if (becameBlocked) {
+          activeGestures.get(this)?.()
+          updateLiveGeometry()
+        }
+        const start = objectDragStartClient.get(this)
+        const current = dragClientPoint(event.sourceEvent)
+        if (start && current && !draftBlockFeedbackShown.has(this)
+          && Math.hypot(current.x - start.x, current.y - start.y) > 6) {
+          draftBlockFeedbackShown.add(this)
+          const blockedCommand = blockedObjectCommands.get(this)
+          if (blockedCommand) handlers.entityCommandBlocked(blockedCommand)
+          else handlers.objectMoveBlocked(object.id)
+          cancelGesture(this)
+        }
+        return
+      }
+      if (cancelledGestures.has(this)) return
       if (event.dx || event.dy) {
         movedObjects.add(this)
-        livePositions.set(object.id, { x: event.x, y: event.y })
+        const originalPosition = objectDragOriginalPositions.get(this)
+          ?? requiredPosition(appliedPositions(), object.id)
+        setLivePosition(object.id, objectDragPreviewPosition(object, { x: event.x, y: event.y }, originalPosition))
         updateLiveGeometry()
       }
     })
     .on('end', function (event, object) {
+      draftBlockedObjectGestures.delete(this)
+      draftBlockFeedbackShown.delete(this)
+      blockedObjectCommands.delete(this)
+      objectDragStartClient.delete(this)
+      if (finishGesture(this)) {
+        select(this).classed('is-dragging', false)
+        movedObjects.delete(this)
+        objectDragOriginalPositions.delete(this)
+        return
+      }
       select(this).classed('is-dragging', false)
-      if (!movedObjects.has(this)) return
+      if (!movedObjects.has(this)) {
+        objectDragOriginalPositions.delete(this)
+        return
+      }
       setTimeout(() => movedObjects.delete(this), 0)
-
-      if (object.placement.kind === 'orbit') {
-        const { orbitId } = object.placement
-        const orbit = system.orbits.find(candidate => candidate.id === orbitId)
-        if (!orbit) throw new Error(`Object "${object.id}" references a missing Orbit.`)
-        const positions = currentPositions()
-        const point = { x: event.x, y: event.y }
-        const targetOrbit = orbitAtPoint(
-          system,
-          point,
-          positions,
-          geometry,
-          object.id,
-          liveOrbitRadii,
-          liveOrbitRotations,
-          liveOrbitCenters,
-        )
-        if (targetOrbit) {
-          const center = orbitCenter(targetOrbit, positions, liveOrbitCenters)
-          handlers.placeObjectInOrbit(object.id, targetOrbit.id, orbitAngleAtPoint(
-            point,
-            center,
-            orbitRadii(system, targetOrbit, geometry, liveOrbitRadii),
-            orbitRotation(targetOrbit, geometry, liveOrbitRotations),
-          ))
-        } else {
-          const center = orbitCenter(orbit, positions, liveOrbitCenters)
-          handlers.rotateObject(object.id, orbitAngleAtPoint(
-            point,
-            center,
-            orbitRadii(system, orbit, geometry, liveOrbitRadii),
-            orbitRotation(orbit, geometry, liveOrbitRotations),
-          ))
+      const point = { x: event.x, y: event.y }
+      const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+      const hits = objectPlacementHits(object.id, point)
+      const candidates: SystemObjectMoveCandidate[] = hits.map(hit => {
+        const command: EntityCommand = {
+          kind: 'object-placement',
+          objectId: object.id,
+          fromOrbitId,
+          toOrbitId: hit.orbit.id,
         }
+        const error = !hit.valid
+          ? 'This Orbit is hosted by the object or one of its descendants.'
+          : handlers.isEntityCommandBlocked(command)
+            ? 'Resolve the Inspector draft before moving this object into this Orbit.'
+            : null
+        return {
+          key: `orbit:${hit.orbit.id}`,
+          label: orbitLabel(system, hit.orbit),
+          target: { kind: 'orbit', orbitId: hit.orbit.id, angle: hit.angle },
+          error,
+        }
+      })
+      const eligibleCandidates = candidates.filter(candidate => candidate.error === null)
+      clearLivePosition(object.id)
+      updateLiveGeometry()
+      objectDragOriginalPositions.delete(this)
+
+      if (hits.length > 0) {
+        if (eligibleCandidates.length !== 1) {
+          handlers.objectMoveCandidates(object.id, candidates)
+          return
+        }
+        const [candidate] = eligibleCandidates
+        if (!candidate) return
+        const command: EntityCommand = {
+          kind: 'object-placement',
+          objectId: object.id,
+          fromOrbitId,
+          toOrbitId: candidate.target.orbitId,
+        }
+        if (blockEntityCommand(command)) return
+        handlers.placeObjectInOrbit(object.id, candidate.target.orbitId, candidate.target.angle)
         return
       }
 
-      const positions = currentPositions()
-      const point = { x: event.x, y: event.y }
-      const targetOrbit = orbitAtPoint(
-        system,
-        point,
-        positions,
-        geometry,
-        object.id,
-        liveOrbitRadii,
-        liveOrbitRotations,
-        liveOrbitCenters,
-      )
-      if (targetOrbit) {
-        const center = orbitCenter(targetOrbit, positions, liveOrbitCenters)
-        handlers.placeObjectInOrbit(object.id, targetOrbit.id, orbitAngleAtPoint(
-          point,
-          center,
-          orbitRadii(system, targetOrbit, geometry, liveOrbitRadii),
-          orbitRotation(targetOrbit, geometry, liveOrbitRotations),
-        ))
-      } else {
-        handlers.moveObject(object.id, {
-          x: (event.x - 64) / 832,
-          y: (event.y - 72) / 416,
-        })
-      }
+      if (blockEntityCommand({
+        kind: 'object-placement',
+        objectId: object.id,
+        fromOrbitId,
+        toOrbitId: null,
+      })) return
+      handlers.moveObject(object.id, {
+        x: (point.x - 64) / 832,
+        y: (point.y - 72) / 416,
+      })
     })
   objectMarks.call(objectDrag)
 
@@ -670,16 +1281,18 @@ export function renderSystemMap({
       currentPositions(),
       geometry,
       undefined,
-      liveOrbitRadii,
-      liveOrbitRotations,
-      liveOrbitCenters,
+      effectiveOrbitRadii,
+      effectiveOrbitRotations,
+      effectiveOrbitCenters,
     )
     if (orbit?.id !== selectedOrbitId) return false
 
+    handlers.cancelOrbitPlacementPreview()
     const rotation = normalizeOrbitRotation(
-      orbitRotation(orbit, geometry, liveOrbitRotations) + event.deltaY * 0.05,
+      orbitRotation(orbit, geometry, effectiveOrbitRotations) + event.deltaY * 0.05,
     )
-    liveOrbitRotations.set(orbit.id, rotation)
+    if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return true
+    setLiveOrbitRotation(orbit.id, rotation)
     updateLiveGeometry()
     handlers.rotateOrbit(orbit.id, rotation)
     return true
@@ -717,11 +1330,11 @@ export function renderSystemMap({
       }
     }
 
-    const current = orbitRadii(system, orbit, geometry, liveOrbitRadii)
+    const current = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
     const localPoint = rotatePoint(
       point,
       center,
-      -orbitRotation(orbit, geometry, liveOrbitRotations),
+      -orbitRotation(orbit, geometry, effectiveOrbitRotations),
     )
     return {
       horizontal: axis === 'horizontal'
@@ -734,11 +1347,20 @@ export function renderSystemMap({
   }
   orbitResizeTargets.call(
     drag<SVGElement, Orbit>()
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
         resizedOrbits.delete(this)
-        const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
+        beginGesture(this, () => {
+          resizedOrbits.delete(this)
+          orbitResizeGestures.delete(this)
+          clearLiveOrbitRadii(orbit.id)
+          select(this).classed('is-resizing', false)
+        }, true, event.sourceEvent)
+        const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
         const handleAxis = this.getAttribute('data-resize-axis')
         const axis: OrbitResizeAxis = handleAxis === 'horizontal' || handleAxis === 'vertical'
           ? handleAxis
@@ -746,25 +1368,41 @@ export function renderSystemMap({
         orbitResizeGestures.set(this, {
           axis,
           center,
-          startRadii: orbitRadii(system, orbit, geometry, liveOrbitRadii),
+          startRadii: orbitRadii(system, orbit, geometry, effectiveOrbitRadii),
           startDistance: Math.hypot(event.x - center.x, event.y - center.y),
         })
         select(this).classed('is-resizing', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) resizedOrbits.add(this)
         const gesture = orbitResizeGestures.get(this)
         if (!gesture) return
-        liveOrbitRadii.set(orbit.id, resizedRadii({ x: event.x, y: event.y }, orbit, gesture))
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          cancelGesture(this)
+          return
+        }
+        setLiveOrbitRadii(orbit.id, resizedRadii({ x: event.x, y: event.y }, orbit, gesture))
         updateLiveGeometry()
       })
       .on('end', function (event, orbit) {
+        if (finishGesture(this)) {
+          orbitResizeGestures.delete(this)
+          resizedOrbits.delete(this)
+          select(this).classed('is-resizing', false)
+          return
+        }
         select(this).classed('is-resizing', false)
         const gesture = orbitResizeGestures.get(this)
         orbitResizeGestures.delete(this)
         if (!gesture || !resizedOrbits.has(this)) return
         const radii = resizedRadii({ x: event.x, y: event.y }, orbit, gesture)
-        liveOrbitRadii.set(orbit.id, radii)
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          clearLiveOrbitRadii(orbit.id)
+          updateLiveGeometry()
+          return
+        }
+        setLiveOrbitRadii(orbit.id, radii)
         updateLiveGeometry()
         handlers.resizeOrbit(orbit.id, radii)
       }),
@@ -772,28 +1410,74 @@ export function renderSystemMap({
 
   orbitCenterHandles.call(
     drag<SVGCircleElement, Orbit>()
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
-      .on('start', function () {
+      .on('start', function (event, orbit) {
         movedOrbitCenters.delete(this)
+        beginGesture(this, () => {
+          movedOrbitCenters.delete(this)
+          clearLiveOrbitCenter(orbit.id)
+          clearLiveOrbitRadii(orbit.id)
+          select(this).classed('is-moving', false)
+        }, true, event.sourceEvent)
         select(this).classed('is-moving', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) movedOrbitCenters.add(this)
-        liveOrbitCenters.set(orbit.id, { x: event.x, y: event.y })
+        const resolution = resolveOrbitCenterMove(orbit, { x: event.x, y: event.y })
+        if (!resolution.candidate || !resolution.center) {
+          clearLiveOrbitCenter(orbit.id)
+          clearLiveOrbitRadii(orbit.id)
+        } else {
+          setLiveOrbitCenter(orbit.id, resolution.center)
+          setLiveOrbitRadii(orbit.id, resolution.radii)
+        }
         updateLiveGeometry()
       })
       .on('end', function (event, orbit) {
+        if (finishGesture(this)) {
+          movedOrbitCenters.delete(this)
+          select(this).classed('is-moving', false)
+          return
+        }
         select(this).classed('is-moving', false)
         if (!movedOrbitCenters.has(this)) return
-        const center = { x: event.x, y: event.y }
-        liveOrbitCenters.set(orbit.id, center)
+        const resolution = resolveOrbitCenterMove(orbit, { x: event.x, y: event.y })
+        const candidate = resolution.candidate
+        if (!candidate || !resolution.center) {
+          clearLiveOrbitCenter(orbit.id)
+          clearLiveOrbitRadii(orbit.id)
+          updateLiveGeometry()
+          handlers.orbitCenterCandidates(orbit.id, resolution.candidates)
+          movedOrbitCenters.delete(this)
+          return
+        }
+
+        const hostId = candidate.target.kind === 'host' ? candidate.target.objectId : null
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
+          || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId })) {
+          clearLiveOrbitCenter(orbit.id)
+          clearLiveOrbitRadii(orbit.id)
+          updateLiveGeometry()
+          handlers.orbitCenterCandidates(orbit.id, resolution.candidates.map(entry => entry.key === candidate.key
+            ? { ...entry, error: 'Resolve the Inspector draft before applying this Orbit center move.' }
+            : entry))
+          movedOrbitCenters.delete(this)
+          return
+        }
+
+        setLiveOrbitCenter(orbit.id, resolution.center)
+        setLiveOrbitRadii(orbit.id, resolution.radii)
         updateLiveGeometry()
-        const target = event.sourceEvent.target
-        const hostId = target instanceof Element
-          ? target.closest('.system-object')?.getAttribute('data-object-id') ?? null
-          : null
-        handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(center), hostId)
+        handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(resolution.center), hostId)
+        clearLiveOrbitCenter(orbit.id)
+        clearLiveOrbitRadii(orbit.id)
+        updateLiveGeometry()
+        movedOrbitCenters.delete(this)
       }),
   )
 
@@ -801,19 +1485,29 @@ export function renderSystemMap({
   const orbitRotationGestures = new WeakMap<SVGCircleElement, OrbitRotationGesture>()
   orbitRotationHandles.call(
     drag<SVGCircleElement, Orbit>()
+      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+        && (!('touches' in event) || event.touches.length === 1))
+      .clickDistance(6)
       .container(() => content.node()!)
       .subject(event => ({ x: event.x, y: event.y }))
       .on('start', function (event, orbit) {
         rotatedOrbits.delete(this)
-        const center = orbitCenter(orbit, currentPositions(), liveOrbitCenters)
+        beginGesture(this, () => {
+          rotatedOrbits.delete(this)
+          orbitRotationGestures.delete(this)
+          clearLiveOrbitRotation(orbit.id)
+          select(this).classed('is-rotating', false)
+        }, true, event.sourceEvent)
+        const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
         orbitRotationGestures.set(this, {
           center,
           lastPointerAngle: Math.atan2(event.y - center.y, event.x - center.x),
-          rotation: orbitRotation(orbit, geometry, liveOrbitRotations),
+          rotation: orbitRotation(orbit, geometry, effectiveOrbitRotations),
         })
         select(this).classed('is-rotating', true)
       })
       .on('drag', function (event, orbit) {
+        if (cancelledGestures.has(this)) return
         if (event.dx || event.dy) rotatedOrbits.add(this)
         const gesture = orbitRotationGestures.get(this)
         if (!gesture) return
@@ -826,21 +1520,37 @@ export function renderSystemMap({
         else if (delta < -Math.PI) delta += Math.PI * 2
         gesture.rotation = normalizeOrbitRotation(gesture.rotation + delta * 180 / Math.PI)
         gesture.lastPointerAngle = pointerAngle
-        liveOrbitRotations.set(orbit.id, gesture.rotation)
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          cancelGesture(this)
+          return
+        }
+        setLiveOrbitRotation(orbit.id, gesture.rotation)
         updateLiveGeometry()
       })
       .on('end', function (_event, orbit) {
+        if (finishGesture(this)) {
+          orbitRotationGestures.delete(this)
+          rotatedOrbits.delete(this)
+          select(this).classed('is-rotating', false)
+          return
+        }
         select(this).classed('is-rotating', false)
         const gesture = orbitRotationGestures.get(this)
         orbitRotationGestures.delete(this)
         if (!gesture || !rotatedOrbits.has(this)) return
+        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) {
+          clearLiveOrbitRotation(orbit.id)
+          updateLiveGeometry()
+          return
+        }
         handlers.rotateOrbit(orbit.id, gesture.rotation)
       }),
   )
 
   const zoomBehavior = zoom<SVGSVGElement, unknown>()
-    .extent([[0, 0], [960, 560]])
+    .extent(() => svgViewportExtent(getSvgViewportRect(element)))
     .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
+    .clickDistance(6)
     .filter((event) => {
       if (orbitRotationWheelEvents.has(event as Event)) return false
       const target = event.target
@@ -851,22 +1561,46 @@ export function renderSystemMap({
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
-      return (!isMapMark || event.type === 'wheel' || touchPinch)
-        && (!event.ctrlKey || event.type === 'wheel')
+      return (!isMapMark || !moveEnabled || event.type === 'wheel' || touchPinch)
+        && (!moveEnabled || !event.ctrlKey || event.type === 'wheel')
         && !('button' in event && event.button)
     })
     .on('zoom', (event) => {
       content.attr('transform', event.transform.toString())
       setZoomLevel(Math.round(event.transform.k * 100))
+      onViewportChange({ x: event.transform.x, y: event.transform.y, k: event.transform.k })
     })
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())
   setZoomLevel(Math.round(currentTransform.k * 100))
-  if (focusedOrbitCenterId) {
-    orbitCenterHandles.filter(orbit => orbit.id === focusedOrbitCenterId).node()?.focus()
-  } else if (focusedOrbitId) {
-    orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
+  const activeAfterRedraw = element.ownerDocument.activeElement
+  const focusMayBeRestored = sceneOwnedFocus
+    && (activeAfterRedraw === element.ownerDocument.body || activeAfterRedraw === focusedElement)
+  if (focusMayBeRestored) {
+    if (focusedOrbitAxisId) {
+      orbitAxisHandles.filter(function (orbit) {
+        return orbit.id === focusedOrbitAxisId && this.getAttribute('data-resize-axis') === focusedOrbitAxisDirection
+      }).node()?.focus()
+    } else if (focusedOrbitRotationId) {
+      orbitRotationHandles.filter(orbit => orbit.id === focusedOrbitRotationId).node()?.focus()
+    } else if (focusedOrbitCenterId) {
+      orbitCenterHandles.filter(orbit => orbit.id === focusedOrbitCenterId).node()?.focus()
+    } else if (focusedOrbitId) {
+      orbitSelectors.filter(orbit => orbit.id === focusedOrbitId).node()?.focus()
+    } else if (focusedObjectId) {
+      objectMarks.filter(object => object.id === focusedObjectId).node()?.focus()
+    }
   }
 
-  return { zoomBehavior, captureOrbitRotationWheel, handleObjectDrop }
+  return {
+    zoomBehavior,
+    prepareExportClone,
+    cancelActiveGesture,
+    setObjectPlacementPreview,
+    setOrbitPlacementPreview,
+    captureOrbitRotationWheel,
+    handleObjectDrop,
+    handleCreationClick,
+    getCreationCandidates,
+  }
 }

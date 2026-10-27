@@ -1,13 +1,17 @@
-## Agent skills
+## Documentation
 
-### Issue tracker
+Write all project documentation in English.
 
-For GitHub intake or local planning, read `docs/agents/issue-tracker.md`: GitHub holds requests; local Markdown holds complex efforts under `.scratch/<feature>/`.
+## Repository baseline
 
-### Triage labels
+Before GitHub-driven analysis or implementation, fetch `origin` and compare with `origin/main`. Fast-forward outdated `main` when safe, preserving local work. Record the actual baseline in planning artifacts and identify an intentionally different base.
 
-For triage role mappings and their separation from ticket lifecycle, read `docs/agents/triage-labels.md`.
+## References
 
-### Domain docs
-
-Single-context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md` for consumer rules.
+- Development and review: the coordinator follows `.agents/skills/project-development/SKILL.md`; delegated specialists execute only their assigned scope.
+- Source changes and review: read `docs/agents/conventions.md`.
+- Editor state, commands, persistence or map integration: read `docs/architecture/editor.md`.
+- UI changes and UI review: read `docs/agents/ui.md` for component boundaries and consistency decisions.
+- GitHub intake and local planning: read `docs/agents/issue-tracker.md`.
+- Triage roles and labels: read `docs/agents/triage-labels.md`.
+- Domain changes: read `docs/agents/domain.md`, which points to the context and ADRs.

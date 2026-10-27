@@ -1,8 +1,28 @@
-import tailwindcss from '@tailwindcss/vite'
-
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-08',
   ssr: true,
+  modules: ['@nuxt/ui', '@pinia/nuxt'],
+  pinia: {
+    storesDirs: ['./stores/**'],
+  },
+  vite: {
+    // Keep the Nuxt plugin and application stores on the same Pinia SSR runtime.
+    ssr: { noExternal: ['pinia'] },
+  },
+  ui: { fonts: false },
+  colorMode: {
+    preference: 'system',
+    fallback: 'light',
+    classSuffix: '',
+    storage: 'localStorage',
+    storageKey: 'nuxt-color-mode',
+    disableTransition: true,
+  },
+  icon: {
+    provider: 'server',
+    serverBundle: { collections: ['lucide'], remote: false },
+    fallbackToApi: false,
+  },
   app: {
     head: {
       title: 'TTRPG Cluster Control',
@@ -14,9 +34,6 @@ export default defineNuxtConfig({
       inline: [/[\\/]node_modules[\\/]nuxt[\\/]dist[\\/]/],
     },
   },
-  devtools: { enabled: true },
+  devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
-  vite: {
-    plugins: [tailwindcss()],
-  },
 })

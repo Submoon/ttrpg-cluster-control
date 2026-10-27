@@ -41,6 +41,8 @@ export {
   updateCustomFieldApplicability,
   renameCustomFieldDefinition,
   updateCustomFieldOptions,
+  isCustomFieldValueCompatible,
+  updateCustomFieldType,
   removeCustomFieldDefinition,
 } from './workspace-fields'
 export {
@@ -68,6 +70,7 @@ export {
   detachOrbit,
   normalizeOrbitRotation,
 } from './workspace-orbits'
+export { captureEffectiveObjectAngles, defaultObjectOrbitAngle, updateWorkspaceObject } from './workspace-placement'
 export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'

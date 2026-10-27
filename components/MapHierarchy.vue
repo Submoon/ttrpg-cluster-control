@@ -1,11 +1,17 @@
 <template>
-  <template v-if="props.mode === 'cluster'">
+  <template v-if="store.activeView === 'cluster'">
     <div class="panel-heading flex items-center justify-between gap-[0.8rem]">
       <div>
         <span class="section-kicker">LOCAL ARCHIVE</span>
         <h2 class="mt-[0.28rem] mb-0 text-2xl">Cluster</h2>
       </div>
       <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -20,8 +26,8 @@
           class="system-link flex min-h-[2.7rem] min-w-0 flex-1 cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
           type="button"
           :aria-label="`Open ${system.name} system map`"
-          :aria-current="system.id === props.selectedSystemId ? 'page' : undefined"
-          @click="emit('select-system', system.id)"
+          :aria-current="system.id === activeSystemId ? 'page' : undefined"
+          @click="commands.navigation.selectSystem(system.id)"
         >
           <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
           <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
@@ -32,7 +38,7 @@
           :aria-label="`Delete ${system.name} system`"
           :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
           :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
-          @click="emit('delete-system', system.id)"
+          @click="commands.cluster.deleteSystem(system.id)"
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -46,16 +52,16 @@
         v-for="route in props.workspace.cluster.routes"
         :key="route.id"
         class="tree-row object-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-        :class="{ active: route.id === props.selectedRouteId }"
+        :class="{ active: route.id === store.selectedRouteId }"
         type="button"
-        :aria-label="`Select Jump Level ${route.jumpLevel}: ${props.routeSummary(route)}`"
-        :aria-current="route.id === props.selectedRouteId ? 'true' : undefined"
-        @click="emit('select-route', route.id)"
+        :aria-label="`Select Jump Level ${route.jumpLevel}: ${commands.navigation.routeSummary(route)}`"
+        :aria-current="route.id === store.selectedRouteId ? 'true' : undefined"
+        @click="commands.navigation.selectRoute(route.id)"
       >
         <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">R</span>
         <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
           Jump Level {{ route.jumpLevel }}
-          <small class="mt-[0.18rem] block">{{ props.routeSummary(route) }}</small>
+          <small class="mt-[0.18rem] block">{{ commands.navigation.routeSummary(route) }}</small>
         </span>
       </button>
     </nav>
@@ -68,51 +74,18 @@
         <h2 class="mt-[0.28rem] mb-0 text-2xl">Hierarchy</h2>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button class="quiet-button cluster-map-nav-button" type="button" aria-label="Cluster map" @click="emit('show-cluster')">
+          <button class="quiet-button cluster-map-nav-button" type="button" aria-label="Cluster map" @click="commands.navigation.showClusterMap()">
           Cluster map
         </button>
       </div>
     </div>
 
-    <details class="chart-names my-4 border-y border-[var(--line-soft)]">
-      <summary class="cursor-pointer py-[0.7rem]">Chart names</summary>
-      <form class="name-form grid gap-2 pb-[0.9rem]" @submit.prevent="emit('submit-names')">
-        <fieldset class="m-0 grid gap-2 border-0 p-0" :disabled="!props.chartNamesEditing || props.saving">
-          <label for="edit-cluster-name">Jump Cluster</label>
-          <input
-            id="edit-cluster-name"
-            v-model="clusterName"
-            maxlength="80"
-            required
-          >
-          <label for="edit-system-name">Star system</label>
-          <input
-            id="edit-system-name"
-            v-model="systemName"
-            maxlength="80"
-            required
-          >
-        </fieldset>
-        <p v-if="props.formError" class="feedback m-0 error-text" role="alert">{{ props.formError }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-if="!props.chartNamesEditing"
-            class="secondary-button mt-[0.3rem] min-h-[2.25rem] justify-center"
-            type="button"
-            aria-label="Edit chart names"
-            @click="emit('edit-chart-names')"
-          >
-            Edit
-          </button>
-          <button v-else class="primary-button mt-[0.3rem]" type="submit" aria-label="Save chart names" :disabled="props.saving">
-            Save
-          </button>
-          <button v-if="props.chartNamesEditing" class="quiet-button mt-[0.3rem]" type="button" @click="emit('cancel-chart-names')">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </details>
+    <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
+      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
+        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+      </UButton>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+    </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
@@ -120,10 +93,10 @@
         v-for="system in props.workspace.cluster.systems"
         :key="system.id"
         class="system-link flex min-h-[2.7rem] w-full cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-        :class="{ active: system.id === props.selectedSystemId }"
+        :class="{ active: system.id === activeSystemId }"
         type="button"
-        :aria-current="system.id === props.selectedSystemId ? 'page' : undefined"
-        @click="emit('select-system', system.id)"
+        :aria-current="system.id === activeSystemId ? 'page' : undefined"
+        @click="commands.navigation.selectSystem(system.id)"
       >
         <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
         <span>{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
@@ -140,29 +113,29 @@
         <button
           v-if="row.kind === 'object'"
           class="tree-row object-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-          :class="{ active: row.object.id === props.selectedObjectId }"
+          :class="{ active: row.object.id === store.selectedObjectId }"
           type="button"
           :style="{ paddingLeft: `${0.55 + row.depth * 0.8}rem` }"
           :aria-label="`Select ${row.object.locationKey}, ${row.object.name}`"
-          :aria-current="row.object.id === props.selectedObjectId ? 'true' : undefined"
-          @click="emit('select-object', row.object.id)"
+          :aria-current="row.object.id === store.selectedObjectId ? 'true' : undefined"
+          @click="commands.navigation.selectObject(row.object.id)"
         >
           <span class="key-tag">{{ row.object.locationKey }}</span>
           <span class="object-mark" aria-hidden="true">{{ objectMark(row.object) }}</span>
           <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
             {{ row.object.name }}
-            <small class="mt-[0.18rem] block">{{ row.object.family }} / {{ row.object.subtype }}</small>
+            <small class="mt-[0.18rem] block">{{ catalogueFamilyLabel(row.object.family) }} / {{ catalogueSubtypeLabel(row.object) }}</small>
           </span>
         </button>
         <button
           v-else
           class="tree-row orbit-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-          :class="{ active: row.orbit.id === props.selectedOrbitId }"
+          :class="{ active: row.orbit.id === store.selectedOrbitId }"
           type="button"
           :style="{ paddingLeft: `${0.55 + row.depth * 0.8}rem` }"
           :aria-label="`Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`"
-          :aria-current="row.orbit.id === props.selectedOrbitId ? 'true' : undefined"
-          @click="emit('select-orbit', row.orbit.id)"
+          :aria-current="row.orbit.id === store.selectedOrbitId ? 'true' : undefined"
+          @click="commands.navigation.selectOrbit(row.orbit.id)"
         >
           <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
           <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
@@ -172,7 +145,7 @@
         </button>
       </template>
     </nav>
-    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Drag Orbit from Add Object onto a map object to host it, or elsewhere on the map to place an unoccupied center. Empty Orbits stay on the chart.</p>
+    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Choose Add Orbit from Add, then click the map to place it, or drag Orbit onto a map object to host it. Empty Orbits stay on the chart.</p>
   </template>
 </template>
 
@@ -182,99 +155,31 @@
  */
 import { computed } from 'vue'
 import {
-  type JumpRoute,
   type LocalWorkspace,
-  type Orbit,
-  type StarSystem,
-  type SystemObject,
 } from '../domain/workspace'
 import { objectMark } from '../utils/catalogue-marks'
-
-type ObjectRow = { kind: 'object'; object: SystemObject; depth: number }
-type OrbitRow = { kind: 'orbit'; orbit: Orbit; host: SystemObject | null; childCount: number; depth: number }
-type HierarchyRow = ObjectRow | OrbitRow
+import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../utils/catalogue-labels'
+import { buildMapHierarchy } from '../utils/map-hierarchy'
+import { useEditorUiStore } from '../stores/editor-ui'
+import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 
 const props = defineProps<{
-  mode: 'cluster' | 'system'
   workspace: LocalWorkspace
-  selectedSystemId: string | null
-  selectedObjectId: string | null
-  selectedOrbitId: string | null
-  selectedRouteId: string | null
-  chartNamesEditing: boolean
+  hasChartNameDraft: boolean
   saving: boolean
-  formError: string
-  routeSummary: (route: JumpRoute) => string
 }>()
 
-const emit = defineEmits<{
-  'select-system': [systemId: string]
-  'delete-system': [systemId: string]
-  'select-object': [objectId: string]
-  'select-orbit': [orbitId: string]
-  'select-route': [routeId: string]
-  'submit-names': []
-  'edit-chart-names': []
-  'cancel-chart-names': []
-  'show-cluster': []
-}>()
-
-const clusterName = defineModel<string>('clusterName', { required: true })
-const systemName = defineModel<string>('systemName', { required: true })
+const store = useEditorUiStore()
+const commands = useEditorCommands()
+const activeSystemId = computed(() => store.activeView === 'cluster'
+  ? store.clusterSelectedSystemId
+  : store.selectedSystemId)
 
 const selectedSystem = computed(() =>
-  props.workspace.cluster.systems.find(system => system.id === props.selectedSystemId),
+  props.workspace.cluster.systems.find(system => system.id === activeSystemId.value),
 )
 
-/**
- * Flattens unoccupied Orbits and system-level objects into depth-first rows of their nested children.
- * Orbit siblings are ordered by their stored order; root objects retain system.objects order.
- * Expects the acyclic host/placement relationships enforced by workspace validation.
- * @param system Current selected system, if any.
- * @returns Display rows with host, child-count, and indentation metadata; empty when no system is selected.
- */
-function buildHierarchy(system: StarSystem | undefined): HierarchyRow[] {
-  if (!system) return []
-
-  const rows: HierarchyRow[] = []
-  const orbitsByHost = new Map<string | null, Orbit[]>()
-  const objectsByOrbit = new Map<string, SystemObject[]>()
-  for (const orbit of system.orbits) {
-    const hosted = orbitsByHost.get(orbit.hostId) ?? []
-    hosted.push(orbit)
-    orbitsByHost.set(orbit.hostId, hosted)
-  }
-  for (const object of system.objects) {
-    if (object.placement.kind === 'orbit') {
-      const children = objectsByOrbit.get(object.placement.orbitId) ?? []
-      children.push(object)
-      objectsByOrbit.set(object.placement.orbitId, children)
-    }
-  }
-
-  function addOrbitBranch(orbit: Orbit, host: SystemObject | null, depth: number): void {
-    const children = objectsByOrbit.get(orbit.id) ?? []
-    rows.push({ kind: 'orbit', orbit, host, childCount: children.length, depth })
-    for (const child of children) addObjectBranch(child, depth + 1)
-  }
-
-  function addObjectBranch(object: SystemObject, depth: number): void {
-    rows.push({ kind: 'object', object, depth })
-    const hostedOrbits = orbitsByHost.get(object.id) ?? []
-    hostedOrbits.sort((left, right) => left.order - right.order)
-    for (const orbit of hostedOrbits) addOrbitBranch(orbit, object, depth + 1)
-  }
-
-  const unhostedOrbits = orbitsByHost.get(null) ?? []
-  unhostedOrbits.sort((left, right) => left.order - right.order)
-  for (const orbit of unhostedOrbits) addOrbitBranch(orbit, null, 0)
-  for (const object of system.objects) {
-    if (object.placement.kind === 'system') addObjectBranch(object, 0)
-  }
-  return rows
-}
-
-const hierarchyRows = computed(() => buildHierarchy(selectedSystem.value))
+const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
 </script>
 
 <style>

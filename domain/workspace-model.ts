@@ -225,6 +225,14 @@ export interface MapDeletionPlan {
   workspace: LocalWorkspace
   entityLabel: string
   affectedEntities: string[]
+  removedSystemIds: string[]
+  removedObjectIds: string[]
+  removedOrbitIds: string[]
+  removedRouteIds: string[]
+  clearedStationLinks: Array<{ objectId: string; stationId: string }>
+  reorderedOrbits: Array<{ orbitId: string; label: string; fromOrder: number; toOrder: number }>
+  /** Stable description of semantic consequences; excludes unrelated workspace edits. */
+  effectSignature: string
 }
 
 /** Creates the built-in field options with no custom definitions. */

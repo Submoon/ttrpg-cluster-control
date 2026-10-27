@@ -1,10 +1,16 @@
 <template>
-  <nav class="field-definition-list" aria-label="Field definitions">
+  <nav
+    class="field-definition-list"
+    aria-label="Field definitions"
+    @scroll="emit('position-change')"
+    @focusin="emit('position-change')"
+  >
     <section>
       <h3>Native fields</h3>
       <button
         v-for="field in props.nativeFields"
         :key="field.id"
+        :data-field-id="field.id"
         class="field-definition-choice"
         type="button"
         :aria-pressed="props.selectedFieldId === field.id"
@@ -16,19 +22,11 @@
       </button>
     </section>
     <section>
-      <div class="field-definition-list-heading">
-        <h3>Custom fields</h3>
-        <button
-          class="quiet-button field-definition-add"
-          type="button"
-          @click="emit('create-custom-field')"
-        >
-          New custom field
-        </button>
-      </div>
+      <h3>Custom fields</h3>
       <button
         v-for="field in props.customFields"
         :key="field.id"
+        :data-field-id="field.id"
         class="field-definition-choice"
         type="button"
         :aria-pressed="props.selectedFieldId === field.id"
@@ -60,7 +58,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [fieldId: string]
-  'create-custom-field': []
+  'position-change': []
 }>()
 </script>
 
@@ -79,24 +77,6 @@ const emit = defineEmits<{
   font-size: 0.6rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.field-definition-list-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.45rem;
-}
-
-.field-definition-list-heading h3 {
-  margin: 0;
-}
-
-.field-definition-add {
-  min-height: 1.8rem;
-  padding: 0.25rem 0.45rem;
-  font-size: 0.62rem;
 }
 
 .field-definition-choice {

@@ -1,8 +1,26 @@
 import { expect } from '@playwright/test'
 
+/** Returns the visible page-level or compact-panel workspace feedback owner. */
+export function activeWorkspaceFeedback(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.locator('.workspace-feedback:not([inert]), .workspace-compact-recovery')
+}
+
 export type WorldPoint = { x: number; y: number }
 
 export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+
+/** Captures real map export blobs so assertions can inspect their serialized contents. */
+export async function captureMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+}
 
 export type ExportedObject = {
   id: string
@@ -10,7 +28,10 @@ export type ExportedObject = {
   family: string
   subtype: string
   locationKey: string
+  description: string
   placement: { kind: 'system'; x: number; y: number } | { kind: 'orbit'; orbitId: string }
+  atmosphere?: string
+  portClass?: string
   jumpStationId?: string | null
   customFieldValues?: Record<string, string | number | boolean>
 }
@@ -62,13 +83,106 @@ export type ExportedMap = {
   }
 }
 
-export async function dragToWorldPoint(
+type ScreenPoint = { x: number; y: number }
+
+async function worldPointOnScreen(
+  map: import('@playwright/test').Locator,
+  point: WorldPoint,
+): Promise<ScreenPoint> {
+  return map.evaluate((element, target) => {
+    const content = element.querySelector<SVGGElement>('.system-map-content')
+    const transform = content?.getScreenCTM()
+    if (!transform) throw new Error('The system map content is not attached to the document.')
+    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
+    return { x: screenPoint.x, y: screenPoint.y }
+  }, point)
+}
+
+/** Recovers a measured native drag through public Fit and bounded Zoom out controls. */
+export async function ensureMapDragPointsReachable(
   page: import('@playwright/test').Page,
   map: import('@playwright/test').Locator,
   source: import('@playwright/test').Locator,
   point: WorldPoint,
 ): Promise<void> {
-  await beginDragToWorldPoint(page, map, source, point)
+  const sourceCount = await source.count()
+  if (sourceCount === 0) {
+    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true })
+    await expect(addToggle).toBeVisible()
+    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
+    await expect(source).toBeVisible()
+  }
+  const paletteSource = await source.getAttribute('draggable') === 'true'
+  const ensureSourceVisible = async (): Promise<void> => {
+    if (!paletteSource) return
+    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true })
+    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
+    await expect(source).toBeVisible()
+    await source.scrollIntoViewIfNeeded()
+  }
+  const closeChooserBeforeCameraChange = async (): Promise<void> => {
+    if (!paletteSource) return
+    await dismissAddChooser(page)
+  }
+  await ensureSourceVisible()
+  await source.scrollIntoViewIfNeeded()
+
+  const isReachable = async (): Promise<boolean> => {
+    await ensureSourceVisible()
+    const sourceBox = await source.boundingBox()
+    if (!sourceBox) throw new Error('Could not find the map element to drag.')
+    const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 }
+    const end = await worldPointOnScreen(map, point)
+    const sourceReachable = await source.evaluate((element, point) => {
+      const hit = document.elementFromPoint(point.x, point.y)
+      return point.x >= 0 && point.y >= 0
+        && point.x < window.innerWidth && point.y < window.innerHeight
+        && !!hit && (hit === element || element.contains(hit))
+    }, start)
+    const targetReachable = await map.evaluate((element, point) => {
+      const bounds = element.getBoundingClientRect()
+      const hit = document.elementFromPoint(point.x, point.y)
+      return point.x >= Math.max(0, bounds.left) && point.y >= Math.max(0, bounds.top)
+        && point.x < Math.min(window.innerWidth, bounds.right)
+        && point.y < Math.min(window.innerHeight, bounds.bottom)
+        && !!hit && (hit === element || element.contains(hit))
+    }, end)
+    return sourceReachable && targetReachable
+  }
+
+  const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
+  if (await isReachable()) return
+
+  await closeChooserBeforeCameraChange()
+  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+  if (initialZoom === '25%') {
+    await closeChooserBeforeCameraChange()
+    await zoomOutMapToMinimum(page)
+    if (!(await isReachable())) {
+      throw new Error('Map drag points are unreachable at the required 25% zoom after Fit.')
+    }
+    return
+  }
+
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    if (await isReachable()) return
+    await closeChooserBeforeCameraChange()
+    if (await zoomOut.isDisabled()) break
+    await zoomOut.click()
+  }
+
+  throw new Error('Map drag points are still unreachable after public Fit and bounded Zoom out recovery.')
+}
+
+export async function dragToWorldPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  source: import('@playwright/test').Locator,
+  point: WorldPoint,
+  roundEndpoint = false,
+): Promise<void> {
+  await beginDragToWorldPoint(page, map, source, point, roundEndpoint)
   await page.mouse.up()
 }
 
@@ -77,17 +191,16 @@ export async function beginDragToWorldPoint(
   map: import('@playwright/test').Locator,
   source: import('@playwright/test').Locator,
   point: WorldPoint,
+  roundEndpoint = false,
 ): Promise<void> {
+  await dismissAddChooser(page)
+  await setWorkspaceMapMode(page, 'Move')
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
-
-  const destination = await map.evaluate((element, target) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!transform) throw new Error('The system map content is not attached to the document.')
-    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
-    return { x: screenPoint.x, y: screenPoint.y }
-  }, point)
+  const screenPoint = await worldPointOnScreen(map, point)
+  const destination = roundEndpoint
+    ? { x: Math.round(screenPoint.x), y: Math.round(screenPoint.y) }
+    : screenPoint
 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
@@ -101,25 +214,19 @@ export async function dragHtmlElementToWorldPoint(
   point: WorldPoint,
   duringDrag?: () => Promise<void>,
 ): Promise<void> {
+  if (!(await source.isVisible())) {
+    await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  }
   await source.scrollIntoViewIfNeeded()
   await map.scrollIntoViewIfNeeded()
   const sourceBounds = await source.boundingBox()
   const bounds = await map.boundingBox()
   if (!sourceBounds || !bounds) throw new Error('Could not find the map or palette object to drag.')
 
-  const destination = await map.evaluate((element, target) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!transform) throw new Error('The system map content is not attached to the document.')
-    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
-    return { x: screenPoint.x - target.boundsX, y: screenPoint.y - target.boundsY }
-  }, { x: point.x, y: point.y, boundsX: bounds.x, boundsY: bounds.y })
-  await page.mouse.move(
-    sourceBounds.x + sourceBounds.width / 2,
-    sourceBounds.y + sourceBounds.height / 2,
-  )
+  const destination = await worldPointOnScreen(map, point)
+  await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2)
   await page.mouse.down()
-  await page.mouse.move(bounds.x + destination.x, bounds.y + destination.y, { steps: 12 })
+  await page.mouse.move(destination.x, destination.y, { steps: 12 })
   if (duringDrag) await duringDrag()
   await page.mouse.up()
 }
@@ -130,6 +237,8 @@ export async function dragOrbitToWorldPoint(
   point: WorldPoint,
   startAngle = 0,
 ): Promise<void> {
+  await dismissAddChooser(page)
+  await setWorkspaceMapMode(page, 'Move')
   await orbit.scrollIntoViewIfNeeded()
   const coordinates = await orbit.evaluate((element, target) => {
     const shape = element as SVGCircleElement | SVGEllipseElement
@@ -159,6 +268,7 @@ export async function panMap(
   map: import('@playwright/test').Locator,
   delta: WorldPoint,
 ): Promise<void> {
+  await dismissAddChooser(page)
   await map.scrollIntoViewIfNeeded()
   const start = await map.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
@@ -179,6 +289,10 @@ export async function dragBy(
   const sourceBox = await source.boundingBox()
   if (!sourceBox) throw new Error('Could not find the map element to drag.')
 
+  // Capture the source while its Navigate-mode accessible name is still current.
+  // Switching to Move changes map-entity labels to their Select action names.
+  await dismissAddChooser(page)
+  await setWorkspaceMapMode(page, 'Move')
   const x = sourceBox.x + sourceBox.width / 2
   const y = sourceBox.y + sourceBox.height / 2
   await page.mouse.move(x, y)
@@ -191,9 +305,292 @@ export async function setHeaderMapActionsOpen(
   page: import('@playwright/test').Page,
   open: boolean,
 ): Promise<void> {
-  const toggle = page.locator('.header-map-actions-toggle')
+  const toggle = page.getByRole('button', { name: 'Map files', exact: true })
+  await expect(toggle).toBeVisible()
   const isOpen = await toggle.getAttribute('aria-expanded') === 'true'
-  if (isOpen !== open) await toggle.click()
+  if (isOpen !== open) {
+    await dismissAddChooser(page)
+    await toggle.click()
+  }
+}
+
+/** Finds the shared Dock containing map interaction modes and Add. */
+export function workspaceNavigation(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('toolbar', { name: 'Workspace navigation' })
+}
+
+/** Finds the separate bottom-right map zoom controls. */
+export function workspaceZoomControls(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('toolbar', { name: 'Map zoom controls' })
+}
+
+export function workspaceZoomOutput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return workspaceZoomControls(page).locator('output').first()
+}
+
+export type SingleSystemWorkspaceOptions = {
+  clusterName?: string
+  systemName?: string
+  viewport?: { width: number; height: number }
+}
+
+/** Creates a fresh one-system workspace and leaves its system map ready for interaction. */
+export async function createSingleSystemWorkspace(
+  page: import('@playwright/test').Page,
+  options: SingleSystemWorkspaceOptions = {},
+): Promise<{ clusterName: string; systemName: string }> {
+  const clusterName = options.clusterName ?? 'Kestrel Reach'
+  const systemName = options.systemName ?? 'Vesper'
+  if (options.viewport) await page.setViewportSize(options.viewport)
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
+  await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
+  await page.getByLabel('First star system', { exact: true }).fill(systemName)
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+
+  await returnToClusterMap(page)
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
+  const systemEntry = systems.getByRole('button', { name: /^Open .* system map$/ })
+  await expect(systemEntry).toHaveCount(1)
+  await expect(systemEntry).toHaveAccessibleName(`Open ${systemName} system map`)
+  await systemEntry.click()
+  const compactHierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await compactHierarchyClose.isVisible().catch(() => false)) await compactHierarchyClose.click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+
+  for (const panel of ['hierarchy', 'inspector'] as const) {
+    const compactClose = page.getByRole('button', { name: `Close ${panel} panel`, exact: true })
+    if (await compactClose.isVisible().catch(() => false)) {
+      await compactClose.click()
+      continue
+    }
+
+    const toggleName = panel === 'hierarchy' ? 'Hierarchy' : 'Inspect'
+    const toggle = page.getByRole('button', { name: toggleName, exact: true })
+    if (await toggle.isVisible().catch(() => false) && await toggle.getAttribute('aria-expanded') === 'true') {
+      await toggle.click()
+    }
+  }
+
+  await expect(page.getByRole('group', { name: 'Map interaction mode' })
+    .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  return { clusterName, systemName }
+}
+
+/** Reaches the public minimum zoom without assuming a particular starting level. */
+export async function zoomOutMapToMinimum(page: import('@playwright/test').Page): Promise<void> {
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  if (!(await zoomOut.isDisabled())) await dismissAddChooser(page)
+  for (let step = 0; step < 64 && !(await zoomOut.isDisabled()); step += 1) {
+    await zoomOut.click()
+  }
+  await expect(workspaceZoomOutput(page)).toHaveText('25%')
+}
+
+/** Opens the compact popover that contains the zoom slider and named pan controls. */
+export async function openWorkspaceZoomNavigation(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  const toggle = workspaceZoomControls(page).getByRole('button', { name: 'Open map navigation controls' })
+  await dismissAddChooser(page)
+  if (await toggle.getAttribute('aria-expanded') !== 'true') {
+    await toggle.click()
+  }
+  const controls = page.getByRole('group', { name: 'Map zoom' })
+  await expect(controls).toBeVisible()
+  return controls
+}
+
+/** Opens Hierarchy through its public Map chrome control when a test needs its contents. */
+export async function openWorkspaceHierarchy(
+  page: import('@playwright/test').Page,
+  name: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
+): Promise<import('@playwright/test').Locator> {
+  const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  await expect(toggle).toBeVisible()
+  await dismissAddChooser(page)
+  if (await toggle.getAttribute('aria-expanded') !== 'true') {
+    await toggle.click()
+  }
+  const desktopHierarchy = page.getByRole('complementary', { name, exact: true })
+  const compactHierarchy = page.getByRole('dialog', { name, exact: true })
+  await expect.poll(async () =>
+    await desktopHierarchy.isVisible() || await compactHierarchy.isVisible(),
+  ).toBe(true)
+  return await compactHierarchy.isVisible() ? compactHierarchy : desktopHierarchy
+}
+
+/** Shows the consultation summary in the inspector without changing map selection. */
+export async function openChartDetails(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  await expect(inspectToggle).toBeVisible()
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
+  await expect(chartDetails).toBeVisible()
+  if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
+  return page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+}
+
+/** Selects a map interaction mode through the shared Dock before a map gesture. */
+export async function setWorkspaceMapMode(
+  page: import('@playwright/test').Page,
+  mode: 'Navigate' | 'Select' | 'Move',
+): Promise<void> {
+  const button = workspaceNavigation(page).getByRole('button', { name: mode, exact: true })
+  if (await button.getAttribute('aria-pressed') !== 'true') {
+    await dismissAddChooser(page)
+    await button.click()
+  }
+}
+
+/** Returns to the cluster through the real compact-context Back control. */
+export async function returnToClusterMap(page: import('@playwright/test').Page): Promise<void> {
+  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  await expect(context).toBeVisible()
+  const contextKind = context.locator('.workspace-map-context > span')
+  await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
+  const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  if (await back.isVisible()) {
+    await dismissAddChooser(page)
+    await back.click()
+  } else {
+    await expect(contextKind).toHaveText('Jump Cluster')
+  }
+  await expect(contextKind).toHaveText('Jump Cluster')
+}
+
+/** Reveals the Dock's legacy action popover only when its requested command is not already visible. */
+export async function dockAction(
+  page: import('@playwright/test').Page,
+  name: string,
+): Promise<import('@playwright/test').Locator> {
+  const toggle = page.getByRole('button', { name: 'Add to map', exact: true })
+  await expect(toggle).toBeVisible()
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+  const actions = page.getByRole('group', { name: 'Add to map', exact: true })
+  await expect(actions).toBeVisible()
+  const action = actions.getByRole('button', { name, exact: true })
+  await expect(action).toBeVisible()
+  return action
+}
+
+export async function clickDockAction(
+  page: import('@playwright/test').Page,
+  name: string,
+  options: OrbitCreationOptions = {},
+): Promise<void> {
+  await (await dockAction(page, name)).click()
+  await dismissAddChooser(page)
+
+  if (name === 'Add orbit') await completeOrbitCreation(page, options)
+}
+
+/** Creates a cluster system through its public placement controls and optionally enters it. */
+export async function addClusterSystem(
+  page: import('@playwright/test').Page,
+  options: { open?: boolean; position?: WorldPoint } = {},
+): Promise<string | undefined> {
+  const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
+  const existingSystemNames = options.open
+    ? await Promise.all((await clusterMap.locator('.cluster-system-node').all()).map(async button => {
+      const label = await button.getAttribute('aria-label')
+      const match = label?.match(/^(?:Select (.+) system|Open (.+) system map)$/)
+      const systemName = match?.[1] ?? match?.[2]
+      if (!systemName) throw new Error(`Could not read a system name from "${label}".`)
+      return systemName
+    }))
+    : []
+
+  await clickDockAction(page, 'Add star system')
+
+  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const position = options.position ?? { x: 0.75, y: 0.75 }
+  await page.getByLabel('System position X', { exact: true }).fill(String(position.x))
+  await page.getByLabel('System position Y', { exact: true }).fill(String(position.y))
+  await page.getByRole('form', { name: 'System placement coordinates', exact: true })
+    .getByRole('button', { name: 'Add at coordinates', exact: true }).click()
+  await quitSystemAdd(page)
+
+  if (!options.open) return undefined
+
+  await setWorkspaceMapMode(page, 'Navigate')
+  await expect(clusterMap).toBeVisible()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  const existingSystemActions = clusterMap.getByRole('button', { name: /^Open .* system map$/ })
+  await expect(existingSystemActions).toHaveCount(existingSystemNames.length + 1)
+  const currentSystemActions = await existingSystemActions.all()
+  let createdAction: import('@playwright/test').Locator | undefined
+  let createdLabel: string | null = null
+  for (const action of currentSystemActions) {
+    const label = await action.getAttribute('aria-label')
+    const systemName = label?.match(/^Open (.+) system map$/)?.[1]
+    if (systemName && !existingSystemNames.includes(systemName)) {
+      createdAction = action
+      createdLabel = label
+      break
+    }
+  }
+  if (!createdAction || !createdLabel) throw new Error('The cluster map does not expose the newly added system.')
+
+  const systemName = createdLabel.match(/^Open (.+) system map$/)?.[1]
+  if (!systemName) throw new Error(`Could not read the new system name from "${createdLabel}".`)
+  await createdAction.click()
+  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+  return systemName
+}
+
+async function dismissAddChooser(page: import('@playwright/test').Page): Promise<void> {
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') {
+    // Its outside-dismiss capture consumes the first pointer gesture on another control.
+    // Dismiss only the chooser; Add remains armed until Confirm or Quit Add.
+    await page.keyboard.press('Escape')
+    await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
+  }
+}
+
+export function jsonMapImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByLabel('Import map JSON')
+}
+
+/** Returns the public review dialog for a prepared destructive change. */
+export function deletionReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('dialog', { name: 'Review deletion', exact: true })
+}
+
+/** Returns the public review dialog for a validated independent JSON import. */
+export function importReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('dialog', { name: 'Review import', exact: true })
+}
+
+/** Resolves a deletion review through its visible action. Read its summary before calling this helper. */
+export async function resolveDeletionReview(
+  review: import('@playwright/test').Locator,
+  choice: 'confirm' | 'cancel',
+): Promise<void> {
+  await expect(review).toBeVisible()
+  await review.getByRole('button', {
+    name: choice === 'confirm' ? 'Confirm deletion' : 'Cancel deletion',
+    exact: true,
+  }).click()
+}
+
+/** Resolves an import review through its visible action. Read its summary before calling this helper. */
+export async function resolveImportReview(
+  review: import('@playwright/test').Locator,
+  choice: 'confirm' | 'cancel',
+): Promise<void> {
+  await expect(review).toBeVisible()
+  await review.getByRole('button', {
+    name: choice === 'confirm' ? 'Import independent copy' : 'Cancel import',
+    exact: true,
+  }).click()
 }
 
 export async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
@@ -225,11 +622,58 @@ export async function editFieldDefinition(dialog: import('@playwright/test').Loc
 }
 
 export async function editMapObject(page: import('@playwright/test').Page): Promise<void> {
-  await page.getByRole('button', { name: 'Edit map object' }).click()
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') {
+    await addToggle.click()
+    await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
+  }
+  const edit = page.getByRole('button', { name: 'Edit map object', exact: true })
+  const apply = page.getByRole('button', { name: /^Apply changes/ })
+  await expect(edit.or(apply)).toBeVisible()
+  if (await edit.isVisible()) await edit.click()
+  else await expect(apply).toBeVisible()
 }
 
 export async function saveMapObject(page: import('@playwright/test').Page): Promise<void> {
   await page.getByRole('button', { name: 'Save map object' }).click()
+}
+
+export type InspectorSelectionOption = string | { label: string | RegExp; value?: string }
+
+/** Selects through the Inspector's public semantic control, whether a legacy native select or Nuxt UI Select. */
+export async function selectInspectorOption(
+  control: import('@playwright/test').Locator,
+  option: InspectorSelectionOption,
+): Promise<void> {
+  const tagName = await control.evaluate(element => element.tagName)
+  if (tagName === 'SELECT') {
+    if (typeof option === 'string') {
+      await control.selectOption(option)
+    } else if (option.value !== undefined) {
+      await control.selectOption(option.value)
+    } else if (typeof option.label === 'string') {
+      await control.selectOption({ label: option.label })
+    } else {
+      throw new Error('Native select options need a string label or value.')
+    }
+    return
+  }
+
+  const label = typeof option === 'string' ? option : option.label
+  await control.click()
+  const optionControl = control.page().getByRole('option', { name: label, exact: typeof label === 'string' })
+  await expect(optionControl).toBeVisible()
+  await optionControl.click()
+}
+
+/** Reads the current Inspector selection from its visible value label, preserving USelect semantics. */
+export async function readInspectorSelection(control: import('@playwright/test').Locator): Promise<string> {
+  const tagName = await control.evaluate(element => element.tagName)
+  if (tagName === 'SELECT') return control.inputValue()
+
+  const selectedValue = control.locator('[data-slot="value"]')
+  if (await selectedValue.count()) return (await selectedValue.innerText()).trim()
+  return ''
 }
 
 export async function addCustomFieldThroughDialog(
@@ -241,7 +685,13 @@ export async function addCustomFieldThroughDialog(
   const dialog = await openFieldDefinitionDialog(page)
   await dialog.getByRole('button', { name: 'New custom field' }).click()
   await dialog.getByLabel('Custom field label').fill(name)
-  await dialog.getByLabel('Value type').selectOption(type)
+  const typeLabel = ({
+    text: 'Text',
+    number: 'Number',
+    boolean: 'Boolean',
+    'single-select': 'Single-select',
+  } as Record<string, string>)[type] ?? type
+  await selectInspectorOption(dialog.getByLabel('Value type'), typeLabel)
   if (options !== undefined) {
     await dialog.getByLabel('New field choices').fill(options)
   }
@@ -384,6 +834,7 @@ export async function setJsonFile(
   name: string,
   content: string,
 ): Promise<void> {
+  await setHeaderMapActionsOpen(input.page(), true)
   await input.evaluate((element, file) => {
     const input = element as HTMLInputElement
     const transfer = new DataTransfer()
@@ -429,14 +880,43 @@ export const objectPaletteCategoryBySubtype: Record<typeof catalogueSubtypes[num
   other: 'Other',
 }
 
+export type CatalogueCreationTarget =
+  | { kind: 'free'; x: number; y: number }
+  | { kind: 'orbit'; label: string; angleDegrees?: number }
+
+export type CatalogueCreationOptions = {
+  target?: CatalogueCreationTarget
+  preserveDraft?: boolean
+  noSelection?: boolean
+  typeLabel?: string
+}
+
+export type OrbitCreationTarget =
+  | { kind: 'center'; x: number; y: number }
+  | { kind: 'host'; name: string }
+
+export type OrbitCreationOptions = {
+  target?: OrbitCreationTarget
+  preserveDraft?: boolean
+  noSelection?: boolean
+}
+
 export async function selectCatalogueObjectButton(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
 ): Promise<import('@playwright/test').Locator> {
+  // The modal Add popover aria-hides its trigger while open, so keep this locator stable
+  // for the expanded-state assertion after opening it.
+  const addMenu = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  const palette = page.getByRole('region', { name: 'Object palette' })
+  if (await addMenu.getAttribute('aria-expanded') !== 'true') {
+    await addMenu.click()
+  }
+  await expect(addMenu).toHaveAttribute('aria-expanded', 'true')
+  await expect(palette).toBeVisible()
   const label = subtype.split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
-  const palette = page.getByRole('region', { name: 'Object palette' })
   const category = objectPaletteCategoryBySubtype[subtype]
   await palette.getByRole('group', { name: 'Object categories' })
     .getByRole('button', { name: category, exact: true })
@@ -448,6 +928,151 @@ export async function selectCatalogueObjectButton(
 export async function addCatalogueObject(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
+  options: CatalogueCreationOptions = {},
 ): Promise<void> {
   await (await selectCatalogueObjectButton(page, subtype)).click()
+  await completeCatalogueObjectCreation(page, subtype, options)
+}
+
+/** Completes an already armed catalogue type through its public Placement Add action. */
+export async function completeCatalogueObjectCreation(
+  page: import('@playwright/test').Page,
+  subtype: typeof catalogueSubtypes[number],
+  options: CatalogueCreationOptions = {},
+): Promise<void> {
+  const subtypeLabel = subtype.split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+  const controls = page.getByRole('group', { name: `${subtypeLabel} creation controls` })
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+
+  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const target = options.target ?? await defaultCatalogueCreationTarget(page, map, options)
+  if (subtype === 'other') {
+    await page.getByLabel('Type label', { exact: true }).fill(options.typeLabel ?? 'Other object')
+  }
+
+  if (target.kind === 'orbit') {
+    await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), target.label)
+    await page.getByLabel('Angle (degrees)', { exact: true }).fill(String(target.angleDegrees ?? 0))
+  } else {
+    await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
+    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
+    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+  }
+
+  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await quitSystemAdd(page)
+
+  if (!options.noSelection && !options.preserveDraft) {
+    const hierarchy = await openWorkspaceHierarchy(page)
+    const generatedType = subtype.toLowerCase() === 'jump-point' ? 'jump point' : subtype
+    const createdObject = hierarchy.getByRole('button', { name: new RegExp(`New ${escapeRegExp(generatedType)}`, 'i') }).last()
+    await expect(createdObject).toBeVisible()
+    await createdObject.click()
+  }
+}
+
+async function defaultCatalogueCreationTarget(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  options: CatalogueCreationOptions,
+): Promise<CatalogueCreationTarget> {
+  if (options.preserveDraft || options.noSelection) return { kind: 'free', ...await nextFreeSystemPoint(map) }
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  if (await hierarchy.count() > 0) {
+    const selected = hierarchy.locator('button[aria-current="true"]')
+    if (await selected.count() > 0) {
+      const selectedLabel = await selected.first().getAttribute('aria-label') ?? await selected.first().innerText()
+      const orbitLabel = selectedLabel.replace(/\s+/g, ' ').match(/Orbit \d+ around .+?(?=, \d+ objects?$|$)/i)?.[0]
+      if (orbitLabel) return { kind: 'orbit', label: orbitLabel }
+    }
+  }
+
+  return { kind: 'free', ...await nextFreeSystemPoint(map) }
+}
+
+async function nextFreeSystemPoint(map: import('@playwright/test').Locator): Promise<WorldPoint> {
+  const objectCount = await map.locator('.system-object').count()
+  const gridIndex = Math.max(0, objectCount - 1) % 16
+  return {
+    x: ((gridIndex % 4) + 1) / 5,
+    y: (Math.floor(gridIndex / 4) + 1) / 5,
+  }
+}
+
+/** Creates an Orbit through its public Placement Add action and optionally inspects it from Hierarchy. */
+export async function completeOrbitCreation(
+  page: import('@playwright/test').Page,
+  options: OrbitCreationOptions = {},
+): Promise<void> {
+  const controls = page.getByRole('group', { name: 'Orbit creation controls' })
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+
+  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const target = options.target ?? await defaultOrbitCreationTarget(page, map, options)
+  const targetControl = page.getByLabel('Orbit center or host', { exact: true })
+  if (target.kind === 'host') {
+    await selectInspectorOption(targetControl, `Around ${target.name}`)
+  } else {
+    await selectInspectorOption(targetControl, 'Unoccupied center')
+    await page.getByLabel('Placement X', { exact: true }).fill(String(target.x))
+    await page.getByLabel('Placement Y', { exact: true }).fill(String(target.y))
+  }
+
+  const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
+  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await quitSystemAdd(page)
+
+  if (!options.noSelection && !options.preserveDraft) {
+    const hierarchy = await openWorkspaceHierarchy(page)
+    const hostLabel = target.kind === 'host' ? target.name : 'unoccupied center'
+    const createdOrbit = hierarchy.getByRole('button', {
+      name: new RegExp(`^Orbit \\d+ around ${escapeRegExp(hostLabel)}`, 'i'),
+    }).last()
+    await expect(createdOrbit).toBeVisible()
+    await createdOrbit.click()
+  }
+}
+
+async function defaultOrbitCreationTarget(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  options: OrbitCreationOptions,
+): Promise<OrbitCreationTarget> {
+  if (options.preserveDraft || options.noSelection) return { kind: 'center', x: 0.25, y: 0.25 }
+
+  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  if (await hierarchy.count() > 0) {
+    const selected = hierarchy.locator('button[aria-current="true"]')
+    if (await selected.count() > 0) {
+      const selectedLabel = (await selected.first().getAttribute('aria-label') ?? await selected.first().innerText())
+        .replace(/\s+/g, ' ')
+      const orbitHost = selectedLabel.match(/Orbit \d+ around (.+?)(?=, \d+ objects?$|$)/i)?.[1]
+      if (orbitHost && !/^unoccupied center$/i.test(orbitHost)) return { kind: 'host', name: orbitHost }
+
+      const objectName = selectedLabel.match(/^Select [^,]+,\s*(.+?)(?:\s+\([^)]*\))?$/i)?.[1]
+      if (objectName) return { kind: 'host', name: objectName }
+    }
+  }
+
+  return { kind: 'center', ...await nextFreeSystemPoint(map) }
+}
+
+export async function quitSystemAdd(page: import('@playwright/test').Page): Promise<void> {
+  await dismissAddChooser(page)
+  const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+  const quit = context.getByRole('button', { name: 'Quit Add and return to Select', exact: true })
+  await expect(quit).toBeVisible()
+  await quit.click()
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
