@@ -1,5 +1,5 @@
 /** Owns precise, single-use placement previews for existing system objects. */
-import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import {
   canPlaceObjectInOrbit,
   defaultObjectOrbitAngle,
@@ -47,6 +47,18 @@ interface CurrentObject {
 
 interface PreparedPlacementBaseline {
   fingerprint: string
+}
+
+interface PlacementInputValues {
+  destination: string
+  position: string
+  x: string
+  y: string
+}
+
+interface PlacementInputBaseline {
+  objectIdentity: string
+  values: PlacementInputValues
 }
 
 function geometryForWorkspace(workspace: LocalWorkspace): SystemMapGeometry {
@@ -210,6 +222,7 @@ export function useSystemObjectPlacement({
   const nextPreviewToken = ref(0)
   let pendingConfirmationToken: number | null = null
   let ownerKey = ''
+  const inputBaseline = shallowRef<PlacementInputBaseline | null>(null)
   let preparedBaseline: PreparedPlacementBaseline | null = null
   let candidateBaselines = new Map<string, string>()
 
@@ -243,6 +256,14 @@ export function useSystemObjectPlacement({
     && !creationActive.value
     && currentObject() !== null)
 
+  const hasPendingHistoryInput = computed(() => {
+    const current = currentObject()
+    if (!current) return false
+    const baseline = inputBaseline.value
+    return !baseline || baseline.objectIdentity !== objectIdentityKeyFor(current)
+      || !placementInputValuesEqual(readPlacementInputValues(), baseline.values)
+  })
+
   const systemObjectMoveDestinationOptions = computed<SystemObjectMoveDestinationOption[]>(() => {
     const current = currentObject()
     const orbits = current
@@ -256,12 +277,46 @@ export function useSystemObjectPlacement({
     ]
   })
 
+  function objectIdentityKeyFor(current: CurrentObject | null): string {
+    if (!current) return ''
+    return `${current.workspace.cluster.id}:${current.system.id}:${current.object.id}`
+  }
+
   function ownerKeyFor(current: CurrentObject | null): string {
     if (!current) return ''
     const placement = current.object.placement.kind === 'orbit'
-      ? `orbit:${current.object.placement.orbitId}`
+      ? `orbit:${current.object.placement.orbitId}:${effectiveObjectAngle(current.workspace, current.system, current.object)}`
       : `system:${current.object.placement.x}:${current.object.placement.y}`
-    return `${current.workspace.cluster.id}:${current.system.id}:${current.object.id}:${placement}`
+    let currentPoint = ''
+    try {
+      const point = freePointForObject(current)
+      currentPoint = `:${point.x}:${point.y}`
+    } catch {
+      // Missing geometry is reported by the existing placement validation path.
+    }
+    return `${objectIdentityKeyFor(current)}:${placement}${currentPoint}`
+  }
+
+  function readPlacementInputValues(): PlacementInputValues {
+    return {
+      destination: systemObjectMoveDestination.value,
+      position: systemObjectPositionInput.value,
+      x: systemObjectPositionXInput.value,
+      y: systemObjectPositionYInput.value,
+    }
+  }
+
+  function placementInputValuesEqual(left: PlacementInputValues, right: PlacementInputValues): boolean {
+    return left.destination === right.destination
+      && left.position === right.position
+      && left.x === right.x
+      && left.y === right.y
+  }
+
+  function placementInputsMatchBaseline(objectIdentity: string): boolean {
+    const baseline = inputBaseline.value
+    return baseline?.objectIdentity === objectIdentity
+      && placementInputValuesEqual(readPlacementInputValues(), baseline.values)
   }
 
   function clearPreview(): void {
@@ -291,6 +346,7 @@ export function useSystemObjectPlacement({
       systemObjectPositionInput.value = '0'
       systemObjectPositionXInput.value = ''
       systemObjectPositionYInput.value = ''
+      inputBaseline.value = null
       return
     }
     if (current.object.placement.kind === 'orbit') {
@@ -311,6 +367,10 @@ export function useSystemObjectPlacement({
     } catch {
       systemObjectPositionXInput.value = ''
       systemObjectPositionYInput.value = ''
+    }
+    inputBaseline.value = {
+      objectIdentity: objectIdentityKeyFor(current),
+      values: readPlacementInputValues(),
     }
   }
 
@@ -609,12 +669,26 @@ export function useSystemObjectPlacement({
     if (pendingConfirmationToken !== null) return
     const current = currentObject()
     const nextOwnerKey = ownerKeyFor(current)
-    if (nextOwnerKey !== ownerKey) {
+    const nextObjectIdentity = objectIdentityKeyFor(current)
+    const identityChanged = inputBaseline.value?.objectIdentity !== nextObjectIdentity
+    if (identityChanged) {
       const hadPreview = systemObjectMovePreview.value !== null
       clearPreview()
       clearMoveCandidates()
       ownerKey = nextOwnerKey
       setInputsToCurrentObject(current)
+      systemObjectMoveError.value = hadPreview
+        ? 'The selected object or placement changed. Preview the position again.'
+        : ''
+      return
+    }
+
+    if (nextOwnerKey !== ownerKey) {
+      const hadPreview = systemObjectMovePreview.value !== null
+      clearPreview()
+      clearMoveCandidates()
+      ownerKey = nextOwnerKey
+      if (current && placementInputsMatchBaseline(nextObjectIdentity)) setInputsToCurrentObject(current)
       systemObjectMoveError.value = hadPreview
         ? 'The selected object or placement changed. Preview the position again.'
         : ''
@@ -631,7 +705,8 @@ export function useSystemObjectPlacement({
     const preview = systemObjectMovePreview.value
     if (!preview) {
       if (current && systemObjectMoveDestination.value !== FREE_SYSTEM_OBJECT_PLACEMENT
-        && !systemObjectMoveDestinationOptions.value.some(option => option.value === systemObjectMoveDestination.value)) {
+        && !systemObjectMoveDestinationOptions.value.some(option => option.value === systemObjectMoveDestination.value)
+        && placementInputsMatchBaseline(nextObjectIdentity)) {
         setInputsToCurrentObject(current)
       }
       return
@@ -690,6 +765,7 @@ export function useSystemObjectPlacement({
 
   return {
     systemObjectMoveAvailable,
+    hasPendingHistoryInput,
     systemObjectMoveDestination,
     systemObjectMoveDestinationOptions,
     systemObjectPositionInput,

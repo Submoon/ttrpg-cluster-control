@@ -475,6 +475,18 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     if (!session) return false
     return !sameValue(session.draft, session.initial.values)
   })
+  const hasPendingHistoryChoice = computed(() => {
+    const session = entitySession.value
+    return session?.kind === 'orbit' && session.centerMoveCandidates !== null
+  })
+
+  /** Ends a clean, choice-free session after history restores its previously selected entity. */
+  function endCleanHistorySession(): void {
+    const session = entitySession.value
+    if (session && !hasModifiedEntitySession.value && !hasPendingHistoryChoice.value) {
+      discardEntitySession(session.id)
+    }
+  }
 
   function getEntitySessionStaleError(session: EntityInspectorSession): string | null {
     const currentWorkspace = workspace.value
@@ -1115,6 +1127,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
   return {
     entitySession,
     hasModifiedEntitySession,
+    hasPendingHistoryChoice,
     orbitPlacementPreview,
     beginObjectSession,
     updateObjectPlacement,
@@ -1125,6 +1138,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     cancelOrbitPlacementPreview,
     applyEntitySession,
     discardEntitySession,
+    endCleanHistorySession,
     isEntityCommandBlocked,
     isEntityDraftTarget,
   }

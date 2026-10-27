@@ -34,6 +34,7 @@ export function useLocalWorkspace() {
   let saveQueue: Promise<void> = Promise.resolve()
   let saveRevision = 0
   const appliedRevision = ref(0)
+  const savedAppliedRevision = ref<number | null>(null)
 
   /**
    * Loads and validates the durable workspace, publishing a ready or load-error state.
@@ -41,24 +42,28 @@ export function useLocalWorkspace() {
    */
   async function hydrate(): Promise<void> {
     hydrationState.value = 'loading'
+    savedAppliedRevision.value = null
     loadError.value = null
     recoveryError.value = null
 
     try {
-      workspace.value = await loadWorkspace()
+      const restored = await loadWorkspace()
+      workspace.value = restored
       appliedRevision.value += 1
+      savedAppliedRevision.value = restored ? appliedRevision.value : null
       saveState.value = workspace.value ? 'saved' : 'idle'
       saveError.value = null
       hydrationState.value = 'ready'
     } catch (error) {
       workspace.value = null
+      savedAppliedRevision.value = null
       hydrationState.value = 'error'
       loadError.value = errorText(error)
     }
   }
 
   /** Enqueues a detached snapshot and lets only its newest revision update visible save feedback. */
-  function enqueueSnapshot(snapshot: LocalWorkspace): Promise<void> {
+  function enqueueSnapshot(snapshot: LocalWorkspace, targetAppliedRevision: number): Promise<void> {
     const currentRevision = ++saveRevision
     saveState.value = 'saving'
 
@@ -68,6 +73,7 @@ export function useLocalWorkspace() {
     return write.then(
       () => {
         if (currentRevision === saveRevision) {
+          savedAppliedRevision.value = targetAppliedRevision
           saveState.value = 'saved'
           saveError.value = null
         }
@@ -96,7 +102,7 @@ export function useLocalWorkspace() {
     const snapshot = createWorkspaceSnapshot(nextWorkspace)
     workspace.value = snapshot
     appliedRevision.value += 1
-    return { durable: enqueueSnapshot(snapshot) }
+    return { durable: enqueueSnapshot(snapshot, appliedRevision.value) }
   }
 
   /** Legacy persistence adapter; callers keep observing the durable rejection through await/catch. */
@@ -110,7 +116,7 @@ export function useLocalWorkspace() {
     if (hydrationState.value !== 'ready' || !workspace.value) {
       throw new Error('There is no applied workspace available to save.')
     }
-    return enqueueSnapshot(createWorkspaceSnapshot(workspace.value))
+    return enqueueSnapshot(createWorkspaceSnapshot(workspace.value), appliedRevision.value)
   }
 
   /**
@@ -119,6 +125,7 @@ export function useLocalWorkspace() {
    */
   async function restoreBackup(): Promise<void> {
     hydrationState.value = 'loading'
+    savedAppliedRevision.value = null
     recoveryError.value = null
 
     try {
@@ -129,12 +136,14 @@ export function useLocalWorkspace() {
 
       workspace.value = restored
       appliedRevision.value += 1
+      savedAppliedRevision.value = appliedRevision.value
       saveState.value = 'saved'
       saveError.value = null
       loadError.value = null
       hydrationState.value = 'ready'
     } catch (error) {
       workspace.value = null
+      savedAppliedRevision.value = null
       recoveryError.value = errorText(error)
       hydrationState.value = 'error'
     }
@@ -143,6 +152,8 @@ export function useLocalWorkspace() {
   return {
     workspace: computed(() => workspace.value),
     appliedRevision: readonly(appliedRevision),
+    /** Applied-data revision whose successful durable acknowledgement is current. */
+    savedAppliedRevision: readonly(savedAppliedRevision),
     hydrationState: readonly(hydrationState),
     loadError: readonly(loadError),
     recoveryError: readonly(recoveryError),

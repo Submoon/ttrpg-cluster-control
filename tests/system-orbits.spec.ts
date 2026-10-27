@@ -790,7 +790,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   }
   const angleBeforeDetach = await ellipticalOrbitAngle(map, hostedOrbitLabel, 'Nix')
   await hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 1 object/ }).click()
-  await page.getByRole('button', { name: 'Detach Orbit' }).click()
+  await page.getByRole('button', { name: 'Detach Orbit', exact: true }).click()
 
   const detachedOrbitLabel = 'Orbit 1 around unoccupied center'
   const detachedOrbit = map.getByRole('group', { name: detachedOrbitLabel })
@@ -799,7 +799,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     .toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()
-  await expect(page.getByRole('button', { name: 'Detach Orbit' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Detach Orbit', exact: true })).toHaveCount(0)
   await expect(detachedRing).toHaveAttribute('rx', String(originalRadii.horizontal))
   await expect(detachedRing).toHaveAttribute('ry', String(originalRadii.vertical))
 
@@ -1152,6 +1152,8 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.keyboard.press('Escape')
   await expect(palette).toBeHidden()
   await setHeaderMapActionsOpen(page, true)
+  await expect(page.getByRole('group', { name: 'Edit history' }).getByRole('status'))
+    .toHaveText('Close the open panel or dialog before using Undo or Redo.')
   await waitForFiniteAnimations(page)
   const fileActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const fileActionsBefore = await fileActions.evaluate(element => {
@@ -1247,6 +1249,8 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   )).toEqual(transformsBeforeCancel)
 
   await setHeaderMapActionsOpen(page, true)
+  await expect(page.getByRole('group', { name: 'Edit history' }).getByRole('status'))
+    .toHaveText('Close the open panel or dialog before using Undo or Redo.')
   await waitForFiniteAnimations(page)
   const fileActionsAfter = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')

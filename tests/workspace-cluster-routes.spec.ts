@@ -33,7 +33,7 @@ test('Add Jump Route retains its origin through pan and zoom, then clears both e
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
   await page.getByLabel('First star system').fill('Campaign staging')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 
   await setJsonFile(
     jsonMapImportInput(page),

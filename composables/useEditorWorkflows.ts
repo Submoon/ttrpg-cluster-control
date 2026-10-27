@@ -188,6 +188,38 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     beginOrbitEdit: map.beginOrbitEdit,
   })
 
+  const historyGuards = computed(() => {
+    if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
+    if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-name draft first.'
+    if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
+    if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
+    if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
+    if (route.hasPendingHistoryChoice.value) return 'Finish choosing the Jump Route endpoints first.'
+    if (entity.hasPendingHistoryChoice.value) return 'Finish choosing the Orbit placement first.'
+    if (systemCreation.creationSession.value) return 'Finish or cancel the object or Orbit placement first.'
+    if (clusterSystemPlacement.clusterAddType.value) return 'Finish or cancel the current Cluster action first.'
+    if (clusterSystemPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending Cluster placement inputs first.'
+    if (clusterSystemPlacement.clusterSystemMovePreview.value) return 'Confirm or cancel the pending system-move preview first.'
+    if (systemObjectPlacement.systemObjectMoveCandidateRequest.value !== 0
+      && systemObjectPlacement.systemObjectMoveCandidates.value.length) {
+      return 'Choose or cancel the pending object-placement target first.'
+    }
+    if (systemObjectPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending object-placement inputs first.'
+    if (systemObjectPlacement.systemObjectMovePreview.value) return 'Confirm or cancel the pending object-move preview first.'
+    if (entity.orbitPlacementPreview.value) return 'Finish or cancel the pending Orbit-placement preview first.'
+    if (cluster.deletionReview.value) return 'Finish or cancel the open map-deletion review first.'
+    if (mapControls.editingGestureActive.value) return 'Finish the active map gesture first.'
+    return null
+  })
+
+  function endCleanHistorySessions(): void {
+    charts.endCleanHistorySession()
+    entity.endCleanHistorySession()
+    route.endCleanHistorySession()
+    fields.endCleanHistorySession()
+  }
+
   function quitAdd(): void {
     route.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
@@ -200,6 +232,10 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }
 
   return {
+    historyGuards: {
+      blockReason: historyGuards,
+      endCleanSessions: endCleanHistorySessions,
+    },
     inspector: {
       objectInspectorFocusRequest,
       acknowledgeObjectInspectorFocusRequest,
@@ -331,6 +367,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       clusterMapRef: mapControls.clusterMapRef,
       systemMapRef: mapControls.systemMapRef,
       activeMapKey: mapControls.activeMapKey,
+      editingGestureActive: mapControls.editingGestureActive,
+      setEditingGestureActive: mapControls.setEditingGestureActive,
       initialViewport: mapControls.initialViewport,
       zoomLevel: mapControls.zoomLevel,
       isCompactViewport: viewport.isCompactViewport,

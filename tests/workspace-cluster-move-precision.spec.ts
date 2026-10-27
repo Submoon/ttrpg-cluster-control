@@ -15,7 +15,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
   await returnToClusterMap(page)
 }
 
@@ -85,7 +85,7 @@ test('Move System previews numeric cluster coordinates, cancels without changing
   const mapTarget = { x: 0.82, y: 0.2 }
   await zoomOutMapToMinimum(page)
   await clickClusterPoint(page, clusterMap, mapTarget)
-  await expect(mapContext.getByRole('status')).toContainText(/move.*preview/i)
+  await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
   const afterMapPreview = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapPreview).toEqual(beforeMove)
@@ -102,7 +102,7 @@ test('Move System previews numeric cluster coordinates, cancels without changing
   await page.getByRole('textbox', { name: 'System position Y', exact: true }).fill(String(target.y))
   await page.getByRole('button', { name: 'Preview move', exact: true }).click()
   await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  await expect(mapContext.getByRole('status')).toContainText(/move.*preview/i)
+  await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
   await page.getByRole('button', { name: 'Cancel system move', exact: true }).click()
   await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
@@ -166,7 +166,7 @@ test('Move System keeps its preview visible after applying an independent chart-
   const updatedNode = updatedMap.getByRole('button', { name: 'Select Vesper system', exact: true })
   await expect(updatedMap).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-    .getByRole('status')).toContainText(/move.*preview/i)
+    .locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(updatedNode).not.toHaveAttribute('transform', originalTransform!)
   await expect(page.getByRole('button', { name: 'Confirm system move', exact: true })).toBeVisible()
 

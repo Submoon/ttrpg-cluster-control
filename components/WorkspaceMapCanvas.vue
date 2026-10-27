@@ -31,6 +31,7 @@
       @move-system="forwardMoveSystem"
       @cluster-target="forwardClusterTarget"
       @cancel-cluster-preview="emit('cancel-cluster-preview')"
+      @editing-gesture-change="emit('editing-gesture-change', $event)"
       @viewport-change="emitViewport"
     />
     <SystemMap
@@ -67,6 +68,7 @@
       @cancel-creation-preview="forwardCancelCreationPreview"
       @cancel-object-placement-preview="emit('cancel-object-placement-preview')"
       @cancel-orbit-placement-preview="emit('cancel-orbit-placement-preview')"
+      @editing-gesture-change="emit('editing-gesture-change', $event)"
       @viewport-change="emitViewport"
     />
   </div>
@@ -148,6 +150,7 @@ const emit = defineEmits<{
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
   'cancel-creation-preview': []
+  'editing-gesture-change': [active: boolean]
   'viewport-change': [change: { key: string; viewport: MapViewport }]
 }>()
 

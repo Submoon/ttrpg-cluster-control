@@ -139,6 +139,28 @@ export function useFieldDefinitionWorkflows({
   const hasModifiedFieldDefinitionsSession = computed(() =>
     hasDefinitionChanges() || hasCreateChanges(),
   )
+  const hasPendingHistoryDecision = computed(() =>
+    fieldDefinitionsSession.pendingGuard !== null
+      || fieldDefinitionsSession.review !== null
+      || confirmingFieldMutation
+      || pendingFieldDeletionId !== null,
+  )
+
+  /** Clears clean Fields selection/detail state after a restore; modified or reviewed work remains owned. */
+  function endCleanHistorySession(): boolean {
+    if (hasModifiedFieldDefinitionsSession.value || hasPendingHistoryDecision.value) return false
+    invalidatePreparedMutation()
+    fieldDefinitionsSession.open = false
+    fieldDefinitionsSession.screen = 'list'
+    fieldDefinitionsSession.selectedId = null
+    fieldDefinitionsSession.draft = null
+    fieldDefinitionsSession.createDraft = null
+    fieldDefinitionsSession.pendingGuard = null
+    fieldDefinitionsSession.review = null
+    fieldDefinitionsSession.error = null
+    fieldDefinitionsSession.listPosition = { scrollTop: 0, focusedFieldId: null }
+    return true
+  }
 
   /** Refuses an import only when it changes the definition currently owned by a dirty Fields draft. */
   function getFieldDefinitionImportConflict(candidate: LocalWorkspace): { message: string } | null {
@@ -939,6 +961,8 @@ export function useFieldDefinitionWorkflows({
     fieldDefinitionError,
     fieldDefinitionSaveRevision,
     hasModifiedFieldDefinitionsSession,
+    hasPendingHistoryDecision,
+    endCleanHistorySession,
     fieldDefinitionsDialog,
     openFieldDefinitions,
     handleFieldDefinitionsIntent,

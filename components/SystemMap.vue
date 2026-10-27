@@ -108,6 +108,7 @@ const emit = defineEmits<{
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
   'cancel-creation-preview': []
+  'editing-gesture-change': [active: boolean]
   'viewport-change': [viewport: MapViewport]
 }>()
 
@@ -131,6 +132,7 @@ const objectPlacementPreviews = new Map<string, Point>()
 const orbitPlacementPreviews = new Map<string, OrbitPlacementPreview>()
 
 const handlers: SystemMapEventHandlers = {
+  editingGestureChange: active => emit('editing-gesture-change', active),
   selectObject: id => { if (!props.creationType) emit('select-object', id) },
   selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,

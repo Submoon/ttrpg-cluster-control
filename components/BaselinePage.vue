@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -127,7 +127,11 @@
               @quit-add="quitSystemAdd"
               @confirm-system-move="confirmSystemMove"
               @cancel-system-move="cancelSystemMovePreview"
-            />
+            >
+              <template #history>
+                <WorkspaceHistoryControls :status="historyStatus" :error="historyTraversalError" @undo="undoWorkspace" @redo="redoWorkspace" />
+              </template>
+            </WorkspaceMapChrome>
           </template>
 
           <template #dock>
@@ -219,6 +223,7 @@
                     v-if="activeView === 'cluster'"
                     :key="activeMapKey ?? 'cluster-map'"
                     ref="clusterMapRef"
+                    @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
@@ -261,6 +266,7 @@
                     v-else-if="selectedSystem"
                     :key="activeMapKey ?? 'system-map'"
                     ref="systemMapRef"
+                    @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
@@ -449,6 +455,8 @@
       @resolve-transition="resolveTransitionChoice"
     />
 
+    <WorkspaceHistoryCapacityDialog :request="historyCapacityRequest" @resolve="resolveHistoryCapacity" />
+
   </div>
 </template>
 
@@ -463,7 +471,7 @@ import { provideEditorCommands } from '../composables/editor-workflows/editor-co
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
-import { createWorkspaceMutationExecutor } from '../composables/editor-workflows/workspace-mutations'
+import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -477,6 +485,7 @@ const {
   saveState,
   saveError,
   appliedRevision,
+  savedAppliedRevision,
   hydrate,
   applyWorkspace,
   commit,
@@ -484,11 +493,22 @@ const {
   restoreBackup,
 } = useLocalWorkspace()
 
-const mutations = createWorkspaceMutationExecutor({
-  getWorkspace: () => workspace.value,
-  getRevision: () => appliedRevision.value,
+let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
+let endCleanHistorySessions: () => void = () => undefined
+const history = useWorkspaceHistory({
+  workspace,
+  appliedRevision,
+  savedAppliedRevision,
+  saveState,
+  hydrationState,
   publishWorkspace: applyWorkspace,
+  getEditorBlockReason: () => readEditorHistoryBlockReason(),
+  endCleanSessions: () => endCleanHistorySessions(),
 })
+const {
+  mutations, status: historyStatus, capacityRequest: historyCapacityRequest, traversalError: historyTraversalError,
+  resolveCapacity: resolveHistoryCapacity, undo: undoWorkspace, redo: redoWorkspace,
+} = history
 const workflows = useEditorWorkflows({ workspace, saveState, saveError, mutations, initializeWorkspace: commit })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback } = workflows
 
@@ -777,6 +797,18 @@ const {
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
+
+readEditorHistoryBlockReason = () => {
+  if (chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
+    || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
+    return 'Close the open panel or dialog before using Undo or Redo.'
+  }
+  if (importReview.value.open || importReview.value.suspended || importReview.value.confirming) {
+    return 'Finish or cancel the import review before using Undo or Redo.'
+  }
+  return workflows.historyGuards.blockReason.value
+}
+endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 
 function openImportFieldsDraft(): void {
   reviewImportFields()

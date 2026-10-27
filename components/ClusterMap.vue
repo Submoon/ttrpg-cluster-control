@@ -79,6 +79,7 @@ const emit = defineEmits<{
   'open-system': [id: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'cancel-cluster-preview': []
+  'editing-gesture-change': [active: boolean]
   'select-route': [id: string]
   'move-system': [id: string, position: Point]
   'viewport-change': [viewport: MapViewport]
@@ -273,6 +274,7 @@ function cancelActiveGesture(): void {
     gesture.mouseGesture.cancel()
   }
   activeSystemGestures.clear()
+  emit('editing-gesture-change', false)
   refreshLiveRouteGeometry?.()
 }
 
@@ -577,6 +579,7 @@ function render(): void {
         },
         mouseGesture,
       })
+      emit('editing-gesture-change', true)
       select(this).classed('is-dragging', true)
     })
     .on('drag', function (event, system) {
@@ -589,6 +592,7 @@ function render(): void {
     .on('end', function (event, system) {
       activeSystemGestures.get(this)?.mouseGesture.complete()
       activeSystemGestures.delete(this)
+      emit('editing-gesture-change', activeSystemGestures.size > 0)
       select(this).classed('is-dragging', false)
       if (cancelledSystemGestures.has(this)) {
         cancelledSystemGestures.delete(this)

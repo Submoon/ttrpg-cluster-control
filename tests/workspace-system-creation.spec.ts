@@ -58,7 +58,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 }
 
 async function ensurePlacementOpen(controls: import('@playwright/test').Locator): Promise<void> {
@@ -334,7 +334,7 @@ test('Orbit form Add retains its host, corrects each axis, and retries one appli
   await page.getByLabel('Horizontal radius').fill('10')
   await page.getByLabel('Vertical radius').fill('80')
   await page.getByLabel('Rotation', { exact: true }).fill('37')
-  const creationStatus = page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('status')
+  const creationStatus = page.getByRole('navigation', { name: 'Map context and commands' }).locator('.workspace-add-status')
 
   const beforeAdd = await downloadJson(page, 'Export star system JSON')
   expect(beforeAdd.system?.orbits).toHaveLength(0)

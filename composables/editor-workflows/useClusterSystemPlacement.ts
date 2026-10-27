@@ -1,5 +1,5 @@
 /** Owns the independent Cluster Add System intent and its single-use placement inputs. */
-import { computed, nextTick, reactive, ref, watch, type Ref } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, watch, type Ref } from 'vue'
 import { addStarSystem, type LocalWorkspace, type Point } from '../../domain/workspace'
 import { clusterSystemPosition } from '../../utils/cluster-map-geometry'
 import type { ClusterAddType, ClusterSystemMovePreview, ClusterSystemPositionInput, ClusterSystemPositionInputs, MapNavigationHandle } from './types'
@@ -11,6 +11,17 @@ interface ClusterSystemPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   clusterMapRef: Readonly<Ref<MapNavigationHandle | null>>
   mutations: EditorWorkflowOptions['mutations']
+}
+
+interface ClusterMoveInputTarget {
+  key: string
+  position: Point
+}
+
+interface ClusterMoveInputBaseline {
+  key: string
+  x: string
+  y: string
 }
 
 const CLUSTER_SYSTEM_CARD_WIDTH = 156
@@ -28,11 +39,46 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
   const systemMovePreview = ref<ClusterSystemMovePreview | null>(null)
   const nextPreviewToken = ref(0)
   let pendingSystemMoveToken: number | null = null
+  const moveInputBaseline = shallowRef<ClusterMoveInputBaseline | null>(null)
   const clusterAddError = computed(() => formError.value || inputErrors.x || inputErrors.y)
   const clusterSystemMoveError = computed(() => systemMoveError.value || inputErrors.x || inputErrors.y)
   const clusterMoveTargeting = computed(() => store.activeView === 'cluster'
     && store.mapMode === 'move'
     && store.clusterSelectedSystemId !== null)
+
+  function currentMoveInputTarget(): ClusterMoveInputTarget | null {
+    const currentWorkspace = workspace.value
+    const systemId = store.clusterSelectedSystemId
+    if (!clusterMoveTargeting.value || !currentWorkspace || !systemId
+      || !currentWorkspace.cluster.systems.some(system => system.id === systemId)) return null
+    const position = currentWorkspace.layout.systemPositions[systemId]
+    if (!position) return null
+    return { key: `${currentWorkspace.cluster.id}:${systemId}`, position }
+  }
+
+  function setMoveInputs(target: ClusterMoveInputTarget | null): void {
+    if (!target) {
+      moveInputBaseline.value = null
+      return
+    }
+    inputs.x = String(target.position.x)
+    inputs.y = String(target.position.y)
+    moveInputBaseline.value = { key: target.key, x: inputs.x, y: inputs.y }
+  }
+
+  function moveInputsMatchBaseline(targetKey: string): boolean {
+    const baseline = moveInputBaseline.value
+    return baseline?.key === targetKey
+      && inputs.x === baseline.x
+      && inputs.y === baseline.y
+  }
+
+  const hasPendingHistoryInput = computed(() => {
+    if (clusterAddType.value === 'system' || systemMovePreview.value) return true
+    const target = currentMoveInputTarget()
+    if (!target) return false
+    return !moveInputsMatchBaseline(target.key)
+  })
 
   function clearErrors(): void {
     inputErrors.x = ''
@@ -61,8 +107,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
       ? currentWorkspace.layout.systemPositions[preview.sourceSystemId]
       : null
     if (currentPosition) {
-      inputs.x = String(currentPosition.x)
-      inputs.y = String(currentPosition.y)
+      setMoveInputs({ key: `${currentWorkspace!.cluster.id}:${preview.sourceSystemId}`, position: currentPosition })
     }
   }
 
@@ -347,8 +392,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
       if (systemMovePreview.value?.token === preview.token) {
         clearSystemMovePreview()
         systemMoveError.value = ''
-        inputs.x = String(preview.targetPosition.x)
-        inputs.y = String(preview.targetPosition.y)
+        setMoveInputs(currentMoveInputTarget())
       }
       return true
     } catch (error) {
@@ -374,11 +418,24 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
           systemMoveError.value = 'The selected system has no saved Cluster position.'
           return
         }
-        inputs.x = String(normalized.x)
-        inputs.y = String(normalized.y)
+        setMoveInputs({ key: `${currentWorkspace.cluster.id}:${systemId}`, position: normalized })
       }
     }
   }, { flush: 'sync' })
+
+  const selectedMoveInputTarget = computed(() => currentMoveInputTarget())
+  watch(selectedMoveInputTarget, (current, previous) => {
+    if (!current) {
+      moveInputBaseline.value = null
+      return
+    }
+    if (!previous || current.key !== previous.key) {
+      setMoveInputs(current)
+      return
+    }
+    if (current.position.x === previous.position.x && current.position.y === previous.position.y) return
+    if (moveInputsMatchBaseline(previous.key)) setMoveInputs(current)
+  }, { flush: 'sync', immediate: true })
 
   watch(workspace, (currentWorkspace) => {
     const preview = systemMovePreview.value
@@ -420,6 +477,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
     clusterAddType,
     clusterAddError,
     clusterMoveTargeting,
+    hasPendingHistoryInput,
     clusterSystemMovePreview: systemMovePreview,
     clusterSystemMoveError,
     clusterSystemPositionInputs: inputs,

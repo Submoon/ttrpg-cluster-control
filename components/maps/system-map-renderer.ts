@@ -81,6 +81,8 @@ interface OrbitRotationGesture {
 }
 
 export interface SystemMapEventHandlers {
+  /** Publishes whether an uncommitted pointer preview is active on the map. */
+  editingGestureChange(active: boolean): void
   /** Select an existing system object. */
   selectObject(id: string): void
   /** Checks whether a pending entity command touches an active inspector draft. */
@@ -322,11 +324,13 @@ export function renderSystemMap({
     cancelledGestures.delete(element)
     activeGestures.set(element, rollback)
     activeGestureDisposers.set(element, mouseGesture)
+    handlers.editingGestureChange(true)
   }
   function finishGesture(element: Element): boolean {
     activeGestureDisposers.get(element)?.complete()
     activeGestures.delete(element)
     activeGestureDisposers.delete(element)
+    handlers.editingGestureChange(activeGestures.size > 0)
     const cancelled = cancelledGestures.has(element)
     if (cancelled) cancelledGestures.delete(element)
     return cancelled
@@ -339,6 +343,7 @@ export function renderSystemMap({
     }
     activeGestures.clear()
     activeGestureDisposers.clear()
+    handlers.editingGestureChange(false)
     updateLiveGeometry()
   }
   function cancelGesture(element: Element): void {
@@ -346,6 +351,7 @@ export function renderSystemMap({
     if (!rollback) return
     cancelledGestures.add(element)
     activeGestures.delete(element)
+    handlers.editingGestureChange(activeGestures.size > 0)
     rollback()
     // This dispatches D3's end callback synchronously; callers must snapshot needed drag data first.
     activeGestureDisposers.get(element)?.cancel()

@@ -455,11 +455,11 @@ export async function returnToClusterMap(page: import('@playwright/test').Page):
   const contextKind = context.locator('.workspace-map-context > span')
   await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
-  if (await back.isVisible()) {
+  if (await contextKind.textContent() === 'Star System') {
+    // A closing review can still hide its focus-restoration target for one render.
+    await expect(back).toBeVisible()
     await dismissAddChooser(page)
     await back.click()
-  } else {
-    await expect(contextKind).toHaveText('Jump Cluster')
   }
   await expect(contextKind).toHaveText('Jump Cluster')
 }

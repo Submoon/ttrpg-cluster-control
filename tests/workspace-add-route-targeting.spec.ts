@@ -21,7 +21,7 @@ campaignTest('Add Jump Route deselects ordinary map modes and switching mode exi
   await clickDockAction(page, 'Add Jump Route')
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   const addButton = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
-  await expect(mapContext.getByRole('status')).toContainText(/ADD Jump Route/)
+  await expect(mapContext.locator('.workspace-add-status')).toContainText(/ADD Jump Route/)
   await expect(addButton).toHaveAttribute('aria-pressed', 'true')
   for (const mode of ['Navigate', 'Select', 'Move']) {
     await expect(modeGroup.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'false')
@@ -31,7 +31,7 @@ campaignTest('Add Jump Route deselects ordinary map modes and switching mode exi
   await expect(modeGroup.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(addButton).toHaveAttribute('aria-pressed', 'false')
   await expect(mapContext.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
-  await expect(mapContext.getByRole('status').filter({ hasText: /ADD Jump Route/ })).toHaveCount(0)
+  await expect(mapContext.locator('.workspace-add-status').filter({ hasText: /ADD Jump Route/ })).toHaveCount(0)
 })
 
 test('Add Jump Route uses scoped From and To controls for map-picked systems without mutating before Apply', async ({ page }) => {

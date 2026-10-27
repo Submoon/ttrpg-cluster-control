@@ -23,13 +23,17 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   let sessionSequence = 0
 
   const hasDraft = computed(() => session.value !== null)
+  const hasChangedNames = computed(() => {
+    const active = session.value
+    return !!active && (clusterName.value.trim() !== active.initialClusterName
+      || systemName.value.trim() !== active.initialSystemName)
+  })
   const hasUncommittedNames = computed(() => {
     const active = session.value
     const current = workspace.value
     const targetStillExists = !!active && current?.cluster.id === active.clusterId
       && current.cluster.systems.some(system => system.id === active.systemId)
-    return !!active && (!targetStillExists || clusterName.value.trim() !== active.initialClusterName
-      || systemName.value.trim() !== active.initialSystemName)
+    return !!active && (!targetStillExists || hasChangedNames.value)
   })
   const draftSystemId = computed(() => session.value?.systemId ?? null)
   const draftSystemName = computed(() => {
@@ -178,6 +182,11 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     session.value = null
   }
 
+  /** Ends an obsolete clean session after workspace-history traversal; changed names remain caller-owned. */
+  function endCleanHistorySession(): void {
+    if (session.value && !hasChangedNames.value) discard(session.value.id)
+  }
+
   return {
     clusterName,
     systemName,
@@ -185,6 +194,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     formError,
     session,
     hasDraft,
+    hasChangedNames,
     hasUncommittedNames,
     draftSystemId,
     draftSystemName,
@@ -193,5 +203,6 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     apply,
     submit,
     discard,
+    endCleanHistorySession,
   }
 }

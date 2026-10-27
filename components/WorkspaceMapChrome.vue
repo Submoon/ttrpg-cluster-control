@@ -76,6 +76,7 @@
     </UButton>
 
     <div class="workspace-map-actions">
+      <slot name="history" />
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
           class="workspace-control"

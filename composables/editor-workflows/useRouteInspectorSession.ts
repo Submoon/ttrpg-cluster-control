@@ -86,6 +86,18 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const active = session.value
     return !!active && !sameValue(active.draft, active.initial)
   })
+  const hasPendingHistoryChoice = computed(() => {
+    const active = session.value
+    return !!active && (active.sourceSystemIds !== null || active.destinationSystemIds !== null)
+  })
+
+  /** Ends a clean route form after history traversal; endpoint targeting remains a blocker. */
+  function endCleanHistorySession(): void {
+    const active = session.value
+    if (active && !hasModifiedRouteSession.value && !hasPendingHistoryChoice.value) {
+      discardRouteSession(active.id)
+    }
+  }
 
   function beginRouteSession(routeId: string | null = null): number | null {
     const current = workspace.value
@@ -334,12 +346,14 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
   return {
     routeSession: session,
     hasModifiedRouteSession,
+    hasPendingHistoryChoice,
     beginRouteSession,
     offerRouteSystems,
     chooseRoutePoint,
     updateRouteInput,
     applyRouteSession,
     discardRouteSession,
+    endCleanHistorySession,
     cancelRouteCreation,
     isRouteCommandBlocked,
   }
