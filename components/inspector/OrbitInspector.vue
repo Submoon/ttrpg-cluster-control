@@ -286,7 +286,7 @@
           color="primary"
           type="submit"
           :form="formId"
-          :disabled="!props.hasModifiedEntitySession || hasPendingCenterMoveChoice || props.saving"
+          :disabled="hasPendingCenterMoveChoice || props.saving"
         >
           <span>Apply changes</span><span class="sr-only">Save Orbit</span>
         </UButton>

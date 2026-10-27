@@ -72,7 +72,7 @@
         </template>
         <template v-else>
           <UButton color="neutral" variant="ghost" @click="emit('discard')">Discard draft</UButton>
-          <UButton color="primary" type="submit" form="chart-names-form" :disabled="!props.hasUncommittedNames">Apply names</UButton>
+          <UButton color="primary" type="submit" form="chart-names-form">Apply names</UButton>
         </template>
       </div>
     </template>

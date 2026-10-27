@@ -10,7 +10,7 @@ export interface ChartNamesSession {
   initialSystemName: string
 }
 
-/** Owns the resumable chart-name draft; successful Apply means memory was published, while saving remains independent. */
+/** Owns the resumable chart-name draft; Apply validates before publishing changes or finishing a clean edit. */
 export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'workspace' | 'saveState' | 'saveError' | 'commit' | 'applyWorkspace'> & {
   selectedSystem: ComputedRef<StarSystem | undefined>
 }) {
@@ -93,6 +93,15 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
         throw new Error('The star system for this draft no longer exists.')
       }
       const nextWorkspace = renameLocalWorkspace(currentWorkspace, clusterName.value, systemName.value, active.systemId)
+      if (!hasUncommittedNames.value) {
+        if (session.value?.id === active.id) {
+          session.value = null
+          editing.value = false
+          formError.value = ''
+          syncNames(active.systemId)
+        }
+        return true
+      }
       const { durable } = applyWorkspace(nextWorkspace)
       if (session.value?.id === active.id) {
         session.value = null

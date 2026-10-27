@@ -486,6 +486,14 @@ test('legacy Object and Orbit palette drags still add to the active map in every
     await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
       .toHaveAttribute('aria-pressed', 'true')
 
+    const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+    if (await inspectToggle.getAttribute('aria-expanded') === 'true') await inspectToggle.click()
+
+    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
+    await expect(addToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('region', { name: 'Object palette', exact: true })).toBeVisible()
+
     const orbitCount = await map.locator('.orbit-mark').count()
     const addOrbit = page.getByRole('button', { name: 'Add orbit', exact: true })
     await ensureMapDragPointsReachable(page, map, addOrbit, orbitPoint)

@@ -628,11 +628,10 @@ export async function editMapObject(page: import('@playwright/test').Page): Prom
     await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
   }
   const edit = page.getByRole('button', { name: 'Edit map object', exact: true })
-  if (await edit.isVisible()) {
-    await edit.click()
-    return
-  }
-  await expect(page.getByRole('button', { name: 'Apply changes Save map object', exact: true })).toBeVisible()
+  const apply = page.getByRole('button', { name: /^Apply changes/ })
+  await expect(edit.or(apply)).toBeVisible()
+  if (await edit.isVisible()) await edit.click()
+  else await expect(apply).toBeVisible()
 }
 
 export async function saveMapObject(page: import('@playwright/test').Page): Promise<void> {

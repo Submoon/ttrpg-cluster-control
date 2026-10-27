@@ -159,7 +159,7 @@ test('object footer distinguishes clean, editing, and dirty drafts, then discard
   await expect(discard).toHaveCount(0)
 
   await edit.click()
-  await expect(apply).toBeDisabled()
+  await expect(apply).toBeEnabled()
   await expect(discard).toBeEnabled()
   await inspector.getByLabel('Name', { exact: true }).fill('Unapplied Primary Star')
   await expect(apply).toBeEnabled()

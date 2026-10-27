@@ -877,8 +877,9 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
   }
 
   /**
-   * Applies a validated draft snapshot to workspace memory and starts its ordered save.
-   * A true result means the writer accepted the snapshot; the durable acknowledgement is tracked separately.
+   * Validates the active draft before finishing its session. Changed drafts publish to memory and start an
+   * ordered save; a clean draft finishes after the same target and dependency guards without publishing.
+   * A true result means the session completed or the writer accepted the snapshot; durability is tracked separately.
    */
   function applyEntitySession(expectedId?: number): boolean {
     const session = entitySession.value
@@ -947,6 +948,15 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
           return false
         }
         nextWorkspace = result.workspace
+      }
+
+      if (!hasModifiedEntitySession.value) {
+        if (entitySession.value?.id === session.id) {
+          if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
+          entitySession.value = null
+          draftDependencies = null
+        }
+        return true
       }
 
       const { durable } = applyWorkspace(nextWorkspace)

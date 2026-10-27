@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, addCatalogueObject, workspaceZoomControls } from './helpers'
+import { activeWorkspaceFeedback, addCatalogueObject, editMapObject, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -199,7 +199,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await closeCompactPanels(page)
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
-  await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
+  await editMapObject(page)
   await inspector.getByLabel('Schematic X', { exact: true }).fill('0.9')
   await inspector.getByLabel('Schematic Y', { exact: true }).fill('0.9')
   await inspector.getByRole('button', { name: /^Apply changes/ }).click()

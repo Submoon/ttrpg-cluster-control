@@ -175,7 +175,7 @@
           <span class="route-session-state" role="status" aria-live="polite">{{ routeSessionState }}</span>
         </div>
         <div class="flex flex-wrap gap-2">
-          <UButton color="primary" type="submit" :disabled="props.saving || (!!props.session.routeId && !hasRouteChanges)">
+          <UButton color="primary" type="submit" :disabled="props.saving">
             {{ props.session.routeId ? 'Apply Jump Route' : 'Create Jump Route' }}
           </UButton>
           <UButton color="neutral" variant="outline" type="button" @click="emit('discard-route-session', props.session!.id)">
@@ -321,7 +321,6 @@ function fieldError(field: RouteDraftField): string | undefined {
 async function applyRouteSession(): Promise<void> {
   const session = props.session
   if (!session) return
-  if (session.routeId && !hasRouteChanges.value) return
   emit('apply-route-session', session.id)
   await nextTick()
   if (props.session?.id !== session.id || !summaryMessage.value && !errorEntries.value.length) return

@@ -295,7 +295,7 @@
           color="primary"
           type="submit"
           :form="formId"
-          :disabled="!props.hasModifiedEntitySession || props.saving"
+          :disabled="props.saving"
           @click="applyObjectSession"
         >
           <span>Apply changes</span><span class="sr-only">Save map object</span>

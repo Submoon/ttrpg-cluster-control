@@ -79,7 +79,7 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
   }
 }
 
-/** Keeps route form values alive above the Inspector, validates against current workspace, and applies once. */
+/** Keeps route form values alive above the Inspector and validates before applying or finishing once. */
 export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteInspectorSessionOptions) {
   const session = ref<RouteInspectorSession | null>(null)
   let sequence = 0
@@ -218,6 +218,10 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
       active.error = 'The Jump Cluster for this draft no longer exists.'
       return false
     }
+    if (active.routeId && !current.cluster.routes.some(route => route.id === active.routeId)) {
+      active.error = 'The Jump Route for this draft no longer exists.'
+      return false
+    }
 
     const jumpLevel = Number(active.draft.jumpLevel)
     const toPointId = active.draft.destination === 'external' ? null : active.draft.toPointId
@@ -242,6 +246,10 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
       active.errors = errors
       active.error = ''
       return false
+    }
+    if (active.routeId !== null && !hasModifiedRouteSession.value) {
+      if (session.value?.id === active.id) session.value = null
+      return true
     }
     try {
       const route = active.routeId
