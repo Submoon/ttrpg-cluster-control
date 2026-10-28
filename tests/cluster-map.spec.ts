@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
-import { addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
+import { addClusterSystem, ensureMapDragPointsReachable, returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'
 
 async function orbitalAngle(map: import('@playwright/test').Locator): Promise<number> {
@@ -22,6 +22,15 @@ async function orbitalAngle(map: import('@playwright/test').Locator): Promise<nu
       planetCenter.x - hostCenter.x,
     )
   })
+}
+
+async function historyUndoDepth(page: import('@playwright/test').Page): Promise<number> {
+  const undo = page.getByRole('group', { name: 'Edit history' })
+    .getByRole('button', { name: /^Undo(?:$|:)/ })
+  const description = await undo.getAttribute('aria-description')
+  const match = description?.match(/^(\d+)/)
+  if (!match) throw new Error(`Could not read the Undo depth from "${description}".`)
+  return Number(match[1])
 }
 
 test('the Warden can navigate and arrange both maps', async ({ page }) => {
@@ -92,10 +101,18 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await saveMapObject(page)
 
   const planet = map.getByRole('button', { name: /Select PL-01, Iria/ })
-  await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), {
+  const resizeDestination = {
     x: 480 + 112 * Math.SQRT1_2,
     y: 280 - 112 * Math.SQRT1_2,
-  })
+  }
+  await ensureMapDragPointsReachable(page, map, planet.locator('.object-hit-target'), resizeDestination)
+  const history = page.getByRole('group', { name: 'Edit history' })
+  const undo = history.getByRole('button', { name: /^Undo(?:$|:)/ })
+  const historyDepthBeforePlacement = await historyUndoDepth(page)
+  await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), resizeDestination)
+  await expect.poll(() => historyUndoDepth(page)).toBeGreaterThan(historyDepthBeforePlacement)
+  await expect(undo).toHaveAccessibleName('Undo: Place Iria in Orbit · Iria · Vesper')
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   const angleBeforeResize = await orbitalAngle(map)
   const orbitRadius = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
   const radiusBeforeResize = Number(await orbitRadius.getAttribute('rx'))

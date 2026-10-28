@@ -304,7 +304,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     y: (committedCenter.y - 72) / 416,
   }
 
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('50')
   await expect(page.getByRole('spinbutton', { name: 'Center X', exact: true })).toHaveCount(0)
@@ -866,7 +866,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
     .toBeCloseTo(initialCenter.x, 2)
   await expect.poll(async () => Number(await ring.getAttribute('cy')))
     .toBeCloseTo(initialCenter.y, 2)
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   const controls = page.getByRole('group', { name: 'Orbit center placement controls' })
   const moveButton = controls.getByRole('button', { name: 'Move center on map', exact: true })
   await expect(moveButton).toBeVisible()
@@ -920,7 +920,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   await expect.poll(async () => Number(await ring.getAttribute('cx')))
     .toBeCloseTo(64 + applyDraftTarget.x * 832, 1)
 
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByLabel('Vertical radius', { exact: true }).fill('250')
   await moveButton.click()
   const discardDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.34, y: 0.68 })
@@ -1177,7 +1177,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const centerHandle = unoccupiedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
@@ -1229,7 +1229,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await expect(smallOrbit).toBeVisible()
   await quitSystemAdd(page)
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('16')
   await page.getByRole('button', { name: 'Save Orbit' }).click()

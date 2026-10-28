@@ -5,9 +5,11 @@ import {
   createLocalWorkspace,
   createOrbit,
   type LocalWorkspace,
+  type Orbit,
   type SystemObject,
 } from '../domain/workspace'
 import { createContinuousOrbitAdjustmentController } from '../composables/editor-workflows/continuous-orbit-adjustments'
+import { useEntityInspectorSession } from '../composables/editor-workflows/useEntityInspectorSession'
 import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows'
 import { useOrbitCenterPlacement } from '../composables/editor-workflows/useOrbitCenterPlacement'
 import { useUnresolvedExitPlacement } from '../composables/editor-workflows/useUnresolvedExitPlacement'
@@ -87,7 +89,17 @@ function createUnoccupiedOrbitWorkspace(): { workspace: LocalWorkspace; systemId
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]
   if (!system) throw new Error('The initial workspace has no star system.')
-  const orbit = createOrbit(system, null)
+  const generatedOrbit = createOrbit(system, null)
+  if (generatedOrbit.hostId !== null || !generatedOrbit.center) {
+    throw new Error('The generated Orbit does not have an unoccupied center.')
+  }
+  // Match the field insertion order used by the free-center Add workflow.
+  const orbit: Orbit = {
+    id: generatedOrbit.id,
+    order: generatedOrbit.order,
+    hostId: null,
+    center: generatedOrbit.center,
+  }
   return {
     systemId: system.id,
     orbitId: orbit.id,
@@ -407,6 +419,234 @@ test('a map-mode change invalidates an Orbit-center preview while capacity conse
 
   stopGuard()
   controllers.dispose()
+  harness.dispose()
+})
+
+test('accepted Orbit-center moves retain clean and modified Orbit Inspector sessions @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = createUnoccupiedOrbitWorkspace()
+  expect(Object.keys(fixture.workspace.cluster.systems[0]!.orbits[0]!))
+    .toEqual(['id', 'order', 'hostId', 'center'])
+  const harness = createHistoryHarness(fixture.workspace)
+  const scope = effectScope()
+  const workflows = scope.run(() => useEditorWorkflows({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    initializeWorkspace: async () => undefined,
+    saveState: ref<SaveState>('saved'),
+    saveError: ref<string | null>(null),
+  }))
+  if (!workflows) throw new Error('The editor workflows were not created.')
+
+  const store = useEditorUiStore()
+  store.setSelection({
+    activeView: 'system',
+    selectedSystemId: fixture.systemId,
+    selectedOrbitId: fixture.orbitId,
+  })
+  await workflows.inspector.beginOrbitEdit()
+  const cleanSession = workflows.inspector.entitySession.value
+  expect(cleanSession?.kind).toBe('orbit')
+  if (!cleanSession || cleanSession.kind !== 'orbit') throw new Error('The Orbit Inspector session did not start.')
+
+  expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.62, y: 0.71 }, null)).toBe(true)
+  expect(Object.keys(harness.workspace.value!.cluster.systems[0]!.orbits[0]!))
+    .toEqual(['id', 'hostId', 'center', 'order'])
+  expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
+  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
+
+  cleanSession.draft.horizontalRadius = '240'
+  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(true)
+  expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.74, y: 0.39 }, null)).toBe(true)
+  expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
+  expect(workflows.inspector.entitySession.value?.kind === 'orbit'
+    ? workflows.inspector.entitySession.value.draft.horizontalRadius
+    : null).toBe('240')
+  expect(await workflows.inspector.applyEntitySession(cleanSession.id)).toBe(true)
+  expect(harness.workspace.value?.layout.orbitRadii[fixture.orbitId]?.horizontal).toBe(240)
+
+  workflows.adjustments.resetOrbitAdjustments()
+  scope.stop()
+  harness.dispose()
+})
+
+test('Orbit Inspector still rejects changed hosts and radii @pure', async () => {
+  async function expectStaleDraft(
+    changeWorkspace: (current: LocalWorkspace, fixture: ReturnType<typeof createUnoccupiedOrbitWorkspace>) => LocalWorkspace,
+    message: string,
+  ): Promise<void> {
+    const fixture = createUnoccupiedOrbitWorkspace()
+    const harness = createHistoryHarness(fixture.workspace)
+    const scope = effectScope()
+    const inspector = scope.run(() => useEntityInspectorSession({
+      workspace: harness.workspace,
+      mutations: harness.history,
+    }))
+    if (!inspector) throw new Error('The Inspector session controller was not created.')
+    inspector.beginOrbitSession(fixture.workspace.cluster.id, fixture.systemId, fixture.orbitId)
+    const session = inspector.entitySession.value
+    if (!session || session.kind !== 'orbit') throw new Error('The Orbit Inspector session did not start.')
+    session.draft.horizontalRadius = '240'
+    harness.workspace.value = createWorkspaceSnapshot(changeWorkspace(harness.workspace.value!, fixture))
+
+    expect(await inspector.applyEntitySession(session.id)).toBe(false)
+    expect(session.error).toContain(message)
+    expect(harness.history.getStatus().totalActions).toBe(0)
+
+    scope.stop()
+    harness.dispose()
+  }
+
+  await expectStaleDraft((current, fixture) => ({
+    ...current,
+    layout: {
+      ...current.layout,
+      orbitRadii: {
+        ...current.layout.orbitRadii,
+        [fixture.orbitId]: { horizontal: 190, vertical: 90 },
+      },
+    },
+  }), 'The Orbit host or one of its parent placements changed while this Inspector was open.')
+
+  await expectStaleDraft((current, fixture) => {
+    const system = current.cluster.systems.find(candidate => candidate.id === fixture.systemId)!
+    const orbit = system.orbits.find(candidate => candidate.id === fixture.orbitId)!
+    const hostId = system.objects[0]!.id
+    return {
+      ...current,
+      cluster: {
+        ...current.cluster,
+        systems: current.cluster.systems.map(candidate => candidate.id === fixture.systemId
+          ? {
+              ...candidate,
+              orbits: candidate.orbits.map(value => value.id === fixture.orbitId
+                ? { id: orbit.id, hostId, order: orbit.order }
+                : value),
+            }
+          : candidate),
+      },
+    }
+  }, 'This Orbit changed while its Inspector was open.')
+})
+
+test('capacity-delayed Orbit-center moves do not rebase a replacement Inspector session @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = createUnoccupiedOrbitWorkspace()
+  let decideCapacity: ((accepted: boolean) => void) | undefined
+  let announceCapacity: (() => void) | undefined
+  const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
+  const capacityShown = new Promise<void>((resolve) => { announceCapacity = resolve })
+  const harness = createHistoryHarness(fixture.workspace, {
+    limits: { maxBytes: 1, maxActions: 100 },
+    confirmCapacity: async () => {
+      announceCapacity?.()
+      return await capacityDecision
+    },
+  })
+  const system = fixture.workspace.cluster.systems[0]!
+  const object = system.objects[0]!
+  const store = useEditorUiStore()
+  store.setSelection({
+    activeView: 'system',
+    selectedSystemId: fixture.systemId,
+    selectedOrbitId: fixture.orbitId,
+  })
+  store.setMode('move')
+  const scope = effectScope()
+  const systemMapRef = shallowRef<SystemMapHandle | null>(systemMapStub())
+  const orbitAdjustments = createContinuousOrbitAdjustmentController({ history: harness.history })
+  const beforeWorkspaceOperation = async (): Promise<boolean> => {
+    const result = await orbitAdjustments.beforeOperation()
+    if (result.status === 'applied') void result.durable.catch(() => undefined)
+    return result.status !== 'rejected'
+  }
+  const controllers = scope.run(() => {
+    const inspector = useEntityInspectorSession({ workspace: harness.workspace, mutations: harness.history })
+    const map = useMapWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      systemMapRef,
+      resolveTransition: async () => true,
+      beginObjectSession: inspector.beginObjectSession,
+      beginOrbitSession: inspector.beginOrbitSession,
+      isEntityCommandBlocked: inspector.isEntityCommandBlocked,
+      createCommittedPositionAppliedHandler: inspector.createCommittedPositionAppliedHandler,
+      createCommittedOrbitCenterAppliedHandler: inspector.createCommittedOrbitCenterAppliedHandler,
+      editorError: ref(''),
+      orbitAdjustments,
+      beforeWorkspaceOperation,
+    })
+    return { inspector, map }
+  })
+  if (!controllers) throw new Error('The Inspector and map workflows were not created.')
+
+  controllers.inspector.beginOrbitSession(fixture.workspace.cluster.id, fixture.systemId, fixture.orbitId)
+  const originalSession = controllers.inspector.entitySession.value
+  if (!originalSession || originalSession.kind !== 'orbit' || originalSession.initial.orbit.hostId !== null) {
+    throw new Error('The unoccupied Orbit Inspector session did not start.')
+  }
+  const originalCenter = { ...originalSession.initial.orbit.center }
+  const originalSessionId = originalSession.id
+  const pendingMove = controllers.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.69, y: 0.57 }, null)
+  await capacityShown
+
+  controllers.inspector.beginObjectSession(fixture.workspace.cluster.id, fixture.systemId, object.id)
+  controllers.inspector.beginOrbitSession(fixture.workspace.cluster.id, fixture.systemId, fixture.orbitId)
+  const replacement = controllers.inspector.entitySession.value
+  expect(replacement?.kind).toBe('orbit')
+  if (!replacement || replacement.kind !== 'orbit') throw new Error('The replacement Orbit session did not start.')
+  expect(replacement.id).not.toBe(originalSessionId)
+  replacement.draft.horizontalRadius = '200'
+
+  decideCapacity?.(true)
+  expect(await pendingMove).toBe(true)
+  expect(harness.workspace.value?.cluster.systems[0]?.orbits[0]?.center).toEqual({ x: 0.69, y: 0.57 })
+  expect(controllers.inspector.entitySession.value?.id).toBe(replacement.id)
+  expect(replacement.initial.orbit.center).toEqual(originalCenter)
+  expect(replacement.draft.horizontalRadius).toBe('200')
+
+  orbitAdjustments.dispose()
+  scope.stop()
+  harness.dispose()
+})
+
+test('accepted object-position moves retain the clean Object Inspector session @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const object = system.objects[0]!
+  const harness = createHistoryHarness(initial)
+  const scope = effectScope()
+  const workflows = scope.run(() => useEditorWorkflows({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    initializeWorkspace: async () => undefined,
+    saveState: ref<SaveState>('saved'),
+    saveError: ref<string | null>(null),
+  }))
+  if (!workflows) throw new Error('The editor workflows were not created.')
+
+  useEditorUiStore().setSelection({
+    activeView: 'system',
+    selectedSystemId: system.id,
+    selectedObjectId: object.id,
+  })
+  await workflows.inspector.beginObjectEdit()
+  const session = workflows.inspector.entitySession.value
+  expect(session?.kind).toBe('object')
+  if (!session || session.kind !== 'object') throw new Error('The Object Inspector session did not start.')
+
+  const target = { x: 0.68, y: 0.42 }
+  await workflows.placement.map.moveMapObject(object.id, target)
+
+  expect(harness.workspace.value?.cluster.systems[0]?.objects[0]?.placement)
+    .toEqual({ kind: 'system', ...target })
+  expect(workflows.inspector.entitySession.value?.id).toBe(session.id)
+  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
+  expect(session.initial.object.placement).toEqual({ kind: 'system', ...target })
+
+  workflows.adjustments.resetOrbitAdjustments()
+  scope.stop()
   harness.dispose()
 })
 

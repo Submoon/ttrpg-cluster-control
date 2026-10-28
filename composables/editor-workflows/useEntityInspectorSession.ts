@@ -30,6 +30,7 @@ import type {
   OrbitCenterMoveCandidate,
   OrbitEditBaseline,
   OrbitPlacementPreview,
+  CommittedOrbitCenterPosition,
   CommittedObjectPosition,
 } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
@@ -41,13 +42,6 @@ import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 interface EntityInspectorSessionOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   mutations: WorkspaceMutationExecutor
-}
-
-interface CommittedOrbitCenterPosition {
-  orbitId: string
-  previous: Point
-  next: Point
-  command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
 }
 
 interface DraftDependencySnapshots {
@@ -77,7 +71,26 @@ function clone<T>(value: T): T {
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
+  if (Object.is(left, right)) return true
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    for (let index = 0; index < left.length; index += 1) {
+      const leftHasIndex = Object.prototype.hasOwnProperty.call(left, index)
+      const rightHasIndex = Object.prototype.hasOwnProperty.call(right, index)
+      if (leftHasIndex !== rightHasIndex || (leftHasIndex && !sameValue(left[index], right[index]))) return false
+    }
+    return true
+  }
+
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every(key => Object.prototype.hasOwnProperty.call(rightRecord, key)
+    && sameValue(leftRecord[key], rightRecord[key]))
 }
 
 function samePlacement(left: ObjectPlacement, right: ObjectPlacement): boolean {
@@ -809,6 +822,24 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     return true
   }
 
+  function createCommittedPositionAppliedHandler(change: CommittedObjectPosition): () => void {
+    const originatingSessionId = entitySession.value?.id
+    const acceptedChange = clone(change)
+    return () => {
+      if (entitySession.value?.id !== originatingSessionId) return
+      acceptCommittedPosition(acceptedChange)
+    }
+  }
+
+  function createCommittedOrbitCenterAppliedHandler(change: CommittedOrbitCenterPosition): () => void {
+    const originatingSessionId = entitySession.value?.id
+    const acceptedChange = clone(change)
+    return () => {
+      if (entitySession.value?.id !== originatingSessionId) return
+      acceptCommittedOrbitCenter(acceptedChange)
+    }
+  }
+
   function beginObjectSession(clusterId: string, systemId: string, objectId: string): void {
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
@@ -1367,8 +1398,8 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     endCleanHistorySession,
     isEntityCommandBlocked,
     isEntityDraftTarget,
-    acceptCommittedPosition,
-    acceptCommittedOrbitCenter,
+    createCommittedPositionAppliedHandler,
+    createCommittedOrbitCenterAppliedHandler,
   }
 }
 

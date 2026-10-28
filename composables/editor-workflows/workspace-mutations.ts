@@ -37,6 +37,8 @@ export interface WorkspaceMutationRequest {
   action: WorkspaceMutationAction
   prepare(current: LocalWorkspace): LocalWorkspace
   isCurrent?: () => boolean
+  /** Best-effort notification after memory publication (and timeline installation when coordinated), before durability settles. */
+  onApplied?: () => void
 }
 
 export type WorkspaceMutationResult =
@@ -70,6 +72,14 @@ function rejected(
   message: string,
 ): RejectedMutationResult {
   return { status: 'rejected', reason, message }
+}
+
+function notifyApplied(request: WorkspaceMutationRequest): void {
+  try {
+    request.onApplied?.()
+  } catch {
+    // Draft rebasing is best effort and cannot change an already-published mutation verdict.
+  }
 }
 
 function normalizedTarget(target: WorkspaceMutationTarget): WorkspaceMutationTarget | null {
@@ -216,14 +226,30 @@ function createWorkspaceMutationPipeline({
 /** Runs a validated proposal through the page owner's synchronous memory publication boundary. */
 export function createWorkspaceMutationExecutor(options: WorkspaceMutationExecutorOptions): WorkspaceMutationExecutor {
   const pipeline = createWorkspaceMutationPipeline(options)
+  let publishing = false
+  let disposed = false
+  let operationEpoch = 0
   return {
     execute(request) {
-      const preparation = pipeline.prepare(request)
-      return Promise.resolve('action' in preparation
-        ? pipeline.publish(preparation)
-        : preparation)
+      if (disposed) return Promise.resolve(rejected('stale', 'The workspace mutation executor is no longer active.'))
+      if (publishing) return Promise.resolve(rejected('busy', 'Finish the current workspace operation before editing again.'))
+      publishing = true
+      const epoch = operationEpoch
+      try {
+        const preparation = pipeline.prepare(request)
+        const result = 'action' in preparation ? pipeline.publish(preparation) : preparation
+        if (result.status === 'applied' && !disposed && epoch === operationEpoch) notifyApplied(request)
+        return Promise.resolve(result)
+      } finally {
+        publishing = false
+      }
     },
-    dispose: () => pipeline.dispose(),
+    dispose() {
+      if (disposed) return
+      disposed = true
+      operationEpoch += 1
+      pipeline.dispose()
+    },
   }
 }
 
@@ -547,6 +573,7 @@ export function createWorkspaceHistoryCoordinator(
           timeline = nextTimeline
           identity = identityOf(prepared.after)
         }
+        if (!disposed && epoch === operationEpoch) notifyApplied(prepared.request)
       }
       return result
     } catch (error) {
@@ -561,12 +588,14 @@ export function createWorkspaceHistoryCoordinator(
   const publishOversizedBaseline = (
     prepared: PreparedMutation,
     baseline: WorkspaceHistoryTimeline,
+    epoch: number,
   ): WorkspaceMutationResult => {
     const result = pipeline.publish(prepared)
     if (result.status === 'applied') {
-      if (!disposed) {
+      if (!disposed && epoch === operationEpoch) {
         timeline = baseline
         identity = identityOf(prepared.after)
+        notifyApplied(prepared.request)
       }
     }
     return result
@@ -648,7 +677,7 @@ export function createWorkspaceHistoryCoordinator(
           return rejected('stale', 'The workspace changed while the history capacity question was open.')
         }
 
-        const applied = publishOversizedBaseline(preparation, oversizedBaseline)
+        const applied = publishOversizedBaseline(preparation, oversizedBaseline, epoch)
         return applied
       }).catch(error => rejected('failed', errorText(error))).finally(finishConfirmation)
     } catch (error) {

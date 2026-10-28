@@ -155,8 +155,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
-    acceptCommittedPosition: entity.acceptCommittedPosition,
-    acceptCommittedOrbitCenter: entity.acceptCommittedOrbitCenter,
+    createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
+    createCommittedOrbitCenterAppliedHandler: entity.createCommittedOrbitCenterAppliedHandler,
     editorError,
     orbitAdjustments,
     beforeWorkspaceOperation,
@@ -188,7 +188,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     beforeWorkspaceOperation,
-    acceptCommittedPosition: entity.acceptCommittedPosition,
+    createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
   })
   const unresolvedExitPlacement = useUnresolvedExitPlacement({
     workspace,

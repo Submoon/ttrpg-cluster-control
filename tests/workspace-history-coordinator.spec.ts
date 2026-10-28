@@ -412,9 +412,24 @@ test('accepting an oversized action publishes it as a non-undoable empty-history
       return true
     },
   })
-  const applied = await oversized.history.execute(renamed(oversized.workspace, 'Kestrel Reach Prime'))
+  let appliedHookCount = 0
+  let statusInsideAppliedHook: ReturnType<typeof oversized.history.getStatus> | null = null
+  const request = renamed(oversized.workspace, 'Kestrel Reach Prime')
+  request.onApplied = () => {
+    appliedHookCount += 1
+    statusInsideAppliedHook = oversized.history.getStatus()
+  }
+  const applied = await oversized.history.execute(request)
 
   expect(applied.status).toBe('applied')
+  expect(appliedHookCount).toBe(1)
+  expect(statusInsideAppliedHook).toMatchObject({
+    totalActions: 0,
+    undoDepth: 0,
+    redoDepth: 0,
+    retentionReduced: true,
+    isBusy: true,
+  })
   if (applied.status === 'applied') await applied.durable
   expect(oversized.workspace.cluster.name).toBe('Kestrel Reach Prime')
   expect(oversized.history.getStatus()).toMatchObject({
@@ -466,6 +481,112 @@ test('a synchronous writer failure after memory publication keeps the matching h
   if (applied.status === 'applied') {
     await expect(applied.durable).rejects.toThrow('The writer failed after publishing memory.')
   }
+  harness.dispose()
+})
+
+test('a throwing applied hook preserves the coordinator verdict and its durable rejection @pure', async () => {
+  const harness = historyHarness({ failAfterPublication: () => true })
+  let hookCount = 0
+  const request = renamed(harness.workspace, 'Visible Reach')
+  request.onApplied = () => {
+    hookCount += 1
+    throw new Error('The Inspector rebase observer failed.')
+  }
+
+  const result = await harness.history.execute(request)
+
+  expect(result.status).toBe('applied')
+  expect(hookCount).toBe(1)
+  expect(harness.workspace.cluster.name).toBe('Visible Reach')
+  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, redoDepth: 0 })
+  if (result.status === 'applied') {
+    await expect(result.durable).rejects.toThrow('The writer failed after publishing memory.')
+  }
+  harness.dispose()
+})
+
+test('the applied hook observes the installed history edge and remains inside the reentrancy guard @pure', async () => {
+  const harness = historyHarness()
+  let hookCount = 0
+  let statusInsideHook: ReturnType<typeof harness.history.getStatus> | null = null
+  let reentrantAttempt: Promise<unknown> | undefined
+  const request = renamed(harness.workspace, 'Published once')
+  request.onApplied = () => {
+    hookCount += 1
+    statusInsideHook = harness.history.getStatus()
+    reentrantAttempt = harness.history.execute(renamed(harness.workspace, 'Reentrant edit'))
+  }
+
+  const applied = await harness.history.execute(request)
+
+  expect(applied.status).toBe('applied')
+  expect(hookCount).toBe(1)
+  expect(statusInsideHook).toMatchObject({ totalActions: 1, undoDepth: 1, redoDepth: 0, isBusy: true })
+  expect(await reentrantAttempt).toMatchObject({ status: 'rejected', reason: 'busy' })
+  expect(harness.workspace.cluster.name).toBe('Published once')
+  expect(harness.history.getStatus()).toMatchObject({ totalActions: 1, undoDepth: 1, redoDepth: 0, isBusy: false })
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect((await harness.history.redo()).status).toBe('applied')
+  expect(hookCount).toBe(1)
+  harness.dispose()
+})
+
+test('unchanged, stale, and capacity-canceled requests do not call the applied hook @pure', async () => {
+  const harness = historyHarness({
+    limits: { maxBytes: 1, maxActions: 100 },
+    confirmCapacity: async () => false,
+  })
+  let hookCount = 0
+  const withHook = (request: WorkspaceMutationRequest): WorkspaceMutationRequest => ({
+    ...request,
+    onApplied: () => { hookCount += 1 },
+  })
+
+  const unchanged = await harness.history.execute(withHook(renamed(harness.workspace, 'Kestrel Reach')))
+  const staleRequest = withHook(renamed(harness.workspace, 'Stale proposal'))
+  staleRequest.isCurrent = () => false
+  const stale = await harness.history.execute(staleRequest)
+  const canceled = await harness.history.execute(withHook(renamed(harness.workspace, 'Canceled proposal')))
+
+  expect(unchanged.status).toBe('unchanged')
+  expect(stale).toMatchObject({ status: 'rejected', reason: 'stale' })
+  expect(canceled).toMatchObject({ status: 'rejected', reason: 'cancelled' })
+  expect(hookCount).toBe(0)
+  expect(harness.history.getStatus()).toMatchObject({ totalActions: 0, undoDepth: 0, redoDepth: 0 })
+  harness.dispose()
+})
+
+test('reset during memory publication suppresses the applied hook after clearing the installed edge @pure', async () => {
+  let history: ReturnType<typeof createWorkspaceHistoryCoordinator> | null = null
+  const harness = historyHarness({ beforePublication: () => history?.reset('The editing baseline changed.') })
+  history = harness.history
+  let hookCount = 0
+  const request = renamed(harness.workspace, 'Visible before reset')
+  request.onApplied = () => { hookCount += 1 }
+
+  const applied = await history.execute(request)
+
+  expect(applied.status).toBe('applied')
+  expect(harness.workspace.cluster.name).toBe('Visible before reset')
+  expect(hookCount).toBe(0)
+  expect(history.getStatus()).toMatchObject({ totalActions: 0, undoDepth: 0, notice: 'The editing baseline changed.' })
+  harness.dispose()
+})
+
+test('disposal during memory publication suppresses the applied hook without changing the verdict @pure', async () => {
+  let history: ReturnType<typeof createWorkspaceHistoryCoordinator> | null = null
+  const harness = historyHarness({ beforePublication: () => history?.dispose() })
+  history = harness.history
+  let hookCount = 0
+  const request = renamed(harness.workspace, 'Visible before disposal')
+  request.onApplied = () => { hookCount += 1 }
+
+  const applied = await history.execute(request)
+
+  expect(applied.status).toBe('applied')
+  expect(harness.workspace.cluster.name).toBe('Visible before disposal')
+  expect(hookCount).toBe(0)
+  expect(history.getStatus()).toMatchObject({ totalActions: 0, undoDepth: 0 })
   harness.dispose()
 })
 

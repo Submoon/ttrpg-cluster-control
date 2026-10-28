@@ -1,12 +1,23 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback, captureMapExportBlobs, createSingleSystemWorkspace,
-  downloadJson, openChartDetails, returnToClusterMap, setWorkspaceMapMode,
+  activeWorkspaceFeedback, addCatalogueObject, captureMapExportBlobs, clickDockAction,
+  createSingleSystemWorkspace, dragToWorldPoint, downloadJson, editMapObject,
+  ensureMapDragPointsReachable, openChartDetails, openWorkspaceHierarchy,
+  returnToClusterMap, saveMapObject, setWorkspaceMapMode, workspaceZoomControls,
 } from './helpers'
 import {
   installHistoryStorageGate, pendingHistoryAcknowledgements, releaseHistoryAcknowledgements,
   releaseNextHistoryAcknowledgement, setHistoryStorageGate,
 } from './scenarios/history-storage-gate'
+
+async function historyUndoDepth(page: import('@playwright/test').Page): Promise<number> {
+  const undo = page.getByRole('group', { name: 'Edit history' })
+    .getByRole('button', { name: /^Undo(?:$|:)/ })
+  const description = await undo.getAttribute('aria-description')
+  const match = description?.match(/^(\d+)/)
+  if (!match) throw new Error(`Could not read the Undo depth from "${description}".`)
+  return Number(match[1])
+}
 
 test('saved names can be undone and redone through directly reachable history buttons', async ({ page }) => {
   await createSingleSystemWorkspace(page)
@@ -258,4 +269,74 @@ test('an older real save acknowledgement cannot enable traversal of a newer appl
   } finally {
     await releaseHistoryAcknowledgements(page, true)
   }
+})
+
+test('releasing an object drag over disabled history chrome cancels cleanly and permits the next drag', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  await addCatalogueObject(page, 'planet', {
+    target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
+  })
+  await editMapObject(page)
+  await page.getByLabel('Name', { exact: true }).fill('Iria')
+  await saveMapObject(page)
+
+  const history = page.getByRole('group', { name: 'Edit history' })
+  const undo = history.getByRole('button', { name: /^Undo(?:$|:)/ })
+  const redo = history.getByRole('button', { name: /^Redo(?:$|:)/ })
+  await expect(undo).toBeEnabled()
+  await expect(redo).toBeDisabled()
+  await setWorkspaceMapMode(page, 'Move')
+
+  const planet = map.getByRole('button', { name: 'Select PL-01, Iria (Planet)', exact: true })
+  const hitTarget = planet.locator('.object-hit-target')
+  const initialTransform = await planet.getAttribute('transform')
+  if (!initialTransform) throw new Error('The Orbit object has no initial map position.')
+  const historyDepthBeforeBlockedRelease = await historyUndoDepth(page)
+  const redoBounds = await redo.boundingBox()
+  const sourceBounds = await hitTarget.boundingBox()
+  if (!redoBounds || !sourceBounds) throw new Error('The source or disabled Redo command is outside the viewport.')
+  const obstructedClientPoint = {
+    x: redoBounds.x + redoBounds.width / 2,
+    y: redoBounds.y + redoBounds.height / 2,
+  }
+  const obstructedHit = await page.evaluate((point) => {
+    const element = document.elementFromPoint(point.x, point.y)
+    const button = element?.closest('button')
+    return {
+      ariaLabel: button?.getAttribute('aria-label'),
+      disabled: button instanceof HTMLButtonElement ? button.disabled : null,
+    }
+  }, obstructedClientPoint)
+  expect(obstructedHit).toEqual({ ariaLabel: 'Redo', disabled: true })
+
+  await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(obstructedClientPoint.x, obstructedClientPoint.y, { steps: 6 })
+  await expect(undo).toBeDisabled()
+  await expect(history).toContainText('Finish the active map gesture first.')
+  await page.mouse.up()
+
+  await expect(undo).toBeEnabled()
+  await expect(history).not.toContainText('Finish the active map gesture first.')
+  await expect(planet).toHaveAttribute('transform', initialTransform)
+  await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease)
+
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(planet).toHaveAttribute('transform', initialTransform)
+  await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease)
+
+  const validDestination = {
+    x: 480 + 112 * Math.SQRT1_2,
+    y: 280 - 112 * Math.SQRT1_2,
+  }
+  await ensureMapDragPointsReachable(page, map, hitTarget, validDestination)
+  await dragToWorldPoint(page, map, hitTarget, validDestination)
+  await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease + 1)
+  await expect(undo).toHaveAccessibleName('Undo: Place Iria in Orbit · Iria · Vesper')
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await expect(planet).not.toHaveAttribute('transform', initialTransform)
 })

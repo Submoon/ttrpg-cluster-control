@@ -450,14 +450,31 @@ function onWindowPointerUp(event: PointerEvent): void {
     return
   }
   if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
+  const ownsActiveMousePointer = event.pointerType === 'mouse'
+    && activeMousePointerId === event.pointerId
+  if (ownsActiveMousePointer && !activePointerPan && isDisabledObstructionRelease(event)) {
+    activeMousePointerId = null
+    cancelMapGesture()
+    return
+  }
   if (consumedAddPointerId === event.pointerId) {
     holdClickSuppression()
     consumedAddPointerId = null
   }
-  if (event.pointerType === 'mouse' && activeMousePointerId === event.pointerId) activeMousePointerId = null
+  if (ownsActiveMousePointer) activeMousePointerId = null
   if (!activePointerPan || event.pointerId !== activePointerPan.id) return
   currentMap()?.endViewPan()
   activePointerPan = null
+}
+
+function isDisabledObstructionRelease(event: PointerEvent): boolean {
+  if (!(event.target instanceof Element)) return false
+  const canvas = canvasRoot.value
+  if (!canvas || canvas.contains(event.target)) return false
+  const obstruction = event.target.closest<HTMLElement>('[data-map-obstruction]')
+  if (!obstruction || canvas.contains(obstruction)) return false
+  const disabledButton = event.target.closest<HTMLButtonElement>('button:disabled')
+  return disabledButton !== null && obstruction.contains(disabledButton)
 }
 
 function onContextMenuCapture(event: MouseEvent): void {

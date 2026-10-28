@@ -40,7 +40,7 @@ interface SystemObjectPlacementOptions {
   mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   beforeWorkspaceOperation: () => Promise<boolean>
-  acceptCommittedPosition?: (change: CommittedObjectPosition) => boolean
+  createCommittedPositionAppliedHandler?: (change: CommittedObjectPosition) => () => void
 }
 
 interface CurrentObject {
@@ -224,7 +224,7 @@ export function useSystemObjectPlacement({
   mutations,
   isEntityCommandBlocked,
   beforeWorkspaceOperation,
-  acceptCommittedPosition,
+  createCommittedPositionAppliedHandler,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -642,6 +642,16 @@ export function useSystemObjectPlacement({
         ? { kind: 'orbit' as const, orbitId: preview.target.orbitId }
         : { kind: 'system' as const, x: preview.target.point.x, y: preview.target.point.y }
       const command = moveCommand(current, preview.target)
+      const onApplied = createCommittedPositionAppliedHandler?.({
+        objectId: current.object.id,
+        previousPlacement: current.object.placement,
+        nextPlacement: placement,
+        ...(current.object.placement.kind === 'orbit'
+          ? { previousAngle: effectiveObjectAngle(current.workspace, current.system, current.object) }
+          : {}),
+        ...(preview.target.kind === 'orbit' ? { nextAngle: preview.target.angle } : {}),
+        command,
+      })
       const result = await mutations.execute({
         action: {
           kind: preview.target.kind === 'orbit' ? 'place' : 'move',
@@ -653,6 +663,7 @@ export function useSystemObjectPlacement({
             ? { kind: 'orbit', id: preview.target.orbitId, systemId: current.system.id }
             : { kind: 'system', id: current.system.id },
         },
+        ...(onApplied ? { onApplied } : {}),
         isCurrent: () => {
           if (systemObjectMovePreview.value?.token !== preview.token
             || creationActive.value
@@ -691,16 +702,6 @@ export function useSystemObjectPlacement({
       if (result.status === 'rejected') throw new Error(result.message)
       if (result.status === 'applied') {
         void result.durable.catch(() => undefined)
-        acceptCommittedPosition?.({
-          objectId: current.object.id,
-          previousPlacement: current.object.placement,
-          nextPlacement: placement,
-          ...(current.object.placement.kind === 'orbit'
-            ? { previousAngle: effectiveObjectAngle(current.workspace, current.system, current.object) }
-            : {}),
-          ...(preview.target.kind === 'orbit' ? { nextAngle: preview.target.angle } : {}),
-          command,
-        })
       }
       if (systemObjectMovePreview.value?.token === preview.token) {
         clearPreview()

@@ -23,6 +23,7 @@ import type {
   createContinuousOrbitAdjustmentController,
 } from './continuous-orbit-adjustments'
 import type {
+  CommittedOrbitCenterPosition,
   CommittedObjectPosition,
   EntityCommand,
   SystemMapHandle,
@@ -47,13 +48,8 @@ interface MapWorkflowOptions {
   beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
   beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
   isEntityCommandBlocked: (command: EntityCommand) => boolean
-  acceptCommittedPosition?: (change: CommittedObjectPosition) => boolean
-  acceptCommittedOrbitCenter?: (change: {
-    orbitId: string
-    previous: Point
-    next: Point
-    command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
-  }) => void
+  createCommittedPositionAppliedHandler?: (change: CommittedObjectPosition) => () => void
+  createCommittedOrbitCenterAppliedHandler?: (change: CommittedOrbitCenterPosition) => () => void
   editorError: Ref<string>
   orbitAdjustments: OrbitAdjustmentController
   beforeWorkspaceOperation(): Promise<boolean>
@@ -72,8 +68,8 @@ export function useMapWorkflows({
   beginObjectSession,
   beginOrbitSession,
   isEntityCommandBlocked,
-  acceptCommittedPosition,
-  acceptCommittedOrbitCenter,
+  createCommittedPositionAppliedHandler,
+  createCommittedOrbitCenterAppliedHandler,
   editorError,
   orbitAdjustments,
   beforeWorkspaceOperation,
@@ -338,6 +334,16 @@ export function useMapWorkflows({
       }
       const clusterId = currentWorkspace.cluster.id
       const originalPlacement = object.placement
+      const nextPlacement: ObjectPlacement = { kind: 'system', x: position.x, y: position.y }
+      const onApplied = createCommittedPositionAppliedHandler?.({
+        objectId,
+        previousPlacement: originalPlacement,
+        nextPlacement,
+        ...(originalPlacement.kind === 'orbit'
+          ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
+          : {}),
+        command,
+      })
       const result = await mutations.execute({
         action: {
           kind: 'move',
@@ -352,6 +358,7 @@ export function useMapWorkflows({
             && latest.cluster.systems.some(candidate => candidate.id === system.id
               && candidate.objects.some(item => item.id === object.id && JSON.stringify(item.placement) === JSON.stringify(originalPlacement)))
         },
+        ...(onApplied ? { onApplied } : {}),
         prepare: (latest) => {
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === system.id)
           const latestObject = latestSystem?.objects.find(candidate => candidate.id === object.id)
@@ -368,16 +375,6 @@ export function useMapWorkflows({
       })
       throwIfRejected(result)
       if (result.status === 'applied') {
-        const nextPlacement: ObjectPlacement = { kind: 'system', x: position.x, y: position.y }
-        acceptCommittedPosition?.({
-          objectId,
-          previousPlacement: object.placement,
-          nextPlacement,
-          ...(object.placement.kind === 'orbit'
-            ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
-            : {}),
-          command,
-        })
         await result.durable
       }
       editorError.value = ''
@@ -415,6 +412,23 @@ export function useMapWorkflows({
       }
       const clusterId = currentWorkspace.cluster.id
       const sourcePlacement = object.placement
+      const nextPlacement: ObjectPlacement = { kind: 'orbit', orbitId }
+      const placementCommand: Extract<EntityCommand, { kind: 'object-placement' }> = {
+        kind: 'object-placement',
+        objectId,
+        fromOrbitId: sourcePlacement.kind === 'orbit' ? sourcePlacement.orbitId : null,
+        toOrbitId: orbitId,
+      }
+      const onApplied = createCommittedPositionAppliedHandler?.({
+        objectId,
+        previousPlacement: sourcePlacement,
+        nextPlacement,
+        ...(sourcePlacement.kind === 'orbit'
+          ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
+          : {}),
+        nextAngle: angle,
+        command: placementCommand,
+      })
       const result = await mutations.execute({
         action: {
           kind: 'place',
@@ -422,6 +436,7 @@ export function useMapWorkflows({
           target: { kind: 'object', id: object.id, systemId: system.id },
           parent: { kind: 'orbit', id: orbitId, systemId: system.id },
         },
+        ...(onApplied ? { onApplied } : {}),
         isCurrent: () => {
           const latest = workspace.value
           return latest !== null && latest.cluster.id === clusterId
@@ -447,21 +462,6 @@ export function useMapWorkflows({
       })
       throwIfRejected(result)
       if (result.status === 'applied') {
-        acceptCommittedPosition?.({
-          objectId,
-          previousPlacement: object.placement,
-          nextPlacement: { kind: 'orbit', orbitId },
-          ...(object.placement.kind === 'orbit'
-            ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
-            : {}),
-          nextAngle: angle,
-          command: {
-            kind: 'object-placement',
-            objectId,
-            fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
-            toOrbitId: orbitId,
-          },
-        })
         await result.durable
       }
       editorError.value = ''
@@ -494,6 +494,20 @@ export function useMapWorkflows({
       const clusterId = currentWorkspace.cluster.id
       const currentAngle = currentWorkspace.layout.objectAngles[objectId]
       const previousAngle = effectiveObjectAngle(currentWorkspace, systemId, objectId)
+      const command: Extract<EntityCommand, { kind: 'object-placement' }> = {
+        kind: 'object-placement',
+        objectId,
+        fromOrbitId: object.placement.orbitId,
+        toOrbitId: object.placement.orbitId,
+      }
+      const onApplied = createCommittedPositionAppliedHandler?.({
+        objectId,
+        previousPlacement: object.placement,
+        nextPlacement: object.placement,
+        ...(previousAngle !== undefined ? { previousAngle } : {}),
+        nextAngle: angle,
+        command,
+      })
       const result = await mutations.execute({
         action: {
           kind: 'rotate',
@@ -501,6 +515,7 @@ export function useMapWorkflows({
           target: { kind: 'object', id: objectId, systemId },
           parent: { kind: 'system', id: systemId },
         },
+        ...(onApplied ? { onApplied } : {}),
         isCurrent: () => {
           const latest = workspace.value
           return latest !== null && latest.cluster.id === clusterId
@@ -529,19 +544,6 @@ export function useMapWorkflows({
       })
       throwIfRejected(result)
       if (result.status === 'applied') {
-        acceptCommittedPosition?.({
-          objectId,
-          previousPlacement: object.placement,
-          nextPlacement: object.placement,
-          ...(previousAngle !== undefined ? { previousAngle } : {}),
-          nextAngle: angle,
-          command: {
-            kind: 'object-placement',
-            objectId,
-            fromOrbitId: object.placement.orbitId,
-            toOrbitId: object.placement.orbitId,
-          },
-        })
         await result.durable
       }
       editorError.value = ''
@@ -697,6 +699,14 @@ export function useMapWorkflows({
       const clusterId = currentWorkspace.cluster.id
       const selectedSystemId = system.id
       let adjustedMinimum: number | undefined
+      const onApplied = isFreeCenterMove && previousCenter
+        ? createCommittedOrbitCenterAppliedHandler?.({
+            orbitId,
+            previous: previousCenter,
+            next: { ...center },
+            command: { kind: 'orbit-center-position', orbitId },
+          })
+        : undefined
       const result = await mutations.execute({
         action: {
           kind: 'move',
@@ -704,6 +714,7 @@ export function useMapWorkflows({
           target: { kind: 'orbit', id: orbitId, systemId: selectedSystemId },
           parent: { kind: 'system', id: selectedSystemId },
         },
+        ...(onApplied ? { onApplied } : {}),
         isCurrent: () => {
           const latest = workspace.value
           const latestOrbit = latest?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
@@ -772,14 +783,6 @@ export function useMapWorkflows({
       editorError.value = ''
       orbitAdjustmentNotice.value = ''
       if (result.status === 'applied') {
-        if (isFreeCenterMove && previousCenter) {
-          acceptCommittedOrbitCenter?.({
-            orbitId,
-            previous: previousCenter,
-            next: { ...center },
-            command: { kind: 'orbit-center-position', orbitId },
-          })
-        }
         if (adjustedMinimum !== undefined) {
           orbitAdjustmentNotice.value = `Orbit radii increased to the new host minimum of ${adjustedMinimum}.`
         }

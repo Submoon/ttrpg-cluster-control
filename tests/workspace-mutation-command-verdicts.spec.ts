@@ -72,6 +72,43 @@ test('a map move publishes before its durable acknowledgement and keeps awaiting
   mutations.dispose()
 })
 
+test('a throwing ordinary applied hook preserves the memory verdict and original durable acknowledgement @pure', async () => {
+  const workspace = ref<LocalWorkspace | null>(createLocalWorkspace('Kestrel Reach', 'Vesper'))
+  const initial = workspace.value!
+  const durable = deferred<void>()
+  let revision = 0
+  let hookCount = 0
+  const mutations = createWorkspaceMutationExecutor({
+    getWorkspace: () => workspace.value,
+    getRevision: () => revision,
+    publishWorkspace: nextWorkspace => {
+      workspace.value = nextWorkspace
+      revision += 1
+      return { durable: durable.promise }
+    },
+  })
+
+  const result = await mutations.execute({
+    action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: initial.cluster.id } },
+    prepare: current => ({ ...current, cluster: { ...current.cluster, name: 'Kestrel Reach Prime' } }),
+    onApplied: () => {
+      hookCount += 1
+      expect(workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
+      throw new Error('A best-effort editor observer failed.')
+    },
+  })
+
+  expect(result.status).toBe('applied')
+  expect(hookCount).toBe(1)
+  expect(workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
+  if (result.status === 'applied') {
+    expect(result.durable).toBe(durable.promise)
+    durable.resolve()
+    await result.durable
+  }
+  mutations.dispose()
+})
+
 test('a rejected Cluster move keeps its initiating preview and leaves applied position intact @pure', async () => {
   setActivePinia(createPinia())
   const workspace = ref<LocalWorkspace | null>(createLocalWorkspace('Kestrel Reach', 'Vesper'))

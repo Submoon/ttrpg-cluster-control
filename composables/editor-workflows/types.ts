@@ -271,6 +271,14 @@ export interface CommittedObjectPosition {
   command: Extract<EntityCommand, { kind: 'object-placement' }>
 }
 
+/** Accepted map move of an unoccupied Orbit center, used to rebase only its originating Inspector session. */
+export interface CommittedOrbitCenterPosition {
+  orbitId: string
+  previous: Point
+  next: Point
+  command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
+}
+
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */
 export interface MapNavigationHandle extends MapImageExporter {
   /** Focuses the current SVG so a map-based placement can use keyboard targeting. */
