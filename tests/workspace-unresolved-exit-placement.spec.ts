@@ -45,6 +45,60 @@ async function targetPosition(
   }))
 }
 
+async function sceneHorizontalGap(
+  map: import('@playwright/test').Locator,
+  screenStartX: number,
+  screenEndX: number,
+): Promise<number> {
+  return map.evaluate((element, screenPoints) => {
+    const contentTransform = element.querySelector<SVGGElement>('.cluster-map-content')?.getScreenCTM()
+    if (!contentTransform) throw new Error('The Cluster map has no active scene transform.')
+    const screenToScene = contentTransform.inverse()
+    const start = new DOMPoint(screenPoints[0], 0).matrixTransform(screenToScene).x
+    const end = new DOMPoint(screenPoints[1], 0).matrixTransform(screenToScene).x
+    return end - start
+  }, [screenStartX, screenEndX])
+}
+
+async function targetGeometrySnapshot(routeMark: import('@playwright/test').Locator): Promise<{
+  path: string | null
+  marker: Array<string | null>
+  badge: Array<string | null>
+  badgeText: Array<string | null>
+  caption: Array<string | null>
+}> {
+  return routeMark.evaluate(mark => {
+    const attributes = (selector: string, names: string[]) => {
+      const element = mark.querySelector(selector)
+      return names.map(name => element?.getAttribute(name) ?? null)
+    }
+    return {
+      path: mark.querySelector('.cluster-route-line')?.getAttribute('d') ?? null,
+      marker: attributes('.cluster-exit-mark', ['cx', 'cy']),
+      badge: attributes('.cluster-route-label-bg', ['x', 'y', 'width', 'height']),
+      badgeText: attributes('.cluster-route-label', ['x', 'y']),
+      caption: attributes('.cluster-exit-label', ['x', 'y', 'text-anchor', 'textLength']),
+    }
+  })
+}
+
+async function attachMapDetailScreenshot(
+  page: import('@playwright/test').Page,
+  bounds: Array<{ x: number; y: number; width: number; height: number }>,
+): Promise<void> {
+  const viewport = page.viewportSize()
+  if (!viewport || bounds.length === 0) return
+  const left = Math.max(0, Math.floor(Math.min(...bounds.map(box => box.x)) - 12))
+  const top = Math.max(0, Math.floor(Math.min(...bounds.map(box => box.y)) - 12))
+  const right = Math.min(viewport.width, Math.ceil(Math.max(...bounds.map(box => box.x + box.width)) + 12))
+  const bottom = Math.min(viewport.height, Math.ceil(Math.max(...bounds.map(box => box.y + box.height)) + 12))
+  if (right <= left || bottom <= top) return
+  await test.info().attach('unresolved-exit-card-and-label-detail', {
+    body: await page.screenshot({ clip: { x: left, y: top, width: right - left, height: bottom - top } }),
+    contentType: 'image/png',
+  })
+}
+
 async function dragToClusterScenePoint(
   page: import('@playwright/test').Page,
   map: import('@playwright/test').Locator,
@@ -95,8 +149,38 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
     initialPosition.x - originScenePosition.x,
     initialPosition.y - originScenePosition.y,
   )
-  expect(automaticOffset).toBeGreaterThan(150)
-  expect(automaticOffset).toBeLessThan(250)
+  expect(automaticOffset).toBeGreaterThan(125)
+  expect(automaticOffset).toBeLessThan(145)
+
+  const sourceCard = clusterMap.locator(`.cluster-system-node[data-system-id="${originSystem.id}"] .cluster-system-card`)
+  const sourceBounds = await sourceCard.boundingBox()
+  const targetBounds = await target.boundingBox()
+  if (!sourceBounds || !targetBounds) throw new Error('The source system card or unresolved target has no visible bounds.')
+  const gapInSceneUnits = await sceneHorizontalGap(
+    clusterMap,
+    sourceBounds.x + sourceBounds.width,
+    targetBounds.x,
+  )
+  expect(gapInSceneUnits).toBeGreaterThanOrEqual(40)
+  expect(gapInSceneUnits).toBeLessThanOrEqual(60)
+
+  const routeBadge = routeMark.locator('.cluster-route-label-bg')
+  const exitCaption = routeMark.locator('.cluster-exit-label')
+  const [badgeBounds, captionBounds] = await Promise.all([routeBadge.boundingBox(), exitCaption.boundingBox()])
+  if (!badgeBounds || !captionBounds) throw new Error('The unresolved route labels have no visible bounds.')
+  const sourceRight = sourceBounds.x + sourceBounds.width
+  const sourceBottom = sourceBounds.y + sourceBounds.height
+  expect(badgeBounds.x).toBeGreaterThan(sourceRight)
+  const captionOverlapsCardHorizontally = captionBounds.x < sourceRight
+    && captionBounds.x + captionBounds.width > sourceBounds.x
+  const captionOverlapsCardVertically = captionBounds.y < sourceBottom
+    && captionBounds.y + captionBounds.height > sourceBounds.y
+  expect(captionOverlapsCardHorizontally && captionOverlapsCardVertically).toBe(false)
+  await attachMapDetailScreenshot(page, [sourceBounds, targetBounds, badgeBounds, captionBounds])
+  await test.info().attach('unresolved-exit-near-source', {
+    body: await clusterMap.screenshot(),
+    contentType: 'image/png',
+  })
 
   await page.getByRole('navigation', { name: 'Map context and commands' })
     .getByRole('button', { name: 'Inspect', exact: true })
@@ -105,9 +189,12 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await target.click()
   await expect(routeMark).toHaveClass(/is-selected/)
   await expect(page.getByRole('button', { name: 'Move on map', exact: true })).toBeVisible()
+  const automaticGeometry = await targetGeometrySnapshot(routeMark)
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
-  await clickClusterScenePoint(page, clusterMap, initialPosition)
+  const zeroDeltaPreviewGeometry = await targetGeometrySnapshot(routeMark)
+  expect(zeroDeltaPreviewGeometry).toEqual(automaticGeometry)
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
+  expect(await targetGeometrySnapshot(routeMark)).toEqual(zeroDeltaPreviewGeometry)
   const anchoredAutomaticPosition = await targetPosition(target)
   const anchoredExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(anchoredExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(anchoredAutomaticPosition)

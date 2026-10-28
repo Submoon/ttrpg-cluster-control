@@ -43,11 +43,17 @@ export function useUnresolvedExitPlacement({
 
   function automaticPosition(routeId: string): Point | null {
     const current = workspace.value
-    const routeIndex = current?.cluster.routes.findIndex(route => route.id === routeId) ?? -1
-    const route = current?.cluster.routes[routeIndex]
+    const route = current?.cluster.routes.find(candidate => candidate.id === routeId)
     if (!current || !route || route.toPointId !== null) return null
     const jumpPoints = new Map(jumpPointsInCluster(current.cluster).map(reference => [reference.point.id, reference]))
-    return clusterRouteGeometry(route, current.cluster.routes, jumpPoints, current.layout.systemPositions).exitPoint ?? null
+    return clusterRouteGeometry(
+      route,
+      current.cluster,
+      jumpPoints,
+      current.layout.systemPositions,
+      undefined,
+      current.layout.unresolvedExitPositions,
+    ).exitPoint ?? null
   }
 
   function positionFor(routeId: string): Point | null {

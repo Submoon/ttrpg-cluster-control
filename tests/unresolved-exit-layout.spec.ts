@@ -3,12 +3,17 @@ import {
   addStarSystem,
   createLocalWorkspace,
   exportJumpCluster,
+  jumpPointsInCluster,
   planMapEntityDeletion,
   prepareJsonImport,
   replaceWorkspaceSystem,
   restoreLocalWorkspace,
 } from '../domain/workspace'
-import { CLUSTER_SCENE_COORDINATE_LIMIT } from '../utils/cluster-map-geometry'
+import {
+  CLUSTER_SCENE_COORDINATE_LIMIT,
+  clusterRouteGeometry,
+  hasSafeClusterSceneBounds,
+} from '../utils/cluster-map-geometry'
 
 function unresolvedWorkspace() {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
@@ -125,7 +130,7 @@ test('workspace validation rejects finite coordinates outside the SVG renderer n
   expect(restoreLocalWorkspace(rendererClamped)).toBeNull()
 })
 
-test('workspace admission includes the longest unresolved label at the renderer boundary', { tag: '@pure' }, () => {
+test('workspace admission preserves long captions near the renderer boundary', { tag: '@pure' }, () => {
   const { workspace, route } = unresolvedWorkspace()
   const system = workspace.cluster.systems[0]!
   const longLabelWorkspace = {
@@ -138,12 +143,94 @@ test('workspace admission includes the longest unresolved label at the renderer 
       ...workspace.layout,
       systemPositions: { ...workspace.layout.systemPositions, [system.id]: { x: 0.5, y: 0.5 } },
       unresolvedExitPositions: {
-        [route.id]: { x: -CLUSTER_SCENE_COORDINATE_LIMIT + 1000, y: 280 },
+        [route.id]: { x: CLUSTER_SCENE_COORDINATE_LIMIT - 600, y: 280 },
       },
     },
   }
 
-  expect(restoreLocalWorkspace(longLabelWorkspace)).toBeNull()
+  expect(restoreLocalWorkspace(longLabelWorkspace)?.layout.unresolvedExitPositions?.[route.id])
+    .toEqual({ x: CLUSTER_SCENE_COORDINATE_LIMIT - 600, y: 280 })
+})
+
+test('workspace restoration keeps baseline-valid scenes near the aggregate span limit', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const secondRoute = { ...route, id: 'route-b', unresolvedExit: 'Far Side' }
+  const nearAggregateLimit = {
+    ...workspace,
+    cluster: { ...workspace.cluster, routes: [route, secondRoute] },
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: {
+        [route.id]: { x: -CLUSTER_SCENE_COORDINATE_LIMIT / 2 + 1600, y: 280 },
+        [secondRoute.id]: { x: CLUSTER_SCENE_COORDINATE_LIMIT / 2 - 1600, y: 280 },
+      },
+    },
+  }
+
+  expect(restoreLocalWorkspace(nearAggregateLimit)?.layout.unresolvedExitPositions)
+    .toEqual(nearAggregateLimit.layout.unresolvedExitPositions)
+})
+
+test('workspace restoration keeps near-source automatic defaults at extreme safe system positions', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const system = workspace.cluster.systems[0]!
+  const farButSafe = {
+    ...workspace,
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: {},
+      systemPositions: {
+        ...workspace.layout.systemPositions,
+        [system.id]: { x: (CLUSTER_SCENE_COORDINATE_LIMIT / 2 - 112) / 736, y: 0.5 },
+      },
+    },
+  }
+
+  expect(restoreLocalWorkspace(farButSafe)?.layout.unresolvedExitPositions).toEqual({})
+  const routeGeometry = clusterRouteGeometry(
+    route,
+    farButSafe.cluster,
+    new Map(jumpPointsInCluster(farButSafe.cluster).map(reference => [reference.point.id, reference])),
+    farButSafe.layout.systemPositions,
+  )
+  expect(routeGeometry.exitPoint).toEqual({ x: CLUSTER_SCENE_COORDINATE_LIMIT / 2 + 135, y: 280 })
+})
+
+test('saving an unchanged long-label endpoint near the feature boundary remains valid', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const system = workspace.cluster.systems[0]!
+  const sourceX = -CLUSTER_SCENE_COORDINATE_LIMIT + 715
+  const savedTarget = { x: sourceX + 135, y: 280 }
+  const boundaryWorkspace = {
+    ...workspace,
+    cluster: {
+      ...workspace.cluster,
+      routes: [{ ...route, unresolvedExit: 'X'.repeat(80) }],
+    },
+    layout: {
+      ...workspace.layout,
+      systemPositions: {
+        ...workspace.layout.systemPositions,
+        [system.id]: { x: (sourceX - 112) / 736, y: 0.5 },
+      },
+      unresolvedExitPositions: {},
+    },
+  }
+  const unchangedMove = {
+    ...boundaryWorkspace,
+    layout: {
+      ...boundaryWorkspace.layout,
+      unresolvedExitPositions: { [route.id]: savedTarget },
+    },
+  }
+
+  expect(hasSafeClusterSceneBounds(
+    boundaryWorkspace.cluster,
+    boundaryWorkspace.layout.systemPositions,
+  )).toBe(true)
+  expect(restoreLocalWorkspace(boundaryWorkspace)).not.toBeNull()
+  expect(restoreLocalWorkspace(unchangedMove)?.layout.unresolvedExitPositions?.[route.id])
+    .toEqual(savedTarget)
 })
 
 test('append import remaps each unresolved target to its independent route identity', { tag: '@pure' }, () => {

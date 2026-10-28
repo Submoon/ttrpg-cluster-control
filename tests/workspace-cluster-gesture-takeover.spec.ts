@@ -263,6 +263,24 @@ test('unresolved exit hit target remains selectable at minimum zoom beside its s
     x: markerBounds.x + markerBounds.width / 2 + 20,
     y: markerBounds.y + markerBounds.height / 2,
   }
+  const hit = await page.evaluate(point => {
+    const element = document.elementFromPoint(point.x, point.y)
+    return {
+      point,
+      tag: element?.tagName,
+      className: element?.getAttribute('class'),
+      routeId: element?.closest('.cluster-route')?.getAttribute('data-route-id'),
+      systemId: element?.closest('.cluster-system-node')?.getAttribute('data-system-id'),
+    }
+  }, offsetClick)
+  await test.info().attach('minimum-zoom-exit-hit', {
+    body: JSON.stringify(hit),
+    contentType: 'application/json',
+  })
+  await test.info().attach('minimum-zoom-exit-map', {
+    body: await clusterMap.screenshot(),
+    contentType: 'image/png',
+  })
   await page.mouse.click(offsetClick.x, offsetClick.y)
   await expect(routeMark).toHaveClass(/is-selected/)
 

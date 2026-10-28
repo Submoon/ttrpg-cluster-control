@@ -40,8 +40,8 @@ import {
   CLUSTER_SCENE_COORDINATE_LIMIT,
   clusterRouteGeometry,
   clusterRouteLabel,
+  clusterRouteLabelWidth,
   clusterSystemPosition,
-  clusterUnresolvedExitLabelGeometry,
   hasSafeClusterSceneBounds,
   isSafeClusterScenePoint,
 } from '../utils/cluster-map-geometry'
@@ -190,14 +190,13 @@ function prepareExportClone(clone: SVGSVGElement): void {
 
     const geometry = clusterRouteGeometry(
       route,
-      props.cluster.routes,
+      props.cluster,
       jumpPoints,
       props.systemPositions,
       undefined,
       props.unresolvedExitPositions,
     )
-    const label = `Jump-${route.jumpLevel}`
-    const labelWidth = Math.max(78, label.length * 7 + 18)
+    const labelWidth = clusterRouteLabelWidth(route)
     mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
     const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
     labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
@@ -207,14 +206,14 @@ function prepareExportClone(clone: SVGSVGElement): void {
     routeLabel?.setAttribute('y', String(geometry.labelY + 2))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
-    if (geometry.exitPoint && route.toPointId === null) {
-      const label = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
+    if (geometry.exitPoint && geometry.exitLabel && route.toPointId === null) {
       exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
       exitMark?.setAttribute('cy', String(geometry.exitPoint.y))
-      exitLabel?.setAttribute('x', String(label.x))
-      exitLabel?.setAttribute('y', String(label.y))
-      exitLabel?.setAttribute('textLength', String(label.width))
+      exitLabel?.setAttribute('x', String(geometry.exitLabel.x))
+      exitLabel?.setAttribute('y', String(geometry.exitLabel.y))
+      exitLabel?.setAttribute('textLength', String(geometry.exitLabel.width))
       exitLabel?.setAttribute('lengthAdjust', 'spacingAndGlyphs')
+      exitLabel?.setAttribute('text-anchor', geometry.exitLabel.anchor)
     }
   })
 }
@@ -571,7 +570,7 @@ function render(): void {
   routeMarks.each(function (route) {
     const geometry = clusterRouteGeometry(
       route,
-      props.cluster.routes,
+      props.cluster,
       jumpPoints,
       props.systemPositions,
       undefined,
@@ -580,7 +579,7 @@ function render(): void {
     )
     const mark = select(this)
     const label = `Jump-${route.jumpLevel}`
-    const labelWidth = Math.max(78, label.length * 7 + 18)
+    const labelWidth = clusterRouteLabelWidth(route)
 
     mark.append('path')
       .attr('class', 'cluster-route-line')
@@ -593,8 +592,8 @@ function render(): void {
       .attr('height', 21)
       .attr('rx', 10)
 
-    if (route.toPointId === null && geometry.exitPoint) {
-      const exitLabel = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
+    if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
+      const exitLabel = geometry.exitLabel
       const exitHitTarget = mark.insert('circle', '.cluster-route-label')
         .attr('class', 'cluster-exit-hit-target')
         .attr('cx', geometry.exitPoint.x)
@@ -629,7 +628,7 @@ function render(): void {
       }
       const committedExitPoint = (): Point => clusterRouteGeometry(
         route,
-        props.cluster.routes,
+        props.cluster,
         jumpPoints,
         props.systemPositions,
         undefined,
@@ -697,7 +696,7 @@ function render(): void {
         .attr('y', exitLabel.y)
         .attr('textLength', exitLabel.width)
         .attr('lengthAdjust', 'spacingAndGlyphs')
-        .attr('text-anchor', 'end')
+        .attr('text-anchor', exitLabel.anchor)
         .text(exitLabel.text)
     } else {
       mark.append('text')
@@ -712,7 +711,7 @@ function render(): void {
     routeMarks.each(function (route) {
       const geometry = clusterRouteGeometry(
         route,
-        props.cluster.routes,
+        props.cluster,
         jumpPoints,
         props.systemPositions,
         liveSystemPositions,
@@ -720,8 +719,7 @@ function render(): void {
         routeTargetOverrides(),
       )
       const mark = select(this)
-      const label = `Jump-${route.jumpLevel}`
-      const labelWidth = Math.max(78, label.length * 7 + 18)
+      const labelWidth = clusterRouteLabelWidth(route)
       mark.select('.cluster-route-line').attr('d', geometry.path)
       mark.select('.cluster-route-label-bg')
         .attr('x', geometry.labelX - labelWidth / 2)
@@ -730,8 +728,8 @@ function render(): void {
         .attr('x', geometry.labelX)
         .attr('y', geometry.labelY + 2)
 
-      if (route.toPointId === null && geometry.exitPoint) {
-        const exitLabel = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
+      if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
+        const exitLabel = geometry.exitLabel
         mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target')
           .attr('cx', geometry.exitPoint.x)
           .attr('cy', geometry.exitPoint.y)
@@ -740,6 +738,7 @@ function render(): void {
           .attr('y', exitLabel.y)
           .attr('textLength', exitLabel.width)
           .attr('lengthAdjust', 'spacingAndGlyphs')
+          .attr('text-anchor', exitLabel.anchor)
       }
     })
   }

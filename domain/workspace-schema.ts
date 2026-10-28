@@ -256,7 +256,7 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
       try {
         return hasFiniteClusterRouteGeometry(clusterRouteGeometry(
           route,
-          routes,
+          validatedCluster,
           jumpPoints,
           positions,
           undefined,
