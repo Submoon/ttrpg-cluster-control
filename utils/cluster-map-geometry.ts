@@ -12,10 +12,30 @@ export interface ClusterRouteGeometry {
   exitPoint?: Point
 }
 
+export interface ClusterUnresolvedExitLabelGeometry {
+  text: string
+  x: number
+  y: number
+  width: number
+  left: number
+}
+
 /** Platform-derived SVG coordinate envelope below observed renderer saturation, independent of canvas size. */
 export const CLUSTER_SCENE_COORDINATE_LIMIT = 2 ** 24 - 4096
 /** Scene-space margin reserved for route labels, endpoint markers, card geometry, and export padding. */
 const CLUSTER_SCENE_GEOMETRY_PADDING = 256
+const CLUSTER_EXIT_LABEL_CHARACTER_ADVANCE = 7
+
+/** Uses the rendered monospace exit-label format to derive its exact explicit SVG text length. */
+export function clusterUnresolvedExitLabelGeometry(
+  unresolvedExit: string,
+  exitPoint: Point,
+): ClusterUnresolvedExitLabelGeometry {
+  const text = `Unknown: ${unresolvedExit}`
+  const width = text.length * CLUSTER_EXIT_LABEL_CHARACTER_ADVANCE
+  const x = exitPoint.x - 10
+  return { text, x, y: exitPoint.y + 24, width, left: x - width }
+}
 
 function isRendererCoordinate(value: number): boolean {
   return Number.isFinite(value) && Math.abs(value) <= CLUSTER_SCENE_COORDINATE_LIMIT
@@ -69,6 +89,9 @@ export function hasSafeClusterSceneBounds(
     if (!position) return false
     const scenePosition = clusterSystemPosition(systemPositions, system.id)
     if (!include(scenePosition.x, scenePosition.y)) return false
+    const systemNameWidth = system.name.length * 14
+    if (!include(scenePosition.x + 4 - systemNameWidth / 2, scenePosition.y - 6)
+      || !include(scenePosition.x + 4 + systemNameWidth / 2, scenePosition.y - 6)) return false
   }
 
   for (const position of Object.values(unresolvedExitPositions)) {
@@ -93,6 +116,10 @@ export function hasSafeClusterSceneBounds(
     if (!hasFiniteClusterRouteGeometry(geometry)
       || !include(geometry.labelX, geometry.labelY)
       || (geometry.exitPoint && !include(geometry.exitPoint.x, geometry.exitPoint.y))) return false
+    if (route.toPointId === null && geometry.exitPoint) {
+      const label = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
+      if (!include(label.left, label.y) || !include(label.x, label.y)) return false
+    }
 
     const coordinates = Array.from(geometry.path.matchAll(pathNumbers), match => Number(match[0]))
     if (coordinates.length === 0 || coordinates.length % 2 !== 0) return false

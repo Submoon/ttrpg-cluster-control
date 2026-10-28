@@ -81,3 +81,38 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
   expect(hasSafeClusterSceneBounds(cluster, systemPositions, oneDistantExit)).toBe(true)
   expect(hasSafeClusterSceneBounds(cluster, systemPositions, oppositeDistantExits)).toBe(false)
 })
+
+test('scene safety includes the rendered width of the longest unresolved-exit label', { tag: '@pure' }, () => {
+  const point = {
+    id: 'point-a',
+    family: 'JumpPoint',
+    subtype: 'jump-point',
+    locationKey: 'JP1',
+    name: 'North Gate',
+    description: '',
+    placement: { kind: 'system', x: 0.5, y: 0.5 },
+  } as const
+  const system: StarSystem = {
+    id: 'system-a',
+    name: 'Aster',
+    objects: [point],
+    orbits: [],
+  }
+  const route: JumpRoute = {
+    id: 'route-a',
+    fromPointId: point.id,
+    toPointId: null,
+    unresolvedExit: 'X'.repeat(80),
+    jumpLevel: 2,
+  }
+  const cluster: JumpCluster = {
+    id: 'cluster-a',
+    name: 'Aster Reach',
+    systems: [system],
+    routes: [route],
+  }
+
+  expect(hasSafeClusterSceneBounds(cluster, { [system.id]: { x: 0.5, y: 0.5 } }, {
+    [route.id]: { x: -CLUSTER_SCENE_COORDINATE_LIMIT + 1000, y: 280 },
+  })).toBe(false)
+})

@@ -41,6 +41,7 @@ import {
   clusterRouteGeometry,
   clusterRouteLabel,
   clusterSystemPosition,
+  clusterUnresolvedExitLabelGeometry,
   hasSafeClusterSceneBounds,
   isSafeClusterScenePoint,
 } from '../utils/cluster-map-geometry'
@@ -207,10 +208,13 @@ function prepareExportClone(clone: SVGSVGElement): void {
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
     if (geometry.exitPoint) {
+      const label = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
       exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
       exitMark?.setAttribute('cy', String(geometry.exitPoint.y))
-      exitLabel?.setAttribute('x', String(geometry.exitPoint.x - 10))
-      exitLabel?.setAttribute('y', String(geometry.exitPoint.y + 24))
+      exitLabel?.setAttribute('x', String(label.x))
+      exitLabel?.setAttribute('y', String(label.y))
+      exitLabel?.setAttribute('textLength', String(label.width))
+      exitLabel?.setAttribute('lengthAdjust', 'spacingAndGlyphs')
     }
   })
 }
@@ -271,35 +275,28 @@ function measureAppliedItemsBounds(element: SVGSVGElement): SvgViewportRect | un
 function refreshSceneSurfaces(): void {
   const element = svgElement.value
   if (!element) return
-  const visible = normalizeSvgViewportRect(getSvgViewportRect(element))
-  if (!visible) return
-
   const transform = zoomTransform(element)
-  const visiblePoints = [
-    transform.invert([visible.x, visible.y]),
-    transform.invert([visible.x + visible.width, visible.y]),
-    transform.invert([visible.x, visible.y + visible.height]),
-    transform.invert([visible.x + visible.width, visible.y + visible.height]),
+  if (![transform.x, transform.y, transform.k].every(Number.isFinite) || transform.k <= 0) return
+  const viewport = normalizeSvgViewportRect(getSvgViewportRect(element))
+  if (!viewport) return
+  const surfaceGeometry = [
+    viewport.x,
+    viewport.y,
+    viewport.width,
+    viewport.height,
+    viewport.x + viewport.width,
+    viewport.y + viewport.height,
   ]
-  if (visiblePoints.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) return
-
-  const applied = appliedItemsBounds
-  const left = Math.floor(Math.min(0, applied?.x ?? 0, ...visiblePoints.map(point => point[0])) - 40)
-  const top = Math.floor(Math.min(0, applied?.y ?? 0, ...visiblePoints.map(point => point[1])) - 40)
-  const right = Math.ceil(Math.max(960, applied ? applied.x + applied.width : 960, ...visiblePoints.map(point => point[0])) + 40)
-  const bottom = Math.ceil(Math.max(560, applied ? applied.y + applied.height : 560, ...visiblePoints.map(point => point[1])) + 40)
-  const width = right - left
-  const height = bottom - top
-  const surfaceGeometry = [left, top, right, bottom, width, height]
-  if (!surfaceGeometry.every(Number.isFinite)
-    || surfaceGeometry.some(value => Math.abs(value) > CLUSTER_SCENE_COORDINATE_LIMIT)
-    || width <= 0 || height <= 0) return
+  if (surfaceGeometry.some(value => !Number.isFinite(value)
+    || Math.abs(value) > CLUSTER_SCENE_COORDINATE_LIMIT)) return
 
   select(element).selectAll<SVGRectElement, unknown>('.cluster-map-background, .cluster-map-grid')
-    .attr('x', left)
-    .attr('y', top)
-    .attr('width', width)
-    .attr('height', height)
+    .attr('x', viewport.x)
+    .attr('y', viewport.y)
+    .attr('width', viewport.width)
+    .attr('height', viewport.height)
+  select(element).select<SVGPatternElement>('#cluster-map-grid')
+    .attr('patternTransform', transform.toString())
 }
 
 /** Reuses applied geometry to keep zoom controls and renderer bounds in agreement. */
@@ -536,8 +533,7 @@ function render(): void {
   )
   svg.selectAll('*').remove()
 
-  const content = svg.append('g').attr('class', 'cluster-map-content')
-  const grid = content.append('defs')
+  const grid = svg.append('defs')
     .append('pattern')
     .attr('id', 'cluster-map-grid')
     .attr('width', 28)
@@ -547,15 +543,21 @@ function render(): void {
     .attr('d', 'M 28 0 L 0 0 0 28')
     .attr('class', 'cluster-map-grid-line')
 
-  content.append('rect')
+  const surfaces = svg.append('g').attr('class', 'cluster-map-surfaces')
+  surfaces.append('rect')
     .attr('class', 'cluster-map-background')
+    .attr('x', 0)
+    .attr('y', 0)
     .attr('width', 960)
     .attr('height', 560)
-  content.append('rect')
+  surfaces.append('rect')
     .attr('class', 'cluster-map-grid')
+    .attr('x', 0)
+    .attr('y', 0)
     .attr('width', 960)
     .attr('height', 560)
 
+  const content = svg.append('g').attr('class', 'cluster-map-content')
   const items = content.append('g').attr('class', 'cluster-map-items')
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
@@ -592,6 +594,7 @@ function render(): void {
       .attr('rx', 10)
 
     if (route.toPointId === null && geometry.exitPoint) {
+      const exitLabel = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
       const exitHitTarget = mark.insert('circle', '.cluster-route-label')
         .attr('class', 'cluster-exit-hit-target')
         .attr('cx', geometry.exitPoint.x)
@@ -690,10 +693,12 @@ function render(): void {
       exitMarker.datum(route).call(exitDrag)
       mark.append('text')
         .attr('class', 'cluster-exit-label')
-        .attr('x', geometry.exitPoint.x - 10)
-        .attr('y', geometry.exitPoint.y + 24)
+        .attr('x', exitLabel.x)
+        .attr('y', exitLabel.y)
+        .attr('textLength', exitLabel.width)
+        .attr('lengthAdjust', 'spacingAndGlyphs')
         .attr('text-anchor', 'end')
-        .text(`Unknown: ${route.unresolvedExit}`)
+        .text(exitLabel.text)
     } else {
       mark.append('text')
         .attr('class', 'cluster-route-label')
@@ -726,12 +731,15 @@ function render(): void {
         .attr('y', geometry.labelY + 2)
 
       if (route.toPointId === null && geometry.exitPoint) {
+        const exitLabel = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
         mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target')
           .attr('cx', geometry.exitPoint.x)
           .attr('cy', geometry.exitPoint.y)
         mark.select('.cluster-exit-label')
-          .attr('x', geometry.exitPoint.x - 10)
-          .attr('y', geometry.exitPoint.y + 24)
+          .attr('x', exitLabel.x)
+          .attr('y', exitLabel.y)
+          .attr('textLength', exitLabel.width)
+          .attr('lengthAdjust', 'spacingAndGlyphs')
       }
     })
   }

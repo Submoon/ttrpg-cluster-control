@@ -240,7 +240,8 @@ function createExportSvg(
       copy.append(titleElement)
     }
 
-    for (const surface of content.querySelectorAll<SVGRectElement>(
+    copy.querySelector<SVGPatternElement>('#cluster-map-grid')?.removeAttribute('patternTransform')
+    for (const surface of copy.querySelectorAll<SVGRectElement>(
       '.cluster-map-background, .cluster-map-grid, .map-background, .map-grid',
     )) {
       surface.setAttribute('x', String(left))

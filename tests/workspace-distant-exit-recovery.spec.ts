@@ -24,6 +24,16 @@ function campaignWithUnresolvedExit(): CampaignFixture {
   return fixture
 }
 
+function campaignWithTallUnresolvedExit(): CampaignFixture {
+  const fixture = campaignWithUnresolvedExit()
+  const route = fixture.cluster.routes[0]
+  if (!route) throw new Error('The campaign fixture has no Jump Route to place.')
+  Object.assign(fixture.layout, {
+    unresolvedExitPositions: { [route.id]: { x: 480, y: 10_000_000 } },
+  })
+  return fixture
+}
+
 async function screenPointForScenePoint(
   map: import('@playwright/test').Locator,
   point: Point,
@@ -144,11 +154,18 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
     y: Number(element.getAttribute('y') ?? 0),
     width: Number(element.getAttribute('width')),
     height: Number(element.getAttribute('height')),
+    right: Number(element.getAttribute('x') ?? 0) + Number(element.getAttribute('width')),
+    bottom: Number(element.getAttribute('y') ?? 0) + Number(element.getAttribute('height')),
   }))
-  expect(backgroundBounds.x).toBeLessThan(appliedDistantPoint.x)
-  expect(backgroundBounds.y).toBeLessThan(appliedDistantPoint.y)
-  expect(backgroundBounds.x + backgroundBounds.width).toBeGreaterThan(960)
-  expect(backgroundBounds.y + backgroundBounds.height).toBeGreaterThan(appliedDistantPoint.y)
+  expect(Object.values(backgroundBounds).every(value => Number.isFinite(value) && Math.abs(value) <= 2 ** 24 - 4096))
+    .toBe(true)
+  const backgroundClient = await background.boundingBox()
+  const mapClient = await clusterMap.boundingBox()
+  if (!backgroundClient || !mapClient) throw new Error('The map background or viewport is not measurable.')
+  expect(backgroundClient.x).toBeLessThanOrEqual(mapClient.x + 1)
+  expect(backgroundClient.y).toBeLessThanOrEqual(mapClient.y + 1)
+  expect(backgroundClient.x + backgroundClient.width).toBeGreaterThanOrEqual(mapClient.x + mapClient.width - 1)
+  expect(backgroundClient.y + backgroundClient.height).toBeGreaterThanOrEqual(mapClient.y + mapClient.height - 1)
 
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   const fittedScale = Number((await workspaceZoomOutput(page).textContent())?.replace('%', ''))
@@ -226,3 +243,85 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await expect(clusterMap.locator(`.cluster-route[data-route-id="${route.id}"] .cluster-exit-mark`))
     .toHaveAttribute('cy', String(committedPosition.y))
 })
+
+for (const viewport of [{ width: 1440, height: 960 }, { width: 1920, height: 400 }]) {
+  test(`Fit of a tall distant exit covers the SVG viewport at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await importCampaignWorkspace(page, campaignWithTallUnresolvedExit(), viewport)
+    const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+    await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+
+    const coverage = await clusterMap.evaluate((element) => {
+      const content = element.querySelector<SVGGElement>('.cluster-map-content')
+      const rect = (box: DOMRect) => ({ left: box.left, top: box.top, right: box.right, bottom: box.bottom })
+      const surfaces = (selector: string) => {
+        const rectangles = [...element.querySelectorAll<SVGRectElement>(selector)].map(rectangle => ({
+          x: Number(rectangle.getAttribute('x')),
+          y: Number(rectangle.getAttribute('y')),
+          width: Number(rectangle.getAttribute('width')),
+          height: Number(rectangle.getAttribute('height')),
+          client: rect(rectangle.getBoundingClientRect()),
+        }))
+        return {
+          rectangles,
+          safe: rectangles.every(rectangle => [
+            rectangle.x,
+            rectangle.y,
+            rectangle.width,
+            rectangle.height,
+            rectangle.x + rectangle.width,
+            rectangle.y + rectangle.height,
+          ].every(value => Number.isFinite(value) && Math.abs(value) <= 2 ** 24 - 4096)
+            && rectangle.width > 0 && rectangle.height > 0),
+        }
+      }
+      return {
+        viewport: rect(element.getBoundingClientRect()),
+        camera: content?.getAttribute('transform'),
+        pattern: element.querySelector<SVGPatternElement>('#cluster-map-grid')?.getAttribute('patternTransform'),
+        background: surfaces('.cluster-map-background'),
+        grid: surfaces('.cluster-map-grid'),
+      }
+    })
+    const fittedScalePercent = Number((await workspaceZoomOutput(page).textContent())?.replace('%', ''))
+    expect(fittedScalePercent).toBeGreaterThan(0)
+    expect(fittedScalePercent).toBeLessThan(0.01)
+    for (const surface of [coverage.background, coverage.grid]) {
+      expect(surface.safe).toBe(true)
+      expect(surface.rectangles).toHaveLength(1)
+      const [rectangle] = surface.rectangles
+      if (!rectangle) throw new Error('The map surface rectangle is missing.')
+      expect(rectangle.client.left).toBeLessThanOrEqual(coverage.viewport.left + 1)
+      expect(rectangle.client.top).toBeLessThanOrEqual(coverage.viewport.top + 1)
+      expect(rectangle.client.right).toBeGreaterThanOrEqual(coverage.viewport.right - 1)
+      expect(rectangle.client.bottom).toBeGreaterThanOrEqual(coverage.viewport.bottom - 1)
+    }
+    expect(coverage.pattern).toBe(coverage.camera)
+
+    const exportedSvg = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+    if (!exportedSvg.text) throw new Error('The tall-scene SVG export is empty.')
+    const exportSurfaces = await page.evaluate((source) => {
+      const document = new DOMParser().parseFromString(source, 'image/svg+xml')
+      const viewBox = (document.documentElement.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number)
+      const read = (selector: string) => {
+        const surface = document.querySelector<SVGRectElement>(selector)
+        if (!surface) throw new Error(`Missing exported surface ${selector}.`)
+        return {
+          x: Number(surface.getAttribute('x')),
+          y: Number(surface.getAttribute('y')),
+          width: Number(surface.getAttribute('width')),
+          height: Number(surface.getAttribute('height')),
+        }
+      }
+      return {
+        viewBox,
+        background: read('.cluster-map-background'),
+        grid: read('.cluster-map-grid'),
+        patternTransform: document.querySelector('#cluster-map-grid')?.getAttribute('patternTransform') ?? null,
+      }
+    }, exportedSvg.text)
+    const [x, y, width, height] = exportSurfaces.viewBox
+    expect(exportSurfaces.background).toEqual({ x, y, width, height })
+    expect(exportSurfaces.grid).toEqual({ x, y, width, height })
+    expect(exportSurfaces.patternTransform).toBeNull()
+  })
+}

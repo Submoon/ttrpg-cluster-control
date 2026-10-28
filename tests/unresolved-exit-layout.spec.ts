@@ -8,6 +8,7 @@ import {
   replaceWorkspaceSystem,
   restoreLocalWorkspace,
 } from '../domain/workspace'
+import { CLUSTER_SCENE_COORDINATE_LIMIT } from '../utils/cluster-map-geometry'
 
 function unresolvedWorkspace() {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
@@ -122,6 +123,27 @@ test('workspace validation rejects finite coordinates outside the SVG renderer n
   }
 
   expect(restoreLocalWorkspace(rendererClamped)).toBeNull()
+})
+
+test('workspace admission includes the longest unresolved label at the renderer boundary', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const system = workspace.cluster.systems[0]!
+  const longLabelWorkspace = {
+    ...workspace,
+    cluster: {
+      ...workspace.cluster,
+      routes: [{ ...route, unresolvedExit: 'X'.repeat(80) }],
+    },
+    layout: {
+      ...workspace.layout,
+      systemPositions: { ...workspace.layout.systemPositions, [system.id]: { x: 0.5, y: 0.5 } },
+      unresolvedExitPositions: {
+        [route.id]: { x: -CLUSTER_SCENE_COORDINATE_LIMIT + 1000, y: 280 },
+      },
+    },
+  }
+
+  expect(restoreLocalWorkspace(longLabelWorkspace)).toBeNull()
 })
 
 test('append import remaps each unresolved target to its independent route identity', { tag: '@pure' }, () => {
