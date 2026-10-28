@@ -84,7 +84,180 @@ export type ExportedMap = {
   }
 }
 
-type ScreenPoint = { x: number; y: number }
+export type ScreenPoint = { x: number; y: number }
+
+type AffineTransform = Readonly<{
+  a: number
+  b: number
+  c: number
+  d: number
+  e: number
+  f: number
+}>
+
+export type SvgCoordinates = Readonly<{
+  matrix: AffineTransform
+  toClient(point: WorldPoint): ScreenPoint
+  fromClient(point: ScreenPoint): WorldPoint
+}>
+
+export type MouseDragDelivery = Readonly<{
+  down: ScreenPoint
+  up: ScreenPoint
+}>
+
+/** Captures an SVG element's current screen transform as portable affine values. */
+export async function snapshotSvgCoordinates(
+  space: import('@playwright/test').Locator,
+): Promise<SvgCoordinates> {
+  const values = await space.evaluate((element) => {
+    const transform = element instanceof SVGGraphicsElement ? element.getScreenCTM() : null
+    if (!transform) throw new Error('The SVG coordinate space is not attached to the document.')
+    return {
+      a: transform.a,
+      b: transform.b,
+      c: transform.c,
+      d: transform.d,
+      e: transform.e,
+      f: transform.f,
+    }
+  })
+  const matrix = Object.freeze(values)
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+  if (!Number.isFinite(determinant) || determinant === 0) {
+    throw new Error('The SVG coordinate space has a non-invertible screen transform.')
+  }
+
+  const coordinates: SvgCoordinates = {
+    matrix,
+    toClient(point) {
+      return Object.freeze({
+        x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+        y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+      })
+    },
+    fromClient(point) {
+      const x = point.x - matrix.e
+      const y = point.y - matrix.f
+      return Object.freeze({
+        x: (matrix.d * x - matrix.c * y) / determinant,
+        y: (-matrix.b * x + matrix.a * y) / determinant,
+      })
+    },
+  }
+  return Object.freeze(coordinates)
+}
+
+type MouseDragProbeWindow = Window & {
+  __testMouseDragProbe?: {
+    id: string
+    events: Array<{ type: 'down' | 'up'; x: number; y: number }>
+    cleanup: () => void
+  }
+}
+
+/** Drives a six-step native mouse drag and returns the captured window-level input points. */
+export async function measureMouseDrag(
+  page: import('@playwright/test').Page,
+  start: ScreenPoint,
+  end: ScreenPoint,
+): Promise<MouseDragDelivery> {
+  const requestedStart = { x: Math.round(start.x), y: Math.round(start.y) }
+  const requestedEnd = { x: Math.round(end.x), y: Math.round(end.y) }
+  const probeId = `${Date.now()}-${Math.random()}`
+  let mouseMayBeDown = false
+  let observerMayBeInstalled = false
+  let gestureFailed = false
+  let gestureFailure: unknown
+  let delivery: MouseDragDelivery | undefined
+  const cleanupFailures: unknown[] = []
+
+  try {
+    observerMayBeInstalled = true
+    await page.evaluate((id) => {
+      const probeWindow = window as MouseDragProbeWindow
+      if (probeWindow.__testMouseDragProbe) {
+        throw new Error('A native mouse drag probe is already active.')
+      }
+
+      const events: Array<{ type: 'down' | 'up'; x: number; y: number }> = []
+      const recordDown = (event: MouseEvent) => {
+        events.push({ type: 'down', x: event.clientX, y: event.clientY })
+      }
+      const recordUp = (event: MouseEvent) => {
+        events.push({ type: 'up', x: event.clientX, y: event.clientY })
+      }
+      const cleanup = () => {
+        window.removeEventListener('mousedown', recordDown, true)
+        window.removeEventListener('mouseup', recordUp, true)
+      }
+      probeWindow.__testMouseDragProbe = { id, events, cleanup }
+      window.addEventListener('mousedown', recordDown, true)
+      window.addEventListener('mouseup', recordUp, true)
+    }, probeId)
+
+    await page.mouse.move(requestedStart.x, requestedStart.y)
+    mouseMayBeDown = true
+    await page.mouse.down()
+    await page.mouse.move(requestedEnd.x, requestedEnd.y, { steps: 6 })
+    await page.mouse.up()
+    mouseMayBeDown = false
+
+    delivery = await page.evaluate((id) => {
+      const probeWindow = window as MouseDragProbeWindow
+      const probe = probeWindow.__testMouseDragProbe
+      if (probe?.id !== id) throw new Error('The native mouse drag probe is no longer available.')
+      const events = probe.events
+      const down = events.find(event => event.type === 'down')
+      const up = [...events].reverse().find(event => event.type === 'up')
+      if (!down || !up) throw new Error('Could not measure the delivered native mouse drag.')
+      return Object.freeze({
+        down: Object.freeze({ x: down.x, y: down.y }),
+        up: Object.freeze({ x: up.x, y: up.y }),
+      })
+    }, probeId)
+  } catch (error) {
+    gestureFailed = true
+    gestureFailure = error
+  } finally {
+    if (mouseMayBeDown) {
+      try {
+        await page.mouse.up()
+      } catch (error) {
+        if (!page.isClosed()) cleanupFailures.push(error)
+      }
+    }
+    if (observerMayBeInstalled) {
+      try {
+        await page.evaluate((id) => {
+          const probeWindow = window as MouseDragProbeWindow
+          const probe = probeWindow.__testMouseDragProbe
+          if (probe?.id !== id) return
+          probe.cleanup()
+          delete probeWindow.__testMouseDragProbe
+        }, probeId)
+      } catch (error) {
+        if (!page.isClosed()) cleanupFailures.push(error)
+      }
+    }
+  }
+
+  if (gestureFailed) {
+    if (cleanupFailures.length > 0) {
+      throw new AggregateError(
+        [gestureFailure, ...cleanupFailures],
+        'The native mouse drag failed, and cleanup also failed.',
+      )
+    }
+    throw gestureFailure
+  }
+  if (cleanupFailures.length === 1) throw cleanupFailures[0]
+  if (cleanupFailures.length > 1) {
+    throw new AggregateError(cleanupFailures, 'Could not clean up after the native mouse drag.')
+  }
+  if (!delivery) throw new Error('The native mouse drag did not return its delivered input points.')
+  return delivery
+}
 
 /** Chooses a map point through a real pointer, accounting for the current view and pixel rounding. */
 async function clickNormalizedMapPoint(
@@ -171,13 +344,8 @@ async function worldPointOnScreen(
   map: import('@playwright/test').Locator,
   point: WorldPoint,
 ): Promise<ScreenPoint> {
-  return map.evaluate((element, target) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!transform) throw new Error('The system map content is not attached to the document.')
-    const screenPoint = new DOMPoint(target.x, target.y).matrixTransform(transform)
-    return { x: screenPoint.x, y: screenPoint.y }
-  }, point)
+  const coordinates = await snapshotSvgCoordinates(map.locator('.system-map-content'))
+  return coordinates.toClient(point)
 }
 
 /** Recovers a measured native drag through public Fit and bounded Zoom out controls. */
@@ -322,27 +490,25 @@ export async function dragOrbitToWorldPoint(
   await dismissAddChooser(page)
   await setWorkspaceMapMode(page, 'Move')
   await orbit.scrollIntoViewIfNeeded()
-  const coordinates = await orbit.evaluate((element, target) => {
+  const geometry = await orbit.evaluate((element) => {
     const shape = element as SVGCircleElement | SVGEllipseElement
-    const matrix = shape.getScreenCTM()
-    if (!matrix) throw new Error('The Orbit is not attached to the map.')
     const radiusX = Number(shape.getAttribute('rx') ?? shape.getAttribute('r'))
     const radiusY = Number(shape.getAttribute('ry') ?? shape.getAttribute('r'))
-    const start = new DOMPoint(
-      Number(shape.getAttribute('cx')) + radiusX * Math.cos(target.startAngle),
-      Number(shape.getAttribute('cy')) + radiusY * Math.sin(target.startAngle),
-    ).matrixTransform(matrix)
-    const end = new DOMPoint(target.point.x, target.point.y).matrixTransform(matrix)
     return {
-      start: { x: start.x, y: start.y },
-      end: { x: end.x, y: end.y },
+      center: {
+        x: Number(shape.getAttribute('cx')),
+        y: Number(shape.getAttribute('cy')),
+      },
+      radiusX,
+      radiusY,
     }
-  }, { point, startAngle })
-
-  await page.mouse.move(coordinates.start.x, coordinates.start.y)
-  await page.mouse.down()
-  await page.mouse.move(coordinates.end.x, coordinates.end.y, { steps: 6 })
-  await page.mouse.up()
+  })
+  const coordinates = await snapshotSvgCoordinates(orbit)
+  const start = coordinates.toClient({
+    x: geometry.center.x + geometry.radiusX * Math.cos(startAngle),
+    y: geometry.center.y + geometry.radiusY * Math.sin(startAngle),
+  })
+  await measureMouseDrag(page, start, coordinates.toClient(point))
 }
 
 export async function panMap(
