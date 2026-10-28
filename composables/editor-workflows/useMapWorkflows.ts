@@ -16,12 +16,25 @@ import {
   type Point,
 } from '../../domain/workspace'
 import type {
+  OrbitAdjustmentGeometry,
+  OrbitAdjustmentIntent,
+  createContinuousOrbitAdjustmentController,
+} from './continuous-orbit-adjustments'
+import type {
   EntityCommand,
   SystemMapHandle,
   TransitionOptions,
 } from './types'
-import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
+import type { WorkspaceMutationExecutor, WorkspaceMutationRequest, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
+import { objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
+
+type OrbitAdjustmentController = Pick<ReturnType<typeof createContinuousOrbitAdjustmentController>, 'update'>
+
+function sameGeometryNumber(left: number, right: number): boolean {
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right)) * 4
+  return Math.abs(left - right) <= tolerance
+}
 
 interface MapWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
@@ -32,6 +45,8 @@ interface MapWorkflowOptions {
   beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   editorError: Ref<string>
+  orbitAdjustments: OrbitAdjustmentController
+  beforeWorkspaceOperation(): Promise<boolean>
 }
 
 /**
@@ -48,6 +63,8 @@ export function useMapWorkflows({
   beginOrbitSession,
   isEntityCommandBlocked,
   editorError,
+  orbitAdjustments,
+  beforeWorkspaceOperation,
 }: MapWorkflowOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -69,6 +86,149 @@ export function useMapWorkflows({
     if (result.status === 'rejected') throw new Error(result.message)
   }
 
+  function readOrbitAdjustmentGeometry(intent: OrbitAdjustmentIntent): OrbitAdjustmentGeometry {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace || currentWorkspace.id !== intent.workspaceId) {
+      throw new Error('The workspace changed before this Orbit adjustment could be read.')
+    }
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === intent.systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === intent.orbitId)
+    if (!system || !orbit) throw new Error('The selected Orbit is no longer available.')
+    const mapGeometry = {
+      objectAngles: currentWorkspace.layout.objectAngles,
+      orbitRadii: currentWorkspace.layout.orbitRadii,
+      orbitRotations: currentWorkspace.layout.orbitRotations,
+    }
+    const positions = objectPositions(system, mapGeometry)
+    return {
+      center: toNormalizedMapPoint(resolveOrbitCenter(orbit, positions)),
+      radii: resolveOrbitRadii(system, orbit, mapGeometry),
+      rotation: resolveOrbitRotation(orbit, mapGeometry),
+    }
+  }
+
+  function buildOrbitAdjustmentRequest(
+    intent: OrbitAdjustmentIntent,
+    geometry: OrbitAdjustmentGeometry,
+  ): WorkspaceMutationRequest {
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === intent.systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === intent.orbitId)
+    if (!currentWorkspace || currentWorkspace.id !== intent.workspaceId || !system || !orbit) {
+      throw new Error('The selected Orbit is no longer available.')
+    }
+    const clusterId = currentWorkspace.cluster.id
+    const change = intent.change
+    if (change.kind === 'center' && orbit.hostId !== null) {
+      throw new Error('Only an unoccupied Orbit center can be moved.')
+    }
+    const command: EntityCommand = { kind: 'orbit-geometry', orbitId: intent.orbitId }
+    const actionKind = change.kind === 'radii' ? 'resize' as const : change.kind === 'rotation' ? 'rotate' as const : 'move' as const
+    const label = change.kind === 'radii'
+      ? `Resize Orbit ${orbit.order}`
+      : change.kind === 'rotation'
+        ? `Rotate Orbit ${orbit.order}`
+        : `Move Orbit ${orbit.order}`
+
+    return {
+      action: {
+        kind: actionKind,
+        label,
+        target: { kind: 'orbit', id: orbit.id, systemId: system.id },
+        parent: { kind: 'system', id: system.id },
+      },
+      isCurrent: () => {
+        const latest = workspace.value
+        const latestOrbit = latest?.cluster.systems.find(candidate => candidate.id === system.id)
+          ?.orbits.find(item => item.id === orbit.id)
+        return latest !== null && latest.id === intent.workspaceId && latest.cluster.id === clusterId
+          && store.activeView === 'system' && store.selectedSystemId === system.id
+          && latestOrbit !== undefined
+          && (change.kind !== 'center' || latestOrbit.hostId === null)
+          && !isEntityCommandBlocked(command)
+      },
+      prepare: (latest) => {
+        const latestSystem = latest.cluster.systems.find(candidate => candidate.id === system.id)
+        const latestOrbit = latestSystem?.orbits.find(candidate => candidate.id === orbit.id)
+        if (!latestSystem || !latestOrbit) throw new Error('The selected Orbit is no longer available.')
+        if (change.kind === 'center' && latestOrbit.hostId !== null) {
+          throw new Error('Only an unoccupied Orbit center can be moved.')
+        }
+        if (isEntityCommandBlocked(command)) throw new Error('Resolve the Inspector draft before changing this Orbit.')
+        if (change.kind === 'radii') {
+          const minimum = minimumOrbitRadius(latestSystem, latestOrbit)
+          const currentRadii = resolveOrbitRadii(latestSystem, latestOrbit, {
+            objectAngles: latest.layout.objectAngles,
+            orbitRadii: latest.layout.orbitRadii,
+            orbitRotations: latest.layout.orbitRotations,
+          })
+          if (sameGeometryNumber(geometry.radii.horizontal, currentRadii.horizontal)
+            && sameGeometryNumber(geometry.radii.vertical, currentRadii.vertical)) return latest
+
+          return {
+            ...latest,
+            layout: {
+              ...latest.layout,
+              orbitRadii: {
+                ...latest.layout.orbitRadii,
+                [orbit.id]: {
+                  horizontal: change.axis === 'vertical'
+                    ? currentRadii.horizontal
+                    : Math.max(minimum, Math.round(geometry.radii.horizontal)),
+                  vertical: change.axis === 'horizontal'
+                    ? currentRadii.vertical
+                    : Math.max(minimum, Math.round(geometry.radii.vertical)),
+                },
+              },
+            },
+          }
+        }
+        if (change.kind === 'rotation') {
+          const currentRotation = resolveOrbitRotation(latestOrbit, {
+            objectAngles: latest.layout.objectAngles,
+            orbitRadii: latest.layout.orbitRadii,
+            orbitRotations: latest.layout.orbitRotations,
+          })
+          const nextRotation = normalizeOrbitRotation(geometry.rotation)
+          if (sameGeometryNumber(nextRotation, currentRotation)) return latest
+          return {
+            ...latest,
+            layout: {
+              ...latest.layout,
+              orbitRotations: { ...latest.layout.orbitRotations, [orbit.id]: nextRotation },
+            },
+          }
+        }
+        const currentCenter = toNormalizedMapPoint(resolveOrbitCenter(latestOrbit, objectPositions(latestSystem, {
+          objectAngles: latest.layout.objectAngles,
+          orbitRadii: latest.layout.orbitRadii,
+          orbitRotations: latest.layout.orbitRotations,
+        })))
+        if (sameGeometryNumber(geometry.center.x, currentCenter.x)
+          && sameGeometryNumber(geometry.center.y, currentCenter.y)) return latest
+        return replaceWorkspaceSystem(latest, moveOrbitCenter(latestSystem, orbit.id, geometry.center, null))
+      },
+    }
+  }
+
+  async function updateOrbitAdjustment(intent: OrbitAdjustmentIntent) {
+    const command: EntityCommand = { kind: 'orbit-geometry', orbitId: intent.orbitId }
+    if (store.activeView !== 'system' || store.mapMode !== 'move' || store.selectedSystemId !== intent.systemId) {
+      return { status: 'rejected', reason: 'stale', message: 'The selected system changed before this Orbit adjustment was received.' } as const
+    }
+    if (rejectBlockedEntityCommand(command)) {
+      return { status: 'rejected', reason: 'unavailable', message: 'Resolve the Inspector draft before changing this Orbit.' } as const
+    }
+    const result = await orbitAdjustments.update(
+      intent,
+      () => readOrbitAdjustmentGeometry(intent),
+      geometry => buildOrbitAdjustmentRequest(intent, geometry),
+    )
+    if (result.status === 'rejected') editorError.value = result.message
+    else editorError.value = ''
+    return result
+  }
+
   /**
    * Persists a cluster-map drag position after clamping each normalized coordinate to [0, 1].
    * @param systemId System being moved.
@@ -76,6 +236,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; invalid coordinates or save failures populate editorError.
    */
   async function moveSystem(systemId: string, position: Point): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     if (!currentWorkspace || !system) return
@@ -132,6 +293,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
    */
   async function moveMapObject(objectId: string, position: Point): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const selectedSystemId = selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
@@ -195,6 +357,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; validation and save errors populate editorError.
    */
   async function placeMapObjectInOrbit(objectId: string, orbitId: string, angle: number): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const selectedSystemId = selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
@@ -259,6 +422,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; invalid angles and save failures populate editorError.
    */
   async function rotateMapObject(objectId: string, angle: number): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
     if (!currentWorkspace || object?.placement.kind !== 'orbit') return
@@ -322,6 +486,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; invalid radii and save failures populate editorError.
    */
   async function resizeMapOrbit(orbitId: string, radii: OrbitRadii): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
@@ -383,6 +548,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt; invalid input or save failures populate editorError.
    */
   async function rotateMapOrbit(orbitId: string, degrees: number): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system?.orbits.some(orbit => orbit.id === orbitId)) return
@@ -439,6 +605,7 @@ export function useMapWorkflows({
     center: Point,
     hostId: string | null,
   ): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const selectedSystemId = selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
@@ -525,6 +692,7 @@ export function useMapWorkflows({
    * @returns A promise that resolves after the attempt or any early guard; failures populate editorError.
    */
   async function detachSelectedOrbit(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const systemId = selectedSystem.value?.id
     const orbitId = selectedOrbit.value?.id
     if (
@@ -616,6 +784,7 @@ export function useMapWorkflows({
 
   return {
     orbitAdjustmentNotice,
+    updateOrbitAdjustment,
     moveSystem,
     moveMapObject,
     placeMapObjectInOrbit,

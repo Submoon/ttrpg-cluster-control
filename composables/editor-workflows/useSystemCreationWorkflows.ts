@@ -43,6 +43,7 @@ interface SystemCreationWorkflowOptions {
   mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   resolveObjectCreationTransition: () => Promise<boolean>
+  beforeWorkspaceOperation?: () => Promise<boolean>
   onObjectCreated: (objectId: string) => Promise<void>
 }
 
@@ -82,6 +83,7 @@ export function useSystemCreationWorkflows({
   mutations,
   isEntityCommandBlocked,
   resolveObjectCreationTransition,
+  beforeWorkspaceOperation = async () => true,
   onObjectCreated,
 }: SystemCreationWorkflowOptions) {
   const store = useEditorUiStore()
@@ -134,18 +136,18 @@ export function useSystemCreationWorkflows({
       && currentWorkspace.cluster.systems.some(candidate => candidate.id === session.systemId)
   }
 
-  function chooseCreationType(type: SystemCreationType): void {
-    if (confirmingPreviewId !== null) return
+  async function chooseCreationType(type: SystemCreationType): Promise<boolean> {
+    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system
-      || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)) return
+      || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)) return false
 
     if (creationSession.value && sameCreationType(creationSession.value.type, type)
       && sessionMatchesCurrentContext(creationSession.value)) {
       invalidatePreview(creationSession.value)
       creationSession.value.errors = {}
-      return
+      return true
     }
 
     sessionSequence += 1
@@ -162,6 +164,7 @@ export function useSystemCreationWorkflows({
     }
     creationSession.value = session
     if (type.kind === 'orbit') fillDefaultOrbitGeometry(session, system, null)
+    return true
   }
 
   function nextOrbitOrder(system: StarSystem, hostId: string | null): number {
@@ -417,7 +420,7 @@ export function useSystemCreationWorkflows({
   }
 
   async function addCreationFromInputs(): Promise<boolean> {
-    if (confirmingPreviewId !== null) return false
+    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -468,7 +471,7 @@ export function useSystemCreationWorkflows({
   }
 
   async function offerCreationCandidates(candidates: SystemCreationCandidate[]): Promise<boolean> {
-    if (confirmingPreviewId !== null) return false
+    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -510,7 +513,7 @@ export function useSystemCreationWorkflows({
   async function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): Promise<boolean> {
     let session = creationSession.value
     if (!session || !sameCreationType(session.type, type) || !sessionMatchesCurrentContext(session)) {
-      chooseCreationType(type)
+      if (!await chooseCreationType(type)) return false
       session = creationSession.value
     }
     if (!session) return false
@@ -526,7 +529,7 @@ export function useSystemCreationWorkflows({
   }
 
   async function confirmCreation(previewId: number): Promise<boolean> {
-    if (confirmingPreviewId !== null) return false
+    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
     const session = creationSession.value
     if (!session?.preview || session.preview.id !== previewId) return false
     let currentWorkspace = workspace.value
@@ -710,7 +713,7 @@ export function useSystemCreationWorkflows({
   }
 
   async function chooseCreationCandidate(key: string): Promise<boolean> {
-    if (confirmingPreviewId !== null) return false
+    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
     const session = creationSession.value
     const candidate = session?.candidates.find(item => item.key === key)
     if (!session || !candidate) return false

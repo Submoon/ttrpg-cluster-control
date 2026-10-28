@@ -238,6 +238,7 @@ export interface WorkspaceHistoryCapacityDetails {
 export interface WorkspaceHistoryActionDescriptor extends WorkspaceMutationAction {
   workspaceId: string
   clusterId: string
+  contextLabel: string
 }
 
 export interface WorkspaceHistoryStatus {
@@ -248,6 +249,7 @@ export interface WorkspaceHistoryStatus {
   maxActions: number
   maxBytes: number
   isBusy: boolean
+  hasPendingGroup: boolean
   isConfirmingCapacity: boolean
   retentionReduced: boolean
   notice: string | null
@@ -257,22 +259,42 @@ export interface WorkspaceHistoryStatus {
   redoUnavailableReason: string | null
 }
 
+/** A continuous adjustment has an in-memory preview but has not applied a workspace mutation yet. */
+export type WorkspaceGroupStageResult = WorkspaceMutationResult | { status: 'preview' }
+
+/** A detached read-only action summary and whether it lies before the current history position. */
+export interface WorkspaceHistoryEntry {
+  action: WorkspaceHistoryActionDescriptor
+  applied: boolean
+}
+
+export interface WorkspaceHistoryTraversalContext {
+  direction: 'undo' | 'redo'
+  action: WorkspaceHistoryActionDescriptor
+}
+
 export interface WorkspaceHistoryCoordinatorOptions extends WorkspaceMutationExecutorOptions {
   /** Returns a live reason traversal cannot start; called on every status read and command. */
   getTraversalBlockReason(): string | null
   /** Confirms a single oversized action. The signal aborts the confirmation after reset/disposal. */
   confirmCapacity(details: WorkspaceHistoryCapacityDetails, signal: AbortSignal): Promise<boolean>
   /** Ends obsolete clean editing sessions after an accepted restore. */
-  onTraversalApplied?(): void
+  onTraversalApplied?(context: WorkspaceHistoryTraversalContext): void
   /** Limits are configurable for deterministic capacity boundary checks. */
   limits?: Partial<WorkspaceHistoryLimits>
 }
 
 export interface WorkspaceHistoryCoordinator extends WorkspaceMutationExecutor {
+  /** Updates a continuous adjustment's proposal without publishing or serializing it. */
+  stageGroup(key: string, request: WorkspaceMutationRequest): Promise<WorkspaceGroupStageResult>
+  /** Publishes the pending adjustment once through the ordinary validated history path. */
+  completeGroup(): Promise<WorkspaceMutationResult>
   undo(): Promise<WorkspaceMutationResult>
   redo(): Promise<WorkspaceMutationResult>
   reset(reason?: string): void
   getStatus(): WorkspaceHistoryStatus
+  /** Returns detached action descriptors in chronological order; it never exposes snapshots. */
+  getEntries(): readonly WorkspaceHistoryEntry[]
   subscribe(listener: () => void): () => void
 }
 
@@ -292,6 +314,84 @@ function sameIdentity(left: WorkspaceIdentity | null, right: WorkspaceIdentity |
 function readHistoryAction(bytes: Uint8Array | null): WorkspaceHistoryActionDescriptor | null {
   if (!bytes) return null
   return JSON.parse(new TextDecoder().decode(bytes)) as WorkspaceHistoryActionDescriptor
+}
+
+function boundedContextLabel(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 200).trim() || 'Workspace'
+}
+
+function contextName(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, ' ')
+  return normalized.length <= 32 ? normalized : `${normalized.slice(0, 31).trimEnd()}…`
+}
+
+function routePointContext(workspace: LocalWorkspace, pointId: string): string {
+  for (const system of workspace.cluster.systems) {
+    const point = system.objects.find(object => object.id === pointId && object.family === 'JumpPoint')
+    if (point) return `${contextName(point.name)} (${contextName(system.name)})`
+  }
+  return 'Missing Jump Point'
+}
+
+function targetContextLabel(target: WorkspaceMutationTarget | undefined, workspace: LocalWorkspace): string | null {
+  if (!target) return null
+  const { cluster } = workspace
+  if (target.kind === 'cluster') return target.id === cluster.id ? cluster.name : null
+  if (target.kind === 'system') {
+    const system = cluster.systems.find(candidate => candidate.id === target.id)
+    return system ? `${system.name} · ${cluster.name}` : null
+  }
+  if (target.kind === 'object') {
+    const system = cluster.systems.find(candidate => candidate.id === target.systemId)
+    const object = system?.objects.find(candidate => candidate.id === target.id)
+    return system && object ? `${object.name} · ${system.name}` : null
+  }
+  if (target.kind === 'orbit') {
+    const system = cluster.systems.find(candidate => candidate.id === target.systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === target.id)
+    if (!system || !orbit) return null
+    const host = orbit.hostId === null
+      ? 'unoccupied center'
+      : system.objects.find(object => object.id === orbit.hostId)?.name ?? 'missing host'
+    return `Orbit ${orbit.order} around ${host} · ${system.name}`
+  }
+  if (target.kind === 'route') {
+    const route = cluster.routes.find(candidate => candidate.id === target.id)
+    if (!route) return null
+    const from = routePointContext(workspace, route.fromPointId)
+    const to = route.toPointId === null ? route.unresolvedExit : routePointContext(workspace, route.toPointId)
+    return `${from} → ${to} · Level ${route.jumpLevel} · ${contextName(cluster.name)}`
+  }
+  const field = workspace.objectFieldSettings.customFields.find(candidate => candidate.id === target.id)
+  return field ? `${field.name} · Global Fields` : null
+}
+
+function historyContextLabel(
+  action: WorkspaceMutationAction,
+  before: LocalWorkspace,
+  after: LocalWorkspace,
+): string {
+  const primary = action.kind === 'create' || action.kind === 'import'
+    ? after
+    : action.kind === 'delete' ? before : after
+  const fallback = primary === after ? before : after
+  const context = action.kind === 'import'
+    ? primary.cluster.name
+    : targetContextLabel(action.target, primary)
+      ?? targetContextLabel(action.parent, primary)
+      ?? targetContextLabel(action.target, fallback)
+      ?? targetContextLabel(action.parent, fallback)
+      ?? primary.cluster.name
+  return boundedContextLabel(context)
+}
+
+function historyDescriptor(prepared: PreparedMutation): WorkspaceHistoryActionDescriptor {
+  return {
+    workspaceId: prepared.before.id,
+    clusterId: prepared.before.cluster.id,
+    ...prepared.action,
+    contextLabel: historyContextLabel(prepared.action, prepared.before, prepared.after),
+  }
 }
 
 function abortedPromise(signal: AbortSignal): Promise<'aborted'> {
@@ -331,6 +431,14 @@ export function createWorkspaceHistoryCoordinator(
   let confirmingCapacity = false
   let operationEpoch = 0
   let capacityController: AbortController | null = null
+  let pendingGroup: {
+    key: string
+    request: WorkspaceMutationRequest
+    currentReference: LocalWorkspace
+    revision: number
+    epoch: number
+  } | null = null
+  let groupCompletion: Promise<WorkspaceMutationResult> | null = null
   const listeners = new Set<() => void>()
   let disposed = false
   let pendingSynchronousReset: { notice: string | null } | null = null
@@ -366,6 +474,7 @@ export function createWorkspaceHistoryCoordinator(
     }
     if (sameIdentity(identity, nextIdentity)) return true
     operationEpoch += 1
+    pendingGroup = null
     capacityController?.abort()
     capacityController = null
     if (confirmingCapacity) busy = false
@@ -390,6 +499,8 @@ export function createWorkspaceHistoryCoordinator(
     const redoAction = readHistoryAction(historyActionAt(timeline, 'redo'))
     const blockedReason = busy
       ? 'Finish the current workspace operation before using Undo or Redo.'
+      : pendingGroup
+        ? 'Finish the active adjustment before using Undo or Redo.'
       : identityReadError
         ? `Workspace history is unavailable: ${identityReadError}`
         : liveBlockReason()
@@ -401,6 +512,7 @@ export function createWorkspaceHistoryCoordinator(
       maxActions: limits.maxActions,
       maxBytes: limits.maxBytes,
       isBusy: busy,
+      hasPendingGroup: pendingGroup !== null,
       isConfirmingCapacity: confirmingCapacity,
       retentionReduced: timeline.retentionReduced,
       notice: timeline.notice,
@@ -460,7 +572,7 @@ export function createWorkspaceHistoryCoordinator(
     return result
   }
 
-  const execute = (request: WorkspaceMutationRequest): Promise<WorkspaceMutationResult> => {
+  const executeNow = (request: WorkspaceMutationRequest): Promise<WorkspaceMutationResult> => {
     if (!syncIdentity()) {
       return Promise.resolve(rejected('unavailable', `Workspace history is unavailable: ${identityReadError}`))
     }
@@ -473,11 +585,7 @@ export function createWorkspaceHistoryCoordinator(
     try {
       const beforeBytes = encodeCanonical(preparation.before)
       const afterBytes = encodeCanonical(preparation.after)
-      const actionBytes = encodeCanonical({
-        workspaceId: preparation.before.id,
-        clusterId: preparation.before.cluster.id,
-        ...preparation.action,
-      })
+      const actionBytes = encodeCanonical(historyDescriptor(preparation))
       const plan = planWorkspaceHistoryAppend(timeline, beforeBytes, afterBytes, actionBytes, limits)
       if (plan.status === 'stale') {
         return Promise.resolve(rejected('stale', 'The workspace changed outside the shared history. Start a fresh editing session before applying this action.'))
@@ -548,12 +656,155 @@ export function createWorkspaceHistoryCoordinator(
     }
   }
 
+  const completeGroup = (): Promise<WorkspaceMutationResult> => {
+    if (groupCompletion) return groupCompletion
+    const group = pendingGroup
+    if (!group) return Promise.resolve({ status: 'unchanged' })
+    if (disposed) return Promise.resolve(rejected('stale', 'The workspace history is no longer active.'))
+    if (busy) return Promise.resolve(rejected('busy', 'Finish the current workspace operation before completing this adjustment.'))
+
+    let current: LocalWorkspace | null
+    let revision: number
+    try {
+      current = options.getWorkspace()
+      revision = options.getRevision()
+    } catch (error) {
+      pendingGroup = null
+      notify()
+      return Promise.resolve(rejected('unavailable', errorText(error)))
+    }
+    if (group.epoch !== operationEpoch || current !== group.currentReference || revision !== group.revision
+      || (group.request.isCurrent && !isRequestCurrent(group.request))) {
+      if (pendingGroup === group) pendingGroup = null
+      notify()
+      return Promise.resolve(rejected('stale', 'The adjustment preview changed before it could be applied.'))
+    }
+
+    const completion = executeNow(group.request).then(
+      result => result,
+      error => rejected('failed', errorText(error)),
+    ).then((result) => {
+      if (pendingGroup === group) pendingGroup = null
+      if (groupCompletion === completion) groupCompletion = null
+      notify()
+      return result
+    })
+    groupCompletion = completion
+    notify()
+    return completion
+  }
+
+  function observeDiscardedDurability(result: WorkspaceMutationResult): void {
+    // The sole save-status owner reports persistence failures. Callers that discard a finalized
+    // action's acknowledgement must still mark its promise handled to avoid an unhandled rejection.
+    if (result.status === 'applied') void result.durable.catch(() => undefined)
+  }
+
+  function isRequestCurrent(request: WorkspaceMutationRequest): boolean {
+    try {
+      return !request.isCurrent || request.isCurrent()
+    } catch {
+      return false
+    }
+  }
+
+  const stageGroup = async (
+    key: string,
+    request: WorkspaceMutationRequest,
+  ): Promise<WorkspaceGroupStageResult> => {
+    if (!key.trim()) return rejected('invalid', 'The adjustment group key is empty.')
+    if (!syncIdentity()) return rejected('unavailable', `Workspace history is unavailable: ${identityReadError}`)
+    if (disposed) return rejected('stale', 'The workspace history is no longer active.')
+    if (busy || groupCompletion) return rejected('busy', 'Finish the current workspace operation before adjusting again.')
+
+    const action = normalizedAction(request.action)
+    if (!action) return rejected('invalid', 'The workspace adjustment action is invalid.')
+
+    let current: LocalWorkspace | null
+    let revision: number
+    try {
+      current = options.getWorkspace()
+      revision = options.getRevision()
+    } catch (error) {
+      return rejected('unavailable', errorText(error))
+    }
+    if (!current) return rejected('invalid', 'There is no applied workspace to adjust.')
+    if (!isRequestCurrent(request)) return rejected('stale', 'The workspace changed before this adjustment preview could be shown.')
+
+    const existing = pendingGroup
+    if (existing && existing.key !== key) {
+      const completed = await completeGroup()
+      if (completed.status === 'rejected') return completed
+      if (completed.status === 'applied') observeDiscardedDurability(completed)
+      let currentAfterCompletion: LocalWorkspace | null
+      let revisionAfterCompletion: number
+      try {
+        currentAfterCompletion = options.getWorkspace()
+        revisionAfterCompletion = options.getRevision()
+      } catch (error) {
+        return rejected('unavailable', errorText(error))
+      }
+      if (completed.status === 'applied' || currentAfterCompletion !== current || revisionAfterCompletion !== revision) {
+        return rejected('stale', 'The previous adjustment changed the workspace. Recalculate this adjustment before continuing.')
+      }
+    }
+
+    const currentGroup = pendingGroup
+    if (currentGroup && currentGroup.key === key) {
+      if (currentGroup.currentReference !== current || currentGroup.revision !== revision || currentGroup.epoch !== operationEpoch) {
+        pendingGroup = null
+        notify()
+        return rejected('stale', 'The workspace changed while this adjustment preview was active.')
+      }
+      const previousAction = normalizedAction(currentGroup.request.action)
+      if (!previousAction || previousAction.kind !== action.kind
+        || canonicalJson(previousAction.target) !== canonicalJson(action.target)
+        || canonicalJson(previousAction.parent ?? null) !== canonicalJson(action.parent ?? null)) {
+        return rejected('invalid', 'One adjustment group cannot change its action target.')
+      }
+      currentGroup.request = request
+      notify()
+      return { status: 'preview' }
+    }
+
+    pendingGroup = { key, request, currentReference: current, revision, epoch: operationEpoch }
+    notify()
+    return { status: 'preview' }
+  }
+
+  const execute = async (request: WorkspaceMutationRequest): Promise<WorkspaceMutationResult> => {
+    if (!pendingGroup) return executeNow(request)
+    let before: LocalWorkspace | null
+    let revision: number
+    try {
+      before = options.getWorkspace()
+      revision = options.getRevision()
+    } catch (error) {
+      return rejected('unavailable', errorText(error))
+    }
+    const completed = await completeGroup()
+    if (completed.status === 'rejected') return completed
+    if (completed.status === 'applied') {
+      observeDiscardedDurability(completed)
+      return rejected('stale', 'The active adjustment was saved first. Recalculate this action using the updated workspace.')
+    }
+    try {
+      if (options.getWorkspace() !== before || options.getRevision() !== revision) {
+        return rejected('stale', 'The workspace changed while the active adjustment was being completed.')
+      }
+    } catch (error) {
+      return rejected('unavailable', errorText(error))
+    }
+    return executeNow(request)
+  }
+
   const traverse = (direction: 'undo' | 'redo'): Promise<WorkspaceMutationResult> => {
     if (!syncIdentity()) {
       return Promise.resolve(rejected('unavailable', `Workspace history is unavailable: ${identityReadError}`))
     }
     if (disposed) return Promise.resolve(rejected('stale', 'The workspace history is no longer active.'))
     if (busy) return Promise.resolve(rejected('busy', 'Finish the current workspace operation before using Undo or Redo.'))
+    if (pendingGroup) return Promise.resolve(rejected('unavailable', 'Finish the active adjustment before using Undo or Redo.'))
     const blocked = liveBlockReason()
     if (blocked) return Promise.resolve(rejected('unavailable', blocked))
 
@@ -584,6 +835,8 @@ export function createWorkspaceHistoryCoordinator(
     }
 
     const nextTimeline = moveWorkspaceHistoryPosition(timeline, direction)
+    const traversalAction = readHistoryAction(historyActionAt(timeline, direction))
+    if (!traversalAction) return Promise.resolve(rejected('invalid', 'The retained action summary could not be restored.'))
     const restoredIdentity = identityOf(workspace)
 
     const epoch = operationEpoch
@@ -626,7 +879,7 @@ export function createWorkspaceHistoryCoordinator(
             identity = restoredIdentity
           }
           try {
-            options.onTraversalApplied?.()
+            options.onTraversalApplied?.({ direction, action: traversalAction })
           } catch {
             // Session cleanup cannot turn a workspace already restored in memory into a rejection.
           }
@@ -640,7 +893,7 @@ export function createWorkspaceHistoryCoordinator(
         identity = restoredIdentity
       }
       try {
-        options.onTraversalApplied?.()
+        options.onTraversalApplied?.({ direction, action: traversalAction })
       } catch {
         // Session cleanup cannot turn a workspace already restored in memory into a rejection.
       }
@@ -656,11 +909,14 @@ export function createWorkspaceHistoryCoordinator(
 
   return {
     execute,
+    stageGroup,
+    completeGroup,
     undo: () => traverse('undo'),
     redo: () => traverse('redo'),
     reset(reason) {
       if (disposed) return
       operationEpoch += 1
+      pendingGroup = null
       capacityController?.abort()
       capacityController = null
       const resetNotice = reason ?? null
@@ -684,6 +940,14 @@ export function createWorkspaceHistoryCoordinator(
       notify()
     },
     getStatus: status,
+    getEntries() {
+      syncIdentity()
+      return timeline.actions.map((bytes, index) => {
+        const action = readHistoryAction(bytes)
+        if (!action) throw new Error('A retained action summary could not be read.')
+        return { action, applied: index < timeline.position }
+      })
+    },
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -692,6 +956,7 @@ export function createWorkspaceHistoryCoordinator(
       if (disposed) return
       disposed = true
       operationEpoch += 1
+      pendingGroup = null
       capacityController?.abort()
       capacityController = null
       busy = false

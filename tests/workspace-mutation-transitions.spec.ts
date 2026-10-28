@@ -9,8 +9,9 @@ import type { RouteInspectorSession } from '../composables/editor-workflows/useR
 import type { RouteDraftValues } from '../composables/editor-workflows/useRouteInspectorSession'
 import { useEntityInspectorSession } from '../composables/editor-workflows/useEntityInspectorSession'
 import {
+  createWorkspaceHistoryCoordinator,
   createWorkspaceMutationExecutor,
-  type WorkspaceMutationExecutor,
+  type WorkspaceHistoryCoordinator,
   type WorkspaceMutationRequest,
   type WorkspaceMutationResult,
 } from '../composables/editor-workflows/workspace-mutations'
@@ -70,7 +71,8 @@ function createMutationGate() {
   let rejectDurable: ((error: Error) => void) | undefined
   const durable = new Promise<void>((_resolve, reject) => { rejectDurable = reject })
   const pending: PendingMutation[] = []
-  const executor = createWorkspaceMutationExecutor({
+  const pendingMutationWaiters: Array<() => void> = []
+  const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
     getRevision: () => revision,
     publishWorkspace: next => {
@@ -78,10 +80,16 @@ function createMutationGate() {
       revision += 1
       return { durable }
     },
+    getTraversalBlockReason: () => null,
+    confirmCapacity: async () => false,
   })
-  const mutations: WorkspaceMutationExecutor = {
-    execute: request => new Promise(resolve => { pending.push({ request, resolve }) }),
-    dispose: () => executor.dispose(),
+  const mutations: WorkspaceHistoryCoordinator = {
+    ...history,
+    execute: request => new Promise(resolve => {
+      pending.push({ request, resolve })
+      pendingMutationWaiters.shift()?.()
+    }),
+    dispose: () => history.dispose(),
   }
 
   function takePending(): PendingMutation {
@@ -92,12 +100,17 @@ function createMutationGate() {
 
   async function acceptNext(): Promise<void> {
     const next = takePending()
-    next.resolve(await executor.execute(next.request))
+    next.resolve(await history.execute(next.request))
+  }
+
+  async function waitForPendingMutation(): Promise<void> {
+    if (pending.length > 0) return
+    await new Promise<void>(resolve => pendingMutationWaiters.push(resolve))
   }
 
   async function executeNextAndHoldResult(): Promise<() => void> {
     const next = takePending()
-    const result = await executor.execute(next.request)
+    const result = await history.execute(next.request)
     return () => next.resolve(result)
   }
 
@@ -111,6 +124,7 @@ function createMutationGate() {
     mutations,
     revision: () => revision,
     acceptNext,
+    waitForPendingMutation,
     executeNextAndHoldResult,
     rejectNext,
     rejectDurable: (error: Error) => rejectDurable?.(error),
@@ -218,6 +232,7 @@ test('an accepted result after transition unmount cannot close a newer chart ses
   const pendingTransition = chart.transitions.resolveTransition()
   const applying = chart.transitions.resolveTransitionChoice('apply')
 
+  await gate.waitForPendingMutation()
   const releaseResult = await gate.executeNextAndHoldResult()
   expect(gate.workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
   chart.dispose()

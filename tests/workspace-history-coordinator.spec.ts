@@ -108,6 +108,69 @@ test('saved snapshot traversal restores exact identities and a new accepted edit
   harness.dispose()
 })
 
+test('the read-only history list follows the current position and exposes detached action summaries @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const harness = historyHarness({ workspace: initial })
+  expect(harness.history.getEntries()).toEqual([])
+
+  await applyRename(harness.history, harness.workspace, 'Kestrel Reach Prime')
+  await applyRename(harness.history, harness.workspace, 'Kestrel Reach North')
+  const applied = harness.history.getEntries()
+  expect(applied).toEqual([
+    { action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: initial.cluster.id }, workspaceId: initial.id, clusterId: initial.cluster.id, contextLabel: 'Kestrel Reach Prime' }, applied: true },
+    { action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: initial.cluster.id }, workspaceId: initial.id, clusterId: initial.cluster.id, contextLabel: 'Kestrel Reach North' }, applied: true },
+  ])
+
+  applied[0]!.action.target.id = 'mutated-copy'
+  const undo = await harness.history.undo()
+  expect(undo.status).toBe('applied')
+  if (undo.status === 'applied') await undo.durable
+
+  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, redoDepth: 1 })
+  expect(harness.history.getEntries()).toEqual([
+    { action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: initial.cluster.id }, workspaceId: initial.id, clusterId: initial.cluster.id, contextLabel: 'Kestrel Reach Prime' }, applied: true },
+    { action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: initial.cluster.id }, workspaceId: initial.id, clusterId: initial.cluster.id, contextLabel: 'Kestrel Reach North' }, applied: false },
+  ])
+  harness.history.reset('History starts after the workspace is recovered.')
+  expect(harness.history.getEntries()).toEqual([])
+  expect(harness.history.getStatus().notice).toBe('History starts after the workspace is recovered.')
+  harness.dispose()
+})
+
+test('accepted traversal reports its direction and action descriptor after memory publication @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  let publishedWorkspace: LocalWorkspace = createWorkspaceSnapshot(initial)
+  let revision = 0
+  const traversals: Array<{ direction: 'undo' | 'redo'; label: string; targetId: string }> = []
+  const history = createWorkspaceHistoryCoordinator({
+    getWorkspace: () => publishedWorkspace,
+    getRevision: () => revision,
+    publishWorkspace: next => {
+      publishedWorkspace = createWorkspaceSnapshot(next)
+      revision += 1
+      return { durable: Promise.resolve() }
+    },
+    getTraversalBlockReason: () => null,
+    confirmCapacity: async () => false,
+    onTraversalApplied: ({ direction, action }) => {
+      traversals.push({ direction, label: action.label, targetId: action.target.id })
+    },
+  })
+  const rename = await history.execute(renamed(publishedWorkspace, 'Kestrel Reach Prime'))
+  if (rename.status !== 'applied') throw new Error('The setup rename did not apply.')
+  await rename.durable
+  const undo = await history.undo()
+  if (undo.status === 'applied') await undo.durable
+  const redo = await history.redo()
+  if (redo.status === 'applied') await redo.durable
+
+  expect(traversals).toEqual([
+    { direction: 'undo', label: 'Rename Jump Cluster', targetId: initial.cluster.id },
+    { direction: 'redo', label: 'Rename Jump Cluster', targetId: initial.cluster.id },
+  ])
+  history.dispose()
+})
+
 test('a no-op leaves Redo available and traversal changes data before durability finishes @pure', async () => {
   let releaseSave: (() => void) | undefined
   const durable = new Promise<void>(resolve => { releaseSave = resolve })
@@ -160,6 +223,8 @@ test('prefix eviction retains a contiguous restorable suffix under the action li
   await applyRename(harness.history, harness.workspace, 'Reach 3')
 
   expect(harness.history.getStatus()).toMatchObject({ undoDepth: 2, redoDepth: 0, totalActions: 2, retentionReduced: true })
+  expect(harness.history.getEntries()).toHaveLength(2)
+  expect(harness.history.getEntries().every(entry => entry.applied)).toBe(true)
   const firstUndo = await harness.history.undo()
   if (firstUndo.status === 'applied') await firstUndo.durable
   expect(harness.workspace.cluster.name).toBe('Reach 2')
@@ -249,6 +314,7 @@ test('retained bytes count canonical UTF-8 workspace nodes and their action desc
     workspaceId: initial.id,
     clusterId: initial.cluster.id,
     ...action,
+    contextLabel: nextName,
   }
   const expectedBytes = new TextEncoder().encode(JSON.stringify(initial)).byteLength
     + new TextEncoder().encode(JSON.stringify(next)).byteLength
@@ -279,15 +345,17 @@ test('adjacent history actions count their shared workspace snapshot node once @
     label: 'Rename Jump Cluster',
     target: { kind: 'cluster', id: initial.cluster.id },
   }
-  const descriptorBytes = new TextEncoder().encode(JSON.stringify({
-    workspaceId: initial.id,
-    clusterId: initial.cluster.id,
-    ...action,
-  })).byteLength
+  const descriptorBytes = [middle.cluster.name, final.cluster.name]
+    .reduce((total, contextLabel) => total + new TextEncoder().encode(JSON.stringify({
+      workspaceId: initial.id,
+      clusterId: initial.cluster.id,
+      ...action,
+      contextLabel,
+    })).byteLength, 0)
   const expected = new TextEncoder().encode(JSON.stringify(initial)).byteLength
     + new TextEncoder().encode(JSON.stringify(middle)).byteLength
     + new TextEncoder().encode(JSON.stringify(final)).byteLength
-    + descriptorBytes * 2
+    + descriptorBytes
 
   expect(harness.history.getStatus()).toMatchObject({ undoDepth: 2, redoDepth: 0, retainedBytes: expected })
   harness.dispose()
@@ -358,6 +426,7 @@ test('accepting an oversized action publishes it as a non-undoable empty-history
     notice: 'This action cannot be undone. It cleared the retained history.',
   })
   expect(oversized.history.getStatus().undoUnavailableReason).toBe('There is nothing to undo.')
+  expect(oversized.history.getEntries()).toEqual([])
   expect(promptCount).toBe(1)
   oversized.dispose()
 })

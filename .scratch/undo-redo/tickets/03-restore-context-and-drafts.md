@@ -1,6 +1,7 @@
 ---
 title: 'Restore useful context without stale drafts'
-status: open
+status: closed
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -29,12 +30,12 @@ Undo/Redo across ordinary system/route/object/Orbit edits reveals the affected m
 
 ## Acceptance criteria
 
-- [ ] Systems/routes reveal Cluster context, objects/Orbits their system, with original or surviving-parent/empty selection as appropriate. Shared Fields changes use global feedback in the current view.
-- [ ] Reveal an off-screen target only as needed, without restoring old camera/panel snapshots. Retain initiating-control focus or a stable map fallback.
-- [ ] Refresh or end stale clean chart/entity/route/Fields sessions explicitly; no retained clean form can later overwrite restored data using an obsolete baseline. Modified hidden or unrelated drafts continue to block traversal.
-- [ ] Preserve complete form-Apply and confirmed numeric/drag placement boundaries. Creation followed by modified Apply, and draft Apply before a following operation, remain separate entries. Preserve exact field values, placement relationships and layout.
-- [ ] Make detailed blocker reasons/action labels understandable across map contexts, panel hiding/reopening and responsive reflow; do not weaken 02's safety floor.
-- [ ] Cover public cross-map system/route/object/Orbit form and placement journeys, missing-target fallback, hidden-session blockers, clean-form refresh and focus, with command-level failure preservation and relevant UI checks.
+- [x] Systems/routes reveal Cluster context, objects/Orbits their system, with original or surviving-parent/empty selection as appropriate. Shared Fields changes use global feedback in the current view.
+- [x] Reveal an off-screen target only as needed, without restoring old camera/panel snapshots. Retain initiating-control focus or a stable map fallback.
+- [x] Refresh or end stale clean chart/entity/route/Fields sessions explicitly; no retained clean form can later overwrite restored data using an obsolete baseline. Modified hidden or unrelated drafts continue to block traversal.
+- [x] Preserve complete form-Apply and confirmed numeric/drag placement boundaries. Creation followed by modified Apply, and draft Apply before a following operation, remain separate entries. Preserve exact field values, placement relationships and layout.
+- [x] Make detailed blocker reasons/action labels understandable across map contexts, panel hiding/reopening and responsive reflow; do not weaken 02's safety floor.
+- [x] Cover public cross-map system/route/object/Orbit form and placement journeys, missing-target fallback, hidden-session blockers, clean-form refresh and focus, with command-level failure preservation and relevant UI checks.
 
 ## Shared constraints
 
@@ -53,4 +54,21 @@ Undo/Redo across ordinary system/route/object/Orbit edits reveals the affected m
 
 ## Planning authorization
 
-The user approved this ticket in the eight-ticket local breakdown on 2026-10-27. It is ready for an agent once its blocking tickets are complete and implementation is separately authorized. It is unclaimed and has not been implemented.
+The user approved this ticket in the eight-ticket local breakdown on 2026-10-27. It is ready for an agent once its blocking tickets are complete and implementation is separately authorized. The user separately authorized implementation on 2026-10-28; the execution and resolution below record the outcome.
+
+## Implementation execution
+
+The user authorized this ticket together with 03/04/05/06/08 on 2026-10-28. Actual implementation baseline: `4ad6976aaf0953bcaac90c26eb4e289c3ef75487` on current branch `codex/undo-redo-ticket-01`. Freshly fetched `origin/main` and local `main` remain `9edfa66c4f505d56f106fc4af8245f200abfba78`; the two completed prerequisite commits intentionally form the base. The source issue was re-fetched unchanged (open, same labels, no comments). Preserve unrelated environment configuration and other worktrees. Ticket 07 is outside this instruction. The coordinator owns Git, integration resources and final independent reviews; use the previously approved command/read-only, public UI and real IndexedDB test seams.
+
+### Focused implementation evidence
+
+The 2026-10-28 context/consultation slice adds detached descriptor-only chronological history reads, an accepted-restore context callback, useful object/Orbit action labels and a responsive read-only History view. Accepted restore navigation resolves surviving targets/parents, preserves panels and zoom, waits for mounted map geometry and abandons stale focus/reveal continuations. Focused command checks passed (25 coordinator scenarios); six public browser scenarios passed for compact consultation, dirty-draft preservation, cross-map object and Orbit restoration, deleted-target fallback and the existing post-import Back regression. An off-screen object reproduction required both its useful center anchor and a guarded render-frame wait; removal of that wait reproduced the failure. Scoped lint and full typecheck passed. Integrated verification and independent review closure are recorded in the Resolution below.
+
+
+## Resolution
+
+Resolved on 2026-10-28 after implementation, integrated validation and independent review closure.
+
+Accepted Undo/Redo now reveals the affected Cluster or system and a surviving target/parent, with clean-session cleanup, stable focus and minimal pan at the existing zoom. Deferred reveals verify workspace/context ownership after rendering. Public cross-map object/Orbit, missing-target, hidden-draft, clean-form and compact journeys passed; final route-validation focus verification is recorded in the shared batch evidence.
+
+See [Undo/redo implementation tickets — batch verification](index.md#batch-verification) for the fixed baseline, source candidate, independent review closure, integrated checks and their limits. Ticket 07 and global source-issue completion remain outside this batch.

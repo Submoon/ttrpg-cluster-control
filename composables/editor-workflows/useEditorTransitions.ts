@@ -25,6 +25,7 @@ export function useEditorTransitions(options: {
     discard(sessionId?: number): void
   }
   clearEditorError(): void
+  beforeWorkspaceOperation?(): Promise<boolean>
 }) {
   const { chart, entity, route, clearEditorError } = options
   const transitionGuard = ref<TransitionGuard>(null)
@@ -44,8 +45,10 @@ export function useEditorTransitions(options: {
    * Resolves only the drafts named by this transition; a second pending request is rejected.
    * Apply means the controller published memory; the workspace owner reports durable save completion separately.
    */
-  function resolveTransition(transition: TransitionOptions = {}): Promise<boolean> {
+  async function resolveTransition(transition: TransitionOptions = {}): Promise<boolean> {
     if (pendingTransition) return Promise.resolve(false)
+    if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+    if (pendingTransition) return false
 
     const leaveChart = transition.leaveChart !== false
     const leaveEntitySession = transition.leaveEntitySession !== false
@@ -58,7 +61,7 @@ export function useEditorTransitions(options: {
       if (hasChartDraft) chart.discard()
       if (leaveEntitySession && entity.session.value) entity.discard(entity.session.value.id)
       if (leaveRouteSession && route.session.value) route.discard(route.session.value.id)
-      return Promise.resolve(true)
+      return true
     }
 
     return new Promise(resolve => {

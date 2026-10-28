@@ -19,6 +19,7 @@ import type {
   OrbitPlacementPreview,
   SystemObjectMoveCandidate,
 } from '../../composables/editor-workflows/types'
+import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../../composables/editor-workflows/continuous-orbit-adjustments'
 import type {
   SystemCreationCandidate,
   SystemCreationPreview,
@@ -103,6 +104,8 @@ export interface SystemMapEventHandlers {
   orbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[]): void
   /** Select an existing Orbit. */
   selectOrbit(id: string): void
+  /** Sends one relative Orbit adjustment for page-owned history grouping. */
+  orbitAdjustment(input: OrbitAdjustmentInput): void
   /** Commit a system-level object position in normalized initial-scene coordinates. */
   moveObject(id: string, position: Point): void
   /** Commit an unoccupied Orbit center in normalized coordinates, optionally attaching it to a host object. */
@@ -138,6 +141,8 @@ export interface SystemMapRendererOptions {
   objectPlacementPreviews: ReadonlyMap<string, Point>
   /** Parent-owned Orbit center and radii previews retained across renderer rebuilds by the wrapper. */
   orbitPlacementPreviews: ReadonlyMap<string, OrbitPlacementPreview>
+  /** Complete parent-owned adjustment preview, rendered without publishing it to saved geometry. */
+  orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
   moveEnabled: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
@@ -199,6 +204,7 @@ export function renderSystemMap({
   creationChooserOpen,
   objectPlacementPreviews,
   orbitPlacementPreviews,
+  orbitAdjustmentPreview,
   moveEnabled,
   orbitRotationWheelEvents,
   handlers,
@@ -260,6 +266,19 @@ export function renderSystemMap({
     previewOrbitCenters.set(orbitId, { ...preview.center })
     previewOrbitRadii.set(orbitId, { ...preview.radii })
     if (preview.rotation !== undefined) previewOrbitRotations.set(orbitId, preview.rotation)
+  }
+  const adjustmentIdentity = orbitAdjustmentPreview?.identity
+  if (orbitAdjustmentPreview && adjustmentIdentity?.systemId === system.id
+    && system.orbits.some(orbit => orbit.id === adjustmentIdentity.orbitId)) {
+    const { center, radii, rotation } = orbitAdjustmentPreview.geometry
+    if ([center.x, center.y, radii.horizontal, radii.vertical, rotation].every(Number.isFinite)) {
+      previewOrbitCenters.set(adjustmentIdentity.orbitId, {
+        x: 64 + center.x * 832,
+        y: 72 + center.y * 416,
+      })
+      previewOrbitRadii.set(adjustmentIdentity.orbitId, { ...radii })
+      previewOrbitRotations.set(adjustmentIdentity.orbitId, rotation)
+    }
   }
   const liveOrbitCenters = new Map<string, Point>()
   const liveOrbitRadii = new Map<string, OrbitRadii>()
@@ -754,25 +773,27 @@ export function renderSystemMap({
       }
 
       if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+      if (event.defaultPrevented) return
       handlers.cancelOrbitPlacementPreview()
-      const current = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
       const step = event.shiftKey ? 10 : 1
       const minimum = minimumOrbitRadius(system, orbit)
-      let horizontal = current.horizontal
-      let vertical = current.vertical
-      if (event.key === 'ArrowLeft') horizontal = Math.max(minimum, current.horizontal - step)
-      else if (event.key === 'ArrowRight') horizontal += step
-      else if (event.key === 'ArrowDown') vertical = Math.max(minimum, current.vertical - step)
-      else if (event.key === 'ArrowUp') vertical += step
-      else if (event.key === 'Home') horizontal = vertical = minimum
-      else if (event.key === 'End') {
-        horizontal += 400
-        vertical += 400
-      } else return
-
+      let change: OrbitAdjustmentInput['change']
+      if (event.key === 'ArrowLeft') change = { kind: 'radii', axis: 'horizontal', operation: 'delta', delta: -step, minimum }
+      else if (event.key === 'ArrowRight') change = { kind: 'radii', axis: 'horizontal', operation: 'delta', delta: step, minimum }
+      else if (event.key === 'ArrowDown') change = { kind: 'radii', axis: 'vertical', operation: 'delta', delta: -step, minimum }
+      else if (event.key === 'ArrowUp') change = { kind: 'radii', axis: 'vertical', operation: 'delta', delta: step, minimum }
+      else if (event.key === 'Home') change = { kind: 'radii', axis: 'both', operation: 'minimum', minimum }
+      else if (event.key === 'End') change = { kind: 'radii', axis: 'both', operation: 'delta', delta: 400, minimum }
+      else return
       event.preventDefault()
       if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
-      handlers.resizeOrbit(orbit.id, { horizontal, vertical })
+      handlers.orbitAdjustment({
+        systemId: system.id,
+        orbitId: orbit.id,
+        inputKind: 'keyboard',
+        keyCode: event.code,
+        change,
+      })
     })
   orbitAxisHandles
     .on('click', (event, orbit) => {
@@ -788,19 +809,31 @@ export function renderSystemMap({
         return
       }
       if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+      if (event.defaultPrevented) return
       handlers.cancelOrbitPlacementPreview()
       const axis = this.getAttribute('data-resize-axis') === 'vertical' ? 'vertical' : 'horizontal'
-      const current = orbitRadii(system, orbit, geometry, effectiveOrbitRadii)
       const step = event.shiftKey ? 10 : 1
-      let radius = current[axis]
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') radius -= step
-      else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') radius += step
-      else if (event.key === 'Home') radius = minimumOrbitRadius(system, orbit)
-      else if (event.key === 'End') radius += 400
+      const minimum = minimumOrbitRadius(system, orbit)
+      let change: OrbitAdjustmentInput['change']
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+        change = { kind: 'radii', axis, operation: 'delta', delta: -step, minimum }
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+        change = { kind: 'radii', axis, operation: 'delta', delta: step, minimum }
+      } else if (event.key === 'Home') {
+        change = { kind: 'radii', axis, operation: 'minimum', minimum }
+      } else if (event.key === 'End') {
+        change = { kind: 'radii', axis, operation: 'delta', delta: 400, minimum }
+      }
       else return
       event.preventDefault()
       if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
-      handlers.resizeOrbit(orbit.id, { ...current, [axis]: Math.max(minimumOrbitRadius(system, orbit), radius) })
+      handlers.orbitAdjustment({
+        systemId: system.id,
+        orbitId: orbit.id,
+        inputKind: 'keyboard',
+        keyCode: event.code,
+        change,
+      })
     })
   orbitCenterHandles
     .on('click', (event, orbit) => {
@@ -822,24 +855,23 @@ export function renderSystemMap({
       }
 
       if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+      if (event.defaultPrevented) return
       handlers.cancelOrbitPlacementPreview()
       const step = event.shiftKey ? 10 : 1
-      const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
-      let x = center.x
-      let y = center.y
-      if (event.key === 'ArrowLeft') x -= step
-      else if (event.key === 'ArrowRight') x += step
-      else if (event.key === 'ArrowUp') y -= step
-      else if (event.key === 'ArrowDown') y += step
-      else return
-
       event.preventDefault()
-      const nextCenter = { x, y }
       if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
         || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })) return
-      setLiveOrbitCenter(orbit.id, nextCenter)
-      updateLiveGeometry()
-      handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(nextCenter), null)
+      const delta = event.key === 'ArrowLeft' ? { x: -step / 832, y: 0 }
+        : event.key === 'ArrowRight' ? { x: step / 832, y: 0 }
+          : event.key === 'ArrowUp' ? { x: 0, y: -step / 416 }
+            : { x: 0, y: step / 416 }
+      handlers.orbitAdjustment({
+        systemId: system.id,
+        orbitId: orbit.id,
+        inputKind: 'keyboard',
+        keyCode: event.code,
+        change: { kind: 'center', delta },
+      })
     })
   orbitRotationHandles
     .on('click', (event, orbit) => {
@@ -855,17 +887,19 @@ export function renderSystemMap({
         return
       }
       if (!moveEnabled || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
+      if (event.defaultPrevented) return
       event.preventDefault()
       const step = event.shiftKey ? 10 : 1
       const direction = event.key === 'ArrowRight' ? 1 : -1
       handlers.cancelOrbitPlacementPreview()
-      const rotation = normalizeOrbitRotation(
-        orbitRotation(orbit, geometry, effectiveOrbitRotations) + step * direction,
-      )
       if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return
-      setLiveOrbitRotation(orbit.id, rotation)
-      updateLiveGeometry()
-      handlers.rotateOrbit(orbit.id, rotation)
+      handlers.orbitAdjustment({
+        systemId: system.id,
+        orbitId: orbit.id,
+        inputKind: 'keyboard',
+        keyCode: event.code,
+        change: { kind: 'rotation', delta: step * direction },
+      })
     })
 
   const items = content.append('g').attr('class', 'system-map-items')
@@ -1294,13 +1328,13 @@ export function renderSystemMap({
     if (orbit?.id !== selectedOrbitId) return false
 
     handlers.cancelOrbitPlacementPreview()
-    const rotation = normalizeOrbitRotation(
-      orbitRotation(orbit, geometry, effectiveOrbitRotations) + event.deltaY * 0.05,
-    )
     if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })) return true
-    setLiveOrbitRotation(orbit.id, rotation)
-    updateLiveGeometry()
-    handlers.rotateOrbit(orbit.id, rotation)
+    handlers.orbitAdjustment({
+      systemId: system.id,
+      orbitId: orbit.id,
+      inputKind: 'wheel',
+      change: { kind: 'rotation', delta: event.deltaY * 0.05 },
+    })
     return true
   }
 

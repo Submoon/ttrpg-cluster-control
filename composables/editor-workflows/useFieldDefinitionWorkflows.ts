@@ -36,6 +36,7 @@ interface FieldDefinitionWorkflowOptions {
   mutations: WorkspaceMutationExecutor
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 type FieldMutationAction =
@@ -64,6 +65,7 @@ export function useFieldDefinitionWorkflows({
   mutations,
   resolveTransition,
   isEntityCommandBlocked,
+  beforeWorkspaceOperation = async () => true,
 }: FieldDefinitionWorkflowOptions) {
   const fieldDefinitionsSession = reactive<FieldDefinitionsSessionState>({
     open: false,
@@ -301,7 +303,12 @@ export function useFieldDefinitionWorkflows({
     }
   }
 
-  function handleFieldDefinitionsIntent(intent: FieldDefinitionsIntent): void {
+  async function handleFieldDefinitionsIntent(intent: FieldDefinitionsIntent): Promise<void> {
+    const resolvesPendingWork = intent.kind !== 'patch-definition'
+      && intent.kind !== 'patch-create'
+      && intent.kind !== 'remember-list'
+      && (intent.kind !== 'resolve-transition' || intent.decision === 'apply')
+    if (resolvesPendingWork && !await beforeWorkspaceOperation()) return
     switch (intent.kind) {
       case 'open':
         openSession()
@@ -887,8 +894,8 @@ export function useFieldDefinitionWorkflows({
   }
 
   /** Opens the resumable Fields session without inventing a target or resolving an object draft. */
-  function openFieldDefinitions(): void {
-    handleFieldDefinitionsIntent({ kind: 'open' })
+  async function openFieldDefinitions(): Promise<void> {
+    await handleFieldDefinitionsIntent({ kind: 'open' })
   }
 
   function saveFieldDefinitionChanges(

@@ -17,9 +17,12 @@ import type {
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
-import type { WorkspaceMutationExecutor } from './workspace-mutations'
+import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+export type MapHistoryTarget =
+  | { kind: 'system' | 'route'; id: string }
+  | { kind: 'object' | 'orbit'; id: string; systemId: string }
 export type TransitionGuard = 'chart' | 'inspector' | null
 export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
@@ -238,7 +241,7 @@ export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
   workspace: Readonly<Ref<LocalWorkspace | null>>
   /** Shared application boundary for ordinary editor mutations. */
-  mutations: WorkspaceMutationExecutor
+  mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
   initializeWorkspace: (nextWorkspace: LocalWorkspace) => Promise<void>
   /** Current durable-save status, distinct from immediate in-memory publication. */
@@ -261,6 +264,10 @@ export interface MapNavigationHandle extends MapImageExporter {
   startTouchNavigation(event: TouchEvent): void
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
+  /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
+  revealHistoryTarget?(target: MapHistoryTarget): boolean
+  /** Stable keyboard target when a traversal removes the focused map item. */
+  focusMap?(): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
   setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
 }

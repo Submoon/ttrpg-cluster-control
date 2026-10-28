@@ -11,6 +11,7 @@ interface ClusterSystemPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   clusterMapRef: Readonly<Ref<MapNavigationHandle | null>>
   mutations: EditorWorkflowOptions['mutations']
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 interface ClusterMoveInputTarget {
@@ -29,7 +30,12 @@ const CLUSTER_SYSTEM_CARD_HEIGHT = 76
 const CLUSTER_MAP_POSITION_ORIGIN = { x: 112, y: 96 }
 const CLUSTER_MAP_POSITION_SIZE = { x: 736, y: 368 }
 
-export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations }: ClusterSystemPlacementOptions) {
+export function useClusterSystemPlacement({
+  workspace,
+  clusterMapRef,
+  mutations,
+  beforeWorkspaceOperation = async () => true,
+}: ClusterSystemPlacementOptions) {
   const store = useEditorUiStore()
   const clusterAddType = ref<ClusterAddType | null>(null)
   const inputs = reactive<ClusterSystemPositionInputs>({ x: '0.5', y: '0.5' })
@@ -179,6 +185,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
   }
 
   async function addSystemAt(point: Point, systemIds: string[] = []): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     if (clusterAddType.value !== 'system' || store.activeView !== 'cluster') return false
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return false
@@ -249,6 +256,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
   }
 
   async function addSystemFromInputs(): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     if (clusterAddType.value !== 'system' || store.activeView !== 'cluster') return false
     clearErrors()
     const x = validateCoordinate('x')
@@ -322,6 +330,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations 
   }
 
   async function confirmSystemMove(): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     const preview = systemMovePreview.value
     const currentWorkspace = workspace.value
     if (!preview || !currentWorkspace) return false

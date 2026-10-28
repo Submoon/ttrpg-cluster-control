@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import type { LocalWorkspace } from '../../domain/workspace'
-import type { EntityInspectorSession, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SystemMapHandle } from './types'
+import type { EntityInspectorSession, MapHistoryTarget, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SystemMapHandle } from './types'
 import type { useEditorUiStore } from '../../stores/editor-ui'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
 
@@ -153,6 +153,10 @@ export function useEditorMapControls(
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
   function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
   function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
+  function revealHistoryTarget(target: MapHistoryTarget): boolean {
+    return activeMapHandle()?.revealHistoryTarget?.(target) ?? false
+  }
+  function focusActiveMap(): void { activeMapHandle()?.focusMap?.() }
 
   function pruneVisits(normalizeSelection: (key: string, selection: MapVisitSelection) => MapVisitSelection): void {
     const currentWorkspace = workspace.value
@@ -188,5 +192,7 @@ export function useEditorMapControls(
     fitActiveMap,
     zoomActiveMap,
     panActiveMap,
+    revealHistoryTarget,
+    focusActiveMap,
   }
 }

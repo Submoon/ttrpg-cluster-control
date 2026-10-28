@@ -44,6 +44,7 @@
       :creation-type="props.creationType ?? null"
       :creation-preview="props.creationPreview ?? null"
       :creation-chooser-open="props.creationChooserOpen ?? false"
+      :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
@@ -53,6 +54,7 @@
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
+      @orbit-adjustment="forwardOrbitAdjustment"
       @object-move-blocked="forwardBlockedObjectMove"
       @object-move-candidates="forwardObjectMoveCandidates"
       @orbit-center-candidates="forwardOrbitCenterCandidates"
@@ -76,7 +78,7 @@
 
 <script setup lang="ts">
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
-import { onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
   LocalWorkspace,
   OrbitRadii,
@@ -85,6 +87,7 @@ import type {
 } from '../domain/workspace'
 import type {
   MapInteractionMode,
+  MapHistoryTarget,
   OrbitCenterMoveCandidate,
   OrbitPlacementPreview,
   SystemCreationCandidate,
@@ -93,6 +96,11 @@ import type {
   SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
+import type {
+  OrbitAdjustmentInput,
+  OrbitAdjustmentIntent,
+  OrbitAdjustmentPreview,
+} from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
 import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
@@ -120,6 +128,7 @@ const props = defineProps<{
   clusterAddType?: 'system' | 'route' | null
   clusterChooserOpen?: boolean
   clusterMoveTargeting?: boolean
+  orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
 }>()
 
 const emit = defineEmits<{
@@ -132,6 +141,7 @@ const emit = defineEmits<{
   'move-select-object': [id: string]
   'select-orbit': [id: string]
   'move-select-orbit': [id: string]
+  'orbit-adjustment': [intent: OrbitAdjustmentIntent]
   'object-move-blocked': [id: string]
   'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
   'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
@@ -160,6 +170,15 @@ const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+const matchingOrbitAdjustmentPreview = computed(() => {
+  const preview = props.orbitAdjustmentPreview
+  const system = props.system
+  return props.activeView === 'system' && system && preview
+    && preview.identity.workspaceId === props.workspace.id
+    && preview.identity.systemId === system.id
+    ? preview
+    : null
+})
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let activeMousePointerId: number | null = null
 let pointerLongPress: {
@@ -527,6 +546,13 @@ function handleOrbitSelection(orbitId: string): void {
   else if (props.mode === 'move') emit('move-select-orbit', orbitId)
 }
 
+/** Enriches one active-system Orbit input with the workspace identity owned by this map surface. */
+function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
+  const system = props.system
+  if (props.activeView !== 'system' || !system || system.id !== input.systemId) return
+  emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
+}
+
 function forwardMoveSystem(id: string, position: Point): void { if (props.mode === 'move') emit('move-system', id, position) }
 function forwardClusterTarget(point: Point, systemIds: string[]): void {
   if (props.activeView !== 'cluster'
@@ -686,6 +712,8 @@ defineExpose({
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
+  revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
+  focusMap: () => currentMap()?.focusMap?.(),
   fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),

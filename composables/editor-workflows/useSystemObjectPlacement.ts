@@ -37,6 +37,7 @@ interface SystemObjectPlacementOptions {
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 interface CurrentObject {
@@ -207,6 +208,7 @@ export function useSystemObjectPlacement({
   systemMapRef,
   mutations,
   isEntityCommandBlocked,
+  beforeWorkspaceOperation = async () => true,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -535,6 +537,7 @@ export function useSystemObjectPlacement({
   }
 
   async function confirmSystemObjectMove(token: number): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     const preview = systemObjectMovePreview.value
     const baseline = preparedBaseline
     const current = currentObject()

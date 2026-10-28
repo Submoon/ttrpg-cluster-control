@@ -1,4 +1,4 @@
-import { computed, watch, type Ref } from 'vue'
+import { computed, nextTick, watch, type Ref } from 'vue'
 import {
   jumpPointsInCluster,
   type JumpRoute,
@@ -6,7 +6,8 @@ import {
   type MapDeletionPlan,
 } from '../../domain/workspace'
 import type { EditorUiSelection, useEditorUiStore } from '../../stores/editor-ui'
-import type { EntityCommand, MapInteractionMode, TransitionOptions } from './types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, TransitionOptions } from './types'
+import type { WorkspaceHistoryTraversalContext, WorkspaceMutationTarget } from './workspace-mutations'
 import type { useEditorMapControls } from './useEditorMapControls'
 import type { useChartNamesSession } from './useChartNamesSession'
 import type { useEditorTransitions } from './useEditorTransitions'
@@ -32,6 +33,7 @@ export function useEditorNavigation(options: {
   entity: EntityController
   route: RouteController
   editorError: Ref<string>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }) {
   const { workspace, store, mapControls, chart, transitions, viewport, entity, route, editorError } = options
   const activeView = computed(() => store.activeView)
@@ -114,7 +116,11 @@ export function useEditorNavigation(options: {
     mapControls.captureActiveMap()
   }
 
-  function setMapMode(mode: MapInteractionMode): void { store.setMode(mode) }
+  async function setMapMode(mode: MapInteractionMode): Promise<boolean> {
+    if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+    store.setMode(mode)
+    return true
+  }
 
   watch(workspace, currentWorkspace => {
     if (!currentWorkspace) {
@@ -172,6 +178,7 @@ export function useEditorNavigation(options: {
     const target = currentWorkspace?.cluster.systems.find(system => system.id === targetId)
     if (!currentWorkspace || !target) return
     if (chart.session.value?.clusterId === currentWorkspace.cluster.id && chart.session.value.systemId === target.id) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return
       chart.beginAccepted(currentWorkspace, target)
       return
     }
@@ -247,6 +254,7 @@ export function useEditorNavigation(options: {
     const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
     if (!entrySystem?.objects.some(object => object.id === objectId)) return
     if (store.selectedObjectId === objectId) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return
       if (openInspector) viewport.requestPanel('inspector')
       return
     }
@@ -278,6 +286,7 @@ export function useEditorNavigation(options: {
     const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
     if (!entrySystem?.orbits.some(orbit => orbit.id === orbitId)) return
     if (store.selectedOrbitId === orbitId) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return
       if (openInspector) viewport.requestPanel('inspector')
       return
     }
@@ -306,6 +315,7 @@ export function useEditorNavigation(options: {
     const targetRoute = currentWorkspace.cluster.routes.find(candidate => candidate.id === routeId)
     if (!targetRoute) return
     if (store.selectedRouteId === routeId) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return
       if (openInspector) viewport.requestPanel('inspector')
       return
     }
@@ -389,6 +399,92 @@ export function useEditorNavigation(options: {
     storeCurrentSelection()
   }
 
+  function retainedTargetExists(target: WorkspaceMutationTarget | undefined): MapHistoryTarget | null {
+    const current = workspace.value
+    if (!current || !target) return null
+    if (target.kind === 'system') {
+      return current.cluster.systems.some(system => system.id === target.id)
+        ? { kind: 'system', id: target.id }
+        : null
+    }
+    if (target.kind === 'route') {
+      return current.cluster.routes.some(routeValue => routeValue.id === target.id)
+        ? { kind: 'route', id: target.id }
+        : null
+    }
+    if (target.kind === 'object' || target.kind === 'orbit') {
+      const system = current.cluster.systems.find(value => value.id === target.systemId)
+      const exists = target.kind === 'object'
+        ? system?.objects.some(value => value.id === target.id)
+        : system?.orbits.some(value => value.id === target.id)
+      return exists ? { kind: target.kind, id: target.id, systemId: target.systemId } : null
+    }
+    return null
+  }
+
+  /** Reveals a traversal's surviving target without resolving drafts or restoring map visits/panels. */
+  async function revealHistoryContext(context: WorkspaceHistoryTraversalContext): Promise<void> {
+    const { action } = context
+    if (action.target.kind === 'field') return
+    const workspaceAtSelection = workspace.value
+    const initiatingFocus = typeof document === 'undefined' ? null : document.activeElement
+
+    const target = retainedTargetExists(action.target) ?? retainedTargetExists(action.parent ?? undefined)
+    const targetKind = target?.kind ?? action.target.kind
+    const systemId = target && (target.kind === 'object' || target.kind === 'orbit')
+      ? target.systemId
+      : action.target.kind === 'object' || action.target.kind === 'orbit'
+        ? action.target.systemId
+        : target?.kind === 'system'
+          ? target.id
+          : store.selectedSystemId
+
+    if (targetKind === 'object' || targetKind === 'orbit' || action.target.kind === 'object' || action.target.kind === 'orbit') {
+      const survivingSystemId = workspace.value?.cluster.systems.some(system => system.id === systemId)
+        ? systemId
+        : workspace.value?.cluster.systems[0]?.id ?? null
+      setSelection({
+        activeView: 'system',
+        selectedSystemId: survivingSystemId,
+        selectedObjectId: target?.kind === 'object' ? target.id : null,
+        selectedOrbitId: target?.kind === 'orbit' ? target.id : null,
+        selectedRouteId: null,
+        clusterSelectedSystemId: null,
+        inspectedClusterSystemId: null,
+      })
+    } else {
+      setSelection({
+        activeView: 'cluster',
+        selectedSystemId: workspace.value?.cluster.systems.some(system => system.id === store.selectedSystemId)
+          ? store.selectedSystemId
+          : workspace.value?.cluster.systems[0]?.id ?? null,
+        selectedRouteId: target?.kind === 'route' ? target.id : null,
+        selectedObjectId: null,
+        selectedOrbitId: null,
+        clusterSelectedSystemId: target?.kind === 'system' ? target.id : null,
+        inspectedClusterSystemId: null,
+      })
+    }
+
+    const acceptedContextStamp = navigationContextStamp()
+    await nextTick()
+    if (workspace.value !== workspaceAtSelection || navigationContextStamp() !== acceptedContextStamp) return
+    if (typeof requestAnimationFrame === 'function') {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      if (workspace.value !== workspaceAtSelection || navigationContextStamp() !== acceptedContextStamp) return
+    }
+    if (typeof HTMLElement !== 'undefined'
+      && initiatingFocus instanceof HTMLElement
+      && initiatingFocus.isConnected
+      && !initiatingFocus.hasAttribute('disabled')) {
+      initiatingFocus.focus({ preventScroll: true })
+    } else {
+      mapControls.focusActiveMap()
+    }
+    if (target) mapControls.revealHistoryTarget(target)
+    editorError.value = ''
+  }
+
   return {
     activeView,
     mapMode,
@@ -415,6 +511,7 @@ export function useEditorNavigation(options: {
     resumeEntitySession,
     showChartDetails,
     cleanupAfterDeletion,
+    revealHistoryContext,
     setMapMode,
     isEntityCommandBlocked: (command: EntityCommand) => entity.isEntityCommandBlocked(command),
   }

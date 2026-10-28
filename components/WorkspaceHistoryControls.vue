@@ -25,22 +25,68 @@
         aria-describedby="workspace-history-feedback"
         @click="emit('redo')"
       >Redo</UButton>
+      <UButton
+        class="workspace-control"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        icon="i-lucide-history"
+        aria-label="History"
+        aria-haspopup="dialog"
+        :aria-expanded="props.open"
+        @click="emit('update:open', true)"
+      >History</UButton>
     </div>
     <p id="workspace-history-feedback" class="workspace-history-feedback m-0 text-xs text-muted" role="status" aria-live="polite">
       {{ feedback }}
     </p>
     <p v-if="props.error" class="m-0 text-xs error-text" role="alert">{{ props.error }}</p>
   </div>
+  <UModal
+    :open="props.open"
+    title="History"
+    description="Read the bounded history retained for this editing session."
+    :ui="{ content: 'max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto' }"
+    @update:open="emit('update:open', $event)"
+  >
+    <template #body>
+      <div class="grid gap-3">
+        <p class="m-0 text-sm text-muted">This is the bounded history retained for the current editing session, not a complete audit log. Reading it does not move through history or change the workspace.</p>
+        <p v-if="props.status.notice" class="m-0 text-sm" role="status">{{ props.status.notice }}</p>
+        <p v-if="props.status.retentionReduced && !props.status.notice" class="m-0 text-sm" role="status">Older actions were removed to stay within the history limit.</p>
+        <p v-if="!props.entries.length" class="m-0" role="status">{{ props.status.notice ?? 'History starts with the first applied change in this session.' }}</p>
+        <ol v-else class="workspace-history-list m-0 grid list-none gap-2 p-0" aria-label="Retained actions in chronological order">
+          <template v-for="(entry, index) in props.entries" :key="`${index}:${entry.action.workspaceId}:${entry.action.target.id}`">
+            <li v-if="index === props.status.undoDepth" class="workspace-history-position" role="status" aria-label="Current history position">Current position</li>
+            <li class="workspace-history-entry grid gap-1" :data-applied="entry.applied">
+              <span class="font-medium">{{ entry.action.label }}</span>
+              <span class="text-sm text-muted">{{ entry.action.contextLabel }}</span>
+              <span class="text-xs text-muted">{{ entry.applied ? 'Applied' : 'Available through Redo' }}</span>
+            </li>
+          </template>
+          <li v-if="props.status.undoDepth === props.entries.length" class="workspace-history-position" role="status" aria-label="Current history position">Current position</li>
+        </ol>
+        <p v-if="props.entries.length" class="m-0 text-sm text-muted">{{ props.status.undoDepth }} available to undo · {{ props.status.redoDepth }} available through Redo</p>
+        <p v-else class="m-0 text-sm text-muted">Current position: initial baseline</p>
+      </div>
+    </template>
+  </UModal>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { WorkspaceHistoryStatus } from '../composables/useWorkspaceHistory'
+import type { WorkspaceHistoryEntry } from '../composables/editor-workflows/workspace-mutations'
 
-const props = defineProps<{ status: WorkspaceHistoryStatus; error?: string }>()
-const emit = defineEmits<{ undo: []; redo: [] }>()
-const undoLabel = computed(() => props.status.undoAction ? `Undo: ${props.status.undoAction.label}` : 'Undo')
-const redoLabel = computed(() => props.status.redoAction ? `Redo: ${props.status.redoAction.label}` : 'Redo')
+const props = defineProps<{ open: boolean; status: WorkspaceHistoryStatus; entries: readonly WorkspaceHistoryEntry[]; error?: string }>()
+const emit = defineEmits<{ undo: []; redo: []; 'update:open': [open: boolean] }>()
+
+const undoLabel = computed(() => props.status.undoAction
+  ? `Undo: ${props.status.undoAction.label} · ${props.status.undoAction.contextLabel}`
+  : 'Undo')
+const redoLabel = computed(() => props.status.redoAction
+  ? `Redo: ${props.status.redoAction.label} · ${props.status.redoAction.contextLabel}`
+  : 'Redo')
 const feedback = computed(() => {
   const commonReason = props.status.undoUnavailableReason
   if (commonReason && commonReason === props.status.redoUnavailableReason) return commonReason

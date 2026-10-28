@@ -14,6 +14,7 @@
       role="group"
       :aria-label="`${system.name} star system map`"
       aria-description="Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls."
+      :data-system-id="system.id"
       tabindex="0"
       @wheel.capture="captureOrbitRotationWheel"
       @click.capture="handleCreationClick"
@@ -35,7 +36,8 @@ import {
   type Point,
   type StarSystem,
 } from '../domain/workspace'
-import type { EntityCommand } from '../composables/editor-workflows/types'
+import type { EntityCommand, MapHistoryTarget } from '../composables/editor-workflows/types'
+import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type {
   OrbitCenterMoveCandidate,
   OrbitPlacementPreview,
@@ -56,6 +58,7 @@ import {
   type MapViewport,
   type SvgViewportRect,
 } from '../utils/map-zoom'
+import { revealSvgPoint, revealSvgTarget } from '../utils/reveal-svg-target'
 import {
   getDetachedOrbitCenter as findDetachedOrbitCenter,
   type SystemMapGeometry,
@@ -74,6 +77,7 @@ const props = withDefaults(defineProps<{
   creationType?: SystemCreationType | null
   creationPreview?: SystemCreationPreview | null
   creationChooserOpen?: boolean
+  orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   selectedObjectId: string | null
   selectedOrbitId: string | null
   isObjectMoveBlocked?: (objectId: string) => boolean
@@ -85,6 +89,7 @@ const props = withDefaults(defineProps<{
   creationType: null,
   creationPreview: null,
   creationChooserOpen: false,
+  orbitAdjustmentPreview: null,
   moveEnabled: true,
   touchNavigation: false,
   showZoomControls: true,
@@ -93,6 +98,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'select-object': [id: string]
   'select-orbit': [id: string]
+  'orbit-adjustment': [input: OrbitAdjustmentInput]
   'object-move-blocked': [id: string]
   'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
   'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
@@ -135,6 +141,7 @@ const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
   selectObject: id => { if (!props.creationType) emit('select-object', id) },
   selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
+  orbitAdjustment: input => emit('orbit-adjustment', input),
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
   isEntityCommandBlocked: command => props.isEntityCommandBlocked?.(command) ?? false,
   objectMoveBlocked: id => emit('object-move-blocked', id),
@@ -197,6 +204,30 @@ function panBy(dx: number, dy: number): void {
   const viewport = getViewport()
   setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
+
+function revealHistoryTarget(target: MapHistoryTarget): boolean {
+  if (target.kind !== 'object' && target.kind !== 'orbit') return false
+  if (target.systemId !== props.system.id) return false
+  const selector = target.kind === 'object'
+    ? '.system-object[data-object-id]'
+    : '.orbit-mark[data-orbit-id]'
+  const attribute = target.kind === 'object' ? 'data-object-id' : 'data-orbit-id'
+  const element = [...(svgElement.value?.querySelectorAll<SVGGElement>(selector) ?? [])]
+    .find(candidate => candidate.getAttribute(attribute) === target.id) ?? null
+  if (target.kind === 'orbit') {
+    const ring = element?.querySelector<SVGEllipseElement>('.orbit-ring')
+    const matrix = ring?.getScreenCTM()
+    if (!ring || !matrix) return false
+    const center = new DOMPoint(
+      Number(ring.getAttribute('cx')),
+      Number(ring.getAttribute('cy')),
+    ).matrixTransform(matrix)
+    return revealSvgPoint(svgElement.value, center, panBy)
+  }
+  return revealSvgTarget(svgElement.value, element, panBy)
+}
+
+function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
   return pointer(touch, element) as [number, number]
@@ -416,6 +447,9 @@ function render(preserveNavigation = false): void {
     creationChooserOpen: props.creationChooserOpen,
     objectPlacementPreviews,
     orbitPlacementPreviews,
+    orbitAdjustmentPreview: props.orbitAdjustmentPreview?.identity.systemId === props.system.id
+      ? props.orbitAdjustmentPreview
+      : null,
     moveEnabled: props.moveEnabled,
     orbitRotationWheelEvents,
     handlers,
@@ -463,6 +497,7 @@ watch(() => props.creationType, () => render(), { deep: true })
 watch([
   () => props.creationPreview,
   () => props.creationChooserOpen,
+  () => props.orbitAdjustmentPreview,
 ], () => render(true), { deep: true })
 
 defineExpose({
@@ -473,6 +508,8 @@ defineExpose({
   setViewport,
   zoomBy,
   panBy,
+  revealHistoryTarget,
+  focusMap,
   fitMap,
   cancelActiveGesture,
   cancelCreationPreview,

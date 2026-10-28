@@ -13,8 +13,17 @@ export interface ChartNamesSession {
 /** Owns the resumable chart-name draft; Apply validates before publishing changes or finishing a clean edit. */
 export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'workspace' | 'saveState' | 'saveError' | 'mutations' | 'initializeWorkspace'> & {
   selectedSystem: ComputedRef<StarSystem | undefined>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }) {
-  const { workspace, saveState, saveError, mutations, initializeWorkspace, selectedSystem } = options
+  const {
+    workspace,
+    saveState,
+    saveError,
+    mutations,
+    initializeWorkspace,
+    selectedSystem,
+    beforeWorkspaceOperation = async () => true,
+  } = options
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
   const editing = ref(false)
@@ -82,16 +91,22 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
 
   /** Applies a valid rename to memory and only then completes the owning chart-name session. */
   async function apply(): Promise<boolean> {
-    const currentWorkspace = workspace.value
-    const active = session.value
-    if (!currentWorkspace || !active) {
+    const submittedSession = session.value
+    if (!submittedSession) {
       formError.value = 'Start a chart-name edit before applying these names.'
       return false
     }
 
+    const expectedSessionId = submittedSession.id
     const submittedClusterName = clusterName.value
     const submittedSystemName = systemName.value
     const submittedSignature = JSON.stringify([submittedClusterName, submittedSystemName])
+    if (!await beforeWorkspaceOperation()) return false
+    if (session.value?.id !== expectedSessionId) return false
+
+    const active = session.value
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace || !active) return false
     const isSubmittedSessionCurrent = (): boolean => session.value?.id === active.id
       && JSON.stringify([clusterName.value, systemName.value]) === submittedSignature
 
@@ -103,7 +118,9 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
         throw new Error('The star system for this draft no longer exists.')
       }
       renameLocalWorkspace(currentWorkspace, submittedClusterName, submittedSystemName, active.systemId)
-      if (!hasUncommittedNames.value) {
+      const submittedNamesChanged = submittedClusterName.trim() !== active.initialClusterName
+        || submittedSystemName.trim() !== active.initialSystemName
+      if (!submittedNamesChanged) {
         if (!isSubmittedSessionCurrent()) return false
         session.value = null
         editing.value = false

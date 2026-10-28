@@ -199,7 +199,7 @@
 
 <script setup lang="ts">
 /** Presents route details and the page-owned route session with Nuxt UI controls. */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   jumpPointsInCluster,
   type JumpRoute,
@@ -290,9 +290,28 @@ const controlIds: Record<RouteDraftField, string> = {
   unresolvedExit: 'route-exit',
 }
 const validationSummary = ref<HTMLElement | null>(null)
+let pendingApplyFocusSessionId: number | null = null
 const errorEntries = computed(() => Object.entries(props.session?.errors ?? {})
   .filter((entry): entry is [RouteDraftField | 'form', string] => !!entry[1]))
 const summaryMessage = computed(() => props.session?.error || props.editorError)
+watch(
+  () => ({
+    sessionId: props.session?.id ?? null,
+    hasIssues: !!summaryMessage.value || errorEntries.value.length > 0,
+  }),
+  ({ sessionId, hasIssues }) => {
+    const expectedSessionId = pendingApplyFocusSessionId
+    if (expectedSessionId === null) return
+    if (sessionId !== expectedSessionId) {
+      pendingApplyFocusSessionId = null
+      return
+    }
+    if (!hasIssues) return
+    pendingApplyFocusSessionId = null
+    validationSummary.value?.focus()
+  },
+  { flush: 'post' },
+)
 const routeDraftSummary = computed(() => {
   const draft = props.session?.draft
   if (!draft) return ''
@@ -321,10 +340,18 @@ function fieldError(field: RouteDraftField): string | undefined {
 async function applyRouteSession(): Promise<void> {
   const session = props.session
   if (!session) return
+  pendingApplyFocusSessionId = session.id
   emit('apply-route-session', session.id)
   await nextTick()
-  if (props.session?.id !== session.id || !summaryMessage.value && !errorEntries.value.length) return
-  validationSummary.value?.focus()
+  if (pendingApplyFocusSessionId !== session.id) return
+  if (props.session?.id !== session.id) {
+    pendingApplyFocusSessionId = null
+    return
+  }
+  if (summaryMessage.value || errorEntries.value.length) {
+    pendingApplyFocusSessionId = null
+    validationSummary.value?.focus()
+  }
 }
 
 function focusControl(field: RouteDraftField | 'form'): void {

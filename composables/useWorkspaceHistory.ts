@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import type { SaveState } from './editor-workflows/types'
+import type { WorkspaceHistoryTraversalContext } from './editor-workflows/workspace-mutations'
 import { createWorkspaceHistoryCoordinator } from './editor-workflows/workspace-mutations'
 
 type HistoryCoordinator = ReturnType<typeof createWorkspaceHistoryCoordinator>
@@ -17,6 +18,7 @@ interface WorkspaceHistoryOptions {
   publishWorkspace: HistoryOptions['publishWorkspace']
   getEditorBlockReason(): string | null
   endCleanSessions(): void
+  revealHistoryContext?(context: WorkspaceHistoryTraversalContext): void
 }
 
 /** Owns the session coordinator and its capacity prompt without owning another workspace/save path. */
@@ -57,13 +59,20 @@ export function useWorkspaceHistory(options: WorkspaceHistoryOptions) {
       capacityRequest.value = details
       signal.addEventListener('abort', cancel, { once: true })
     }),
-    onTraversalApplied: options.endCleanSessions,
+    onTraversalApplied: context => {
+      options.endCleanSessions()
+      options.revealHistoryContext?.(context)
+    },
   })
   const unsubscribe = mutations.subscribe(() => { version.value += 1 })
   const status = computed(() => {
     // Internal history changes and external reactive blockers have separate owners.
     void version.value
     return mutations.getStatus()
+  })
+  const entries = computed(() => {
+    void version.value
+    return mutations.getEntries()
   })
 
   watch(() => {
@@ -103,6 +112,7 @@ export function useWorkspaceHistory(options: WorkspaceHistoryOptions) {
   return {
     mutations,
     status,
+    entries,
     capacityRequest,
     traversalError,
     resolveCapacity: (accepted: boolean): void => { settleCapacity?.(accepted) },

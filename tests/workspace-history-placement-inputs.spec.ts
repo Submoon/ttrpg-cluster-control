@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, ref, shallowRef, watchEffect } from 'vue'
 import { createLocalWorkspace, createOrbit, type LocalWorkspace } from '../domain/workspace'
 import { useClusterSystemPlacement } from '../composables/editor-workflows/useClusterSystemPlacement'
+import { createContinuousOrbitAdjustmentController } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useSystemObjectPlacement } from '../composables/editor-workflows/useSystemObjectPlacement'
@@ -34,6 +35,18 @@ function connectInputGuard(
   return watchEffect(() => {
     blockedReason.value = isPending() ? reason : null
   }, { flush: 'sync' })
+}
+
+function createMapAdjustmentBindings(history: ReturnType<typeof createWorkspaceHistoryCoordinator>) {
+  const orbitAdjustments = createContinuousOrbitAdjustmentController({ history })
+  return {
+    orbitAdjustments,
+    beforeWorkspaceOperation: async () => {
+      const result = await orbitAdjustments.beforeOperation()
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      return result.status !== 'rejected'
+    },
+  }
 }
 
 function createObjectOrbitWorkspace(): { workspace: LocalWorkspace; objectId: string } {
@@ -88,6 +101,7 @@ function createObjectPlacementController(
     isEntityCommandBlocked: () => false,
   }))
   if (!placement) throw new Error('The object placement controller was not created.')
+  const adjustmentBindings = createMapAdjustmentBindings(history)
   const mapWorkflows = useMapWorkflows({
     workspace,
     mutations: history,
@@ -97,8 +111,17 @@ function createObjectPlacementController(
     beginOrbitSession: () => undefined,
     isEntityCommandBlocked: () => false,
     editorError: ref(''),
+    ...adjustmentBindings,
   })
-  return { placement, mapWorkflows, systemId, dispose: () => scope.stop() }
+  return {
+    placement,
+    mapWorkflows,
+    systemId,
+    dispose: () => {
+      adjustmentBindings.orbitAdjustments.dispose()
+      scope.stop()
+    },
+  }
 }
 
 test('a numeric Cluster placement can Undo and Redo after its clean inputs follow each restore @pure', async () => {
@@ -119,6 +142,7 @@ test('a numeric Cluster placement can Undo and Redo after its clean inputs follo
     })
   })
   if (!placement) throw new Error('The Cluster placement controller was not created.')
+  const adjustmentBindings = createMapAdjustmentBindings(harness.history)
   const mapWorkflows = useMapWorkflows({
     workspace: harness.workspace,
     mutations: harness.history,
@@ -128,6 +152,7 @@ test('a numeric Cluster placement can Undo and Redo after its clean inputs follo
     beginOrbitSession: () => undefined,
     isEntityCommandBlocked: () => false,
     editorError: ref(''),
+    ...adjustmentBindings,
   })
   const stopGuard = connectInputGuard(
     harness.blockedReason,
@@ -164,6 +189,7 @@ test('a numeric Cluster placement can Undo and Redo after its clean inputs follo
   expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
 
   scope.stop()
+  adjustmentBindings.orbitAdjustments.dispose()
   stopGuard()
   harness.dispose()
 })

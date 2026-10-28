@@ -1008,8 +1008,11 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
       const target = session.kind === 'object'
         ? { kind: 'object' as const, id: session.targetId, systemId: session.systemId }
         : { kind: 'orbit' as const, id: session.targetId, systemId: session.systemId }
+      const actionLabel = session.kind === 'object'
+        ? `Edit ${session.draft.name.trim() || session.initial.object.name}`
+        : `Edit Orbit ${session.initial.orbit.order}`
       const result = await mutations.execute({
-        action: { kind: 'update', label: session.kind === 'object' ? 'Edit map object' : 'Edit Orbit', target },
+        action: { kind: 'update', label: actionLabel, target },
         prepare: () => nextWorkspace,
         isCurrent: isSubmittedMutationCurrent,
       })

@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -129,7 +129,14 @@
               @cancel-system-move="cancelSystemMovePreview"
             >
               <template #history>
-                <WorkspaceHistoryControls :status="historyStatus" :error="historyTraversalError" @undo="undoWorkspace" @redo="redoWorkspace" />
+                <WorkspaceHistoryControls
+                  v-model:open="historyOpen"
+                  :status="historyStatus"
+                  :entries="historyEntries"
+                  :error="historyTraversalError"
+                  @undo="undoWorkspace"
+                  @redo="redoWorkspace"
+                />
               </template>
             </WorkspaceMapChrome>
           </template>
@@ -171,7 +178,7 @@
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
-                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAdd(); close()">
+                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAddAndClose(close)">
                     Add star system
                   </button>
                   <button class="workspace-control tool-button" type="button" aria-label="Add Jump Route" @click="beginRoute(); close()">
@@ -283,6 +290,7 @@
                     :feedback-element="workspaceFeedbackRef"
                     :is-object-move-blocked="isObjectMoveBlocked"
                     :is-entity-command-blocked="isEntityCommandBlocked"
+                    :orbit-adjustment-preview="orbitAdjustmentPreview"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
@@ -301,6 +309,7 @@
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
+                    @orbit-adjustment="updateOrbitAdjustment"
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @creation-target="offerCreationCandidates"
                     @creation-drop-target="handleCreationDrop"
@@ -467,6 +476,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
+import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
@@ -495,6 +505,8 @@ const {
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
+let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = () => undefined
+const historyOpen = ref(false)
 const history = useWorkspaceHistory({
   workspace,
   appliedRevision,
@@ -504,13 +516,15 @@ const history = useWorkspaceHistory({
   publishWorkspace: applyWorkspace,
   getEditorBlockReason: () => readEditorHistoryBlockReason(),
   endCleanSessions: () => endCleanHistorySessions(),
+  revealHistoryContext: context => { void revealHistoryContext(context) },
 })
 const {
-  mutations, status: historyStatus, capacityRequest: historyCapacityRequest, traversalError: historyTraversalError,
+  mutations, status: historyStatus, entries: historyEntries, capacityRequest: historyCapacityRequest, traversalError: historyTraversalError,
   resolveCapacity: resolveHistoryCapacity, undo: undoWorkspace, redo: redoWorkspace,
 } = history
 const workflows = useEditorWorkflows({ workspace, saveState, saveError, mutations, initializeWorkspace: commit })
-const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback } = workflows
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments } = workflows
+revealHistoryContext = navigation.revealHistoryContext
 
 const {
   activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedOrbitId,
@@ -537,6 +551,10 @@ const {
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
 const { editorError, orbitAdjustmentNotice } = feedback
+const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
+watch(hydrationState, (state, previous) => {
+  if (state === 'loading' || previous === 'loading') resetOrbitAdjustments()
+}, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
   isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, requestPanel, closePanel, togglePanel,
@@ -675,27 +693,38 @@ watch([activeView, selectedSystemId], () => {
   if (creationSession.value || clusterAddType.value) quitSystemAdd()
 })
 
-function chooseObjectCreationType(subtype: CatalogueSubtype): void {
-  chooseCreationType({ kind: 'object', subtype })
+async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
+  if (!await chooseCreationType({ kind: 'object', subtype })) return
   creationChooserOpen.value = false
 }
 
-function chooseOrbitCreationType(): void {
-  chooseCreationType({ kind: 'orbit' })
+async function chooseOrbitCreationType(): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
+  if (!await chooseCreationType({ kind: 'orbit' })) return
   creationChooserOpen.value = false
 }
 
 async function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): Promise<boolean> {
   // Keep the palette mounted through the browser's drop dispatch; close it only after the shared
   // owner has accepted the exact candidate set or exposed an ambiguity for correction.
+  if (!await beforeWorkspaceOperation()) return false
   const completed = await processCreationDrop(type, candidates)
-  creationChooserOpen.value = false
+  if (completed) creationChooserOpen.value = false
   return completed
 }
 
-function quitSystemAdd(): void {
-  creationChooserOpen.value = false
+async function armSystemAddAndClose(close: () => void): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
+  armSystemAdd()
+  close()
+}
+
+async function quitSystemAdd(): Promise<boolean> {
+  if (!await beforeWorkspaceOperation()) return false
   quitAdd()
+  creationChooserOpen.value = false
+  return true
 }
 
 function handleClusterTarget(point: Point, systemIds: string[]): void {
@@ -723,17 +752,19 @@ function discardRouteDraft(sessionId: number): void {
   editorError.value = ''
 }
 
-function handleClusterSystemMove(systemId: string, position: Point): void {
+async function handleClusterSystemMove(systemId: string, position: Point): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
   cancelSystemMovePreview()
-  moveSystem(systemId, position)
+  await moveSystem(systemId, position)
 }
 
-function changeMapMode(mode: 'navigate' | 'select' | 'move'): void {
-  if (creationSession.value || clusterAddType.value) quitSystemAdd()
-  setMapMode(mode)
+async function changeMapMode(mode: 'navigate' | 'select' | 'move'): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
+  if ((creationSession.value || clusterAddType.value) && !await quitSystemAdd()) return
+  await setMapMode(mode)
 }
 
-function handleAddEscape(event: KeyboardEvent): void {
+async function handleAddEscape(event: KeyboardEvent): Promise<void> {
   const hasMovePreview = clusterSystemMovePreview.value !== null
   if (event.key !== 'Escape' || event.defaultPrevented
     || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value)
@@ -748,6 +779,7 @@ function handleAddEscape(event: KeyboardEvent): void {
   const target = event.target
   if (target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]')) return
   event.preventDefault()
+  if (!await beforeWorkspaceOperation()) return
   if (hasMovePreview) {
     cancelSystemMovePreview()
     return
@@ -779,8 +811,17 @@ const workspaceFiles = useWorkspaceFiles({
   workspace,
   selectedSystem,
   mutations,
+  getCurrentMapImage: (kind) => {
+    if (kind === 'jump-cluster') {
+      if (activeView.value !== 'cluster') return null
+      return { map: clusterMapRef.value, name: workspace.value?.cluster.name }
+    }
+    if (activeView.value !== 'system') return null
+    return { map: systemMapRef.value, name: selectedSystem.value?.name }
+  },
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
+  beforeWorkspaceOperation,
 })
 importReviewActions = workspaceFiles
 
@@ -799,6 +840,7 @@ const {
 } = workspaceFiles
 
 readEditorHistoryBlockReason = () => {
+  if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
@@ -810,7 +852,8 @@ readEditorHistoryBlockReason = () => {
 }
 endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 
-function openImportFieldsDraft(): void {
+async function openImportFieldsDraft(): Promise<void> {
+  if (!await beforeWorkspaceOperation()) return
   reviewImportFields()
   fieldDefinitionsDialog.value?.open()
 }

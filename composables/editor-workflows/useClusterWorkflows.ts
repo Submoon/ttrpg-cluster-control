@@ -33,6 +33,7 @@ interface ClusterWorkflowOptions {
   isRouteCommandBlocked: (command: EntityCommand) => boolean
   isChartDraftTarget: (systemId: string) => boolean
   editorError: Ref<string>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 /**
@@ -55,6 +56,7 @@ export function useClusterWorkflows({
   isRouteCommandBlocked,
   isChartDraftTarget,
   editorError,
+  beforeWorkspaceOperation = async () => true,
 }: ClusterWorkflowOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -99,6 +101,7 @@ export function useClusterWorkflows({
 
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
   async function beginRoute(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const existing = routeSession.value
     if (currentWorkspace && store.activeView === 'cluster'
@@ -123,6 +126,7 @@ export function useClusterWorkflows({
    * @param routeId Route expected to own the edit draft.
    */
   async function beginRouteEdit(routeId: string): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     if (selectedRoute.value?.id !== routeId) return
     if (!await resolveTransition({ leaveChart: false })) return
     if (selectedRoute.value?.id !== routeId) return
@@ -184,7 +188,8 @@ export function useClusterWorkflows({
   }
 
   /** Prepares a current cascade without changing applied data or resolving any drafts. */
-  function openDeletionReview(target: MapDeletionTarget): void {
+  async function openDeletionReview(target: MapDeletionTarget): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     if (!workspace.value || saveState.value === 'saving' || deletionReview.value?.confirming) return
     const id = ++deletionReviewSequence
     editorError.value = ''
@@ -201,6 +206,7 @@ export function useClusterWorkflows({
   async function confirmDeletionReview(): Promise<void> {
     const active = deletionReview.value
     if (!active || !active.open || active.suspended || active.confirming || active.error) return
+    if (!await beforeWorkspaceOperation()) return
     const reviewId = active.id
     const target = active.target
     active.confirming = true
@@ -321,25 +327,25 @@ export function useClusterWorkflows({
     }
   }
 
-  function deleteSystem(systemId: string): void {
-    openDeletionReview({ kind: 'system', systemId })
+  async function deleteSystem(systemId: string): Promise<void> {
+    await openDeletionReview({ kind: 'system', systemId })
   }
 
-  function deleteSelectedObject(): void {
+  async function deleteSelectedObject(): Promise<void> {
     const system = selectedSystem.value
     const object = selectedObject.value
-    if (system && object) openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
+    if (system && object) await openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
   }
 
-  function deleteSelectedOrbit(): void {
+  async function deleteSelectedOrbit(): Promise<void> {
     const system = selectedSystem.value
     const orbit = selectedOrbit.value
-    if (system && orbit) openDeletionReview({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
+    if (system && orbit) await openDeletionReview({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
   }
 
-  function deleteSelectedRoute(): void {
+  async function deleteSelectedRoute(): Promise<void> {
     const route = selectedRoute.value
-    if (route) openDeletionReview({ kind: 'route', routeId: route.id })
+    if (route) await openDeletionReview({ kind: 'route', routeId: route.id })
   }
 
   /**

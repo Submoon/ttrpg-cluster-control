@@ -51,6 +51,8 @@ import {
   type MapViewport,
   type SvgViewportRect,
 } from '../utils/map-zoom'
+import { revealSvgTarget } from '../utils/reveal-svg-target'
+import type { MapHistoryTarget } from '../composables/editor-workflows/types'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -125,6 +127,22 @@ function panBy(dx: number, dy: number): void {
   const viewport = getViewport()
   setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
+
+function revealHistoryTarget(target: MapHistoryTarget): boolean {
+  if (target.kind !== 'system' && target.kind !== 'route') return false
+  const selector = target.kind === 'system'
+    ? '.cluster-system-node[data-system-id]'
+    : '.cluster-route[data-route-id]'
+  const attribute = target.kind === 'system' ? 'data-system-id' : 'data-route-id'
+  const element = [...(svgElement.value?.querySelectorAll<SVGGraphicsElement>(selector) ?? [])]
+    .find(candidate => candidate.getAttribute(attribute) === target.id) ?? null
+  const anchor = target.kind === 'route'
+    ? element?.querySelector<SVGGraphicsElement>('.cluster-route-label-bg') ?? element
+    : element
+  return revealSvgTarget(svgElement.value, anchor, panBy)
+}
+
+function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
 
 /**
  * Exports the complete Cluster-map scene without adding a system title band.
@@ -698,6 +716,8 @@ defineExpose({
   setViewport,
   zoomBy,
   panBy,
+  revealHistoryTarget,
+  focusMap,
   fitMap,
   cancelActiveGesture,
   startViewPan,

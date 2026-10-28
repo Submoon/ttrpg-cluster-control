@@ -16,12 +16,19 @@ import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mut
 
 type MapKind = 'jump-cluster' | 'star-system'
 
+interface CurrentMapImage {
+  map: MapImageExporter | null
+  name: string | undefined
+}
+
 interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
   mutations: WorkspaceMutationExecutor
+  getCurrentMapImage: (kind: MapKind) => CurrentMapImage | null
   getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
   resolveImportDefinitionChanges: (existingFieldIds: string[]) => Promise<boolean>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 interface ImportReviewState {
@@ -48,8 +55,10 @@ export function useWorkspaceFiles({
   workspace,
   selectedSystem,
   mutations,
+  getCurrentMapImage,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
+  beforeWorkspaceOperation = async () => true,
 }: WorkspaceFileActionsOptions) {
   const exportError = ref('')
   const importError = ref('')
@@ -182,7 +191,8 @@ export function useWorkspaceFiles({
   /**
    * Exports the current complete Cluster JSON; serialization/download failures populate exportError.
    */
-  function downloadClusterJson(): void {
+  async function downloadClusterJson(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
 
@@ -201,7 +211,8 @@ export function useWorkspaceFiles({
    * Exports the selected system with shared field settings and only its durable Orbit/object layout.
    * Serialization/download failures populate exportError.
    */
-  function downloadSystemJson(): void {
+  async function downloadSystemJson(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system) return
@@ -233,9 +244,12 @@ export function useWorkspaceFiles({
     palette: MapImagePalette = 'active',
   ): Promise<void> {
     if (!map || !name) return
+    if (!await beforeWorkspaceOperation()) return
+    const current = getCurrentMapImage(kind)
+    if (!current?.map || current.map !== map || current.name !== name) return
 
     try {
-      downloadFile(exportFileName(name, kind, format), await map.exportImage(format, palette))
+      downloadFile(exportFileName(current.name, kind, format), await current.map.exportImage(format, palette))
       exportError.value = ''
     } catch (error) {
       exportError.value = errorText(error)
@@ -253,8 +267,9 @@ export function useWorkspaceFiles({
     if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
+    if (!file || !await beforeWorkspaceOperation()) return
     const initialWorkspace = workspace.value
-    if (!file || !initialWorkspace) return
+    if (!initialWorkspace) return
 
     importError.value = ''
     clearImportReview()
@@ -275,6 +290,7 @@ export function useWorkspaceFiles({
         abandonStaleImport(epoch)
         return
       }
+      if (!await beforeWorkspaceOperation()) return
       const currentWorkspace = workspace.value
       if (!currentWorkspace) return
       const prepared = prepareJsonImport(currentWorkspace, content)
@@ -316,6 +332,7 @@ export function useWorkspaceFiles({
     mutableImportReview.value.fieldConflict = null
 
     try {
+      if (!await beforeWorkspaceOperation()) return
       const firstWorkspace = workspace.value
       if (!firstWorkspace) return
       const firstPrepared = prepareJsonImport(firstWorkspace, content)

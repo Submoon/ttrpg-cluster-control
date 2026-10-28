@@ -1,6 +1,7 @@
 ---
 title: 'Inspect retained session history'
-status: open
+status: closed
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -29,13 +30,13 @@ The Warden can open a history view near the Undo/Redo controls on desktop and co
 
 ## Acceptance criteria
 
-- [ ] Offer a clearly named History entry near the map's history controls, with a usable responsive view and focus return to its trigger on dismissal.
-- [ ] Show retained actions in chronological order with meaningful action/target labels; distinguish already applied actions, the current history position and actions available through Redo. Include an understandable initial-baseline/empty state.
-- [ ] Opening, scrolling, inspecting or closing the view does not change applied workspace data, the history cursor, selection/map context, the save queue, Redo or drafts. Rows do not jump to a historical state.
-- [ ] Explain that the list is the bounded current session history, not an audit log. Reflect prefix eviction, Redo-branch removal, baseline resets, accepted oversized continuation and session reset promptly, with available-depth/empty/reset feedback.
-- [ ] Read descriptors through an explicit read-only interface from the existing coordinator; retain no second history stack and decode no full workspace snapshots just to render the list. Count any retained descriptors under the established capacity rules.
-- [ ] Consultation itself does not apply/discard a draft and does not require a successful save. Preserve existing modal ownership/focus rules; ordinary Undo/Redo availability remains guarded independently.
-- [ ] Cover list ordering/current-position/Redo updates through the command/read-only interface, and real opening/dismissal, unchanged data/history/drafts, empty/truncated/reset states, focus and desktop/compact layout through public browser journeys.
+- [x] Offer a clearly named History entry near the map's history controls, with a usable responsive view and focus return to its trigger on dismissal.
+- [x] Show retained actions in chronological order with meaningful action/target labels; distinguish already applied actions, the current history position and actions available through Redo. Include an understandable initial-baseline/empty state.
+- [x] Opening, scrolling, inspecting or closing the view does not change applied workspace data, the history cursor, selection/map context, the save queue, Redo or drafts. Rows do not jump to a historical state.
+- [x] Explain that the list is the bounded current session history, not an audit log. Reflect prefix eviction, Redo-branch removal, baseline resets, accepted oversized continuation and session reset promptly, with available-depth/empty/reset feedback.
+- [x] Read descriptors through an explicit read-only interface from the existing coordinator; retain no second history stack and decode no full workspace snapshots just to render the list. Count any retained descriptors under the established capacity rules.
+- [x] Consultation itself does not apply/discard a draft and does not require a successful save. Preserve existing modal ownership/focus rules; ordinary Undo/Redo availability remains guarded independently.
+- [x] Cover list ordering/current-position/Redo updates through the command/read-only interface, and real opening/dismissal, unchanged data/history/drafts, empty/truncated/reset states, focus and desktop/compact layout through public browser journeys.
 
 ## Shared constraints
 
@@ -54,4 +55,21 @@ The Warden can open a history view near the Undo/Redo controls on desktop and co
 
 ## Planning authorization
 
-The user approved this ticket in the eight-ticket local breakdown on 2026-10-27. It is ready for an agent once its blocking tickets are complete and implementation is separately authorized. It is unclaimed and has not been implemented.
+The user approved this ticket in the eight-ticket local breakdown on 2026-10-27. It is ready for an agent once its blocking tickets are complete and implementation is separately authorized. The user separately authorized implementation on 2026-10-28; the execution and resolution below record the outcome.
+
+## Implementation execution
+
+The user authorized this ticket together with 03/04/05/06/08 on 2026-10-28. Actual implementation baseline: `4ad6976aaf0953bcaac90c26eb4e289c3ef75487` on current branch `codex/undo-redo-ticket-01`. Freshly fetched `origin/main` and local `main` remain `9edfa66c4f505d56f106fc4af8245f200abfba78`; the two completed prerequisite commits intentionally form the base. The source issue was re-fetched unchanged (open, same labels, no comments). Preserve unrelated environment configuration and other worktrees. Ticket 07 is outside this instruction. The coordinator owns Git, integration resources and final independent reviews; use the previously approved command/read-only, public UI and real IndexedDB test seams.
+
+### Focused implementation evidence
+
+The 2026-10-28 context/consultation slice adds detached descriptor-only chronological history reads, an accepted-restore context callback, useful object/Orbit action labels and a responsive read-only History view. Accepted restore navigation resolves surviving targets/parents, preserves panels and zoom, waits for mounted map geometry and abandons stale focus/reveal continuations. Focused command checks passed (25 coordinator scenarios); six public browser scenarios passed for compact consultation, dirty-draft preservation, cross-map object and Orbit restoration, deleted-target fallback and the existing post-import Back regression. An off-screen object reproduction required both its useful center anchor and a guarded render-frame wait; removal of that wait reproduced the failure. Scoped lint and full typecheck passed. Integrated verification and independent review closure are recorded in the Resolution below.
+
+
+## Resolution
+
+Resolved on 2026-10-28 after implementation, integrated validation and independent review closure.
+
+History is available beside Undo/Redo with chronological, detached descriptor-only rows, captured bounded map/target context, current-position/Redo information, baseline and capacity feedback. Parent-owned modal state reliably guards traversal while consultation preserves data, drafts and focus. Actual public UI input generated 102 actions, verified 100 retained rows and prefix eviction, scrolled the list without traversal and reloaded persisted geometry with a fresh empty history. No direct history installation, portable-history format or second stack was added.
+
+See [Undo/redo implementation tickets — batch verification](index.md#batch-verification) for the fixed baseline, source candidate, independent review closure, integrated checks and their limits. Ticket 07 and global source-issue completion remain outside this batch.
