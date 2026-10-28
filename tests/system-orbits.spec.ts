@@ -209,10 +209,22 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
   }, globalStartAngle)
   const orbitCoordinates = await snapshotSvgCoordinates(orbitTarget)
   const failedDragStart = orbitCoordinates.toClient(failedDragStartPoint)
-  await expect(measureMouseDrag(page, failedDragStart, {
-    x: Number.NaN,
-    y: failedDragStart.y,
-  })).rejects.toThrow()
+  // Fail after forwarding the start move and real mouse down, before the finite end move.
+  const originalMouseMove = page.mouse.move
+  const nativeMouseMove = originalMouseMove.bind(page.mouse)
+  let mouseMoveCalls = 0
+  page.mouse.move = async (...args: Parameters<typeof page.mouse.move>) => {
+    if (mouseMoveCalls++ === 1) throw new Error('Injected failure after the native mouse down.')
+    return nativeMouseMove(...args)
+  }
+  try {
+    await expect(measureMouseDrag(page, failedDragStart, {
+      x: failedDragStart.x + 24,
+      y: failedDragStart.y,
+    })).rejects.toThrow('Injected failure after the native mouse down.')
+  } finally {
+    page.mouse.move = originalMouseMove
+  }
   await expect(orbitRing).toHaveAttribute('rx', String(radiusXBefore))
   await expect(orbitRing).toHaveAttribute('ry', String(radiusYBefore))
   await page.mouse.move(Math.round(failedDragStart.x + 12), Math.round(failedDragStart.y), { steps: 6 })

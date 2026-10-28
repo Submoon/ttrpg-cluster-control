@@ -35,7 +35,7 @@ This record closes the local implementation/publication checkpoint. Browser vali
 - Verification guidance records candidate-specific evidence and keeps Nuxt generation checks outside browser runs. It points to existing placement-preservation and compatibility regressions.
 - The repository-owned project-development skill pins comparison revisions, uses bounded fresh specialist context and resumes completed specialists through an execution-triggering follow-up.
 - `snapshotSvgCoordinates` captures forward/inverse SVG matrices before a gesture. `measureMouseDrag` rounds intended CSS points, returns observed window-capture down/up events and owns mouse/observer cleanup. Unexpected cleanup errors fail the check; combined failures retain their diagnostics.
-- Existing Orbit/map-point helpers and the elliptical resize journey use the primitives. Scenario-specific radius, accuracy, ratio, occupant-angle and interchange assertions remain. A real invalid-destination failure followed by pointer movement and a successful drag checks release recovery and probe reuse.
+- Existing Orbit/map-point helpers and the elliptical resize journey use the primitives. Scenario-specific radius, accuracy, ratio, occupant-angle and interchange assertions remain. A one-time injected failure after a real mouse down, followed by pointer movement and a successful drag, checks release recovery and probe reuse. The original mouse method is restored in `finally`; all coordinates remain finite.
 
 ## Check record
 
@@ -50,3 +50,5 @@ Candidate: frozen working tree based on `e145a48c1a1237174dc5eb894a1f1263dd74c01
 | Affected public browser journeys | Pending CI at publication | Local Nuxt reported ready on port 3127, but HTTP preflight timed out after bounded startup retries; the PR tracks subsequent CI results |
 
 The coordinator stopped the owned local runtime and publishes a draft PR so the existing immutable-preview CI can supply browser evidence. The affected scenarios are the Orbit ring and ellipse journeys plus the Cluster navigation and expanded System-map consumers of the same helper. Draft readiness remains pending CI; the local runtime failure did not justify changing product code or user settings.
+
+The initial integrated run, [40724365064](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/40724365064), passed checks and browser shard 2. Shard 1 passed 115 scenarios and found two test failures: the invalid-coordinate cleanup probe poisoned Playwright's mouse state, and an existing Chart details assertion read computed colors before its CSS transition advanced. The corrections use finite-coordinate failure injection and retry the same appearance inequality with `expect.poll`, respectively. Neither correction changes application behavior or reduces the asserted outcomes. Subsequent verification is tracked in the PR.
