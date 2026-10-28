@@ -1,7 +1,8 @@
 import { expect, test } from './fixtures'
 import {
   activeWorkspaceFeedback, addCustomFieldThroughDialog, createSingleSystemWorkspace, editMapObject,
-  openChartDetails, openWorkspaceHierarchy, openWorkspaceZoomNavigation,
+  openChartDetails, openWorkspaceHierarchy, openWorkspaceZoomNavigation, returnToClusterMap,
+  selectCatalogueObjectButton, selectInspectorOption,
 } from './helpers'
 import {
   installHistoryStorageGate, pendingHistoryAcknowledgements, releaseHistoryAcknowledgements, setHistoryStorageGate,
@@ -23,6 +24,127 @@ test('Ctrl+Z undoes a saved chart-name change from the workspace', async ({ page
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
   await expect(clusterMap.getByRole('button', { name: /^(Open|Select) Vesper system(?: map)?$/ })).toBeVisible()
   await expect(clusterMap.getByRole('button', { name: /^(Open|Select) Vesper Prime system(?: map)?$/ })).toHaveCount(0)
+})
+
+test('saved object creation supports Undo and Redo while Object Add stays armed', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const objects = map.locator('.system-object')
+  await expect(objects).toHaveCount(1)
+
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  await placementToggle.click()
+  await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
+  await page.getByLabel('Placement X', { exact: true }).fill('0.8')
+  await page.getByLabel('Placement Y', { exact: true }).fill('0.8')
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await expect(objects).toHaveCount(2)
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+  await page.locator('#workspace-main').focus()
+  await page.keyboard.press('Control+z')
+  await expect(objects).toHaveCount(1)
+  await expect(redo).toBeEnabled()
+
+  await page.keyboard.press('Control+y')
+  await expect(objects).toHaveCount(2)
+  await expect(undo).toBeEnabled()
+
+  await expect(controls).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
+  await placementToggle.click()
+  await page.getByLabel('Placement X', { exact: true }).fill('0.9')
+  await page.getByLabel('Placement Y', { exact: true }).fill('0.8')
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(objects).toHaveCount(3)
+  await expect(redo).toBeDisabled()
+})
+
+test('modified Add placement inputs continue to block history traversal', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  await applySavedChartRename(page, 'Star system', 'Vesper Prime')
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+
+  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const placement = page.getByRole('form', { name: 'Placement', exact: true })
+  await page.getByLabel('Placement X', { exact: true }).fill('0.8')
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  await expect(undo).toBeDisabled()
+  await page.locator('#workspace-main').focus()
+  await page.keyboard.press('Control+z')
+  await expect(page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })).toBeVisible()
+  await expect(undo).toBeDisabled()
+  await expect(placement).toBeVisible()
+})
+
+test('saved Orbit creation supports Undo and Redo while Orbit Add stays armed', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true })
+
+  await page.locator('.workspace-dock-add').click()
+  await page.getByRole('button', { name: 'Add orbit', exact: true }).click()
+  const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
+  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
+  await selectInspectorOption(page.getByLabel('Orbit center or host', { exact: true }), 'Around Primary Star')
+  await page.getByLabel('Horizontal radius', { exact: true }).fill('60')
+  await page.getByLabel('Vertical radius', { exact: true }).fill('60')
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+
+  await expect(orbit).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+  await page.locator('#workspace-main').focus()
+  await page.keyboard.press('Control+z')
+  await expect(orbit).toHaveCount(0)
+  await expect(redo).toBeEnabled()
+  await page.keyboard.press('Control+y')
+  await expect(orbit).toBeVisible()
+  await expect(undo).toBeEnabled()
+  await expect(controls).toBeVisible()
+})
+
+test('saved Cluster system placement supports Undo and Redo while system Add stays armed', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  await returnToClusterMap(page)
+  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const systems = map.locator('.cluster-system-node')
+  await expect(systems).toHaveCount(1)
+
+  await page.getByRole('button', { name: 'Add to map', exact: true }).click()
+  await page.getByRole('button', { name: 'Add star system', exact: true }).click()
+  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  await page.getByLabel('System position X', { exact: true }).fill('0.75')
+  await page.getByLabel('System position Y', { exact: true }).fill('0.75')
+  await page.getByRole('form', { name: 'System placement coordinates', exact: true })
+    .getByRole('button', { name: 'Add at coordinates', exact: true }).click()
+  await expect(systems).toHaveCount(2)
+  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+  await page.locator('#workspace-main').focus()
+  await page.keyboard.press('Control+z')
+  await expect(systems).toHaveCount(1)
+  await expect(redo).toBeEnabled()
+  await page.keyboard.press('Control+y')
+  await expect(systems).toHaveCount(2)
+  await expect(undo).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
 })
 
 test('supported Ctrl and Cmd shortcuts traverse the same saved name action and controls announce their shortcuts', async ({ page }) => {
@@ -326,7 +448,7 @@ test('a nested Inspector USelect listbox owns Ctrl+Z while open', async ({ page 
   await page.keyboard.press('Control+z')
   await expect(listbox).toBeVisible()
   await expect(designation).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('1 to undo')
+  await expect(page.getByRole('button', { name: /^Undo(?:\b|:)/, includeHidden: true })).toHaveText('Undo 1')
 
   await page.keyboard.press('Escape')
   await expect(listbox).toBeHidden()

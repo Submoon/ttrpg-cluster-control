@@ -9,7 +9,22 @@
     <div class="workspace-map-context">
       <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
       <div class="workspace-map-context-line">
-        <h2>{{ contextName }}</h2>
+        <div class="workspace-map-title">
+          <UButton
+            v-if="activeView === 'system'"
+            class="workspace-control workspace-map-back"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Back to Jump Cluster"
+            title="Back to Jump Cluster"
+            @click="emit('show-cluster')"
+          >
+            <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
+            <span>Back</span>
+          </UButton>
+          <h2>{{ contextName }}</h2>
+        </div>
         <template v-if="props.creationSession || props.clusterAddPresentation">
           <span class="workspace-add-status" role="status" aria-live="polite">
             {{ props.clusterAddPresentation?.status ?? `ADD ${props.creationTypeLabel} · ${creationProgress}` }}
@@ -60,20 +75,6 @@
         {{ props.clusterMovePresentation.error }}
       </p>
     </div>
-
-    <UButton
-      v-if="activeView === 'system'"
-      class="workspace-control workspace-map-back"
-      color="neutral"
-      variant="outline"
-      size="sm"
-      aria-label="Back to Jump Cluster"
-      title="Back to Jump Cluster"
-      @click="emit('show-cluster')"
-    >
-      <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-      <span>Back</span>
-    </UButton>
 
     <div class="workspace-map-actions">
       <slot name="history" />
@@ -326,6 +327,7 @@ function openJsonImportPicker(): void {
 
 <style scoped>
 .workspace-map-chrome {
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -354,7 +356,9 @@ function openJsonImportPicker(): void {
 }
 
 .workspace-map-context h2 {
+  min-width: 0;
   max-width: min(32vw, 28rem);
+  flex: 0 1 auto;
   margin: 0;
   overflow: hidden;
   font-family: Georgia, serif;
@@ -369,6 +373,15 @@ function openJsonImportPicker(): void {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+.workspace-map-title {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.25rem 0.6rem;
 }

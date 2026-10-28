@@ -15,6 +15,9 @@ test('saved names can be undone and redone through directly reachable history bu
   await expect(undo).toBeVisible()
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
+  await expect(undo).toHaveText('Undo 0')
+  await expect(redo).toHaveText('Redo 0')
+  await expect(undo).toHaveAttribute('aria-description', '0 actions available to undo')
 
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart names' }).click()
@@ -24,6 +27,9 @@ test('saved names can be undone and redone through directly reachable history bu
   await expect(names).toBeHidden()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await expect(undo).toBeEnabled()
+  await expect(undo).toHaveText('Undo 1')
+  await expect(redo).toHaveText('Redo 0')
+  await expect(undo).toHaveAttribute('aria-description', '1 action available to undo')
 
   await undo.click()
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands' })
@@ -31,16 +37,56 @@ test('saved names can be undone and redone through directly reachable history bu
   await expect(mapContext.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   await expect(clusterMap.getByRole('button', { name: /^(Open|Select) Vesper system(?: map)?$/ })).toBeVisible()
   await expect(redo).toBeEnabled()
+  await expect(undo).toHaveText('Undo 0')
+  await expect(redo).toHaveText('Redo 1')
   await redo.click()
   await expect(mapContext.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   await expect(clusterMap.getByRole('button', { name: /^(Open|Select) Vesper Prime system(?: map)?$/ })).toBeVisible()
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
+  await expect(undo).toHaveText('Undo 1')
+  await expect(redo).toHaveText('Redo 0')
 
   await page.reload()
   await expect(mapContext.getByRole('heading', { name: 'Vesper Prime', exact: true })).toBeVisible()
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
+})
+
+test('Back stays to the left of the system name across desktop and compact viewports', async ({ page }, testInfo) => {
+  await createSingleSystemWorkspace(page)
+  const details = await openChartDetails(page)
+  await details.getByRole('button', { name: 'Edit chart names' }).click()
+  const names = page.getByRole('dialog', { name: 'Edit chart names' })
+  const longName = 'The Very Long Star System Name That Must Remain Legible'
+  await names.getByLabel('Star system', { exact: true }).fill(longName)
+  await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+  await expect(names).toBeHidden()
+  const inspect = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await inspect.getAttribute('aria-expanded') === 'true') await inspect.click()
+
+  const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+  const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  const heading = context.getByRole('heading', { name: longName, exact: true })
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport)
+    await expect(back).toBeVisible()
+    await expect(heading).toBeVisible()
+    const [backBounds, headingBounds] = await Promise.all([back.boundingBox(), heading.boundingBox()])
+    expect(backBounds).not.toBeNull()
+    expect(headingBounds).not.toBeNull()
+    if (!backBounds || !headingBounds) throw new Error('The Back button or system title is not positioned.')
+    expect(backBounds.x + backBounds.width).toBeLessThanOrEqual(headingBounds.x)
+    expect(headingBounds.x + headingBounds.width).toBeLessThanOrEqual(viewport.width)
+    expect(backBounds.y + backBounds.height).toBeGreaterThan(headingBounds.y)
+    expect(backBounds.y).toBeLessThan(headingBounds.y + headingBounds.height)
+    await testInfo.attach(`system-header-${viewport.width}x${viewport.height}`, {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
+  }
+  await back.click()
+  await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
 })
 
 test('a held map move blocks traversal and its completed position round-trips exactly', async ({ page }) => {

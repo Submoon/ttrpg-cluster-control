@@ -1,5 +1,5 @@
 /** Owns persistent Add intent and one transient, single-use completion token. */
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import {
   createOrbit,
   createSystemObject,
@@ -27,6 +27,7 @@ import {
 import type {
   EntityCommand,
   SystemCreationCandidate,
+  SystemCreationInputs,
   SystemCreationSession,
   SystemCreationTarget,
   SystemCreationType,
@@ -35,7 +36,7 @@ import type {
 import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
-type CreationInputKey = keyof SystemCreationSession['inputs']
+type CreationInputKey = keyof SystemCreationInputs
 
 interface SystemCreationWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
@@ -47,7 +48,7 @@ interface SystemCreationWorkflowOptions {
   onObjectCreated: (objectId: string) => Promise<void>
 }
 
-function emptyInputs(): SystemCreationSession['inputs'] {
+function emptyInputs(): SystemCreationInputs {
   return {
     x: '',
     y: '',
@@ -59,6 +60,18 @@ function emptyInputs(): SystemCreationSession['inputs'] {
     rotation: '',
     otherType: '',
   }
+}
+
+function sameCreationInputs(left: SystemCreationInputs, right: SystemCreationInputs): boolean {
+  return left.x === right.x
+    && left.y === right.y
+    && left.orbitId === right.orbitId
+    && left.angleDegrees === right.angleDegrees
+    && left.hostId === right.hostId
+    && left.horizontalRadius === right.horizontalRadius
+    && left.verticalRadius === right.verticalRadius
+    && left.rotation === right.rotation
+    && left.otherType === right.otherType
 }
 
 function sameCreationType(left: SystemCreationType, right: SystemCreationType): boolean {
@@ -159,13 +172,54 @@ export function useSystemCreationWorkflows({
       candidates: [],
       preview: null,
       inputs: emptyInputs(),
+      appliedInputs: emptyInputs(),
       errors: {},
       notice: '',
     }
     creationSession.value = session
     if (type.kind === 'orbit') fillDefaultOrbitGeometry(session, system, null)
+    session.appliedInputs = { ...session.inputs }
     return true
   }
+
+  const hasPendingHistoryInput = computed(() => {
+    const session = creationSession.value
+    return !!session && (
+      session.preview !== null
+      || session.candidates.length > 0
+      || !sameCreationInputs(session.inputs, session.appliedInputs)
+    )
+  })
+
+  /** Preserve a clean armed Add tool after history changes, repairing only references the restored data removed. */
+  function reconcileCleanTargetsAfterWorkspaceChange(nextWorkspace: LocalWorkspace | null): void {
+    const session = creationSession.value
+    if (!session || hasPendingHistoryInput.value) return
+
+    const system = nextWorkspace?.cluster.id === session.clusterId
+      ? nextWorkspace.cluster.systems.find(candidate => candidate.id === session.systemId)
+      : undefined
+    if (!system) {
+      creationSession.value = null
+      if (store.activeView === 'system' && store.selectedSystemId === session.systemId) store.setMode('select')
+      return
+    }
+
+    if (session.type.kind === 'orbit' && session.inputs.hostId
+      && !system.objects.some(object => object.id === session.inputs.hostId)) {
+      session.inputs.hostId = ''
+      session.appliedInputs = { ...session.appliedInputs, hostId: '' }
+    }
+
+    if (session.type.kind === 'object' && session.inputs.orbitId && session.inputs.orbitId !== '__free__'
+      && !system.orbits.some(orbit => orbit.id === session.inputs.orbitId)) {
+      session.inputs.orbitId = '__free__'
+      session.inputs.angleDegrees = ''
+      session.appliedInputs = { ...session.appliedInputs, orbitId: '__free__', angleDegrees: '' }
+    }
+  }
+
+  watch(workspace, reconcileCleanTargetsAfterWorkspaceChange, { flush: 'sync' })
 
   function nextOrbitOrder(system: StarSystem, hostId: string | null): number {
     return system.orbits
@@ -691,6 +745,7 @@ export function useSystemCreationWorkflows({
       session.preview = null
       session.candidates = []
       if (result.status === 'applied') {
+        session.appliedInputs = { ...session.inputs }
         session.notice = session.type.kind === 'object'
           ? `${correctionNotice ? `${correctionNotice} ` : ''}${identityName} added. Choose another location or Quit Add.`
           : `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${identityOrder} added. Choose another target or Quit Add.`
@@ -753,6 +808,7 @@ export function useSystemCreationWorkflows({
     let pruned = false
     if (session.type.kind === 'orbit' && session.inputs.hostId && removedObjects.has(session.inputs.hostId)) {
       session.inputs.hostId = ''
+      session.appliedInputs = { ...session.appliedInputs, hostId: '' }
       pruned = true
       const errors = { ...session.errors }
       delete errors.hostId
@@ -761,6 +817,7 @@ export function useSystemCreationWorkflows({
     if (session.type.kind === 'object' && session.inputs.orbitId && removedOrbits.has(session.inputs.orbitId)) {
       session.inputs.orbitId = ''
       session.inputs.angleDegrees = ''
+      session.appliedInputs = { ...session.appliedInputs, orbitId: '', angleDegrees: '' }
       pruned = true
       const errors = { ...session.errors }
       delete errors.orbitId
@@ -787,6 +844,7 @@ export function useSystemCreationWorkflows({
 
   return {
     creationSession,
+    hasPendingHistoryInput,
     chooseCreationType,
     updateCreationInput,
     offerCreationCandidates,

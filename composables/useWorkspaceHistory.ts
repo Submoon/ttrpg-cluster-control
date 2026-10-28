@@ -80,12 +80,12 @@ export function useWorkspaceHistory(options: WorkspaceHistoryOptions) {
     return current ? `${current.id}:${current.cluster.id}` : null
   }, () => {
     traversalError.value = ''
-    mutations.reset('History starts with changes in this editing session.')
+    mutations.reset()
   }, { flush: 'sync' })
   watch(options.hydrationState, (state, previous) => {
     if (state === 'loading' || previous === 'loading') {
       traversalError.value = ''
-      mutations.reset('History starts after the workspace is opened or recovered.')
+      mutations.reset()
     }
   }, { flush: 'sync' })
 

@@ -36,7 +36,8 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
   await names.getByRole('button', { name: 'Discard draft', exact: true }).click()
   await expect(undo).toBeEnabled()
-  await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('1 to undo')
+  await expect(undo).toHaveText('Undo 1')
+  await expect(undo).toHaveAttribute('aria-description', '1 action available to undo')
 
   await details.getByRole('button', { name: 'Edit chart names' }).click()
   await names.getByLabel('Jump Cluster', { exact: true }).fill('Accepted large baseline')

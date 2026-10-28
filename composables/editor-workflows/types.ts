@@ -214,6 +214,18 @@ export interface SystemCreationPreview {
   rotation?: number
 }
 
+export interface SystemCreationInputs {
+  x: string
+  y: string
+  orbitId: string
+  angleDegrees: string
+  hostId: string
+  horizontalRadius: string
+  verticalRadius: string
+  rotation: string
+  otherType: string
+}
+
 /** Parent-owned Add state; presentation changes do not discard its type or form strings. */
 export interface SystemCreationSession {
   id: number
@@ -222,17 +234,9 @@ export interface SystemCreationSession {
   type: SystemCreationType
   candidates: SystemCreationCandidate[]
   preview: SystemCreationPreview | null
-  inputs: {
-    x: string
-    y: string
-    orbitId: string
-    angleDegrees: string
-    hostId: string
-    horizontalRadius: string
-    verticalRadius: string
-    rotation: string
-    otherType: string
-  }
+  inputs: SystemCreationInputs
+  /** Values after the latest applied placement, so an armed clean Add tool doesn't block history. */
+  appliedInputs: SystemCreationInputs
   errors: Record<string, string>
   notice: string
 }

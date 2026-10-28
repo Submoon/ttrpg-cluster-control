@@ -999,6 +999,7 @@ p-note {
   transform: translateX(-50%);
   pointer-events: none;
 }
+.workspace-map-chrome-region:has(.workspace-history-controls-has-notice) { z-index: 20; }
 .workspace-map-chrome-region > * { width: 100%; pointer-events: auto; }
 
 .workspace-bottom-controls {

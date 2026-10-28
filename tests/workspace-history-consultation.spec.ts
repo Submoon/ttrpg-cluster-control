@@ -22,6 +22,8 @@ test('History consultation stays read only across Undo and Redo and returns focu
   const historyDialog = page.getByRole('dialog', { name: 'History' })
   await expect(historyDialog).toBeVisible()
   await expect(historyDialog).toContainText('not a complete audit log')
+  await expect(historyDialog).toContainText('No actions yet.')
+  await expect(historyDialog).not.toContainText('History starts with changes in this editing session.')
   await expect(historyDialog).toContainText('initial baseline')
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()

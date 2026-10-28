@@ -46,6 +46,7 @@ export function useClusterSystemPlacement({
   const nextPreviewToken = ref(0)
   let pendingSystemMoveToken: number | null = null
   const moveInputBaseline = shallowRef<ClusterMoveInputBaseline | null>(null)
+  const appliedSystemAddInputs = shallowRef<{ x: string; y: string } | null>(null)
   const clusterAddError = computed(() => formError.value || inputErrors.x || inputErrors.y)
   const clusterSystemMoveError = computed(() => systemMoveError.value || inputErrors.x || inputErrors.y)
   const clusterMoveTargeting = computed(() => store.activeView === 'cluster'
@@ -79,8 +80,14 @@ export function useClusterSystemPlacement({
       && inputs.y === baseline.y
   }
 
+  function systemAddInputsMatchBaseline(): boolean {
+    const baseline = appliedSystemAddInputs.value
+    return baseline !== null && inputs.x === baseline.x && inputs.y === baseline.y
+  }
+
   const hasPendingHistoryInput = computed(() => {
-    if (clusterAddType.value === 'system' || systemMovePreview.value) return true
+    if (systemMovePreview.value) return true
+    if (clusterAddType.value === 'system') return !systemAddInputsMatchBaseline()
     const target = currentMoveInputTarget()
     if (!target) return false
     return !moveInputsMatchBaseline(target.key)
@@ -120,6 +127,9 @@ export function useClusterSystemPlacement({
   function armSystemAdd(): void {
     if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
+    if (clusterAddType.value !== 'system' || !appliedSystemAddInputs.value) {
+      appliedSystemAddInputs.value = { x: inputs.x, y: inputs.y }
+    }
     clusterAddType.value = 'system'
     clearErrors()
   }
@@ -128,12 +138,14 @@ export function useClusterSystemPlacement({
     if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
     clusterAddType.value = 'route'
+    appliedSystemAddInputs.value = null
     clearErrors()
   }
 
   function quitClusterAdd(): void {
     cancelSystemMovePreview()
     clusterAddType.value = null
+    appliedSystemAddInputs.value = null
     clearErrors()
   }
 
@@ -248,6 +260,7 @@ export function useClusterSystemPlacement({
       throwIfRejected(result)
       inputs.x = String(point.x)
       inputs.y = String(point.y)
+      if (clusterAddType.value === 'system') appliedSystemAddInputs.value = { x: inputs.x, y: inputs.y }
       return true
     } catch (error) {
       formError.value = error instanceof Error ? error.message : String(error)

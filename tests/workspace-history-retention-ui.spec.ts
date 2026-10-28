@@ -139,7 +139,7 @@ test('History displays its retained limit, scrolls without moving, and resets af
   await historyButton.click()
   await expect(historyDialog).toBeVisible()
   await expect(historyDialog.getByRole('list', { name: 'Retained actions in chronological order' })).toHaveCount(0)
-  await expect(historyDialog).toContainText('History starts after the workspace is opened or recovered.')
+  await expect(historyDialog).toContainText('No actions yet.')
   await expect(historyDialog).toContainText('Current position: initial baseline')
   await testInfo.attach('history-after-reload-baseline', { body: await page.screenshot(), contentType: 'image/png' })
   await page.keyboard.press('Escape')

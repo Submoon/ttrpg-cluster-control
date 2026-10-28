@@ -238,8 +238,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
     if (route.hasPendingHistoryChoice.value) return 'Finish choosing the Jump Route endpoints first.'
     if (entity.hasPendingHistoryChoice.value) return 'Finish choosing the Orbit placement first.'
-    if (systemCreation.creationSession.value) return 'Finish or cancel the object or Orbit placement first.'
-    if (clusterSystemPlacement.clusterAddType.value) return 'Finish or cancel the current Cluster action first.'
+    if (systemCreation.hasPendingHistoryInput.value) return 'Finish or cancel the object or Orbit placement first.'
+    if (clusterSystemPlacement.clusterAddType.value === 'route') return 'Finish or cancel the current Cluster route action first.'
     if (clusterSystemPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending Cluster placement inputs first.'
     if (clusterSystemPlacement.clusterSystemMovePreview.value) return 'Confirm or cancel the pending system-move preview first.'
     if (systemObjectPlacement.systemObjectMoveCandidateRequest.value !== 0

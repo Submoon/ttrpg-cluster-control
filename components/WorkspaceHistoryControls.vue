@@ -1,5 +1,10 @@
 <template>
-  <div class="workspace-history-controls" role="group" aria-label="Edit history">
+  <div
+    class="workspace-history-controls"
+    :class="{ 'workspace-history-controls-has-notice': feedback || props.error }"
+    role="group"
+    aria-label="Edit history"
+  >
     <div class="flex items-center gap-1">
       <UButton
         class="workspace-control"
@@ -9,11 +14,14 @@
         icon="i-lucide-undo-2"
         :aria-label="undoLabel"
         aria-keyshortcuts="Control+Z Meta+Z"
+        :aria-description="undoDescription"
         :title="undoTitle"
         :disabled="props.status.undoUnavailableReason !== null"
-        aria-describedby="workspace-history-feedback"
+        aria-describedby="workspace-history-feedback workspace-history-error"
         @click="emit('undo')"
-      >Undo</UButton>
+      >
+        Undo <span class="workspace-history-count" aria-hidden="true">{{ props.status.undoDepth }}</span>
+      </UButton>
       <UButton
         class="workspace-control"
         color="neutral"
@@ -22,11 +30,14 @@
         icon="i-lucide-redo-2"
         :aria-label="redoLabel"
         aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
+        :aria-description="redoDescription"
         :title="redoTitle"
         :disabled="props.status.redoUnavailableReason !== null"
-        aria-describedby="workspace-history-feedback"
+        aria-describedby="workspace-history-feedback workspace-history-error"
         @click="emit('redo')"
-      >Redo</UButton>
+      >
+        Redo <span class="workspace-history-count" aria-hidden="true">{{ props.status.redoDepth }}</span>
+      </UButton>
       <UButton
         class="workspace-control"
         color="neutral"
@@ -39,10 +50,17 @@
         @click="emit('update:open', true)"
       >History</UButton>
     </div>
-    <p id="workspace-history-feedback" class="workspace-history-feedback m-0 text-xs text-muted" role="status" aria-live="polite">
-      {{ feedback }}
-    </p>
-    <p v-if="props.error" class="m-0 text-xs error-text" role="alert">{{ props.error }}</p>
+    <div v-if="feedback || props.error" class="workspace-history-notices" data-map-obstruction>
+      <p id="workspace-history-feedback" class="m-0 text-xs text-muted" :class="{ 'sr-only': !feedback }" role="status" aria-live="polite">
+        {{ feedback }}
+      </p>
+      <p v-if="props.error" id="workspace-history-error" class="m-0 text-xs error-text" role="alert">{{ props.error }}</p>
+      <p v-else id="workspace-history-error" class="sr-only" role="alert"></p>
+    </div>
+    <div v-else>
+      <p id="workspace-history-feedback" class="sr-only" role="status" aria-live="polite"></p>
+      <p id="workspace-history-error" class="sr-only" role="alert"></p>
+    </div>
   </div>
   <UModal
     :open="props.open"
@@ -56,7 +74,7 @@
         <p class="m-0 text-sm text-muted">This is the bounded history retained for the current editing session, not a complete audit log. Reading it does not move through history or change the workspace.</p>
         <p v-if="props.status.notice" class="m-0 text-sm" role="status">{{ props.status.notice }}</p>
         <p v-if="props.status.retentionReduced && !props.status.notice" class="m-0 text-sm" role="status">Older actions were removed to stay within the history limit.</p>
-        <p v-if="!props.entries.length" class="m-0" role="status">{{ props.status.notice ?? 'History starts with the first applied change in this session.' }}</p>
+        <p v-if="!props.entries.length" class="m-0" role="status">{{ props.status.notice ?? 'No actions yet.' }}</p>
         <ol v-else class="workspace-history-list m-0 grid list-none gap-2 p-0" aria-label="Retained actions in chronological order">
           <template v-for="(entry, index) in props.entries" :key="`${index}:${entry.action.workspaceId}:${entry.action.target.id}`">
             <li v-if="index === props.status.undoDepth" class="workspace-history-position" role="status" aria-label="Current history position">Current position</li>
@@ -91,6 +109,8 @@ const redoLabel = computed(() => props.status.redoAction
   : 'Redo')
 const undoTitle = computed(() => `${props.status.undoUnavailableReason ?? undoLabel.value}. Shortcut: Ctrl+Z or Cmd+Z.`)
 const redoTitle = computed(() => `${props.status.redoUnavailableReason ?? redoLabel.value}. Shortcut: Ctrl+Shift+Z, Ctrl+Y or Cmd+Shift+Z.`)
+const undoDescription = computed(() => `${props.status.undoDepth} ${props.status.undoDepth === 1 ? 'action' : 'actions'} available to undo`)
+const redoDescription = computed(() => `${props.status.redoDepth} ${props.status.redoDepth === 1 ? 'action' : 'actions'} available through Redo`)
 const feedback = computed(() => {
   const commonReason = props.status.undoUnavailableReason
   if (commonReason && commonReason === props.status.redoUnavailableReason) return commonReason
@@ -98,8 +118,7 @@ const feedback = computed(() => {
     : props.status.redoAction ? props.status.redoUnavailableReason : null
   if (reason) return reason
   if (props.status.retentionReduced) return props.status.notice ?? 'Older history was removed to stay within capacity.'
-  if (!props.status.totalActions) return props.status.notice ?? 'History starts with your first change.'
-  return `${props.status.undoDepth} to undo · ${props.status.redoDepth} to redo`
+  return props.status.notice ?? ''
 })
 </script>
 
@@ -113,8 +132,31 @@ const feedback = computed(() => {
   gap: 0.2rem;
 }
 
-/* Keep neighbouring commands still when a popover closes between pointer down and up. */
-.workspace-history-feedback {
-  min-height: 2lh;
+.workspace-history-count {
+  display: inline-flex;
+  min-width: 3ch;
+  justify-content: center;
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
 }
+
+.workspace-history-notices {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 1;
+  display: grid;
+  width: max-content;
+  max-width: min(19rem, calc(100vw - 2rem));
+  gap: 0.2rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.25rem;
+  padding: 0.35rem 0.45rem;
+  background: var(--panel-raised);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--map-bg) 65%, transparent);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
 </style>
