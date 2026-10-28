@@ -1,6 +1,7 @@
 ---
 title: Improve editor verification after the positioning retrospective
-status: in-progress
+status: closed
+closed_on: 2026-10-28
 ---
 
 # Improve editor verification after the positioning retrospective
@@ -24,7 +25,9 @@ Validate documentation links, final lint/typecheck and affected public journeys 
 
 ## Resolution
 
-Pending implementation and verification.
+Repository guidance and shared test-helper extraction are implemented and published in [PR #33](https://github.com/Submoon/ttrpg-cluster-control/pull/33). Local documentation checks, lint, typecheck and independent review passed. Shared user skills, product code, dependencies and CI configuration were not modified.
+
+This record closes the local implementation/publication checkpoint. Browser validation and review readiness are tracked by the PR's existing CI and description; the PR was published as a draft because the local development runtime did not pass HTTP preflight. No local browser pass is claimed here.
 
 ## Implemented changes
 
@@ -44,6 +47,6 @@ Candidate: frozen working tree based on `e145a48c1a1237174dc5eb894a1f1263dd74c01
 | Independent review | Passed, zero findings | Reviewed the integrated guidance, helper extraction, callers and failure cleanup |
 | Lint | Passed | `npm run lint` |
 | Typecheck | Passed | `npm run typecheck` |
-| Affected public browser journeys | Pending CI | Local Nuxt reported ready on port 3127, but HTTP preflight timed out after bounded startup retries; no browser result is claimed |
+| Affected public browser journeys | Pending CI at publication | Local Nuxt reported ready on port 3127, but HTTP preflight timed out after bounded startup retries; the PR tracks subsequent CI results |
 
 The coordinator stopped the owned local runtime and publishes a draft PR so the existing immutable-preview CI can supply browser evidence. The affected scenarios are the Orbit ring and ellipse journeys plus the Cluster navigation and expanded System-map consumers of the same helper. Draft readiness remains pending CI; the local runtime failure did not justify changing product code or user settings.
