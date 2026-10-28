@@ -1,5 +1,5 @@
 /** Owns persistent Add intent and one transient, single-use completion token. */
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import {
   createOrbit,
   createSystemObject,
@@ -90,6 +90,12 @@ export function useSystemCreationWorkflows({
   let sessionSequence = 0
   let previewSequence = 0
   let confirmingPreviewId: number | null = null
+  let explicitObjectOrbitPreference: { sessionId: number; orbitId: string } | null = null
+
+  watch(
+    [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
+    () => { explicitObjectOrbitPreference = null },
+  )
 
   function setError(key: string, message: string): void {
     if (!creationSession.value) return
@@ -145,6 +151,7 @@ export function useSystemCreationWorkflows({
     }
 
     sessionSequence += 1
+    explicitObjectOrbitPreference = null
     const session: SystemCreationSession = {
       id: sessionSequence,
       clusterId: currentWorkspace.cluster.id,
@@ -184,8 +191,14 @@ export function useSystemCreationWorkflows({
   function updateCreationInput(key: CreationInputKey, value: string): void {
     const session = creationSession.value
     if (!session) return
+    const nextValue = String(value ?? '')
+    if (session.type.kind === 'object' && key === 'orbitId') {
+      explicitObjectOrbitPreference = nextValue && nextValue !== '__free__'
+        ? { sessionId: session.id, orbitId: nextValue }
+        : null
+    }
     const previous = session.inputs[key]
-    session.inputs[key] = String(value ?? '')
+    session.inputs[key] = nextValue
     invalidatePreview(session)
     clearError(key)
     clearError('target')
@@ -386,8 +399,15 @@ export function useSystemCreationWorkflows({
         session.inputs.y = String(target.point.y)
         session.inputs.orbitId = ''
         session.inputs.hostId = ''
+        if (explicitObjectOrbitPreference?.sessionId === session.id) {
+          explicitObjectOrbitPreference = null
+        }
       }
     } else if (target.kind === 'orbit') {
+      if (explicitObjectOrbitPreference?.sessionId === session.id
+        && explicitObjectOrbitPreference.orbitId !== target.orbitId) {
+        explicitObjectOrbitPreference = null
+      }
       session.inputs.orbitId = target.orbitId
     } else if (session.type.kind === 'orbit') {
       session.inputs.hostId = target.objectId
@@ -478,25 +498,17 @@ export function useSystemCreationWorkflows({
       const validationError = validateTarget(session, system, candidate.target)
       return { ...candidate, error: candidate.error ?? validationError }
     })
-    const selectedOrbitId = session.type.kind === 'object'
-      && session.inputs.orbitId !== '__free__'
-      ? session.inputs.orbitId
+    const preferredOrbitId = session.type.kind === 'object'
+      && explicitObjectOrbitPreference?.sessionId === session.id
+      ? explicitObjectOrbitPreference.orbitId
       : ''
-    const selectedOrbitCandidates = selectedOrbitId
+    const preferredOrbitCandidates = preferredOrbitId
       ? currentCandidates.filter(candidate => candidate.target.kind === 'orbit'
-        && candidate.target.orbitId === selectedOrbitId)
+        && candidate.target.orbitId === preferredOrbitId)
       : []
-    const candidatesToResolve = selectedOrbitId
-      ? selectedOrbitCandidates.length
-        ? selectedOrbitCandidates
-        : currentCandidates.filter(candidate => candidate.target.kind === 'free')
+    const candidatesToResolve = preferredOrbitCandidates.length
+      ? preferredOrbitCandidates
       : currentCandidates
-    if (selectedOrbitId && !candidatesToResolve.length) {
-      setTargetError({ kind: 'orbit', orbitId: selectedOrbitId, angle: 0 },
-        'Click the selected Orbit to add this object at that position.')
-      session.notice = 'The selected Orbit is not at this map position.'
-      return false
-    }
     const validCandidates = candidatesToResolve.filter(candidate => !candidate.error)
     if (validCandidates.length === 1) {
       const candidate = validCandidates[0]
@@ -700,6 +712,7 @@ export function useSystemCreationWorkflows({
   }
 
   function quitAdd(): void {
+    explicitObjectOrbitPreference = null
     creationSession.value = null
   }
 
@@ -709,6 +722,7 @@ export function useSystemCreationWorkflows({
     if (!session) return
 
     if (plan.removedSystemIds.includes(session.systemId)) {
+      explicitObjectOrbitPreference = null
       creationSession.value = null
       return
     }
@@ -730,6 +744,10 @@ export function useSystemCreationWorkflows({
     }
     if (session.type.kind === 'object' && session.inputs.orbitId && removedOrbits.has(session.inputs.orbitId)) {
       session.inputs.orbitId = ''
+      if (explicitObjectOrbitPreference?.sessionId === session.id
+        && removedOrbits.has(explicitObjectOrbitPreference.orbitId)) {
+        explicitObjectOrbitPreference = null
+      }
       pruned = true
       const errors = { ...session.errors }
       delete errors.orbitId

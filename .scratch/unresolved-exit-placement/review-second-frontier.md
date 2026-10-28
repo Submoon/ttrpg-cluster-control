@@ -40,3 +40,7 @@ The background/grid now belong to viewport space, using the real SVG client view
 All three reviewers inspected the correction and closed their blockers without identifying a consequential new issue. A final export-branch type guard explicitly narrows unresolved destinations; it does not change valid geometry behavior. Ticket 05 has no blocking review finding. Full integrated suite and production build remain completion gates.
 
 Initial totals: Standards 0 blockers; Spec 2 P2; complementary review 1 shared P2 (two unique defects). Remaining blocking findings: Standards 0; Spec 0; complementary numerical/persistence 0.
+
+## Integrated-suite follow-up
+
+The subsequent complete suite found one creation regression outside the initial review findings: a map-inferred Orbit was treated as an explicit control preference, preventing the next valid click on a different nested Orbit. The existing rotated/nested creation test failed without relaxing its expectations. The ticket 05 owner is correcting that provenance/lifetime distinction. Focused verification and correction review remain pending; overall acceptance is not yet closed.

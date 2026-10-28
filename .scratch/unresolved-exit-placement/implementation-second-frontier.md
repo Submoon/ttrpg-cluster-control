@@ -39,6 +39,12 @@ Pending implementation and verification.
 - Final lint/typecheck passed after the corrections and the explicit unresolved-route type guard. The four affected Cluster image-export journeys passed together after the viewport-space rewrite (`test-results/second-frontier-cluster-images-final/report.json`).
 - The complete suite once and production build are the remaining verification sequence. Sources remain frozen throughout browser checks; no second full-suite pass is implied by later affected reruns.
 
+## Complete-suite result and follow-up
+
+The complete suite ran once on `80f0b21462a600bd5b63d75912742299cded3b85` in system Chrome: **263 passed, 1 failed, 264 total**, in 28.4 minutes (`test-results/second-frontier-full/report.json`). There were no retries or skipped tests.
+
+The failure is an actual creation regression in the rotated/nested-Orbit journey. A map-resolved Orbit was retained in the same input field as an explicit control choice, so the next click on a different Orbit was rejected. The ticket 05 owner is separating explicit preference from inferred map outcomes, preserving the existing count, placement, pointer-accuracy and legacy-angle assertions. Affected reruns, correction review and build remain pending; no second full-suite run is claimed.
+
 ## Agreed implementation contracts
 
 - Cluster maps expose a reactive `getMinimumZoomScale()` derived from valid applied bounds and the usable viewport. Shared camera helpers accept optional minimums with the existing 0.25 default. The coordinator transports that floor through visit recording, percentage changes and controls; System maps keep their current floor.

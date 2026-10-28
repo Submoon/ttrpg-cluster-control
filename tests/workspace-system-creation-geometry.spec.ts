@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { importReviewDialog, readInspectorSelection, resolveImportReview, selectInspectorOption } from './helpers'
 import {
   captureMapExportBlobs,
   dockAction,
@@ -217,6 +217,13 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
     clickErrors[0]!,
     creationTargets[0].minorRadius,
   )
+
+  clickErrors.push(await clickScenePoint(page, map, creationTargets[0].point))
+  await expect(alphaChoice).toBeVisible()
+  await expect(betaChoice).toBeVisible()
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 1)
+  await alphaChoice.click()
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
   await expect(map.locator(`.orbit-mark[data-orbit-id="${alphaOrbit.id}"] .orbit-ring`))
     .toHaveAttribute('transform', 'rotate(30 480 280)')
   const completedExport = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
@@ -230,7 +237,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   }
 
   clickErrors.push(await clickScenePoint(page, map, creationTargets[1].point))
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
   await expect(creationControls).toBeVisible()
   await expect(map.locator('.system-creation-preview')).toHaveCount(0)
   for (const { name, point } of preservedLegacyPositions) {
@@ -243,13 +250,82 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   const createdPlanets = completed.system!.objects.filter(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
   )
-  expect(createdPlanets).toHaveLength(2)
-  for (let index = 0; index < creationTargets.length; index += 1) {
-    const target = creationTargets[index]!
+  const expectedTargets = [creationTargets[0]!, creationTargets[0]!, creationTargets[1]!]
+  expect(createdPlanets).toHaveLength(expectedTargets.length)
+  for (let index = 0; index < expectedTargets.length; index += 1) {
+    const target = expectedTargets[index]!
     const planet = createdPlanets[index]!
     expect(planet.placement).toEqual({ kind: 'orbit', orbitId: target.orbitId })
     expectAngleNearFixtureAngle(completed.layout.objectAngles[planet.id], clickErrors[index]!, target.minorRadius)
   }
+})
+
+test('an explicit Placement Orbit preference wins among overlapping map targets after inferred placement', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await createWorkspace(page)
+  const map = await openDenseReach(page)
+  const initial = await downloadJson(page, 'Export star system JSON')
+  const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
+  const oldPlanet = initial.system!.objects.find(object => object.name === 'Old Planet')!
+  const alphaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
+  const betaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
+  const nestedOrbit = initial.system!.orbits.find(orbit => orbit.hostId === oldPlanet.id && orbit.order === 1)!
+  const initialObjectCount = initial.system!.objects.length
+
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  const overlapPoint = { x: 583.9230484541326, y: 340 }
+  const firstClickError = await clickScenePoint(page, map, overlapPoint)
+  const alphaChoice = page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })
+  await expect(alphaChoice).toBeVisible()
+  await alphaChoice.click()
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 1)
+
+  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const orbitPlacement = page.getByLabel('Orbit placement', { exact: true })
+  const alphaLabel = `Orbit ${alphaOrbit.order} around ${primary.name}`
+  await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe(alphaLabel)
+  // Map choice inferred Alpha into the selector. Re-selecting that displayed value makes it an
+  // explicit preference, even though updateCreationInput receives the same logical value.
+  await selectInspectorOption(orbitPlacement, alphaLabel)
+  await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe(alphaLabel)
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+
+  const secondClickError = await clickScenePoint(page, map, overlapPoint)
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
+  await expect(map.locator('.system-creation-candidates')).toHaveCount(0)
+  const completed = await downloadJson(page, 'Export star system JSON')
+  const created = completed.system!.objects.filter(object =>
+    object.subtype === 'planet' && !initial.system!.objects.some(existing => existing.id === object.id),
+  )
+  expect(created).toHaveLength(2)
+  expect(created.map(object => object.placement)).toEqual([
+    { kind: 'orbit', orbitId: alphaOrbit.id },
+    { kind: 'orbit', orbitId: alphaOrbit.id },
+  ])
+  expectAngleNearFixtureAngle(completed.layout.objectAngles[created[0]!.id], firstClickError, 80)
+  expectAngleNearFixtureAngle(completed.layout.objectAngles[created[1]!.id], secondClickError, 80)
+
+  const nestedPoint = { x: 592.5020987390543, y: Number('244.52742863650086') }
+  const nestedClickError = await clickScenePoint(page, map, nestedPoint)
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
+  const afterNestedPlacement = await downloadJson(page, 'Export star system JSON')
+  const createdAfterNestedPlacement = afterNestedPlacement.system!.objects.filter(object =>
+    object.subtype === 'planet' && !initial.system!.objects.some(existing => existing.id === object.id),
+  )
+  expect(createdAfterNestedPlacement).toHaveLength(3)
+  expect(createdAfterNestedPlacement[2]!.placement).toEqual({ kind: 'orbit', orbitId: nestedOrbit.id })
+  expectAngleNearFixtureAngle(
+    afterNestedPlacement.layout.objectAngles[createdAfterNestedPlacement[2]!.id],
+    nestedClickError,
+    55,
+  )
+
+  await clickScenePoint(page, map, overlapPoint)
+  await expect(page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Orbit ${betaOrbit.order} around ${primary.name}`, exact: true })).toBeVisible()
+  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
 })
 
 test('a second map touch interrupts a fresh Add gesture and leaves the completed object unchanged', async ({ page }) => {
