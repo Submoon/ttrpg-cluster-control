@@ -3,7 +3,7 @@ import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } 
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
 import { clickDockAction, dockAction, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
-import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation, clickNormalizedSystemPoint } from './helpers'
+import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation, clickNormalizedSystemPoint, measureMouseDrag, snapshotSvgCoordinates } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -22,11 +22,6 @@ type DragPreviewWindow = Window & {
     contentMatrix: { a: number; b: number; c: number; d: number; e: number; f: number }
     ellipse: { cx: number; cy: number; rx: number; ry: number; rotation: number }
   } | null
-  __orbitResizeMouseEvents?: Array<{
-    type: 'down' | 'up'
-    clientX: number
-    clientY: number
-  }>
 }
 
 function recordNativeDragTypes(): void {
@@ -205,6 +200,37 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
   const planetBefore = await planet.getAttribute('transform')
   const globalScale = 1.25
   const globalStartAngle = 0.5
+  const failedDragStartPoint = await orbitTarget.evaluate((element, angle) => {
+    const ellipse = element as SVGEllipseElement
+    return {
+      x: Number(ellipse.getAttribute('cx')) + Number(ellipse.getAttribute('rx')) * Math.cos(angle),
+      y: Number(ellipse.getAttribute('cy')) + Number(ellipse.getAttribute('ry')) * Math.sin(angle),
+    }
+  }, globalStartAngle)
+  const orbitCoordinates = await snapshotSvgCoordinates(orbitTarget)
+  const failedDragStart = orbitCoordinates.toClient(failedDragStartPoint)
+  // Fail after forwarding the start move and real mouse down, before the finite end move.
+  const originalMouseMove = page.mouse.move
+  const nativeMouseMove = originalMouseMove.bind(page.mouse)
+  let mouseMoveCalls = 0
+  page.mouse.move = async (...args: Parameters<typeof page.mouse.move>) => {
+    if (mouseMoveCalls++ === 1) throw new Error('Injected failure after the native mouse down.')
+    return nativeMouseMove(...args)
+  }
+  try {
+    await expect(measureMouseDrag(page, failedDragStart, {
+      x: failedDragStart.x + 24,
+      y: failedDragStart.y,
+    })).rejects.toThrow('Injected failure after the native mouse down.')
+  } finally {
+    page.mouse.move = originalMouseMove
+  }
+  await expect(orbitRing).toHaveAttribute('rx', String(radiusXBefore))
+  await expect(orbitRing).toHaveAttribute('ry', String(radiusYBefore))
+  await page.mouse.move(Math.round(failedDragStart.x + 12), Math.round(failedDragStart.y), { steps: 6 })
+  await expect(orbitRing).toHaveAttribute('rx', String(radiusXBefore))
+  await expect(orbitRing).toHaveAttribute('ry', String(radiusYBefore))
+
   await dragOrbitToWorldPoint(page, orbitTarget, {
     x: 480 + radiusXBefore * globalScale * Math.cos(globalStartAngle),
     y: 280 + radiusYBefore * globalScale * Math.sin(globalStartAngle),
@@ -405,22 +431,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await globalResizeTarget.scrollIntoViewIfNeeded()
   const resizeStart = await orbit.evaluate((element) => {
     const ring = element.querySelector<SVGEllipseElement>('.orbit-ring')
-    const hitTarget = element.querySelector<SVGEllipseElement>('.orbit-hit-target')
-    const content = element.closest('svg')?.querySelector<SVGGElement>('.system-map-content')
-    const contentMatrix = content?.getScreenCTM()
-    const hitTargetMatrix = hitTarget?.getScreenCTM()
-    if (!ring || !contentMatrix || !hitTargetMatrix) {
-      throw new Error('Could not capture the Orbit resize transform before the gesture.')
-    }
-
-    const matrixValues = (matrix: DOMMatrix) => ({
-      a: matrix.a,
-      b: matrix.b,
-      c: matrix.c,
-      d: matrix.d,
-      e: matrix.e,
-      f: matrix.f,
-    })
+    if (!ring) throw new Error('Could not capture the Orbit geometry before the gesture.')
     return {
       center: {
         x: Number(ring.getAttribute('cx')),
@@ -428,150 +439,48 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
       },
       horizontalRadius: Number(ring.getAttribute('rx')),
       verticalRadius: Number(ring.getAttribute('ry')),
-      contentMatrix: matrixValues(contentMatrix),
-      hitTargetMatrix: matrixValues(hitTargetMatrix),
     }
   })
-  const resizedOrbitLabel = await orbit.getAttribute('aria-label')
-  if (!resizedOrbitLabel) throw new Error('The resized Orbit has no accessible label.')
-  const globalResizePixels = await page.evaluate((target) => {
-    const matrix = (values: typeof target.contentMatrix) => new DOMMatrix([
-      values.a,
-      values.b,
-      values.c,
-      values.d,
-      values.e,
-      values.f,
-    ])
-    const startMatrix = matrix(target.hitTargetMatrix)
-    const contentMatrix = matrix(target.contentMatrix)
-    const worldPoint = (
-      transform: DOMMatrix,
-      radiusX: number,
-      radiusY: number,
-      scale: number,
-      angle: number,
-    ) => new DOMPoint(
-      target.center.x + radiusX * scale * Math.cos(angle),
-      target.center.y + radiusY * scale * Math.sin(angle),
-    ).matrixTransform(transform)
-    const nearestPixel = (point: DOMPoint) => ({
-      x: Math.round(point.x),
-      y: Math.round(point.y),
-    })
-    return {
-      start: nearestPixel(worldPoint(
-        startMatrix,
-        target.horizontalRadius,
-        target.verticalRadius,
-        1,
-        target.angle,
-      )),
-      end: nearestPixel(worldPoint(
-        contentMatrix,
-        target.horizontalRadius,
-        target.verticalRadius,
-        target.scale,
-        target.angle,
-      )),
-    }
-  }, {
-    ...resizeStart,
-    angle: globalStartAngle,
-    scale: globalScale,
-  })
-  await map.evaluate((element, targetOrbitLabel) => {
-    const resizeWindow = window as DragPreviewWindow
-    resizeWindow.__orbitResizeMouseEvents = []
-    let resizingOrbit = false
-    const recordMouseDown = (event: MouseEvent) => {
-      if (!(event.target instanceof Element)
-        || !element.contains(event.target)
-        || event.target.closest('.orbit-mark')?.getAttribute('aria-label') !== targetOrbitLabel) return
-      resizingOrbit = true
-      resizeWindow.__orbitResizeMouseEvents?.push({
-        type: 'down',
-        clientX: event.clientX,
-        clientY: event.clientY,
-      })
-    }
-    const recordMouseUp = (event: MouseEvent) => {
-      if (!resizingOrbit) return
-      resizingOrbit = false
-      resizeWindow.__orbitResizeMouseEvents?.push({
-        type: 'up',
-        clientX: event.clientX,
-        clientY: event.clientY,
-      })
-      window.removeEventListener('mousedown', recordMouseDown, true)
-      window.removeEventListener('mouseup', recordMouseUp, true)
-    }
-    window.addEventListener('mousedown', recordMouseDown, true)
-    window.addEventListener('mouseup', recordMouseUp, true)
-  }, resizedOrbitLabel)
-  await page.mouse.move(globalResizePixels.start.x, globalResizePixels.start.y)
-  await page.mouse.down()
-  await page.mouse.move(globalResizePixels.end.x, globalResizePixels.end.y, { steps: 6 })
-  await page.mouse.up()
+  const contentCoordinates = await snapshotSvgCoordinates(map.locator('.system-map-content'))
+  const hitTargetCoordinates = await snapshotSvgCoordinates(globalResizeTarget)
+  const globalResizeStartPoint = {
+    x: resizeStart.center.x + resizeStart.horizontalRadius * Math.cos(globalStartAngle),
+    y: resizeStart.center.y + resizeStart.verticalRadius * Math.sin(globalStartAngle),
+  }
+  const globalResizeEndPoint = {
+    x: resizeStart.center.x + resizeStart.horizontalRadius * globalScale * Math.cos(globalStartAngle),
+    y: resizeStart.center.y + resizeStart.verticalRadius * globalScale * Math.sin(globalStartAngle),
+  }
+  const deliveredMouseDrag = await measureMouseDrag(
+    page,
+    hitTargetCoordinates.toClient(globalResizeStartPoint),
+    contentCoordinates.toClient(globalResizeEndPoint),
+  )
   const globallyResizedHorizontalRadius = Number(await ring.getAttribute('rx'))
   const globallyResizedVerticalRadius = Number(await ring.getAttribute('ry'))
-  const deliveredResize = await page.evaluate((target) => {
-    const resizeWindow = window as DragPreviewWindow
-    const events = resizeWindow.__orbitResizeMouseEvents ?? []
-    const down = events.find(event => event.type === 'down')
-    const up = [...events].reverse().find(event => event.type === 'up')
-    if (!down || !up) {
-      throw new Error('Could not measure the delivered global Orbit resize gesture.')
-    }
-
-    const transform = new DOMMatrix([
-      target.contentMatrix.a,
-      target.contentMatrix.b,
-      target.contentMatrix.c,
-      target.contentMatrix.d,
-      target.contentMatrix.e,
-      target.contentMatrix.f,
-    ])
-    const inverse = transform.inverse()
-    const worldPoint = (clientX: number, clientY: number) => {
-      const point = new DOMPoint(clientX, clientY).matrixTransform(inverse)
-      return { x: point.x, y: point.y }
-    }
-    const start = worldPoint(down.clientX, down.clientY)
-    const end = worldPoint(up.clientX, up.clientY)
-    const center = target.center
-    const scale = Math.hypot(end.x - center.x, end.y - center.y)
-      / Math.hypot(start.x - center.x, start.y - center.y)
-    const targetScreen = new DOMPoint(
-      center.x + target.startHorizontal * target.scale * Math.cos(target.angle),
-      center.y + target.startVertical * target.scale * Math.sin(target.angle),
-    ).matrixTransform(transform)
-    const startTargetScreen = new DOMPoint(
-      center.x + target.startHorizontal * Math.cos(target.angle),
-      center.y + target.startVertical * Math.sin(target.angle),
-    ).matrixTransform(new DOMMatrix([
-      target.hitTargetMatrix.a,
-      target.hitTargetMatrix.b,
-      target.hitTargetMatrix.c,
-      target.hitTargetMatrix.d,
-      target.hitTargetMatrix.e,
-      target.hitTargetMatrix.f,
-    ]))
-    return {
-      horizontalRadius: Math.round(target.startHorizontal * scale),
-      verticalRadius: Math.round(target.startVertical * scale),
-      startScreenError: Math.hypot(down.clientX - startTargetScreen.x, down.clientY - startTargetScreen.y),
-      endScreenError: Math.hypot(up.clientX - targetScreen.x, up.clientY - targetScreen.y),
-    }
-  }, {
-    center: resizeStart.center,
-    startHorizontal: resizeStart.horizontalRadius,
-    startVertical: resizeStart.verticalRadius,
-    contentMatrix: resizeStart.contentMatrix,
-    hitTargetMatrix: resizeStart.hitTargetMatrix,
-    scale: globalScale,
-    angle: globalStartAngle,
-  })
+  const deliveredStart = contentCoordinates.fromClient(deliveredMouseDrag.down)
+  const deliveredEnd = contentCoordinates.fromClient(deliveredMouseDrag.up)
+  const deliveredScale = Math.hypot(
+    deliveredEnd.x - resizeStart.center.x,
+    deliveredEnd.y - resizeStart.center.y,
+  ) / Math.hypot(
+    deliveredStart.x - resizeStart.center.x,
+    deliveredStart.y - resizeStart.center.y,
+  )
+  const expectedStartScreen = hitTargetCoordinates.toClient(globalResizeStartPoint)
+  const expectedEndScreen = contentCoordinates.toClient(globalResizeEndPoint)
+  const deliveredResize = {
+    horizontalRadius: Math.round(resizeStart.horizontalRadius * deliveredScale),
+    verticalRadius: Math.round(resizeStart.verticalRadius * deliveredScale),
+    startScreenError: Math.hypot(
+      deliveredMouseDrag.down.x - expectedStartScreen.x,
+      deliveredMouseDrag.down.y - expectedStartScreen.y,
+    ),
+    endScreenError: Math.hypot(
+      deliveredMouseDrag.up.x - expectedEndScreen.x,
+      deliveredMouseDrag.up.y - expectedEndScreen.y,
+    ),
+  }
   expect(deliveredResize.startScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
   expect(deliveredResize.endScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
   expect(globallyResizedHorizontalRadius).toBe(deliveredResize.horizontalRadius)
