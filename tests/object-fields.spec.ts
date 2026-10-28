@@ -205,11 +205,10 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await expect(systemInspector.getByRole('heading', { name: 'Object details' })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'false')
   await page.mouse.move(0, 0)
-  const selectedAppearance = await chartDetails.evaluate((button) => {
+  await expect.poll(() => chartDetails.evaluate((button) => {
     const style = getComputedStyle(button)
     return `${style.borderColor} ${style.backgroundColor}`
-  })
-  expect(activeAppearance).not.toBe(selectedAppearance)
+  })).not.toBe(activeAppearance)
   await chartDetails.press('Enter')
   await expect(systemInspector.getByText('CHART DETAILS', { exact: true })).toBeVisible()
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')

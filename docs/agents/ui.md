@@ -22,6 +22,12 @@ Paths above are relative to the repository root. An inspected cluster system can
 - Treat fixed headers, ordinary actions and recovery as parts of the same available space. On compact screens they must leave scrollable content and usable actions; recovery is not a decorative overlay.
 - Review focus return, scroll position and pending work across hide/reopen, viewport changes and nested dialogs. Viewport emulation does not certify a physical keyboard or screen reader.
 
+## Placement changes
+
+Define the visible result before changing placement: identify the relevant edges, gap, labels and zoom state. State which neighboring elements stay fixed, whether confirming the current point preserves geometry, and which saved-map compatibility cases apply. Resolve a conflict with those invariants before expanding the change.
+
+Inspect a detail screenshot of the first working slice at a readable zoom before broad verification or declaring visual acceptance. Include the source, target and nearby labels; also inspect compact or minimum-zoom states when affected. Measure the visible gap or hit area through the rendered SVG transform. Keep screenshots in test artifacts or the PR so reviewers can assess the same result.
+
 ## Verification
 
 Use `npm run test:ui` for the maintained smoke selection; narrow further with Playwright's existing CLI when appropriate. It checks action states, destructive styling, footer geometry and hit targets, with screenshot attachments in the report. Mechanical assertions belong in tests rather than a growing prose checklist. A pass supplements review of the requested composition and adjacent affected states.

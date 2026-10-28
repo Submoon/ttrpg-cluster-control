@@ -12,6 +12,8 @@ The user reported conflicts and a failing test on [PR #32](https://github.com/Su
 
 The coordinator began a local `origin/main` merge into `codex/undo-redo-ticket-01` with `--no-commit --no-ff`. This preserves published history and avoids a force push. No PR merge, release or issue closure is authorized. Local main belongs to another checkout and is left untouched; unrelated `.codex/environments/` configuration and other worktrees remain outside this effort.
 
+The reviewed production integration was committed as `a4cb767c71ac91a8ca1a98f558c307d9ff8bbee3`, with the original feature and `e145a48c` as parents. The publication refresh then found a second main advance to `e0b2458fe91dc2fb29c18fdaf903700c13ee1d22` ([PR #33](https://github.com/Submoon/ttrpg-cluster-control/pull/33)), containing only test-helper determinism and verification documentation. A second merge integrates it without conflicts or production changes. Its automatically merged helpers and scenarios receive a narrow compatibility review; exact-head CI supplies final checks/build/full-suite evidence for that test integration.
+
 ## Required outcome
 
 Preserve the complete Undo/Redo session contract and the incoming map-only placement contract. Numeric X/Y and positional-angle editors must not return. New unresolved-exit and unoccupied-Orbit-center movements must participate in the shared history executor, with exact restoration of identities, relationships and optional target positions. Keep saved-state, modified-draft, gesture, preview, candidate-choice and capacity gates, and allow a clean armed Add tool. Maintain the incoming explicit-versus-inferred Orbit preference behavior and relationship-safe Inspector draft rebasing.
