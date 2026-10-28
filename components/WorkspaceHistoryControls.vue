@@ -8,7 +8,8 @@
         size="sm"
         icon="i-lucide-undo-2"
         :aria-label="undoLabel"
-        :title="props.status.undoUnavailableReason ?? undoLabel"
+        aria-keyshortcuts="Control+Z Meta+Z"
+        :title="undoTitle"
         :disabled="props.status.undoUnavailableReason !== null"
         aria-describedby="workspace-history-feedback"
         @click="emit('undo')"
@@ -20,7 +21,8 @@
         size="sm"
         icon="i-lucide-redo-2"
         :aria-label="redoLabel"
-        :title="props.status.redoUnavailableReason ?? redoLabel"
+        aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
+        :title="redoTitle"
         :disabled="props.status.redoUnavailableReason !== null"
         aria-describedby="workspace-history-feedback"
         @click="emit('redo')"
@@ -87,6 +89,8 @@ const undoLabel = computed(() => props.status.undoAction
 const redoLabel = computed(() => props.status.redoAction
   ? `Redo: ${props.status.redoAction.label} · ${props.status.redoAction.contextLabel}`
   : 'Redo')
+const undoTitle = computed(() => `${props.status.undoUnavailableReason ?? undoLabel.value}. Shortcut: Ctrl+Z or Cmd+Z.`)
+const redoTitle = computed(() => `${props.status.redoUnavailableReason ?? redoLabel.value}. Shortcut: Ctrl+Shift+Z, Ctrl+Y or Cmd+Shift+Z.`)
 const feedback = computed(() => {
   const commonReason = props.status.undoUnavailableReason
   if (commonReason && commonReason === props.status.redoUnavailableReason) return commonReason

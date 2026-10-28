@@ -482,6 +482,7 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
+import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -851,6 +852,17 @@ readEditorHistoryBlockReason = () => {
   return workflows.historyGuards.blockReason.value
 }
 endCleanHistorySessions = workflows.historyGuards.endCleanSessions
+
+useWorkspaceHistoryShortcuts({
+  status: historyStatus,
+  workspaceEnabled: () => workspace.value !== null,
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
+    || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
+    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  undo: undoWorkspace,
+  redo: redoWorkspace,
+})
 
 async function openImportFieldsDraft(): Promise<void> {
   if (!await beforeWorkspaceOperation()) return

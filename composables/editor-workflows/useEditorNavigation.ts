@@ -425,9 +425,23 @@ export function useEditorNavigation(options: {
   /** Reveals a traversal's surviving target without resolving drafts or restoring map visits/panels. */
   async function revealHistoryContext(context: WorkspaceHistoryTraversalContext): Promise<void> {
     const { action } = context
-    if (action.target.kind === 'field') return
     const workspaceAtSelection = workspace.value
     const initiatingFocus = typeof document === 'undefined' ? null : document.activeElement
+    if (action.target.kind === 'field') {
+      const acceptedContextStamp = navigationContextStamp()
+      await nextTick()
+      if (workspace.value !== workspaceAtSelection || navigationContextStamp() !== acceptedContextStamp) return
+      if (typeof HTMLElement !== 'undefined'
+        && initiatingFocus instanceof HTMLElement
+        && initiatingFocus.isConnected
+        && !initiatingFocus.hasAttribute('disabled')) {
+        initiatingFocus.focus({ preventScroll: true })
+      } else {
+        mapControls.focusActiveMap()
+      }
+      editorError.value = ''
+      return
+    }
 
     const target = retainedTargetExists(action.target) ?? retainedTargetExists(action.parent ?? undefined)
     const targetKind = target?.kind ?? action.target.kind

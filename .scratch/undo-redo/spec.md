@@ -1,6 +1,6 @@
 ---
 title: Undo and redo for applied workspace changes
-status: open
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -213,3 +213,11 @@ A read-only architect consistency check found no material gap between the origin
 The specification is complete and published locally after the user's explicit testing-seam approval on 2026-10-27. Local triage roles are `enhancement` and `ready-for-agent`; lifecycle `status: open` means the specified effort is available for subsequent planning/implementation, not that this specification is still being drafted or that the feature is implemented.
 
 The user subsequently invoked `to-tickets` and approved the revised eight-ticket breakdown, including read-only History consultation. The [approved ticket plan](ticket-plan.md) and [implementation tickets](tickets/index.md) preserve the contract and genuine blocking dependencies. No GitHub labels/state were changed. Implementation, commits, pushes and PRs remain outside this planning authorization. No runtime tests or performance experiments were run for this documentation/design activity.
+
+### Implementation completion
+
+The user subsequently authorized implementation in separate instructions. All eight [implementation tickets](tickets/index.md) are closed as of 2026-10-28. Their resolutions preserve the actual baselines, behavior, earlier corrected test failures, larger-workspace observations and independent review evidence. The final ticket intentionally starts at completed prerequisites `bee7f13f2150d71097ea097d5fbb155b66f4c3ff`; fetched `origin/main` and local `main` remain `9edfa66c4f505d56f106fc4af8245f200abfba78`.
+
+Final integrated source candidate `66541d3a414f6cd04b1cadef3e751d13c72c3738` passed lint, typecheck, production build and one complete suite: 114/114 checks/real IndexedDB scenarios plus 232/232 production browser journeys, with no skips, failures or retries. Independent Standards, Spec and complementary guard/persistence reviews closed with zero remaining findings; earlier Sensitive restoration/persistence reviews remain applicable to unchanged contracts. See [ticket 07 verification](tickets/index.md#ticket-07-verification) and the individual resolutions for evidence and limits. Final completion changes after the verified candidate are documentation only.
+
+This closes the local implementation effort. GitHub issue #5 was re-fetched unchanged before completion and remains open; no remote write, push, PR, merge or release was performed. Browser emulation does not certify physical keyboards, operating-system shortcuts or screen-reader output; encoded retention capacity remains distinct from a heap or performance guarantee.

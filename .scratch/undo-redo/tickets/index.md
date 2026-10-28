@@ -1,6 +1,6 @@
 # Undo/redo implementation tickets
 
-Eight local implementation tickets were approved through the Codex question form on 2026-10-27, including read-only History consultation. Tickets 01 and 02 are complete following the user's explicit `implement` instructions. Tickets 03/04/05/06/08 are now closed after the separately authorized 2026-10-28 batch; ticket 07 remains open/unclaimed with local triage roles `enhancement`/`ready-for-agent`; unsatisfied blocking edges determine availability.
+Eight local implementation tickets were approved through the Codex question form on 2026-10-27, including read-only History consultation. All eight are now closed following the user's separate implementation instructions. The completed 2026-10-28 ticket 07 execution supplies the final keyboard/compact behavior and integrated verification. Local triage roles remain `enhancement`/`ready-for-agent`.
 
 Parent: [Undo and redo for applied workspace changes](../spec.md). Planning and approval record: [Undo/redo implementation ticket plan](../ticket-plan.md). Source: [Undo/redo functionality — GitHub issue #5](https://github.com/Submoon/ttrpg-cluster-control/issues/5).
 
@@ -19,11 +19,11 @@ Planning baseline: `9edfa66c4f505d56f106fc4af8245f200abfba78`, equal to freshly 
 
 ## Execution frontier
 
-Tickets 01–06 and 08 are closed. Ticket 07 is eligible because 03 is complete, but remains unclaimed and outside this instruction. This graph expresses behavior dependencies, not permission for overlapping writers or Git operations.
+All eight tickets are closed; no implementation ticket remains on the frontier. This graph expresses behavior dependencies, not permission for overlapping writers or Git operations.
 
 The first working history in 02 records every mutation and includes the safety floor. Later family tickets add their complete consequence/consent integration and evidence rather than leaving unrecorded data paths.
 
-After all eight are integrated, complete the parent specification verification and independent Sensitive-route reviews. Do not create an artificial final test-only feature dependency; each ticket owns its affected failure evidence.
+All eight are integrated. Parent verification includes the recorded Sensitive-route restoration/persistence reviews and the final complete suite below. Each ticket owns its affected failure evidence.
 
 The user separately authorized tickets 01 and 02 on the current branch `codex/undo-redo-ticket-01`. Their tickets record the respective baselines and execution contracts. The subsequent 2026-10-28 instruction authorized tickets 03/04/05/06/08 and local commits. It did not authorize ticket 07, remote writes, push, PR or merge.
 
@@ -52,3 +52,12 @@ Local ignored reports include `test-results/batch-03-08-full-checks-results.json
 Viewport/input automation verifies browser behavior, not physical-device, operating-system keyboard or screen-reader certification. Headless Apply tests emit Vue lifecycle warnings; mounted browser tests cover the actual lifecycle hooks. Encoded history capacity remains 100 edges / 32 MiB, not a heap guarantee; no new performance guarantee is claimed.
 
 Final route verification: 7/7 passed on source candidate `021ae929c67eb7f75aa1efda81679d973555b624` (`test-results/batch-03-08-route-final-results.json`). Both full-attempt failures are corrected and reverified. The additional retention case passed separately, bringing maintained scenario coverage to 337 unique cases across the complete attempt and affected follow-ups. Final source review has zero remaining Standards or Spec findings and complementary persistence approval. Completion-only documentation is the only difference between that verified source candidate and the final commit. All owned local servers have been stopped.
+
+
+## Ticket 07 execution
+
+The user separately authorized [Complete keyboard and compact interaction](07-keyboard-and-compact-controls.md) on 2026-10-28. It is closed after coordinator-owned execution starting from `bee7f13f2150d71097ea097d5fbb155b66f4c3ff` with all dependencies closed. Fresh `origin/main` remains `9edfa66c4f505d56f106fc4af8245f200abfba78`. This Standard-route change exposes existing guarded commands without changing mutation, history or persistence semantics. TDD used the already approved public command/browser seams. Independent Standards/Spec reviews and a complementary guard/persistence review each closed with zero findings. The existing writer, saved-state gate, context reveal and bounded-history evidence remain authoritative.
+
+## Ticket 07 verification
+
+Frozen source candidate `66541d3a414f6cd04b1cadef3e751d13c72c3738` passed global lint, typecheck, a production build and one complete suite: 114/114 checks/real IndexedDB scenarios in 38.1s and 232/232 production browser journeys in 15.3m, with no skips, failures or retries. This is 346 successful maintained scenarios on the fully integrated eight-ticket implementation. Nine focused keyboard scenarios and ten existing button/consultation scenarios also passed before the complete run. Compact screenshots and desktop/mobile/short-landscape control geometry were checked. The ticket resolution records exact report paths, behavioral coverage and browser-emulation limits. All owned servers are stopped; only completion documentation differs from the verified source candidate. No remote issue write, push, PR or merge was performed.
