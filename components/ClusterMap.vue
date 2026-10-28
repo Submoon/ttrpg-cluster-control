@@ -207,7 +207,7 @@ function prepareExportClone(clone: SVGSVGElement): void {
     routeLabel?.setAttribute('y', String(geometry.labelY + 2))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
-    if (geometry.exitPoint) {
+    if (geometry.exitPoint && route.toPointId === null) {
       const label = clusterUnresolvedExitLabelGeometry(route.unresolvedExit, geometry.exitPoint)
       exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
       exitMark?.setAttribute('cy', String(geometry.exitPoint.y))

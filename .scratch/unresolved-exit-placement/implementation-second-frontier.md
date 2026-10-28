@@ -30,6 +30,15 @@ The user authorized coordinated implementation of the remaining local tickets 03
 
 Pending implementation and verification.
 
+## Integrated candidate and review
+
+- Initial frozen implementation: `84195a14c607483127035569e26b1f6ffc2a8ef6`. Reviewed corrections: `ede5b3b19a1694aa7ba770df687e00e29964cfc4`.
+- Public and pure RED/GREEN slices verified sub-25% recovery, negative/distant layout durability, raster bounds, occupant map/keyboard positioning, creation without angle forms and Inspector Apply/transfer/Discard preservation. The initial existing image-export regression passed 10/10.
+- Independent Standards, Spec and complementary numerical/persistence reviews are recorded in [review-second-frontier.md](review-second-frontier.md). Both confirmed numerical/surface findings were corrected and closed before the full suite. The correction's pure boundary tests passed 10/10 and public distant tests passed 3/3 including desktop and wide/short viewports.
+- The effective-angle duplication suggestion is nonblocking and has no demonstrated behavior defect. No additional ticket 05 blocker was identified.
+- Final lint/typecheck passed after the corrections and the explicit unresolved-route type guard. The four affected Cluster image-export journeys passed together after the viewport-space rewrite (`test-results/second-frontier-cluster-images-final/report.json`).
+- The complete suite once and production build are the remaining verification sequence. Sources remain frozen throughout browser checks; no second full-suite pass is implied by later affected reruns.
+
 ## Agreed implementation contracts
 
 - Cluster maps expose a reactive `getMinimumZoomScale()` derived from valid applied bounds and the usable viewport. Shared camera helpers accept optional minimums with the existing 0.25 default. The coordinator transports that floor through visit recording, percentage changes and controls; System maps keep their current floor.

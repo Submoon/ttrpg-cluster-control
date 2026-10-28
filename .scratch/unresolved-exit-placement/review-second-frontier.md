@@ -31,6 +31,12 @@ The review also traced schema/legacy admission, route geometry, applied bounds a
 
 ## Correction and closure
 
-Both confirmed findings are assigned to the ticket 03 owner for targeted RED/GREEN corrections before the full suite. Ticket 05 and shared source remain frozen. Reviewer closure and final integrated verification are pending.
+Correction candidate: `ede5b3b19a1694aa7ba770df687e00e29964cfc4`.
 
-Initial totals: Standards 0 blockers; Spec 2 P2; complementary review 1 shared P2. Two unique acceptance defects remain to resolve.
+Both defects were reproduced with meaningful failing tests before correction. Shared exit-label geometry now supplies the explicit rendered SVG text length and admission extents, with conservative system-name extents. The boundary tests reject the previously admitted unsafe scene before publication. Targeted pure checks passed 10/10.
+
+The background/grid now belong to viewport space, using the real SVG client viewport rather than a fixed viewBox rectangle. Their pattern follows the scene camera, while export clears that live transform and covers the full applied bounds. Public tests check actual client coverage and safe attributes at 1440×960 and 1920×400, plus exported surfaces. The corrected distant suite passed 3/3.
+
+All three reviewers inspected the correction and closed their blockers without identifying a consequential new issue. A final export-branch type guard explicitly narrows unresolved destinations; it does not change valid geometry behavior. Ticket 05 has no blocking review finding. Full integrated suite and production build remain completion gates.
+
+Initial totals: Standards 0 blockers; Spec 2 P2; complementary review 1 shared P2 (two unique defects). Remaining blocking findings: Standards 0; Spec 0; complementary numerical/persistence 0.
