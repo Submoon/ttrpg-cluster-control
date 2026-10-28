@@ -190,7 +190,7 @@ function prepareExportClone(clone: SVGSVGElement): void {
 
     const geometry = clusterRouteGeometry(
       route,
-      index,
+      props.cluster.routes,
       jumpPoints,
       props.systemPositions,
       undefined,
@@ -568,10 +568,10 @@ function render(): void {
     .attr('tabindex', 0)
     .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
 
-  routeMarks.each(function (route, index) {
+  routeMarks.each(function (route) {
     const geometry = clusterRouteGeometry(
       route,
-      index,
+      props.cluster.routes,
       jumpPoints,
       props.systemPositions,
       undefined,
@@ -629,7 +629,7 @@ function render(): void {
       }
       const committedExitPoint = (): Point => clusterRouteGeometry(
         route,
-        index,
+        props.cluster.routes,
         jumpPoints,
         props.systemPositions,
         undefined,
@@ -709,10 +709,10 @@ function render(): void {
   })
   /** Recomputes route paths and labels against temporary scene-space system positions during a drag. */
   function updateRouteGeometry(): void {
-    routeMarks.each(function (route, index) {
+    routeMarks.each(function (route) {
       const geometry = clusterRouteGeometry(
         route,
-        index,
+        props.cluster.routes,
         jumpPoints,
         props.systemPositions,
         liveSystemPositions,

@@ -99,12 +99,12 @@ export function hasSafeClusterSceneBounds(
   }
 
   const pathNumbers = /[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?/gi
-  for (const [index, route] of cluster.routes.entries()) {
+  for (const route of cluster.routes) {
     let geometry: ClusterRouteGeometry
     try {
       geometry = clusterRouteGeometry(
         route,
-        index,
+        cluster.routes,
         jumpPoints,
         systemPositions,
         undefined,
@@ -189,24 +189,29 @@ export function requiredJumpPoint(
 /**
  * Builds a scene-space quadratic route path, label point, and optional unresolved-exit marker.
  * @param route Logical Jump Route to draw.
- * @param index Stable list index used to separate parallel route bends.
+ * @param routes Ordered routes of the owning Cluster, used to preserve existing bends and space automatic exits per origin system.
  * @param jumpPoints Current logical endpoints.
  * @param systemPositions Durable normalized positions for endpoint systems.
  * @param positionOverrides Optional temporary scene-space positions while systems are dragged.
  * @param unresolvedExitPositions Optional durable scene-space targets keyed by unresolved route ID.
  * @param exitPositionOverrides Optional temporary scene-space targets keyed by unresolved route ID.
  * @returns SVG path data and label coordinates in Cluster-map scene units.
- * @throws If a referenced Jump Point or required system position is missing.
+ * @throws If the route is absent from routes, a Jump Point is missing, or a required system position is missing.
  */
 export function clusterRouteGeometry(
   route: JumpRoute,
-  index: number,
+  routes: readonly JumpRoute[],
   jumpPoints: ReadonlyMap<string, JumpPointReference>,
   systemPositions: Readonly<Record<string, Point>>,
   positionOverrides?: ReadonlyMap<string, Point>,
   unresolvedExitPositions?: Readonly<Record<string, Point>>,
   exitPositionOverrides?: ReadonlyMap<string, Point>,
 ): ClusterRouteGeometry {
+  const index = routes.findIndex(candidate => candidate.id === route.id)
+  if (index < 0) {
+    throw new Error(`Jump Route "${route.id}" does not belong to the supplied Cluster routes.`)
+  }
+
   const from = requiredJumpPoint(jumpPoints, route.fromPointId)
   const start = clusterSystemPosition(systemPositions, from.system.id, positionOverrides)
   const to = route.toPointId === null
@@ -225,11 +230,21 @@ export function clusterRouteGeometry(
   const savedExitPoint = route.toPointId === null
     ? unresolvedExitPositions?.[route.id]
     : undefined
+  let unresolvedExitOrdinal = 0
+  for (const sibling of routes.slice(0, index)) {
+    if (sibling.toPointId !== null) continue
+    const siblingFrom = requiredJumpPoint(jumpPoints, sibling.fromPointId)
+    if (siblingFrom.system.id === from.system.id) unresolvedExitOrdinal += 1
+  }
+  const localRows = [0, 64, -64, 128, -128] as const
   const exitPoint = to
     ? undefined
     : exitPositionOverrides?.get(route.id)
       ?? savedExitPoint
-      ?? { x: 860, y: Math.min(500, Math.max(88, start.y + 128 + (index % 3) * 24)) }
+      ?? {
+          x: start.x + 180 + Math.floor(unresolvedExitOrdinal / localRows.length) * 180,
+          y: start.y + localRows[unresolvedExitOrdinal % localRows.length]!,
+        }
   const end = to
     ? clusterSystemPosition(systemPositions, to.system.id, positionOverrides)
     : exitPoint!

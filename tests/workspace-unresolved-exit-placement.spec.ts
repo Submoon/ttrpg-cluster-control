@@ -81,6 +81,22 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   const target = routeMark.locator('.cluster-exit-mark')
   await expect(target).toBeVisible()
   const initialPosition = await targetPosition(target)
+  const originSystem = before.cluster?.systems.find(system =>
+    system.objects.some(object => object.id === unresolvedRoute.fromPointId),
+  )
+  const originLayoutPosition = originSystem && before.layout.systemPositions?.[originSystem.id]
+  expect(originLayoutPosition).toBeTruthy()
+  if (!originSystem || !originLayoutPosition) throw new Error('The unresolved route origin has no Cluster-map position.')
+  const originScenePosition = {
+    x: 112 + originLayoutPosition.x * 736,
+    y: 96 + originLayoutPosition.y * 368,
+  }
+  const automaticOffset = Math.hypot(
+    initialPosition.x - originScenePosition.x,
+    initialPosition.y - originScenePosition.y,
+  )
+  expect(automaticOffset).toBeGreaterThan(150)
+  expect(automaticOffset).toBeLessThan(250)
 
   await page.getByRole('navigation', { name: 'Map context and commands' })
     .getByRole('button', { name: 'Inspect', exact: true })

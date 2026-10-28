@@ -18,7 +18,7 @@ interface UnresolvedExitPlacementOptions {
   applyWorkspace: EditorWorkflowOptions['applyWorkspace']
 }
 
-/** Keeps endpoint layout independent from route drafts and the route's source-system placement. */
+/** Keeps endpoint layout independent from route drafts; automatic points follow their source systems. */
 export function useUnresolvedExitPlacement({
   workspace,
   selectedRouteId,
@@ -47,7 +47,7 @@ export function useUnresolvedExitPlacement({
     const route = current?.cluster.routes[routeIndex]
     if (!current || !route || route.toPointId !== null) return null
     const jumpPoints = new Map(jumpPointsInCluster(current.cluster).map(reference => [reference.point.id, reference]))
-    return clusterRouteGeometry(route, routeIndex, jumpPoints, current.layout.systemPositions).exitPoint ?? null
+    return clusterRouteGeometry(route, current.cluster.routes, jumpPoints, current.layout.systemPositions).exitPoint ?? null
   }
 
   function positionFor(routeId: string): Point | null {
