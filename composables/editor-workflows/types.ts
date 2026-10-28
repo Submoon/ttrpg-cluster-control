@@ -10,6 +10,7 @@ import type {
   CustomFieldValue,
   LocalWorkspace,
   MapDeletionTarget,
+  ObjectPlacement,
   Orbit,
   OrbitRadii,
   Point,
@@ -229,7 +230,6 @@ export interface SystemCreationSession {
     x: string
     y: string
     orbitId: string
-    angleDegrees: string
     hostId: string
     horizontalRadius: string
     verticalRadius: string
@@ -253,11 +253,23 @@ export interface EditorWorkflowOptions {
   applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
 }
 
+/** Trusted position-only publication; angles are effective radians only for Orbit placements. */
+export interface CommittedObjectPosition {
+  objectId: string
+  previousPlacement: ObjectPlacement
+  nextPlacement: ObjectPlacement
+  previousAngle?: number
+  nextAngle?: number
+  command: Extract<EntityCommand, { kind: 'object-placement' }>
+}
+
 /** Shared SVG-coordinate view controls exposed by both map wrappers. */
 export interface MapNavigationHandle extends MapImageExporter {
   /** Focuses the current SVG so a map-based placement can use keyboard targeting. */
   focusMap?(): void
   getViewport(): MapViewport
+  /** Scene-dependent camera floor; maps without an expanded scene retain the shared default. */
+  getMinimumZoomScale?(): number
   setViewport(viewport: MapViewport): void
   zoomBy(factor: number): void
   panBy(dx: number, dy: number): void

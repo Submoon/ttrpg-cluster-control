@@ -2,7 +2,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { isLocalWorkspace, jumpPointsInCluster, moveUnresolvedExitTarget, type LocalWorkspace, type Point } from '../../domain/workspace'
 import { isPoint } from '../../domain/workspace-validation'
-import { clusterRouteGeometry } from '../../utils/cluster-map-geometry'
+import { clusterRouteGeometry, hasSafeClusterSceneBounds, isSafeClusterScenePoint } from '../../utils/cluster-map-geometry'
 import type { EditorWorkflowOptions, MapNavigationHandle } from './types'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
@@ -59,7 +59,13 @@ export function useUnresolvedExitPlacement({
   function candidateFor(routeId: string, position: Point): LocalWorkspace {
     const current = workspace.value
     if (!current) throw new Error('The Jump Cluster is no longer available.')
+    if (!isSafeClusterScenePoint(position)) {
+      throw new Error("This position exceeds the map renderer's supported numeric range.")
+    }
     const candidate = moveUnresolvedExitTarget(current, routeId, position)
+    if (!hasSafeClusterSceneBounds(candidate.cluster, candidate.layout.systemPositions, candidate.layout.unresolvedExitPositions)) {
+      throw new Error("This position exceeds the map renderer's supported numeric range.")
+    }
     if (!isLocalWorkspace(candidate)) {
       throw new Error('This position creates invalid Jump Route geometry.')
     }
@@ -98,7 +104,13 @@ export function useUnresolvedExitPlacement({
 
   function previewAt(position: Point): boolean {
     const routeId = selectedRouteId.value
-    if (!targeting.value || !routeId || !isPoint(position)) return false
+    if (!targeting.value || !routeId) return false
+    if (!isPoint(position)) {
+      clearPreview()
+      targetingIntent.value = false
+      error.value = "This position exceeds the map renderer's supported numeric range."
+      return false
+    }
     try {
       candidateFor(routeId, position)
       error.value = ''
@@ -107,6 +119,8 @@ export function useUnresolvedExitPlacement({
       clusterMapRef.value?.focusMap?.()
       return true
     } catch (cause) {
+      clearPreview()
+      targetingIntent.value = false
       error.value = cause instanceof Error ? cause.message : String(cause)
       return false
     }
@@ -140,7 +154,11 @@ export function useUnresolvedExitPlacement({
     const unchanged = appliedOverride !== undefined
       && appliedOverride.x === active.position.x
       && appliedOverride.y === active.position.y
-    if (!unchanged && !publish(active.routeId, active.position)) return false
+    if (!unchanged && !publish(active.routeId, active.position)) {
+      clearPreview()
+      targetingIntent.value = false
+      return false
+    }
     clearPreview()
     targetingIntent.value = false
     clusterMapRef.value?.focusMap?.()

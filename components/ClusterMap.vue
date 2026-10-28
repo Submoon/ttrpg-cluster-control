@@ -1,7 +1,7 @@
 <template>
   <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
     <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
-      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= minimumZoomScale * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
       <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
       <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
@@ -37,9 +37,12 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import {
+  CLUSTER_SCENE_COORDINATE_LIMIT,
   clusterRouteGeometry,
   clusterRouteLabel,
   clusterSystemPosition,
+  hasSafeClusterSceneBounds,
+  isSafeClusterScenePoint,
 } from '../utils/cluster-map-geometry'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import {
@@ -94,6 +97,7 @@ const emit = defineEmits<{
 
 const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
+const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 type ClusterTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
@@ -101,11 +105,14 @@ type ClusterTouchGesture =
 let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
+let appliedItemsBounds: SvgViewportRect | undefined
+let mapResizeObserver: ResizeObserver | undefined
 const activeSystemGestures = new Map<SVGGElement, { rollback: () => void; mouseGesture: D3MouseGestureDisposer }>()
 const cancelledSystemGestures = new WeakSet<SVGGElement>()
 const activeExitGestures = new Map<SVGCircleElement, { rollback: () => void; mouseGesture: D3MouseGestureDisposer }>()
 const cancelledExitGestures = new WeakSet<SVGCircleElement>()
 const liveExitPositions = new Map<string, Point>()
+const exitGesturePositions = new Map<string, Point>()
 const unresolvedExitPositionPreviews = new Map<string, Point>()
 let refreshLiveRouteGeometry: (() => void) | undefined
 let applyClusterSystemPositionPreview: ((systemId: string, position: Point | null) => void) | undefined
@@ -122,10 +129,23 @@ function routeTargetOverrides(): ReadonlyMap<string, Point> {
   return new Map([...unresolvedExitPositionPreviews, ...liveExitPositions])
 }
 
+/** Rejects a candidate when its marker or route geometry exceeds the SVG renderer's numeric range. */
+function isSafeUnresolvedExitPosition(routeId: string, position: Point): boolean {
+  return isSafeClusterScenePoint(position)
+    && hasSafeClusterSceneBounds(props.cluster, props.systemPositions, {
+      ...props.unresolvedExitPositions,
+      [routeId]: position,
+    })
+}
+
 /** Applies a finite viewport through D3 so scene transforms and zoom feedback stay synchronized. */
 function setViewport(viewport: MapViewport): void {
   const element = svgElement.value
-  const next = clampMapViewport(viewport)
+  if (Number.isFinite(viewport.k) && viewport.k > 0) {
+    minimumZoomScale.value = Math.min(minimumZoomScale.value, viewport.k)
+    zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  }
+  const next = clampMapViewport(viewport, minimumZoomScale.value)
   if (!element || !zoomBehavior || !next) return
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(next.x, next.y).scale(next.k))
 }
@@ -201,29 +221,136 @@ async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'a
   return exportMapImage(element, format, undefined, palette, prepareExportClone)
 }
 
-/**
- * Fits route and system-card bounds inside the drawable viewport, clamping to supported zoom limits.
- * Empty or invalid geometry resets the view to the identity transform.
- */
+/** Measures only the last applied Cluster geometry, excluding previews and edit-only targets. */
+function measureAppliedItemsBounds(element: SVGSVGElement): SvgViewportRect | undefined {
+  if (!hasSafeClusterSceneBounds(props.cluster, props.systemPositions, props.unresolvedExitPositions)) {
+    throw new Error('The Cluster map scene exceeds the renderer’s supported numeric range.')
+  }
+  const clone = element.cloneNode(true) as SVGSVGElement
+  prepareExportClone(clone)
+  clone.querySelectorAll('.cluster-exit-hit-target').forEach(target => target.remove())
+  for (const className of ['is-selected', 'is-dragging', 'is-move-preview']) {
+    clone.querySelectorAll(`.${className}`).forEach(mark => mark.classList.remove(className))
+  }
+
+  const host = document.createElement('div')
+  host.setAttribute('aria-hidden', 'true')
+  Object.assign(host.style, {
+    position: 'fixed',
+    left: '-100000px',
+    top: '0',
+    width: '960px',
+    height: '560px',
+    overflow: 'hidden',
+    opacity: '0',
+    pointerEvents: 'none',
+    zIndex: '-1',
+  })
+  host.append(clone)
+  document.body.append(host)
+
+  try {
+    const items = clone.querySelector<SVGGElement>('.cluster-map-items')
+    if (!items) throw new Error('The Cluster map scene is missing its applied feature group.')
+    const bounds = items.getBBox()
+    const geometry = [bounds.x, bounds.y, bounds.width, bounds.height, bounds.x + bounds.width, bounds.y + bounds.height]
+    if (!geometry.every(Number.isFinite)
+      || geometry.some(value => Math.abs(value) > CLUSTER_SCENE_COORDINATE_LIMIT)
+      || bounds.width < 0 || bounds.height < 0 || (bounds.width === 0 && bounds.height === 0)) {
+      throw new Error('The Cluster map scene could not be measured within its safe numeric range.')
+    }
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+  } catch {
+    throw new Error('The Cluster map scene could not be measured safely.')
+  } finally {
+    host.remove()
+  }
+}
+
+/** Keeps the map grid behind both the applied scene and the currently visible scene-space viewport. */
+function refreshSceneSurfaces(): void {
+  const element = svgElement.value
+  if (!element) return
+  const visible = normalizeSvgViewportRect(getSvgViewportRect(element))
+  if (!visible) return
+
+  const transform = zoomTransform(element)
+  const visiblePoints = [
+    transform.invert([visible.x, visible.y]),
+    transform.invert([visible.x + visible.width, visible.y]),
+    transform.invert([visible.x, visible.y + visible.height]),
+    transform.invert([visible.x + visible.width, visible.y + visible.height]),
+  ]
+  if (visiblePoints.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) return
+
+  const applied = appliedItemsBounds
+  const left = Math.floor(Math.min(0, applied?.x ?? 0, ...visiblePoints.map(point => point[0])) - 40)
+  const top = Math.floor(Math.min(0, applied?.y ?? 0, ...visiblePoints.map(point => point[1])) - 40)
+  const right = Math.ceil(Math.max(960, applied ? applied.x + applied.width : 960, ...visiblePoints.map(point => point[0])) + 40)
+  const bottom = Math.ceil(Math.max(560, applied ? applied.y + applied.height : 560, ...visiblePoints.map(point => point[1])) + 40)
+  const width = right - left
+  const height = bottom - top
+  const surfaceGeometry = [left, top, right, bottom, width, height]
+  if (!surfaceGeometry.every(Number.isFinite)
+    || surfaceGeometry.some(value => Math.abs(value) > CLUSTER_SCENE_COORDINATE_LIMIT)
+    || width <= 0 || height <= 0) return
+
+  select(element).selectAll<SVGRectElement, unknown>('.cluster-map-background, .cluster-map-grid')
+    .attr('x', left)
+    .attr('y', top)
+    .attr('width', width)
+    .attr('height', height)
+}
+
+/** Reuses applied geometry to keep zoom controls and renderer bounds in agreement. */
+function updateMinimumZoomScale(rect: SvgViewportRect, allowIncrease = false): void {
+  const fit = appliedItemsBounds
+    ? fitMapViewport(appliedItemsBounds, rect, Number.MIN_VALUE)
+    : undefined
+  const fittedMinimum = fit ? Math.min(MAP_ZOOM_MIN_SCALE, fit.k) : MAP_ZOOM_MIN_SCALE
+  minimumZoomScale.value = allowIncrease
+    ? fittedMinimum
+    : Math.min(minimumZoomScale.value, fittedMinimum)
+  zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+}
+
+function refreshAppliedSceneGeometry(): void {
+  const element = svgElement.value
+  if (!element) return
+  appliedItemsBounds = measureAppliedItemsBounds(element)
+  updateMinimumZoomScale(zoomExtentOverride ?? getSvgViewportRect(element))
+  refreshSceneSurfaces()
+}
+
+function getMinimumZoomScale(): number {
+  return minimumZoomScale.value
+}
+
+/** Fits applied route, endpoint, system-card and label bounds inside the drawable viewport. */
 function fitMap(usableRect?: SvgViewportRect): void {
   const element = svgElement.value
-  const features = element?.querySelector<SVGGElement>('.cluster-map-items')
-  if (!element || !features || !zoomBehavior) return
+  if (!element || !zoomBehavior) return
 
   const requestedRect = usableRect ? normalizeSvgViewportRect(usableRect) : undefined
   const rect = requestedRect ?? getSvgViewportRect(element)
   zoomExtentOverride = requestedRect
   zoomBehavior.extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
-
-  let bounds: DOMRect
-  try {
-    bounds = features.getBBox()
-  } catch {
+  appliedItemsBounds = measureAppliedItemsBounds(element)
+  const viewport = appliedItemsBounds
+    ? fitMapViewport(appliedItemsBounds, rect, Number.MIN_VALUE)
+    : undefined
+  if (!viewport) {
+    minimumZoomScale.value = MAP_ZOOM_MIN_SCALE
+    zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
     setViewport({ x: 0, y: 0, k: 1 })
+    refreshSceneSurfaces()
     return
   }
-  const viewport = fitMapViewport(bounds, rect)
-  setViewport(viewport ?? { x: 0, y: 0, k: 1 })
+
+  minimumZoomScale.value = Math.min(MAP_ZOOM_MIN_SCALE, viewport.k)
+  zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  setViewport(viewport)
+  refreshSceneSurfaces()
 }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
@@ -266,7 +393,7 @@ function moveTouchNavigation(event: TouchEvent): void {
     const second = touchPoint(event.touches[1]!, element)
     const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
     const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-    const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+    const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
     const [anchorX, anchorY] = touchGesture.anchor
     select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - anchorX * scale, center[1] - anchorY * scale).scale(scale))
   } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
@@ -515,10 +642,12 @@ function render(): void {
           const mouseGesture = captureD3MouseGesture(event.sourceEvent)
           if (activeSystemGestures.size || activeExitGestures.size) cancelActiveGesture()
           cancelledExitGestures.delete(this)
+          exitGesturePositions.delete(route.id)
           const startPoint = committedExitPoint()
           activeExitGestures.set(this, {
             rollback: () => {
               liveExitPositions.delete(route.id)
+              exitGesturePositions.delete(route.id)
               mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target')
                 .classed('is-dragging', false)
                 .attr('cx', startPoint.x)
@@ -531,10 +660,13 @@ function render(): void {
         })
         .on('drag', function (event) {
           if (cancelledExitGestures.has(this)) return
-          liveExitPositions.set(route.id, { x: event.x, y: event.y })
-          mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target')
-            .attr('cx', event.x)
-            .attr('cy', event.y)
+          const position = { x: event.x, y: event.y }
+          exitGesturePositions.set(route.id, position)
+          if (isSafeUnresolvedExitPosition(route.id, position)) {
+            liveExitPositions.set(route.id, position)
+          } else {
+            liveExitPositions.delete(route.id)
+          }
           updateRouteGeometry()
         })
         .on('end', function () {
@@ -544,10 +676,12 @@ function render(): void {
           if (cancelledExitGestures.has(this)) {
             cancelledExitGestures.delete(this)
             liveExitPositions.delete(route.id)
+            exitGesturePositions.delete(route.id)
             return
           }
-          const position = liveExitPositions.get(route.id)
+          const position = exitGesturePositions.get(route.id)
           liveExitPositions.delete(route.id)
+          exitGesturePositions.delete(route.id)
           updateRouteGeometry()
           if (!position) return
           emit('move-unresolved-exit', route.id, position)
@@ -795,7 +929,7 @@ function render(): void {
 
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
-    .scaleExtent([MAP_ZOOM_MIN_SCALE, MAP_ZOOM_MAX_SCALE])
+    .scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
     .clickDistance(6)
     .filter((event) => {
       const target = event.target
@@ -811,6 +945,7 @@ function render(): void {
     .on('zoom', (event) => {
       content.attr('transform', event.transform.toString())
       zoomLevel.value = Math.round(event.transform.k * 100)
+      refreshSceneSurfaces()
       emit('viewport-change', {
         x: event.transform.x,
         y: event.transform.y,
@@ -830,6 +965,7 @@ function render(): void {
   })
   content.attr('transform', currentTransform.toString())
   zoomLevel.value = Math.round(currentTransform.k * 100)
+  refreshAppliedSceneGeometry()
 
   const focusMayBeRestored = focusedSystemId !== null || focusedRouteId !== null
   const activeAfterRedraw = element.ownerDocument.activeElement
@@ -841,10 +977,21 @@ function render(): void {
 
 onMounted(() => {
   render()
+  mapResizeObserver = new ResizeObserver(() => {
+    const element = svgElement.value
+    if (!element) return
+    zoomExtentOverride = undefined
+    zoomBehavior?.extent(() => svgViewportExtent(getSvgViewportRect(element)))
+    updateMinimumZoomScale(getSvgViewportRect(element))
+    refreshSceneSurfaces()
+  })
+  if (svgElement.value) mapResizeObserver.observe(svgElement.value)
   window.addEventListener('blur', cancelActiveGesture)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
+  mapResizeObserver?.disconnect()
+  mapResizeObserver = undefined
   refreshLiveRouteGeometry = undefined
   applyClusterSystemPositionPreview = undefined
   applyUnresolvedExitPositionPreview = undefined
@@ -859,6 +1006,7 @@ watch(() => props.systemActivation, render)
 
 defineExpose({
   exportImage,
+  getMinimumZoomScale,
   getViewport,
   setViewport,
   zoomBy,

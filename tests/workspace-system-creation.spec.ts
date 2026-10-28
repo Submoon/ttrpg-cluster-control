@@ -5,6 +5,7 @@ import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   clickNormalizedSystemPoint,
+  clickSystemOrbitPoint,
   dragToWorldPoint,
   downloadJson,
   jsonMapImportInput,
@@ -516,9 +517,9 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   await ensurePlacementOpen(planetControls)
   await selectInspectorOption(orbitPlacement, `Orbit ${primaryOrbit.order} around ${primary.name}`)
   await ensurePlacementOpen(planetControls)
-  await page.getByLabel('Angle (degrees)', { exact: true }).fill('45')
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(page.getByLabel('Angle (degrees)', { exact: true })).toHaveCount(0)
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await clickSystemOrbitPoint(page, map, `Orbit ${primaryOrbit.order} around ${primary.name}`, 45)
   await expect(confirmPlanet).toHaveCount(0)
   await expect(planetControls.getByRole('alert')).toHaveCount(0)
   const afterResolvedObjectAdd = await downloadJson(page, 'Export star system JSON')
@@ -531,7 +532,7 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   expect(newPlanets[0]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
   expect(newPlanets[1]?.placement).toEqual(freePlanet?.placement)
   expect(newPlanets[2]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
-  expect(afterResolvedObjectAdd.layout.objectAngles[newPlanets[2]!.id]).toBeCloseTo(Math.PI / 4, 6)
+  expect(afterResolvedObjectAdd.layout.objectAngles[newPlanets[2]!.id]).toBeCloseTo(Math.PI / 4, 1)
   expect(afterResolvedObjectAdd.layout.objectAngles[oldPlanet.id]).toBeDefined()
   const oldMoon = initial.system!.objects.find(object => object.name === 'Old Moon')!
   expect(afterResolvedObjectAdd.layout.objectAngles[oldMoon.id]).toBeDefined()

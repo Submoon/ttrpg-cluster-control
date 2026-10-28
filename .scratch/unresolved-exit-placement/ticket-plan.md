@@ -8,7 +8,7 @@ tickets_status: published
 
 # Approved tickets for map-based positioning
 
-The user approved these six slices and their blocking edges through the Codex question form on 2026-10-27. One English local file is published per ticket. Ticket numbers below are local identifiers, not GitHub issue numbers. The authorized initial frontier (01, 02, 04 and 06) is implemented and locally closed; 03 and 05 remain open.
+The user approved these six slices and their blocking edges through the Codex question form on 2026-10-27. One English local file is published per ticket. Ticket numbers below are local identifiers, not GitHub issue numbers. The initial frontier (01, 02, 04 and 06) is implemented and locally closed; the user authorized the remaining 03 and 05 on 2026-10-28, and their implementation is in progress.
 
 ## Source and baseline
 
@@ -98,7 +98,7 @@ The user approved these six slices and their blocking edges through the Codex qu
 - Initial frontier: 01, 02, 04 and 06. This is availability, not authorization for four concurrent writers; the repository's limit and disjoint-ownership rules still apply.
 - Tickets were published open and ready-for-agent. The user subsequently authorized implementation of 01, 02, 04 and 06; their current lifecycle and assignee are recorded in each ticket. Prerequisite links still govern 03 and 05, whose implementation has not been requested. See the [first-frontier implementation record](implementation.md) for coordination boundaries.
 - No ticket waits on #5 merely because both efforts touch semantic edits. Reconcile interfaces if that design lands first; add a real blocker only if new evidence establishes one.
-- Current frontier after the first delivery: 03 and 05. Their prerequisites are complete, but this run does not authorize their implementation.
+- Current frontier after the first delivery: 03 and 05. The user subsequently authorized their coordinated implementation on 2026-10-28; see the [second-frontier record](implementation-second-frontier.md). Both are now in progress.
 
 ## Decisions so far
 

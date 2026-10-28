@@ -99,7 +99,7 @@ import type {
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
-import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
@@ -717,6 +717,9 @@ defineExpose({
   exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
     ?? Promise.reject(new Error('The map is not ready to export.')),
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
+  getMinimumZoomScale: () => props.activeView === 'cluster'
+    ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
+    : MAP_ZOOM_MIN_SCALE,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),

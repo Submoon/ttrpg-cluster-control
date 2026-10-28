@@ -1,7 +1,8 @@
 /**
  * Pure Cluster-map scene geometry; drag overrides preview moved endpoints without changing saved positions.
  */
-import type { JumpPointReference, JumpRoute, Point } from '../domain/workspace'
+import { jumpPointsInCluster } from '../domain/workspace-cluster'
+import type { JumpCluster, JumpPointReference, JumpRoute, Point } from '../domain/workspace'
 
 /** SVG path and label geometry for one logical Cluster route. */
 export interface ClusterRouteGeometry {
@@ -11,6 +12,25 @@ export interface ClusterRouteGeometry {
   exitPoint?: Point
 }
 
+/** Platform-derived SVG coordinate envelope below observed renderer saturation, independent of canvas size. */
+export const CLUSTER_SCENE_COORDINATE_LIMIT = 2 ** 24 - 4096
+/** Scene-space margin reserved for route labels, endpoint markers, card geometry, and export padding. */
+const CLUSTER_SCENE_GEOMETRY_PADDING = 256
+
+function isRendererCoordinate(value: number): boolean {
+  return Number.isFinite(value) && Math.abs(value) <= CLUSTER_SCENE_COORDINATE_LIMIT
+}
+
+/** Checks whether one scene-space point leaves enough renderer headroom for its map geometry. */
+export function isSafeClusterScenePoint(point: Point): boolean {
+  const left = point.x - CLUSTER_SCENE_GEOMETRY_PADDING
+  const top = point.y - CLUSTER_SCENE_GEOMETRY_PADDING
+  const right = point.x + CLUSTER_SCENE_GEOMETRY_PADDING
+  const bottom = point.y + CLUSTER_SCENE_GEOMETRY_PADDING
+  return [left, top, right, bottom].every(isRendererCoordinate)
+    && left < point.x && top < point.y && right > point.x && bottom > point.y
+}
+
 /** Checks the numeric SVG geometry produced for one route before it enters durable layout. */
 export function hasFiniteClusterRouteGeometry(geometry: ClusterRouteGeometry): boolean {
   return Number.isFinite(geometry.labelX)
@@ -18,6 +38,84 @@ export function hasFiniteClusterRouteGeometry(geometry: ClusterRouteGeometry): b
     && (geometry.exitPoint === undefined
       || (Number.isFinite(geometry.exitPoint.x) && Number.isFinite(geometry.exitPoint.y)))
     && !/(?:NaN|Infinity)/i.test(geometry.path)
+}
+
+/**
+ * Checks that applied features and their padded scene rectangle fit the renderer's numeric envelope.
+ * This rejects coordinates outside the renderer's safe range, regardless of the initial canvas dimensions.
+ */
+export function hasSafeClusterSceneBounds(
+  cluster: JumpCluster,
+  systemPositions: Readonly<Record<string, Point>>,
+  unresolvedExitPositions: Readonly<Record<string, Point>> = {},
+): boolean {
+  const jumpPoints = new Map(jumpPointsInCluster(cluster).map(reference => [reference.point.id, reference]))
+  let left = Number.POSITIVE_INFINITY
+  let top = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.NEGATIVE_INFINITY
+
+  const include = (x: number, y: number): boolean => {
+    if (!isRendererCoordinate(x) || !isRendererCoordinate(y)) return false
+    left = Math.min(left, x)
+    top = Math.min(top, y)
+    right = Math.max(right, x)
+    bottom = Math.max(bottom, y)
+    return true
+  }
+
+  for (const system of cluster.systems) {
+    const position = systemPositions[system.id]
+    if (!position) return false
+    const scenePosition = clusterSystemPosition(systemPositions, system.id)
+    if (!include(scenePosition.x, scenePosition.y)) return false
+  }
+
+  for (const position of Object.values(unresolvedExitPositions)) {
+    if (!include(position.x, position.y)) return false
+  }
+
+  const pathNumbers = /[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?/gi
+  for (const [index, route] of cluster.routes.entries()) {
+    let geometry: ClusterRouteGeometry
+    try {
+      geometry = clusterRouteGeometry(
+        route,
+        index,
+        jumpPoints,
+        systemPositions,
+        undefined,
+        unresolvedExitPositions,
+      )
+    } catch {
+      return false
+    }
+    if (!hasFiniteClusterRouteGeometry(geometry)
+      || !include(geometry.labelX, geometry.labelY)
+      || (geometry.exitPoint && !include(geometry.exitPoint.x, geometry.exitPoint.y))) return false
+
+    const coordinates = Array.from(geometry.path.matchAll(pathNumbers), match => Number(match[0]))
+    if (coordinates.length === 0 || coordinates.length % 2 !== 0) return false
+    for (let coordinate = 0; coordinate < coordinates.length; coordinate += 2) {
+      if (!include(coordinates[coordinate]!, coordinates[coordinate + 1]!)) return false
+    }
+  }
+
+  if (!Number.isFinite(left) || !Number.isFinite(top)
+    || !Number.isFinite(right) || !Number.isFinite(bottom)) return false
+
+  const paddedLeft = left - CLUSTER_SCENE_GEOMETRY_PADDING
+  const paddedTop = top - CLUSTER_SCENE_GEOMETRY_PADDING
+  const paddedRight = right + CLUSTER_SCENE_GEOMETRY_PADDING
+  const paddedBottom = bottom + CLUSTER_SCENE_GEOMETRY_PADDING
+  const width = paddedRight - paddedLeft
+  const height = paddedBottom - paddedTop
+  return [paddedLeft, paddedTop, paddedRight, paddedBottom, width, height].every(Number.isFinite)
+    && [paddedLeft, paddedTop, paddedRight, paddedBottom].every(isRendererCoordinate)
+    && isRendererCoordinate(width) && isRendererCoordinate(height)
+    && paddedLeft < left && paddedTop < top
+    && paddedRight > right && paddedBottom > bottom
+    && width > 0 && height > 0
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   createSystemObject,
   captureEffectiveObjectAngles,
   defaultOrbitRadius,
+  defaultObjectOrbitAngle,
   minimumOrbitRadius,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
@@ -51,7 +52,6 @@ function emptyInputs(): SystemCreationSession['inputs'] {
     x: '',
     y: '',
     orbitId: '',
-    angleDegrees: '',
     hostId: '',
     horizontalRadius: '',
     verticalRadius: '',
@@ -205,12 +205,6 @@ export function useSystemCreationWorkflows({
         }
         fillDefaultOrbitGeometry(session, system, nextHostId)
       }
-    }
-    if (session.type.kind === 'object' && key === 'orbitId' && previous !== value && !value) {
-      session.inputs.angleDegrees = ''
-      clearError('angleDegrees')
-    } else if (session.type.kind === 'object' && key === 'orbitId' && previous !== value && !session.inputs.angleDegrees) {
-      session.inputs.angleDegrees = '0'
     }
   }
 
@@ -395,7 +389,6 @@ export function useSystemCreationWorkflows({
       }
     } else if (target.kind === 'orbit') {
       session.inputs.orbitId = target.orbitId
-      session.inputs.angleDegrees = String(target.angle * 180 / Math.PI)
     } else if (session.type.kind === 'orbit') {
       session.inputs.hostId = target.objectId
     }
@@ -431,12 +424,20 @@ export function useSystemCreationWorkflows({
       }
       let target: SystemCreationTarget
       if (session.inputs.orbitId && session.inputs.orbitId !== '__free__') {
-        const angleDegrees = parseFinite(session.inputs.angleDegrees)
-        if (angleDegrees === undefined) {
-          setError('angleDegrees', 'Angle (degrees) must be a finite number.')
+        const system = currentSystemForSession(session)
+        const orbit = system?.orbits.find(candidate => candidate.id === session.inputs.orbitId)
+        if (!system || !orbit) {
+          setError('orbitId', 'Choose an available Orbit for this object.')
           return false
         }
-        target = { kind: 'orbit', orbitId: session.inputs.orbitId, angle: angleDegrees * Math.PI / 180 }
+        const siblingCount = system.objects.filter(object =>
+          object.placement.kind === 'orbit' && object.placement.orbitId === orbit.id,
+        ).length
+        target = {
+          kind: 'orbit',
+          orbitId: orbit.id,
+          angle: defaultObjectOrbitAngle(siblingCount, siblingCount + 1),
+        }
       } else {
         setError('target', 'Click a free location on the map to add this object.')
         return false
@@ -477,13 +478,32 @@ export function useSystemCreationWorkflows({
       const validationError = validateTarget(session, system, candidate.target)
       return { ...candidate, error: candidate.error ?? validationError }
     })
-    const validCandidates = currentCandidates.filter(candidate => !candidate.error)
+    const selectedOrbitId = session.type.kind === 'object'
+      && session.inputs.orbitId !== '__free__'
+      ? session.inputs.orbitId
+      : ''
+    const selectedOrbitCandidates = selectedOrbitId
+      ? currentCandidates.filter(candidate => candidate.target.kind === 'orbit'
+        && candidate.target.orbitId === selectedOrbitId)
+      : []
+    const candidatesToResolve = selectedOrbitId
+      ? selectedOrbitCandidates.length
+        ? selectedOrbitCandidates
+        : currentCandidates.filter(candidate => candidate.target.kind === 'free')
+      : currentCandidates
+    if (selectedOrbitId && !candidatesToResolve.length) {
+      setTargetError({ kind: 'orbit', orbitId: selectedOrbitId, angle: 0 },
+        'Click the selected Orbit to add this object at that position.')
+      session.notice = 'The selected Orbit is not at this map position.'
+      return false
+    }
+    const validCandidates = candidatesToResolve.filter(candidate => !candidate.error)
     if (validCandidates.length === 1) {
       const candidate = validCandidates[0]
       return candidate ? await completeCreation(candidate.target, true) : false
     }
 
-    session.candidates = currentCandidates
+    session.candidates = candidatesToResolve
     if (validCandidates.length > 1) {
       session.notice = 'Choose a named placement target.'
       return false
@@ -492,7 +512,7 @@ export function useSystemCreationWorkflows({
     session.notice = candidates.length
       ? 'No valid placement target is available here.'
       : 'No placement target is available here.'
-    const invalidCandidate = currentCandidates.find(candidate => candidate.error)
+    const invalidCandidate = candidatesToResolve.find(candidate => candidate.error)
     if (invalidCandidate?.error) setTargetError(invalidCandidate.target, invalidCandidate.error)
     return false
   }
@@ -710,11 +730,9 @@ export function useSystemCreationWorkflows({
     }
     if (session.type.kind === 'object' && session.inputs.orbitId && removedOrbits.has(session.inputs.orbitId)) {
       session.inputs.orbitId = ''
-      session.inputs.angleDegrees = ''
       pruned = true
       const errors = { ...session.errors }
       delete errors.orbitId
-      delete errors.angleDegrees
       session.errors = errors
     }
 

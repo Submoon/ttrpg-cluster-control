@@ -134,6 +134,31 @@ export function clickNormalizedSystemPoint(
   return clickNormalizedMapPoint(page, map, point, 'system')
 }
 
+/** Clicks an Orbit's parametric position through the real map; returns the delivered normalized map point. */
+export async function clickSystemOrbitPoint(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  orbitLabel: string,
+  angleDegrees: number,
+): Promise<WorldPoint> {
+  const ring = map.getByRole('group', { name: orbitLabel, exact: true }).locator('.orbit-ring')
+  const point = await ring.evaluate((element, degrees) => {
+    const ellipse = element as SVGEllipseElement
+    const content = ellipse.closest('svg')?.querySelector<SVGGElement>('.system-map-content')
+    const ringMatrix = ellipse.getScreenCTM()
+    const contentMatrix = content?.getScreenCTM()
+    if (!ringMatrix || !contentMatrix) throw new Error('The Orbit is not attached to the map.')
+    const angle = degrees * Math.PI / 180
+    const local = new DOMPoint(
+      ellipse.cx.baseVal.value + ellipse.rx.baseVal.value * Math.cos(angle),
+      ellipse.cy.baseVal.value + ellipse.ry.baseVal.value * Math.sin(angle),
+    )
+    const scene = local.matrixTransform(ringMatrix).matrixTransform(contentMatrix.inverse())
+    return { x: (scene.x - 64) / 832, y: (scene.y - 72) / 416 }
+  }, angleDegrees)
+  return clickNormalizedSystemPoint(page, map, point)
+}
+
 export function clickNormalizedClusterPoint(
   page: import('@playwright/test').Page,
   map: import('@playwright/test').Locator,
@@ -988,7 +1013,7 @@ export async function addCatalogueObject(
   await completeCatalogueObjectCreation(page, subtype, options)
 }
 
-/** Completes an already armed catalogue type through its public Placement Add action. */
+/** Completes an armed catalogue type by choosing its logical destination and clicking the map. */
 export async function completeCatalogueObjectCreation(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
@@ -1009,17 +1034,14 @@ export async function completeCatalogueObjectCreation(
 
   if (target.kind === 'orbit') {
     await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), target.label)
-    await page.getByLabel('Angle (degrees)', { exact: true }).fill(String(target.angleDegrees ?? 0))
+    if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+    await clickSystemOrbitPoint(page, map, target.label, target.angleDegrees ?? 0)
   } else {
     await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
     if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
     await clickNormalizedSystemPoint(page, map, target)
   }
 
-  if (target.kind === 'orbit') {
-    const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
-    await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
-  }
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 

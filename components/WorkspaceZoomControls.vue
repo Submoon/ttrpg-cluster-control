@@ -8,12 +8,12 @@
         size="sm"
         icon="i-lucide-minus"
         aria-label="Zoom out"
-        :disabled="props.zoomLevel <= 25"
+        :disabled="props.zoomLevel <= props.minimumZoomLevel"
         @click="emit('zoom-by', 1 / 1.2)"
       />
     </UTooltip>
 
-    <output class="workspace-zoom-value" aria-live="polite">{{ props.zoomLevel }}%</output>
+    <output class="workspace-zoom-value" aria-live="polite">{{ formatPercentage(props.zoomLevel) }}%</output>
 
     <UTooltip text="Zoom in">
       <UButton
@@ -67,17 +67,17 @@
         >
           <div class="workspace-zoom-slider-heading">
             <label for="workspace-map-zoom-level">Zoom level</label>
-            <output aria-live="polite">{{ props.zoomLevel }}%</output>
+            <output aria-live="polite">{{ formatPercentage(props.zoomLevel) }}%</output>
           </div>
           <USlider
             id="workspace-map-zoom-level"
             v-model="sliderValue"
             class="workspace-control workspace-zoom-slider"
-            :min="25"
+            :min="props.minimumZoomLevel"
             :max="1600"
             :step="1"
             aria-label="Map zoom level"
-            :aria-valuetext="`${props.zoomLevel}%`"
+            :aria-valuetext="`${formatPercentage(props.zoomLevel)}%`"
           />
 
           <div class="workspace-zoom-pan" role="group" aria-label="Pan map">
@@ -118,7 +118,7 @@
               @click="emit('pan-by', 80, 0)"
             />
           </div>
-          <p class="workspace-zoom-range-note">Zoom ranges from 25% to 1600%.</p>
+          <p class="workspace-zoom-range-note">Zoom ranges from {{ formatPercentage(props.minimumZoomLevel) }}% to 1600%.</p>
         </div>
       </template>
     </UPopover>
@@ -130,9 +130,11 @@ import { computed, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   zoomLevel: number
+  minimumZoomLevel?: number
   compactModalOpen?: boolean
 }>(), {
   compactModalOpen: false,
+  minimumZoomLevel: 25,
 })
 
 const emit = defineEmits<{
@@ -143,6 +145,9 @@ const emit = defineEmits<{
 }>()
 
 const navigationOpen = ref(false)
+function formatPercentage(value: number): string {
+  return value >= 1 ? String(Math.round(value)) : Number(value.toPrecision(3)).toString()
+}
 watch(() => props.compactModalOpen, open => {
   if (open) navigationOpen.value = false
 })

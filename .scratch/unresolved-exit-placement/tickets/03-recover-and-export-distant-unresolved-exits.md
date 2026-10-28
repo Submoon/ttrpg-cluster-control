@@ -1,6 +1,7 @@
 ---
 title: Recover and export distant unresolved exits
-status: open
+status: in-progress
+assignee: /root/exit_placement
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -27,7 +28,7 @@ Parent: [Map-based positioning and movable unresolved-exit targets](../spec.md).
 
 Source: [Allow repositioning unresolved-exit target markers on the Cluster map](https://github.com/Submoon/ttrpg-cluster-control/issues/27); off-canvas placement and bounded whole-scene PNG output were approved in the expanded specification.
 
-Planning baseline: 9edfa66c4f505d56f106fc4af8245f200abfba78, refreshed on 2026-10-27. Implement on the integrated result of the blocker after refreshing the repository baseline.
+Planning baseline: 9edfa66c4f505d56f106fc4af8245f200abfba78. Refreshed implementation base on 2026-10-28: c3c4946644463f5d83dde5436b3c99f04bea1fd1, including the completed blocker; see the [second-frontier record](../implementation-second-frontier.md).
 
 Relevant parent stories: 5–7, 40, 68–69 and 76–85.
 

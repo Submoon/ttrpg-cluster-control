@@ -84,13 +84,10 @@
         :destination-options="props.systemObjectMoveDestinationOptions"
         :candidates="props.systemObjectMoveCandidates"
         :candidate-request="props.systemObjectMoveCandidateRequest"
-        :position-input="props.systemObjectPositionInput"
         :preview="props.systemObjectMovePreview"
         :error="props.systemObjectMoveError"
         @update-destination="emit('update-system-object-move-destination', $event)"
-        @update-position-input="emit('update-system-object-position-input', $event)"
         @choose-candidate="emit('choose-system-object-move-candidate', $event)"
-        @preview-position="emit('preview-system-object-move')"
         @confirm-position="emit('confirm-system-object-move', $event)"
         @cancel-preview="emit('cancel-system-object-move')"
         @begin-map-move="emit('begin-system-object-map-move')"
@@ -148,7 +145,6 @@ const props = withDefaults(defineProps<{
   systemObjectMoveDestinationOptions?: SystemObjectMoveDestinationOption[]
   systemObjectMoveCandidates?: SystemObjectMoveCandidate[]
   systemObjectMoveCandidateRequest?: number
-  systemObjectPositionInput?: string
   systemObjectMovePreview?: SystemObjectMovePreview | null
   systemObjectMoveError?: string
   unresolvedExitAvailable?: boolean
@@ -166,7 +162,6 @@ const props = withDefaults(defineProps<{
   systemObjectMoveDestinationOptions: () => [{ label: 'Free placement', value: '__free__' }],
   systemObjectMoveCandidates: () => [],
   systemObjectMoveCandidateRequest: 0,
-  systemObjectPositionInput: '',
   systemObjectMovePreview: null,
   systemObjectMoveError: '',
   unresolvedExitAvailable: false,
@@ -183,10 +178,8 @@ const emit = defineEmits<{
   'add-from-inputs': []
   'choose-creation-candidate': [key: string]
   'begin-cluster-system-map-move': []
-  'update-system-object-position-input': [value: string]
   'update-system-object-move-destination': [value: string]
   'choose-system-object-move-candidate': [key: string]
-  'preview-system-object-move': []
   'confirm-system-object-move': [token: number]
   'cancel-system-object-move': []
   'begin-system-object-map-move': []

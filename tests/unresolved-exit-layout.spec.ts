@@ -90,6 +90,40 @@ test('workspace validation rejects orphaned, resolved, malformed, and numericall
   expect(restoreLocalWorkspace(withoutTarget)?.layout.unresolvedExitPositions).toEqual({})
 })
 
+test('workspace validation rejects finite exit anchors whose shared scene bounds are not representable', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const secondRoute = { ...route, id: 'route-b', unresolvedExit: 'Far Side' }
+  const oppositeFiniteExits = {
+    ...workspace,
+    cluster: { ...workspace.cluster, routes: [route, secondRoute] },
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: {
+        [route.id]: { x: -8_500_000, y: 0 },
+        [secondRoute.id]: { x: 8_500_000, y: 0 },
+      },
+    },
+  }
+  const imported = exportJumpCluster(oppositeFiniteExits)
+
+  expect(restoreLocalWorkspace(oppositeFiniteExits)).toBeNull()
+  expect(() => prepareJsonImport(createLocalWorkspace('Other Reach', 'Other system'), imported))
+    .toThrow('Choose a valid version 1 Jump Cluster or star system JSON export.')
+})
+
+test('workspace validation rejects finite coordinates outside the SVG renderer numeric range', { tag: '@pure' }, () => {
+  const { workspace, route } = unresolvedWorkspace()
+  const rendererClamped = {
+    ...workspace,
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: { [route.id]: { x: 20_000_000, y: 0 } },
+    },
+  }
+
+  expect(restoreLocalWorkspace(rendererClamped)).toBeNull()
+})
+
 test('append import remaps each unresolved target to its independent route identity', { tag: '@pure' }, () => {
   const { workspace, route } = unresolvedWorkspace()
   const exported = exportJumpCluster(workspace)

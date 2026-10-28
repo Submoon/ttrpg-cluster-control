@@ -142,7 +142,6 @@
               :system-object-move-destination-options="systemObjectMoveDestinationOptions"
               :system-object-move-candidates="systemObjectMoveCandidates"
               :system-object-move-candidate-request="systemObjectMoveCandidateRequest"
-              :system-object-position-input="systemObjectPositionInput"
               :system-object-move-preview="systemObjectMovePreview"
               :system-object-move-error="systemObjectMoveError"
               :unresolved-exit-available="unresolvedExitAvailable"
@@ -158,9 +157,7 @@
               @choose-creation-candidate="chooseCreationCandidate"
               @begin-cluster-system-map-move="beginClusterSystemMapMove"
               @update-system-object-move-destination="updateSystemObjectMoveDestination"
-              @update-system-object-position-input="updateSystemObjectPositionInput"
               @choose-system-object-move-candidate="chooseObjectMoveCandidate"
-              @preview-system-object-move="previewSystemObjectMoveFromInputs"
               @confirm-system-object-move="confirmSystemObjectMove"
               @cancel-system-object-move="cancelSystemObjectMovePreview"
               @begin-system-object-map-move="beginSystemObjectMapMove"
@@ -195,6 +192,7 @@
           <template #zoom>
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
+              :minimum-zoom-level="minimumZoomLevel"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
@@ -527,7 +525,7 @@ const {
 const { editorError, orbitAdjustmentNotice } = feedback
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
-  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, requestPanel, closePanel, togglePanel,
+  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
 } = mapControls
 const {
@@ -552,10 +550,9 @@ const {
 const {
   systemObjectMapMoveTargeting, beginSystemObjectMapMove, previewSystemObjectMoveAt, nudgeSystemObjectMove,
   systemObjectMoveAvailable, systemObjectMoveDestination, systemObjectMoveDestinationOptions,
-  systemObjectPositionInput,
   systemObjectMoveCandidates, systemObjectMoveCandidateRequest, systemObjectMovePreview,
-  systemObjectMoveError, updateSystemObjectMoveDestination, updateSystemObjectPositionInput,
-  chooseObjectMoveCandidate, previewSystemObjectMoveFromInputs, confirmSystemObjectMove,
+  systemObjectMoveError, updateSystemObjectMoveDestination,
+  chooseObjectMoveCandidate, confirmSystemObjectMove,
   cancelSystemObjectMovePreview,
 } = objectPlacement
 const {
@@ -609,9 +606,9 @@ const fieldDefinitionInspectorConflict = computed(() => {
 
 function isObjectMoveBlocked(objectId: string): boolean {
   const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
-  return isEntityCommandBlocked(object?.placement.kind === 'system'
-    ? { kind: 'object-placement', objectId, fromOrbitId: null, toOrbitId: null }
-    : { kind: 'object-placement', objectId })
+  if (!object) return isEntityCommandBlocked({ kind: 'object-placement', objectId })
+  const orbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+  return isEntityCommandBlocked({ kind: 'object-placement', objectId, fromOrbitId: orbitId, toOrbitId: orbitId })
 }
 
 function handleMapMoveTarget(point: Point): void {

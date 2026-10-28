@@ -15,6 +15,8 @@ const viewBoxPadding = 24
 const exportTitleBandHeight = 48
 const exportTitleFontSize = 20
 const fallbackSceneBounds = { x: 0, y: 0, width: 960, height: 560 }
+const maximumPngEdge = 4096
+const maximumPngPixels = 4_194_304
 const styleProperties = [
   'alignment-baseline',
   'color',
@@ -74,14 +76,18 @@ function featureBounds(content: SVGGElement): DOMRect {
         content.querySelector<SVGGElement>('.system-map-items'),
         content.querySelector<SVGGElement>('.system-orbits'),
       ]
-  const boxes = featureGroups.flatMap(group => {
-    if (!group) return []
+  const boxes: DOMRect[] = []
+  for (const group of featureGroups) {
+    if (!group) continue
     const box = group.getBBox()
-    return [box.x, box.y, box.width, box.height].every(Number.isFinite)
-      && (box.width > 0 || box.height > 0)
-      ? [box]
-      : []
-  })
+    if (box.x === 0 && box.y === 0 && box.width === 0 && box.height === 0) continue
+    if (![box.x, box.y, box.width, box.height].every(Number.isFinite)
+      || box.width < 0 || box.height < 0
+      || !Number.isFinite(box.x + box.width) || !Number.isFinite(box.y + box.height)) {
+      throw new Error('The map scene has unsafe export bounds.')
+    }
+    boxes.push(box)
+  }
 
   if (!boxes.length) {
     return new DOMRect(
@@ -96,7 +102,31 @@ function featureBounds(content: SVGGElement): DOMRect {
   const top = Math.min(...boxes.map(box => box.y))
   const right = Math.max(...boxes.map(box => box.x + box.width))
   const bottom = Math.max(...boxes.map(box => box.y + box.height))
-  return new DOMRect(left, top, right - left, bottom - top)
+  const width = right - left
+  const height = bottom - top
+  if (![left, top, right, bottom, width, height].every(Number.isFinite)
+    || width < 0 || height < 0) {
+    throw new Error('The map scene has unsafe export bounds.')
+  }
+  return new DOMRect(left, top, width, height)
+}
+
+/** Computes finite raster dimensions within the edge and total-pixel budget. */
+function boundedPngDimensions(width: number, height: number): { width: number; height: number } {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error('The map scene has unsafe PNG dimensions.')
+  }
+  const areaScale = Math.exp((Math.log(maximumPngPixels) - Math.log(width) - Math.log(height)) / 2)
+  const scale = Math.min(1, maximumPngEdge / width, maximumPngEdge / height, areaScale)
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('The map scene has unsafe PNG dimensions.')
+
+  let rasterWidth = Math.max(1, Math.floor(width * scale))
+  let rasterHeight = Math.max(1, Math.floor(height * scale))
+  while (rasterWidth * rasterHeight > maximumPngPixels) {
+    if (rasterWidth >= rasterHeight) rasterWidth -= 1
+    else rasterHeight -= 1
+  }
+  return { width: rasterWidth, height: rasterHeight }
 }
 
 function createExportHost(palette: MapImagePalette): HTMLDivElement {
@@ -176,6 +206,10 @@ function createExportSvg(
     const bottom = Math.ceil(bounds.y + bounds.height + viewBoxPadding)
     const width = right - left
     const height = bottom - top
+    if (![left, top, right, bottom, width, height].every(Number.isFinite)
+      || width <= 0 || height <= 0) {
+      throw new Error('The map scene has unsafe export bounds.')
+    }
 
     content.removeAttribute('transform')
     const copyElements: SVGElement[] = [copy, ...Array.from(copy.querySelectorAll<SVGElement>('*'))]
@@ -234,7 +268,7 @@ function createExportSvg(
 }
 
 /**
- * Decodes an SVG blob and encodes its full dimensions as a PNG canvas.
+ * Caps the source SVG's intrinsic raster dimensions before decoding, then encodes a bounded PNG canvas.
  * @param svg Serialized SVG scene.
  * @param width Raster output width in pixels.
  * @param height Raster output height in pixels.
@@ -242,18 +276,28 @@ function createExportSvg(
  * @throws If image decoding, Canvas creation, drawing, or PNG encoding fails.
  */
 async function rasterizeSvg(svg: Blob, width: number, height: number): Promise<Blob> {
-  const url = URL.createObjectURL(svg)
+  const rasterDimensions = boundedPngDimensions(width, height)
+  const source = new DOMParser().parseFromString(await svg.text(), 'image/svg+xml').documentElement
+  if (source.localName !== 'svg' || source.querySelector('parsererror')) {
+    throw new Error('Could not prepare the map scene for PNG export.')
+  }
+  source.setAttribute('width', String(rasterDimensions.width))
+  source.setAttribute('height', String(rasterDimensions.height))
+  const boundedSvg = new Blob([new XMLSerializer().serializeToString(source)], {
+    type: 'image/svg+xml;charset=utf-8',
+  })
+  const url = URL.createObjectURL(boundedSvg)
   try {
     const image = new Image()
     image.src = url
     await image.decode()
 
     const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
+    canvas.width = rasterDimensions.width
+    canvas.height = rasterDimensions.height
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Could not create a Canvas context for PNG export.')
-    context.drawImage(image, 0, 0, width, height)
+    context.drawImage(image, 0, 0, rasterDimensions.width, rasterDimensions.height)
 
     return await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(blob => {

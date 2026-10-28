@@ -30,7 +30,7 @@
           id="system-object-placement-form"
           class="system-object-placement-form"
           aria-label="Object placement"
-          @submit.prevent="emit('preview-position')"
+          @submit.prevent
         >
           <p class="system-object-placement-heading">OBJECT PLACEMENT</p>
           <div v-if="props.candidates.length" class="system-object-placement-candidates system-object-placement-wide" role="group" aria-label="Choose destination Orbit">
@@ -55,7 +55,7 @@
           <template v-else>
             <UFormField
               label="Destination"
-              description="Choose an Orbit, or move a free object directly on the map."
+              description="Choose the placement relationship, then position the object on the map."
               class="system-object-placement-wide"
             >
               <USelect
@@ -65,27 +65,18 @@
                 @update:model-value="emit('update-destination', String($event ?? ''))"
               />
             </UFormField>
-            <p v-if="props.destination === freePlacementValue" class="system-object-placement-wide m-0 text-xs text-[var(--text-muted)]" role="status">
-              Choose a destination on the map. Use the arrow keys to adjust it.
+            <p class="system-object-placement-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              {{ props.destination === freePlacementValue
+                ? 'Choose a destination on the map. Use the arrow keys to adjust it.'
+                : 'Choose a position along the selected Orbit. Use the arrow keys to adjust it.' }}
             </p>
             <p
-              v-if="props.error && props.destination === freePlacementValue"
+              v-if="props.error"
               class="system-object-placement-error system-object-placement-feedback system-object-placement-wide"
               role="alert"
             >
               {{ props.error }}
             </p>
-            <UFormField v-if="props.destination !== freePlacementValue" label="Orbit position (degrees)" class="system-object-placement-wide" :error="props.error || undefined">
-              <UInput
-                :model-value="props.positionInput"
-                type="number"
-                step="any"
-                inputmode="decimal"
-                autocomplete="off"
-                aria-label="Orbit position (degrees)"
-                @update:model-value="emit('update-position-input', String($event))"
-              />
-            </UFormField>
             <div v-if="props.preview" class="system-object-placement-actions system-object-placement-wide">
               <UButton class="workspace-control" color="primary" variant="solid" size="sm" type="button" @click="confirmPosition(props.preview.token)">
                 Confirm position
@@ -95,7 +86,7 @@
               </UButton>
             </div>
             <UButton
-              v-else-if="props.destination === freePlacementValue"
+              v-else
               class="workspace-control system-object-placement-wide"
               color="primary"
               variant="solid"
@@ -104,9 +95,6 @@
               @click="beginMapMove"
             >
               Move on map
-            </UButton>
-            <UButton v-else class="workspace-control system-object-placement-wide" color="primary" variant="solid" size="sm" type="submit">
-              Preview position
             </UButton>
           </template>
           <p v-if="props.error && props.candidates.length" class="system-object-placement-error system-object-placement-wide" role="alert">
@@ -134,17 +122,14 @@ const props = defineProps<{
   destinationOptions: SystemObjectMoveDestinationOption[]
   candidates: SystemObjectMoveCandidate[]
   candidateRequest: number
-  positionInput: string
   preview: SystemObjectMovePreview | null
   error: string
 }>()
 
 const emit = defineEmits<{
   'update-destination': [value: string]
-  'update-position-input': [value: string]
   'choose-candidate': [key: string]
   'begin-map-move': []
-  'preview-position': []
   'confirm-position': [token: number]
   'cancel-preview': []
 }>()
@@ -163,7 +148,7 @@ function beginMapMove(): void {
   open.value = false
   emit('begin-map-move')
   void nextTick(async () => {
-    if (!props.error || props.destination !== freePlacementValue) return
+    if (!props.error) return
     open.value = true
     await nextTick()
     controlRoot.value?.querySelector<HTMLButtonElement>('.system-object-placement-trigger')?.focus()

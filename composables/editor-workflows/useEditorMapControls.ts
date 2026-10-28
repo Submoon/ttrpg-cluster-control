@@ -27,7 +27,14 @@ export function useEditorMapControls(
     const key = activeMapKey.value
     return key ? store.visits[key]?.viewport ?? null : null
   })
-  const zoomLevel = computed(() => Math.round((initialViewport.value?.k ?? 1) * 100))
+  const zoomLevel = computed(() => (initialViewport.value?.k ?? 1) * 100)
+  const minimumZoomScale = computed(() => {
+    const minimum = activeMapHandle()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
+    return Number.isFinite(minimum) && minimum > 0 && minimum <= MAP_ZOOM_MAX_SCALE
+      ? minimum
+      : MAP_ZOOM_MIN_SCALE
+  })
+  const minimumZoomLevel = computed(() => minimumZoomScale.value * 100)
 
   let appliedOrbitPreview: { map: SystemMapHandle; orbitId: string } | null = null
   watch(
@@ -133,7 +140,7 @@ export function useEditorMapControls(
     rememberCurrent(key, {
       x: viewport.x,
       y: viewport.y,
-      k: Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, viewport.k)),
+      k: Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, viewport.k)),
     })
   }
 
@@ -141,7 +148,7 @@ export function useEditorMapControls(
     const map = activeMapHandle()
     if (!map || !Number.isFinite(percentage)) return
     const viewport = map.getViewport()
-    map.setViewport({ ...viewport, k: Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
+    map.setViewport({ ...viewport, k: Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
   }
 
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
@@ -171,6 +178,7 @@ export function useEditorMapControls(
     activeMapKey,
     initialViewport,
     zoomLevel,
+    minimumZoomLevel,
     selectionForActiveMap,
     validVisitSelection,
     captureActiveMap,

@@ -4,6 +4,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import {
   defaultOrbitRadius,
+  captureEffectiveObjectAngles,
   isCustomFieldApplicableToObject,
   minimumOrbitRadius,
   moveOrbitCenter,
@@ -16,6 +17,7 @@ import {
   type ObjectFieldSettings,
   type Orbit,
   type OrbitRadii,
+  type ObjectPlacement,
   type Point,
   type StarSystem,
   type SystemObject,
@@ -28,6 +30,7 @@ import type {
   OrbitCenterMoveCandidate,
   OrbitEditBaseline,
   OrbitPlacementPreview,
+  CommittedObjectPosition,
 } from './types'
 import { objectDraftValuesFor } from './entity-draft-values'
 import { parseFiniteInput, validateObjectDraft } from './entity-draft-validation'
@@ -39,13 +42,6 @@ type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
 interface EntityInspectorSessionOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   applyWorkspace: ApplyWorkspace
-}
-
-interface CommittedFreeObjectPosition {
-  objectId: string
-  previous: Point
-  next: Point
-  command: Extract<EntityCommand, { kind: 'object-placement' }>
 }
 
 interface CommittedOrbitCenterPosition {
@@ -85,31 +81,51 @@ function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function systemPlacementAt(point: Point): SystemObject['placement'] {
-  return { kind: 'system', x: point.x, y: point.y }
+function samePlacement(left: ObjectPlacement, right: ObjectPlacement): boolean {
+  return sameValue(left, right)
 }
 
-function matchesSystemPlacement(placement: SystemObject['placement'], point: Point): boolean {
-  return placement.kind === 'system' && placement.x === point.x && placement.y === point.y
+function placementDraftValue(placement: ObjectPlacement): string {
+  return placement.kind === 'orbit' ? `orbit:${placement.orbitId}` : 'system'
 }
 
 function samePoint(left: Point, right: Point): boolean {
   return left.x === right.x && left.y === right.y
 }
 
-function rebaseDependencyPosition(
+function rebaseDependencyPlacement(
   baseline: EntityDependencyBaseline,
   objectId: string,
-  previous: Point,
-  next: Point,
+  previous: ObjectPlacement,
+  next: ObjectPlacement,
 ): { baseline: EntityDependencyBaseline; matched: boolean } {
   let matched = false
   const objects = baseline.objects.map(object => {
-    if (object.id !== objectId || !matchesSystemPlacement(object.placement, previous)) return object
+    if (object.id !== objectId || !samePlacement(object.placement, previous)) return object
     matched = true
-    return { ...object, placement: systemPlacementAt(next) }
+    return { ...object, placement: clone(next) }
   })
   return { baseline: matched ? { ...baseline, objects } : baseline, matched }
+}
+
+function preserveDependencyExpectations(
+  previous: EntityDependencyBaseline,
+  current: EntityDependencyBaseline,
+): EntityDependencyBaseline {
+  const objects = new Map(previous.objects.map(object => [object.id, object]))
+  const orbits = new Map(previous.orbits.map(orbit => [orbit.id, orbit]))
+  return {
+    objects: current.objects.map(object => objects.get(object.id) ?? object),
+    orbits: current.orbits.map(orbit => orbits.get(orbit.id) ?? orbit),
+    orbitRadii: Object.fromEntries(Object.entries(current.orbitRadii).map(([id, radii]) => [
+      id,
+      previous.orbitRadii[id] ?? radii,
+    ])),
+    orbitRotations: Object.fromEntries(Object.entries(current.orbitRotations).map(([id, rotation]) => [
+      id,
+      previous.orbitRotations[id] ?? rotation,
+    ])),
+  }
 }
 
 function rebaseDependencyOrbitCenter(
@@ -623,33 +639,42 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     return null
   }
 
-  function hasPositionBaseline(session: EntityInspectorSession, objectId: string, point: Point): boolean {
+  function hasPositionBaseline(session: EntityInspectorSession, objectId: string, placement: ObjectPlacement): boolean {
     if (session.kind === 'object' && session.targetId === objectId
-      && matchesSystemPlacement(session.initial.object.placement, point)) return true
+      && samePlacement(session.initial.object.placement, placement)) return true
     if (session.initial.dependencies.objects.some(object => object.id === objectId
-      && matchesSystemPlacement(object.placement, point))) return true
+      && samePlacement(object.placement, placement))) return true
     if (draftDependencies?.sessionId !== session.id) return false
 
     for (const baseline of draftDependencies.placements.values()) {
       if (baseline.objects.some(object => object.id === objectId
-        && matchesSystemPlacement(object.placement, point))) return true
+        && samePlacement(object.placement, placement))) return true
     }
     const host = draftDependencies.orbitHosts.get(objectId)
-    return !!host && (matchesSystemPlacement(host.object.placement, point)
+    return !!host && (samePlacement(host.object.placement, placement)
       || host.placement.objects.some(object => object.id === objectId
-        && matchesSystemPlacement(object.placement, point)))
+        && samePlacement(object.placement, placement)))
   }
 
-  function canMoveFreeObjectWithoutChangingDraftRelationship(command: Extract<EntityCommand, { kind: 'object-placement' }>): boolean {
-    if (command.fromOrbitId !== null || command.toOrbitId !== null) return false
+  function canMoveObjectWithoutChangingDraftRelationship(command: Extract<EntityCommand, { kind: 'object-placement' }>): boolean {
     const session = entitySession.value
     const currentWorkspace = workspace.value
     const system = session && currentWorkspace ? plannedSystem(currentWorkspace, session.systemId) : undefined
     const object = system?.objects.find(candidate => candidate.id === command.objectId)
-    if (!session || !object || object.placement.kind !== 'system') return false
-    if (session.kind === 'object' && session.targetId === object.id
-      && (session.draft.placement !== session.initial.values.placement
-        || session.initial.values.placement !== 'system')) return false
+    if (!session || !currentWorkspace || !object
+      || (object.placement.kind === 'orbit' ? object.placement.orbitId : null) !== (command.fromOrbitId ?? null)) return false
+    const previousPlacement = object.placement
+    const positionOnly = (command.fromOrbitId ?? null) === (command.toOrbitId ?? null)
+
+    if (session.kind === 'object' && session.targetId === object.id) {
+      const relationshipUntouched = session.draft.placement === session.initial.values.placement
+        && session.initial.values.placement === placementDraftValue(session.initial.object.placement)
+        && samePlacement(session.initial.object.placement, previousPlacement)
+      if (!relationshipUntouched || getEntitySessionStaleError(session) !== null) return false
+      return true
+    }
+
+    if (!positionOnly || getEntitySessionStaleError(session) !== null) return false
     if (session.kind === 'orbit') {
       const orbitRelationshipDraft = session.draft.hostId !== session.initial.values.hostId
         || session.draft.targetOrder !== session.initial.values.targetOrder
@@ -659,35 +684,57 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       ) ?? false
       if (pendingHostChoice || (orbitRelationshipDraft && relatedObjects.has(object.id))) return false
     }
-    return hasPositionBaseline(session, object.id, { x: object.placement.x, y: object.placement.y })
+    return hasPositionBaseline(session, object.id, previousPlacement)
   }
 
-  /** Rebases only positions captured by this session after an independently published free-to-free move. */
-  function acceptCommittedPosition(change: CommittedFreeObjectPosition): boolean {
-    const { objectId, previous, next, command } = change
+  /** Rebases only the committed placement after an independently published map position change. */
+  function acceptCommittedPosition(change: CommittedObjectPosition): boolean {
+    const { objectId, previousPlacement, nextPlacement, previousAngle, nextAngle, command } = change
     const session = entitySession.value
     const currentWorkspace = workspace.value
     if (!session || !currentWorkspace || command.kind !== 'object-placement'
-      || command.objectId !== objectId || command.fromOrbitId !== null || command.toOrbitId !== null
-      || ![previous.x, previous.y, next.x, next.y].every(Number.isFinite)) return false
+      || command.objectId !== objectId
+      || (command.fromOrbitId ?? null) !== (previousPlacement.kind === 'orbit' ? previousPlacement.orbitId : null)
+      || (command.toOrbitId ?? null) !== (nextPlacement.kind === 'orbit' ? nextPlacement.orbitId : null)) return false
+    if (previousPlacement.kind === 'system' && ![previousPlacement.x, previousPlacement.y].every(Number.isFinite)) return false
+    if (nextPlacement.kind === 'system' && ![nextPlacement.x, nextPlacement.y].every(Number.isFinite)) return false
+    if ((previousPlacement.kind === 'orbit' && !Number.isFinite(previousAngle))
+      || (nextPlacement.kind === 'orbit' && !Number.isFinite(nextAngle))) return false
     if (currentWorkspace.cluster.id !== session.clusterId) return false
     const system = plannedSystem(currentWorkspace, session.systemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
-    if (!object || !matchesSystemPlacement(object.placement, next)) return false
+    if (!system || !object || !samePlacement(object.placement, nextPlacement)) return false
+    if (nextPlacement.kind === 'orbit'
+      && captureEffectiveObjectAngles(currentWorkspace, system, [nextPlacement.orbitId])[objectId] !== nextAngle) return false
 
     let matched = false
     if (session.kind === 'object' && session.targetId === objectId) {
       if (session.draft.placement !== session.initial.values.placement
-        || session.initial.values.placement !== 'system'
-        || !matchesSystemPlacement(session.initial.object.placement, previous)) return false
+        || session.initial.values.placement !== placementDraftValue(previousPlacement)
+        || !samePlacement(session.initial.object.placement, previousPlacement)) return false
+      const placementChanged = !samePlacement(previousPlacement, nextPlacement)
+      const nextDependencies = placementChanged
+        ? preserveDependencyExpectations(
+          session.initial.dependencies,
+          captureObjectPlacementDependencies(currentWorkspace, system, object),
+        )
+        : session.initial.dependencies
       session.initial = {
         ...session.initial,
-        object: { ...session.initial.object, placement: systemPlacementAt(next) },
+        object: { ...session.initial.object, placement: clone(nextPlacement) },
+        values: { ...session.initial.values, placement: placementDraftValue(nextPlacement) },
+        dependencies: nextDependencies,
       }
+      if (placementChanged) session.draft.placement = placementDraftValue(nextPlacement)
       matched = true
     }
 
-    const initialDependencies = rebaseDependencyPosition(session.initial.dependencies, objectId, previous, next)
+    const initialDependencies = rebaseDependencyPlacement(
+      session.initial.dependencies,
+      objectId,
+      previousPlacement,
+      nextPlacement,
+    )
     if (initialDependencies.matched) {
       session.initial = { ...session.initial, dependencies: initialDependencies.baseline }
       matched = true
@@ -695,25 +742,27 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
 
     if (draftDependencies?.sessionId === session.id) {
       for (const [orbitId, baseline] of draftDependencies.placements) {
-        const rebased = rebaseDependencyPosition(baseline, objectId, previous, next)
+        const rebased = rebaseDependencyPlacement(baseline, objectId, previousPlacement, nextPlacement)
         if (!rebased.matched) continue
         draftDependencies.placements.set(orbitId, rebased.baseline)
         matched = true
       }
-      const host = draftDependencies.orbitHosts.get(objectId)
-      if (host && matchesSystemPlacement(host.object.placement, previous)) {
-        draftDependencies.orbitHosts.set(objectId, {
-          ...host,
-          object: { ...host.object, placement: systemPlacementAt(next) },
-          placement: rebaseDependencyPosition(host.placement, objectId, previous, next).baseline,
-          scenePosition: { x: 64 + next.x * 832, y: 72 + next.y * 416 },
-        })
-        matched = true
-      }
       for (const [hostId, snapshot] of draftDependencies.orbitHosts) {
-        const rebased = rebaseDependencyPosition(snapshot.placement, objectId, previous, next)
-        if (!rebased.matched) continue
-        draftDependencies.orbitHosts.set(hostId, { ...snapshot, placement: rebased.baseline })
+        const rebased = rebaseDependencyPlacement(snapshot.placement, objectId, previousPlacement, nextPlacement)
+        const isMovedHost = hostId === objectId && samePlacement(snapshot.object.placement, previousPlacement)
+        if (!rebased.matched && !isMovedHost) continue
+        const positions = objectPositions(system, {
+          objectAngles: currentWorkspace.layout.objectAngles,
+          orbitRadii: currentWorkspace.layout.orbitRadii,
+          orbitRotations: currentWorkspace.layout.orbitRotations,
+        })
+        const scenePosition = positions.get(hostId)
+        draftDependencies.orbitHosts.set(hostId, {
+          ...snapshot,
+          ...(isMovedHost ? { object: { ...snapshot.object, placement: clone(nextPlacement) } } : {}),
+          placement: rebased.baseline,
+          ...(isMovedHost && scenePosition ? { scenePosition: clone(scenePosition) } : {}),
+        })
         matched = true
       }
     }
@@ -1161,7 +1210,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
 
     const ids = dependencyIds(session, draftDependencies)
     if (command.kind === 'object-placement') {
-      if (canMoveFreeObjectWithoutChangingDraftRelationship(command)) return false
+      if (canMoveObjectWithoutChangingDraftRelationship(command)) return false
       // An occupant's placement or angle can change independently of the Orbit's geometry and sibling order.
       // Conflicts are limited to editing an object whose own state anchors this draft's dependencies.
       return ids.objects.has(command.objectId)

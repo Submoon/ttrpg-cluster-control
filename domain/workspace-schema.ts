@@ -23,7 +23,11 @@ import {
   orbitRadiiMeetMinimum,
 } from './workspace-orbits'
 import { jumpPointsInCluster } from './workspace-cluster'
-import { clusterRouteGeometry, hasFiniteClusterRouteGeometry } from '../utils/cluster-map-geometry'
+import {
+  clusterRouteGeometry,
+  hasFiniteClusterRouteGeometry,
+  hasSafeClusterSceneBounds,
+} from '../utils/cluster-map-geometry'
 
 /**
  * Checks references and cross-entity invariants that cannot be verified by individual object guards.
@@ -241,6 +245,7 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
   ))
   return Object.values(positions).every(isPoint)
     && Object.values(unresolvedExitPositions).every(isPoint)
+    && hasSafeClusterSceneBounds(validatedCluster, positions, unresolvedExitPositions)
     && Object.entries(unresolvedExitPositions).every(([routeId]) =>
       routes.some(route => route.id === routeId && route.toPointId === null),
     )

@@ -42,16 +42,9 @@
             <p v-if="objectOrbitValue === freeValue" class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
               Click a free location on the map to add this object.
             </p>
-            <UFormField v-else label="Angle (degrees)" :error="props.session.errors.angleDegrees">
-              <UInput
-                :model-value="props.session.inputs.angleDegrees"
-                type="number"
-                step="any"
-                inputmode="decimal"
-                aria-label="Angle (degrees)"
-                @update:model-value="updateInput('angleDegrees', $event)"
-              />
-            </UFormField>
+            <p v-else class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              Click the selected Orbit to choose a position, or use Add for its next automatic position.
+            </p>
             <UFormField v-if="props.session.type.subtype === 'other'" label="Type label" class="system-creation-form-wide" :error="props.session.errors.otherType">
               <UInput
                 :model-value="props.session.inputs.otherType"
