@@ -1,6 +1,7 @@
 ---
 title: Recover and export distant unresolved exits
-status: in-progress
+status: closed
+closed_on: 2026-10-28
 assignee: /root/exit_placement
 type: implementation
 label: wayfinder:implementation
@@ -14,7 +15,7 @@ triage_labels:
 
 **What to build:** Let the Warden arrange unresolved-exit targets beyond the initial canvas, recover the entire applied scene through pan and Fit, and export it completely as vector SVG or a manageable-size PNG.
 
-**Status:** ready-for-agent
+**Status:** closed — implemented and verified.
 
 ## Blocked by
 
@@ -34,18 +35,18 @@ Relevant parent stories: 5–7, 40, 68–69 and 76–85.
 
 ## Acceptance criteria
 
-- [ ] Valid targets can be placed on either side of the initial canvas, including negative coordinates, and remain at the same map-space point after navigation, reload and JSON round trip.
-- [ ] Pan can reach placed targets without modifying any committed position.
-- [ ] Fit includes all applied systems, route geometry, targets and labels, even when a scale below the historical 25 percent floor is required.
-- [ ] A target and its originating map remain recoverable together; Fit does not merely center oversized bounds while leaving both ends outside the viewport.
-- [ ] Subsequent pan/zoom and movement continue to use the correct transform after such a Fit operation. No system-placement bounds or other entity constraints are implicitly expanded.
-- [ ] Off-canvas background/grid presentation remains coherent with the expanded scene.
-- [ ] SVG exports the whole applied scene as vector content with correct label bounds and no viewport crop.
-- [ ] PNG exports that same full scene with preserved aspect ratio and bounded output dimensions, reducing resolution when necessary instead of allocating a scene-sized unbounded canvas.
-- [ ] Export during a live drag or non-drag preview uses the last applied geometry, not the unfinished candidate.
-- [ ] Selection styling and edit-only hit shapes are excluded from exported appearance; invisible interaction geometry does not incorrectly inflate Fit or export bounds.
-- [ ] Input and derived geometry/output calculations remain finite and safe. Unsafe data produces defined feedback without publishing partial state or attempting an unbounded raster allocation.
-- [ ] Ordinary-scene navigation, exports, retained labels and previous movement/recovery behavior continue to work.
+- [x] Valid targets can be placed on either side of the initial canvas, including negative coordinates, and remain at the same map-space point after navigation, reload and JSON round trip.
+- [x] Pan can reach placed targets without modifying any committed position.
+- [x] Fit includes all applied systems, route geometry, targets and labels, even when a scale below the historical 25 percent floor is required.
+- [x] A target and its originating map remain recoverable together; Fit does not merely center oversized bounds while leaving both ends outside the viewport.
+- [x] Subsequent pan/zoom and movement continue to use the correct transform after such a Fit operation. No system-placement bounds or other entity constraints are implicitly expanded.
+- [x] Off-canvas background/grid presentation remains coherent with the expanded scene.
+- [x] SVG exports the whole applied scene as vector content with correct label bounds and no viewport crop.
+- [x] PNG exports that same full scene with preserved aspect ratio and bounded output dimensions, reducing resolution when necessary instead of allocating a scene-sized unbounded canvas.
+- [x] Export during a live drag or non-drag preview uses the last applied geometry, not the unfinished candidate.
+- [x] Selection styling and edit-only hit shapes are excluded from exported appearance; invisible interaction geometry does not incorrectly inflate Fit or export bounds.
+- [x] Input and derived geometry/output calculations remain finite and safe. Unsafe data produces defined feedback without publishing partial state or attempting an unbounded raster allocation.
+- [x] Ordinary-scene navigation, exports, retained labels and previous movement/recovery behavior continue to work.
 
 ## Verification
 
@@ -56,3 +57,9 @@ Exercise distant targets through the public Cluster editor, including a negative
 This extends the delivered unresolved-target capability, not a standalone generic zoom/export refactor. Exact scene-dependent scale handling, output caps and grid rendering are engineering choices within the approved whole-scene contract. Do not replace it with viewport-only export, a new hard placement rectangle or a global navigation redesign.
 
 Use existing renderer/export ownership and the single workspace writer. Do not implement undo/redo or alter unrelated worktrees.
+
+## Resolution
+
+Implemented scene-dependent Cluster Fit below 25 percent, preserved visit scale and whole-viewport grid/background coverage. Applied targets, paths and labels define Fit and vector export bounds. PNG retains the full scene while capping its edge and pixel area before image decoding or canvas allocation. Admission and preview/drag guards reject unsafe points and derived label/aggregate geometry before publication, without clamping valid off-canvas targets.
+
+Completed on 2026-10-28. Focused pure/public checks, the complete-suite result with affected correction reruns, final lint/typecheck/build and independent review closure are recorded in the [implementation record](../implementation-second-frontier.md) and [review](../review-second-frontier.md). This local closure does not change GitHub issue #27.

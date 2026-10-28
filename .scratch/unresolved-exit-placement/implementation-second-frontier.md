@@ -1,6 +1,7 @@
 ---
 title: Implement distant exits and Orbit occupant map placement
-status: in-progress
+status: closed
+closed_on: 2026-10-28
 ---
 
 # Implement distant exits and Orbit occupant map placement
@@ -12,7 +13,7 @@ The user authorized coordinated implementation of the remaining local tickets 03
 - Fetched origin on 2026-10-28. Main and origin/main remain at `9edfa66c4f505d56f106fc4af8245f200abfba78` and need no fast-forward.
 - Actual implementation base: `c3c4946644463f5d83dde5436b3c99f04bea1fd1`, three commits ahead and none behind origin/main. This intentionally includes the completed prerequisites 01, 02, 04 and 06.
 - Continue on `codex/map-positioning-first-frontier` in this worktree. Preserve unrelated `.codex/environments/` files and other worktrees.
-- Re-fetched source issue #27: still open with the enhancement label, unchanged body and no comments. The approved expanded local specification remains authoritative for tickets 03 and 05.
+- Re-fetched source issue #27 at intake and again before completion on 2026-10-28: still open with the enhancement label, unchanged body and no comments. The approved expanded local specification remains authoritative for tickets 03 and 05.
 - No push, PR, merge or remote issue/label change is part of this delivery.
 
 ## Coordination and verification
@@ -28,7 +29,7 @@ The user authorized coordinated implementation of the remaining local tickets 03
 
 ## Resolution
 
-Pending implementation and verification.
+Both tickets are implemented and locally closed on 2026-10-28. Ticket 03 delivers recovery of the whole distant Cluster scene, viewport coverage and bounded whole-scene PNG export alongside vector SVG. Ticket 05 delivers Orbit-occupant map and keyboard placement, independent draft preservation and creation without positional-angle fields. The integrated suite exposed one creation regression; its correction, affected verification and independent review closure are recorded below. Final lint, typecheck and production build passed. All six local tickets and their approved parent effort are now closed; GitHub issue #27 remains open.
 
 ## Integrated candidate and review
 
@@ -37,13 +38,22 @@ Pending implementation and verification.
 - Independent Standards, Spec and complementary numerical/persistence reviews are recorded in [review-second-frontier.md](review-second-frontier.md). Both confirmed numerical/surface findings were corrected and closed before the full suite. The correction's pure boundary tests passed 10/10 and public distant tests passed 3/3 including desktop and wide/short viewports.
 - The effective-angle duplication suggestion is nonblocking and has no demonstrated behavior defect. No additional ticket 05 blocker was identified.
 - Final lint/typecheck passed after the corrections and the explicit unresolved-route type guard. The four affected Cluster image-export journeys passed together after the viewport-space rewrite (`test-results/second-frontier-cluster-images-final/report.json`).
-- The complete suite once and production build are the remaining verification sequence. Sources remain frozen throughout browser checks; no second full-suite pass is implied by later affected reruns.
+- Sources remained frozen throughout the complete-suite run. The result and affected correction checks are recorded below; no second full-suite pass is implied by those reruns.
 
 ## Complete-suite result and follow-up
 
 The complete suite ran once on `80f0b21462a600bd5b63d75912742299cded3b85` in system Chrome: **263 passed, 1 failed, 264 total**, in 28.4 minutes (`test-results/second-frontier-full/report.json`). There were no retries or skipped tests.
 
-The failure is an actual creation regression in the rotated/nested-Orbit journey. A map-resolved Orbit was retained in the same input field as an explicit control choice, so the next click on a different Orbit was rejected. The ticket 05 owner is separating explicit preference from inferred map outcomes, preserving the existing count, placement, pointer-accuracy and legacy-angle assertions. Affected reruns, correction review and build remain pending; no second full-suite run is claimed.
+The failure was an actual creation regression in the rotated/nested-Orbit journey. A map-resolved Orbit was retained in the same input field as an explicit control choice, so the next click on a different Orbit was rejected. Correction `8ec884d19ec6a9bd02f43de53ab91dfaa84b5af2` separates session-scoped explicit preference from inferred map outcomes, including same-value control selections and preference reset after another target or context change. Existing count, placement, pointer-accuracy and legacy-angle assertions remain intact.
+
+The corrected geometry journeys passed **2/2**; repeated/default creation with reload and keyboard free creation/movement passed **2/2** (`test-results/ticket05-placement`). All three independent reviewers inspected the correction and closed without blocking findings. The successful 263 unchanged-suite results are retained as evidence; no second complete-suite run was performed or claimed.
+
+## Final checks
+
+- Lint, typecheck and the production build passed on final source `8ec884d19ec6a9bd02f43de53ab91dfaa84b5af2`. Build warnings concern chunk size, dependency export deprecations and bundler diagnostics; they did not fail the build.
+- The dedicated development server on port 3127 was stopped after browser verification; the port has no listener.
+- Browser keyboard, pointer, compact-layout and gesture checks are evidence from system Chrome emulation, not physical-device or screen-reader certification.
+- No dependency installation, push, PR, merge or GitHub state/label change was performed. Unrelated environment files and other worktrees remain untouched.
 
 ## Agreed implementation contracts
 

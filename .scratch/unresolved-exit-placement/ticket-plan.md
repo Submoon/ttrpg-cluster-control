@@ -1,6 +1,7 @@
 ---
 title: Approved tickets for map-based positioning
-status: open
+status: closed
+closed_on: 2026-10-28
 plan_status: approved
 plan_approved_on: 2026-10-27
 tickets_status: published
@@ -8,7 +9,7 @@ tickets_status: published
 
 # Approved tickets for map-based positioning
 
-The user approved these six slices and their blocking edges through the Codex question form on 2026-10-27. One English local file is published per ticket. Ticket numbers below are local identifiers, not GitHub issue numbers. The initial frontier (01, 02, 04 and 06) is implemented and locally closed; the user authorized the remaining 03 and 05 on 2026-10-28, and their implementation is in progress.
+The user approved these six slices and their blocking edges through the Codex question form on 2026-10-27. One English local file is published per ticket. Ticket numbers below are local identifiers, not GitHub issue numbers. All six tickets are implemented and locally closed across the first delivery (01, 02, 04 and 06) and the separately authorized second delivery (03 and 05).
 
 ## Source and baseline
 
@@ -96,17 +97,19 @@ The user approved these six slices and their blocking edges through the Codex qu
 - 04 blocks 05.
 - 01 and 06 have no ticket blockers.
 - Initial frontier: 01, 02, 04 and 06. This is availability, not authorization for four concurrent writers; the repository's limit and disjoint-ownership rules still apply.
-- Tickets were published open and ready-for-agent. The user subsequently authorized implementation of 01, 02, 04 and 06; their current lifecycle and assignee are recorded in each ticket. Prerequisite links still govern 03 and 05, whose implementation has not been requested. See the [first-frontier implementation record](implementation.md) for coordination boundaries.
+- Tickets were published open and ready-for-agent. The user subsequently authorized implementation of 01, 02, 04 and 06, then 03 and 05 after their prerequisites were completed. Each ticket records its lifecycle and assignee. See the [first-frontier implementation record](implementation.md) for the initial coordination boundaries.
 - No ticket waits on #5 merely because both efforts touch semantic edits. Reconcile interfaces if that design lands first; add a real blocker only if new evidence establishes one.
-- Current frontier after the first delivery: 03 and 05. The user subsequently authorized their coordinated implementation on 2026-10-28; see the [second-frontier record](implementation-second-frontier.md). Both are now in progress.
+- Current frontier: none. The user authorized coordinated implementation of 03 and 05 on 2026-10-28; both are completed. See the [second-frontier record](implementation-second-frontier.md).
 
 ## Decisions so far
 
 - [01](tickets/01-position-cluster-systems-from-map.md) is closed: Cluster systems use map placement and keyboard creation without coordinate fields.
 - [02](tickets/02-move-and-retain-unresolved-exit-targets.md) is closed: unresolved exits have durable route-keyed placement and lifecycle/interchange cleanup.
+- [03](tickets/03-recover-and-export-distant-unresolved-exits.md) is closed: distant exits remain recoverable with whole-scene Fit, coherent viewport surfaces and bounded full-scene PNG/vector SVG exports.
 - [04](tickets/04-position-free-system-map-objects.md) is closed: free objects use map placement with independent drafts and preserved relationship guards.
+- [05](tickets/05-position-orbit-occupants-without-angle-fields.md) is closed: Orbit occupants and creation use map/keyboard placement without positional-angle forms, preserving drafts and explicit relationship choices.
 - [06](tickets/06-move-unoccupied-orbit-centers.md) is closed: unoccupied Orbit centers use map previews while retaining size, orientation and hosting controls.
-- Verification and independent review closure are recorded in [implementation.md](implementation.md) and [review.md](review.md). The parent specification remains open for 03 and 05.
+- Verification and independent review closure are recorded in [implementation.md](implementation.md), [review.md](review.md), [implementation-second-frontier.md](implementation-second-frontier.md) and [review-second-frontier.md](review-second-frontier.md). The local parent specification is closed.
 
 ## Specification coverage
 
@@ -125,8 +128,12 @@ All 86 stories are covered collectively. The integrated delivery must also satis
 
 ## Approval and publication
 
-The user selected “Valider la granularité et les dépendances proposées” on 2026-10-27. The approved tickets are published with lifecycle status open, parent-specification links, the enhancement/ready-for-agent triage roles and explicit blocking links. Local publication does not modify or close the GitHub source, authorize implementation, create a PR or start an unrelated chat. Before implementation, refresh the source/baseline and follow the repository's applicable architecture, ownership and review route.
+The user selected “Valider la granularité et les dépendances proposées” on 2026-10-27. The approved tickets were published with lifecycle status open, parent-specification links, the enhancement/ready-for-agent triage roles and explicit blocking links. Local publication did not modify or close the GitHub source, authorize implementation, create a PR or start an unrelated chat. The later implementation authorizations and refreshed baselines are recorded in the two implementation records.
 
 ## Publication verification
 
 Verified on 2026-10-27: six unclaimed open tickets, local enhancement/ready-for-agent roles, 82 acceptance criteria, valid local references, collective coverage of all 86 parent stories, no source paths/code snippets in ticket prose, and exactly the approved blocking edges 02 to 03 and 04 to 05. Source issue #27 was re-read before reporting completion and remains unchanged, open, with no comments. No runtime tests were run because this task publishes planning documents only. Product source, remote labels, parent issue state and unrelated worktrees were not changed.
+
+## Resolution
+
+All six implementation tickets and their collective 86-story scope are locally completed on 2026-10-28. Baselines, test results, the corrected integrated-suite failure and review closure are recorded in the two delivery records linked above. Source issue #27 was refreshed again before completion and remains unchanged and open. No push, PR, merge or remote state/label change was performed.

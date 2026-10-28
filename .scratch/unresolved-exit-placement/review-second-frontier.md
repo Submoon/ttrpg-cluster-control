@@ -37,10 +37,14 @@ Both defects were reproduced with meaningful failing tests before correction. Sh
 
 The background/grid now belong to viewport space, using the real SVG client viewport rather than a fixed viewBox rectangle. Their pattern follows the scene camera, while export clears that live transform and covers the full applied bounds. Public tests check actual client coverage and safe attributes at 1440×960 and 1920×400, plus exported surfaces. The corrected distant suite passed 3/3.
 
-All three reviewers inspected the correction and closed their blockers without identifying a consequential new issue. A final export-branch type guard explicitly narrows unresolved destinations; it does not change valid geometry behavior. Ticket 05 has no blocking review finding. Full integrated suite and production build remain completion gates.
+All three reviewers inspected the correction and closed their blockers without identifying a consequential new issue. A final export-branch type guard explicitly narrows unresolved destinations; it does not change valid geometry behavior. Ticket 05 has no blocking review finding. The subsequent integrated verification is recorded below and in the [implementation record](implementation-second-frontier.md).
 
 Initial totals: Standards 0 blockers; Spec 2 P2; complementary review 1 shared P2 (two unique defects). Remaining blocking findings: Standards 0; Spec 0; complementary numerical/persistence 0.
 
 ## Integrated-suite follow-up
 
-The subsequent complete suite found one creation regression outside the initial review findings: a map-inferred Orbit was treated as an explicit control preference, preventing the next valid click on a different nested Orbit. The existing rotated/nested creation test failed without relaxing its expectations. The ticket 05 owner is correcting that provenance/lifetime distinction. Focused verification and correction review remain pending; overall acceptance is not yet closed.
+The subsequent complete suite passed 263/264 and found one creation regression outside the initial review findings: a map-inferred Orbit was treated as an explicit control preference, preventing the next valid click on a different nested Orbit. The existing rotated/nested creation test failed without relaxing its expectations.
+
+Correction `8ec884d19ec6a9bd02f43de53ab91dfaa84b5af2` separates session-scoped explicit preference from inferred map outcomes. Same-value user selections establish preference; another accepted target, new session, context change or relevant deletion clears it. Existing validation and asynchronous context guards remain. Two geometry journeys and two repeated/default/keyboard creation journeys passed after this correction, retaining count, relationship, pointer and legacy-position assertions.
+
+Standards, Spec and the complementary numerical/persistence reviewers independently inspected this final correction and closed with no blocking findings. The effective-angle duplication suggestion remains nonblocking. Review is complete; final runtime gates are documented in the implementation record. No clean 264/264 complete-suite rerun is claimed.

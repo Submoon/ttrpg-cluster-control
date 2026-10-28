@@ -1,6 +1,7 @@
 ---
 title: Map-based positioning and movable unresolved-exit targets
-status: open
+status: closed
+closed_on: 2026-10-28
 scope_status: approved
 scope_approved_on: 2026-10-27
 testing_seams_status: approved
@@ -194,7 +195,7 @@ Additional decisions:
 - Assert presence of retained logical/size/orientation controls and absence of editable positional fields across Inspector, Dock and creation surfaces.
 - Verify meaningful keyboard operation and visible focus through public roles/actions. Browser emulation is useful evidence for compact and touch flows, not certification of a physical keyboard, screen reader or Android device.
 - Run lint, typecheck and affected behavior checks during implementation. Follow repository guidance for the integrated full suite and build when integration, SSR or bundling is affected.
-- No runtime tests have been executed for this specification-only change. Documentation verification covers template sections, continuous story numbering, local references and the absence of source paths or code snippets in Implementation Decisions.
+- No runtime tests were executed during specification preparation. Its documentation verification covered template sections, continuous story numbering, local references and the absence of source paths or code snippets in Implementation Decisions. Later implementation evidence is linked in Resolution.
 
 ## Out of Scope
 
@@ -229,4 +230,12 @@ Additional decisions:
 - Movement and Inspector sessions must be integrated without restoring stale coordinates or silently applying unrelated relationship drafts. This is an architecture and behavioral-review focus.
 - Issue #5 is a related contract dependency, not an established blocker. If its design lands first, reconcile semantic operation boundaries and position snapshots before implementing either integration; this specification does not decide its history design.
 - GitHub remains authoritative for incoming requests and global completion; this local effort is authoritative for the approved expanded scope and specification. Local readiness does not change the state or labels of issue #27.
-- The effort remains open. The user subsequently authorized implementation of the initial frontier; its baseline, delivery and checks are recorded in [implementation.md](implementation.md). Tickets 03 and 05 remain open for a separately authorized continuation.
+- The user subsequently authorized the initial frontier and then tickets 03 and 05. The effort and all six local implementation tickets are now closed; the two delivery records below retain their actual baselines and verification results.
+
+## Resolution
+
+The approved 86-story scope is implemented across the [first delivery](implementation.md) and [second delivery](implementation-second-frontier.md), with independent [first-delivery review](review.md) and [second-delivery review](review-second-frontier.md). All six tickets in the [approved index](ticket-plan.md) are locally closed on 2026-10-28.
+
+The second delivery ran the complete suite once: 263/264 passed, then the one creation regression was corrected and four affected journeys passed. Final lint, typecheck and production build passed; review has no blocking findings. The records distinguish those affected reruns from a clean complete-suite rerun and retain browser/device verification limits.
+
+This local completion covers the approved expanded specification. GitHub issue #27 remains open; no push, PR, merge or remote state/label change was performed.
