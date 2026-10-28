@@ -5,6 +5,8 @@ import {
   activeWorkspaceFeedback,
   beginDragToWorldPoint,
   captureMapExportBlobs,
+  clickNormalizedSystemPoint,
+  clickSystemOrbitPoint,
   downloadJson,
   ensureMapDragPointsReachable,
   jsonMapImportInput,
@@ -240,7 +242,27 @@ test('dragging an attached object into empty space previews its raw drop and pre
   expectPointNear(await objectMapPosition(map, oldMoon.id), originalOldMoonPosition)
 })
 
-test('an existing attached object supports numeric Orbit-angle preview, cancellation, and confirmation', async ({ page }) => {
+test('an Orbit occupant can start map placement without a numeric position field', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  const map = await createDenseReach(page)
+  const initial = await downloadJson(page, 'Export star system JSON')
+  const oldPlanet = initial.system?.objects.find(object => object.name === 'Old Planet')
+  if (!oldPlanet) throw new Error('The imported fixture is missing Old Planet.')
+
+  await setWorkspaceMapMode(page, 'Move')
+  await map.getByRole('button', { name: /^Select .*Old Planet/ }).click()
+  const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
+  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
+  const form = page.getByRole('form', { name: 'Object placement', exact: true })
+
+  await expect(form.getByRole('button', { name: 'Move on map', exact: true })).toBeVisible()
+  await expect(form.getByRole('spinbutton', { name: 'Orbit position (degrees)', exact: true })).toHaveCount(0)
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+  await expect(map).toHaveAttribute('data-system-object-move-targeting', 'true')
+  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
+})
+
+test('an existing attached object previews and confirms an Orbit position chosen on the map', async ({ page }) => {
   await captureMapExportBlobs(page)
   const map = await createDenseReach(page)
   const initial = await downloadJson(page, 'Export star system JSON')
@@ -263,9 +285,6 @@ test('an existing attached object supports numeric Orbit-angle preview, cancella
   }
   expect(oldPlanet.placement).toEqual({ kind: 'orbit', orbitId: alphaOrbit.id })
 
-  const alphaCenter = objectPosition(primary)
-  const alphaRadii = orbitRadii(initial, alphaOrbit.id)
-  const alphaRotation = initial.layout.orbitRotations?.[alphaOrbit.id] ?? 0
   const nestedAngle = initial.layout.objectAngles[nestedMoon.id]
   const deepAsteroidAngle = initial.layout.objectAngles[deepAsteroid.id]
   if (nestedAngle === undefined || deepAsteroidAngle === undefined) {
@@ -284,11 +303,14 @@ test('an existing attached object supports numeric Orbit-angle preview, cancella
   await expect(placement).toBeVisible()
   if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
   await expect(placement).toHaveAttribute('aria-expanded', 'true')
-  await page.getByRole('spinbutton', { name: 'Orbit position (degrees)', exact: true }).fill('45')
-  await page.getByRole('button', { name: 'Preview position', exact: true }).click()
+  const form = page.getByRole('form', { name: 'Object placement', exact: true })
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+  const requestedPoint = await clickSystemOrbitPoint(page, map, 'Orbit 1 around Primary Star', 45)
+  await ensureObjectPlacementOpen(page)
 
-  const targetAngle = 45 * Math.PI / 180
-  const expectedPlanet = ellipsePoint(alphaCenter, alphaRadii, targetAngle, alphaRotation)
+  const requestedScenePoint = { x: 64 + requestedPoint.x * 832, y: 72 + requestedPoint.y * 416 }
+  const expectedPlanet = await objectMapPosition(map, oldPlanet.id)
+  expectPointNear(expectedPlanet, requestedScenePoint, 2)
   const expectedNestedMoon = ellipsePoint(
     expectedPlanet,
     orbitRadii(initial, nestedOrbit.id),
@@ -307,15 +329,16 @@ test('an existing attached object supports numeric Orbit-angle preview, cancella
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
 
   if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
-  await page.getByRole('button', { name: 'Cancel preview', exact: true }).click()
+  await form.getByRole('button', { name: 'Cancel preview', exact: true }).click()
   expectPointNear(await objectMapPosition(map, oldPlanet.id), originalPositions.planet)
   expectPointNear(await objectMapPosition(map, nestedMoon.id), originalPositions.nestedMoon)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), originalPositions.deepAsteroid)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
 
   if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
-  await page.getByRole('spinbutton', { name: 'Orbit position (degrees)', exact: true }).fill('45')
-  await page.getByRole('button', { name: 'Preview position', exact: true }).click()
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+  await clickSystemOrbitPoint(page, map, 'Orbit 1 around Primary Star', 45)
+  await ensureObjectPlacementOpen(page)
   expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanet)
   expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoon)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroid)
@@ -324,7 +347,10 @@ test('an existing attached object supports numeric Orbit-angle preview, cancella
 
   const committed = await downloadJson(page, 'Export star system JSON')
   const expectedCommitted = JSON.parse(JSON.stringify(initial)) as ExportedMap
-  expectedCommitted.layout.objectAngles[oldPlanet.id] = targetAngle
+  const committedAngle = committed.layout.objectAngles[oldPlanet.id]
+  expect(committedAngle).toBeDefined()
+  expect(committedAngle).toBeCloseTo(45 * Math.PI / 180, 2)
+  expectedCommitted.layout.objectAngles[oldPlanet.id] = committedAngle!
   expect(committed).toEqual(expectedCommitted)
   const committedPlanet = committed.system?.objects.find(object => object.id === oldPlanet.id)
   expect(committedPlanet?.placement).toEqual({ kind: 'orbit', orbitId: alphaOrbit.id })
@@ -403,14 +429,11 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
   await expect(page.getByRole('option', { name: 'Orbit 1 around Nested Moon', exact: true })).toHaveCount(0)
   await page.getByRole('option', { name: 'Orbit 2 around Primary Star', exact: true }).click()
 
-  const betaAngle = Math.PI / 2
-  const betaCenter = objectPosition(primary)
-  const expectedPlanetBeta = ellipsePoint(
-    betaCenter,
-    orbitRadii(initial, betaOrbit.id),
-    betaAngle,
-    initial.layout.orbitRotations?.[betaOrbit.id] ?? 0,
-  )
+  await page.getByRole('button', { name: 'Move on map', exact: true }).click()
+  const betaPoint = await clickSystemOrbitPoint(page, map, 'Orbit 2 around Primary Star', 90)
+  await ensureObjectPlacementOpen(page)
+  const expectedPlanetBeta = await objectMapPosition(map, oldPlanet.id)
+  expectPointNear(expectedPlanetBeta, { x: 64 + betaPoint.x * 832, y: 72 + betaPoint.y * 416 }, 2)
   const expectedNestedMoonBeta = ellipsePoint(
     expectedPlanetBeta,
     orbitRadii(initial, nestedOrbit.id),
@@ -423,8 +446,6 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
     deepAsteroidAngle,
     initial.layout.orbitRotations?.[deepOrbit.id] ?? 0,
   )
-  await page.getByRole('spinbutton', { name: 'Orbit position (degrees)', exact: true }).fill('90')
-  await page.getByRole('button', { name: 'Preview position', exact: true }).click()
   expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanetBeta)
   expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonBeta)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidBeta)
@@ -437,10 +458,12 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   const betaCommitted = await downloadJson(page, 'Export star system JSON')
   const expectedBeta = JSON.parse(JSON.stringify(initial)) as ExportedMap
+  const committedBetaAngle = betaCommitted.layout.objectAngles[oldPlanet.id]
+  expect(committedBetaAngle).toBeCloseTo(Math.PI / 2, 2)
   const expectedBetaPlanet = expectedBeta.system?.objects.find(object => object.id === oldPlanet.id)
   if (!expectedBetaPlanet) throw new Error('The expected export is missing Old Planet.')
   expectedBetaPlanet.placement = { kind: 'orbit', orbitId: betaOrbit.id }
-  expectedBeta.layout.objectAngles[oldPlanet.id] = betaAngle
+  expectedBeta.layout.objectAngles[oldPlanet.id] = committedBetaAngle!
   expectedBeta.layout.objectAngles[oldMoon.id] = implicitOrbitAngle(system, oldMoon.id, alphaOrbit.id)
   expectedBeta.layout.objectAngles[outerColony.id] = implicitOrbitAngle(system, outerColony.id, betaOrbit.id)
   expect(betaCommitted).toEqual(expectedBeta)
@@ -452,7 +475,47 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
 
   await ensureObjectPlacementOpen(page)
   await selectInspectorOption(destination, 'Free placement')
-  const freePoint = { x: 0.8, y: 0.75 }
+  await page.getByRole('button', { name: 'Move on map', exact: true }).click()
+  const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await closeHierarchy.isVisible()) await closeHierarchy.click()
+  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  if (await closeInspector.isVisible()) await closeInspector.click()
+  const firstFreePoint = await clickNormalizedSystemPoint(page, map, { x: 0.8, y: 0.75 })
+  const firstExpectedPlanetFree = {
+    x: 64 + firstFreePoint.x * 832,
+    y: 72 + firstFreePoint.y * 416,
+  }
+  const firstExpectedNestedMoonFree = ellipsePoint(
+    firstExpectedPlanetFree,
+    orbitRadii(betaCommitted, nestedOrbit.id),
+    nestedAngle,
+    betaCommitted.layout.orbitRotations?.[nestedOrbit.id] ?? 0,
+  )
+  const firstExpectedDeepAsteroidFree = ellipsePoint(
+    firstExpectedNestedMoonFree,
+    orbitRadii(betaCommitted, deepOrbit.id),
+    deepAsteroidAngle,
+    betaCommitted.layout.orbitRotations?.[deepOrbit.id] ?? 0,
+  )
+  expectPointNear(await objectMapPosition(map, oldPlanet.id), firstExpectedPlanetFree)
+  expectPointNear(await objectMapPosition(map, nestedMoon.id), firstExpectedNestedMoonFree)
+  expectPointNear(await objectMapPosition(map, deepAsteroid.id), firstExpectedDeepAsteroidFree)
+  expectPointNear(await objectMapPosition(map, oldMoon.id), originalPositions.oldMoon)
+  expectPointNear(await objectMapPosition(map, outerColony.id), originalPositions.outerColony)
+  expect(await downloadJson(page, 'Export star system JSON')).toEqual(betaCommitted)
+
+  await ensureObjectPlacementOpen(page)
+  await page.getByRole('button', { name: 'Cancel preview', exact: true }).click()
+  await expect(workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })).toBeFocused()
+  expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanetBeta)
+  expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonBeta)
+  expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidBeta)
+  expect(await downloadJson(page, 'Export star system JSON')).toEqual(betaCommitted)
+
+  await ensureObjectPlacementOpen(page)
+  await selectInspectorOption(destination, 'Free placement')
+  await page.getByRole('button', { name: 'Move on map', exact: true }).click()
+  const freePoint = await clickNormalizedSystemPoint(page, map, { x: 0.8, y: 0.75 })
   const expectedPlanetFree = { x: 64 + freePoint.x * 832, y: 72 + freePoint.y * 416 }
   const expectedNestedMoonFree = ellipsePoint(
     expectedPlanetFree,
@@ -466,28 +529,7 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
     deepAsteroidAngle,
     betaCommitted.layout.orbitRotations?.[deepOrbit.id] ?? 0,
   )
-  await page.getByRole('spinbutton', { name: 'Object position X', exact: true }).fill(String(freePoint.x))
-  await page.getByRole('spinbutton', { name: 'Object position Y', exact: true }).fill(String(freePoint.y))
-  await page.getByRole('button', { name: 'Preview position', exact: true }).click()
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanetFree)
-  expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonFree)
-  expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidFree)
-  expectPointNear(await objectMapPosition(map, oldMoon.id), originalPositions.oldMoon)
-  expectPointNear(await objectMapPosition(map, outerColony.id), originalPositions.outerColony)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(betaCommitted)
-
   await ensureObjectPlacementOpen(page)
-  await page.getByRole('button', { name: 'Cancel preview', exact: true }).click()
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanetBeta)
-  expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonBeta)
-  expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidBeta)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(betaCommitted)
-
-  await ensureObjectPlacementOpen(page)
-  await selectInspectorOption(destination, 'Free placement')
-  await page.getByRole('spinbutton', { name: 'Object position X', exact: true }).fill(String(freePoint.x))
-  await page.getByRole('spinbutton', { name: 'Object position Y', exact: true }).fill(String(freePoint.y))
-  await page.getByRole('button', { name: 'Preview position', exact: true }).click()
   expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedPlanetFree)
   expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonFree)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidFree)
@@ -497,9 +539,16 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
   const expectedFree = JSON.parse(JSON.stringify(betaCommitted)) as ExportedMap
   const expectedFreePlanet = expectedFree.system?.objects.find(object => object.id === oldPlanet.id)
   if (!expectedFreePlanet) throw new Error('The expected free-placement export is missing Old Planet.')
-  expectedFreePlanet.placement = { kind: 'system', x: freePoint.x, y: freePoint.y }
+  const committedFree = await downloadJson(page, 'Export star system JSON')
+  const committedFreePlanet = committedFree.system?.objects.find(object => object.id === oldPlanet.id)
+  if (!committedFreePlanet || committedFreePlanet.placement.kind !== 'system') {
+    throw new Error('The confirmed object is not freely placed on the map.')
+  }
+  expect(committedFreePlanet.placement.x).toBeCloseTo(freePoint.x, 6)
+  expect(committedFreePlanet.placement.y).toBeCloseTo(freePoint.y, 6)
+  expectedFreePlanet.placement = { ...committedFreePlanet.placement }
   delete expectedFree.layout.objectAngles[oldPlanet.id]
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(expectedFree)
+  expect(committedFree).toEqual(expectedFree)
 
   await page.reload()
   await returnToClusterMap(page)
@@ -623,7 +672,7 @@ test('moving one implicit Orbit occupant preserves its source sibling position',
   expectPointNear(await objectMapPosition(map, oldMoon.id), originalOldMoonPosition)
 })
 
-test('short landscape precise placement safely rejects derived overflow and persists valid input', async ({ page }) => {
+test('short landscape placement keeps Orbit controls usable and free placement on the map', async ({ page }) => {
   await captureMapExportBlobs(page)
   const map = await createDenseReach(page)
   await page.screenshot({ path: test.info().outputPath('workspace-desktop-light.png') })
@@ -650,6 +699,8 @@ test('short landscape precise placement safely rejects derived overflow and pers
   await placement.click()
   await expect(placement).toHaveAttribute('aria-expanded', 'true')
   const form = page.getByRole('form', { name: 'Object placement', exact: true })
+  await expect(form.getByLabel('Object position X', { exact: true })).toHaveCount(0)
+  await expect(form.getByLabel('Object position Y', { exact: true })).toHaveCount(0)
   const formBounds = await form.boundingBox()
   if (!formBounds) throw new Error('The Object placement form has no visible bounds in short landscape.')
   expect(formBounds.x).toBeGreaterThanOrEqual(0)
@@ -659,6 +710,8 @@ test('short landscape precise placement safely rejects derived overflow and pers
   await page.screenshot({ path: test.info().outputPath('placement-landscape-dark.png') })
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(form).toBeVisible()
+  await expect(form.getByLabel('Object position X', { exact: true })).toHaveCount(0)
+  await expect(form.getByLabel('Object position Y', { exact: true })).toHaveCount(0)
   const portraitBounds = await form.boundingBox()
   if (!portraitBounds) throw new Error('The Object placement form has no visible portrait bounds.')
   expect(portraitBounds.x).toBeGreaterThanOrEqual(0)
@@ -669,22 +722,15 @@ test('short landscape precise placement safely rejects derived overflow and pers
   await expect(form).toBeVisible()
 
   const originalPosition = await objectMapPosition(map, oldPlanet.id)
-  const orbitPosition = form.getByRole('spinbutton', { name: 'Orbit position (degrees)', exact: true })
-  await expect(orbitPosition).toBeVisible()
-  await orbitPosition.focus()
-  await expect(orbitPosition).toBeFocused()
-  const hugeDegrees = 1e308
-  await orbitPosition.fill(String(hugeDegrees))
-  await form.getByRole('button', { name: 'Preview position', exact: true }).click()
-  const normalizedRadians = (hugeDegrees % 360) * Math.PI / 180
-  const expectedOrbitPosition = ellipsePoint(
-    objectPosition(primary),
-    orbitRadii(initial, alphaOrbit.id),
-    normalizedRadians,
-    initial.layout.orbitRotations?.[alphaOrbit.id] ?? 0,
-  )
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+  await expect(map).toHaveAttribute('data-system-object-move-targeting', 'true')
+  await map.press('ArrowRight')
+  await map.press('ArrowDown')
+  await ensureObjectPlacementOpen(page)
   await expect(form.getByRole('button', { name: 'Confirm position', exact: true })).toBeVisible()
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedOrbitPosition)
+  const keyboardPreviewPosition = await objectMapPosition(map, oldPlanet.id)
+  expect(Math.abs(keyboardPreviewPosition.x - originalPosition.x)
+    + Math.abs(keyboardPreviewPosition.y - originalPosition.y)).toBeGreaterThan(0.01)
   if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
   await expect(placement).toHaveAttribute('aria-expanded', 'false')
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
@@ -698,25 +744,12 @@ test('short landscape precise placement safely rejects derived overflow and pers
   await ensureObjectPlacementOpen(page)
   const destination = form.getByRole('combobox', { name: 'Destination', exact: true })
   await selectInspectorOption(destination, 'Free placement')
-  const positionX = form.getByRole('spinbutton', { name: 'Object position X', exact: true })
-  const positionY = form.getByRole('spinbutton', { name: 'Object position Y', exact: true })
-  await positionX.fill('1e308')
-  await positionY.fill('0.75')
-  await form.getByRole('button', { name: 'Preview position', exact: true }).click()
-  await expect(form.getByText('Enter finite X and Y coordinates for free placement.', { exact: true }).first())
-    .toBeVisible()
-  await expect(form.getByRole('button', { name: 'Confirm position', exact: true })).toHaveCount(0)
-  expectPointNear(await objectMapPosition(map, oldPlanet.id), originalPosition)
-  if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
-
-  await ensureObjectPlacementOpen(page)
-  const freePoint = { x: 0.8, y: 0.75 }
-  await positionX.fill(String(freePoint.x))
-  await positionY.fill(String(freePoint.y))
-  await form.getByRole('button', { name: 'Preview position', exact: true }).click()
+  await form.getByRole('button', { name: 'Move on map', exact: true }).click()
+  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  if (await closeInspector.isVisible()) await closeInspector.click()
+  const freePoint = await clickNormalizedSystemPoint(page, map, { x: 0.8, y: 0.75 })
   const expectedFreePosition = { x: 64 + freePoint.x * 832, y: 72 + freePoint.y * 416 }
+  await ensureObjectPlacementOpen(page)
   await expect(form.getByRole('button', { name: 'Confirm position', exact: true })).toBeVisible()
   expectPointNear(await objectMapPosition(map, oldPlanet.id), expectedFreePosition)
   if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
@@ -729,13 +762,20 @@ test('short landscape precise placement safely rejects derived overflow and pers
   const expectedCommitted = JSON.parse(JSON.stringify(initial)) as ExportedMap
   const expectedPlanet = expectedCommitted.system?.objects.find(object => object.id === oldPlanet.id)
   if (!expectedPlanet) throw new Error('The expected export is missing Old Planet.')
-  expectedPlanet.placement = { kind: 'system', x: freePoint.x, y: freePoint.y }
+  const committed = await downloadJson(page, 'Export star system JSON')
+  const committedPlanet = committed.system?.objects.find(object => object.id === oldPlanet.id)
+  if (!committedPlanet || committedPlanet.placement.kind !== 'system') {
+    throw new Error('The confirmed object is not freely placed on the map.')
+  }
+  expect(committedPlanet.placement.x).toBeCloseTo(freePoint.x, 6)
+  expect(committedPlanet.placement.y).toBeCloseTo(freePoint.y, 6)
+  expectedPlanet.placement = { ...committedPlanet.placement }
   delete expectedCommitted.layout.objectAngles[oldPlanet.id]
   expectedCommitted.layout.objectAngles[oldMoon.id] = initial.layout.objectAngles[oldMoon.id]
     ?? implicitOrbitAngle(system, oldMoon.id, alphaOrbit.id)
   if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
   await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(expectedCommitted)
+  expect(committed).toEqual(expectedCommitted)
 
   await page.reload()
   await returnToClusterMap(page)

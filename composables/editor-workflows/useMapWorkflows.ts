@@ -4,6 +4,7 @@
 import { computed, ref, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
+  defaultObjectOrbitAngle,
   defaultOrbitRadius,
   detachOrbit,
   minimumOrbitRadius,
@@ -12,10 +13,12 @@ import {
   replaceWorkspaceSystem,
   updateWorkspaceObject,
   type LocalWorkspace,
+  type ObjectPlacement,
   type OrbitRadii,
   type Point,
 } from '../../domain/workspace'
 import type {
+  CommittedObjectPosition,
   EntityCommand,
   SystemMapHandle,
   TransitionOptions,
@@ -31,6 +34,13 @@ interface MapWorkflowOptions {
   beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
   beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
   isEntityCommandBlocked: (command: EntityCommand) => boolean
+  acceptCommittedPosition?: (change: CommittedObjectPosition) => boolean
+  acceptCommittedOrbitCenter?: (change: {
+    orbitId: string
+    previous: Point
+    next: Point
+    command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
+  }) => void
   editorError: Ref<string>
 }
 
@@ -48,6 +58,8 @@ export function useMapWorkflows({
   beginObjectSession,
   beginOrbitSession,
   isEntityCommandBlocked,
+  acceptCommittedPosition,
+  acceptCommittedOrbitCenter,
   editorError,
 }: MapWorkflowOptions) {
   const store = useEditorUiStore()
@@ -64,6 +76,19 @@ export function useMapWorkflows({
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  function effectiveObjectAngle(currentWorkspace: LocalWorkspace, systemId: string, objectId: string): number | undefined {
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+    const object = system?.objects.find(candidate => candidate.id === objectId)
+    if (!system || !object || object.placement.kind !== 'orbit') return undefined
+    const orbitId = object.placement.orbitId
+    const saved = currentWorkspace.layout.objectAngles[objectId]
+    if (typeof saved === 'number' && Number.isFinite(saved)) return saved
+    const siblings = system.objects.filter(candidate =>
+      candidate.placement.kind === 'orbit' && candidate.placement.orbitId === orbitId,
+    )
+    return defaultObjectOrbitAngle(siblings.findIndex(candidate => candidate.id === objectId), siblings.length)
   }
 
   /**
@@ -112,12 +137,13 @@ export function useMapWorkflows({
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
     if (!currentWorkspace || !system || !object) return
-    if (rejectBlockedEntityCommand({
+    const command: Extract<EntityCommand, { kind: 'object-placement' }> = {
       kind: 'object-placement',
       objectId,
       fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
       toOrbitId: null,
-    })) return
+    }
+    if (rejectBlockedEntityCommand(command)) return
 
     try {
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
@@ -130,7 +156,18 @@ export function useMapWorkflows({
           y: position.y,
         },
       })
-      await commit(nextWorkspace)
+      const { durable } = applyWorkspace(nextWorkspace)
+      const nextPlacement: ObjectPlacement = { kind: 'system', x: position.x, y: position.y }
+      acceptCommittedPosition?.({
+        objectId,
+        previousPlacement: object.placement,
+        nextPlacement,
+        ...(object.placement.kind === 'orbit'
+          ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
+          : {}),
+        command,
+      })
+      await durable
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -166,7 +203,23 @@ export function useMapWorkflows({
       const nextWorkspace = updateWorkspaceObject(currentWorkspace, system.id, object.id, {
         placement: { kind: 'orbit', orbitId },
       }, { angle })
-      await commit(nextWorkspace)
+      const { durable } = applyWorkspace(nextWorkspace)
+      acceptCommittedPosition?.({
+        objectId,
+        previousPlacement: object.placement,
+        nextPlacement: { kind: 'orbit', orbitId },
+        ...(object.placement.kind === 'orbit'
+          ? { previousAngle: effectiveObjectAngle(currentWorkspace, system.id, objectId) }
+          : {}),
+        nextAngle: angle,
+        command: {
+          kind: 'object-placement',
+          objectId,
+          fromOrbitId: object.placement.kind === 'orbit' ? object.placement.orbitId : null,
+          toOrbitId: orbitId,
+        },
+      })
+      await durable
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -192,7 +245,8 @@ export function useMapWorkflows({
 
     try {
       if (!Number.isFinite(angle)) throw new Error('An orbital angle must be finite.')
-      await commit({
+      const previousAngle = effectiveObjectAngle(currentWorkspace, selectedSystem.value?.id ?? '', objectId)
+      const { durable } = applyWorkspace({
         ...currentWorkspace,
         layout: {
           ...currentWorkspace.layout,
@@ -202,6 +256,20 @@ export function useMapWorkflows({
           },
         },
       })
+      acceptCommittedPosition?.({
+        objectId,
+        previousPlacement: object.placement,
+        nextPlacement: object.placement,
+        ...(previousAngle !== undefined ? { previousAngle } : {}),
+        nextAngle: angle,
+        command: {
+          kind: 'object-placement',
+          objectId,
+          fromOrbitId: object.placement.orbitId,
+          toOrbitId: object.placement.orbitId,
+        },
+      })
+      await durable
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
@@ -294,9 +362,13 @@ export function useMapWorkflows({
     if (!currentWorkspace || !system) return
     const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
     if (!currentOrbit) return
-    const command: EntityCommand = currentOrbit.hostId === hostId
-      ? { kind: 'orbit-geometry', orbitId }
-      : { kind: 'orbit-host', orbitId, hostId }
+    const isFreeCenterMove = currentOrbit.hostId === null && hostId === null
+    const previousCenter = isFreeCenterMove ? { ...currentOrbit.center } : null
+    const command: EntityCommand = isFreeCenterMove
+      ? { kind: 'orbit-center-position', orbitId }
+      : currentOrbit.hostId === hostId
+        ? { kind: 'orbit-geometry', orbitId }
+        : { kind: 'orbit-host', orbitId, hostId }
     if (rejectBlockedEntityCommand(command)) return
 
     try {
@@ -341,6 +413,14 @@ export function useMapWorkflows({
         }
       }
       const { durable } = applyWorkspace(nextWorkspace)
+      if (isFreeCenterMove && previousCenter) {
+        acceptCommittedOrbitCenter?.({
+          orbitId,
+          previous: previousCenter,
+          next: { ...center },
+          command: { kind: 'orbit-center-position', orbitId },
+        })
+      }
       editorError.value = ''
       orbitAdjustmentNotice.value = ''
       if (adjusted && minimum !== undefined) {

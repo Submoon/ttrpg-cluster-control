@@ -21,7 +21,7 @@ async function dragMapBackground(page: Page): Promise<void> {
   await page.mouse.up()
 }
 
-test('Move refuses an object with an unresolved inspector draft before preview and opens Resolve access', async ({ page }) => {
+test('Move commits a free position independently of an unresolved metadata draft', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
@@ -51,18 +51,22 @@ test('Move refuses an object with an unresolved inspector draft before preview a
   await page.mouse.move(startX, startY)
   await page.mouse.down()
   await page.mouse.move(startX + 52, startY + 34, { steps: 5 })
-  await expect(object).toHaveAttribute('transform', originalObjectTransform!)
+  await expect(object).not.toHaveAttribute('transform', originalObjectTransform!)
   await page.mouse.up()
 
-  await expect(object).toHaveAttribute('transform', originalObjectTransform!)
-  await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(object).not.toHaveAttribute('transform', originalObjectTransform!)
+  await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
+  const committedAfterMove = await downloadJson(page, 'Export star system JSON')
+  const movedObject = committedAfterMove.system!.objects.find(candidate => candidate.id === objectId)!
+  expect(movedObject.placement).not.toEqual(committedObject.placement)
+  expect({ ...movedObject, placement: committedObject.placement }).toEqual(committedObject)
+  await inspectorToggle.click()
   const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector.getByRole('alert')).toContainText(/draft/i)
   await expect(inspector.getByLabel('Description')).toHaveValue('Unresolved map-object draft')
   await expect(inspector.getByRole('button', { name: 'Save map object' })).toBeVisible()
-  await expect(inspector.getByRole('button', { name: 'Cancel map object edits' })).toBeVisible()
-  const committedAfterBlockedMove = await downloadJson(page, 'Export star system JSON')
-  expect(committedAfterBlockedMove.system!.objects.find(candidate => candidate.id === objectId)).toEqual(committedObject)
+  await inspector.getByRole('button', { name: 'Cancel map object edits' }).click()
+  const committedAfterDiscard = await downloadJson(page, 'Export star system JSON')
+  expect(committedAfterDiscard.system!.objects.find(candidate => candidate.id === objectId)).toEqual(movedObject)
 
   await inspectorToggle.click()
   await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')

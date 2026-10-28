@@ -1,9 +1,9 @@
 import { expect, test } from './fixtures'
 import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
 import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
-import { clickDockAction } from './helpers'
+import { clickDockAction, dockAction, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
-import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation } from './helpers'
+import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation, clickNormalizedSystemPoint } from './helpers'
 import type { WorldPoint, DownloadWindow } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -22,6 +22,11 @@ type DragPreviewWindow = Window & {
     contentMatrix: { a: number; b: number; c: number; d: number; e: number; f: number }
     ellipse: { cx: number; cy: number; rx: number; ry: number; rotation: number }
   } | null
+  __orbitResizeMouseEvents?: Array<{
+    type: 'down' | 'up'
+    clientX: number
+    clientY: number
+  }>
 }
 
 function recordNativeDragTypes(): void {
@@ -212,7 +217,7 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
     .not.toBe(planetBefore)
 })
 
-test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }, testInfo) => {
+test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }) => {
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []
@@ -264,15 +269,27 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     Math.abs(Number(await ring.getAttribute('cy')) - movedCenter.y),
   ).toBeLessThan(2)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  const committedCenter = {
+    x: Number(await ring.getAttribute('cx')),
+    y: Number(await ring.getAttribute('cy')),
+  }
+  const committedCenterNormalized = {
+    x: (committedCenter.x - 64) / 832,
+    y: (committedCenter.y - 72) / 416,
+  }
 
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('50')
-  await page.getByLabel('Center X').fill('0.2')
-  await page.getByLabel('Center Y').fill('0.5')
+  await expect(page.getByRole('spinbutton', { name: 'Center X', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('spinbutton', { name: 'Center Y', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Save Orbit' }).click()
   await expect(ring).toHaveAttribute('rx', '300')
   await expect(ring).toHaveAttribute('ry', '50')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBe(committedCenter.x)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBe(committedCenter.y)
 
   await addCatalogueObject(page, 'star', {
     target: { kind: 'orbit', label: 'Orbit 1 around unoccupied center' },
@@ -383,19 +400,182 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
 
   const globalScale = 1.25
   const globalStartAngle = 1.4
-  await dragOrbitToWorldPoint(
-    page,
-    orbit.locator('.orbit-hit-target'),
-    {
-      x: geometry.cx + 320 * globalScale * Math.cos(globalStartAngle),
-      y: geometry.cy + axisResizedVerticalRadius * globalScale * Math.sin(globalStartAngle),
-    },
-    globalStartAngle,
-  )
+  await setWorkspaceMapMode(page, 'Move')
+  const globalResizeTarget = orbit.locator('.orbit-hit-target')
+  await globalResizeTarget.scrollIntoViewIfNeeded()
+  const resizeStart = await orbit.evaluate((element) => {
+    const ring = element.querySelector<SVGEllipseElement>('.orbit-ring')
+    const hitTarget = element.querySelector<SVGEllipseElement>('.orbit-hit-target')
+    const content = element.closest('svg')?.querySelector<SVGGElement>('.system-map-content')
+    const contentMatrix = content?.getScreenCTM()
+    const hitTargetMatrix = hitTarget?.getScreenCTM()
+    if (!ring || !contentMatrix || !hitTargetMatrix) {
+      throw new Error('Could not capture the Orbit resize transform before the gesture.')
+    }
+
+    const matrixValues = (matrix: DOMMatrix) => ({
+      a: matrix.a,
+      b: matrix.b,
+      c: matrix.c,
+      d: matrix.d,
+      e: matrix.e,
+      f: matrix.f,
+    })
+    return {
+      center: {
+        x: Number(ring.getAttribute('cx')),
+        y: Number(ring.getAttribute('cy')),
+      },
+      horizontalRadius: Number(ring.getAttribute('rx')),
+      verticalRadius: Number(ring.getAttribute('ry')),
+      contentMatrix: matrixValues(contentMatrix),
+      hitTargetMatrix: matrixValues(hitTargetMatrix),
+    }
+  })
+  const resizedOrbitLabel = await orbit.getAttribute('aria-label')
+  if (!resizedOrbitLabel) throw new Error('The resized Orbit has no accessible label.')
+  const globalResizePixels = await page.evaluate((target) => {
+    const matrix = (values: typeof target.contentMatrix) => new DOMMatrix([
+      values.a,
+      values.b,
+      values.c,
+      values.d,
+      values.e,
+      values.f,
+    ])
+    const startMatrix = matrix(target.hitTargetMatrix)
+    const contentMatrix = matrix(target.contentMatrix)
+    const worldPoint = (
+      transform: DOMMatrix,
+      radiusX: number,
+      radiusY: number,
+      scale: number,
+      angle: number,
+    ) => new DOMPoint(
+      target.center.x + radiusX * scale * Math.cos(angle),
+      target.center.y + radiusY * scale * Math.sin(angle),
+    ).matrixTransform(transform)
+    const nearestPixel = (point: DOMPoint) => ({
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    })
+    return {
+      start: nearestPixel(worldPoint(
+        startMatrix,
+        target.horizontalRadius,
+        target.verticalRadius,
+        1,
+        target.angle,
+      )),
+      end: nearestPixel(worldPoint(
+        contentMatrix,
+        target.horizontalRadius,
+        target.verticalRadius,
+        target.scale,
+        target.angle,
+      )),
+    }
+  }, {
+    ...resizeStart,
+    angle: globalStartAngle,
+    scale: globalScale,
+  })
+  await map.evaluate((element, targetOrbitLabel) => {
+    const resizeWindow = window as DragPreviewWindow
+    resizeWindow.__orbitResizeMouseEvents = []
+    let resizingOrbit = false
+    const recordMouseDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)
+        || !element.contains(event.target)
+        || event.target.closest('.orbit-mark')?.getAttribute('aria-label') !== targetOrbitLabel) return
+      resizingOrbit = true
+      resizeWindow.__orbitResizeMouseEvents?.push({
+        type: 'down',
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+    }
+    const recordMouseUp = (event: MouseEvent) => {
+      if (!resizingOrbit) return
+      resizingOrbit = false
+      resizeWindow.__orbitResizeMouseEvents?.push({
+        type: 'up',
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+      window.removeEventListener('mousedown', recordMouseDown, true)
+      window.removeEventListener('mouseup', recordMouseUp, true)
+    }
+    window.addEventListener('mousedown', recordMouseDown, true)
+    window.addEventListener('mouseup', recordMouseUp, true)
+  }, resizedOrbitLabel)
+  await page.mouse.move(globalResizePixels.start.x, globalResizePixels.start.y)
+  await page.mouse.down()
+  await page.mouse.move(globalResizePixels.end.x, globalResizePixels.end.y, { steps: 6 })
+  await page.mouse.up()
   const globallyResizedHorizontalRadius = Number(await ring.getAttribute('rx'))
   const globallyResizedVerticalRadius = Number(await ring.getAttribute('ry'))
-  expect(Math.abs(globallyResizedHorizontalRadius - 400)).toBeLessThanOrEqual(3)
-  expect(Math.abs(globallyResizedVerticalRadius - 75)).toBeLessThanOrEqual(3)
+  const deliveredResize = await page.evaluate((target) => {
+    const resizeWindow = window as DragPreviewWindow
+    const events = resizeWindow.__orbitResizeMouseEvents ?? []
+    const down = events.find(event => event.type === 'down')
+    const up = [...events].reverse().find(event => event.type === 'up')
+    if (!down || !up) {
+      throw new Error('Could not measure the delivered global Orbit resize gesture.')
+    }
+
+    const transform = new DOMMatrix([
+      target.contentMatrix.a,
+      target.contentMatrix.b,
+      target.contentMatrix.c,
+      target.contentMatrix.d,
+      target.contentMatrix.e,
+      target.contentMatrix.f,
+    ])
+    const inverse = transform.inverse()
+    const worldPoint = (clientX: number, clientY: number) => {
+      const point = new DOMPoint(clientX, clientY).matrixTransform(inverse)
+      return { x: point.x, y: point.y }
+    }
+    const start = worldPoint(down.clientX, down.clientY)
+    const end = worldPoint(up.clientX, up.clientY)
+    const center = target.center
+    const scale = Math.hypot(end.x - center.x, end.y - center.y)
+      / Math.hypot(start.x - center.x, start.y - center.y)
+    const targetScreen = new DOMPoint(
+      center.x + target.startHorizontal * target.scale * Math.cos(target.angle),
+      center.y + target.startVertical * target.scale * Math.sin(target.angle),
+    ).matrixTransform(transform)
+    const startTargetScreen = new DOMPoint(
+      center.x + target.startHorizontal * Math.cos(target.angle),
+      center.y + target.startVertical * Math.sin(target.angle),
+    ).matrixTransform(new DOMMatrix([
+      target.hitTargetMatrix.a,
+      target.hitTargetMatrix.b,
+      target.hitTargetMatrix.c,
+      target.hitTargetMatrix.d,
+      target.hitTargetMatrix.e,
+      target.hitTargetMatrix.f,
+    ]))
+    return {
+      horizontalRadius: Math.round(target.startHorizontal * scale),
+      verticalRadius: Math.round(target.startVertical * scale),
+      startScreenError: Math.hypot(down.clientX - startTargetScreen.x, down.clientY - startTargetScreen.y),
+      endScreenError: Math.hypot(up.clientX - targetScreen.x, up.clientY - targetScreen.y),
+    }
+  }, {
+    center: resizeStart.center,
+    startHorizontal: resizeStart.horizontalRadius,
+    startVertical: resizeStart.verticalRadius,
+    contentMatrix: resizeStart.contentMatrix,
+    hitTargetMatrix: resizeStart.hitTargetMatrix,
+    scale: globalScale,
+    angle: globalStartAngle,
+  })
+  expect(deliveredResize.startScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
+  expect(deliveredResize.endScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
+  expect(globallyResizedHorizontalRadius).toBe(deliveredResize.horizontalRadius)
+  expect(globallyResizedVerticalRadius).toBe(deliveredResize.verticalRadius)
   expect(Math.abs(globallyResizedHorizontalRadius / 320
     - globallyResizedVerticalRadius / axisResizedVerticalRadius))
     .toBeLessThan(0.02)
@@ -482,11 +662,10 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     return { x: screenPoint.x, y: screenPoint.y }
   }, newPlanetDropPoint)
   await map.evaluate((element, label) => {
-    const content = element.querySelector<SVGGElement>('.system-map-content')
     const orbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
       .find(candidate => candidate.getAttribute('aria-label') === label)
     const ellipse = orbit?.querySelector<SVGEllipseElement>('.orbit-ring')
-    if (!content || !ellipse) throw new Error('Could not observe the native Orbit drop geometry.')
+    if (!orbit || !ellipse) throw new Error('Could not observe the native Orbit drop geometry.')
 
     const document = element.ownerDocument
     const dropWindow = document.defaultView as DragPreviewWindow | null
@@ -496,6 +675,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
       if (!(event instanceof DragEvent)
         || !(event.target instanceof Node)
         || !element.contains(event.target)) return
+      const content = element.querySelector<SVGGElement>('.system-map-content')
+      const currentOrbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
+        .find(candidate => candidate.getAttribute('aria-label') === label)
+      const currentEllipse = currentOrbit?.querySelector<SVGEllipseElement>('.orbit-ring')
+      if (!content || !currentEllipse) return
       const matrix = content.getScreenCTM()
       if (!matrix) return
       dropWindow.__nativeEllipseDrop = {
@@ -509,11 +693,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
           f: matrix.f,
         },
         ellipse: {
-          cx: Number(ellipse.getAttribute('cx')),
-          cy: Number(ellipse.getAttribute('cy')),
-          rx: Number(ellipse.getAttribute('rx')),
-          ry: Number(ellipse.getAttribute('ry')),
-          rotation: Number(ellipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0),
+          cx: Number(currentEllipse.getAttribute('cx')),
+          cy: Number(currentEllipse.getAttribute('cy')),
+          rx: Number(currentEllipse.getAttribute('rx')),
+          ry: Number(currentEllipse.getAttribute('ry')),
+          rotation: Number(currentEllipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0),
         },
       }
       document.removeEventListener('drop', captureDrop, true)
@@ -554,14 +738,6 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
       intendedScreenPoint: target.intendedScreenPoint,
     }
   }, { intendedScreenPoint: intendedDropScreenPoint })
-  await testInfo.attach('native-ellipse-drop-probe.json', {
-    body: JSON.stringify({
-      intendedAngle: newPlanetAngle,
-      intendedWorldPoint: newPlanetDropPoint,
-      ...nativeDropProbe,
-    }, null, 2),
-    contentType: 'application/json',
-  })
   const nativeDrop = nativeDropProbe.nativeDrop
   const renderedDrop = nativeDropProbe.rendered
   if (!nativeDrop || !renderedDrop?.scenePoint || !renderedDrop.screenPoint) {
@@ -627,7 +803,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const system = systemExport.system!
   const exportedOrbit = system.orbits.find(candidate => candidate.hostId === null)!
   const exportedNewPlanet = system.objects.find(object => object.name === 'New planet 1')!
-  expect(exportedOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(exportedOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(exportedOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(exportedNewPlanet.placement).toEqual({ kind: 'orbit', orbitId: exportedOrbit.id })
   expect(systemExport.layout.objectAngles[exportedNewPlanet.id]).toBeCloseTo(renderedNewPlanetAngle, 10)
   expect(systemExport.layout).not.toHaveProperty('orbitEllipseRadii')
@@ -704,7 +881,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     candidate.id !== system.id && candidate.name === system.name,
   )!
   const importedOrbit = importedSystem.orbits.find(candidate => candidate.hostId === null)!
-  expect(importedOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(importedOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(importedOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(clusterExport.layout.orbitRadii[importedOrbit.id])
     .toEqual({ horizontal: resizedHorizontalRadius, vertical: resizedVerticalRadius })
   expect(clusterExport.layout.orbitRotations?.[importedOrbit.id]).toBeCloseTo(finalRotation, 4)
@@ -726,7 +904,8 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     .filter(candidate => !sourceSystemIds.has(candidate.id))
     .find(candidate => candidate.orbits.some(orbit => orbit.hostId === null))!
   const roundTripOrbit = roundTripSystem.orbits.find(orbit => orbit.hostId === null)!
-  expect(roundTripOrbit.center).toEqual({ x: 0.2, y: 0.5 })
+  expect(roundTripOrbit.center?.x).toBeCloseTo(committedCenterNormalized.x, 10)
+  expect(roundTripOrbit.center?.y).toBeCloseTo(committedCenterNormalized.y, 10)
   expect(clusterRoundTrip.layout.orbitRadii[roundTripOrbit.id])
     .toEqual({ horizontal: resizedHorizontalRadius, vertical: resizedVerticalRadius })
   expect(clusterRoundTrip.layout.orbitRotations?.[roundTripOrbit.id])
@@ -735,6 +914,121 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   expect(roundTripStars).toHaveLength(2)
   expect(roundTripStars.every(object => object.placement.kind === 'orbit'
     && object.placement.orbitId === roundTripOrbit.id)).toBe(true)
+})
+
+test('the Warden can preview and confirm an unoccupied Orbit center move without losing Orbit drafts', async ({ page }) => {
+  await page.addInitScript(() => {
+    const downloadWindow = window as DownloadWindow
+    downloadWindow.__mapExportBlobs = []
+    const createObjectURL = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object) => {
+      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+      return createObjectURL(object)
+    }
+  })
+  const { systemName } = await createSingleSystemWorkspace(page)
+  const map = page.getByRole('group', { name: `${systemName} star system map` })
+  await (await dockAction(page, 'Add orbit')).click()
+  const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
+  if (await addToggle.getAttribute('aria-expanded') === 'true') await addToggle.click()
+  const creationControls = page.getByRole('group', { name: 'Orbit creation controls' })
+  const placementToggle = creationControls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
+  const centerOrHost = page.getByLabel('Orbit center or host', { exact: true })
+  await selectInspectorOption(centerOrHost, 'Unoccupied center')
+  await expect(page.getByLabel('X', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Y', { exact: true })).toHaveCount(0)
+  await clickNormalizedSystemPoint(page, map, { x: 0.24, y: 0.31 })
+  await quitSystemAdd(page)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const orbitItem = hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ })
+  await orbitItem.click()
+  const orbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
+  const ring = orbit.locator('.orbit-ring')
+  const initialCenter = {
+    x: Number(await ring.getAttribute('cx')),
+    y: Number(await ring.getAttribute('cy')),
+  }
+  await setWorkspaceMapMode(page, 'Move')
+  const centerHandle = orbit.locator('.orbit-center-handle')
+  await centerHandle.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(initialCenter.x, 2)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(initialCenter.y, 2)
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  const controls = page.getByRole('group', { name: 'Orbit center placement controls' })
+  const moveButton = controls.getByRole('button', { name: 'Move center on map', exact: true })
+  await expect(moveButton).toBeVisible()
+  await moveButton.click()
+  const originalExport = await downloadJson(page, 'Export star system JSON')
+  const originalExportCenter = originalExport.system?.orbits.find(candidate => candidate.hostId === null)?.center
+  if (!originalExportCenter) throw new Error('The unoccupied Orbit did not export its applied center.')
+
+  const clickedPoint = await clickNormalizedSystemPoint(page, map, { x: 0.69, y: 0.61 })
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + clickedPoint.x * 832, 1)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(72 + clickedPoint.y * 416, 1)
+  const previewExport = await downloadJson(page, 'Export star system JSON')
+  expect(previewExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
+    .toEqual(originalExportCenter)
+
+  await map.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(65 + clickedPoint.x * 832, 1)
+  await controls.getByRole('button', { name: 'Cancel preview', exact: true }).click()
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(initialCenter.x, 2)
+  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+    .toBeCloseTo(initialCenter.y, 2)
+  const canceledExport = await downloadJson(page, 'Export star system JSON')
+  expect(canceledExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
+    .toEqual(originalExportCenter)
+
+  await moveButton.click()
+  const confirmedTarget = await clickNormalizedSystemPoint(page, map, { x: 0.72, y: 0.58 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await expect(map).toBeFocused()
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + confirmedTarget.x * 832, 1)
+  const confirmedExport = await downloadJson(page, 'Export star system JSON')
+  const confirmedCenter = confirmedExport.system?.orbits.find(candidate => candidate.hostId === null)?.center
+  expect(confirmedCenter?.x).toBeCloseTo(confirmedTarget.x, 5)
+  expect(confirmedCenter?.y).toBeCloseTo(confirmedTarget.y, 5)
+
+  await page.getByLabel('Horizontal radius', { exact: true }).fill('240')
+  await moveButton.click()
+  const applyDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.64, y: 0.73 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await expect(page.getByLabel('Horizontal radius', { exact: true })).toHaveValue('240')
+  await page.getByRole('button', { name: 'Save Orbit' }).click()
+  await expect(ring).toHaveAttribute('rx', '240')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + applyDraftTarget.x * 832, 1)
+
+  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByLabel('Vertical radius', { exact: true }).fill('250')
+  await moveButton.click()
+  const discardDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.34, y: 0.68 })
+  await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
+  await page.getByRole('button', { name: 'Discard changes' }).click()
+  await expect(ring).toHaveAttribute('rx', '240')
+  await expect(ring).not.toHaveAttribute('ry', '250')
+  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+    .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
+
+  await page.reload()
+  await openWorkspaceHierarchy(page)
+  const restoredMap = page.getByRole('group', { name: `${systemName} star system map` })
+  const restoredRing = restoredMap.getByRole('group', { name: 'Orbit 1 around unoccupied center' }).locator('.orbit-ring')
+  await expect.poll(async () => Number(await restoredRing.getAttribute('cx')))
+    .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
+  await expect(restoredRing).toHaveAttribute('rx', '240')
 })
 
 test('the Warden can detach a hosted Orbit and move its unoccupied center', async ({ page }) => {

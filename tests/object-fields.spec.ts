@@ -48,6 +48,7 @@ async function createCatalogueWorkspace(page: import('@playwright/test').Page): 
 }
 
 test('the Warden can build and edit a nested star-system map', async ({ page }) => {
+  await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -119,14 +120,12 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(inspector.getByRole('heading', { name: 'Nix' })).toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Nix/ })).toHaveAttribute('aria-current', 'true')
 
-  await addCatalogueObject(page, 'other')
+  await addCatalogueObject(page, 'other', { target: { kind: 'free', x: 0.75, y: 0.25 } })
   await expect(inspector.getByRole('heading', { name: generatedNames.get('other')! })).toBeVisible()
 
   await editMapObject(page)
   await page.getByLabel('Type label').fill('Relay Beacon')
   await page.getByLabel('Name', { exact: true }).fill('Relay Beacon Kestrel')
-  await page.getByLabel('Schematic X').fill('0.75')
-  await page.getByLabel('Schematic Y').fill('0.25')
   await saveMapObject(page)
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await expect(inspector.getByRole('heading', { name: 'Relay Beacon Kestrel' })).toBeVisible()
@@ -139,7 +138,13 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await expect(hierarchy.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await hierarchy.getByRole('button', { name: /Relay Beacon Kestrel/ }).click()
   await expect(inspector.getByLabel('Type label')).toHaveValue('Relay Beacon')
-  await expect(inspector.getByLabel('Schematic X')).toHaveValue('0.75')
+  await expect(inspector.getByLabel('Schematic X')).toHaveCount(0)
+  const afterReload = await downloadJson(page, 'Export star system JSON')
+  const beacon = afterReload.system?.objects.find(object => object.name === 'Relay Beacon Kestrel')
+  expect(beacon?.placement.kind).toBe('system')
+  if (beacon?.placement.kind !== 'system') throw new Error('Expected the beacon to keep its free map position.')
+  expect(beacon.placement.x).toBeCloseTo(0.75, 2)
+  expect(beacon.placement.y).toBeCloseTo(0.25, 2)
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
 })
 
@@ -246,6 +251,8 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
 })
 
 test('the Warden can configure native and reusable custom object fields', async ({ page }) => {
+  // This round trip edits six definitions and creates objects in two systems through the public UI.
+  test.slow()
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')

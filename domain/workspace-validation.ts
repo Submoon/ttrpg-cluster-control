@@ -178,6 +178,11 @@ export function isPoint(value: unknown): value is Point {
     && Number.isFinite(value.y)
 }
 
+/** Narrows a record whose every value is a finite scene point. */
+export function isPointRecord(value: unknown): value is Record<string, Point> {
+  return isRecord(value) && Object.values(value).every(isPoint)
+}
+
 function isObjectFamily(value: unknown): value is ObjectFamily {
   return value === 'CelestialBody'
     || value === 'SmallBody/Field'

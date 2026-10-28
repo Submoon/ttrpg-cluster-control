@@ -1,11 +1,17 @@
 import { expect, test, type Page } from './fixtures'
 import {
   captureMapExportBlobs,
+  clickNormalizedClusterPoint,
+  clickDockAction,
   dockAction,
   downloadJson,
   returnToClusterMap,
+  selectInspectorOption,
+  setWorkspaceMapMode,
   workspaceNavigation,
+  zoomOutMapToMinimum,
 } from './helpers'
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
 type TouchPoint = { id: number; x: number; y: number }
 type WorldPoint = { x: number; y: number }
@@ -70,14 +76,9 @@ async function beginTwoContactViewGesture(
   await page.waitForTimeout(80)
 }
 
-async function placeNumericMovePreview(page: Page, point: WorldPoint): Promise<void> {
-  const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
-  await expect(placement).toBeVisible()
-  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
-  await page.getByRole('textbox', { name: 'System position X', exact: true }).fill(String(point.x))
-  await page.getByRole('textbox', { name: 'System position Y', exact: true }).fill(String(point.y))
-  await page.getByRole('button', { name: 'Preview move', exact: true }).click()
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
+async function chooseSystemMoveDestination(page: Page, map: import('@playwright/test').Locator, point: WorldPoint): Promise<void> {
+  await workspaceNavigation(page).getByRole('button', { name: 'Move selected system on map', exact: true }).click()
+  await clickNormalizedClusterPoint(page, map, point)
 }
 
 test('cluster two-contact takeover cancels an active Move drag and never activates Navigate, Select, or Add System', async ({ page }) => {
@@ -205,14 +206,14 @@ test('Add System ignores right-pan and exits when Navigate is reselected', async
   const originalTransform = await sourceNode.getAttribute('transform')
   await sourceNode.click()
   await expect(sourceNode).toHaveClass(/is-selected/)
-  await placeNumericMovePreview(page, { x: 0.82, y: 0.18 })
+  await chooseSystemMoveDestination(page, map, { x: 0.82, y: 0.18 })
   await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
 
   await modeButtons.getByRole('button', { name: 'Select', exact: true }).click()
   await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
 
   await modeButtons.getByRole('button', { name: 'Move', exact: true }).click()
-  await placeNumericMovePreview(page, { x: 0.82, y: 0.18 })
+  await chooseSystemMoveDestination(page, map, { x: 0.82, y: 0.18 })
   const moveViewportBeforePan = await scene.getAttribute('transform')
   const mapBounds = await map.boundingBox()
   if (!mapBounds) throw new Error('The cluster map has no visible bounds for Move right-pan input.')
@@ -225,11 +226,64 @@ test('Add System ignores right-pan and exits when Navigate is reselected', async
   await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
   await expect.poll(() => scene.getAttribute('transform')).not.toBe(moveViewportBeforePan)
 
-  await placeNumericMovePreview(page, { x: 0.82, y: 0.18 })
+  await chooseSystemMoveDestination(page, map, { x: 0.82, y: 0.18 })
   // This emulates a browser blur event; it does not exercise physical tab switching or OS focus loss.
   await page.evaluate(() => window.dispatchEvent(new Event('blur')))
   await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
   await expect(page.getByRole('button', { name: 'Confirm system move', exact: true })).toHaveCount(0)
+  const after = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(after).toEqual(before)
+})
+
+test('unresolved exit hit target remains selectable at minimum zoom beside its small marker', async ({ page }) => {
+  await importCampaignWorkspace(page, undefined, { width: 1440, height: 960 })
+  await clickDockAction(page, 'Add Jump Route')
+  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  await page.getByRole('spinbutton', { name: 'Jump level', exact: true }).fill('3')
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
+  await page.getByLabel('Unknown destination label').fill('The Rim')
+  await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
+  const unresolvedRoute = before.cluster?.routes.find(route => route.toPointId === null)
+  expect(unresolvedRoute).toBeDefined()
+  if (!unresolvedRoute) throw new Error('The newly created route has no unresolved destination.')
+  const routeMark = clusterMap.locator(`.cluster-route[data-route-id="${unresolvedRoute.id}"]`)
+  const marker = routeMark.locator('.cluster-exit-mark')
+
+  await setWorkspaceMapMode(page, 'Select')
+  await zoomOutMapToMinimum(page)
+  await expect(marker).toBeVisible()
+  await expect(routeMark).not.toHaveClass(/is-selected/)
+  const markerBounds = await marker.boundingBox()
+  if (!markerBounds) throw new Error('The unresolved exit marker is not visible at minimum zoom.')
+  const offsetClick = {
+    x: markerBounds.x + markerBounds.width / 2 + 20,
+    y: markerBounds.y + markerBounds.height / 2,
+  }
+  const hit = await page.evaluate(point => {
+    const element = document.elementFromPoint(point.x, point.y)
+    return {
+      point,
+      tag: element?.tagName,
+      className: element?.getAttribute('class'),
+      routeId: element?.closest('.cluster-route')?.getAttribute('data-route-id'),
+      systemId: element?.closest('.cluster-system-node')?.getAttribute('data-system-id'),
+    }
+  }, offsetClick)
+  await test.info().attach('minimum-zoom-exit-hit', {
+    body: JSON.stringify(hit),
+    contentType: 'application/json',
+  })
+  await test.info().attach('minimum-zoom-exit-map', {
+    body: await clusterMap.screenshot(),
+    contentType: 'image/png',
+  })
+  await page.mouse.click(offsetClick.x, offsetClick.y)
+  await expect(routeMark).toHaveClass(/is-selected/)
+
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after).toEqual(before)
 })

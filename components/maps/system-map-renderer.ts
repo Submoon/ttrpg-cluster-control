@@ -115,6 +115,8 @@ export interface SystemMapEventHandlers {
   placeObjectInOrbit(id: string, orbitId: string, angle: number): void
   /** Offers the named map targets for a user click while Add is armed. */
   creationTarget(candidates: SystemCreationCandidate[]): void
+  /** Supplies a raw SVG scene point selected for a parent-owned object move preview. */
+  moveTarget(point: Point): void
   /** Resolves a native palette release through the same creation candidate path as an armed Add click. */
   creationDropTarget(type: SystemCreationType, candidates: SystemCreationCandidate[]): void
 }
@@ -132,10 +134,14 @@ export interface SystemMapRendererOptions {
   creationType: SystemCreationType | null
   creationPreview: SystemCreationPreview | null
   creationChooserOpen: boolean
+  /** A parent-owned object move is armed; its map clicks must take priority over Add/selection. */
+  moveTargeting: boolean
   /** Parent-owned object position previews retained across renderer rebuilds by the wrapper. */
   objectPlacementPreviews: ReadonlyMap<string, Point>
   /** Parent-owned Orbit center and radii previews retained across renderer rebuilds by the wrapper. */
   orbitPlacementPreviews: ReadonlyMap<string, OrbitPlacementPreview>
+  /** Parent-owned Orbit center target overlays retained independently from Inspector geometry previews. */
+  orbitCenterMovePreviews: ReadonlyMap<string, Point>
   /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
   moveEnabled: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
@@ -159,12 +165,18 @@ export interface SystemMapRenderer {
   setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
   /** Updates a parent-owned proposed-host Orbit preview without publishing workspace geometry. */
   setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
+  /** Updates a parent-owned Orbit center overlay without replacing committed radii or rotation. */
+  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void
   /** Captures Ctrl+wheel rotation before the same event reaches D3's zoom behavior. */
   captureOrbitRotationWheel(event: WheelEvent): void
   /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
   handleObjectDrop(event: DragEvent): void
   /** Consumes a map click in Add and offers its candidates in raw scene coordinates. */
   handleCreationClick(event: MouseEvent): void
+  /** Consumes Enter/Space in Add and offers candidates at the visible map center. */
+  handleCreationKeydown(event: KeyboardEvent): void
+  /** Consumes a map click while a parent-owned object move is armed. */
+  handleMoveTargetClick(event: MouseEvent): void
   /** Resolves candidates from an unclamped SVG scene point using the same calculation as map clicks. */
   getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }
@@ -195,8 +207,10 @@ export function renderSystemMap({
   creationType,
   creationPreview,
   creationChooserOpen,
+  moveTargeting,
   objectPlacementPreviews,
   orbitPlacementPreviews,
+  orbitCenterMovePreviews,
   moveEnabled,
   orbitRotationWheelEvents,
   handlers,
@@ -254,6 +268,7 @@ export function renderSystemMap({
   const previewOrbitCenters = new Map<string, Point>()
   const previewOrbitRadii = new Map<string, OrbitRadii>()
   const previewOrbitRotations = new Map<string, number>()
+  const centerMovePreviewCenters = new Map(orbitCenterMovePreviews)
   for (const [orbitId, preview] of orbitPlacementPreviews) {
     previewOrbitCenters.set(orbitId, { ...preview.center })
     previewOrbitRadii.set(orbitId, { ...preview.radii })
@@ -263,6 +278,7 @@ export function renderSystemMap({
   const liveOrbitRadii = new Map<string, OrbitRadii>()
   const liveOrbitRotations = new Map<string, number>()
   const effectiveOrbitCenters = new Map(previewOrbitCenters)
+  for (const [orbitId, center] of centerMovePreviewCenters) effectiveOrbitCenters.set(orbitId, { ...center })
   const effectiveOrbitRadii = new Map(previewOrbitRadii)
   const effectiveOrbitRotations = new Map(previewOrbitRotations)
   const activeGestures = new Map<Element, () => void>()
@@ -279,7 +295,7 @@ export function renderSystemMap({
   }
   function clearLiveOrbitCenter(orbitId: string): void {
     liveOrbitCenters.delete(orbitId)
-    const previewCenter = previewOrbitCenters.get(orbitId)
+    const previewCenter = centerMovePreviewCenters.get(orbitId) ?? previewOrbitCenters.get(orbitId)
     if (previewCenter) effectiveOrbitCenters.set(orbitId, previewCenter)
     else effectiveOrbitCenters.delete(orbitId)
   }
@@ -379,7 +395,9 @@ export function renderSystemMap({
       previewOrbitRadii.set(orbitId, radii)
       if (preview.rotation !== undefined) previewOrbitRotations.set(orbitId, preview.rotation)
       else previewOrbitRotations.delete(orbitId)
-      if (!liveOrbitCenters.has(orbitId)) effectiveOrbitCenters.set(orbitId, center)
+      if (!liveOrbitCenters.has(orbitId)) {
+        effectiveOrbitCenters.set(orbitId, centerMovePreviewCenters.get(orbitId) ?? center)
+      }
       if (!liveOrbitRadii.has(orbitId)) effectiveOrbitRadii.set(orbitId, radii)
       if (!liveOrbitRotations.has(orbitId)) {
         if (preview.rotation !== undefined) effectiveOrbitRotations.set(orbitId, preview.rotation)
@@ -389,9 +407,28 @@ export function renderSystemMap({
       previewOrbitCenters.delete(orbitId)
       previewOrbitRadii.delete(orbitId)
       previewOrbitRotations.delete(orbitId)
-      if (!liveOrbitCenters.has(orbitId)) effectiveOrbitCenters.delete(orbitId)
+      if (!liveOrbitCenters.has(orbitId)) {
+        const centerMovePreview = centerMovePreviewCenters.get(orbitId)
+        if (centerMovePreview) effectiveOrbitCenters.set(orbitId, centerMovePreview)
+        else effectiveOrbitCenters.delete(orbitId)
+      }
       if (!liveOrbitRadii.has(orbitId)) effectiveOrbitRadii.delete(orbitId)
       if (!liveOrbitRotations.has(orbitId)) effectiveOrbitRotations.delete(orbitId)
+    }
+    updateLiveGeometry()
+  }
+  function setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void {
+    if (scenePoint) {
+      const center = { ...scenePoint }
+      centerMovePreviewCenters.set(orbitId, center)
+      if (!liveOrbitCenters.has(orbitId)) effectiveOrbitCenters.set(orbitId, center)
+    } else {
+      centerMovePreviewCenters.delete(orbitId)
+      if (!liveOrbitCenters.has(orbitId)) {
+        const placementPreview = previewOrbitCenters.get(orbitId)
+        if (placementPreview) effectiveOrbitCenters.set(orbitId, placementPreview)
+        else effectiveOrbitCenters.delete(orbitId)
+      }
     }
     updateLiveGeometry()
   }
@@ -481,7 +518,7 @@ export function renderSystemMap({
   } {
     const positions = appliedPositions()
     const movingObjectIds = objectsMovedWithOrbit(system, orbit.id)
-    const geometryBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-geometry', orbitId: orbit.id })
+    const geometryBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-center-position', orbitId: orbit.id })
     const candidates: OrbitCenterMoveCandidate[] = []
     const nearbyHosts = Number.isFinite(point.x) && Number.isFinite(point.y)
       ? system.objects
@@ -514,16 +551,13 @@ export function renderSystemMap({
     }
 
     if (nearbyHosts.length === 0 && Number.isFinite(point.x) && Number.isFinite(point.y)) {
-      const hostBlocked = handlers.isEntityCommandBlocked({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })
       candidates.push({
         key: `free:${point.x}:${point.y}`,
         label: 'Free Orbit center',
         target: { kind: 'free', point: toNormalizedMapPoint(point) },
         error: geometryBlocked
           ? 'Resolve the Inspector draft before moving this Orbit.'
-          : hostBlocked
-            ? 'Resolve the Inspector draft before changing this Orbit host.'
-            : null,
+          : null,
       })
     }
     const eligible = candidates.filter(candidate => candidate.error === null)
@@ -582,6 +616,35 @@ export function renderSystemMap({
     if (!contentNode) return
     const [x, y] = pointer(event, contentNode)
     offerCreationTarget({ x, y })
+  }
+
+  /** Uses the transformed visible center so keyboard Add follows the current pan and zoom. */
+  function handleCreationKeydown(event: KeyboardEvent): void {
+    if (!creationType || creationChooserOpen || event.target !== element
+      || (event.key !== 'Enter' && event.key !== ' ')) return
+    const contentNode = element.querySelector<SVGGElement>('.system-map-content')
+    const inverse = contentNode?.getScreenCTM()?.inverse()
+    if (!contentNode || !inverse) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    const bounds = element.getBoundingClientRect()
+    const center = new DOMPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+      .matrixTransform(inverse)
+    offerCreationTarget({ x: center.x, y: center.y })
+  }
+
+  /** Consumes a target click before D3 selection or Add handling and reports the unbounded scene point. */
+  function handleMoveTargetClick(event: MouseEvent): void {
+    if (!moveTargeting || event.detail === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    const contentNode = element.querySelector<SVGGElement>('.system-map-content')
+    if (!contentNode) return
+    const [x, y] = pointer(event, contentNode)
+    handlers.moveTarget({ x, y })
   }
 
   const svg = select(element)
@@ -691,10 +754,10 @@ export function renderSystemMap({
         .attr('tabindex', selectedOrbitId === orbit.id ? 0 : -1)
         .attr('aria-hidden', selectedOrbitId === orbit.id ? 'false' : 'true')
         .attr('aria-label', moveEnabled
-          ? `Move center of ${orbitLabel(system, orbit)}`
-          : `Inspect ${orbitLabel(system, orbit)}`)
+          ? `Center of ${orbitLabel(system, orbit)}; drag to move or use Move center on map for click and keyboard placement`
+          : `Inspect center of ${orbitLabel(system, orbit)}`)
         .append('title')
-        .text('Drag to move the Orbit center')
+        .text('Drag to move the Orbit center; use Move center on map for click or keyboard placement')
     }
     mark.append<SVGLineElement>('line')
       .attr('class', 'orbit-edit-control orbit-rotation-stem')
@@ -815,25 +878,12 @@ export function renderSystemMap({
         return
       }
 
-      if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
-      handlers.cancelOrbitPlacementPreview()
-      const step = event.shiftKey ? 10 : 1
-      const center = orbitCenter(orbit, currentPositions(), effectiveOrbitCenters)
-      let x = center.x
-      let y = center.y
-      if (event.key === 'ArrowLeft') x -= step
-      else if (event.key === 'ArrowRight') x += step
-      else if (event.key === 'ArrowUp') y -= step
-      else if (event.key === 'ArrowDown') y += step
-      else return
-
+      if (!moveEnabled || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp'].includes(event.key)) return
+      // Position changes from this handle require the explicit map Move preview and confirmation.
+      // The armed workflow captures arrows at the SVG boundary before they reach this handler.
+      if (moveTargeting) return
       event.preventDefault()
-      const nextCenter = { x, y }
-      if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
-        || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId: null })) return
-      setLiveOrbitCenter(orbit.id, nextCenter)
-      updateLiveGeometry()
-      handlers.moveOrbitCenter(orbit.id, toNormalizedMapPoint(nextCenter), null)
+      handlers.selectOrbit(orbit.id)
     })
   orbitRotationHandles
     .on('click', (event, orbit) => {
@@ -1111,7 +1161,7 @@ export function renderSystemMap({
       }
     })
   const objectDrag = drag<SVGGElement, SystemObject>()
-    .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+    .filter(event => moveEnabled && !moveTargeting && !creationType && !event.ctrlKey && !event.button
       && (!('touches' in event) || event.touches.length === 1))
     .clickDistance(6)
     .container(() => content.node()!)
@@ -1347,7 +1397,7 @@ export function renderSystemMap({
   }
   orbitResizeTargets.call(
     drag<SVGElement, Orbit>()
-      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !moveTargeting && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1410,7 +1460,7 @@ export function renderSystemMap({
 
   orbitCenterHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !moveTargeting && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1458,8 +1508,10 @@ export function renderSystemMap({
         }
 
         const hostId = candidate.target.kind === 'host' ? candidate.target.objectId : null
-        if (blockEntityCommand({ kind: 'orbit-geometry', orbitId: orbit.id })
-          || blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId })) {
+        const blocked = candidate.target.kind === 'host'
+          ? blockEntityCommand({ kind: 'orbit-host', orbitId: orbit.id, hostId })
+          : blockEntityCommand({ kind: 'orbit-center-position', orbitId: orbit.id })
+        if (blocked) {
           clearLiveOrbitCenter(orbit.id)
           clearLiveOrbitRadii(orbit.id)
           updateLiveGeometry()
@@ -1485,7 +1537,7 @@ export function renderSystemMap({
   const orbitRotationGestures = new WeakMap<SVGCircleElement, OrbitRotationGesture>()
   orbitRotationHandles.call(
     drag<SVGCircleElement, Orbit>()
-      .filter(event => moveEnabled && !creationType && !event.ctrlKey && !event.button
+      .filter(event => moveEnabled && !moveTargeting && !creationType && !event.ctrlKey && !event.button
         && (!('touches' in event) || event.touches.length === 1))
       .clickDistance(6)
       .container(() => content.node()!)
@@ -1598,9 +1650,12 @@ export function renderSystemMap({
     cancelActiveGesture,
     setObjectPlacementPreview,
     setOrbitPlacementPreview,
+    setOrbitCenterMovePreview,
     captureOrbitRotationWheel,
     handleObjectDrop,
     handleCreationClick,
+    handleCreationKeydown,
+    handleMoveTargetClick,
     getCreationCandidates,
   }
 }

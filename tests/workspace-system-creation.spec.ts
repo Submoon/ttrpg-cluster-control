@@ -4,6 +4,8 @@ import { importReviewDialog, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
+  clickNormalizedSystemPoint,
+  clickSystemOrbitPoint,
   dragToWorldPoint,
   downloadJson,
   jsonMapImportInput,
@@ -15,7 +17,6 @@ import {
   setHeaderMapActionsOpen,
   setJsonFile,
   workspaceNavigation,
-  workspaceZoomControls,
   type WorldPoint,
 } from './helpers'
 
@@ -67,7 +68,7 @@ async function ensurePlacementOpen(controls: import('@playwright/test').Locator)
   await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
 }
 
-test('Placement Add validates and uses the current coordinate inputs', async ({ page }) => {
+test('free-object creation uses a map point instead of coordinate inputs', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
   const inspector = page.locator('#workspace-inspector-panel')
@@ -79,31 +80,16 @@ test('Placement Add validates and uses the current coordinate inputs', async ({ 
 
   const controls = page.getByRole('group', { name: 'Planet creation controls' })
   await controls.getByRole('button', { name: 'Placement', exact: true }).click()
-  const x = page.getByLabel('Placement X')
-  const y = page.getByLabel('Placement Y')
-  const add = page.getByRole('button', { name: 'Add', exact: true })
-  const beforeAdd = await downloadJson(page, 'Export star system JSON')
-  await ensurePlacementOpen(controls)
-  await x.fill('0.3')
-  await y.fill('0.4')
-  await x.fill('')
-  await add.click()
-  await expect(page.getByText('X must be a finite number.', { exact: true })).toBeVisible()
-  await expect(x).toHaveValue('')
-  await expect(y).toHaveValue('0.4')
-  const afterInvalidAdd = await downloadJson(page, 'Export star system JSON')
-  expect(afterInvalidAdd.system).toEqual(beforeAdd.system)
-  expect(afterInvalidAdd.layout).toEqual(beforeAdd.layout)
-
-  await ensurePlacementOpen(controls)
-  await x.fill('0.35')
-  await y.fill('0.45')
-  await add.click()
+  await expect(page.getByLabel('Placement X')).toHaveCount(0)
+  await expect(page.getByLabel('Placement Y')).toHaveCount(0)
+  await expect(page.getByRole('form', { name: 'Placement', exact: true }).getByRole('button', { name: 'Add', exact: true })).toHaveCount(0)
+  await controls.getByRole('button', { name: 'Placement', exact: true }).click()
+  const point = await clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), { x: 0.35, y: 0.45 })
   await expect(page.getByRole('button', { name: 'Confirm placement', exact: true })).toHaveCount(0)
   const afterAdd = await downloadJson(page, 'Export star system JSON')
   const addedPlanet = afterAdd.system?.objects.find(object => object.subtype === 'planet')
   expect(afterAdd.system?.objects).toHaveLength(2)
-  expect(addedPlanet?.placement).toEqual({ kind: 'system', x: 0.35, y: 0.45 })
+  expectSystemPlacement(addedPlanet?.placement, point)
   await expect(inspector).toBeVisible()
 })
 
@@ -140,7 +126,8 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
   const placementForm = page.getByRole('form', { name: 'Placement', exact: true })
   await placementForm.getByLabel('Type label', { exact: true }).fill('Relay Beacon')
-  await placementForm.getByRole('button', { name: 'Add', exact: true }).click()
+  await placementToggle.click()
+  await clickNormalizedSystemPoint(page, map, { x: 0.25, y: 0.25 })
 
   const guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
   await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
@@ -160,45 +147,6 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   await expect(inspector).toBeVisible()
   await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
 })
-
-async function clickNormalizedSystemPoint(
-  page: import('@playwright/test').Page,
-  map: import('@playwright/test').Locator,
-  point: WorldPoint,
-): Promise<WorldPoint> {
-  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
-  for (let attempt = 0; attempt < 64; attempt += 1) {
-    const target = await map.evaluate((element, normalized) => {
-      const content = element.querySelector<SVGGElement>('.system-map-content')
-      const transform = content?.getScreenCTM()
-      if (!transform) throw new Error('The system map content is not attached to the document.')
-      const requestedScreenPoint = new DOMPoint(64 + normalized.x * 832, 72 + normalized.y * 416)
-        .matrixTransform(transform)
-      const clickPoint = { x: Math.floor(requestedScreenPoint.x), y: Math.floor(requestedScreenPoint.y) }
-      const bounds = element.getBoundingClientRect()
-      const hit = document.elementFromPoint(clickPoint.x, clickPoint.y)
-      // Chromium delivers page.mouse coordinates as integer CSS pixels; derive the oracle from that delivered point.
-      const deliveredScenePoint = new DOMPoint(clickPoint.x, clickPoint.y).matrixTransform(transform.inverse())
-      return {
-        clickPoint,
-        deliveredPoint: { x: (deliveredScenePoint.x - 64) / 832, y: (deliveredScenePoint.y - 72) / 416 },
-        reachable: clickPoint.x >= Math.max(0, bounds.left) && clickPoint.y >= Math.max(0, bounds.top)
-          && clickPoint.x < Math.min(window.innerWidth, bounds.right)
-          && clickPoint.y < Math.min(window.innerHeight, bounds.bottom)
-          && !!hit && (hit === element || element.contains(hit)),
-      }
-    }, point)
-
-    if (target.reachable) {
-      await page.mouse.click(target.clickPoint.x, target.clickPoint.y)
-      return target.deliveredPoint
-    }
-    if (await zoomOut.isDisabled()) break
-    await zoomOut.click()
-  }
-
-  throw new Error(`Normalized map point (${point.x}, ${point.y}) is unreachable after public Zoom out controls.`)
-}
 
 function expectSystemPlacement(
   placement: { kind: string; x?: number; y?: number } | undefined,
@@ -554,9 +502,8 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
   await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
   await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe('Free map position')
-  // The map's D3 pointer is float32-backed while the public DOM matrix oracle is double precision.
-  expect(Number(await page.getByLabel('Placement X', { exact: true }).inputValue())).toBeCloseTo(freePoint.x, 6)
-  expect(Number(await page.getByLabel('Placement Y', { exact: true }).inputValue())).toBeCloseTo(freePoint.y, 6)
+  await expect(page.getByLabel('Placement X', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Placement Y', { exact: true })).toHaveCount(0)
   const afterFreeMapAdd = await downloadJson(page, 'Export star system JSON')
   expect(afterFreeMapAdd.system?.objects).toHaveLength(initial.system!.objects.length + 2)
   const freePlanet = afterFreeMapAdd.system!.objects.find(object =>
@@ -570,9 +517,9 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   await ensurePlacementOpen(planetControls)
   await selectInspectorOption(orbitPlacement, `Orbit ${primaryOrbit.order} around ${primary.name}`)
   await ensurePlacementOpen(planetControls)
-  await page.getByLabel('Angle (degrees)', { exact: true }).fill('45')
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(page.getByLabel('Angle (degrees)', { exact: true })).toHaveCount(0)
+  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await clickSystemOrbitPoint(page, map, `Orbit ${primaryOrbit.order} around ${primary.name}`, 45)
   await expect(confirmPlanet).toHaveCount(0)
   await expect(planetControls.getByRole('alert')).toHaveCount(0)
   const afterResolvedObjectAdd = await downloadJson(page, 'Export star system JSON')
@@ -585,7 +532,7 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   expect(newPlanets[0]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
   expect(newPlanets[1]?.placement).toEqual(freePlanet?.placement)
   expect(newPlanets[2]?.placement).toEqual({ kind: 'orbit', orbitId: primaryOrbit.id })
-  expect(afterResolvedObjectAdd.layout.objectAngles[newPlanets[2]!.id]).toBeCloseTo(Math.PI / 4, 6)
+  expect(afterResolvedObjectAdd.layout.objectAngles[newPlanets[2]!.id]).toBeCloseTo(Math.PI / 4, 1)
   expect(afterResolvedObjectAdd.layout.objectAngles[oldPlanet.id]).toBeDefined()
   const oldMoon = initial.system!.objects.find(object => object.name === 'Old Moon')!
   expect(afterResolvedObjectAdd.layout.objectAngles[oldMoon.id]).toBeDefined()

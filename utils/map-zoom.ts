@@ -23,15 +23,21 @@ const DEFAULT_VIEWBOX: SvgViewportRect = { x: 0, y: 0, width: 960, height: 560 }
 const FIT_PADDING = 40
 
 /** Returns a finite transform and clamps its scale to the map's supported range. */
-export function clampMapViewport(viewport: MapViewport): MapViewport | undefined {
+export function clampMapViewport(
+  viewport: MapViewport,
+  minimumScale = MAP_ZOOM_MIN_SCALE,
+): MapViewport | undefined {
   if (!Number.isFinite(viewport.x) || !Number.isFinite(viewport.y) || !Number.isFinite(viewport.k)) {
+    return undefined
+  }
+  if (!Number.isFinite(minimumScale) || minimumScale <= 0 || minimumScale > MAP_ZOOM_MAX_SCALE) {
     return undefined
   }
 
   return {
     x: viewport.x,
     y: viewport.y,
-    k: Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, viewport.k)),
+    k: Math.max(minimumScale, Math.min(MAP_ZOOM_MAX_SCALE, viewport.k)),
   }
 }
 
@@ -103,10 +109,16 @@ export function getSvgViewportRect(element: SVGSVGElement): SvgViewportRect {
  * Centers scene bounds inside a usable SVG rectangle with the same padding used by legacy Fit.
  * Returns undefined when either rectangle is invalid so the caller can choose a safe fallback.
  */
-export function fitMapViewport(bounds: SvgViewportRect, usableRect: SvgViewportRect): MapViewport | undefined {
+export function fitMapViewport(
+  bounds: SvgViewportRect,
+  usableRect: SvgViewportRect,
+  minimumScale = MAP_ZOOM_MIN_SCALE,
+): MapViewport | undefined {
   const viewport = normalizeSvgViewportRect(usableRect)
   if (!viewport || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y)
     || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)
+    || !Number.isFinite(bounds.x + bounds.width) || !Number.isFinite(bounds.y + bounds.height)
+    || !Number.isFinite(minimumScale) || minimumScale <= 0
     || bounds.width < 0 || bounds.height < 0 || (bounds.width === 0 && bounds.height === 0)) {
     return undefined
   }
@@ -116,7 +128,7 @@ export function fitMapViewport(bounds: SvgViewportRect, usableRect: SvgViewportR
   const height = Math.max(1, bounds.height)
   const availableWidth = Math.max(1, viewport.width - padding * 2)
   const availableHeight = Math.max(1, viewport.height - padding * 2)
-  const k = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(
+  const k = Math.max(minimumScale, Math.min(
     MAP_ZOOM_MAX_SCALE,
     availableWidth / width,
     availableHeight / height,

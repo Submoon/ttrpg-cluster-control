@@ -60,6 +60,7 @@ export {
   renameLocalWorkspace,
 } from './workspace-cluster'
 export { planMapEntityDeletion } from './workspace-deletion'
+export { moveUnresolvedExitTarget } from './workspace-exit-placement'
 export {
   createOrbit,
   defaultOrbitRadius,

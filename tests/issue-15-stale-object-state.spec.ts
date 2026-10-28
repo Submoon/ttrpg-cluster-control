@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   captureMapExportBlobs,
+  clickNormalizedSystemPoint,
   createSingleSystemWorkspace,
   deletionReviewDialog,
   downloadJson,
@@ -79,15 +80,13 @@ async function beginPlanetAdd(page: import('@playwright/test').Page): Promise<vo
   await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toBeVisible()
 }
 
-async function addPlanetAt(page: import('@playwright/test').Page, point: Point): Promise<void> {
+async function addPlanetAt(page: import('@playwright/test').Page, point: Point): Promise<Point> {
   const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
   const placement = controls.getByRole('button', { name: 'Placement', exact: true })
   if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
   await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await page.getByLabel('Placement X', { exact: true }).fill(String(point.x))
-  await page.getByLabel('Placement Y', { exact: true }).fill(String(point.y))
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
+  await placement.click()
+  return clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), point)
 }
 
 test('deleting and quickly recreating an object starts with fresh selection, session, name, and position', async ({ page }) => {
@@ -100,7 +99,7 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   const originalPoint = { x: 0.82, y: 0.74 }
 
   await beginPlanetAdd(page)
-  await addPlanetAt(page, originalPoint)
+  const deliveredOriginalPoint = await addPlanetAt(page, originalPoint)
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
   await inspector.getByLabel('Name', { exact: true }).fill('Foo')
   await inspector.getByLabel('Description', { exact: true }).fill('Old object draft')
@@ -116,7 +115,10 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   const originalExport = await downloadJson(page, 'Export star system JSON')
   const originalObject = originalExport.system?.objects.find(object => object.name === 'Foo')
   expect(originalObject).toBeDefined()
-  expect(originalObject?.placement).toEqual({ kind: 'system', ...originalPoint })
+  expect(originalObject?.placement.kind).toBe('system')
+  if (originalObject?.placement.kind !== 'system') throw new Error('Expected the original free placement.')
+  expect(originalObject.placement.x).toBeCloseTo(deliveredOriginalPoint.x, 6)
+  expect(originalObject.placement.y).toBeCloseTo(deliveredOriginalPoint.y, 6)
   expect(originalObject?.description).toBe('Old object draft')
 
   await setWorkspaceMapMode(page, 'Select')
@@ -133,7 +135,7 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   // surviving New planet 2, whose numeric suffix used to collide after deleting Foo.
   await beginPlanetAdd(page)
   const newPoint = { x: 0.63, y: 0.67 }
-  await addPlanetAt(page, newPoint)
+  const deliveredNewPoint = await addPlanetAt(page, newPoint)
 
   await expect(inspector.getByLabel('Name', { exact: true })).not.toHaveValue('Foo')
   await expect(inspector.getByLabel('Description', { exact: true })).toHaveValue('')
@@ -145,7 +147,10 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   expect(recreatedObject?.name).not.toBe('Foo')
   expect(recreatedObject?.name).not.toBe(survivingObject?.name)
   expect(recreatedObject?.description).toBe('')
-  expect(recreatedObject?.placement).toEqual({ kind: 'system', ...newPoint })
+  expect(recreatedObject?.placement.kind).toBe('system')
+  if (recreatedObject?.placement.kind !== 'system') throw new Error('Expected the recreated free placement.')
+  expect(recreatedObject.placement.x).toBeCloseTo(deliveredNewPoint.x, 6)
+  expect(recreatedObject.placement.y).toBeCloseTo(deliveredNewPoint.y, 6)
   expect(recreatedObject?.placement).not.toEqual({ kind: 'system', ...originalPoint })
   expect(recreatedExport.system?.objects.filter(object => object.subtype === 'planet'
     && object.name === recreatedObject?.name)).toHaveLength(1)
