@@ -146,6 +146,8 @@ export interface LocalWorkspace {
   layout: {
     /** Normalized cluster positions; interactive system drags clamp each axis to [0, 1]. */
     systemPositions: Record<string, Point>
+    /** Manually placed unresolved-exit targets in absolute SVG scene coordinates, keyed by route ID. */
+    unresolvedExitPositions?: Record<string, Point>
     /** Orbit radii in SVG scene units. */
     orbitRadii: Record<string, OrbitRadii>
     /** Orbit rotations in degrees. */
@@ -163,6 +165,8 @@ export interface ExportedLayout {
   orbitEllipseRadii?: Record<string, OrbitRadii>
   orbitRotations?: Record<string, number>
   objectAngles: Record<string, number>
+  /** Optional for older files; manually placed unresolved targets are keyed by Cluster route ID. */
+  unresolvedExitPositions?: Record<string, Point>
 }
 
 export type JumpClusterExport = {

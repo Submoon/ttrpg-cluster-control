@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, addCatalogueObject, editMapObject, workspaceZoomControls } from './helpers'
+import { activeWorkspaceFeedback, addCatalogueObject, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -189,7 +189,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  await addCatalogueObject(page, 'planet', { noSelection: true })
+  await addCatalogueObject(page, 'planet', { noSelection: true, target: { kind: 'free', x: 0.9, y: 0.9 } })
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   await closeCompactPanels(page)
 
@@ -199,10 +199,6 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await closeCompactPanels(page)
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
-  await editMapObject(page)
-  await inspector.getByLabel('Schematic X', { exact: true }).fill('0.9')
-  await inspector.getByLabel('Schematic Y', { exact: true }).fill('0.9')
-  await inspector.getByRole('button', { name: /^Apply changes/ }).click()
   await expect(inspector.locator('.entity-inspector-save-feedback').getByRole('status', { name: 'Saved on this device', exact: true })).toBeVisible()
   await closeCompactPanels(page)
 

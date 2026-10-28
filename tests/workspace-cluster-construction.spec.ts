@@ -174,7 +174,7 @@ test('Add System places two systems at targeted cluster points and reloads their
   expectSystemPosition(afterReload.layout.systemPositions?.[secondCreatedId], secondDeliveredPoint)
 })
 
-test('Add System keeps coordinate errors visible while closed and accepts a corrected numeric point', async ({ page }) => {
+test('Add System rejects an occupied map point and accepts a clear point without coordinate fields', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
   await returnToClusterMap(page)
@@ -186,26 +186,23 @@ test('Add System keeps coordinate errors visible while closed and accepts a corr
 
   const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
+  const existingSystem = before.cluster?.systems[0]
+  expect(existingSystem).toBeDefined()
+  if (!existingSystem) throw new Error('The cluster export does not contain its first system.')
+  const occupiedPoint = before.layout.systemPositions?.[existingSystem.id]
+  expect(occupiedPoint).toBeDefined()
+  if (!occupiedPoint) throw new Error('The first system has no saved Cluster position.')
   await (await dockAction(page, 'Add star system')).click()
-  const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
-  await expect(placement).toBeVisible()
+  await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
+  await expect(workspaceNavigation(page).getByText('Click a clear point on the Cluster map to add a system.', { exact: true })).toBeVisible()
 
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  await placement.click()
-  await page.getByRole('textbox', { name: 'System position X', exact: true }).fill('1.2')
-  await page.getByRole('textbox', { name: 'System position Y', exact: true }).fill('0.7')
-  await page.getByRole('button', { name: 'Add at coordinates', exact: true }).click()
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
-  await expect(page.getByRole('alert')).toContainText('X must be between 0 and 1.')
+  await clickNormalizedClusterPoint(page, map, occupiedPoint)
+  await expect(page.getByRole('alert')).toContainText('Choose an open point clear of existing systems.')
   const afterInvalid = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterInvalid).toEqual(before)
 
   const target = { x: 0.84, y: 0.78 }
-  await placement.click()
-  await page.getByRole('textbox', { name: 'System position X', exact: true }).fill(String(target.x))
-  await page.getByRole('textbox', { name: 'System position Y', exact: true }).fill(String(target.y))
-  await page.getByRole('button', { name: 'Add at coordinates', exact: true }).click()
-  await expect(placement).toHaveAttribute('aria-expanded', 'false')
+  const deliveredTarget = await clickNormalizedClusterPoint(page, map, target)
   await expect(map).toBeVisible()
   await expect(inspector).toBeHidden()
   await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })).toContainText(/system/i)
@@ -214,5 +211,50 @@ test('Add System keeps coordinate errors visible while closed and accepts a corr
   expect(afterCorrected.cluster?.systems).toHaveLength(2)
   const newSystem = afterCorrected.cluster?.systems.find(system => system.name === 'New System 2')
   expect(newSystem).toBeDefined()
-  expectSystemPosition(afterCorrected.layout.systemPositions?.[newSystem!.id], target)
+  expectSystemPosition(afterCorrected.layout.systemPositions?.[newSystem!.id], deliveredTarget)
+})
+
+test('Add System can be created from the keyboard at the panned Cluster viewport center', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await createWorkspace(page)
+  await returnToClusterMap(page)
+
+  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
+  const firstSystem = before.cluster?.systems[0]
+  expect(firstSystem).toBeDefined()
+  if (!firstSystem) throw new Error('The cluster export does not contain its first system.')
+  const firstPosition = before.layout.systemPositions?.[firstSystem.id]
+  expect(firstPosition).toBeDefined()
+  if (!firstPosition) throw new Error('The first system has no saved Cluster position.')
+
+  await (await dockAction(page, 'Add star system')).click()
+  await expect(map).toBeFocused()
+  const content = map.locator('.cluster-map-content')
+  const viewportBeforePan = await content.getAttribute('transform')
+  for (let index = 0; index < 10; index += 1) await page.keyboard.press('ArrowLeft')
+  await expect.poll(() => content.getAttribute('transform')).not.toBe(viewportBeforePan)
+  const keyboardTarget = await map.evaluate((element) => {
+    const contentElement = element.querySelector<SVGGElement>('.cluster-map-content')
+    const matrix = contentElement?.getScreenCTM()
+    if (!matrix) throw new Error('The Cluster map content is not attached to the document.')
+    const bounds = element.getBoundingClientRect()
+    const point = new DOMPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+      .matrixTransform(matrix.inverse())
+    return { x: (point.x - 112) / 736, y: (point.y - 96) / 368 }
+  })
+  expect(keyboardTarget.x).toBeGreaterThanOrEqual(0)
+  expect(keyboardTarget.x).toBeLessThanOrEqual(1)
+  expect(Math.abs(keyboardTarget.x - firstPosition.x) * 736).toBeGreaterThanOrEqual(156)
+  await page.keyboard.press('Enter')
+
+  const after = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(after.cluster?.systems).toHaveLength((before.cluster?.systems.length ?? 0) + 1)
+  const addedSystem = after.cluster?.systems.find(system => system.name === 'New System 2')
+  expect(addedSystem).toBeDefined()
+  const addedPosition = after.layout.systemPositions?.[addedSystem!.id]
+  expect(addedPosition).toBeDefined()
+  expect(Math.abs(addedPosition!.x - firstPosition.x) * 736).toBeGreaterThanOrEqual(156)
+  expect(addedPosition!.y).toBeCloseTo(firstPosition.y, 2)
+  await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
 })

@@ -147,34 +147,37 @@
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
               :cluster-add-label="clusterAddPresentation?.label ?? null"
-              :cluster-system-position-inputs="clusterSystemPositionInputs"
-              :cluster-system-position-input-errors="clusterSystemPositionInputErrors"
               :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
               :system-object-move-available="systemObjectMoveAvailable"
               :system-object-move-destination="systemObjectMoveDestination"
               :system-object-move-destination-options="systemObjectMoveDestinationOptions"
               :system-object-move-candidates="systemObjectMoveCandidates"
               :system-object-move-candidate-request="systemObjectMoveCandidateRequest"
-              :system-object-position-input="systemObjectPositionInput"
-              :system-object-position-x-input="systemObjectPositionXInput"
-              :system-object-position-y-input="systemObjectPositionYInput"
               :system-object-move-preview="systemObjectMovePreview"
               :system-object-move-error="systemObjectMoveError"
+              :unresolved-exit-available="unresolvedExitAvailable"
+              :unresolved-exit-preview="unresolvedExitPreview"
+              :unresolved-exit-error="unresolvedExitError"
+              :orbit-center-move-available="orbitCenterMoveAvailable"
+              :orbit-center-map-move-targeting="orbitCenterMapMoveTargeting"
+              :orbit-center-move-preview="orbitCenterMovePreview"
+              :orbit-center-move-error="orbitCenterMoveError"
               :selected-system="selectedSystem"
               @update-creation-input="updateCreationInput"
               @add-from-inputs="addCreationFromInputs"
               @choose-creation-candidate="chooseCreationCandidate"
-              @update-cluster-system-input="updateClusterSystemPositionInput"
-              @add-cluster-system-from-inputs="addSystemFromInputs"
-              @preview-cluster-system-move-from-inputs="previewSystemMoveFromInputs"
+              @begin-cluster-system-map-move="beginClusterSystemMapMove"
               @update-system-object-move-destination="updateSystemObjectMoveDestination"
-              @update-system-object-position-input="updateSystemObjectPositionInput"
-              @update-system-object-position-x-input="updateSystemObjectPositionXInput"
-              @update-system-object-position-y-input="updateSystemObjectPositionYInput"
               @choose-system-object-move-candidate="chooseObjectMoveCandidate"
-              @preview-system-object-move="previewSystemObjectMoveFromInputs"
               @confirm-system-object-move="confirmSystemObjectMove"
               @cancel-system-object-move="cancelSystemObjectMovePreview"
+              @begin-system-object-map-move="beginSystemObjectMapMove"
+              @begin-unresolved-exit-move="beginUnresolvedExitMove"
+              @confirm-unresolved-exit-move="confirmUnresolvedExitMove"
+              @cancel-unresolved-exit-move="cancelUnresolvedExitMove"
+              @begin-orbit-center-move="beginOrbitCenterMapMove"
+              @confirm-orbit-center-move="confirmOrbitCenterMove"
+              @cancel-orbit-center-move="cancelOrbitCenterMove"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -200,6 +203,7 @@
           <template #zoom>
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
+              :minimum-zoom-level="minimumZoomLevel"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
@@ -245,7 +249,8 @@
                     :creation-preview="null"
                     :creation-chooser-open="creationChooserOpen"
                     :cluster-add-type="clusterAddType"
-                    :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
+                    :cluster-move-targeting="clusterSystemMapMoveTargeting && clusterAddType === null"
+                    :move-targeting="mapMoveTargeting"
                     :cluster-chooser-open="creationChooserOpen"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
@@ -258,8 +263,12 @@
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-system="handleClusterSystemMove"
+                    @move-unresolved-exit="moveUnresolvedExit"
+                    @move-target="handleMapMoveTarget"
+                    @move-nudge="handleMapMoveNudge"
+                    @cancel-map-move="cancelMapMove"
                     @cluster-target="handleClusterTarget"
-                    @cancel-cluster-preview="cancelSystemMovePreview"
+                    @cancel-cluster-preview="cancelClusterPlacement"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
                     @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
@@ -289,6 +298,7 @@
                     :creation-chooser-open="creationChooserOpen"
                     :feedback-element="workspaceFeedbackRef"
                     :is-object-move-blocked="isObjectMoveBlocked"
+                    :move-targeting="mapMoveTargeting"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
                     @navigate-system="selectSystem"
@@ -301,6 +311,9 @@
                     @select-orbit="selectOrbit"
                     @move-select-orbit="selectOrbit($event, false)"
                     @move-object="moveMapObject"
+                    @move-target="handleMapMoveTarget"
+                    @move-nudge="handleMapMoveNudge"
+                    @cancel-map-move="cancelMapMove"
                     @object-move-candidates="placement.interactions.handleObjectMoveCandidates"
                     @object-move-blocked="handleBlockedObjectMove"
                     @entity-command-blocked="handleBlockedEntityCommand"
@@ -327,7 +340,7 @@
               </div>
               <p v-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
                 <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE LOGICAL ENDPOINTS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
-                <span>{{ clusterAddType === 'system' ? 'Choose clear cluster space, or use Placement to enter coordinates.' : clusterAddType === 'route' ? 'Choose a system, then a logical Jump Point for each endpoint.' : clusterMoveTargeting ? 'Choose a clear map point or use Placement to preview coordinates.' : 'Select a system to open it, or a route to inspect its endpoints.' }}</span>
+                <span>{{ clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system, then a logical Jump Point for each endpoint.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it; use Navigate to enter a system.' }}</span>
               </p>
               <p v-else class="map-note mb-[1em] px-[0.2rem] pt-[0.55rem] pb-[0.1rem]">
                 Select a mark or Orbit to inspect it.
@@ -558,7 +571,7 @@ watch(hydrationState, (state, previous) => {
 }, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
-  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, requestPanel, closePanel, togglePanel,
+  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
 } = mapControls
 const {
@@ -566,6 +579,8 @@ const {
   creation,
   systemObject: objectPlacement,
   clusterSystem,
+  unresolvedExit,
+  orbitCenter,
   quitAdd,
 } = placement
 const {
@@ -574,19 +589,38 @@ const {
 } = mapPlacement
 const {
   clusterAddType, clusterAddError, clusterMoveTargeting, clusterSystemMovePreview, clusterSystemMoveError,
-  clusterSystemPositionInputs, clusterSystemPositionInputErrors, armSystemAdd, updateClusterSystemPositionInput,
-  addSystemAt, addSystemFromInputs, previewSystemMoveAt, previewSystemMoveFromInputs, cancelSystemMovePreview,
+  clusterSystemMapMoveTargeting, beginClusterSystemMapMove, nudgeClusterSystemMove, armSystemAdd,
+  addSystemAt, previewSystemMoveAt, cancelSystemMovePreview,
   confirmSystemMove,
 } = clusterSystem
 const {
+  systemObjectMapMoveTargeting, beginSystemObjectMapMove, previewSystemObjectMoveAt, nudgeSystemObjectMove,
   systemObjectMoveAvailable, systemObjectMoveDestination, systemObjectMoveDestinationOptions,
-  systemObjectPositionInput, systemObjectPositionXInput, systemObjectPositionYInput,
   systemObjectMoveCandidates, systemObjectMoveCandidateRequest, systemObjectMovePreview,
-  systemObjectMoveError, updateSystemObjectMoveDestination, updateSystemObjectPositionInput,
-  updateSystemObjectPositionXInput, updateSystemObjectPositionYInput,
-  chooseObjectMoveCandidate, previewSystemObjectMoveFromInputs, confirmSystemObjectMove,
+  systemObjectMoveError, updateSystemObjectMoveDestination,
+  chooseObjectMoveCandidate, confirmSystemObjectMove,
   cancelSystemObjectMovePreview,
 } = objectPlacement
+const {
+  available: unresolvedExitAvailable,
+  targeting: unresolvedExitTargeting,
+  preview: unresolvedExitPreview,
+  error: unresolvedExitError,
+  begin: beginUnresolvedExitMove,
+  previewAt: previewUnresolvedExitAt,
+  nudge: nudgeUnresolvedExit,
+  confirm: confirmUnresolvedExitMove,
+  cancel: cancelUnresolvedExitMove,
+  move: moveUnresolvedExit,
+} = unresolvedExit
+const {
+  orbitCenterMoveAvailable, orbitCenterMapMoveTargeting, orbitCenterMovePreview, orbitCenterMoveError,
+  beginOrbitCenterMapMove, previewOrbitCenterMoveAt, nudgeOrbitCenterMove,
+  confirmOrbitCenterMove, cancelOrbitCenterMove,
+} = orbitCenter
+const mapMoveTargeting = computed(() => activeView.value === 'cluster'
+  ? unresolvedExitTargeting.value || clusterSystemMapMoveTargeting.value
+  : systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value)
 const {
   creationSession, chooseCreationType, chooseCreationCandidate, updateCreationInput,
   offerCreationCandidates, addCreationFromInputs, cancelCreationPreview,
@@ -617,7 +651,35 @@ const fieldDefinitionInspectorConflict = computed(() => {
 })
 
 function isObjectMoveBlocked(objectId: string): boolean {
-  return isEntityCommandBlocked({ kind: 'object-placement', objectId })
+  const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
+  if (!object) return isEntityCommandBlocked({ kind: 'object-placement', objectId })
+  const orbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+  return isEntityCommandBlocked({ kind: 'object-placement', objectId, fromOrbitId: orbitId, toOrbitId: orbitId })
+}
+
+function handleMapMoveTarget(point: Point): void {
+  if (activeView.value === 'cluster' && unresolvedExitTargeting.value) previewUnresolvedExitAt(point)
+  else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) previewSystemMoveAt(point)
+  else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) previewSystemObjectMoveAt(point)
+  else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) previewOrbitCenterMoveAt(point)
+}
+
+function handleMapMoveNudge(delta: Point): void {
+  if (activeView.value === 'cluster' && unresolvedExitTargeting.value) nudgeUnresolvedExit(delta)
+  else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) nudgeClusterSystemMove(delta)
+  else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
+  else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
+}
+
+function cancelClusterPlacement(): void {
+  cancelSystemMovePreview()
+  if (unresolvedExitTargeting.value || unresolvedExitPreview.value) cancelUnresolvedExitMove()
+}
+
+function cancelMapMove(): void {
+  cancelClusterPlacement()
+  cancelSystemObjectMovePreview()
+  cancelOrbitCenterMove()
 }
 
 function handleBlockedObjectMove(objectId: string): void {
@@ -641,6 +703,8 @@ function blockedEntityCommandMessage(command: EntityCommand): string {
     case 'orbit-geometry':
     case 'orbit-host':
       return 'Resolve the Inspector draft before changing this Orbit or one of its hosts.'
+    case 'orbit-center-position':
+      return 'Resolve the Inspector relationship draft before moving this Orbit center.'
     case 'orbit-create':
       return 'Resolve the Inspector draft before adding another Orbit to this host.'
     case 'definition-mutation':
@@ -664,7 +728,7 @@ const creationTypeLabel = computed(() => {
 const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
   ? {
       label: 'System',
-      status: 'ADD System · Choose a clear map point or use Placement for coordinates.',
+      status: 'ADD System · Choose a clear map point, or pan with the arrow keys and press Enter.',
       error: clusterAddError.value,
     }
   : clusterAddType.value === 'route'
@@ -680,8 +744,10 @@ const clusterMovePresentation = computed(() => {
   const systemName = clusterSelectedSystem.value?.name ?? 'selected system'
   return {
     status: preview
-      ? `MOVE preview · ${systemName} at ${preview.targetPosition.x}, ${preview.targetPosition.y}`
-      : `MOVE ${systemName} · Choose a destination or use Placement.`,
+      ? `MOVE preview · ${systemName} · Confirm or cancel the move.`
+      : clusterSystemMapMoveTargeting.value
+        ? `MOVE ${systemName} · Choose a destination or adjust it with the arrow keys.`
+        : `MOVE ${systemName} · Choose Move selected system on map, or drag the system.`,
     error: clusterSystemMoveError.value || undefined,
     previewing: preview !== null,
   }
@@ -693,6 +759,9 @@ watch(
 watch([activeView, selectedSystemId], () => {
   if (creationSession.value || clusterAddType.value) quitSystemAdd()
 })
+watch([creationSession, clusterAddType], ([creationIntent, clusterIntent]) => {
+  if (creationIntent || clusterIntent) cancelMapMove()
+}, { flush: 'sync' })
 
 async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void> {
   if (!await beforeWorkspaceOperation()) return
@@ -738,7 +807,6 @@ function handleClusterTarget(point: Point, systemIds: string[]): void {
     if (session) offerRouteSystems(session.id, systemIds)
     return
   }
-  if (clusterMoveTargeting.value) previewSystemMoveAt(point, systemIds)
 }
 
 function discardRouteDraft(sessionId: number): void {
@@ -768,10 +836,15 @@ async function changeMapMode(mode: 'navigate' | 'select' | 'move'): Promise<void
 async function handleAddEscape(event: KeyboardEvent): Promise<void> {
   const hasMovePreview = clusterSystemMovePreview.value !== null
   if (event.key !== 'Escape' || event.defaultPrevented
-    || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value)
+    || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value && !mapMoveTargeting.value)
     || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
   if (document.querySelector('[role="listbox"][data-state="open"]')) return
+  if (mapMoveTargeting.value) {
+    event.preventDefault()
+    cancelMapMove()
+    return
+  }
   if (systemObjectMovePreview.value) {
     event.preventDefault()
     cancelSystemObjectMovePreview()

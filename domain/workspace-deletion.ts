@@ -298,6 +298,8 @@ export function planMapEntityDeletion(
         ...workspace.layout,
         systemPositions: Object.fromEntries(Object.entries(workspace.layout.systemPositions)
           .filter(([systemId]) => !removedSystemIds.has(systemId))),
+        unresolvedExitPositions: Object.fromEntries(Object.entries(workspace.layout.unresolvedExitPositions ?? {})
+          .filter(([routeId]) => !removedRouteIds.has(routeId))),
         orbitRadii: Object.fromEntries(Object.entries(workspace.layout.orbitRadii)
           .filter(([orbitId]) => !removedOrbitIds.has(orbitId))),
         orbitRotations: Object.fromEntries(Object.entries(workspace.layout.orbitRotations)

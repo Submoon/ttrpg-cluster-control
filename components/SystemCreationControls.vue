@@ -26,7 +26,7 @@
         <form class="system-creation-placement-form" aria-label="Placement" @submit.prevent="emit('add-from-inputs')">
           <div class="system-creation-form-heading">
             <span class="section-kicker">PLACEMENT</span>
-            <p v-if="props.session.type.kind === 'orbit'">Choose a host or an unoccupied center, then set its ellipse.</p>
+            <p v-if="props.session.type.kind === 'orbit'">Choose a host or click the map to place an unoccupied center, then set its ellipse.</p>
             <p v-else>Choose a map position or place the object on an existing Orbit.</p>
           </div>
 
@@ -39,38 +39,12 @@
                 @update:model-value="updateObjectOrbit"
               />
             </UFormField>
-            <template v-if="objectOrbitValue === freeValue">
-              <UFormField label="X" :error="props.session.errors.x">
-                <UInput
-                  :model-value="props.session.inputs.x"
-                  type="number"
-                  step="any"
-                  inputmode="decimal"
-                  aria-label="Placement X"
-                  @update:model-value="updateInput('x', $event)"
-                />
-              </UFormField>
-              <UFormField label="Y" :error="props.session.errors.y">
-                <UInput
-                  :model-value="props.session.inputs.y"
-                  type="number"
-                  step="any"
-                  inputmode="decimal"
-                  aria-label="Placement Y"
-                  @update:model-value="updateInput('y', $event)"
-                />
-              </UFormField>
-            </template>
-            <UFormField v-else label="Angle (degrees)" :error="props.session.errors.angleDegrees">
-              <UInput
-                :model-value="props.session.inputs.angleDegrees"
-                type="number"
-                step="any"
-                inputmode="decimal"
-                aria-label="Angle (degrees)"
-                @update:model-value="updateInput('angleDegrees', $event)"
-              />
-            </UFormField>
+            <p v-if="objectOrbitValue === freeValue" class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              Click a free location on the map to add this object.
+            </p>
+            <p v-else class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              Click the selected Orbit to choose a position, or use Add for its next automatic position.
+            </p>
             <UFormField v-if="props.session.type.subtype === 'other'" label="Type label" class="system-creation-form-wide" :error="props.session.errors.otherType">
               <UInput
                 :model-value="props.session.inputs.otherType"
@@ -89,28 +63,9 @@
                 @update:model-value="updateHost"
               />
             </UFormField>
-            <template v-if="hostValue === centerValue">
-              <UFormField label="X" :error="props.session.errors.x">
-                <UInput
-                  :model-value="props.session.inputs.x"
-                  type="number"
-                  step="any"
-                  inputmode="decimal"
-                  aria-label="Placement X"
-                  @update:model-value="updateInput('x', $event)"
-                />
-              </UFormField>
-              <UFormField label="Y" :error="props.session.errors.y">
-                <UInput
-                  :model-value="props.session.inputs.y"
-                  type="number"
-                  step="any"
-                  inputmode="decimal"
-                  aria-label="Placement Y"
-                  @update:model-value="updateInput('y', $event)"
-                />
-              </UFormField>
-            </template>
+            <p v-if="hostValue === centerValue" class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
+              Click a free location on the map to place this Orbit center.
+            </p>
             <UFormField label="Horizontal radius" :error="props.session.errors.horizontalRadius">
               <UInput
                 :model-value="props.session.inputs.horizontalRadius"
@@ -146,7 +101,15 @@
           <p v-if="props.session.errors.form" class="system-creation-error system-creation-form-wide" role="alert">
             {{ props.session.errors.form }}
           </p>
-          <UButton class="workspace-control system-creation-form-wide" color="primary" type="submit" aria-label="Add">Add</UButton>
+          <UButton
+            v-if="props.session.type.kind === 'orbit' || objectOrbitValue !== freeValue"
+            class="workspace-control system-creation-form-wide"
+            color="primary"
+            type="submit"
+            aria-label="Add"
+          >
+            Add
+          </UButton>
         </form>
       </template>
     </UPopover>

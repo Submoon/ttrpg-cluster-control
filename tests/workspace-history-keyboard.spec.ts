@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback, addCustomFieldThroughDialog, createSingleSystemWorkspace, editMapObject,
+  activeWorkspaceFeedback, addCustomFieldThroughDialog, captureMapExportBlobs, clickNormalizedClusterPoint,
+  clickDockAction, clickNormalizedSystemPoint, createSingleSystemWorkspace, downloadJson, editMapObject,
   openChartDetails, openWorkspaceHierarchy, openWorkspaceZoomNavigation, returnToClusterMap,
   selectCatalogueObjectButton, selectInspectorOption,
 } from './helpers'
@@ -34,14 +35,7 @@ test('saved object creation supports Undo and Redo while Object Add stays armed'
 
   await (await selectCatalogueObjectButton(page, 'planet')).click()
   const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
-  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
-  await placementToggle.click()
-  await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await page.getByLabel('Placement X', { exact: true }).fill('0.8')
-  await page.getByLabel('Placement Y', { exact: true }).fill('0.8')
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
-  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
+  await clickNormalizedSystemPoint(page, map, { x: 0.8, y: 0.8 })
   await expect(objects).toHaveCount(2)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
@@ -59,31 +53,56 @@ test('saved object creation supports Undo and Redo while Object Add stays armed'
 
   await expect(controls).toBeVisible()
   await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
-  await placementToggle.click()
-  await page.getByLabel('Placement X', { exact: true }).fill('0.9')
-  await page.getByLabel('Placement Y', { exact: true }).fill('0.8')
-  await page.getByRole('form', { name: 'Placement', exact: true })
-    .getByRole('button', { name: 'Add', exact: true }).click()
+  await clickNormalizedSystemPoint(page, map, { x: 0.9, y: 0.8 })
   await expect(objects).toHaveCount(3)
   await expect(redo).toBeDisabled()
 })
 
-test('modified Add placement inputs continue to block history traversal', async ({ page }) => {
+test('a modified Other Add label continues to block history traversal', async ({ page }) => {
   await createSingleSystemWorkspace(page)
   await applySavedChartRename(page, 'Star system', 'Vesper Prime')
-  await (await selectCatalogueObjectButton(page, 'planet')).click()
-
-  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
-  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
-  const placement = page.getByRole('form', { name: 'Placement', exact: true })
-  await page.getByLabel('Placement X', { exact: true }).fill('0.8')
+  await (await selectCatalogueObjectButton(page, 'other')).click()
+  const creation = page.getByRole('group', { name: 'Other creation controls', exact: true })
+  await creation.getByRole('button', { name: 'Placement', exact: true }).click()
+  await page.getByLabel('Type label', { exact: true }).fill('Pending Relay Beacon')
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   await expect(undo).toBeDisabled()
   await page.locator('#workspace-main').focus()
   await page.keyboard.press('Control+z')
   await expect(page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })).toBeVisible()
   await expect(undo).toBeDisabled()
-  await expect(placement).toBeVisible()
+  await expect(creation).toBeVisible()
+})
+
+test('a fresh Jump Route draft blocks Undo until discarded without replaying it afterward', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  await createSingleSystemWorkspace(page)
+  await applySavedChartRename(page, 'Star system', 'Vesper Prime')
+  await returnToClusterMap(page)
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+
+  await clickDockAction(page, 'Add Jump Route')
+  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  const routeDraft = inspector.getByRole('heading', { name: 'Connect Jump Points', exact: true })
+  await expect(routeDraft).toBeVisible()
+  await expect(undo).toBeDisabled()
+  await expect(undo).toHaveAttribute('title', /^Finish or cancel the current Cluster route action first\./)
+
+  await page.locator('#workspace-main').focus()
+  await page.keyboard.press('Control+z')
+  await expect(routeDraft).toBeVisible()
+  await expect(undo).toBeDisabled()
+  await expectClusterSystemName(page, 'Kestrel Reach', 'Vesper Prime')
+  const afterBlockedShortcut = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(afterBlockedShortcut).toEqual(before)
+
+  await inspector.getByRole('button', { name: 'Discard route draft', exact: true }).click()
+  await expect(routeDraft).toHaveCount(0)
+  await expect(undo).toBeEnabled()
+  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
+  await expectClusterSystemName(page, 'Kestrel Reach', 'Vesper Prime')
 })
 
 test('saved Orbit creation supports Undo and Redo while Orbit Add stays armed', async ({ page }) => {
@@ -125,12 +144,7 @@ test('saved Cluster system placement supports Undo and Redo while system Add sta
 
   await page.getByRole('button', { name: 'Add to map', exact: true }).click()
   await page.getByRole('button', { name: 'Add star system', exact: true }).click()
-  const placementToggle = page.getByRole('button', { name: 'Placement', exact: true })
-  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
-  await page.getByLabel('System position X', { exact: true }).fill('0.75')
-  await page.getByLabel('System position Y', { exact: true }).fill('0.75')
-  await page.getByRole('form', { name: 'System placement coordinates', exact: true })
-    .getByRole('button', { name: 'Add at coordinates', exact: true }).click()
+  await clickNormalizedClusterPoint(page, map, { x: 0.75, y: 0.75 })
   await expect(systems).toHaveCount(2)
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 

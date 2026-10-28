@@ -135,15 +135,16 @@ function createObjectPlacementController(
   const systemId = workspace.value!.cluster.systems[0]!.id
   store.setSelection({ activeView: 'system', selectedSystemId: systemId, selectedObjectId: objectId })
   store.setMode('move')
+  const adjustmentBindings = createMapAdjustmentBindings(history)
   const placement = scope.run(() => useSystemObjectPlacement({
     workspace,
     creationActive: computed(() => false),
     systemMapRef: shallowRef(null),
     mutations: history,
     isEntityCommandBlocked: () => false,
+    beforeWorkspaceOperation: adjustmentBindings.beforeWorkspaceOperation,
   }))
   if (!placement) throw new Error('The object placement controller was not created.')
-  const adjustmentBindings = createMapAdjustmentBindings(history)
   const mapWorkflows = useMapWorkflows({
     workspace,
     mutations: history,
@@ -166,7 +167,7 @@ function createObjectPlacementController(
   }
 }
 
-test('a numeric Cluster placement can Undo and Redo after its clean inputs follow each restore @pure', async () => {
+test('a Cluster map placement can Undo and Redo, while a pending map preview blocks traversal @pure', async () => {
   setActivePinia(createPinia())
   const harness = createHistoryHarness(createLocalWorkspace('Kestrel Reach', 'Vesper'))
   const scope = effectScope()
@@ -175,45 +176,33 @@ test('a numeric Cluster placement can Undo and Redo after its clean inputs follo
   const original = { ...harness.workspace.value!.layout.systemPositions[system.id]! }
   store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: system.id })
   store.setMode('select')
+  const adjustmentBindings = createMapAdjustmentBindings(harness.history)
   let placement: ReturnType<typeof useClusterSystemPlacement> | undefined
   scope.run(() => {
     placement = useClusterSystemPlacement({
       workspace: harness.workspace,
       clusterMapRef: shallowRef(null),
       mutations: harness.history,
+      beforeWorkspaceOperation: adjustmentBindings.beforeWorkspaceOperation,
     })
   })
   if (!placement) throw new Error('The Cluster placement controller was not created.')
-  const adjustmentBindings = createMapAdjustmentBindings(harness.history)
-  const mapWorkflows = useMapWorkflows({
-    workspace: harness.workspace,
-    mutations: harness.history,
-    systemMapRef: shallowRef(null),
-    resolveTransition: async () => true,
-    beginObjectSession: () => undefined,
-    beginOrbitSession: () => undefined,
-    isEntityCommandBlocked: () => false,
-    editorError: ref(''),
-    ...adjustmentBindings,
-  })
   const stopGuard = connectInputGuard(
     harness.blockedReason,
     () => placement!.hasPendingHistoryInput.value,
-    'Finish the pending Cluster placement inputs first.',
+    'Finish or cancel the Cluster move preview first.',
   )
   store.setMode('move')
 
-  expect(placement.clusterSystemPositionInputs).toMatchObject({ x: String(original.x), y: String(original.y) })
-  expect(placement.hasPendingHistoryInput.value).toBe(false)
-  expect(placement.previewSystemMoveAt({ x: 0.72, y: 0.68 })).toBe(true)
+  expect(placement.beginClusterSystemMapMove()).toBe(true)
+  expect(placement.hasPendingHistoryInput.value).toBe(true)
+  expect(placement.previewSystemMoveAt({ x: 112 + 0.72 * 736, y: 96 + 0.68 * 368 })).toBe(true)
+  expect(placement.hasPendingHistoryInput.value).toBe(true)
   expect(await placement.confirmSystemMove()).toBe(true)
-  expect(harness.workspace.value?.layout.systemPositions[system.id]).toEqual({ x: 0.72, y: 0.68 })
-  expect({
-    preview: placement.clusterSystemMovePreview.value,
-    addType: placement.clusterAddType.value,
-    targeting: placement.clusterMoveTargeting.value,
-    inputs: { ...placement.clusterSystemPositionInputs },
-  }).toEqual({ preview: null, addType: null, targeting: true, inputs: { x: '0.72', y: '0.68' } })
+  expect(harness.workspace.value?.layout.systemPositions[system.id]?.x).toBeCloseTo(0.72)
+  expect(harness.workspace.value?.layout.systemPositions[system.id]?.y).toBeCloseTo(0.68)
+  expect(placement.clusterSystemMovePreview.value).toBeNull()
+  expect(placement.clusterAddType.value).toBeNull()
   expect(placement.hasPendingHistoryInput.value).toBe(false)
 
   expect((await harness.history.undo()).status).toBe('applied')
@@ -221,22 +210,23 @@ test('a numeric Cluster placement can Undo and Redo after its clean inputs follo
   expect(placement.hasPendingHistoryInput.value).toBe(false)
   expect(harness.history.getStatus().redoUnavailableReason).toBeNull()
   expect((await harness.history.redo()).status).toBe('applied')
-  expect(harness.workspace.value?.layout.systemPositions[system.id]).toEqual({ x: 0.72, y: 0.68 })
+  expect(harness.workspace.value?.layout.systemPositions[system.id]?.x).toBeCloseTo(0.72)
+  expect(harness.workspace.value?.layout.systemPositions[system.id]?.y).toBeCloseTo(0.68)
 
-  placement.updateClusterSystemPositionInput('x', '0.81')
-  await mapWorkflows.moveSystem(system.id, { x: 0.55, y: 0.4 })
-  expect(placement.clusterSystemPositionInputs.x).toBe('0.81')
+  expect(placement.beginClusterSystemMapMove()).toBe(true)
+  expect(placement.previewSystemMoveAt({ x: 112 + 0.81 * 736, y: 96 + 0.4 * 368 })).toBe(true)
   expect(placement.hasPendingHistoryInput.value).toBe(true)
-  expect(harness.history.getStatus().undoUnavailableReason).toBe('Finish the pending Cluster placement inputs first.')
+  expect(harness.history.getStatus().undoUnavailableReason).toBe('Finish or cancel the Cluster move preview first.')
   expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
 
+  placement.cancelSystemMovePreview()
   scope.stop()
   adjustmentBindings.orbitAdjustments.dispose()
   stopGuard()
   harness.dispose()
 })
 
-test('armed Cluster Add System stays history-safe after Apply but edited coordinates still block traversal @pure', async () => {
+test('armed Cluster Add System stays history-safe across Undo and Redo without dirty inputs @pure', async () => {
   setActivePinia(createPinia())
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const harness = createHistoryHarness(initial)
@@ -246,10 +236,12 @@ test('armed Cluster Add System stays history-safe after Apply but edited coordin
   const store = useEditorUiStore()
   store.setSelection({ activeView: 'cluster' })
   store.setMode('select')
+  const adjustmentBindings = createMapAdjustmentBindings(harness.history)
   const placement = scope.run(() => useClusterSystemPlacement({
     workspace: harness.workspace,
     clusterMapRef: shallowRef(null),
     mutations: harness.history,
+    beforeWorkspaceOperation: adjustmentBindings.beforeWorkspaceOperation,
   }))
   if (!placement) throw new Error('The Cluster placement controller was not created.')
   const stopGuard = connectInputGuard(
@@ -260,13 +252,15 @@ test('armed Cluster Add System stays history-safe after Apply but edited coordin
 
   placement.armSystemAdd()
   expect(placement.hasPendingHistoryInput.value).toBe(false)
-  placement.updateClusterSystemPositionInput('x', '0.8')
-  expect(placement.hasPendingHistoryInput.value).toBe(true)
-  expect(harness.history.getStatus().undoUnavailableReason)
-    .toBe('Finish the pending Cluster placement inputs first.')
-  expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+  expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
+  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach')
+  expect(placement.clusterAddType.value).toBe('system')
+  expect(placement.hasPendingHistoryInput.value).toBe(false)
+  expect(await harness.history.redo()).toMatchObject({ status: 'applied' })
+  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Prime')
+  expect(placement.clusterAddType.value).toBe('system')
+  expect(placement.hasPendingHistoryInput.value).toBe(false)
 
-  placement.updateClusterSystemPositionInput('x', '0.5')
   expect(await placement.addSystemAt({ x: 0.75, y: 0.1 })).toBe(true)
   expect(harness.workspace.value?.cluster.systems).toHaveLength(2)
   expect(placement.clusterAddType.value).toBe('system')
@@ -279,13 +273,8 @@ test('armed Cluster Add System stays history-safe after Apply but edited coordin
   expect(placement.clusterAddType.value).toBe('system')
   expect(placement.hasPendingHistoryInput.value).toBe(false)
 
-  placement.updateClusterSystemPositionInput('x', '0.8')
-  placement.armSystemAdd()
-  expect(placement.hasPendingHistoryInput.value).toBe(true)
-  expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
-  expect(harness.workspace.value?.cluster.systems).toHaveLength(2)
-
   scope.stop()
+  adjustmentBindings.orbitAdjustments.dispose()
   stopGuard()
   harness.dispose()
 })
@@ -301,13 +290,13 @@ test('armed object Add blocks dirty inputs and unresolved candidate choices but 
     'Finish or cancel the object or Orbit placement first.',
   )
 
-  expect(await controller.creation.chooseCreationType({ kind: 'object', subtype: 'planet' })).toBe(true)
+  expect(await controller.creation.chooseCreationType({ kind: 'object', subtype: 'other' })).toBe(true)
   expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
 
-  controller.creation.updateCreationInput('x', '0.8')
+  controller.creation.updateCreationInput('otherType', 'Relay Beacon')
   expect(controller.creation.hasPendingHistoryInput.value).toBe(true)
   expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
-  controller.creation.updateCreationInput('x', '')
+  controller.creation.updateCreationInput('otherType', '')
   expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
 
   expect(await controller.creation.offerCreationCandidates([
@@ -367,7 +356,6 @@ test('clean Add target references follow restored Orbit and system data @pure', 
 
   expect(await controller.creation.chooseCreationType({ kind: 'object', subtype: 'planet' })).toBe(true)
   controller.creation.updateCreationInput('orbitId', orbit.id)
-  controller.creation.updateCreationInput('angleDegrees', '45')
   expect(await controller.creation.addCreationFromInputs()).toBe(true)
   expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
   expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
@@ -377,7 +365,6 @@ test('clean Add target references follow restored Orbit and system data @pure', 
   expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
   expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
   expect(controller.creation.creationSession.value?.inputs.orbitId).toBe('__free__')
-  expect(controller.creation.creationSession.value?.inputs.angleDegrees).toBe('')
   expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
 
   const latestSystem = harness.workspace.value!.cluster.systems[0]!
@@ -433,7 +420,7 @@ test('clean Add target references follow restored Orbit and system data @pure', 
   harness.dispose()
 })
 
-test('a same-Orbit object angle command can Undo and Redo without a stale angle input @pure', async () => {
+test('a same-Orbit object rotation can Undo and Redo without a dirty placement choice @pure', async () => {
   setActivePinia(createPinia())
   const prepared = createObjectOrbitWorkspace()
   const harness = createHistoryHarness(prepared.workspace)
@@ -443,9 +430,6 @@ test('a same-Orbit object angle command can Undo and Redo without a stale angle 
     () => controller.placement.hasPendingHistoryInput.value,
     'Finish the pending placement inputs first.',
   )
-  const initialDegrees = String(0.2 * 180 / Math.PI)
-
-  expect(controller.placement.systemObjectPositionInput.value).toBe(initialDegrees)
   expect(controller.placement.hasPendingHistoryInput.value).toBe(false)
   await controller.mapWorkflows.rotateMapObject(prepared.objectId, 1.2)
   expect(harness.workspace.value?.layout.objectAngles[prepared.objectId]).toBe(1.2)
@@ -453,7 +437,6 @@ test('a same-Orbit object angle command can Undo and Redo without a stale angle 
 
   expect((await harness.history.undo()).status).toBe('applied')
   expect(harness.workspace.value?.layout.objectAngles[prepared.objectId]).toBe(0.2)
-  expect(controller.placement.systemObjectPositionInput.value).toBe(initialDegrees)
   expect(harness.history.getStatus().redoUnavailableReason).toBeNull()
   expect((await harness.history.redo()).status).toBe('applied')
   expect(harness.workspace.value?.layout.objectAngles[prepared.objectId]).toBe(1.2)
@@ -474,11 +457,11 @@ test('accepted geometry changes preserve genuinely edited placement inputs and b
     'Finish the pending placement inputs first.',
   )
 
-  controller.placement.updateSystemObjectPositionInput('45')
+  controller.placement.updateSystemObjectMoveDestination('__free__')
   expect(controller.placement.hasPendingHistoryInput.value).toBe(true)
   await controller.mapWorkflows.rotateMapObject(prepared.objectId, 1.2)
 
-  expect(controller.placement.systemObjectPositionInput.value).toBe('45')
+  expect(controller.placement.systemObjectMoveDestination.value).toBe('__free__')
   expect(controller.placement.hasPendingHistoryInput.value).toBe(true)
   expect(harness.history.getStatus().undoUnavailableReason).toBe('Finish the pending placement inputs first.')
   expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })

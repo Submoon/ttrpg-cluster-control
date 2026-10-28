@@ -13,11 +13,17 @@
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${system.name} star system map`"
-      aria-description="Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls."
+      :aria-description="props.moveTargeting
+        ? 'Choose a destination with the arrow keys or click the map. Confirm or cancel the preview in the Placement controls.'
+        : props.creationType
+          ? 'In Add mode, click a location or focus this map and press Enter or Space to choose its visible center. Arrow keys pan the map.'
+          : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.'"
       :data-system-id="system.id"
+      :data-system-object-move-targeting="props.moveTargeting ? 'true' : undefined"
       tabindex="0"
+      @keydown.capture="handleCreationKeydown"
       @wheel.capture="captureOrbitRotationWheel"
-      @click.capture="handleCreationClick"
+      @click.capture="handleMapClick"
       @touchstart.capture="startTouchNavigation"
       @dragover.prevent
       @drop.prevent="handleObjectDrop"
@@ -83,6 +89,8 @@ const props = withDefaults(defineProps<{
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   moveEnabled?: boolean
+  /** Parent-owned explicit object movement consumes map clicks before selection or Add. */
+  moveTargeting?: boolean
   touchNavigation?: boolean
   showZoomControls?: boolean
 }>(), {
@@ -91,6 +99,7 @@ const props = withDefaults(defineProps<{
   creationChooserOpen: false,
   orbitAdjustmentPreview: null,
   moveEnabled: true,
+  moveTargeting: false,
   touchNavigation: false,
   showZoomControls: true,
 })
@@ -106,6 +115,7 @@ const emit = defineEmits<{
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
+  'move-target': [point: Point]
   'move-orbit-center': [id: string, center: Point, hostId: string | null]
   'rotate-object': [id: string, angle: number]
   'resize-orbit': [id: string, radii: OrbitRadii]
@@ -136,6 +146,7 @@ let zoomExtentOverride: SvgViewportRect | undefined
 let cancelledCreationPreviewId: number | null = null
 const objectPlacementPreviews = new Map<string, Point>()
 const orbitPlacementPreviews = new Map<string, OrbitPlacementPreview>()
+const orbitCenterMovePreviews = new Map<string, Point>()
 
 const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
@@ -151,6 +162,7 @@ const handlers: SystemMapEventHandlers = {
   cancelObjectPlacementPreview: () => emit('cancel-object-placement-preview'),
   cancelOrbitPlacementPreview: () => emit('cancel-orbit-placement-preview'),
   moveObject: (id, position) => emit('move-object', id, position),
+  moveTarget: point => emit('move-target', point),
   moveOrbitCenter: (id, center, hostId) => emit('move-orbit-center', id, center, hostId),
   rotateObject: (id, angle) => emit('rotate-object', id, angle),
   resizeOrbit: (id, radii) => emit('resize-orbit', id, radii),
@@ -173,6 +185,25 @@ function handleObjectDrop(event: DragEvent): void {
 /** Consumes a map click in Add and forwards its named candidates without selecting a map entity. */
 function handleCreationClick(event: MouseEvent): void {
   mapRenderer?.handleCreationClick(event)
+}
+
+/** Routes Enter and Space in Add to the currently visible map center. */
+function handleCreationKeydown(event: KeyboardEvent): void {
+  mapRenderer?.handleCreationKeydown(event)
+}
+
+/** Gives an armed map-position command first refusal on a click before Add or entity selection. */
+function handleMapClick(event: MouseEvent): void {
+  if (props.moveTargeting) {
+    mapRenderer?.handleMoveTargetClick(event)
+    return
+  }
+  handleCreationClick(event)
+}
+
+/** Focuses the map surface so arrow-key positioning is available immediately after Move on map. */
+function focusMap(): void {
+  svgElement.value?.focus({ preventScroll: true })
 }
 
 /** Returns the current D3 transform as the map's public viewport state. */
@@ -226,8 +257,6 @@ function revealHistoryTarget(target: MapHistoryTarget): boolean {
   }
   return revealSvgTarget(svgElement.value, element, panBy)
 }
-
-function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
   return pointer(touch, element) as [number, number]
@@ -322,6 +351,13 @@ function setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPrevie
   mapRenderer?.setOrbitPlacementPreview(orbitId, preview)
 }
 
+/** Replaces or clears an unoccupied-center movement overlay independently from Inspector geometry previews. */
+function setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void {
+  if (scenePoint) orbitCenterMovePreviews.set(orbitId, { ...scenePoint })
+  else orbitCenterMovePreviews.delete(orbitId)
+  mapRenderer?.setOrbitCenterMovePreview(orbitId, scenePoint)
+}
+
 /** Cancels only the currently displayed geometric target, retaining the armed Add type. */
 function cancelCreationPreview(preserveNavigation = false): void {
   const preview = props.creationPreview
@@ -335,6 +371,7 @@ function cancelCreationPreview(preserveNavigation = false): void {
 function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !mapRenderer) return
+  if (props.moveTargeting && event.button === 0) return
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
   cancelCreationPreview(true)
@@ -445,11 +482,13 @@ function render(preserveNavigation = false): void {
     creationType: props.creationType,
     creationPreview: props.creationPreview,
     creationChooserOpen: props.creationChooserOpen,
+    moveTargeting: props.moveTargeting,
     objectPlacementPreviews,
     orbitPlacementPreviews,
     orbitAdjustmentPreview: props.orbitAdjustmentPreview?.identity.systemId === props.system.id
       ? props.orbitAdjustmentPreview
       : null,
+    orbitCenterMovePreviews,
     moveEnabled: props.moveEnabled,
     orbitRotationWheelEvents,
     handlers,
@@ -493,6 +532,7 @@ watch(() => props.objectAngles, () => render(), { deep: true })
 watch(() => props.selectedObjectId, () => render())
 watch(() => props.selectedOrbitId, () => render())
 watch(() => props.moveEnabled, () => render())
+watch(() => props.moveTargeting, () => render(true))
 watch(() => props.creationType, () => render(), { deep: true })
 watch([
   () => props.creationPreview,
@@ -515,6 +555,7 @@ defineExpose({
   cancelCreationPreview,
   setObjectPlacementPreview,
   setOrbitPlacementPreview,
+  setOrbitCenterMovePreview,
   startViewPan,
   moveViewPan,
   endViewPan,

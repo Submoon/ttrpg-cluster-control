@@ -342,6 +342,8 @@ test('panel toggles preserve the active mode and Delete remains safe while editi
 })
 
 test('every catalogue glyph matches the corresponding Add object action', async ({ page }) => {
+  // All fifteen catalogue entries complete the map-placement journey in this one consistency check.
+  test.slow()
   await createWorkspace(page)
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })

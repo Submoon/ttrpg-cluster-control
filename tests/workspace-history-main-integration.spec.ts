@@ -1,0 +1,453 @@
+import { expect, test } from '@playwright/test'
+import { createPinia, setActivePinia } from 'pinia'
+import { computed, effectScope, ref, shallowRef, watchEffect } from 'vue'
+import {
+  createLocalWorkspace,
+  createOrbit,
+  type LocalWorkspace,
+  type SystemObject,
+} from '../domain/workspace'
+import { createContinuousOrbitAdjustmentController } from '../composables/editor-workflows/continuous-orbit-adjustments'
+import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows'
+import { useOrbitCenterPlacement } from '../composables/editor-workflows/useOrbitCenterPlacement'
+import { useUnresolvedExitPlacement } from '../composables/editor-workflows/useUnresolvedExitPlacement'
+import { useEditorWorkflows } from '../composables/useEditorWorkflows'
+import type { SaveState } from '../composables/editor-workflows/types'
+import {
+  createWorkspaceHistoryCoordinator,
+  type WorkspaceHistoryCapacityDetails,
+} from '../composables/editor-workflows/workspace-mutations'
+import type { MapNavigationHandle, SystemMapHandle } from '../composables/editor-workflows/types'
+import { useEditorUiStore } from '../stores/editor-ui'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+
+interface HistoryHarnessOptions {
+  limits?: { maxActions?: number; maxBytes?: number }
+  confirmCapacity?: (details: WorkspaceHistoryCapacityDetails, signal: AbortSignal) => Promise<boolean>
+}
+
+function createHistoryHarness(initial: LocalWorkspace, options: HistoryHarnessOptions = {}) {
+  const workspace = shallowRef<LocalWorkspace | null>(createWorkspaceSnapshot(initial))
+  const blockedReason = ref<string | null>(null)
+  let revision = 0
+  const history = createWorkspaceHistoryCoordinator({
+    getWorkspace: () => workspace.value,
+    getRevision: () => revision,
+    publishWorkspace: next => {
+      workspace.value = createWorkspaceSnapshot(next)
+      revision += 1
+      return { durable: Promise.resolve() }
+    },
+    getTraversalBlockReason: () => blockedReason.value,
+    confirmCapacity: options.confirmCapacity ?? (async () => false),
+    limits: options.limits,
+  })
+  return {
+    workspace,
+    blockedReason,
+    history,
+    dispose: () => history.dispose(),
+  }
+}
+
+function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId: string } {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]
+  if (!system) throw new Error('The initial workspace has no star system.')
+  const jumpPoint: SystemObject = {
+    id: 'history-integration-jump-point',
+    family: 'JumpPoint',
+    subtype: 'jump-point',
+    locationKey: 'J',
+    name: 'Far Gate',
+    description: '',
+    placement: { kind: 'system', x: 0.78, y: 0.5 },
+  }
+  const routeId = 'history-integration-unresolved-route'
+  return {
+    routeId,
+    workspace: createWorkspaceSnapshot({
+      ...initial,
+      cluster: {
+        ...initial.cluster,
+        systems: [{ ...system, objects: [...system.objects, jumpPoint] }],
+        routes: [{
+          id: routeId,
+          fromPointId: jumpPoint.id,
+          toPointId: null,
+          unresolvedExit: 'Beyond the known Cluster',
+          jumpLevel: 1,
+        }],
+      },
+    }),
+  }
+}
+
+function createUnoccupiedOrbitWorkspace(): { workspace: LocalWorkspace; systemId: string; orbitId: string } {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]
+  if (!system) throw new Error('The initial workspace has no star system.')
+  const orbit = createOrbit(system, null)
+  return {
+    systemId: system.id,
+    orbitId: orbit.id,
+    workspace: createWorkspaceSnapshot({
+      ...initial,
+      cluster: {
+        ...initial.cluster,
+        systems: [{ ...system, orbits: [orbit] }],
+      },
+      layout: {
+        ...initial.layout,
+        orbitRadii: { ...initial.layout.orbitRadii, [orbit.id]: { horizontal: 140, vertical: 90 } },
+        orbitRotations: { ...initial.layout.orbitRotations, [orbit.id]: 17 },
+      },
+    }),
+  }
+}
+
+function mapNavigationStub(): MapNavigationHandle {
+  return {
+    focusMap: () => undefined,
+    setUnresolvedExitPositionPreview: () => undefined,
+  } as unknown as MapNavigationHandle
+}
+
+function systemMapStub(): SystemMapHandle {
+  return {
+    focusMap: () => undefined,
+    setOrbitCenterMovePreview: () => undefined,
+  } as unknown as SystemMapHandle
+}
+
+function connectPreviewGuard(
+  blockedReason: ReturnType<typeof createHistoryHarness>['blockedReason'],
+  hasPendingPreview: () => boolean,
+  message: string,
+) {
+  return watchEffect(() => {
+    blockedReason.value = hasPendingPreview() ? message : null
+  }, { flush: 'sync' })
+}
+
+test('unresolved-exit direct moves and confirmed previews round-trip through the shared coordinator @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createUnresolvedRouteWorkspace()
+  const harness = createHistoryHarness(initial.workspace)
+  const scope = effectScope()
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', selectedRouteId: null })
+  store.setMode('move')
+  const placement = scope.run(() => useUnresolvedExitPlacement({
+    workspace: harness.workspace,
+    selectedRouteId: computed(() => store.selectedRouteId),
+    clusterMapRef: shallowRef(mapNavigationStub()),
+    mutations: harness.history,
+    beforeWorkspaceOperation: async () => true,
+  }))
+  if (!placement) throw new Error('The unresolved-exit placement controller was not created.')
+  const stopGuard = connectPreviewGuard(
+    harness.blockedReason,
+    () => placement.preview.value !== null,
+    'Confirm or cancel the unresolved-exit preview first.',
+  )
+
+  store.setSelection({ selectedRouteId: initial.routeId })
+  expect(placement.begin()).toBe(true)
+  const automaticPosition = { ...placement.preview.value!.position }
+  placement.cancel()
+  expect(await placement.move(initial.routeId, automaticPosition)).toBe(true)
+  expect(harness.workspace.value?.layout.unresolvedExitPositions).toEqual({})
+  expect(harness.history.getStatus().totalActions).toBe(0)
+
+  // An explicit confirmation at the same visual point creates the manual override as one action.
+  expect(placement.begin()).toBe(true)
+  expect(placement.preview.value?.position).toEqual(automaticPosition)
+  expect(await placement.confirm()).toBe(true)
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(automaticPosition)
+  expect(harness.history.getStatus().totalActions).toBe(1)
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect(harness.workspace.value).toEqual(createWorkspaceSnapshot(initial.workspace))
+  expect((await harness.history.redo()).status).toBe('applied')
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(automaticPosition)
+
+  const directPosition = { x: 684, y: 248 }
+  expect(await placement.move(initial.routeId, directPosition)).toBe(true)
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(directPosition)
+  expect(harness.history.getStatus().undoAction?.label).toBe('Move unresolved Jump Route target')
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(automaticPosition)
+  expect((await harness.history.redo()).status).toBe('applied')
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(directPosition)
+
+  store.setSelection({ selectedRouteId: initial.routeId })
+  expect(placement.begin()).toBe(true)
+  const targetPosition = { x: 752, y: 310 }
+  expect(placement.previewAt(targetPosition)).toBe(true)
+  expect(harness.history.getStatus().undoUnavailableReason).toBe('Confirm or cancel the unresolved-exit preview first.')
+  expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+  const previewToken = placement.preview.value?.token
+  expect(previewToken).toBeDefined()
+  expect(await placement.confirm()).toBe(true)
+  expect(placement.preview.value).toBeNull()
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(targetPosition)
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(directPosition)
+  expect((await harness.history.redo()).status).toBe('applied')
+  expect(harness.workspace.value?.layout.unresolvedExitPositions?.[initial.routeId]).toEqual(targetPosition)
+  expect(harness.workspace.value?.cluster.routes[0]?.id).toBe(initial.routeId)
+
+  stopGuard()
+  scope.stop()
+  harness.dispose()
+})
+
+function createOrbitCenterControllers(
+  harness: ReturnType<typeof createHistoryHarness>,
+  fixture: ReturnType<typeof createUnoccupiedOrbitWorkspace>,
+) {
+  const scope = effectScope()
+  const store = useEditorUiStore()
+  store.setSelection({
+    activeView: 'system',
+    selectedSystemId: fixture.systemId,
+    selectedOrbitId: fixture.orbitId,
+  })
+  store.setMode('move')
+  const systemMapRef = shallowRef<SystemMapHandle | null>(systemMapStub())
+  const orbitAdjustments = createContinuousOrbitAdjustmentController({ history: harness.history })
+  const beforeWorkspaceOperation = async (): Promise<boolean> => {
+    const result = await orbitAdjustments.beforeOperation()
+    if (result.status === 'applied') void result.durable.catch(() => undefined)
+    return result.status !== 'rejected'
+  }
+  let mapWorkflows: ReturnType<typeof useMapWorkflows> | undefined
+  let placement: ReturnType<typeof useOrbitCenterPlacement> | undefined
+  scope.run(() => {
+    mapWorkflows = useMapWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      systemMapRef,
+      resolveTransition: async () => true,
+      beginObjectSession: () => undefined,
+      beginOrbitSession: () => undefined,
+      isEntityCommandBlocked: () => false,
+      editorError: ref(''),
+      orbitAdjustments,
+      beforeWorkspaceOperation,
+    })
+    placement = useOrbitCenterPlacement({
+      workspace: harness.workspace,
+      creationActive: computed(() => false),
+      systemMapRef,
+      isEntityCommandBlocked: () => false,
+      moveOrbitCenter: mapWorkflows.moveMapOrbitCenter,
+    })
+  })
+  if (!mapWorkflows || !placement) throw new Error('The Orbit-center workflows were not created.')
+  return {
+    placement,
+    mapWorkflows,
+    dispose() {
+      orbitAdjustments.dispose()
+      scope.stop()
+    },
+  }
+}
+
+test('unoccupied Orbit-center previews survive capacity cancellation and accepted moves round-trip @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = createUnoccupiedOrbitWorkspace()
+
+  const rejectedHarness = createHistoryHarness(fixture.workspace, {
+    limits: { maxBytes: 1, maxActions: 100 },
+    confirmCapacity: async () => false,
+  })
+  const rejectedControllers = createOrbitCenterControllers(rejectedHarness, fixture)
+  const stopRejectedGuard = connectPreviewGuard(
+    rejectedHarness.blockedReason,
+    () => rejectedControllers.placement.orbitCenterMapMoveTargeting.value,
+    'Confirm or cancel the Orbit-center move first.',
+  )
+  expect(rejectedControllers.placement.beginOrbitCenterMapMove()).toBe(true)
+  const rejectedTarget = { x: 0.73, y: 0.64 }
+  expect(rejectedControllers.placement.previewOrbitCenterMoveAt({
+    x: 64 + rejectedTarget.x * 832,
+    y: 72 + rejectedTarget.y * 416,
+  })).toBe(true)
+  const rejectedPreviewToken = rejectedControllers.placement.orbitCenterMovePreview.value?.token
+  expect(rejectedPreviewToken).toBeDefined()
+  expect(await rejectedControllers.placement.confirmOrbitCenterMove(rejectedPreviewToken!)).toBe(false)
+  expect(rejectedControllers.placement.orbitCenterMovePreview.value?.token).toBe(rejectedPreviewToken)
+  expect(rejectedHarness.workspace.value?.cluster.systems[0]?.orbits[0]?.center)
+    .toEqual(fixture.workspace.cluster.systems[0]?.orbits[0]?.center)
+  expect(rejectedHarness.history.getStatus().totalActions).toBe(0)
+  stopRejectedGuard()
+  rejectedControllers.dispose()
+  rejectedHarness.dispose()
+
+  const harness = createHistoryHarness(fixture.workspace)
+  const controllers = createOrbitCenterControllers(harness, fixture)
+  const stopGuard = connectPreviewGuard(
+    harness.blockedReason,
+    () => controllers.placement.orbitCenterMapMoveTargeting.value,
+    'Confirm or cancel the Orbit-center move first.',
+  )
+  const before = createWorkspaceSnapshot(harness.workspace.value!)
+  expect(controllers.placement.beginOrbitCenterMapMove()).toBe(true)
+  const target = { x: 0.71, y: 0.66 }
+  expect(controllers.placement.previewOrbitCenterMoveAt({
+    x: 64 + target.x * 832,
+    y: 72 + target.y * 416,
+  })).toBe(true)
+  const token = controllers.placement.orbitCenterMovePreview.value?.token
+  expect(token).toBeDefined()
+  expect(await controllers.placement.confirmOrbitCenterMove(token!)).toBe(true)
+  expect(controllers.placement.orbitCenterMovePreview.value).toBeNull()
+  const acceptedCenter = { ...harness.workspace.value!.cluster.systems[0]!.orbits[0]!.center }
+  expect(acceptedCenter.x).toBeCloseTo(target.x, 12)
+  expect(acceptedCenter.y).toBeCloseTo(target.y, 12)
+  expect(harness.history.getStatus().undoAction?.label).toBe('Move Orbit 1')
+
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect(harness.workspace.value).toEqual(before)
+  expect((await harness.history.redo()).status).toBe('applied')
+  expect(harness.workspace.value?.cluster.systems[0]?.orbits[0]?.center).toEqual(acceptedCenter)
+  expect(harness.workspace.value?.cluster.systems[0]?.orbits[0]?.id).toBe(fixture.orbitId)
+
+  stopGuard()
+  controllers.dispose()
+  harness.dispose()
+})
+
+test('late capacity consent cannot publish a canceled and replaced Orbit-center preview @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = createUnoccupiedOrbitWorkspace()
+  let decideCapacity: ((accepted: boolean) => void) | undefined
+  let announceCapacity: (() => void) | undefined
+  const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
+  const capacityShown = new Promise<void>((resolve) => { announceCapacity = resolve })
+  const harness = createHistoryHarness(fixture.workspace, {
+    limits: { maxBytes: 1, maxActions: 100 },
+    confirmCapacity: async () => {
+      announceCapacity?.()
+      return await capacityDecision
+    },
+  })
+  const controllers = createOrbitCenterControllers(harness, fixture)
+  const stopGuard = connectPreviewGuard(
+    harness.blockedReason,
+    () => controllers.placement.orbitCenterMapMoveTargeting.value,
+    'Confirm or cancel the Orbit-center move first.',
+  )
+  const before = createWorkspaceSnapshot(harness.workspace.value!)
+  expect(controllers.placement.beginOrbitCenterMapMove()).toBe(true)
+  expect(controllers.placement.previewOrbitCenterMoveAt({ x: 64 + 0.69 * 832, y: 72 + 0.61 * 416 })).toBe(true)
+  const canceledToken = controllers.placement.orbitCenterMovePreview.value?.token
+  expect(canceledToken).toBeDefined()
+
+  const pendingConfirm = controllers.placement.confirmOrbitCenterMove(canceledToken!)
+  await capacityShown
+  controllers.placement.cancelOrbitCenterMove(false)
+  expect(controllers.placement.beginOrbitCenterMapMove()).toBe(true)
+  expect(controllers.placement.previewOrbitCenterMoveAt({ x: 64 + 0.76 * 832, y: 72 + 0.68 * 416 })).toBe(true)
+  const replacementToken = controllers.placement.orbitCenterMovePreview.value?.token
+  expect(replacementToken).toBeDefined()
+  expect(replacementToken).not.toBe(canceledToken)
+
+  decideCapacity?.(true)
+  expect(await pendingConfirm).toBe(false)
+  expect(harness.workspace.value).toEqual(before)
+  expect(harness.history.getStatus().totalActions).toBe(0)
+  expect(controllers.placement.orbitCenterMovePreview.value?.token).toBe(replacementToken)
+
+  stopGuard()
+  controllers.dispose()
+  harness.dispose()
+})
+
+test('a map-mode change invalidates an Orbit-center preview while capacity consent is open @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = createUnoccupiedOrbitWorkspace()
+  let decideCapacity: ((accepted: boolean) => void) | undefined
+  let announceCapacity: (() => void) | undefined
+  const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
+  const capacityShown = new Promise<void>((resolve) => { announceCapacity = resolve })
+  const harness = createHistoryHarness(fixture.workspace, {
+    limits: { maxBytes: 1, maxActions: 100 },
+    confirmCapacity: async () => {
+      announceCapacity?.()
+      return await capacityDecision
+    },
+  })
+  const controllers = createOrbitCenterControllers(harness, fixture)
+  const store = useEditorUiStore()
+  const stopGuard = connectPreviewGuard(
+    harness.blockedReason,
+    () => controllers.placement.orbitCenterMapMoveTargeting.value,
+    'Confirm or cancel the Orbit-center move first.',
+  )
+  const before = createWorkspaceSnapshot(harness.workspace.value!)
+  expect(controllers.placement.beginOrbitCenterMapMove()).toBe(true)
+  expect(controllers.placement.previewOrbitCenterMoveAt({ x: 64 + 0.74 * 832, y: 72 + 0.59 * 416 })).toBe(true)
+  const token = controllers.placement.orbitCenterMovePreview.value?.token
+  expect(token).toBeDefined()
+
+  const pendingConfirm = controllers.placement.confirmOrbitCenterMove(token!)
+  await capacityShown
+  store.setMode('select')
+  decideCapacity?.(true)
+
+  expect(await pendingConfirm).toBe(false)
+  expect(harness.workspace.value).toEqual(before)
+  expect(harness.history.getStatus().totalActions).toBe(0)
+  expect(controllers.placement.orbitCenterMovePreview.value).toBeNull()
+  expect(controllers.placement.orbitCenterMapMoveTargeting.value).toBe(false)
+  expect(harness.blockedReason.value).toBeNull()
+
+  stopGuard()
+  controllers.dispose()
+  harness.dispose()
+})
+
+test('a blank route-creation session blocks Undo while a clean armed system Add does not @pure', async () => {
+  setActivePinia(createPinia())
+  const harness = createHistoryHarness(createLocalWorkspace('Kestrel Reach', 'Vesper'))
+  const workflows = useEditorWorkflows({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    initializeWorkspace: async () => undefined,
+    saveState: ref<SaveState>('saved'),
+    saveError: ref<string | null>(null),
+  })
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster' })
+  const stopGuard = watchEffect(() => {
+    harness.blockedReason.value = workflows.historyGuards.blockReason.value
+  }, { flush: 'sync' })
+
+  const before = harness.workspace.value!
+  const rename = await harness.history.execute({
+    action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: before.cluster.id } },
+    prepare: current => ({ ...current, cluster: { ...current.cluster, name: 'Kestrel Reach Prime' } }),
+  })
+  expect(rename.status).toBe('applied')
+  await workflows.cluster.beginRoute()
+  expect(workflows.inspector.routeSession.value?.routeId).toBeNull()
+  expect(workflows.historyGuards.blockReason.value).toBe('Finish or cancel the current Cluster route action first.')
+  expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
+
+  await workflows.placement.quitAdd()
+  expect(workflows.inspector.routeSession.value).toBeNull()
+  expect(workflows.historyGuards.blockReason.value).toBeNull()
+  workflows.placement.clusterSystem.armSystemAdd()
+  expect(workflows.historyGuards.blockReason.value).toBeNull()
+  expect((await harness.history.undo()).status).toBe('applied')
+  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach')
+  expect(workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+
+  stopGuard()
+  workflows.adjustments.resetOrbitAdjustments()
+  harness.dispose()
+})

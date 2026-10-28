@@ -17,6 +17,7 @@
       ref="clusterMapRef"
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
+      :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :selected-system-id="props.selectedSystemId"
       :selected-route-id="props.selectedRouteId"
       :move-enabled="props.mode === 'move' && props.clusterAddType == null"
@@ -24,11 +25,14 @@
       :cluster-add-type="props.clusterAddType ?? null"
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
+      :move-targeting="props.moveTargeting ?? false"
       touch-navigation
       :show-zoom-controls="false"
       @activate-system="handleSystemActivation"
       @select-route="handleRouteSelection"
       @move-system="forwardMoveSystem"
+      @move-unresolved-exit="(id, point) => emit('move-unresolved-exit', id, point)"
+      @move-target="forwardMoveTarget"
       @cluster-target="forwardClusterTarget"
       @cancel-cluster-preview="emit('cancel-cluster-preview')"
       @editing-gesture-change="emit('editing-gesture-change', $event)"
@@ -50,11 +54,13 @@
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
       :move-enabled="props.mode === 'move' && !props.creationType"
+      :move-targeting="props.moveTargeting ?? false"
       touch-navigation
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
       @orbit-adjustment="forwardOrbitAdjustment"
+      @move-target="forwardMoveTarget"
       @object-move-blocked="forwardBlockedObjectMove"
       @object-move-candidates="forwardObjectMoveCandidates"
       @orbit-center-candidates="forwardOrbitCenterCandidates"
@@ -103,7 +109,7 @@ import type {
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
-import { clientRectToSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
@@ -129,6 +135,8 @@ const props = defineProps<{
   clusterChooserOpen?: boolean
   clusterMoveTargeting?: boolean
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
+  /** A focused placement controller currently owns scene clicks and arrow keys. */
+  moveTargeting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -147,6 +155,10 @@ const emit = defineEmits<{
   'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
   'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
+  'move-unresolved-exit': [id: string, position: Point]
+  'move-target': [point: Point]
+  'move-nudge': [delta: Point]
+  'cancel-map-move': []
   'cluster-target': [point: Point, systemIds: string[]]
   'cancel-cluster-preview': []
   'cancel-object-placement-preview': []
@@ -233,6 +245,7 @@ function clearPointerLongPress(): void {
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
+  emit('cancel-map-move')
   if (cancelClusterPreview && props.activeView === 'cluster') emit('cancel-cluster-preview')
   clearLongPress()
   clearPointerLongPress()
@@ -309,6 +322,7 @@ function onPointerDownCapture(event: PointerEvent): void {
   const entityPress = event.button === 0 && isMapEntityTarget(event.target)
   const addHold = hasMapAddIntent() && entityPress
   const inspectHold = !hasMapAddIntent()
+    && !props.moveTargeting
     && (props.mode === 'navigate' || props.mode === 'move')
     && entityPress
   if (addHold || inspectHold) {
@@ -335,10 +349,11 @@ function onPointerDownCapture(event: PointerEvent): void {
     pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, timer }
   }
   const isRightPan = event.button === 2
-  const isBackgroundPan = props.mode === 'move' && event.button === 0 && !isMapEntityTarget(event.target)
+  const isBackgroundPan = props.mode === 'move' && !props.moveTargeting && event.button === 0 && !isMapEntityTarget(event.target)
   const isNavigationPan = props.mode !== 'move' && event.button === 0
   if (!isRightPan && !isBackgroundPan && !isNavigationPan) return
 
+  if (isRightPan && props.moveTargeting) emit('cancel-map-move')
   currentMap()?.startViewPan(event)
   activePointerPan = { id: event.pointerId, button: event.button, x: event.clientX, y: event.clientY, moved: false }
   if (isRightPan) holdClickSuppression()
@@ -366,6 +381,22 @@ function onMouseDownCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if (props.moveTargeting && props.mode === 'move' && event.target instanceof SVGElement) {
+    const step = event.shiftKey ? 10 : 1
+    const nudges: Record<string, Point> = {
+      ArrowLeft: { x: -step, y: 0 },
+      ArrowRight: { x: step, y: 0 },
+      ArrowUp: { x: 0, y: -step },
+      ArrowDown: { x: 0, y: step },
+    }
+    const nudge = nudges[event.key]
+    if (nudge) {
+      event.preventDefault()
+      event.stopPropagation()
+      emit('move-nudge', nudge)
+      return
+    }
+  }
   if (!(event.target instanceof SVGSVGElement)) return
   const deltas: Record<string, [number, number]> = {
     ArrowLeft: [-80, 0],
@@ -378,6 +409,11 @@ function onKeyDownCapture(event: KeyboardEvent): void {
   event.preventDefault()
   event.stopPropagation()
   currentMap()?.panBy(delta[0], delta[1])
+}
+
+/** Forwards a scene-space destination only while the active Move controller owns targeting. */
+function forwardMoveTarget(point: Point): void {
+  if (props.moveTargeting && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
@@ -709,6 +745,9 @@ defineExpose({
   exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
     ?? Promise.reject(new Error('The map is not ready to export.')),
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
+  getMinimumZoomScale: () => props.activeView === 'cluster'
+    ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
+    : MAP_ZOOM_MIN_SCALE,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
@@ -722,11 +761,17 @@ defineExpose({
   setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
     if (props.activeView === 'cluster') clusterMapRef.value?.setClusterSystemPositionPreview(systemId, position)
   },
+  setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
+    if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
+  },
   setObjectPlacementPreview: (objectId: string, scenePoint: Point | null) => {
     if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
   },
   setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null) => {
     if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
+  },
+  setOrbitCenterMovePreview: (orbitId: string, scenePoint: Point | null) => {
+    if (props.activeView === 'system') systemMapRef.value?.setOrbitCenterMovePreview(orbitId, scenePoint)
   },
   startTouchNavigation: (event: TouchEvent) => currentMap()?.startTouchNavigation(event),
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),

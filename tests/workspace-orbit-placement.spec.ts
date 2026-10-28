@@ -202,6 +202,22 @@ test('an unoccupied Orbit previews attachment safely and applies with the new ho
   await expectUnavailableHost(host, 'Transfer Moon')
   await expectUnavailableHost(host, 'Nested Traveler')
 
+  const primaryNode = map.locator(`.system-object[data-object-id="${primary.id}"]`)
+  const hostPositionBeforeMove = await objectPosition(map, primary.id)
+  await ensureMapDragPointsReachable(page, map, primaryNode, {
+    x: hostPositionBeforeMove.x + 96,
+    y: hostPositionBeforeMove.y + 72,
+  })
+  await beginDragToWorldPoint(page, map, primaryNode, {
+    x: hostPositionBeforeMove.x + 96,
+    y: hostPositionBeforeMove.y + 72,
+  })
+  await page.mouse.up()
+  await expectObjectPosition(map, primary.id, hostPositionBeforeMove)
+  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
+  await expect(inspector.getByRole('alert'))
+    .toContainText('Resolve the Inspector draft before moving this object or changing a related placement.')
+
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
   await expect.poll(async () => Number(await ring.getAttribute('cx'))).toBe(primaryPosition.x)
   await expect.poll(async () => Number(await ring.getAttribute('cy'))).toBe(primaryPosition.y)

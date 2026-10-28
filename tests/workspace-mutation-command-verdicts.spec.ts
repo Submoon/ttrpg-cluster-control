@@ -104,7 +104,8 @@ test('a rejected Cluster move keeps its initiating preview and leaves applied po
     },
   })
 
-  expect(placement.previewSystemMoveAt({ x: 0.7, y: 0.8 })).toBe(true)
+  expect(placement.beginClusterSystemMapMove()).toBe(true)
+  expect(placement.previewSystemMoveAt({ x: 112 + 0.7 * 736, y: 96 + 0.8 * 368 })).toBe(true)
   const token = placement.clusterSystemMovePreview.value?.token
   expect(token).toBeDefined()
   mutations.dispose()

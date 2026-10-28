@@ -107,6 +107,7 @@ test('an attached Orbit with undersized imported radii is rejected without losin
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
 
   const workspace = await readCurrentWorkspace(page) as StoredWorkspace
   const sourceSystem = workspace.cluster.systems[0]

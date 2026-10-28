@@ -16,6 +16,8 @@ import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
 import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
+import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExitPlacement'
+import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
@@ -153,6 +155,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    acceptCommittedPosition: entity.acceptCommittedPosition,
+    acceptCommittedOrbitCenter: entity.acceptCommittedOrbitCenter,
     editorError,
     orbitAdjustments,
     beforeWorkspaceOperation,
@@ -184,6 +188,21 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     beforeWorkspaceOperation,
+    acceptCommittedPosition: entity.acceptCommittedPosition,
+  })
+  const unresolvedExitPlacement = useUnresolvedExitPlacement({
+    workspace,
+    selectedRouteId: computed(() => store.selectedRouteId),
+    clusterMapRef: mapControls.clusterMapRef,
+    mutations,
+    beforeWorkspaceOperation,
+  })
+  const orbitCenterPlacement = useOrbitCenterPlacement({
+    workspace,
+    creationActive: computed(() => systemCreation.creationSession.value !== null),
+    systemMapRef: mapControls.systemMapRef,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    moveOrbitCenter: map.moveMapOrbitCenter,
   })
   const clusterSystemPlacement = useClusterSystemPlacement({
     workspace,
@@ -239,15 +258,23 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     if (route.hasPendingHistoryChoice.value) return 'Finish choosing the Jump Route endpoints first.'
     if (entity.hasPendingHistoryChoice.value) return 'Finish choosing the Orbit placement first.'
     if (systemCreation.hasPendingHistoryInput.value) return 'Finish or cancel the object or Orbit placement first.'
-    if (clusterSystemPlacement.clusterAddType.value === 'route') return 'Finish or cancel the current Cluster route action first.'
+    if (clusterSystemPlacement.clusterAddType.value === 'route' || route.routeSession.value?.routeId === null) {
+      return 'Finish or cancel the current Cluster route action first.'
+    }
     if (clusterSystemPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending Cluster placement inputs first.'
     if (clusterSystemPlacement.clusterSystemMovePreview.value) return 'Confirm or cancel the pending system-move preview first.'
+    if (clusterSystemPlacement.clusterSystemMapMoveTargeting.value) return 'Finish or cancel the current system move first.'
     if (systemObjectPlacement.systemObjectMoveCandidateRequest.value !== 0
       && systemObjectPlacement.systemObjectMoveCandidates.value.length) {
       return 'Choose or cancel the pending object-placement target first.'
     }
     if (systemObjectPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending object-placement inputs first.'
     if (systemObjectPlacement.systemObjectMovePreview.value) return 'Confirm or cancel the pending object-move preview first.'
+    if (systemObjectPlacement.systemObjectMapMoveTargeting.value) return 'Finish or cancel the current object move first.'
+    if (unresolvedExitPlacement.preview.value) return 'Confirm or cancel the unresolved-exit preview first.'
+    if (orbitCenterPlacement.orbitCenterMovePreview.value || orbitCenterPlacement.orbitCenterMapMoveTargeting.value) {
+      return 'Confirm or cancel the Orbit-center move first.'
+    }
     if (entity.orbitPlacementPreview.value) return 'Finish or cancel the pending Orbit-placement preview first.'
     if (cluster.deletionReview.value) return 'Finish or cancel the open map-deletion review first.'
     if (mapControls.editingGestureActive.value) return 'Finish the active map gesture first.'
@@ -342,6 +369,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       confirmDeletionReview: cluster.confirmDeletionReview,
     },
     placement: {
+      unresolvedExit: unresolvedExitPlacement,
+      orbitCenter: orbitCenterPlacement,
       map: {
         moveSystem: map.moveSystem,
         moveMapObject: map.moveMapObject,
@@ -363,22 +392,19 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
         cancelCreationPreview: systemCreation.cancelCreationPreview,
       },
       systemObject: {
+        systemObjectMapMoveTargeting: systemObjectPlacement.systemObjectMapMoveTargeting,
+        beginSystemObjectMapMove: systemObjectPlacement.beginSystemObjectMapMove,
+        previewSystemObjectMoveAt: systemObjectPlacement.previewSystemObjectMoveAt,
+        nudgeSystemObjectMove: systemObjectPlacement.nudgeSystemObjectMove,
         systemObjectMoveAvailable: systemObjectPlacement.systemObjectMoveAvailable,
         systemObjectMoveDestination: systemObjectPlacement.systemObjectMoveDestination,
         systemObjectMoveDestinationOptions: systemObjectPlacement.systemObjectMoveDestinationOptions,
-        systemObjectPositionInput: systemObjectPlacement.systemObjectPositionInput,
-        systemObjectPositionXInput: systemObjectPlacement.systemObjectPositionXInput,
-        systemObjectPositionYInput: systemObjectPlacement.systemObjectPositionYInput,
         systemObjectMoveCandidates: systemObjectPlacement.systemObjectMoveCandidates,
         systemObjectMoveCandidateRequest: systemObjectPlacement.systemObjectMoveCandidateRequest,
         systemObjectMovePreview: systemObjectPlacement.systemObjectMovePreview,
         systemObjectMoveError: systemObjectPlacement.systemObjectMoveError,
         updateSystemObjectMoveDestination: systemObjectPlacement.updateSystemObjectMoveDestination,
-        updateSystemObjectPositionInput: systemObjectPlacement.updateSystemObjectPositionInput,
-        updateSystemObjectPositionXInput: systemObjectPlacement.updateSystemObjectPositionXInput,
-        updateSystemObjectPositionYInput: systemObjectPlacement.updateSystemObjectPositionYInput,
         chooseObjectMoveCandidate: systemObjectPlacement.chooseObjectMoveCandidate,
-        previewSystemObjectMoveFromInputs: systemObjectPlacement.previewSystemObjectMoveFromInputs,
         confirmSystemObjectMove: systemObjectPlacement.confirmSystemObjectMove,
         cancelSystemObjectMovePreview: systemObjectPlacement.cancelSystemObjectMovePreview,
       },
@@ -386,16 +412,14 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
         clusterAddType: clusterSystemPlacement.clusterAddType,
         clusterAddError: clusterSystemPlacement.clusterAddError,
         clusterMoveTargeting: clusterSystemPlacement.clusterMoveTargeting,
+        clusterSystemMapMoveTargeting: clusterSystemPlacement.clusterSystemMapMoveTargeting,
         clusterSystemMovePreview: clusterSystemPlacement.clusterSystemMovePreview,
         clusterSystemMoveError: clusterSystemPlacement.clusterSystemMoveError,
-        clusterSystemPositionInputs: clusterSystemPlacement.clusterSystemPositionInputs,
-        clusterSystemPositionInputErrors: clusterSystemPlacement.clusterSystemPositionInputErrors,
         armSystemAdd: clusterSystemPlacement.armSystemAdd,
-        updateClusterSystemPositionInput: clusterSystemPlacement.updateClusterSystemPositionInput,
         addSystemAt: clusterSystemPlacement.addSystemAt,
-        addSystemFromInputs: clusterSystemPlacement.addSystemFromInputs,
+        beginClusterSystemMapMove: clusterSystemPlacement.beginClusterSystemMapMove,
         previewSystemMoveAt: clusterSystemPlacement.previewSystemMoveAt,
-        previewSystemMoveFromInputs: clusterSystemPlacement.previewSystemMoveFromInputs,
+        nudgeClusterSystemMove: clusterSystemPlacement.nudgeClusterSystemMove,
         cancelSystemMovePreview: clusterSystemPlacement.cancelSystemMovePreview,
         confirmSystemMove: clusterSystemPlacement.confirmSystemMove,
       },
@@ -413,6 +437,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       setEditingGestureActive: mapControls.setEditingGestureActive,
       initialViewport: mapControls.initialViewport,
       zoomLevel: mapControls.zoomLevel,
+      minimumZoomLevel: mapControls.minimumZoomLevel,
       isCompactViewport: viewport.isCompactViewport,
       hierarchyPanelVisible: viewport.hierarchyPanelVisible,
       inspectorPanelVisible: viewport.inspectorPanelVisible,

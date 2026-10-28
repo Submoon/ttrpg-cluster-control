@@ -55,11 +55,11 @@
         {{ feedback }}
       </p>
       <p v-if="props.error" id="workspace-history-error" class="m-0 text-xs error-text" role="alert">{{ props.error }}</p>
-      <p v-else id="workspace-history-error" class="sr-only" role="alert"></p>
+      <p v-else id="workspace-history-error" class="sr-only"></p>
     </div>
     <div v-else>
       <p id="workspace-history-feedback" class="sr-only" role="status" aria-live="polite"></p>
-      <p id="workspace-history-error" class="sr-only" role="alert"></p>
+      <p id="workspace-history-error" class="sr-only"></p>
     </div>
   </div>
   <UModal
