@@ -158,7 +158,7 @@ test('Undo from the Cluster opens the affected system and keeps the restored obj
   const undo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Undo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
   await undo.click()
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' }).locator('.workspace-map-context > span')).toHaveText('Star System')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands' }).locator('.workspace-map-heading > span')).toHaveText('Star System')
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   await expect(restoredMap).toBeVisible()
   await expect(restoredMap.getByRole('button', { name: /^Select .*Primary Star/ })).toBeVisible()

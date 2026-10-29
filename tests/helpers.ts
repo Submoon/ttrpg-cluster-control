@@ -700,7 +700,7 @@ export async function setWorkspaceMapMode(
 export async function returnToClusterMap(page: import('@playwright/test').Page): Promise<void> {
   const context = page.getByRole('navigation', { name: 'Map context and commands' })
   await expect(context).toBeVisible()
-  const contextKind = context.locator('.workspace-map-context > span')
+  const contextKind = context.locator('.workspace-map-heading > span')
   await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
   if (await contextKind.textContent() === 'Star System') {

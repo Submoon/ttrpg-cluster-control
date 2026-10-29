@@ -14,7 +14,7 @@ test('Back after an import activates once while the Map files menu closes', asyn
   await expect(page.getByRole('button', { name: 'Map files', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await back.click()
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })
-    .locator('.workspace-map-context > span')).toHaveText('Jump Cluster')
+    .locator('.workspace-map-heading > span')).toHaveText('Jump Cluster')
 })
 
 test('Hierarchy still activates when an imported workspace closes the Map files menu under the pointer', async ({ page }) => {

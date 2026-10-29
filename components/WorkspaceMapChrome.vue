@@ -7,7 +7,6 @@
     :inert="props.compactModalOpen ? true : undefined"
   >
     <div class="workspace-map-context">
-      <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
       <div class="workspace-map-context-line">
         <div class="workspace-map-title">
           <UButton
@@ -23,7 +22,10 @@
             <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
             <span>Back</span>
           </UButton>
-          <h2>{{ contextName }}</h2>
+          <div class="workspace-map-heading">
+            <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
+            <h2>{{ contextName }}</h2>
+          </div>
         </div>
         <template v-if="props.creationSession || props.clusterAddPresentation">
           <span class="workspace-add-status" role="status" aria-live="polite">
@@ -346,7 +348,7 @@ function openJsonImportPicker(): void {
   gap: 0.12rem;
 }
 
-.workspace-map-context > span,
+.workspace-map-heading > span,
 .workspace-map-files-heading {
   margin: 0;
   color: var(--text-muted);
@@ -382,8 +384,14 @@ function openJsonImportPicker(): void {
   min-width: 0;
   flex: 0 1 auto;
   flex-wrap: nowrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.25rem 0.6rem;
+}
+
+.workspace-map-heading {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
 }
 
 .workspace-add-status {
