@@ -686,3 +686,43 @@ test('an accepted same-cluster system result ends the armed system Add action @p
     harness.dispose()
   }
 })
+
+test('an unavailable search reveal restores the armed Add action and search context @pure', async () => {
+  for (const failure of ['readiness', 'framing'] as const) {
+    const harness = createSearchHarness()
+    try {
+      const system = harness.workspace.value.cluster.systems[0]
+      if (!system) throw new Error('The local workspace did not create its first system.')
+      harness.store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: system.id })
+      harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+        whenReady: async () => failure !== 'readiness',
+        frameSearchTarget: () => failure !== 'framing',
+        focusMap: () => undefined,
+      })
+      harness.workflows.placement.clusterSystem.armSystemAdd()
+      const search = harness.workflows.search
+      search.open.value = true
+      search.query.value = system.name
+      const result = search.results.value.find(candidate => candidate.target.kind === 'system')
+      if (!result) throw new Error('The applied system name was not searchable.')
+
+      expect(await search.reveal(result.target)).toEqual({ status: 'rejected', reason: 'unavailable' })
+      expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+      expect({
+        activeView: harness.store.activeView,
+        clusterSelectedSystemId: harness.store.clusterSelectedSystemId,
+        mode: harness.store.mapMode,
+        searchOpen: search.open.value,
+        query: search.query.value,
+      }).toEqual({
+        activeView: 'cluster',
+        clusterSelectedSystemId: system.id,
+        mode: 'select',
+        searchOpen: true,
+        query: system.name,
+      })
+    } finally {
+      harness.dispose()
+    }
+  }
+})

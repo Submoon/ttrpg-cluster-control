@@ -407,7 +407,6 @@ export function useEditorNavigation(options: {
     if (!searchTargetExists(latestWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
     if (!latestWorkspace) return { status: 'rejected', reason: 'unavailable' }
 
-    options.onSearchNavigationAccepted?.()
     mapControls.captureActiveMap()
     publishingSearchContext = true
     if (target.kind === 'cluster') {
@@ -476,6 +475,7 @@ export function useEditorNavigation(options: {
     if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, initialSelection.selectedSystemId)) {
       return { status: 'rejected', reason: 'stale' }
     }
+    options.onSearchNavigationAccepted?.()
     clusterMap.focusMap?.()
     editorError.value = ''
     return { status: 'revealed' }

@@ -54,7 +54,7 @@ Development caught and corrected three material behaviors: system-ID equality in
 
 The initial committed candidate is `2f24884c3edea1797949e7ab89ed1d6f4d936145`. Its production build passed (Nuxt client/SSR/Nitro), with bundler chunk-size/timing notices and third-party package deprecation notices; no warning policy was relaxed. An initial complete-suite attempt was interrupted to incorporate confirmed review corrections: terminal progress reached case 209, but no completed JSON report was produced. That partial run is not claimed as a full-suite pass.
 
-Post-review regression evidence: 16 model/composed-command tests passed in `test-results/search01-review-final-pure`; all 8 public search journeys passed together in `test-results/search01-review-final-browser` (44.8s). This includes Delete while traversing results and same-cluster Add exit. Corrected-candidate static/build/full-suite checks and review closure remain pending. Browser viewport and CDP touch evidence do not certify an operating-system software keyboard, physical device or screen reader.
+Post-review regression evidence: 16 model/composed-command tests passed in `test-results/search01-review-final-pure`; all 8 public search journeys passed together in `test-results/search01-review-final-browser` (44.8s). This includes Delete while traversing results and same-cluster Add exit. A subsequent failure-path correction adds readiness/framing refusal coverage: 17 pure tests pass in `test-results/search01-final-review-pure`; the real Inspector guard and same-cluster Add journeys pass again in `test-results/search01-final-review-browser` (2 passed, 18.5s). Corrected-candidate static/build/full-suite checks and final review closure remain pending. Browser viewport and CDP touch evidence do not certify an operating-system software keyboard, physical device or screen reader.
 
 ## Independent review
 
@@ -64,13 +64,14 @@ The independent Standards reviewer found zero actionable violations or significa
 
 ### Spec
 
-The independent Spec reviewer identified three P2 defects, all confirmed through coordinator-owned reproductions:
+The independent Spec reviewer identified three initial P2 defects and one adjacent rejection-path P2, all confirmed through coordinator-owned reproductions:
 
 1. A focused Search result leaked Delete to the editor, opening a deletion review for the existing map selection. The global shortcut owner now ignores Search, with a public regression. No deletion mutation/confirmation semantics changed.
 2. Reopening and dismissing Search during deferred presentation let an obsolete reveal regain ownership. Search open/close now advances the existing context generation, while the command's own publication suppresses its accepted close. The real composed regression verifies stale rejection with no frame/focus.
-3. Same-cluster activation left Add armed because only the map mode changed. The complete accepted reveal now invokes composition-owned synchronous creation/route cleanup after guards accept. Real command and browser cases verify Select and no accidental placement; a refused guard retains the armed Add state.
+3. Same-cluster activation left Add armed because only the map mode changed. The complete accepted reveal invokes composition-owned synchronous creation/route cleanup. Real command and browser cases verify Select and no accidental placement; a refused guard retains the armed Add state.
+4. Initial cleanup placement could end Add before renderer readiness/framing rejected the operation. The cleanup now runs only after a successful frame and final ownership check, immediately before map focus and the successful verdict with no subsequent await. The new real-command case reproduces the old loss and verifies preservation for both unavailable readiness and failed framing. No controller rollback protocol or weakened rejection contract was introduced.
 
-The reviewer also inspected Escape from a result while Add is armed: the existing modal exclusion prevents that shortcut from reaching Add cancellation, so no additional defect or workaround was introduced. The three corrections remain subject to pinned-diff reviewer closure; no product scope from tickets 02/03 was added.
+The reviewer also inspected Escape from a result while Add is armed: the existing modal exclusion prevents that shortcut from reaching Add cancellation, so no additional defect or workaround was introduced. The corrections remain subject to final pinned-diff reviewer closure; no product scope from tickets 02/03 was added. The intermediate correction commit is `5d9a1d4595480bce81af72ce2bbab72e5f7ceac7`; its ongoing build was stopped before completion for the rejection-path correction, so it is not recorded as a successful corrected-candidate build.
 
 ## Review plan
 
