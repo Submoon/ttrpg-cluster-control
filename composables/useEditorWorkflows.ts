@@ -132,6 +132,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const navigation = useEditorNavigation({
     workspace,
     waitForSearchPresentation: options.waitForSearchPresentation,
+    onSearchNavigationAccepted: endAcceptedSearchAddIntent,
     store,
     mapControls,
     chart: charts,
@@ -250,6 +251,11 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     editorError,
     beforeWorkspaceOperation,
   })
+  function endAcceptedSearchAddIntent(): void {
+    clusterSystemPlacement.quitClusterAdd()
+    route.cancelRouteCreation()
+    systemCreation.quitAdd()
+  }
   const interactions = useMapInteractionCoordinator({
     workspace,
     store,

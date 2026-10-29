@@ -27,6 +27,7 @@ type RouteController = ReturnType<typeof useRouteInspectorSession>
 export function useEditorNavigation(options: {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   waitForSearchPresentation?: () => Promise<void>
+  onSearchNavigationAccepted?: () => void
   store: EditorUiStore
   mapControls: MapControls
   chart: ChartController
@@ -73,6 +74,7 @@ export function useEditorNavigation(options: {
     () => store.selectedObjectId,
     () => store.selectedOrbitId,
     () => store.selectedRouteId,
+    () => store.searchOpen,
   ], () => {
     if (!publishingSearchContext) searchContextGeneration += 1
   }, { flush: 'sync' })
@@ -405,6 +407,7 @@ export function useEditorNavigation(options: {
     if (!searchTargetExists(latestWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
     if (!latestWorkspace) return { status: 'rejected', reason: 'unavailable' }
 
+    options.onSearchNavigationAccepted?.()
     mapControls.captureActiveMap()
     publishingSearchContext = true
     if (target.kind === 'cluster') {

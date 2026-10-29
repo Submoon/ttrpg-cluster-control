@@ -187,6 +187,8 @@ test('Stay keeps the modified chart draft, map context, and search query when a 
     harness.store.setMode('move')
     await harness.workflows.charts.beginNamesEdit()
     harness.workflows.charts.clusterName.value = 'Kestrel Reach Prime'
+    harness.store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: initialSystem.id })
+    harness.workflows.placement.clusterSystem.armSystemAdd()
 
     const search = harness.workflows.search
     search.open.value = true
@@ -212,6 +214,7 @@ test('Stay keeps the modified chart draft, map context, and search query when a 
       mapMode: harness.store.mapMode,
     }).toEqual(initialSelection)
     expect(harness.workflows.charts.clusterName.value).toBe('Kestrel Reach Prime')
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
     expect(harness.workflows.search.open.value).toBe(true)
     expect(harness.workflows.search.query.value).toBe('Kestrel')
   } finally {
@@ -604,6 +607,82 @@ test('reopening search while overlay teardown is pending prevents a stale map fo
     expect(focusCount).toBe(0)
   } finally {
     presentation.resolve()
+    harness.dispose()
+  }
+})
+
+test('reopening then closing search does not revive a pending reveal @pure', async () => {
+  const presentation = deferred<void>()
+  let frameCount = 0
+  let focusCount = 0
+  const harness = createSearchHarness(
+    'Kestrel Reach',
+    'Vesper',
+    Promise.resolve(),
+    undefined,
+    () => presentation.promise,
+  )
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    if (!system) throw new Error('The local workspace did not create its first system.')
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id })
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => {
+        frameCount += 1
+        return true
+      },
+      focusMap: () => { focusCount += 1 },
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = 'Vesper'
+    const result = search.results.value.find(candidate => candidate.target.kind === 'system')
+    if (!result) throw new Error('The applied system name was not searchable.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => harness.store.activeView).toBe('cluster')
+    await expect.poll(() => search.open.value).toBe(false)
+    search.open.value = true
+    await expect.poll(() => search.open.value).toBe(true)
+    search.open.value = false
+    await expect.poll(() => search.open.value).toBe(false)
+    presentation.resolve()
+
+    expect({ result: await reveal, frameCount, focusCount }).toEqual({
+      result: { status: 'rejected', reason: 'stale' },
+      frameCount: 0,
+      focusCount: 0,
+    })
+  } finally {
+    presentation.resolve()
+    harness.dispose()
+  }
+})
+
+test('an accepted same-cluster system result ends the armed system Add action @pure', async () => {
+  const harness = createSearchHarness()
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    if (!system) throw new Error('The local workspace did not create its first system.')
+    harness.store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: system.id })
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+    harness.workflows.placement.clusterSystem.armSystemAdd()
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = system.name
+    const result = search.results.value.find(candidate => candidate.target.kind === 'system')
+    if (!result) throw new Error('The applied system name was not searchable.')
+
+    expect(await search.reveal(result.target)).toEqual({ status: 'revealed' })
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBeNull()
+  } finally {
     harness.dispose()
   }
 })

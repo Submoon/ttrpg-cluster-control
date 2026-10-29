@@ -1,6 +1,8 @@
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
+  clickDockAction,
+  clickNormalizedClusterPoint,
   createSingleSystemWorkspace,
   jsonMapImportInput,
   resolveImportReview,
@@ -310,4 +312,55 @@ test('portrait touch search keeps controls in view and reveals a framed system',
   } finally {
     await cdp.detach()
   }
+})
+
+test('Delete on a focused Search result does not open a deletion review', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  await systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true }).click()
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  await query.fill('Vesper')
+  const result = searchDialog.getByRole('button', { name: /Vesper.*Star System.*Kestrel Reach/i })
+  await expect(result).toBeVisible()
+  await query.press('ArrowDown')
+  await expect(result).toBeFocused()
+
+  await page.keyboard.press('Delete')
+
+  await expect(page.getByRole('dialog', { name: 'Review deletion', exact: true })).toHaveCount(0)
+})
+
+test('revealing a system from armed Cluster Add cannot place a system on the map', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  await returnToClusterMap(page)
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const systemNodes = clusterMap.locator('.cluster-system-node')
+  const initialCount = await systemNodes.count()
+  await clickDockAction(page, 'Add star system')
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  await query.fill('Vesper')
+  const result = searchDialog.getByRole('button', { name: /Vesper.*Star System.*Kestrel Reach/i })
+  await expect(result).toBeVisible()
+  await result.click()
+
+  await expect(clusterMap).toBeVisible()
+  await expect(searchDialog).toHaveCount(0)
+  await expect(systemNodes).toHaveCount(initialCount)
+  const selectMode = page.getByRole('group', { name: 'Map interaction mode' })
+    .getByRole('button', { name: 'Select', exact: true })
+  await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
+
+  await clickNormalizedClusterPoint(page, clusterMap, { x: 0.75, y: 0.75 })
+
+  await expect(systemNodes).toHaveCount(initialCount)
+  await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
 })

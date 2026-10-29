@@ -52,7 +52,25 @@ Final source-freeze checks (candidate commit still pending):
 
 Development caught and corrected three material behaviors: system-ID equality incorrectly bypassed a dirty object session guard; native search Escape cleared the retained query; and late guard close focus could override the map. Each correction retained its observable regression coverage. Locator-only fixes for modal-hidden map geometry and the semantic searchbox role did not change product behavior.
 
-Production build, full-suite results and independent reviews remain pending. Browser viewport and CDP touch evidence do not certify an operating-system software keyboard, physical device or screen reader.
+The initial committed candidate is `2f24884c3edea1797949e7ab89ed1d6f4d936145`. Its production build passed (Nuxt client/SSR/Nitro), with bundler chunk-size/timing notices and third-party package deprecation notices; no warning policy was relaxed. An initial complete-suite attempt was interrupted to incorporate confirmed review corrections: terminal progress reached case 209, but no completed JSON report was produced. That partial run is not claimed as a full-suite pass.
+
+Post-review regression evidence: 16 model/composed-command tests passed in `test-results/search01-review-final-pure`; all 8 public search journeys passed together in `test-results/search01-review-final-browser` (44.8s). This includes Delete while traversing results and same-cluster Add exit. Corrected-candidate static/build/full-suite checks and review closure remain pending. Browser viewport and CDP touch evidence do not certify an operating-system software keyboard, physical device or screen reader.
+
+## Independent review
+
+### Standards
+
+The independent Standards reviewer found zero actionable violations or significant smell-baseline concerns in the pinned baseline-to-`2f24884c` diff. The review inspected module ownership, deterministic matching, Pinia lifetime, guarded navigation, renderer/focus boundaries, relevant callers, tests and desktop/compact/portrait screenshots. No runtime or physical-input check was performed by that reviewer. The correction diff will receive bounded closure review.
+
+### Spec
+
+The independent Spec reviewer identified three P2 defects, all confirmed through coordinator-owned reproductions:
+
+1. A focused Search result leaked Delete to the editor, opening a deletion review for the existing map selection. The global shortcut owner now ignores Search, with a public regression. No deletion mutation/confirmation semantics changed.
+2. Reopening and dismissing Search during deferred presentation let an obsolete reveal regain ownership. Search open/close now advances the existing context generation, while the command's own publication suppresses its accepted close. The real composed regression verifies stale rejection with no frame/focus.
+3. Same-cluster activation left Add armed because only the map mode changed. The complete accepted reveal now invokes composition-owned synchronous creation/route cleanup after guards accept. Real command and browser cases verify Select and no accidental placement; a refused guard retains the armed Add state.
+
+The reviewer also inspected Escape from a result while Add is armed: the existing modal exclusion prevents that shortcut from reaching Add cancellation, so no additional defect or workaround was introduced. The three corrections remain subject to pinned-diff reviewer closure; no product scope from tickets 02/03 was added.
 
 ## Review plan
 
