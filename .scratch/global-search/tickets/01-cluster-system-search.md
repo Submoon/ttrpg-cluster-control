@@ -1,6 +1,6 @@
 ---
 title: "Find and reveal the cluster and its systems"
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -32,18 +32,18 @@ User Stories 1, 3-4, 7-9, 11-16, 18-23, 25-28 and 31-52 as applicable to cluster
 
 ## Acceptance criteria
 
-- [ ] Search is visibly reachable and named from cluster and system contexts on desktop and compact layouts, without a mandatory shortcut.
-- [ ] Applied cluster/system names across the current workspace match literal case/accent-insensitive text with trimmed surrounding whitespace, exact -> prefix -> substring ranking and a deterministic tie-break. Empty input invites typing; no match is explicit; all matches remain reachable.
-- [ ] Results follow the latest applied names/imports/deletions/history traversal even while durable saving is pending; drafts/previews and recovery snapshots are excluded.
-- [ ] Stable-ID results remain separate despite identical names. Show type/context and a result-only occurrence number when needed; do not rename data or show raw IDs to disambiguate.
-- [ ] Typing, hovering and result traversal do not change map/tool/selection/camera/data or resolve drafts. Explicit activation uses one focused editor operation, not UI-coordinated navigation calls.
-- [ ] Cluster activation opens and fits the cluster overview; system activation opens the cluster view, selects that node and frames its visible card/label without entering its local map or silently replacing the separately active system.
-- [ ] Existing Apply/Discard/Stay guards cover modified and hidden sessions. Stay or invalid Apply retains starting map/selection/camera and query; validation and focus remain usable. Deleted targets, changed context and superseded deferred requests cause no partial navigation or stale reveal.
-- [ ] Accepted context transitions and pending gesture/continuous-adjustment handling reuse existing ownership. Result activation cannot accidentally place or move an entity, and search adds no data/history action; an explicitly accepted guard Apply remains its own ordinary edit.
-- [ ] Success closes search, focuses the map and does not automatically open Inspect. Retain useful desktop panels; hide the compact fullscreen panel while preserving retained work. Frame after map restoration and the resulting layout are ready, accounting for obstructions.
-- [ ] Repeated activation reframes; ordinary Back/revisit keeps existing memory. The query survives closing/reopening/reflow during the editor session and resets on identity change or editor exit.
-- [ ] Keyboard users can reach results and activate with Enter; composition cannot activate accidentally. Escape closes only search and returns focus to its opener. Touch users can type, scroll and activate; compact/short-landscape layouts leave usable input and results.
-- [ ] Pure matching cases, real composed command scenarios and public desktop/compact journeys establish these behaviors, including duplicate system names, guard choices, stale targets, remembered cameras and focus. Supply affected checks and rendered evidence, identifying the boundary of emulated mobile testing.
+- [x] Search is visibly reachable and named from cluster and system contexts on desktop and compact layouts, without a mandatory shortcut.
+- [x] Applied cluster/system names across the current workspace match literal case/accent-insensitive text with trimmed surrounding whitespace, exact -> prefix -> substring ranking and a deterministic tie-break. Empty input invites typing; no match is explicit; all matches remain reachable.
+- [x] Results follow the latest applied names/imports/deletions/history traversal even while durable saving is pending; drafts/previews and recovery snapshots are excluded.
+- [x] Stable-ID results remain separate despite identical names. Show type/context and a result-only occurrence number when needed; do not rename data or show raw IDs to disambiguate.
+- [x] Typing, hovering and result traversal do not change map/tool/selection/camera/data or resolve drafts. Explicit activation uses one focused editor operation, not UI-coordinated navigation calls.
+- [x] Cluster activation opens and fits the cluster overview; system activation opens the cluster view, selects that node and frames its visible card/label without entering its local map or silently replacing the separately active system.
+- [x] Existing Apply/Discard/Stay guards cover modified and hidden sessions. Stay or invalid Apply retains starting map/selection/camera and query; validation and focus remain usable. Deleted targets, changed context and superseded deferred requests cause no partial navigation or stale reveal.
+- [x] Accepted context transitions and pending gesture/continuous-adjustment handling reuse existing ownership. Result activation cannot accidentally place or move an entity, and search adds no data/history action; an explicitly accepted guard Apply remains its own ordinary edit.
+- [x] Success closes search, focuses the map and does not automatically open Inspect. Retain useful desktop panels; hide the compact fullscreen panel while preserving retained work. Frame after map restoration and the resulting layout are ready, accounting for obstructions.
+- [x] Repeated activation reframes; ordinary Back/revisit keeps existing memory. The query survives closing/reopening/reflow during the editor session and resets on identity change or editor exit.
+- [x] Keyboard users can reach results and activate with Enter; composition cannot activate accidentally. Escape closes only search and returns focus to its opener. Touch users can type, scroll and activate; compact/short-landscape layouts leave usable input and results.
+- [x] Pure matching cases, real composed command scenarios and public desktop/compact journeys establish these behaviors, including duplicate system names, guard choices, stale targets, remembered cameras and focus. Supply affected checks and rendered evidence, identifying the boundary of emulated mobile testing.
 
 ## Verification and continuation
 
@@ -75,3 +75,11 @@ The tickets are fully specified (enhancement, ready-for-agent) but lifecycle and
 On 2026-10-29, the user explicitly requested coordination of ticket 01 through the implement skill using sub-agents on a separate branch. The coordinator claims only this ticket on **codex/global-search-ticket-01**. Actual implementation baseline: **8d4b66504ca6723db5405ed7cb93d0a666264c9a**, equal to freshly fetched origin/main and local main; no alternative base or fast-forward was needed. GitHub #7 was re-read and remains unchanged.
 
 Use the Complex route: architect before implementation, developer ownership with TDD at the already approved seams, then independent Standards and Spec review against this pinned baseline. The coordinator owns shared Git, ports, runtime/browser sessions and integrated checks. Commit scoped work when complete; preserve unrelated environment files. No push, PR, merge, remote issue update or work on tickets 02/03 is included.
+
+## Resolution
+
+Implemented on `codex/global-search-ticket-01` through source candidate **d970f0ce311953706f39116be0c979d57d067595**, based on `8d4b6650`. Visible Search supports applied cluster/system names, normalized literal ranking and distinct homonyms. One guarded reveal selects and frames the cluster destination, preserves drafts and active-system identity, manages focus/query lifetime, and adds no history mutation. Objects remain outside this slice.
+
+Lint, typecheck and production build passed. The complete 457-test run passed 448 and failed 9; eight failed scenarios passed unchanged in isolation, and the remaining reproducible compact zoom-popup obstruction passed after its CSS correction. All 17 focused model/command and 8 public Search scenarios passed; final panel checks passed 5/5 and the visual hit-target/Inspect probe passed. Both independent Standards and Spec reviews closed with zero blocking findings. See the [Cluster and system search: implementation and verification](../implementation-01.md) record for exact revisions, reports, corrections and emulated-mobile limits.
+
+The source GitHub #7 was re-read unchanged and remains OPEN. Ticket 02 is available but unclaimed; 03 remains blocked by 02. No remote publication or object-search implementation is included.

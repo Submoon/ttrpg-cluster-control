@@ -1,6 +1,6 @@
 ---
 title: "Cluster and system search: implementation and verification"
-status: in-progress
+status: closed
 ---
 
 ## Scope and baseline
@@ -83,8 +83,12 @@ The UI developer applied a CSS-only correction to the zoom navigation surface fo
 
 The affected panel, Search and maintained UI-smoke run at one worker passed 17 of 18 scenarios (`test-results/search01-final-ui-regression/report.json`), including all five panel and all eight Search scenarios. Its single failure occurred during public workspace creation, before the zoom interaction: the map retained the default name instead of the fixture's supplied name. That exact scenario passed unchanged on an isolated rerun, together with desktop/portrait variants and the existing popover-keyboard-ownership journey (4 passed, `test-results/search01-final-presentation-rerun/report.json`). No test deadline, assertion or source behavior was relaxed for that transient failure.
 
-Following repository guidance for presentation-only changes, unchanged script/type/bundling evidence from `31c01b4d` is retained; final lint and bounded review cover the CSS delta. No second complete-suite run is required solely for that stylesheet correction. Final 40px hit-target probe, affected-check and review closure results will be recorded before ticket completion.
+Final source candidate: **d970f0ce311953706f39116be0c979d57d067595**. All five maintained panel scenarios passed again with the restored 40px controls (`test-results/search01-final-pan-targets/report.json`, 36.6s). The final visual probe passed (16.2s), comparing actual compact and regular button dimensions in separate browser contexts, asserting header separation, viewport containment, Inspect hit testing and successful panel opening. Its latest PNG in `test-results/search01-panel-diagnosis/visual-probe-artifacts` was inspected: controls remain readable and unobstructed. An earlier diagnostic that resized the same page reopened its retained compact Inspector and invalidated the later popup checks; separating measurement contexts avoids that unrelated panel-state transition without changing maintained tests or product code.
 
-## Review plan
+Following repository guidance for presentation-only changes, unchanged script/type/bundling evidence from `31c01b4d` is retained; final component lint passed and independent Standards and Spec bounded reviews at `d970f0ce` each closed with zero actionable/blocking findings. No second complete-suite run was required solely for that stylesheet correction. The complete run was not clean on its first attempt: 448/457 passed, eight failures passed unchanged in isolation, and the reproducible ninth failure passed after the compact popup correction. No skips, deadline changes or weakened assertions were introduced.
 
-Freeze and commit the integrated candidate, then run independent Standards and Spec reviews against the pinned baseline through the requested code-review skill. Resolve confirmed findings with the owning developer and obtain reviewer closure. Run the full integrated suite once for the delivery, with targeted reruns after corrections where justified. Close ticket 01 only after its criteria and available verification are resolved; unblock ticket 02 without claiming or implementing it.
+## Resolution
+
+Ticket 01 is complete on `codex/global-search-ticket-01`, with source commits `2f24884c`, `5d9a1d45`, `31c01b4d` and `d970f0ce`. Cluster/system discovery, protected reveal, camera/focus sequencing and session consultation meet this slice's criteria. Both independent review axes are closed. All scenarios from the completed suite have passing evidence after the recorded isolated reruns/correction; the first full invocation remains recorded as 448 passed / 9 failed rather than a clean pass.
+
+GitHub #7 was re-fetched before completion and remains unchanged and OPEN, with enhancement / priority:P1 and no comments. Ticket 02 becomes open and unclaimed; ticket 03 stays blocked. The parent specification remains open because object discovery/branch framing is still pending. No push, PR, merge, release or remote tracker write was performed. Physical device/software-keyboard and screen-reader certification remain outside the collected browser evidence.

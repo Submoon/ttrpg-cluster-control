@@ -1,6 +1,6 @@
 ---
 title: "Find an object and frame its branch in the active system"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,7 +23,7 @@ A Warden on a star-system map can use the same search to find any object in that
 
 ## Blocked by
 
-- [Find and reveal the cluster and its systems](01-cluster-system-search.md)
+None. [Find and reveal the cluster and its systems](01-cluster-system-search.md) is closed; its guarded search entry and reveal operation are the completed predecessor. This ticket is now available and unclaimed. Refresh the baseline and preserve predecessor work before an authorized implementation.
 
 ## Specification coverage
 
