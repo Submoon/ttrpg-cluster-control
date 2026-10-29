@@ -9,22 +9,23 @@ export function useEditorTransitions(options: {
     session: Ref<ChartNamesSession | null>
     editing: Ref<boolean>
     hasUncommittedNames: Readonly<Ref<boolean>>
-    apply(): boolean
-    discard(): void
+    apply(): Promise<boolean>
+    discard(sessionId?: number): void
   }
   entity: {
     session: Readonly<Ref<EntityInspectorSession | null>>
     hasModified: Readonly<Ref<boolean>>
-    apply(sessionId?: number): boolean
+    apply(sessionId?: number): Promise<boolean>
     discard(sessionId?: number): void
   }
   route: {
     session: Readonly<Ref<RouteInspectorSession | null>>
     hasModified: Readonly<Ref<boolean>>
-    apply(sessionId: number): boolean
+    apply(sessionId: number): Promise<boolean>
     discard(sessionId?: number): void
   }
   clearEditorError(): void
+  beforeWorkspaceOperation?(): Promise<boolean>
 }) {
   const { chart, entity, route, clearEditorError } = options
   const transitionGuard = ref<TransitionGuard>(null)
@@ -33,15 +34,21 @@ export function useEditorTransitions(options: {
     leaveChart: boolean
     leaveEntitySession: boolean
     leaveRouteSession: boolean
+    chartSessionId: number | null
+    entitySessionId: number | null
+    routeSessionId: number | null
     resolve: (accepted: boolean) => void
+    choiceInFlight: boolean
   } | null = null
 
   /**
    * Resolves only the drafts named by this transition; a second pending request is rejected.
    * Apply means the controller published memory; the workspace owner reports durable save completion separately.
    */
-  function resolveTransition(transition: TransitionOptions = {}): Promise<boolean> {
+  async function resolveTransition(transition: TransitionOptions = {}): Promise<boolean> {
     if (pendingTransition) return Promise.resolve(false)
+    if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+    if (pendingTransition) return false
 
     const leaveChart = transition.leaveChart !== false
     const leaveEntitySession = transition.leaveEntitySession !== false
@@ -54,11 +61,20 @@ export function useEditorTransitions(options: {
       if (hasChartDraft) chart.discard()
       if (leaveEntitySession && entity.session.value) entity.discard(entity.session.value.id)
       if (leaveRouteSession && route.session.value) route.discard(route.session.value.id)
-      return Promise.resolve(true)
+      return true
     }
 
     return new Promise(resolve => {
-      pendingTransition = { leaveChart, leaveEntitySession, leaveRouteSession, resolve }
+      pendingTransition = {
+        leaveChart,
+        leaveEntitySession,
+        leaveRouteSession,
+        chartSessionId: chart.session.value?.id ?? null,
+        entitySessionId: entity.session.value?.id ?? null,
+        routeSessionId: route.session.value?.id ?? null,
+        resolve,
+        choiceInFlight: false,
+      }
       transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
     })
   }
@@ -74,69 +90,147 @@ export function useEditorTransitions(options: {
   function advancePendingTransition(): void {
     const pending = pendingTransition
     if (!pending) return
-    if (pending.leaveChart && chart.session.value && chart.hasUncommittedNames.value) {
-      transitionGuard.value = 'chart'
-      return
-    }
-    if (pending.leaveEntitySession && entity.hasModified.value) {
-      transitionGuard.value = 'inspector'
-      return
-    }
-    if (pending.leaveRouteSession && route.hasModified.value) {
-      transitionGuard.value = 'inspector'
-      return
-    }
-    if (pending.leaveChart && chart.session.value) chart.discard()
-    if (pending.leaveEntitySession && entity.session.value) entity.discard(entity.session.value.id)
-    if (pending.leaveRouteSession && route.session.value) route.discard(route.session.value.id)
-    finishPendingTransition(true)
-  }
-
-  function resolveTransitionChoice(decision: TransitionDecision): void {
-    const guard = transitionGuard.value
-    if (!pendingTransition || !guard) return
-    if (decision === 'stay') {
-      if (guard === 'chart') chart.editing.value = true
+    const chartDraft = pending.leaveChart ? chart.session.value : null
+    if (chartDraft && chartDraft.id !== pending.chartSessionId) {
       finishPendingTransition(false)
       return
     }
-    if (guard === 'chart') {
-      if (decision === 'apply') {
-        if (!chart.apply()) {
-          finishPendingTransition(false)
-          return
-        }
-      } else {
-        chart.discard()
-      }
-      advancePendingTransition()
+    if (!chartDraft) pending.chartSessionId = null
+    if (chartDraft && chart.hasUncommittedNames.value) {
+      transitionGuard.value = 'chart'
       return
     }
+    const entityDraft = pending.leaveEntitySession ? entity.session.value : null
+    if (entityDraft && entityDraft.id !== pending.entitySessionId) {
+      finishPendingTransition(false)
+      return
+    }
+    if (!entityDraft) pending.entitySessionId = null
+    if (entityDraft && entity.hasModified.value) {
+      transitionGuard.value = 'inspector'
+      return
+    }
+    const routeDraft = pending.leaveRouteSession ? route.session.value : null
+    if (routeDraft && routeDraft.id !== pending.routeSessionId) {
+      finishPendingTransition(false)
+      return
+    }
+    if (!routeDraft) pending.routeSessionId = null
+    if (routeDraft && route.hasModified.value) {
+      transitionGuard.value = 'inspector'
+      return
+    }
+    if (chartDraft && pending.leaveChart) chart.discard(chartDraft.id)
+    if (entityDraft && pending.leaveEntitySession) entity.discard(entityDraft.id)
+    if (routeDraft && pending.leaveRouteSession) route.discard(routeDraft.id)
+    finishPendingTransition(true)
+  }
 
-    const routeDraft = route.session.value
-    if (pendingTransition.leaveRouteSession && routeDraft && route.hasModified.value) {
-      if (decision === 'apply') {
-        if (!route.apply(routeDraft.id)) {
+  async function resolveTransitionChoice(decision: TransitionDecision): Promise<void> {
+    const pending = pendingTransition
+    const guard = transitionGuard.value
+    if (!pending || !guard || pending.choiceInFlight) return
+    pending.choiceInFlight = true
+    try {
+      if (decision === 'stay') {
+        if (guard === 'chart' && chart.session.value?.id === pending.chartSessionId) chart.editing.value = true
+        finishPendingTransition(false)
+        return
+      }
+      if (guard === 'chart') {
+        const chartDraft = chart.session.value
+        if (!chartDraft) {
+          pending.chartSessionId = null
+          advancePendingTransition()
+          return
+        }
+        if (chartDraft.id !== pending.chartSessionId) {
           finishPendingTransition(false)
           return
         }
-      } else {
-        route.discard(routeDraft.id)
-      }
-    }
-    const entityDraft = entity.session.value
-    if (pendingTransition.leaveEntitySession && entityDraft && entity.hasModified.value) {
-      if (decision === 'apply') {
-        if (!entity.apply(entityDraft.id)) {
-          finishPendingTransition(false)
-          return
+        if (decision === 'apply') {
+          if (!await chart.apply()) {
+            if (pendingTransition !== pending) return
+            finishPendingTransition(false)
+            return
+          }
+          if (pendingTransition !== pending) return
+          if (chart.session.value) {
+            finishPendingTransition(false)
+            return
+          }
+          pending.chartSessionId = null
+        } else {
+          chart.discard(chartDraft.id)
+          pending.chartSessionId = null
         }
-      } else {
-        entity.discard(entityDraft.id)
+        if (pendingTransition !== pending) return
+        advancePendingTransition()
+        return
       }
+
+      const routeDraft = route.session.value
+      if (pending.leaveRouteSession && routeDraft && routeDraft.id !== pending.routeSessionId) {
+        finishPendingTransition(false)
+        return
+      }
+      if (pending.leaveRouteSession && routeDraft && route.hasModified.value) {
+        if (decision === 'apply') {
+          if (!await route.apply(routeDraft.id)) {
+            if (pendingTransition !== pending) return
+            finishPendingTransition(false)
+            return
+          }
+          if (pendingTransition !== pending) return
+          const nextRouteSession = route.session.value
+          if (nextRouteSession?.id === routeDraft.id) {
+            finishPendingTransition(false)
+            return
+          }
+          if (nextRouteSession && !(routeDraft.routeId === null
+            && nextRouteSession.routeId === null && !route.hasModified.value)) {
+            finishPendingTransition(false)
+            return
+          }
+          pending.routeSessionId = nextRouteSession?.id ?? null
+        } else {
+          route.discard(routeDraft.id)
+          pending.routeSessionId = null
+        }
+      } else if (pending.leaveRouteSession && !routeDraft) {
+        pending.routeSessionId = null
+      }
+      const entityDraft = entity.session.value
+      if (pending.leaveEntitySession && entityDraft && entityDraft.id !== pending.entitySessionId) {
+        finishPendingTransition(false)
+        return
+      }
+      if (pending.leaveEntitySession && entityDraft && entity.hasModified.value) {
+        if (decision === 'apply') {
+          if (!await entity.apply(entityDraft.id)) {
+            if (pendingTransition !== pending) return
+            finishPendingTransition(false)
+            return
+          }
+          if (pendingTransition !== pending) return
+          if (entity.session.value) {
+            finishPendingTransition(false)
+            return
+          }
+          pending.entitySessionId = null
+        } else {
+          entity.discard(entityDraft.id)
+          pending.entitySessionId = null
+        }
+      } else if (pending.leaveEntitySession && !entityDraft) {
+        pending.entitySessionId = null
+      }
+      if (pendingTransition !== pending) return
+      clearEditorError()
+      advancePendingTransition()
+    } finally {
+      if (pendingTransition === pending) pending.choiceInFlight = false
     }
-    clearEditorError()
-    advancePendingTransition()
   }
 
   function setChartNamesDialogOpen(open: boolean): void {

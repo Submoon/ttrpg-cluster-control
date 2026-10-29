@@ -57,6 +57,8 @@ import {
   type MapViewport,
   type SvgViewportRect,
 } from '../utils/map-zoom'
+import { revealSvgPoint, revealSvgTarget, svgCirclePaintedBounds } from '../utils/reveal-svg-target'
+import type { MapHistoryTarget } from '../composables/editor-workflows/types'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -89,6 +91,7 @@ const emit = defineEmits<{
   'open-system': [id: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'cancel-cluster-preview': []
+  'editing-gesture-change': [active: boolean]
   'select-route': [id: string]
   'move-system': [id: string, position: Point]
   'move-unresolved-exit': [id: string, position: Point]
@@ -163,6 +166,41 @@ function panBy(dx: number, dy: number): void {
   const viewport = getViewport()
   setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
+
+function revealHistoryTarget(target: MapHistoryTarget): boolean {
+  if (target.kind !== 'system' && target.kind !== 'route') return false
+  const selector = target.kind === 'system'
+    ? '.cluster-system-node[data-system-id]'
+    : '.cluster-route[data-route-id]'
+  const attribute = target.kind === 'system' ? 'data-system-id' : 'data-route-id'
+  const element = [...(svgElement.value?.querySelectorAll<SVGGraphicsElement>(selector) ?? [])]
+    .find(candidate => candidate.getAttribute(attribute) === target.id) ?? null
+  if (target.kind === 'route') {
+    const exitMark = element?.querySelector<SVGCircleElement>('.cluster-exit-mark')
+    if (exitMark) {
+      const matrix = exitMark.getScreenCTM()
+      const center = matrix && new DOMPoint(
+        Number(exitMark.getAttribute('cx')),
+        Number(exitMark.getAttribute('cy')),
+      ).matrixTransform(matrix)
+      const paintedBounds = center && matrix
+        ? svgCirclePaintedBounds(
+          center,
+          Number(exitMark.getAttribute('r')),
+          Number.parseFloat(window.getComputedStyle(exitMark).strokeWidth),
+          matrix,
+        )
+        : undefined
+      if (center && paintedBounds) return revealSvgPoint(svgElement.value, center, panBy, paintedBounds)
+    }
+  }
+  const anchor = target.kind === 'route'
+    ? element?.querySelector<SVGGraphicsElement>('.cluster-route-label-bg') ?? element
+    : element
+  return revealSvgTarget(svgElement.value, anchor, panBy)
+}
+
+function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
 
 /**
  * Exports the complete Cluster-map scene without adding a system title band.
@@ -427,6 +465,7 @@ function cancelActiveGesture(): void {
     gesture.mouseGesture.cancel()
   }
   activeExitGestures.clear()
+  emit('editing-gesture-change', false)
   refreshLiveRouteGeometry?.()
 }
 
@@ -658,6 +697,7 @@ function render(): void {
             },
             mouseGesture,
           })
+          emit('editing-gesture-change', true)
           mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target').classed('is-dragging', true)
         })
         .on('drag', function (event) {
@@ -674,6 +714,7 @@ function render(): void {
         .on('end', function () {
           activeExitGestures.get(this)?.mouseGesture.complete()
           activeExitGestures.delete(this)
+          emit('editing-gesture-change', activeSystemGestures.size > 0 || activeExitGestures.size > 0)
           mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target').classed('is-dragging', false)
           if (cancelledExitGestures.has(this)) {
             cancelledExitGestures.delete(this)
@@ -876,6 +917,7 @@ function render(): void {
         },
         mouseGesture,
       })
+      emit('editing-gesture-change', true)
       select(this).classed('is-dragging', true)
     })
     .on('drag', function (event, system) {
@@ -888,6 +930,7 @@ function render(): void {
     .on('end', function (event, system) {
       activeSystemGestures.get(this)?.mouseGesture.complete()
       activeSystemGestures.delete(this)
+      emit('editing-gesture-change', activeSystemGestures.size > 0 || activeExitGestures.size > 0)
       select(this).classed('is-dragging', false)
       if (cancelledSystemGestures.has(this)) {
         cancelledSystemGestures.delete(this)
@@ -1018,8 +1061,9 @@ defineExpose({
   setViewport,
   zoomBy,
   panBy,
+  revealHistoryTarget,
+  focusMap,
   fitMap,
-  focusMap: () => svgElement.value?.focus(),
   cancelActiveGesture,
   startViewPan,
   moveViewPan,

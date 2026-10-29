@@ -3,10 +3,13 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { isLocalWorkspace, jumpPointsInCluster, moveUnresolvedExitTarget, type LocalWorkspace, type Point } from '../../domain/workspace'
 import { isPoint } from '../../domain/workspace-validation'
 import { clusterRouteGeometry, hasSafeClusterSceneBounds, isSafeClusterScenePoint } from '../../utils/cluster-map-geometry'
-import type { EditorWorkflowOptions, MapNavigationHandle } from './types'
+import type { MapNavigationHandle } from './types'
+import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 export interface UnresolvedExitMovePreview {
+  token: number
+  clusterId: string
   routeId: string
   position: Point
 }
@@ -15,7 +18,8 @@ interface UnresolvedExitPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedRouteId: Readonly<Ref<string | null>>
   clusterMapRef: Readonly<Ref<MapNavigationHandle | null>>
-  applyWorkspace: EditorWorkflowOptions['applyWorkspace']
+  mutations: WorkspaceMutationExecutor
+  beforeWorkspaceOperation: () => Promise<boolean>
 }
 
 /** Keeps endpoint layout independent from route drafts; automatic points follow their source systems. */
@@ -23,12 +27,14 @@ export function useUnresolvedExitPlacement({
   workspace,
   selectedRouteId,
   clusterMapRef,
-  applyWorkspace,
+  mutations,
+  beforeWorkspaceOperation,
 }: UnresolvedExitPlacementOptions) {
   const store = useEditorUiStore()
   const targetingIntent = ref(false)
   const preview = ref<UnresolvedExitMovePreview | null>(null)
   const error = ref('')
+  let nextPreviewToken = 0
   const available = computed(() => {
     const current = workspace.value
     const routeId = selectedRouteId.value
@@ -62,9 +68,7 @@ export function useUnresolvedExitPlacement({
     return current.layout.unresolvedExitPositions?.[routeId] ?? automaticPosition(routeId)
   }
 
-  function candidateFor(routeId: string, position: Point): LocalWorkspace {
-    const current = workspace.value
-    if (!current) throw new Error('The Jump Cluster is no longer available.')
+  function candidateFor(current: LocalWorkspace, routeId: string, position: Point): LocalWorkspace {
     if (!isSafeClusterScenePoint(position)) {
       throw new Error("This position exceeds the map renderer's supported numeric range.")
     }
@@ -102,7 +106,9 @@ export function useUnresolvedExitPlacement({
     }
     error.value = ''
     targetingIntent.value = true
-    preview.value = { routeId, position: { ...position } }
+    const clusterId = workspace.value?.cluster.id
+    if (!clusterId) return false
+    preview.value = { token: ++nextPreviewToken, clusterId, routeId, position: { ...position } }
     clusterMapRef.value?.setUnresolvedExitPositionPreview?.(routeId, position)
     clusterMapRef.value?.focusMap?.()
     return true
@@ -118,9 +124,16 @@ export function useUnresolvedExitPlacement({
       return false
     }
     try {
-      candidateFor(routeId, position)
+      const current = workspace.value
+      if (!current) throw new Error('The Jump Cluster is no longer available.')
+      candidateFor(current, routeId, position)
       error.value = ''
-      preview.value = { routeId, position: { x: position.x, y: position.y } }
+      preview.value = {
+        token: ++nextPreviewToken,
+        clusterId: current.cluster.id,
+        routeId,
+        position: { x: position.x, y: position.y },
+      }
       clusterMapRef.value?.setUnresolvedExitPositionPreview?.(routeId, position)
       clusterMapRef.value?.focusMap?.()
       return true
@@ -140,11 +153,33 @@ export function useUnresolvedExitPlacement({
     return previewAt({ x: active.position.x + delta.x, y: active.position.y + delta.y })
   }
 
-  function publish(routeId: string, position: Point): boolean {
+  function throwIfRejected(result: WorkspaceMutationResult): void {
+    if (result.status === 'rejected') throw new Error(result.message)
+  }
+
+  async function publish(routeId: string, clusterId: string, position: Point, previewToken?: number): Promise<boolean> {
     try {
-      const candidate = candidateFor(routeId, position)
-      const { durable } = applyWorkspace(candidate)
-      void durable.catch(() => undefined)
+      const result = await mutations.execute({
+        action: {
+          kind: 'move',
+          label: 'Move unresolved Jump Route target',
+          target: { kind: 'route', id: routeId },
+          parent: { kind: 'cluster', id: clusterId },
+        },
+        isCurrent: () => {
+          const latest = workspace.value
+          return latest?.cluster.id === clusterId
+            && latest.cluster.routes.some(route => route.id === routeId && route.toPointId === null)
+            && (previewToken === undefined || preview.value?.token === previewToken
+              && store.activeView === 'cluster' && selectedRouteId.value === routeId)
+        },
+        prepare: (latest) => {
+          if (latest.cluster.id !== clusterId) throw new Error('The Jump Cluster changed before this target could be moved.')
+          return candidateFor(latest, routeId, position)
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
       error.value = ''
       return true
     } catch (cause) {
@@ -153,18 +188,19 @@ export function useUnresolvedExitPlacement({
     }
   }
 
-  function confirm(): boolean {
+  async function confirm(): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     const active = preview.value
-    if (!targeting.value || !active) return false
-    const appliedOverride = workspace.value?.layout.unresolvedExitPositions?.[active.routeId]
-    const unchanged = appliedOverride !== undefined
-      && appliedOverride.x === active.position.x
-      && appliedOverride.y === active.position.y
-    if (!unchanged && !publish(active.routeId, active.position)) {
-      clearPreview()
-      targetingIntent.value = false
+    const current = workspace.value
+    if (!targeting.value || !active || !current) return false
+    if (active.clusterId !== current.cluster.id
+      || !current.cluster.routes.some(route => route.id === active.routeId && route.toPointId === null)
+      || selectedRouteId.value !== active.routeId || store.activeView !== 'cluster') {
+      error.value = 'The selected Jump Route changed. Preview the target again.'
       return false
     }
+    if (!await publish(active.routeId, active.clusterId, active.position, active.token)) return false
+    if (preview.value?.token !== active.token) return false
     clearPreview()
     targetingIntent.value = false
     clusterMapRef.value?.focusMap?.()
@@ -172,13 +208,20 @@ export function useUnresolvedExitPlacement({
   }
 
   /** A completed marker drag is an immediate one-action commit, independent of selection drafts. */
-  function move(routeId: string, position: Point): boolean {
-    clearPreview()
-    targetingIntent.value = false
+  async function move(routeId: string, position: Point): Promise<boolean> {
+    const startingClusterId = workspace.value?.cluster.id
+    if (!startingClusterId || !await beforeWorkspaceOperation()) return false
+    const current = workspace.value
+    if (!current || current.cluster.id !== startingClusterId
+      || !current.cluster.routes.some(route => route.id === routeId && route.toPointId === null)) return false
     const applied = positionFor(routeId)
     if (applied?.x === position.x && applied.y === position.y) return true
-    const result = publish(routeId, position)
-    if (result) clusterMapRef.value?.focusMap?.()
+    const result = await publish(routeId, startingClusterId, position)
+    if (result) {
+      clearPreview()
+      targetingIntent.value = false
+      clusterMapRef.value?.focusMap?.()
+    }
     return result
   }
 

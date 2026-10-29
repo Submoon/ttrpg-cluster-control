@@ -235,6 +235,49 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   const confirmedExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(confirmedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(confirmedPosition)
   expect(confirmedExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
+
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 16; step += 1) {
+    if (await zoomIn.isDisabled()) break
+    await zoomIn.click()
+  }
+  const clusterZoomBeforeReveal = await workspaceZoomControls(page).getByRole('status').innerText()
+
+  // Undo while inside the source system must restore the global route action in its Cluster context.
+  await setWorkspaceMapMode(page, 'Navigate')
+  await clusterMap.locator(`.cluster-system-node[data-system-id="${originSystem.id}"]`).click()
+  await expect(page.getByRole('group', { name: `${originSystem.name} star system map`, exact: true })).toBeVisible()
+  await undo.click()
+  await expect(clusterMap).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  const undoneExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(undoneExport).toEqual(draggedExport)
+  expect(undoneExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
+
+  const restoredRouteMark = clusterMap.locator(`.cluster-route[data-route-id="${unresolvedRoute.id}"]`)
+  const restoredTarget = restoredRouteMark.locator('.cluster-exit-mark')
+  await expect(restoredRouteMark).toHaveClass(/is-selected/)
+  expect(await targetPosition(restoredTarget)).toEqual(draggedPosition)
+  await expect.poll(async () => {
+    const [mapBounds, markerBounds] = await Promise.all([clusterMap.boundingBox(), restoredTarget.boundingBox()])
+    if (!mapBounds || !markerBounds) return Number.POSITIVE_INFINITY
+    return Math.max(
+      mapBounds.x - markerBounds.x,
+      mapBounds.y - markerBounds.y,
+      markerBounds.x + markerBounds.width - mapBounds.x - mapBounds.width,
+      markerBounds.y + markerBounds.height - mapBounds.y - mapBounds.height,
+    )
+  }).toBeLessThanOrEqual(0)
+  await expect(workspaceZoomControls(page).getByRole('status')).toHaveText(clusterZoomBeforeReveal)
+
+  await expect(redo).toBeEnabled()
+  await redo.click()
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(confirmedExport)
+
   await page.reload()
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()

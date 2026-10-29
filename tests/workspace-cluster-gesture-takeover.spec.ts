@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  activeWorkspaceFeedback,
   captureMapExportBlobs,
   clickNormalizedClusterPoint,
   clickDockAction,
@@ -286,4 +287,47 @@ test('unresolved exit hit target remains selectable at minimum zoom beside its s
 
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after).toEqual(before)
+})
+
+test('an unresolved exit drag blocks history traversal until its gesture is cancelled', async ({ page }) => {
+  await importCampaignWorkspace(page, undefined, { width: 1440, height: 960 })
+  await clickDockAction(page, 'Add Jump Route')
+  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  await page.getByRole('spinbutton', { name: 'Jump level', exact: true }).fill('3')
+  await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
+  await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
+  await page.getByLabel('Unknown destination label').fill('The Rim')
+  await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
+  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+
+  const map = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  const route = exported.cluster?.routes.find(item => item.toPointId === null)
+  expect(route).toBeDefined()
+  if (!route) throw new Error('The created route has no unresolved target to drag.')
+  const marker = map.locator(`.cluster-route[data-route-id="${route.id}"] .cluster-exit-mark`)
+  await setWorkspaceMapMode(page, 'Move')
+  await zoomOutMapToMinimum(page)
+  await expect(marker).toBeVisible()
+  const bounds = await marker.boundingBox()
+  if (!bounds) throw new Error('The unresolved target has no visible drag handle.')
+
+  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
+  await expect(undo).toBeEnabled()
+  const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const originalPosition = await marker.evaluate(element => [element.getAttribute('cx'), element.getAttribute('cy')])
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 12, start.y + 8, { steps: 2 })
+  await expect(marker).toHaveClass(/is-dragging/)
+  await expect(undo).toBeDisabled()
+
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(marker).not.toHaveClass(/is-dragging/)
+  await expect.poll(() => marker.evaluate(element => [element.getAttribute('cx'), element.getAttribute('cy')]))
+    .toEqual(originalPosition)
+  await expect(undo).toBeEnabled()
+  await page.mouse.up()
+  const afterCancel = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(afterCancel).toEqual(exported)
 })

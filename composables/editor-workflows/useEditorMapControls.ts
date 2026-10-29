@@ -1,6 +1,6 @@
-import { computed, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import type { LocalWorkspace } from '../../domain/workspace'
-import type { EntityInspectorSession, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SystemMapHandle } from './types'
+import type { EntityInspectorSession, MapHistoryTarget, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SystemMapHandle } from './types'
 import type { useEditorUiStore } from '../../stores/editor-ui'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
 
@@ -17,12 +17,17 @@ export function useEditorMapControls(
 ) {
   const clusterMapRef = shallowRef<MapNavigationHandle | null>(null)
   const systemMapRef = shallowRef<SystemMapHandle | null>(null)
+  const editingGestureActive = ref(false)
+  function setEditingGestureActive(active: boolean): void {
+    editingGestureActive.value = active
+  }
   const activeMapKey = computed(() => {
     const clusterId = workspace.value?.cluster.id
     if (!clusterId) return null
     if (store.activeView === 'cluster') return `cluster:${clusterId}`
     return store.selectedSystemId ? `system:${clusterId}:${store.selectedSystemId}` : null
   })
+  watch(activeMapKey, () => { editingGestureActive.value = false }, { flush: 'sync' })
   const initialViewport = computed(() => {
     const key = activeMapKey.value
     return key ? store.visits[key]?.viewport ?? null : null
@@ -60,6 +65,7 @@ export function useEditorMapControls(
     { flush: 'post', immediate: true },
   )
   onBeforeUnmount(() => {
+    editingGestureActive.value = false
     appliedOrbitPreview?.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
     appliedOrbitPreview = null
   })
@@ -154,6 +160,10 @@ export function useEditorMapControls(
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
   function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
   function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
+  function revealHistoryTarget(target: MapHistoryTarget): boolean {
+    return activeMapHandle()?.revealHistoryTarget?.(target) ?? false
+  }
+  function focusActiveMap(): void { activeMapHandle()?.focusMap?.() }
 
   function pruneVisits(normalizeSelection: (key: string, selection: MapVisitSelection) => MapVisitSelection): void {
     const currentWorkspace = workspace.value
@@ -176,6 +186,8 @@ export function useEditorMapControls(
     clusterMapRef,
     systemMapRef,
     activeMapKey,
+    editingGestureActive,
+    setEditingGestureActive,
     initialViewport,
     zoomLevel,
     minimumZoomLevel,
@@ -188,5 +200,7 @@ export function useEditorMapControls(
     fitActiveMap,
     zoomActiveMap,
     panActiveMap,
+    revealHistoryTarget,
+    focusActiveMap,
   }
 }

@@ -30,15 +30,17 @@ import type {
   SystemObjectMoveTarget,
 } from './types'
 import { FREE_SYSTEM_OBJECT_PLACEMENT } from './types'
+import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface SystemObjectPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   creationActive: Readonly<ComputedRef<boolean>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
-  applyWorkspace: (workspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
-  acceptCommittedPosition?: (change: CommittedObjectPosition) => boolean
+  beforeWorkspaceOperation: () => Promise<boolean>
+  createCommittedPositionAppliedHandler?: (change: CommittedObjectPosition) => () => void
 }
 
 interface CurrentObject {
@@ -219,9 +221,10 @@ export function useSystemObjectPlacement({
   workspace,
   creationActive,
   systemMapRef,
-  applyWorkspace,
+  mutations,
   isEntityCommandBlocked,
-  acceptCommittedPosition,
+  beforeWorkspaceOperation,
+  createCommittedPositionAppliedHandler,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -268,6 +271,18 @@ export function useSystemObjectPlacement({
     && store.mapMode === 'move'
     && !creationActive.value
     && currentObject() !== null)
+
+  const hasPendingHistoryInput = computed(() => {
+    const current = currentObject()
+    if (!current || creationActive.value) return false
+    const committedDestination = current.object.placement.kind === 'orbit'
+      ? current.object.placement.orbitId
+      : FREE_SYSTEM_OBJECT_PLACEMENT
+    return systemObjectMovePreview.value !== null
+      || systemObjectMoveCandidates.value.length > 0
+      || systemObjectMapMoveTargeting.value
+      || systemObjectMoveDestination.value !== committedDestination
+  })
 
   const systemObjectMoveDestinationOptions = computed<SystemObjectMoveDestinationOption[]>(() => {
     const current = currentObject()
@@ -574,7 +589,8 @@ export function useSystemObjectPlacement({
     return previewSystemObjectMoveAt({ x: current.x + delta.x, y: current.y + delta.y })
   }
 
-  function confirmSystemObjectMove(token: number): boolean {
+  async function confirmSystemObjectMove(token: number): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
     const preview = systemObjectMovePreview.value
     const baseline = preparedBaseline
     const current = currentObject()
@@ -625,18 +641,8 @@ export function useSystemObjectPlacement({
       const placement = preview.target.kind === 'orbit'
         ? { kind: 'orbit' as const, orbitId: preview.target.orbitId }
         : { kind: 'system' as const, x: preview.target.point.x, y: preview.target.point.y }
-      const nextWorkspace = updateWorkspaceObject(
-        current.workspace,
-        current.system.id,
-        current.object.id,
-        { placement },
-        preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
-      )
-      clearPreview()
-      clearMoveCandidates()
-      systemObjectMoveError.value = ''
-      const { durable } = applyWorkspace(nextWorkspace)
-      acceptCommittedPosition?.({
+      const command = moveCommand(current, preview.target)
+      const onApplied = createCommittedPositionAppliedHandler?.({
         objectId: current.object.id,
         previousPlacement: current.object.placement,
         nextPlacement: placement,
@@ -644,16 +650,70 @@ export function useSystemObjectPlacement({
           ? { previousAngle: effectiveObjectAngle(current.workspace, current.system, current.object) }
           : {}),
         ...(preview.target.kind === 'orbit' ? { nextAngle: preview.target.angle } : {}),
-        command: moveCommand(current, preview.target),
+        command,
       })
-      systemObjectMapMoveTargeting.value = false
-      systemObjectMapMoveTarget.value = null
-      systemObjectMapMoveAngle.value = null
-      void durable.catch(() => undefined)
+      const result = await mutations.execute({
+        action: {
+          kind: preview.target.kind === 'orbit' ? 'place' : 'move',
+          label: preview.target.kind === 'orbit'
+            ? `Place ${current.object.name} in Orbit`
+            : `Move ${current.object.name}`,
+          target: { kind: 'object', id: current.object.id, systemId: current.system.id },
+          parent: preview.target.kind === 'orbit'
+            ? { kind: 'orbit', id: preview.target.orbitId, systemId: current.system.id }
+            : { kind: 'system', id: current.system.id },
+        },
+        ...(onApplied ? { onApplied } : {}),
+        isCurrent: () => {
+          if (systemObjectMovePreview.value?.token !== preview.token
+            || creationActive.value
+            || store.activeView !== 'system'
+            || store.mapMode !== 'move') return false
+          const latest = currentObject()
+          if (!latest || latest.workspace.cluster.id !== preview.clusterId
+            || latest.system.id !== preview.systemId || latest.object.id !== preview.objectId
+            || isEntityCommandBlocked(moveCommand(latest, preview.target))) return false
+          try {
+            return placementFingerprint(latest, preview.target) === baseline.fingerprint
+          } catch {
+            return false
+          }
+        },
+        prepare: (latestWorkspace) => {
+          const latestSystem = latestWorkspace.cluster.systems.find(system => system.id === preview.systemId)
+          const latestObject = latestSystem?.objects.find(object => object.id === preview.objectId)
+          if (!latestSystem || !latestObject) throw new Error('The selected object is no longer available.')
+          const latest: CurrentObject = { workspace: latestWorkspace, system: latestSystem, object: latestObject }
+          if (isEntityCommandBlocked(moveCommand(latest, preview.target))) {
+            throw new Error('Resolve the Inspector draft before changing this object or its placement.')
+          }
+          if (placementFingerprint(latest, preview.target) !== baseline.fingerprint) {
+            throw new Error('The object placement or Orbit geometry changed. Preview the position again.')
+          }
+          return updateWorkspaceObject(
+            latestWorkspace,
+            latestSystem.id,
+            latestObject.id,
+            { placement },
+            preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
+          )
+        },
+      })
+      if (result.status === 'rejected') throw new Error(result.message)
+      if (result.status === 'applied') {
+        void result.durable.catch(() => undefined)
+      }
+      if (systemObjectMovePreview.value?.token === preview.token) {
+        clearPreview()
+        clearMoveCandidates()
+        systemObjectMoveError.value = ''
+        systemObjectMapMoveTargeting.value = false
+        systemObjectMapMoveTarget.value = null
+        systemObjectMapMoveAngle.value = null
+      }
       return true
     } catch (error) {
-      clearPreview()
-      systemObjectMoveError.value = errorMessage(error)
+      if (systemObjectMovePreview.value?.token === preview.token) systemObjectMoveError.value = errorMessage(error)
       return false
     }
   }
@@ -747,6 +807,7 @@ export function useSystemObjectPlacement({
     systemObjectMapMoveTargeting,
     systemObjectMapMoveTarget,
     systemObjectMoveAvailable,
+    hasPendingHistoryInput,
     systemObjectMoveDestination,
     systemObjectMoveDestinationOptions,
     systemObjectMoveCandidates,

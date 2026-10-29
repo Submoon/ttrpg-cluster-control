@@ -15,7 +15,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 }
 
 async function clickNormalizedClusterPoint(
@@ -84,7 +84,7 @@ function expectSystemAddArmed(page: import('@playwright/test').Page): Promise<vo
 
   return Promise.all([
     expect(addButton).toContainText(/system/i),
-    expect(context.getByRole('status')).toContainText(/add.*system/i),
+    expect(context.locator('.workspace-add-status')).toContainText(/add.*system/i),
     expect(context.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible(),
   ])
 }

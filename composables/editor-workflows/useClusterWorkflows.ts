@@ -15,11 +15,12 @@ import type {
   WorkspaceDeletionReview,
 } from './types'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
+import type { WorkspaceMutationExecutor, WorkspaceMutationResult, WorkspaceMutationTarget } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
   onDeletionApplied: (plan: MapDeletionPlan) => void
   saveState: Readonly<Ref<SaveState>>
   chartNamesDialogOpen: Readonly<ComputedRef<boolean>>
@@ -32,6 +33,7 @@ interface ClusterWorkflowOptions {
   isRouteCommandBlocked: (command: EntityCommand) => boolean
   isChartDraftTarget: (systemId: string) => boolean
   editorError: Ref<string>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 /**
@@ -41,7 +43,7 @@ interface ClusterWorkflowOptions {
  */
 export function useClusterWorkflows({
   workspace,
-  applyWorkspace,
+  mutations,
   onDeletionApplied,
   saveState,
   chartNamesDialogOpen,
@@ -54,6 +56,7 @@ export function useClusterWorkflows({
   isRouteCommandBlocked,
   isChartDraftTarget,
   editorError,
+  beforeWorkspaceOperation = async () => true,
 }: ClusterWorkflowOptions) {
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -67,8 +70,38 @@ export function useClusterWorkflows({
     return error instanceof Error ? error.message : String(error)
   }
 
+  function throwIfRejected(result: WorkspaceMutationResult): void {
+    if (result.status === 'rejected') throw new Error(result.message)
+  }
+
+  function mutationTarget(target: MapDeletionTarget, clusterId: string): { target: WorkspaceMutationTarget; parent: WorkspaceMutationTarget } {
+    switch (target.kind) {
+      case 'system':
+        return {
+          target: { kind: 'system', id: target.systemId },
+          parent: { kind: 'cluster', id: clusterId },
+        }
+      case 'route':
+        return {
+          target: { kind: 'route', id: target.routeId },
+          parent: { kind: 'cluster', id: clusterId },
+        }
+      case 'object':
+        return {
+          target: { kind: 'object', id: target.objectId, systemId: target.systemId },
+          parent: { kind: 'system', id: target.systemId },
+        }
+      case 'orbit':
+        return {
+          target: { kind: 'orbit', id: target.orbitId, systemId: target.systemId },
+          parent: { kind: 'system', id: target.systemId },
+        }
+    }
+  }
+
   /** Starts route creation after the inspector-draft guard accepts or discards other edits. */
   async function beginRoute(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const existing = routeSession.value
     if (currentWorkspace && store.activeView === 'cluster'
@@ -93,6 +126,7 @@ export function useClusterWorkflows({
    * @param routeId Route expected to own the edit draft.
    */
   async function beginRouteEdit(routeId: string): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     if (selectedRoute.value?.id !== routeId) return
     if (!await resolveTransition({ leaveChart: false })) return
     if (selectedRoute.value?.id !== routeId) return
@@ -154,7 +188,8 @@ export function useClusterWorkflows({
   }
 
   /** Prepares a current cascade without changing applied data or resolving any drafts. */
-  function openDeletionReview(target: MapDeletionTarget): void {
+  async function openDeletionReview(target: MapDeletionTarget): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     if (!workspace.value || saveState.value === 'saving' || deletionReview.value?.confirming) return
     const id = ++deletionReviewSequence
     editorError.value = ''
@@ -171,6 +206,7 @@ export function useClusterWorkflows({
   async function confirmDeletionReview(): Promise<void> {
     const active = deletionReview.value
     if (!active || !active.open || active.suspended || active.confirming || active.error) return
+    if (!await beforeWorkspaceOperation()) return
     const reviewId = active.id
     const target = active.target
     active.confirming = true
@@ -250,36 +286,66 @@ export function useClusterWorkflows({
 
     if (deletionReview.value?.id !== reviewId) return
     try {
-      const { durable } = applyWorkspace(acceptedPlan.workspace)
+      const selectedTarget = mutationTarget(target, active.clusterId)
+      let appliedPlan: MapDeletionPlan | null = null
+      const result = await mutations.execute({
+        action: {
+          kind: 'delete',
+          label: `Delete ${acceptedPlan.entityLabel}`,
+          target: selectedTarget.target,
+          parent: selectedTarget.parent,
+        },
+        isCurrent: () => {
+          const currentReview = deletionReview.value
+          const latestWorkspace = workspace.value
+          return currentReview?.id === reviewId
+            && currentReview.confirming
+            && currentReview.clusterId === active.clusterId
+            && latestWorkspace !== null
+            && latestWorkspace.cluster.id === active.clusterId
+        },
+        prepare: (latest) => {
+          if (latest.cluster.id !== active.clusterId) throw new Error('The Jump Cluster changed before this deletion could be applied.')
+          const freshPlan = planMapEntityDeletion(latest, target)
+          if (freshPlan.effectSignature !== acceptedPlan.effectSignature) {
+            throw new Error('The deletion effects changed. Review the updated consequences and confirm again.')
+          }
+          appliedPlan = freshPlan
+          return freshPlan.workspace
+        },
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      throwIfRejected(result)
+      if (deletionReview.value?.id !== reviewId) return
       deletionReview.value = null
-      onDeletionApplied(acceptedPlan)
+      if (result.status === 'applied' && appliedPlan) onDeletionApplied(appliedPlan)
       editorError.value = ''
-      void durable.catch(() => undefined)
     } catch (error) {
+      if (deletionReview.value?.id !== reviewId) return
       refreshDeletionReview(reviewId, target)
       if (deletionReview.value?.id === reviewId) deletionReview.value.error = errorText(error)
     }
   }
 
-  function deleteSystem(systemId: string): void {
-    openDeletionReview({ kind: 'system', systemId })
+  async function deleteSystem(systemId: string): Promise<void> {
+    await openDeletionReview({ kind: 'system', systemId })
   }
 
-  function deleteSelectedObject(): void {
+  async function deleteSelectedObject(): Promise<void> {
     const system = selectedSystem.value
     const object = selectedObject.value
-    if (system && object) openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
+    if (system && object) await openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
   }
 
-  function deleteSelectedOrbit(): void {
+  async function deleteSelectedOrbit(): Promise<void> {
     const system = selectedSystem.value
     const orbit = selectedOrbit.value
-    if (system && orbit) openDeletionReview({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
+    if (system && orbit) await openDeletionReview({ kind: 'orbit', systemId: system.id, orbitId: orbit.id })
   }
 
-  function deleteSelectedRoute(): void {
+  async function deleteSelectedRoute(): Promise<void> {
     const route = selectedRoute.value
-    if (route) openDeletionReview({ kind: 'route', routeId: route.id })
+    if (route) await openDeletionReview({ kind: 'route', routeId: route.id })
   }
 
   /**

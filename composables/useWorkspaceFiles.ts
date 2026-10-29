@@ -12,15 +12,23 @@ import {
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
 type MapKind = 'jump-cluster' | 'star-system'
+
+interface CurrentMapImage {
+  map: MapImageExporter | null
+  name: string | undefined
+}
 
 interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
-  applyWorkspace: (nextWorkspace: LocalWorkspace) => { durable: Promise<void> }
+  mutations: WorkspaceMutationExecutor
+  getCurrentMapImage: (kind: MapKind) => CurrentMapImage | null
   getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
   resolveImportDefinitionChanges: (existingFieldIds: string[]) => Promise<boolean>
+  beforeWorkspaceOperation?: () => Promise<boolean>
 }
 
 interface ImportReviewState {
@@ -46,9 +54,11 @@ interface ImportEpoch {
 export function useWorkspaceFiles({
   workspace,
   selectedSystem,
-  applyWorkspace,
+  mutations,
+  getCurrentMapImage,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
+  beforeWorkspaceOperation = async () => true,
 }: WorkspaceFileActionsOptions) {
   const exportError = ref('')
   const importError = ref('')
@@ -181,7 +191,8 @@ export function useWorkspaceFiles({
   /**
    * Exports the current complete Cluster JSON; serialization/download failures populate exportError.
    */
-  function downloadClusterJson(): void {
+  async function downloadClusterJson(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     if (!currentWorkspace) return
 
@@ -200,7 +211,8 @@ export function useWorkspaceFiles({
    * Exports the selected system with shared field settings and only its durable Orbit/object layout.
    * Serialization/download failures populate exportError.
    */
-  function downloadSystemJson(): void {
+  async function downloadSystemJson(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = selectedSystem.value
     if (!currentWorkspace || !system) return
@@ -232,9 +244,12 @@ export function useWorkspaceFiles({
     palette: MapImagePalette = 'active',
   ): Promise<void> {
     if (!map || !name) return
+    if (!await beforeWorkspaceOperation()) return
+    const current = getCurrentMapImage(kind)
+    if (!current?.map || current.map !== map || current.name !== name) return
 
     try {
-      downloadFile(exportFileName(name, kind, format), await map.exportImage(format, palette))
+      downloadFile(exportFileName(current.name, kind, format), await current.map.exportImage(format, palette))
       exportError.value = ''
     } catch (error) {
       exportError.value = errorText(error)
@@ -252,8 +267,9 @@ export function useWorkspaceFiles({
     if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
+    if (!file || !await beforeWorkspaceOperation()) return
     const initialWorkspace = workspace.value
-    if (!file || !initialWorkspace) return
+    if (!initialWorkspace) return
 
     importError.value = ''
     clearImportReview()
@@ -274,6 +290,7 @@ export function useWorkspaceFiles({
         abandonStaleImport(epoch)
         return
       }
+      if (!await beforeWorkspaceOperation()) return
       const currentWorkspace = workspace.value
       if (!currentWorkspace) return
       const prepared = prepareJsonImport(currentWorkspace, content)
@@ -315,6 +332,7 @@ export function useWorkspaceFiles({
     mutableImportReview.value.fieldConflict = null
 
     try {
+      if (!await beforeWorkspaceOperation()) return
       const firstWorkspace = workspace.value
       if (!firstWorkspace) return
       const firstPrepared = prepareJsonImport(firstWorkspace, content)
@@ -387,9 +405,52 @@ export function useWorkspaceFiles({
       }
       if (!epochIsCurrent(epoch)) return
 
-      const { durable } = applyWorkspace(finalPrepared.workspace)
+      const submittedSignature = finalEffects.signature
+      const isSubmittedImportCurrent = (): boolean => importOperationIsCurrent(epoch)
+        && epochIsCurrent(epoch)
+        && importContent === content
+        && importReviewSignature === submittedSignature
+        && mutableImportReview.value.open
+        && mutableImportReview.value.confirming
+      const result = await mutations.execute({
+        action: {
+          kind: 'import',
+          label: 'Import independent copy',
+          target: { kind: 'cluster', id: finalWorkspace.cluster.id },
+        },
+        prepare: current => prepareJsonImport(current, content).workspace,
+        isCurrent: isSubmittedImportCurrent,
+      })
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedImportCurrent()) {
+        abandonStaleImport(epoch)
+        return
+      }
+      if (result.status === 'rejected') {
+        if (result.reason === 'stale') {
+          const latestWorkspace = workspace.value
+          if (!latestWorkspace) {
+            abandonStaleImport(epoch)
+            return
+          }
+          const latestPrepared = prepareJsonImport(latestWorkspace, content)
+          const latestEffects = jsonImportReviewEffects(latestWorkspace, content, latestPrepared)
+          const latestConflict = getFieldDefinitionImportConflict(latestPrepared.workspace)
+          if (latestEffects.signature !== submittedSignature) {
+            refreshImportReview(
+              latestPrepared.summary,
+              latestEffects.signature,
+              'The workspace changed before this import could be applied. Review the updated effects before importing.',
+              latestConflict,
+            )
+            return
+          }
+        }
+        mutableImportReview.value.error = result.message
+        return
+      }
+
       clearImportReview()
-      void durable.catch(() => {})
     } catch (error) {
       if (epochIsCurrent(epoch)) mutableImportReview.value.error = errorText(error)
       else abandonStaleImport(epoch)

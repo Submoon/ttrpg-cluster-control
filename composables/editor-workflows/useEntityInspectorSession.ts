@@ -30,25 +30,18 @@ import type {
   OrbitCenterMoveCandidate,
   OrbitEditBaseline,
   OrbitPlacementPreview,
+  CommittedOrbitCenterPosition,
   CommittedObjectPosition,
 } from './types'
+import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { objectDraftValuesFor } from './entity-draft-values'
 import { parseFiniteInput, validateObjectDraft } from './entity-draft-validation'
 import { objectPositions, objectsMovedWithOrbit } from '../../utils/system-map-geometry'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 
-type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
-
 interface EntityInspectorSessionOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: ApplyWorkspace
-}
-
-interface CommittedOrbitCenterPosition {
-  orbitId: string
-  previous: Point
-  next: Point
-  command: Extract<EntityCommand, { kind: 'orbit-center-position' }>
+  mutations: WorkspaceMutationExecutor
 }
 
 interface DraftDependencySnapshots {
@@ -78,7 +71,26 @@ function clone<T>(value: T): T {
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
+  if (Object.is(left, right)) return true
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    for (let index = 0; index < left.length; index += 1) {
+      const leftHasIndex = Object.prototype.hasOwnProperty.call(left, index)
+      const rightHasIndex = Object.prototype.hasOwnProperty.call(right, index)
+      if (leftHasIndex !== rightHasIndex || (leftHasIndex && !sameValue(left[index], right[index]))) return false
+    }
+    return true
+  }
+
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every(key => Object.prototype.hasOwnProperty.call(rightRecord, key)
+    && sameValue(leftRecord[key], rightRecord[key]))
 }
 
 function samePlacement(left: ObjectPlacement, right: ObjectPlacement): boolean {
@@ -452,7 +464,7 @@ function deletionChangesOwnedDependencies(
   return false
 }
 
-export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityInspectorSessionOptions) {
+export function useEntityInspectorSession({ workspace, mutations }: EntityInspectorSessionOptions) {
   const entitySession = ref<EntityInspectorSession | null>(null)
   const orbitPlacementPreview = ref<OrbitPlacementPreviewState | null>(null)
   let sessionSequence = 0
@@ -543,6 +555,18 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     if (!session) return false
     return !sameValue(session.draft, session.initial.values)
   })
+  const hasPendingHistoryChoice = computed(() => {
+    const session = entitySession.value
+    return session?.kind === 'orbit' && session.centerMoveCandidates !== null
+  })
+
+  /** Ends a clean, choice-free session after history restores its previously selected entity. */
+  function endCleanHistorySession(): void {
+    const session = entitySession.value
+    if (session && !hasModifiedEntitySession.value && !hasPendingHistoryChoice.value) {
+      discardEntitySession(session.id)
+    }
+  }
 
   function getEntitySessionStaleError(session: EntityInspectorSession): string | null {
     const currentWorkspace = workspace.value
@@ -796,6 +820,24 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       dependencies: dependencies.baseline,
     }
     return true
+  }
+
+  function createCommittedPositionAppliedHandler(change: CommittedObjectPosition): () => void {
+    const originatingSessionId = entitySession.value?.id
+    const acceptedChange = clone(change)
+    return () => {
+      if (entitySession.value?.id !== originatingSessionId) return
+      acceptCommittedPosition(acceptedChange)
+    }
+  }
+
+  function createCommittedOrbitCenterAppliedHandler(change: CommittedOrbitCenterPosition): () => void {
+    const originatingSessionId = entitySession.value?.id
+    const acceptedChange = clone(change)
+    return () => {
+      if (entitySession.value?.id !== originatingSessionId) return
+      acceptCommittedOrbitCenter(acceptedChange)
+    }
   }
 
   function beginObjectSession(clusterId: string, systemId: string, objectId: string): void {
@@ -1088,9 +1130,9 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
   /**
    * Validates the active draft before finishing its session. Changed drafts publish to memory and start an
    * ordered save; a clean draft finishes after the same target and dependency guards without publishing.
-   * A true result means the session completed or the writer accepted the snapshot; durability is tracked separately.
+   * A true result means this exact draft was applied or validated unchanged; durability is tracked separately.
    */
-  function applyEntitySession(expectedId?: number): boolean {
+  async function applyEntitySession(expectedId?: number): Promise<boolean> {
     const session = entitySession.value
     if (!session || (expectedId !== undefined && session.id !== expectedId)) return false
     const currentWorkspace = workspace.value
@@ -1115,6 +1157,41 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
       session.error = error
       return false
     }
+
+    const submittedSignature = JSON.stringify({
+      id: session.id,
+      clusterId: session.clusterId,
+      systemId: session.systemId,
+      targetId: session.targetId,
+      kind: session.kind,
+      initial: session.initial,
+      draft: session.draft,
+      centerMoveCandidates: session.kind === 'orbit' ? session.centerMoveCandidates : null,
+    })
+    const submittedPreview = orbitPlacementPreview.value?.sessionId === session.id
+      ? JSON.stringify(orbitPlacementPreview.value)
+      : null
+    const isSubmittedDraftCurrent = (): boolean => {
+      const active = entitySession.value
+      return active?.id === session.id
+        && JSON.stringify({
+          id: active.id,
+          clusterId: active.clusterId,
+          systemId: active.systemId,
+          targetId: active.targetId,
+          kind: active.kind,
+          initial: active.initial,
+          draft: active.draft,
+          centerMoveCandidates: active.kind === 'orbit' ? active.centerMoveCandidates : null,
+        }) === submittedSignature
+    }
+    const isSubmittedPreviewCurrent = (): boolean => {
+      const currentPreview = orbitPlacementPreview.value?.sessionId === session.id
+        ? JSON.stringify(orbitPlacementPreview.value)
+        : null
+      return currentPreview === submittedPreview
+    }
+    const isSubmittedMutationCurrent = (): boolean => isSubmittedDraftCurrent() && isSubmittedPreviewCurrent()
 
     try {
       let nextWorkspace: LocalWorkspace
@@ -1166,16 +1243,30 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
         return true
       }
 
-      const { durable } = applyWorkspace(nextWorkspace)
-      if (entitySession.value?.id === session.id) {
-        if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
-        entitySession.value = null
-        draftDependencies = null
+      const target = session.kind === 'object'
+        ? { kind: 'object' as const, id: session.targetId, systemId: session.systemId }
+        : { kind: 'orbit' as const, id: session.targetId, systemId: session.systemId }
+      const actionLabel = session.kind === 'object'
+        ? `Edit ${session.draft.name.trim() || session.initial.object.name}`
+        : `Edit Orbit ${session.initial.orbit.order}`
+      const result = await mutations.execute({
+        action: { kind: 'update', label: actionLabel, target },
+        prepare: () => nextWorkspace,
+        isCurrent: isSubmittedMutationCurrent,
+      })
+      if (result.status === 'rejected') {
+        if (isSubmittedDraftCurrent()) session.error = result.message
+        return false
       }
-      void durable.catch(() => undefined)
+
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedDraftCurrent()) return false
+      if (orbitPlacementPreview.value?.sessionId === session.id) orbitPlacementPreview.value = null
+      entitySession.value = null
+      draftDependencies = null
       return true
     } catch (error) {
-      session.error = error instanceof Error ? error.message : String(error)
+      if (isSubmittedDraftCurrent()) session.error = error instanceof Error ? error.message : String(error)
       return false
     }
   }
@@ -1293,6 +1384,7 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
   return {
     entitySession,
     hasModifiedEntitySession,
+    hasPendingHistoryChoice,
     orbitPlacementPreview,
     beginObjectSession,
     updateObjectPlacement,
@@ -1303,10 +1395,11 @@ export function useEntityInspectorSession({ workspace, applyWorkspace }: EntityI
     cancelOrbitPlacementPreview,
     applyEntitySession,
     discardEntitySession,
+    endCleanHistorySession,
     isEntityCommandBlocked,
     isEntityDraftTarget,
-    acceptCommittedPosition,
-    acceptCommittedOrbitCenter,
+    createCommittedPositionAppliedHandler,
+    createCommittedOrbitCenterAppliedHandler,
   }
 }
 

@@ -7,6 +7,7 @@
     "preview": "npx nuxt preview",
     "typecheck": "npx nuxt typecheck",
     "test": "npx playwright test",
+    "test:local": "node scripts/local-test.mjs",
     "lint": "eslint . --max-warnings 0",
     "test:ui": "playwright test --grep @ui-smoke"
   },

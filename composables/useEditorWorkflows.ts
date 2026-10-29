@@ -4,6 +4,7 @@ import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
 import { useChartNamesSession } from './editor-workflows/useChartNamesSession'
+import { useContinuousOrbitAdjustments } from './editor-workflows/continuous-orbit-adjustments'
 import { useEditorMapControls } from './editor-workflows/useEditorMapControls'
 import { useEditorNavigation } from './editor-workflows/useEditorNavigation'
 import { useEditorTransitions } from './editor-workflows/useEditorTransitions'
@@ -20,7 +21,7 @@ import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacem
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
-  const { workspace, saveState, saveError, commit, applyWorkspace } = options
+  const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
   const workspaceContextId = computed(() => {
@@ -33,21 +34,50 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }, { immediate: true, flush: 'sync' })
   onBeforeUnmount(() => store.reset(null))
 
-  const entity = useEntityInspectorSession({ workspace, applyWorkspace })
-  const route = useRouteInspectorSession({ workspace, applyWorkspace })
+  const entity = useEntityInspectorSession({ workspace, mutations })
+  const route = useRouteInspectorSession({ workspace, mutations })
   const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
+  const orbitAdjustments = useContinuousOrbitAdjustments({
+    history: mutations,
+    onAutomaticCompletion: (result) => {
+      if (result.status === 'rejected') editorError.value = result.message
+    },
+  })
+  watch(workspaceContextId, () => orbitAdjustments.reset(), { flush: 'sync' })
+
+  async function beforeWorkspaceOperation(): Promise<boolean> {
+    if (mutations.getStatus().isBusy && !mutations.getStatus().hasPendingGroup) {
+      editorError.value = 'Finish the current workspace operation before starting another action.'
+      return false
+    }
+    const result = await orbitAdjustments.beforeOperation()
+    if (result.status === 'rejected') {
+      editorError.value = result.message
+      return false
+    }
+    if (result.status === 'applied') void result.durable.catch(() => undefined)
+    return true
+  }
+
   const charts = useChartNamesSession({
     workspace,
     saveState,
     saveError,
-    commit,
-    applyWorkspace,
+    initializeWorkspace,
+    mutations,
     selectedSystem: selectedSystemForChart,
+    beforeWorkspaceOperation,
   })
 
-  function applyEntitySession(sessionId?: number): boolean {
-    const applied = entity.applyEntitySession(sessionId)
-    if (applied) editorError.value = ''
+  async function applyEntitySession(sessionId?: number): Promise<boolean> {
+    const submittedSession = entity.entitySession.value
+    const expectedId = sessionId ?? submittedSession?.id
+    if (!submittedSession || expectedId !== submittedSession.id) return false
+    const startingError = editorError.value
+    if (!await beforeWorkspaceOperation()) return false
+    if (entity.entitySession.value?.id !== expectedId) return false
+    const applied = await entity.applyEntitySession(expectedId)
+    if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
 
@@ -58,9 +88,13 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     if (entity.entitySession.value === null) editorError.value = ''
   }
 
-  function applyRouteSession(sessionId: number): boolean {
-    const applied = route.applyRouteSession(sessionId)
-    if (applied) editorError.value = ''
+  async function applyRouteSession(sessionId: number): Promise<boolean> {
+    if (route.routeSession.value?.id !== sessionId) return false
+    const startingError = editorError.value
+    if (!await beforeWorkspaceOperation()) return false
+    if (route.routeSession.value?.id !== sessionId) return false
+    const applied = await route.applyRouteSession(sessionId)
+    if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
 
@@ -86,6 +120,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       discard: discardRouteSession,
     },
     clearEditorError: () => { editorError.value = '' },
+    beforeWorkspaceOperation,
   })
   const mapControls = useEditorMapControls(workspace, store, {
     orbitPlacementPreview: entity.orbitPlacementPreview,
@@ -102,35 +137,39 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     entity,
     route,
     editorError,
+    beforeWorkspaceOperation,
   })
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
-    applyWorkspace,
+    mutations,
     resolveTransition: transitions.resolveTransition,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    beforeWorkspaceOperation,
   })
   const map = useMapWorkflows({
     workspace,
-    commit,
-    applyWorkspace,
+    mutations,
     systemMapRef: mapControls.systemMapRef,
     resolveTransition: transitions.resolveTransition,
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
-    acceptCommittedPosition: entity.acceptCommittedPosition,
-    acceptCommittedOrbitCenter: entity.acceptCommittedOrbitCenter,
+    createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
+    createCommittedOrbitCenterAppliedHandler: entity.createCommittedOrbitCenterAppliedHandler,
     editorError,
+    orbitAdjustments,
+    beforeWorkspaceOperation,
   })
   const objectInspectorFocusRequest = ref<ObjectInspectorFocusRequest | null>(null)
   let objectInspectorFocusSequence = 0
   const systemCreation = useSystemCreationWorkflows({
     workspace,
     systemMapRef: mapControls.systemMapRef,
-    applyWorkspace,
+    mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     resolveObjectCreationTransition: () => transitions.resolveTransition({ leaveChart: false }),
+    beforeWorkspaceOperation,
     onObjectCreated: async (objectId) => {
       await navigation.selectObject(objectId, !viewport.isCompactViewport.value, { leaveChart: false })
       if (store.activeView !== 'system' || store.selectedObjectId !== objectId) return
@@ -146,15 +185,17 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
     systemMapRef: mapControls.systemMapRef,
-    applyWorkspace,
+    mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
-    acceptCommittedPosition: entity.acceptCommittedPosition,
+    beforeWorkspaceOperation,
+    createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
   })
   const unresolvedExitPlacement = useUnresolvedExitPlacement({
     workspace,
     selectedRouteId: computed(() => store.selectedRouteId),
     clusterMapRef: mapControls.clusterMapRef,
-    applyWorkspace,
+    mutations,
+    beforeWorkspaceOperation,
   })
   const orbitCenterPlacement = useOrbitCenterPlacement({
     workspace,
@@ -166,7 +207,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const clusterSystemPlacement = useClusterSystemPlacement({
     workspace,
     clusterMapRef: mapControls.clusterMapRef,
-    applyWorkspace,
+    mutations,
+    beforeWorkspaceOperation,
   })
   watch(route.routeSession, session => {
     if (!session && clusterSystemPlacement.clusterAddType.value === 'route') {
@@ -176,7 +218,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
 
   const cluster = useClusterWorkflows({
     workspace,
-    applyWorkspace,
+    mutations,
     onDeletionApplied: plan => {
       navigation.cleanupAfterDeletion(plan)
       systemCreation.pruneTargetsAfterDeletion(plan)
@@ -192,6 +234,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     isRouteCommandBlocked: route.isRouteCommandBlocked,
     isChartDraftTarget: navigation.isChartDraftTarget,
     editorError,
+    beforeWorkspaceOperation,
   })
   const interactions = useMapInteractionCoordinator({
     workspace,
@@ -205,7 +248,48 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     beginOrbitEdit: map.beginOrbitEdit,
   })
 
-  function quitAdd(): void {
+  const historyGuards = computed(() => {
+    if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
+    if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-name draft first.'
+    if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
+    if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
+    if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
+    if (route.hasPendingHistoryChoice.value) return 'Finish choosing the Jump Route endpoints first.'
+    if (entity.hasPendingHistoryChoice.value) return 'Finish choosing the Orbit placement first.'
+    if (systemCreation.hasPendingHistoryInput.value) return 'Finish or cancel the object or Orbit placement first.'
+    if (clusterSystemPlacement.clusterAddType.value === 'route' || route.routeSession.value?.routeId === null) {
+      return 'Finish or cancel the current Cluster route action first.'
+    }
+    if (clusterSystemPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending Cluster placement inputs first.'
+    if (clusterSystemPlacement.clusterSystemMovePreview.value) return 'Confirm or cancel the pending system-move preview first.'
+    if (clusterSystemPlacement.clusterSystemMapMoveTargeting.value) return 'Finish or cancel the current system move first.'
+    if (systemObjectPlacement.systemObjectMoveCandidateRequest.value !== 0
+      && systemObjectPlacement.systemObjectMoveCandidates.value.length) {
+      return 'Choose or cancel the pending object-placement target first.'
+    }
+    if (systemObjectPlacement.hasPendingHistoryInput.value) return 'Finish or restore the pending object-placement inputs first.'
+    if (systemObjectPlacement.systemObjectMovePreview.value) return 'Confirm or cancel the pending object-move preview first.'
+    if (systemObjectPlacement.systemObjectMapMoveTargeting.value) return 'Finish or cancel the current object move first.'
+    if (unresolvedExitPlacement.preview.value) return 'Confirm or cancel the unresolved-exit preview first.'
+    if (orbitCenterPlacement.orbitCenterMovePreview.value || orbitCenterPlacement.orbitCenterMapMoveTargeting.value) {
+      return 'Confirm or cancel the Orbit-center move first.'
+    }
+    if (entity.orbitPlacementPreview.value) return 'Finish or cancel the pending Orbit-placement preview first.'
+    if (cluster.deletionReview.value) return 'Finish or cancel the open map-deletion review first.'
+    if (mapControls.editingGestureActive.value) return 'Finish the active map gesture first.'
+    return null
+  })
+
+  function endCleanHistorySessions(): void {
+    charts.endCleanHistorySession()
+    entity.endCleanHistorySession()
+    route.endCleanHistorySession()
+    fields.endCleanHistorySession()
+  }
+
+  async function quitAdd(): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
     route.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
@@ -217,6 +301,10 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }
 
   return {
+    historyGuards: {
+      blockReason: historyGuards,
+      endCleanSessions: endCleanHistorySessions,
+    },
     inspector: {
       objectInspectorFocusRequest,
       acknowledgeObjectInspectorFocusRequest,
@@ -345,6 +433,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       clusterMapRef: mapControls.clusterMapRef,
       systemMapRef: mapControls.systemMapRef,
       activeMapKey: mapControls.activeMapKey,
+      editingGestureActive: mapControls.editingGestureActive,
+      setEditingGestureActive: mapControls.setEditingGestureActive,
       initialViewport: mapControls.initialViewport,
       zoomLevel: mapControls.zoomLevel,
       minimumZoomLevel: mapControls.minimumZoomLevel,
@@ -362,6 +452,12 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       zoomActiveMap: mapControls.zoomActiveMap,
       panActiveMap: mapControls.panActiveMap,
       setMapMode: navigation.setMapMode,
+    },
+    adjustments: {
+      orbitAdjustmentPreview: orbitAdjustments.preview,
+      updateOrbitAdjustment: map.updateOrbitAdjustment,
+      beforeWorkspaceOperation,
+      resetOrbitAdjustments: orbitAdjustments.reset,
     },
     feedback: {
       editorError,
@@ -389,6 +485,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       selectOrbit: navigation.selectOrbit,
       selectRoute: navigation.selectRoute,
       showChartDetails: navigation.showChartDetails,
+      revealHistoryContext: navigation.revealHistoryContext,
     },
   }
 }

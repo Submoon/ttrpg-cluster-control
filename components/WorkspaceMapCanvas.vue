@@ -35,6 +35,7 @@
       @move-target="forwardMoveTarget"
       @cluster-target="forwardClusterTarget"
       @cancel-cluster-preview="emit('cancel-cluster-preview')"
+      @editing-gesture-change="emit('editing-gesture-change', $event)"
       @viewport-change="emitViewport"
     />
     <SystemMap
@@ -47,6 +48,7 @@
       :creation-type="props.creationType ?? null"
       :creation-preview="props.creationPreview ?? null"
       :creation-chooser-open="props.creationChooserOpen ?? false"
+      :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
@@ -57,6 +59,7 @@
       :show-zoom-controls="false"
       @select-object="handleObjectSelection"
       @select-orbit="handleOrbitSelection"
+      @orbit-adjustment="forwardOrbitAdjustment"
       @move-target="forwardMoveTarget"
       @object-move-blocked="forwardBlockedObjectMove"
       @object-move-candidates="forwardObjectMoveCandidates"
@@ -73,6 +76,7 @@
       @cancel-creation-preview="forwardCancelCreationPreview"
       @cancel-object-placement-preview="emit('cancel-object-placement-preview')"
       @cancel-orbit-placement-preview="emit('cancel-orbit-placement-preview')"
+      @editing-gesture-change="emit('editing-gesture-change', $event)"
       @viewport-change="emitViewport"
     />
   </div>
@@ -80,7 +84,7 @@
 
 <script setup lang="ts">
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
-import { onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
   LocalWorkspace,
   OrbitRadii,
@@ -89,6 +93,7 @@ import type {
 } from '../domain/workspace'
 import type {
   MapInteractionMode,
+  MapHistoryTarget,
   OrbitCenterMoveCandidate,
   OrbitPlacementPreview,
   SystemCreationCandidate,
@@ -97,6 +102,11 @@ import type {
   SystemObjectMoveCandidate,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
+import type {
+  OrbitAdjustmentInput,
+  OrbitAdjustmentIntent,
+  OrbitAdjustmentPreview,
+} from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
@@ -124,6 +134,7 @@ const props = defineProps<{
   clusterAddType?: 'system' | 'route' | null
   clusterChooserOpen?: boolean
   clusterMoveTargeting?: boolean
+  orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
 }>()
@@ -138,6 +149,7 @@ const emit = defineEmits<{
   'move-select-object': [id: string]
   'select-orbit': [id: string]
   'move-select-orbit': [id: string]
+  'orbit-adjustment': [intent: OrbitAdjustmentIntent]
   'object-move-blocked': [id: string]
   'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
   'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
@@ -160,6 +172,7 @@ const emit = defineEmits<{
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
   'cancel-creation-preview': []
+  'editing-gesture-change': [active: boolean]
   'viewport-change': [change: { key: string; viewport: MapViewport }]
 }>()
 
@@ -169,6 +182,15 @@ const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+const matchingOrbitAdjustmentPreview = computed(() => {
+  const preview = props.orbitAdjustmentPreview
+  const system = props.system
+  return props.activeView === 'system' && system && preview
+    && preview.identity.workspaceId === props.workspace.id
+    && preview.identity.systemId === system.id
+    ? preview
+    : null
+})
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let activeMousePointerId: number | null = null
 let pointerLongPress: {
@@ -428,14 +450,31 @@ function onWindowPointerUp(event: PointerEvent): void {
     return
   }
   if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
+  const ownsActiveMousePointer = event.pointerType === 'mouse'
+    && activeMousePointerId === event.pointerId
+  if (ownsActiveMousePointer && !activePointerPan && isDisabledObstructionRelease(event)) {
+    activeMousePointerId = null
+    cancelMapGesture()
+    return
+  }
   if (consumedAddPointerId === event.pointerId) {
     holdClickSuppression()
     consumedAddPointerId = null
   }
-  if (event.pointerType === 'mouse' && activeMousePointerId === event.pointerId) activeMousePointerId = null
+  if (ownsActiveMousePointer) activeMousePointerId = null
   if (!activePointerPan || event.pointerId !== activePointerPan.id) return
   currentMap()?.endViewPan()
   activePointerPan = null
+}
+
+function isDisabledObstructionRelease(event: PointerEvent): boolean {
+  if (!(event.target instanceof Element)) return false
+  const canvas = canvasRoot.value
+  if (!canvas || canvas.contains(event.target)) return false
+  const obstruction = event.target.closest<HTMLElement>('[data-map-obstruction]')
+  if (!obstruction || canvas.contains(obstruction)) return false
+  const disabledButton = event.target.closest<HTMLButtonElement>('button:disabled')
+  return disabledButton !== null && obstruction.contains(disabledButton)
 }
 
 function onContextMenuCapture(event: MouseEvent): void {
@@ -558,6 +597,13 @@ function handleObjectSelection(objectId: string): void {
 function handleOrbitSelection(orbitId: string): void {
   if (props.mode === 'select') emit('select-orbit', orbitId)
   else if (props.mode === 'move') emit('move-select-orbit', orbitId)
+}
+
+/** Enriches one active-system Orbit input with the workspace identity owned by this map surface. */
+function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
+  const system = props.system
+  if (props.activeView !== 'system' || !system || system.id !== input.systemId) return
+  emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
 }
 
 function forwardMoveSystem(id: string, position: Point): void { if (props.mode === 'move') emit('move-system', id, position) }
@@ -713,7 +759,6 @@ watch(
 )
 
 defineExpose({
-  focusMap: () => canvasRoot.value?.querySelector('svg')?.focus(),
   exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
     ?? Promise.reject(new Error('The map is not ready to export.')),
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
@@ -723,6 +768,8 @@ defineExpose({
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
+  revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
+  focusMap: () => currentMap()?.focusMap?.(),
   fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),

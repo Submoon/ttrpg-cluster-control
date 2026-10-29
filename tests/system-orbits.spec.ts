@@ -304,7 +304,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     y: (committedCenter.y - 72) / 416,
   }
 
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('300')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('50')
   await expect(page.getByRole('spinbutton', { name: 'Center X', exact: true })).toHaveCount(0)
@@ -866,7 +866,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
     .toBeCloseTo(initialCenter.x, 2)
   await expect.poll(async () => Number(await ring.getAttribute('cy')))
     .toBeCloseTo(initialCenter.y, 2)
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   const controls = page.getByRole('group', { name: 'Orbit center placement controls' })
   const moveButton = controls.getByRole('button', { name: 'Move center on map', exact: true })
   await expect(moveButton).toBeVisible()
@@ -920,7 +920,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   await expect.poll(async () => Number(await ring.getAttribute('cx')))
     .toBeCloseTo(64 + applyDraftTarget.x * 832, 1)
 
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByLabel('Vertical radius', { exact: true }).fill('250')
   await moveButton.click()
   const discardDraftTarget = await clickNormalizedSystemPoint(page, map, { x: 0.34, y: 0.68 })
@@ -993,7 +993,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   }
   const angleBeforeDetach = await ellipticalOrbitAngle(map, hostedOrbitLabel, 'Nix')
   await hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 1 object/ }).click()
-  await page.getByRole('button', { name: 'Detach Orbit' }).click()
+  await page.getByRole('button', { name: 'Detach Orbit', exact: true }).click()
 
   const detachedOrbitLabel = 'Orbit 1 around unoccupied center'
   const detachedOrbit = map.getByRole('group', { name: detachedOrbitLabel })
@@ -1002,7 +1002,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     .toBeVisible()
   await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()
-  await expect(page.getByRole('button', { name: 'Detach Orbit' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Detach Orbit', exact: true })).toHaveCount(0)
   await expect(detachedRing).toHaveAttribute('rx', String(originalRadii.horizontal))
   await expect(detachedRing).toHaveAttribute('ry', String(originalRadii.vertical))
 
@@ -1177,7 +1177,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const centerHandle = unoccupiedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
@@ -1229,7 +1229,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await expect(smallOrbit).toBeVisible()
   await quitSystemAdd(page)
   await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
-  await page.getByRole('button', { name: 'Edit Orbit' }).click()
+  await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('16')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
@@ -1355,6 +1355,8 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await page.keyboard.press('Escape')
   await expect(palette).toBeHidden()
   await setHeaderMapActionsOpen(page, true)
+  await expect(page.getByRole('group', { name: 'Edit history' }).getByRole('status'))
+    .toHaveText('Close the open panel or dialog before using Undo or Redo.')
   await waitForFiniteAnimations(page)
   const fileActions = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const fileActionsBefore = await fileActions.evaluate(element => {
@@ -1450,6 +1452,8 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   )).toEqual(transformsBeforeCancel)
 
   await setHeaderMapActionsOpen(page, true)
+  await expect(page.getByRole('group', { name: 'Edit history' }).getByRole('status'))
+    .toHaveText('Close the open panel or dialog before using Undo or Redo.')
   await waitForFiniteAnimations(page)
   const fileActionsAfter = await fileActions.evaluate(element => {
     const exportButton = element.querySelector('[aria-label="Export star system JSON"]')

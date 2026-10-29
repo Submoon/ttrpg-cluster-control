@@ -8,6 +8,7 @@ import {
 } from '../../domain/workspace'
 import { isJumpLevel, maxNameLength, validText } from '../../domain/workspace-validation'
 import type { EntityCommand } from './types'
+import type { WorkspaceMutationExecutor } from './workspace-mutations'
 
 export type RouteDraftField = 'jumpLevel' | 'fromPointId' | 'destination' | 'toPointId' | 'unresolvedExit'
 export type RouteDraftValues = {
@@ -31,11 +32,9 @@ export interface RouteInspectorSession {
   error: string
 }
 
-type ApplyWorkspace = (workspace: LocalWorkspace) => { durable: Promise<void> }
-
 interface RouteInspectorSessionOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
-  applyWorkspace: ApplyWorkspace
+  mutations: WorkspaceMutationExecutor
 }
 
 const blankDraft = (): RouteDraftValues => ({
@@ -80,13 +79,25 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
 }
 
 /** Keeps route form values alive above the Inspector and validates before applying or finishing once. */
-export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteInspectorSessionOptions) {
+export function useRouteInspectorSession({ workspace, mutations }: RouteInspectorSessionOptions) {
   const session = ref<RouteInspectorSession | null>(null)
   let sequence = 0
   const hasModifiedRouteSession = computed(() => {
     const active = session.value
     return !!active && !sameValue(active.draft, active.initial)
   })
+  const hasPendingHistoryChoice = computed(() => {
+    const active = session.value
+    return !!active && (active.sourceSystemIds !== null || active.destinationSystemIds !== null)
+  })
+
+  /** Ends a clean route form after history traversal; endpoint targeting remains a blocker. */
+  function endCleanHistorySession(): void {
+    const active = session.value
+    if (active && !hasModifiedRouteSession.value && !hasPendingHistoryChoice.value) {
+      discardRouteSession(active.id)
+    }
+  }
 
   function beginRouteSession(routeId: string | null = null): number | null {
     const current = workspace.value
@@ -210,7 +221,7 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
     if (session.value?.routeId === null) session.value = null
   }
 
-  function applyRouteSession(id: number): boolean {
+  async function applyRouteSession(id: number): Promise<boolean> {
     const active = session.value
     const current = workspace.value
     if (!active || active.id !== id) return false
@@ -251,6 +262,21 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
       if (session.value?.id === active.id) session.value = null
       return true
     }
+    const submittedSignature = JSON.stringify({
+      id: active.id,
+      clusterId: active.clusterId,
+      routeId: active.routeId,
+      draft: active.draft,
+    })
+    const isSubmittedSessionCurrent = (): boolean => {
+      const current = session.value
+      return current?.id === active.id && JSON.stringify({
+        id: current.id,
+        clusterId: current.clusterId,
+        routeId: current.routeId,
+        draft: current.draft,
+      }) === submittedSignature
+    }
     try {
       const route = active.routeId
         ? updateJumpRoute(current.cluster, active.routeId, jumpLevel, active.draft.fromPointId, toPointId, active.draft.unresolvedExit)
@@ -265,25 +291,26 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
         cluster: { ...current.cluster, routes },
         layout: { ...current.layout, unresolvedExitPositions },
       }
-      const nextSession = active.routeId === null
+      const result = await mutations.execute({
+        action: {
+          kind: active.routeId === null ? 'create' : 'update',
+          label: active.routeId === null ? 'Create Jump Route' : 'Edit Jump Route',
+          target: { kind: 'route', id: route.id },
+          parent: { kind: 'cluster', id: active.clusterId },
+        },
+        prepare: () => nextWorkspace,
+        isCurrent: isSubmittedSessionCurrent,
+      })
+      if (result.status === 'rejected') {
+        if (isSubmittedSessionCurrent()) active.error = result.message
+        return false
+      }
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (!isSubmittedSessionCurrent()) return false
+      session.value = active.routeId === null
         ? createSession(++sequence, current.cluster.id, null, blankDraft())
         : null
-      const nextSessionGeneration = nextSession?.id ?? null
-      session.value = nextSession
-      try {
-        const { durable } = applyWorkspace(nextWorkspace)
-        void durable.catch(() => undefined)
-        return true
-      } catch (error) {
-        // applyWorkspace validates before publishing. Restore the exact submitted session only
-        // when that prepublication boundary failed, so a later retry cannot duplicate an applied route.
-        if (workspace.value === current && (session.value?.id ?? null) === nextSessionGeneration) {
-          active.error = error instanceof Error ? error.message : String(error)
-          session.value = active
-          return false
-        }
-        return true
-      }
+      return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       active.errors = {}
@@ -322,12 +349,14 @@ export function useRouteInspectorSession({ workspace, applyWorkspace }: RouteIns
   return {
     routeSession: session,
     hasModifiedRouteSession,
+    hasPendingHistoryChoice,
     beginRouteSession,
     offerRouteSystems,
     chooseRoutePoint,
     updateRouteInput,
     applyRouteSession,
     discardRouteSession,
+    endCleanHistorySession,
     cancelRouteCreation,
     isRouteCommandBlocked,
   }

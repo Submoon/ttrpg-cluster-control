@@ -10,7 +10,12 @@ interface OrbitCenterPlacementOptions {
   creationActive: Readonly<ComputedRef<boolean>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
   isEntityCommandBlocked: (command: EntityCommand) => boolean
-  moveOrbitCenter: (orbitId: string, center: Point, hostId: string | null) => Promise<void>
+  moveOrbitCenter: (
+    orbitId: string,
+    center: Point,
+    hostId: string | null,
+    isCurrent?: () => boolean,
+  ) => Promise<boolean>
 }
 
 interface OrbitCenterMoveSource {
@@ -54,6 +59,8 @@ export function useOrbitCenterPlacement({
   let source: OrbitCenterMoveSource | null = null
   let targetScenePoint: Point | null = null
   let nextToken = 0
+  let pendingConfirmationToken: number | null = null
+  let pendingConfirmationContextInvalidated = false
   let appliedPreview: { map: SystemMapHandle; orbitId: string } | null = null
 
   function currentFreeOrbit(): { workspace: LocalWorkspace; system: StarSystem; orbit: Orbit } | null {
@@ -165,7 +172,7 @@ export function useOrbitCenterPlacement({
     return previewOrbitCenterMoveAt({ x: current.x + delta.x, y: current.y + delta.y })
   }
 
-  function confirmOrbitCenterMove(token: number): boolean {
+  async function confirmOrbitCenterMove(token: number): Promise<boolean> {
     const preview = orbitCenterMovePreview.value
     if (!preview || preview.token !== token || !currentMatchesSource()) {
       cancelOrbitCenterMove()
@@ -178,17 +185,52 @@ export function useOrbitCenterPlacement({
       return false
     }
 
-    const orbitId = preview.orbitId
-    const center = { ...preview.targetCenter }
-    systemMapRef.value?.setOrbitCenterMovePreview(orbitId, null)
-    orbitCenterMapMoveTargeting.value = false
-    orbitCenterMovePreview.value = null
-    orbitCenterMoveError.value = ''
-    source = null
-    targetScenePoint = null
-    systemMapRef.value?.focusMap()
-    void moveOrbitCenter(orbitId, center, null)
-    return true
+    pendingConfirmationToken = preview.token
+    try {
+      const isCurrent = (): boolean => orbitCenterMovePreview.value?.token === preview.token
+        && !pendingConfirmationContextInvalidated
+        && source !== null
+        && source.clusterId === preview.clusterId
+        && source.systemId === preview.systemId
+        && source.orbitId === preview.orbitId
+        && source.previousCenter.x === preview.previousCenter.x
+        && source.previousCenter.y === preview.previousCenter.y
+        && store.activeView === 'system'
+        && store.mapMode === 'move'
+        && store.selectedSystemId === preview.systemId
+        && store.selectedOrbitId === preview.orbitId
+        && !creationActive.value
+        && currentMatchesSource()
+        && canMoveCurrentCenter()
+      const applied = await moveOrbitCenter(preview.orbitId, { ...preview.targetCenter }, null, isCurrent)
+      if (!applied) {
+        const stillOwnsPreview = orbitCenterMovePreview.value?.token === preview.token
+        const contextIsStillValid = orbitCenterMoveAvailable.value
+          && currentMatchesSource()
+          && canMoveCurrentCenter()
+          && !pendingConfirmationContextInvalidated
+        if (stillOwnsPreview && !contextIsStillValid) {
+          cancelOrbitCenterMove(false)
+          orbitCenterMoveError.value = 'The Orbit-center move context changed. Start the move again.'
+        }
+        return false
+      }
+      if (orbitCenterMovePreview.value?.token === preview.token) {
+        cancelOrbitCenterMove(false)
+        systemMapRef.value?.focusMap()
+      }
+      return true
+    } catch (error) {
+      if (orbitCenterMovePreview.value?.token === preview.token) {
+        orbitCenterMoveError.value = error instanceof Error ? error.message : String(error)
+      }
+      return false
+    } finally {
+      if (pendingConfirmationToken === preview.token) {
+        pendingConfirmationToken = null
+        pendingConfirmationContextInvalidated = false
+      }
+    }
   }
 
   watch(
@@ -214,6 +256,12 @@ export function useOrbitCenterPlacement({
         : false],
     () => {
       if (!source) return
+      if (pendingConfirmationToken !== null) {
+        if (!orbitCenterMoveAvailable.value || !currentMatchesSource() || !canMoveCurrentCenter()) {
+          pendingConfirmationContextInvalidated = true
+        }
+        return
+      }
       if (!orbitCenterMoveAvailable.value || !currentMatchesSource() || !canMoveCurrentCenter()) {
         cancelOrbitCenterMove(false)
         return

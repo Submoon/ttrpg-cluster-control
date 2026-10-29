@@ -242,6 +242,8 @@ test('an unoccupied Orbit previews attachment safely and applies with the new ho
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
 
+  await expect(inspector.getByRole('button', { name: /Apply changes/ })).toHaveCount(0)
+
   const applied = await downloadJson(page, 'Export star system JSON')
   const appliedSystem = applied.system
   if (!appliedSystem) throw new Error('Applying the placement removed the exported star system.')

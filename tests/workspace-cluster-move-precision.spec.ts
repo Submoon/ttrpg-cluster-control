@@ -16,7 +16,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
   await returnToClusterMap(page)
 }
 
@@ -64,7 +64,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await moveOnMap.click()
   await expect.poll(() => clusterMap.evaluate(map => document.activeElement === map)).toBe(true)
   await clickNormalizedClusterPoint(page, clusterMap, mapTarget)
-  await expect(mapContext.getByRole('status')).toContainText(/move.*preview/i)
+  await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
   const afterMapPreview = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapPreview).toEqual(beforeMove)
@@ -76,7 +76,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
 
   await moveOnMap.click()
   await page.keyboard.press('ArrowRight')
-  await expect(mapContext.getByRole('status')).toContainText(/move.*preview/i)
+  await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
   await page.getByRole('button', { name: 'Confirm system move', exact: true }).click()
   const afterConfirm = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -130,7 +130,7 @@ test('Move System keeps its preview visible after applying an independent chart-
   const updatedNode = updatedMap.getByRole('button', { name: 'Select Vesper system', exact: true })
   await expect(updatedMap).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-    .getByRole('status')).toContainText(/move.*preview/i)
+    .locator('.workspace-add-status')).toContainText(/move.*preview/i)
   await expect(updatedNode).not.toHaveAttribute('transform', originalTransform!)
   await expect(page.getByRole('button', { name: 'Confirm system move', exact: true })).toBeVisible()
 
