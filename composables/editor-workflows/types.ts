@@ -18,6 +18,7 @@ import type {
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
+import type { SearchTarget } from '../../utils/workspace-search'
 import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -251,6 +252,8 @@ export interface SystemCreationSession {
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  /** Resolves after guarded navigation overlays have completed their presentation teardown. */
+  waitForSearchPresentation?: () => Promise<void>
   /** Shared application boundary for ordinary editor mutations. */
   mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
@@ -299,6 +302,10 @@ export interface MapNavigationHandle extends MapImageExporter {
   endTouchNavigation(event: TouchEvent): void
   /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
   revealHistoryTarget?(target: MapHistoryTarget): boolean
+  /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
+  whenReady?(): Promise<boolean>
+  /** Frames a search destination inside the current obstruction-aware map area. */
+  frameSearchTarget?(target: SearchTarget): boolean
   /** Stable keyboard target when a traversal removes the focused map item. */
   focusMap?(): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */

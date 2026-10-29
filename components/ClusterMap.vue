@@ -101,6 +101,7 @@ const emit = defineEmits<{
 
 const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
+const SEARCH_SYSTEM_FRAME_MAX_SCALE = 2
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 type ClusterTouchGesture =
@@ -385,6 +386,47 @@ function fitMap(usableRect?: SvgViewportRect): void {
   zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
   setViewport(viewport)
   refreshSceneSurfaces()
+}
+
+/** Frames the applied card and rendered labels for one system without selecting or inspecting it. */
+function frameSystem(systemId: string, usableRect: SvgViewportRect): boolean {
+  const element = svgElement.value
+  if (!element || !zoomBehavior) return false
+  const mark = [...element.querySelectorAll<SVGGElement>('.cluster-system-node[data-system-id]')]
+    .find(candidate => candidate.getAttribute('data-system-id') === systemId)
+  if (!mark) return false
+
+  let localBounds: DOMRect
+  try {
+    localBounds = mark.getBBox()
+  } catch {
+    return false
+  }
+  const position = clusterSystemPosition(props.systemPositions, systemId)
+  const bounds = {
+    x: position.x + localBounds.x - 3,
+    y: position.y + localBounds.y - 3,
+    width: localBounds.width + 6,
+    height: localBounds.height + 6,
+  }
+  const rect = normalizeSvgViewportRect(usableRect)
+  const minimumScale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, minimumZoomScale.value))
+  const fittedViewport = rect && fitMapViewport(bounds, rect, minimumScale)
+  if (!rect || !fittedViewport) return false
+  const scale = Math.min(SEARCH_SYSTEM_FRAME_MAX_SCALE, fittedViewport.k)
+  const viewport = scale === fittedViewport.k
+    ? fittedViewport
+    : {
+        x: rect.x + (rect.width - bounds.width * scale) / 2 - bounds.x * scale,
+        y: rect.y + (rect.height - bounds.height * scale) / 2 - bounds.y * scale,
+        k: scale,
+      }
+
+  zoomExtentOverride = rect
+  zoomBehavior.extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
+  setViewport(viewport)
+  refreshSceneSurfaces()
+  return true
 }
 
 function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
@@ -1062,6 +1104,7 @@ defineExpose({
   zoomBy,
   panBy,
   revealHistoryTarget,
+  frameSystem,
   focusMap,
   fitMap,
   cancelActiveGesture,

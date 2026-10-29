@@ -18,6 +18,8 @@ import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreation
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
 import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExitPlacement'
 import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
+import { searchWorkspace } from '../utils/workspace-search'
+import type { SearchResult } from '../utils/workspace-search'
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
 export function useEditorWorkflows(options: EditorWorkflowOptions) {
@@ -129,6 +131,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const viewport = useEditorViewport(store)
   const navigation = useEditorNavigation({
     workspace,
+    waitForSearchPresentation: options.waitForSearchPresentation,
     store,
     mapControls,
     chart: charts,
@@ -139,6 +142,17 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     editorError,
     beforeWorkspaceOperation,
   })
+  const searchOpen = computed({
+    get: () => store.searchOpen,
+    set: (open: boolean) => store.setSearchOpen(open),
+  })
+  const searchQuery = computed({
+    get: () => store.searchQuery,
+    set: (query: string) => store.setSearchQuery(query),
+  })
+  const searchResults = computed<SearchResult[]>(() => workspace.value
+    ? searchWorkspace(workspace.value, searchQuery.value)
+    : [])
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
@@ -301,6 +315,12 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }
 
   return {
+    search: {
+      open: searchOpen,
+      query: searchQuery,
+      results: searchResults,
+      reveal: navigation.revealSearchTarget,
+    },
     historyGuards: {
       blockReason: historyGuards,
       endCleanSessions: endCleanHistorySessions,

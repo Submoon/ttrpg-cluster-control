@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || searchOpen"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -103,6 +103,7 @@
 
           <template #map-chrome>
             <WorkspaceMapChrome
+              ref="workspaceMapChrome"
               :workspace="workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
@@ -116,6 +117,10 @@
               :creation-type-label="creationTypeLabel"
               :cluster-add-presentation="clusterAddPresentation"
               :cluster-move-presentation="clusterMovePresentation"
+              v-model:search-open="searchOpen"
+              v-model:search-query="searchQuery"
+              :search-results="searchResults"
+              :reveal-search-target="revealSearchTarget"
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
@@ -462,6 +467,7 @@
     />
 
     <ChartNamesDialog
+      ref="chartNamesDialog"
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
@@ -486,7 +492,7 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
@@ -500,6 +506,7 @@ import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
+import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 
 const {
   workspace,
@@ -536,8 +543,31 @@ const {
   mutations, status: historyStatus, entries: historyEntries, capacityRequest: historyCapacityRequest, traversalError: historyTraversalError,
   resolveCapacity: resolveHistoryCapacity, undo: undoWorkspace, redo: redoWorkspace,
 } = history
-const workflows = useEditorWorkflows({ workspace, saveState, saveError, mutations, initializeWorkspace: commit })
-const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments } = workflows
+const chartNamesDialog = ref<InstanceType<typeof ChartNamesDialog> | null>(null)
+const workspaceMapChrome = ref<InstanceType<typeof WorkspaceMapChrome> | null>(null)
+const workflows = useEditorWorkflows({
+  workspace,
+  saveState,
+  saveError,
+  mutations,
+  initializeWorkspace: commit,
+  waitForSearchPresentation: async () => {
+    await Promise.all([
+      chartNamesDialog.value?.whenClosingFocusSettled() ?? Promise.resolve(),
+      workspaceMapChrome.value?.whenSearchClosingFocusSettled() ?? Promise.resolve(),
+    ])
+    await nextTick()
+  },
+})
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search } = workflows
+const searchOpen = search.open
+const searchQuery = search.query
+const searchResults = search.results
+async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): Promise<Awaited<ReturnType<typeof search.reveal>>> {
+  const outcome = await search.reveal(target)
+  if (outcome.status === 'rejected') await chartNamesDialog.value?.whenClosingFocusSettled()
+  return outcome
+}
 revealHistoryContext = navigation.revealHistoryContext
 
 const {
@@ -915,6 +945,7 @@ const {
 
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
+  if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
@@ -931,6 +962,7 @@ useWorkspaceHistoryShortcuts({
   workspaceEnabled: () => workspace.value !== null,
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
+    || searchOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   undo: undoWorkspace,

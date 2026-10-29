@@ -80,6 +80,13 @@
 
     <div class="workspace-map-actions">
       <slot name="history" />
+      <WorkspaceSearch
+        ref="workspaceSearch"
+        v-model:open="searchOpen"
+        v-model:query="searchQuery"
+        :results="props.searchResults"
+        :reveal="props.revealSearchTarget"
+      />
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
           class="workspace-control"
@@ -234,6 +241,8 @@ import { computed, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { SearchResult, SearchTarget } from '../utils/workspace-search'
+import WorkspaceSearch from './WorkspaceSearch.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -249,6 +258,10 @@ const props = withDefaults(defineProps<{
   creationTypeLabel?: string
   clusterAddPresentation?: { label: string; status: string; error?: string } | null
   clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
+  searchResults: readonly SearchResult[]
+  revealSearchTarget: (target: SearchTarget) => Promise<
+    { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
+  >
 }>(), {
   hierarchyOpen: false,
   inspectorOpen: false,
@@ -273,6 +286,9 @@ const emit = defineEmits<{
 }>()
 
 const headerMapActionsOpen = ref(false)
+const searchOpen = defineModel<boolean>('searchOpen', { required: true })
+const searchQuery = defineModel<string>('searchQuery', { required: true })
+const workspaceSearch = ref<InstanceType<typeof WorkspaceSearch> | null>(null)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -295,6 +311,10 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
   : `star system ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
+
+function whenSearchClosingFocusSettled(): Promise<void> {
+  return workspaceSearch.value?.whenClosingFocusSettled() ?? Promise.resolve()
+}
 
 watch(headerMapActionsOpen, open => emit('files-open-change', open))
 watch(() => props.compactModalOpen, open => {
@@ -325,6 +345,8 @@ function openJsonImportPicker(): void {
   importFileInput.value?.click()
   headerMapActionsOpen.value = false
 }
+
+defineExpose({ whenSearchClosingFocusSettled })
 </script>
 
 <style scoped>
