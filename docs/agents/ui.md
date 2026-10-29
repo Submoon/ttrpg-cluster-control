@@ -6,6 +6,7 @@ Read this for editor UI changes and their review. The accepted product scope liv
 
 | Concern | Start here |
 | --- | --- |
+| Map title, context label and map commands | `components/WorkspaceMapChrome.vue`, `components/WorkspaceHistoryControls.vue` |
 | Guarded commands and session ownership | `components/BaselinePage.vue`, `composables/useEditorWorkflows.ts`, `composables/editor-workflows/` |
 | Active versus inspected system and event forwarding | `components/MapInspector.vue`, `components/inspector/JumpRouteInspector.vue`, `components/inspector/ChartDetailsPanel.vue` |
 | Object and Orbit consultation/editing | `components/inspector/MapObjectInspector.vue`, `components/inspector/OrbitInspector.vue` |

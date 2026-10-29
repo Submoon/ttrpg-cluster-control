@@ -3,7 +3,7 @@ import {
   activeWorkspaceFeedback, addCatalogueObject, captureMapExportBlobs, clickDockAction,
   createSingleSystemWorkspace, dragToWorldPoint, downloadJson, editMapObject,
   ensureMapDragPointsReachable, openChartDetails, openWorkspaceHierarchy,
-  returnToClusterMap, saveMapObject, setWorkspaceMapMode, workspaceZoomControls,
+  returnToClusterMap, saveMapObject, setWorkspaceMapMode, workspaceMapContextType, workspaceZoomControls,
 } from './helpers'
 import {
   installHistoryStorageGate, pendingHistoryAcknowledgements, releaseHistoryAcknowledgements,
@@ -78,15 +78,24 @@ test('Back stays to the left of the system name across desktop and compact viewp
 
   const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  const contextType = workspaceMapContextType(page)
   const heading = context.getByRole('heading', { name: longName, exact: true })
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport)
     await expect(back).toBeVisible()
+    await expect(contextType).toHaveText('Star System')
     await expect(heading).toBeVisible()
-    const [backBounds, headingBounds] = await Promise.all([back.boundingBox(), heading.boundingBox()])
+    const [backBounds, contextTypeBounds, headingBounds] = await Promise.all([
+      back.boundingBox(), contextType.boundingBox(), heading.boundingBox(),
+    ])
     expect(backBounds).not.toBeNull()
+    expect(contextTypeBounds).not.toBeNull()
     expect(headingBounds).not.toBeNull()
-    if (!backBounds || !headingBounds) throw new Error('The Back button or system title is not positioned.')
+    if (!backBounds || !contextTypeBounds || !headingBounds) {
+      throw new Error('The Back button, context label, or system title is not positioned.')
+    }
+    expect(contextTypeBounds.x).toBeCloseTo(headingBounds.x, 1)
+    expect(contextTypeBounds.y + contextTypeBounds.height).toBeLessThanOrEqual(headingBounds.y)
     expect(backBounds.x + backBounds.width).toBeLessThanOrEqual(headingBounds.x)
     expect(headingBounds.x + headingBounds.width).toBeLessThanOrEqual(viewport.width)
     expect(backBounds.y + backBounds.height).toBeGreaterThan(headingBounds.y)

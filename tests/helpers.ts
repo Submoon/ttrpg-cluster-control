@@ -5,6 +5,13 @@ export function activeWorkspaceFeedback(page: import('@playwright/test').Page): 
   return page.locator('.workspace-feedback:not([inert]), .workspace-compact-recovery')
 }
 
+/** Returns the current Jump Cluster or Star System label in the map command navigation. */
+export function workspaceMapContextType(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  // The adjacent heading is user-controlled and may exactly match either context label.
+  return page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+    .locator('.workspace-map-heading > span')
+}
+
 export type WorldPoint = { x: number; y: number }
 
 export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
@@ -698,9 +705,9 @@ export async function setWorkspaceMapMode(
 
 /** Returns to the cluster through the real compact-context Back control. */
 export async function returnToClusterMap(page: import('@playwright/test').Page): Promise<void> {
-  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   await expect(context).toBeVisible()
-  const contextKind = context.locator('.workspace-map-heading > span')
+  const contextKind = workspaceMapContextType(page)
   await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
   if (await contextKind.textContent() === 'Star System') {

@@ -19,11 +19,15 @@ Report only evidence actually collected. Browser viewport emulation can verify r
 
 ## Map-input and placement regressions
 
+Use `workspaceMapContextType` in [the shared UI helpers](../../tests/helpers.ts) to locate the current map type. For Orbit creation and Inspector integration, [the main-integration scenarios](../../tests/workspace-history-main-integration.spec.ts) create data through the real Add controller and retain an explicit property-order regression; reuse that path rather than copying its output record shape.
+
 Reuse [the shared test helpers](../../tests/helpers.ts) for SVG/screen conversion and native mouse gestures. Derive expected geometry from the pre-gesture transform and the delivered input, with an explicit CSS-pixel accuracy check. Keep domain expectations such as radius ratios, attachment and occupant angles in the scenario. Native event observers belong to the helper that installs them, including cleanup when the gesture fails; D3 release observation must run at window capture before D3 consumes the event.
 
 When changing placement or numerical admission, select the relevant existing regressions for [untouched-route independence and previews](../../tests/cluster-map-geometry.spec.ts), [saved-map restoration and identical-point saving](../../tests/unresolved-exit-layout.spec.ts), and [the public move/confirm/export journey](../../tests/workspace-unresolved-exit-placement.spec.ts). Use these invariants when assessing a fallback or a changed support boundary.
 
 ## Playwright suites
+
+For repeated local browser checks, use `npm run test:local -- tests/workspace-history-buttons.spec.ts --project=browser --grep "Back stays to the left"`. The launcher keeps its development server alive between interactive runs: press Enter to rerun the same selection, or `q` to stop. It waits for HTTP readiness, prints its server-log path, and gives each run a separate artifact directory. Noninteractive execution runs once and cleans up. The launcher owns its loopback server on port 3100 (`LOCAL_TEST_PORT` overrides it) and refuses an occupied port; ordinary `npm test` and CI keep their existing behavior.
 
 `npm test` runs the complete local suite by default. `PLAYWRIGHT_SUITE=checks` selects pure checks and the single local IndexedDB regression tagged `@development-storage`; `PLAYWRIGHT_SUITE=browser` selects public browser journeys; `PLAYWRIGHT_SUITE=all` selects all three projects. Tests tagged `@pure` run without a browser context, local server, or preview authentication. Keep local IndexedDB behavior in the `development-storage` project with the `@development-storage` tag.
 

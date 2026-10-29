@@ -3,7 +3,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, ref, shallowRef, watchEffect } from 'vue'
 import {
   createLocalWorkspace,
-  createOrbit,
   type LocalWorkspace,
   type Orbit,
   type SystemObject,
@@ -13,6 +12,7 @@ import { useEntityInspectorSession } from '../composables/editor-workflows/useEn
 import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows'
 import { useOrbitCenterPlacement } from '../composables/editor-workflows/useOrbitCenterPlacement'
 import { useUnresolvedExitPlacement } from '../composables/editor-workflows/useUnresolvedExitPlacement'
+import { useSystemCreationWorkflows } from '../composables/editor-workflows/useSystemCreationWorkflows'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import type { SaveState } from '../composables/editor-workflows/types'
 import {
@@ -85,36 +85,79 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
   }
 }
 
-function createUnoccupiedOrbitWorkspace(): { workspace: LocalWorkspace; systemId: string; orbitId: string } {
+interface UnoccupiedOrbitFixture {
+  workspace: LocalWorkspace
+  systemId: string
+  orbitId: string
+}
+
+async function createUnoccupiedOrbitWorkspace(
+  reorderPropertiesForRegression = false,
+): Promise<UnoccupiedOrbitFixture> {
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]
   if (!system) throw new Error('The initial workspace has no star system.')
-  const generatedOrbit = createOrbit(system, null)
-  if (generatedOrbit.hostId !== null || !generatedOrbit.center) {
-    throw new Error('The generated Orbit does not have an unoccupied center.')
-  }
-  // Match the field insertion order used by the free-center Add workflow.
-  const orbit: Orbit = {
-    id: generatedOrbit.id,
-    order: generatedOrbit.order,
-    hostId: null,
-    center: generatedOrbit.center,
-  }
-  return {
-    systemId: system.id,
-    orbitId: orbit.id,
-    workspace: createWorkspaceSnapshot({
-      ...initial,
+  const harness = createHistoryHarness(initial)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'system', selectedSystemId: system.id })
+  const scope = effectScope()
+  const creation = scope.run(() => useSystemCreationWorkflows({
+    workspace: harness.workspace,
+    systemMapRef: shallowRef<SystemMapHandle | null>(null),
+    mutations: harness.history,
+    isEntityCommandBlocked: () => false,
+    resolveObjectCreationTransition: async () => true,
+    onObjectCreated: async () => undefined,
+  }))
+  if (!creation) throw new Error('The system creation workflow was not created.')
+
+  try {
+    if (!await creation.handleCreationDrop({ kind: 'orbit' }, [{
+      key: 'unoccupied-center',
+      label: 'Unoccupied center',
+      target: { kind: 'free', point: { x: 0.5, y: 0.5 } },
+      error: null,
+    }])) {
+      throw new Error('The Orbit Add drop did not create an unoccupied Orbit.')
+    }
+
+    const createdWorkspace = harness.workspace.value
+    const createdSystem = createdWorkspace?.cluster.systems.find(candidate => candidate.id === system.id)
+    const createdOrbit = createdSystem?.orbits[0]
+    if (!createdWorkspace || !createdSystem || !createdOrbit
+      || createdOrbit.hostId !== null || !createdOrbit.center) {
+      throw new Error('The Orbit Add command did not publish an unoccupied Orbit.')
+    }
+
+    // Keep production Add's record by default. This explicit adversarial order is used only
+    // by the key-order regression, so it does not depend on the Add builder's field order.
+    const orbit: Orbit = reorderPropertiesForRegression
+      ? {
+          center: { ...createdOrbit.center },
+          id: createdOrbit.id,
+          order: createdOrbit.order,
+          hostId: null,
+        }
+      : createdOrbit
+    const workspace = createWorkspaceSnapshot({
+      ...createdWorkspace,
       cluster: {
-        ...initial.cluster,
-        systems: [{ ...system, orbits: [orbit] }],
+        ...createdWorkspace.cluster,
+        systems: createdWorkspace.cluster.systems.map(candidate => candidate.id === system.id
+          ? { ...candidate, orbits: [orbit] }
+          : candidate),
       },
       layout: {
-        ...initial.layout,
-        orbitRadii: { ...initial.layout.orbitRadii, [orbit.id]: { horizontal: 140, vertical: 90 } },
-        orbitRotations: { ...initial.layout.orbitRotations, [orbit.id]: 17 },
+        ...createdWorkspace.layout,
+        orbitRadii: { ...createdWorkspace.layout.orbitRadii, [orbit.id]: { horizontal: 140, vertical: 90 } },
+        orbitRotations: { ...createdWorkspace.layout.orbitRotations, [orbit.id]: 17 },
       },
-    }),
+    })
+
+    return { workspace, systemId: system.id, orbitId: orbit.id }
+  } finally {
+    scope.stop()
+    harness.dispose()
   }
 }
 
@@ -216,7 +259,7 @@ test('unresolved-exit direct moves and confirmed previews round-trip through the
 
 function createOrbitCenterControllers(
   harness: ReturnType<typeof createHistoryHarness>,
-  fixture: ReturnType<typeof createUnoccupiedOrbitWorkspace>,
+  fixture: UnoccupiedOrbitFixture,
 ) {
   const scope = effectScope()
   const store = useEditorUiStore()
@@ -269,7 +312,7 @@ function createOrbitCenterControllers(
 
 test('unoccupied Orbit-center previews survive capacity cancellation and accepted moves round-trip @pure', async () => {
   setActivePinia(createPinia())
-  const fixture = createUnoccupiedOrbitWorkspace()
+  const fixture = await createUnoccupiedOrbitWorkspace()
 
   const rejectedHarness = createHistoryHarness(fixture.workspace, {
     limits: { maxBytes: 1, maxActions: 100 },
@@ -334,7 +377,7 @@ test('unoccupied Orbit-center previews survive capacity cancellation and accepte
 
 test('late capacity consent cannot publish a canceled and replaced Orbit-center preview @pure', async () => {
   setActivePinia(createPinia())
-  const fixture = createUnoccupiedOrbitWorkspace()
+  const fixture = await createUnoccupiedOrbitWorkspace()
   let decideCapacity: ((accepted: boolean) => void) | undefined
   let announceCapacity: (() => void) | undefined
   const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
@@ -380,7 +423,7 @@ test('late capacity consent cannot publish a canceled and replaced Orbit-center 
 
 test('a map-mode change invalidates an Orbit-center preview while capacity consent is open @pure', async () => {
   setActivePinia(createPinia())
-  const fixture = createUnoccupiedOrbitWorkspace()
+  const fixture = await createUnoccupiedOrbitWorkspace()
   let decideCapacity: ((accepted: boolean) => void) | undefined
   let announceCapacity: (() => void) | undefined
   const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
@@ -422,11 +465,13 @@ test('a map-mode change invalidates an Orbit-center preview while capacity conse
   harness.dispose()
 })
 
-test('accepted Orbit-center moves retain clean and modified Orbit Inspector sessions @pure', async () => {
+async function verifyAcceptedOrbitCenterMovesRetainInspectorSessions(reorderPropertiesForRegression: boolean): Promise<void> {
   setActivePinia(createPinia())
-  const fixture = createUnoccupiedOrbitWorkspace()
-  expect(Object.keys(fixture.workspace.cluster.systems[0]!.orbits[0]!))
-    .toEqual(['id', 'order', 'hostId', 'center'])
+  const fixture = await createUnoccupiedOrbitWorkspace(reorderPropertiesForRegression)
+  const initialOrbitKeys = Object.keys(fixture.workspace.cluster.systems[0]!.orbits[0]!)
+  if (reorderPropertiesForRegression) {
+    expect(initialOrbitKeys).toEqual(['center', 'id', 'order', 'hostId'])
+  }
   const harness = createHistoryHarness(fixture.workspace)
   const scope = effectScope()
   const workflows = scope.run(() => useEditorWorkflows({
@@ -450,8 +495,7 @@ test('accepted Orbit-center moves retain clean and modified Orbit Inspector sess
   if (!cleanSession || cleanSession.kind !== 'orbit') throw new Error('The Orbit Inspector session did not start.')
 
   expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.62, y: 0.71 }, null)).toBe(true)
-  expect(Object.keys(harness.workspace.value!.cluster.systems[0]!.orbits[0]!))
-    .toEqual(['id', 'hostId', 'center', 'order'])
+  expect(Object.keys(harness.workspace.value!.cluster.systems[0]!.orbits[0]!)).not.toEqual(initialOrbitKeys)
   expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
   expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
 
@@ -468,14 +512,22 @@ test('accepted Orbit-center moves retain clean and modified Orbit Inspector sess
   workflows.adjustments.resetOrbitAdjustments()
   scope.stop()
   harness.dispose()
+}
+
+test('accepted Orbit-center moves retain Inspector sessions from production Add records @pure', async () => {
+  await verifyAcceptedOrbitCenterMovesRetainInspectorSessions(false)
+})
+
+test('accepted Orbit-center moves ignore deterministic Orbit property reordering @pure', async () => {
+  await verifyAcceptedOrbitCenterMovesRetainInspectorSessions(true)
 })
 
 test('Orbit Inspector still rejects changed hosts and radii @pure', async () => {
   async function expectStaleDraft(
-    changeWorkspace: (current: LocalWorkspace, fixture: ReturnType<typeof createUnoccupiedOrbitWorkspace>) => LocalWorkspace,
+    changeWorkspace: (current: LocalWorkspace, fixture: UnoccupiedOrbitFixture) => LocalWorkspace,
     message: string,
   ): Promise<void> {
-    const fixture = createUnoccupiedOrbitWorkspace()
+    const fixture = await createUnoccupiedOrbitWorkspace()
     const harness = createHistoryHarness(fixture.workspace)
     const scope = effectScope()
     const inspector = scope.run(() => useEntityInspectorSession({
@@ -497,6 +549,7 @@ test('Orbit Inspector still rejects changed hosts and radii @pure', async () => 
     harness.dispose()
   }
 
+  setActivePinia(createPinia())
   await expectStaleDraft((current, fixture) => ({
     ...current,
     layout: {
@@ -531,7 +584,7 @@ test('Orbit Inspector still rejects changed hosts and radii @pure', async () => 
 
 test('capacity-delayed Orbit-center moves do not rebase a replacement Inspector session @pure', async () => {
   setActivePinia(createPinia())
-  const fixture = createUnoccupiedOrbitWorkspace()
+  const fixture = await createUnoccupiedOrbitWorkspace()
   let decideCapacity: ((accepted: boolean) => void) | undefined
   let announceCapacity: (() => void) | undefined
   const capacityDecision = new Promise<boolean>((resolve) => { decideCapacity = resolve })
