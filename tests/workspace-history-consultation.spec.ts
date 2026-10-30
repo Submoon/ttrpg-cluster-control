@@ -222,7 +222,7 @@ test('Undo of an Orbit edit from the Cluster restores its system and selects the
 
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   await expect(restoredMap).toBeVisible()
-  const restoredOrbit = page.getByRole('complementary', { name: 'System hierarchy' }).getByRole('button', { name: orbitLabel })
+  const restoredOrbit = page.getByRole('complementary', { name: 'System hierarchy' }).getByRole('treeitem', { name: orbitLabel })
   await expect(restoredOrbit).toHaveAttribute('aria-current', 'true')
   await expect(restoredMap.getByRole('group', { name: orbitLabel }).locator('.orbit-ring')).toHaveAttribute('rx', originalRadius ?? '')
 })

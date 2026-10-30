@@ -117,6 +117,7 @@
               :creation-type-label="creationTypeLabel"
               :cluster-add-presentation="clusterAddPresentation"
               :cluster-move-presentation="clusterMovePresentation"
+              :search-shortcut-enabled="searchShortcutEnabled"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
               :search-results="searchResults"
@@ -1102,6 +1103,21 @@ const {
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
+
+const searchShortcutEnabled = computed(() => workspace.value !== null
+  && !historyOpen.value
+  && !chartNamesDialogOpen.value
+  && !fieldDefinitionDialogOpen.value
+  && !headerFilesOpen.value
+  && !recoveryDetailsOpen.value
+  && historyCapacityRequest.value === null
+  && !creationChooserOpen.value
+  && deletionReview.value === null
+  && !importReview.value.open
+  && !importReview.value.suspended
+  && !importReview.value.confirming
+  && !compactPanelOpen.value
+  && !editingGestureActive.value)
 
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'

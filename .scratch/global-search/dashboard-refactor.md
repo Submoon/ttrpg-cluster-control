@@ -71,6 +71,22 @@ The 26-case local Search/UI checkpoint finished **23 passed / 3 failed** in 5.6 
 
 Final whole-repository lint and the prepared Nuxt TypeScript check passed on both corrections (`test-results/dashboard-focus-final-lint.log`, `test-results/dashboard-focus-final-typecheck.log`). No temporary diagnostic remains in tests. Final targeted browser checks, complete CI, review pin confirmation and focused actual-phone revalidation remain pending. No source issue was closed and no merge/release was performed.
 
+## Verified native candidate and follow-up
+
+The corrections were committed and pushed at **dfc5c362bac9be64872f94ce6feb860cb8bdcb99**. Both independent review axes confirmed the exact committed closure with zero remaining source findings. All **27 final local journeys passed** in 5.1 minutes (`test-results/dashboard-focus-final-browser/report.json`): all 20 Search journeys, four Tree journeys and three maintained panel smoke cases. Together with the preceding five footer/deletion smoke cases and three responsive journeys, the maintained UI selection and requested desktop/compact states are covered. This includes the independent readable/rotated branch oracle and the actual chevron-to-arrow regression.
+
+Vercel deployment **7443136252** for `dfc5c362` was confirmed ready before sharing the rolling branch preview. The user repeated the software-keyboard/activation/Stay protocol on the previously identified Nothing Phone 4a Pro / Firefox and answered **“Tout fonctionne sur le téléphone”**. See [actual mobile evidence](mobile-validation.md); device testimony is separate from browser emulation.
+
+The first native CI candidate `62c6ad5c` completed 296 browser passes and four failures. Two were the already corrected Search focus/scroll defects. The other two were missed chained hierarchy locators in chart-write recovery and history consultation; both now query `treeitem` while preserving every domain, selection and rendered-radius assertion. Their exact local rerun passed **2/2** in 22.8 seconds (`test-results/dashboard-ci-locator-corrections/report.json`). All checks/build/pure/storage passed on both native candidates. No automatic Actions run appeared for the `dfc5c362` push, so the coordinator dispatched **41088310716** manually on that exact branch/head. Its checks passed; its browser jobs were canceled when the user added the opening-shortcut follow-up below, avoiding a knowingly obsolete integration run. A final integrated CI run remains required on the new candidate.
+
+### Ticket 03 opening shortcut and initial copy
+
+The user requested removing the redundant initial instruction and asked where Control+K would be implemented. The coordinator assigned it to ticket 03, retaining one branch and PR. Initial empty-query copy is now removed through the supported empty-slot visibility configuration; the input still invites typing and a nonempty failed query retains its explicit message.
+
+Read-only architecture prescribed a small mounted bubble listener owned by `WorkspaceSearch`, with cleanup, a page-owned availability flag forwarded through `WorkspaceMapChrome`, and Nuxt UI `useKbd`/`UKbd` for platform chord interpretation and display. Installed `defineShortcuts` prevents default before its handler and cannot admit handled/repeated/composing events first, so it is unsuitable for this editor ownership contract. No store action, domain change, imperative focus forwarding or separate generic shortcut service is introduced.
+
+The shortcut must preserve the query, draft, map/tool/camera and activation guards; respect native composition, event ownership, competing dialogs, compact fullscreen panels and gestures; and remain useful when Search is already open. Add public behavior tracers before implementing the bridge, then repeat focused checks and independent review for this bounded delta. The phone validation continues to cover the unchanged mobile input/activation path.
+
 ### Browser geometry oracle reassessment
 
 The original hosted-branch test incorrectly required its fitted scale to equal the 2x isolated-target maximum. The first correction preserved that cap, added independent 12px/9px text-size floors and complete visible-paint containment. Parent object groups containing invisible hit targets were excluded. A repeated public red then identified an ellipse's oversized transformed DOM rectangle as overlapping the real map header, while the screenshot showed the painted ring well below it.

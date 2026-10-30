@@ -6,12 +6,18 @@
       variant="outline"
       size="sm"
       aria-label="Search"
+      :aria-keyshortcuts="searchShortcutKey"
       aria-haspopup="dialog"
       :aria-expanded="open"
       @click="open = true"
     >
       <UIcon name="i-lucide-search" aria-hidden="true" />
-      Search
+      <span>Search</span>
+      <span class="ml-2 inline-flex items-center gap-1 text-xs" aria-hidden="true">
+        <UKbd size="sm" :value="macOS ? 'meta' : 'ctrl'" />
+        <span>+</span>
+        <UKbd size="sm" value="K" />
+      </span>
     </UButton>
 
     <UModal
@@ -59,6 +65,7 @@
               content: 'workspace-search-palette-content',
               viewport: 'workspace-search-palette-viewport',
               item: 'workspace-search-result',
+              empty: query.trim() ? undefined : 'hidden',
             }"
             @keydown.capture="handlePaletteKeydown"
             @compositionstart="handleCompositionStart"
@@ -79,10 +86,8 @@
             </template>
 
             <template #empty>
-              <p class="workspace-search-hint" role="status">
-                {{ query.trim()
-                  ? `No matches for “${query.trim()}”.`
-                  : 'Type a cluster or star system name, or an object name or Location key from any star system.' }}
+              <p v-if="query.trim()" class="workspace-search-hint" role="status">
+                No matches for “{{ query.trim() }}”.
               </p>
             </template>
           </UCommandPalette>
@@ -93,8 +98,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CommandPaletteGroup, CommandPaletteItem } from '@nuxt/ui/components/CommandPalette.vue'
+import { useKbd } from '@nuxt/ui/composables/useKbd'
 import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 
@@ -113,10 +119,13 @@ type WorkspaceSearchPaletteGroup = CommandPaletteGroup<WorkspaceSearchPaletteIte
 const props = defineProps<{
   results: readonly SearchResult[]
   reveal: (target: SearchTarget) => Promise<RevealOutcome>
+  shortcutEnabled: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
 const query = defineModel<string>('query', { required: true })
+const { macOS } = useKbd()
+const searchShortcutKey = computed(() => macOS.value ? 'Meta+K' : 'Control+K')
 const closeFocus = useDialogCloseFocusBarrier(open)
 const searchOpener = ref<HTMLElement | null>(null)
 const searchBody = ref<HTMLElement | null>(null)
@@ -124,6 +133,8 @@ const resultsMode = ref(false)
 const isComposing = ref(false)
 let returnToOpener = true
 let selectionGeneration = 0
+let shortcutCompositionActive = false
+let listeningForSearchShortcut = false
 
 const paletteInputProps = {
   id: 'workspace-search-input',
@@ -153,6 +164,83 @@ watch(open, (isOpen) => {
   resultsMode.value = false
   isComposing.value = false
   if (!isOpen) selectionGeneration += 1
+})
+
+function isSearchShortcut(event: KeyboardEvent): boolean {
+  const primaryModifier = macOS.value
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey
+  return event.key.toLowerCase() === 'k'
+    && primaryModifier
+    && !event.altKey
+    && !event.shiftKey
+    && !event.getModifierState('AltGraph')
+}
+
+function isVisibleDialog(dialog: HTMLElement): boolean {
+  if (!dialog.isConnected || dialog.hasAttribute('hidden') || dialog.getAttribute('aria-hidden') === 'true') return false
+  if (dialog.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+  const state = dialog.getAttribute('data-state')
+  if (state !== null && state !== 'open') return false
+  const style = window.getComputedStyle(dialog)
+  const bounds = dialog.getBoundingClientRect()
+  return style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && bounds.width > 0
+    && bounds.height > 0
+}
+
+function anotherVisibleDialogOwnsShortcut(): boolean {
+  return [...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')]
+    .some(dialog => !dialog.classList.contains('workspace-search-dialog-content') && isVisibleDialog(dialog))
+}
+
+function handleSearchShortcut(event: KeyboardEvent): void {
+  if (!isSearchShortcut(event)
+    || event.defaultPrevented
+    || event.repeat
+    || event.isComposing
+    || event.keyCode === 229
+    || shortcutCompositionActive
+    || !props.shortcutEnabled
+    || anotherVisibleDialogOwnsShortcut()) return
+
+  event.preventDefault()
+  if (!open.value) {
+    open.value = true
+    return
+  }
+  void nextTick(focusSearchInput)
+}
+
+function handleShortcutCompositionStart(): void {
+  shortcutCompositionActive = true
+}
+
+function handleShortcutCompositionEnd(): void {
+  shortcutCompositionActive = false
+}
+
+function handleWindowBlur(): void {
+  shortcutCompositionActive = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleSearchShortcut)
+  window.addEventListener('compositionstart', handleShortcutCompositionStart)
+  window.addEventListener('compositionend', handleShortcutCompositionEnd)
+  window.addEventListener('blur', handleWindowBlur)
+  listeningForSearchShortcut = true
+})
+
+onBeforeUnmount(() => {
+  if (!listeningForSearchShortcut) return
+  window.removeEventListener('keydown', handleSearchShortcut)
+  window.removeEventListener('compositionstart', handleShortcutCompositionStart)
+  window.removeEventListener('compositionend', handleShortcutCompositionEnd)
+  window.removeEventListener('blur', handleWindowBlur)
+  handleWindowBlur()
+  listeningForSearchShortcut = false
 })
 
 function focusableElement(element: Element | null): HTMLElement | null {

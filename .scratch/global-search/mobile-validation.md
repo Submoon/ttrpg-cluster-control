@@ -1,6 +1,6 @@
 ---
 title: "Global search: actual mobile input validation"
-status: in-progress
+status: closed
 ---
 
 ## Evidence boundary
@@ -28,4 +28,6 @@ On 2026-10-30 the user reported: **“Nothing Phone 4a pro, firefox, et ça fonc
 
 The OS version, Firefox version and a recording/screenshots were not supplied. No broader physical-keyboard or screen-reader certification is claimed. This result is actual-device user testimony, separate from the coordinator's automated desktop/compact Chromium evidence.
 
-The user subsequently requested native Navbar/Toolbar/CommandPalette and proposed Tree. The preceding result remains valid for `afa33c00`; the new Palette changes the mobile input/list interaction, so a focused repeat on the updated branch preview is pending. See [the native presentation refactor](dashboard-refactor.md).
+The user subsequently requested native Navbar/Toolbar/CommandPalette and proposed Tree. After Vercel deployment **7443136252** for **dfc5c362bac9be64872f94ce6feb860cb8bdcb99** was confirmed ready, the coordinator requested a focused repeat on the rolling branch preview: software-keyboard entry, tapping an object result in another system, target visibility after keyboard dismissal, and draft preservation plus usable Search after Stay. The user answered **“Tout fonctionne sur le téléphone”** on 2026-10-30. This confirms the updated native Palette journey on the previously identified **Nothing Phone 4a Pro / Firefox**. No additional OS/browser version or media was supplied; the same evidence limits apply.
+
+The later redundant empty-hint removal and desktop keyboard-opening shortcut do not replace the phone input widget or its guarded activation/framing path. See [the native presentation refactor](dashboard-refactor.md) for those follow-up changes and automated evidence.

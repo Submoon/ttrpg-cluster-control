@@ -86,6 +86,7 @@ After success, show the map, close search and focus the map. Keep the query for 
 50. As a mobile Warden, I want to type with the software keyboard, scroll results, tap a result and see its framed map, so that the full flow works on a phone.
 51. As a Warden, I want drafts and the session query preserved across resizing or rotation, so that responsive presentation does not change the meaning or ownership of my work.
 52. As a Warden, I want search consultation and framing to create no data edit or Undo/Redo action, so that navigation cannot pollute the editing history.
+53. As a Warden, I want Control+K on Windows/Linux or Command+K on macOS to open Search and focus its query, including from an ordinary desktop Inspector input, so that I can begin consultation without changing my draft, map or active tool. Repeating the shortcut keeps Search open and preserves its query. Composition, handled/repeated events, other modifier combinations and competing dialogs/fullscreen panels retain their existing keyboard ownership.
 
 ## Implementation Decisions
 
@@ -125,6 +126,7 @@ After success, show the map, close search and focus the map. Keep the query for 
 - Opening, typing, hovering and keyboard result traversal remain consultation; none changes the map, tool, selection or draft. Activation must be deliberate, by supported keyboard or pointer/touch action.
 - Retain query state for the editor identity/session across closing, reopening and responsive reflow; reset it on workspace/cluster identity change or editor exit. Do not persist search history or add a map-navigation stack.
 - Support keyboard access, result traversal, Enter activation, touch activation, native input editing and composition. Scope search-owned keys to search; preserve native editing shortcuts and the editor's other shortcut owners.
+- The platform's primary modifier plus K opens Search when its editor entry is available; show a matching keyboard hint while retaining the visible button. Admit the chord before preventing its native default. Do not open behind exclusive overlays, pending confirmations, compact fullscreen panels or an active map gesture. An already open Search may refocus its query without closing, clearing or activating it.
 - Escape closes search first and, for simple dismissal, returns focus to its opener without also canceling another tool/draft or panning the map. Existing guard dialogs own focus while open. Successful reveal focuses the map; refused navigation must leave usable search or validation focus as appropriate.
 - Keep committed data and ordered persistence with the existing sole writer, shared transient editor state within its existing lifetime, and mounted geometry/focus/browser effects with their lifecycle owners. Search calculations accept data and return results; they do not depend on persistence or browser APIs.
 - Preserve application/request isolation and hydration safety. No schema, import/export format or domain-terminology change is required by this feature.
@@ -168,11 +170,13 @@ For implementation completion, run lint, type checking and affected behavior che
 - Searching or persisting unapplied draft values and geometry previews.
 - Automatically opening a system map for a system-name result, fitting an object's parent/siblings, or following routes/Station references as descendants.
 - Automatic data renaming, identity merging, raw-ID disambiguation or durable occurrence numbers.
-- Automatic Inspect opening, a prescribed header/sidebar/dialog layout, a mandatory global shortcut, durable query history or a new navigation stack.
+- Automatic Inspect opening, a prescribed header/sidebar/dialog layout, durable query history or a new navigation stack.
 - Replacing existing draft controllers, persistence/history ownership, map renderers or the editor architecture.
 - Product implementation, implementation-ticket creation, commits, pushes, PRs, GitHub label/comment/state changes or source-issue closure as part of this specification-writing task.
 
 ## Further Notes
+
+On 2026-10-30, after validating the native Palette on an actual phone, the user requested removal of the redundant initial input instruction and asked which ticket would provide Control+K. The coordinator attached the platform-aware opening shortcut to ticket 03 on the same feature branch. Story 53 records this additional entry point; the original matching, guarded activation, session and framing decisions remain authoritative.
 
 ### Source issue
 

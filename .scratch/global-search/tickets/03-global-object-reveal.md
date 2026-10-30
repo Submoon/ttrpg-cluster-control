@@ -28,7 +28,7 @@ None. [Find an object and frame its branch in the active system](02-active-syste
 
 ## Specification coverage
 
-Completes User Stories 2 and 24 and extends all applicable matching, identity, applied-data, draft, framing, mobile and session stories to every system. The complete 52-story specification is the final acceptance boundary; this is a functional extension, not a tests-only integration ticket.
+Completes User Stories 2 and 24 and extends all applicable matching, identity, applied-data, draft, framing, mobile and session stories to every system. The complete specification, including the later opening-shortcut story 53, is the final acceptance boundary; this is a functional extension, not a tests-only integration ticket.
 
 ## Acceptance criteria
 
@@ -44,6 +44,7 @@ Completes User Stories 2 and 24 and extends all applicable matching, identity, a
 - [ ] A representative larger workspace proves that later matches are reachable and selection remains usable without silent truncation. Do not infer numerical capacity/latency guarantees from tiny existing fixtures.
 - [ ] Real command and public-browser scenarios cover cluster-to-object, system-A-to-system-B, same-system reactivation, identical imports, context/target changes during confirmation and remembered-camera races. Include all earlier slice regressions and full-spec acceptance evidence.
 - [ ] Record actual software-keyboard/input evidence for the mobile journey and clearly distinguish any remaining physical keyboard/screen-reader certification limits from browser emulation. Do not mark the full mobile criterion satisfied solely by viewport emulation.
+- [ ] Remove the redundant initial empty-query instruction while keeping an inviting input and explicit no-match state. Control+K on Windows/Linux and Command+K on macOS open Search with query focus and a visible keyboard hint; repeated opening preserves the query. Preserve ordinary desktop drafts, competing dialog/fullscreen-panel ownership, composition and active gestures.
 
 ## Verification and completion boundary
 

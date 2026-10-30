@@ -53,6 +53,60 @@ test('workspace search is visibly available from system and cluster map contexts
   await expect(mapContext.getByRole('button', { name: 'Search', exact: true })).toBeVisible()
 })
 
+test('Ctrl+K opens Search from a dirty Inspector and preserves its session and map state', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true, includeHidden: true })
+  const systemContent = systemMap.locator('.system-map-content')
+  const initialCamera = await systemContent.getAttribute('transform')
+  if (!initialCamera) throw new Error('The active system map has no rendered camera transform.')
+
+  await systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true }).click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector).toBeVisible()
+  await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
+  const objectName = inspector.getByLabel('Name', { exact: true })
+  await objectName.fill('Primary Star draft')
+  const selectedObject = systemMap.locator('.system-object.is-selected')
+  await expect(selectedObject).toHaveCount(1)
+  const selectMode = page.getByRole('group', { name: 'Map interaction mode' })
+    .getByRole('button', { name: 'Select', exact: true })
+
+  await page.keyboard.press('Control+k')
+
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toBeFocused()
+  await expect(objectName).toHaveValue('Primary Star draft')
+  await expect(selectedObject).toHaveCount(1)
+  await expect(systemContent).toHaveAttribute('transform', initialCamera)
+  await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
+
+  await query.fill('Vesper')
+  await expect(searchDialog.getByRole('option', { name: /Vesper.*Star System/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(objectName).toBeFocused()
+  await expect(objectName).toHaveValue('Primary Star draft')
+  await expect(systemContent).toHaveAttribute('transform', initialCamera)
+  await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
+
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue('Vesper')
+  await expect(query).toBeFocused()
+
+  await query.evaluate(input => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('Search query is not a native input.')
+    input.blur()
+  })
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toBeFocused()
+  await expect(query).toHaveValue('Vesper')
+})
+
 test('a system result can be searched without changing the map and deliberately revealed on the cluster', async ({ page }, testInfo) => {
   await createSingleSystemWorkspace(page)
 

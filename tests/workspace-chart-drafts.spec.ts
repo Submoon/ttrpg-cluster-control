@@ -681,7 +681,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     await page.reload()
     await openWorkspaceHierarchy(page)
     await expect(page.getByRole('complementary', { name: 'System hierarchy' })
-      .getByRole('button', { name: /New jump point/ })).toBeVisible()
+      .getByRole('treeitem', { name: /New jump point/ })).toBeVisible()
   } finally {
     await releaseChartWriteGate(page)
   }
