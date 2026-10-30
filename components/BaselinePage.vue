@@ -707,7 +707,7 @@ async function waitForSearchPresentation(signal: AbortSignal): Promise<SearchPre
   ])
   await nextTick()
   if (signal.aborted) return 'cancelled'
-  const destinationCanvas = document.querySelector<HTMLElement>('.workspace-map-canvas-region > .workspace-map-canvas')
+  const destinationCanvas = document.querySelector<HTMLElement>('.workspace-map-canvas-region .workspace-map-canvas')
   if (!destinationCanvas) return 'unavailable'
   return await waitForStableSearchPresentationLayout(destinationCanvas, signal)
 }
