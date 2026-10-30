@@ -241,6 +241,16 @@ async function expectAddMode(page: Page, label: RegExp): Promise<void> {
   })).toBeVisible()
 }
 
+async function expectInactiveAdd(page: Page): Promise<void> {
+  const add = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
+  await expect(add).toHaveAttribute('aria-pressed', 'false')
+  await expect(add).toHaveAttribute('aria-expanded', 'false')
+  await expect(add).toHaveAccessibleName('Add to map')
+  await expect(add.getByText('Add', { exact: true })).toBeVisible()
+  await expect(add.locator('kbd')).toHaveText('A')
+  await expect(add.locator('#workspace-dock-add-type')).toHaveCount(0)
+}
+
 async function visibleMapBackgroundPair(map: Locator): Promise<[ScreenPoint, ScreenPoint]> {
   return map.evaluate((element) => {
     const svg = element instanceof SVGSVGElement ? element : element.querySelector('svg')
@@ -749,8 +759,7 @@ test('Object Add suppresses long-press inspection and second-contact takeover pr
     await workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true }).click()
     await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
-    await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true }))
-      .toHaveText('Add')
+    await expectInactiveAdd(page)
     await expectWorkspaceMode(page, 'Move')
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)
@@ -788,7 +797,7 @@ test('Orbit Add ring drag cancels on Escape and camera takeover stays navigation
     await expect(controls).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true }))
       .toHaveCount(0)
-    await expect(addToggle).toHaveText('Add')
+    await expectInactiveAdd(page)
     await expectWorkspaceMode(page, 'Select')
     await page.mouse.up()
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)

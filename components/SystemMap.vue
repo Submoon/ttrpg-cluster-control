@@ -1,5 +1,12 @@
 <template>
   <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <p id="system-map-keyboard-help" class="sr-only">
+      {{ props.moveTargeting
+        ? 'Choose a destination with the arrow keys or click the map. Confirm or cancel the preview in the Placement controls.'
+        : props.creationType
+          ? 'In Add mode, click a location or focus this map and press Enter or Space to choose its visible center. Arrow keys pan the map.'
+          : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.' }}
+    </p>
     <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
       <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= minimumZoomScale * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
@@ -13,11 +20,7 @@
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${system.name} star system map`"
-      :aria-description="props.moveTargeting
-        ? 'Choose a destination with the arrow keys or click the map. Confirm or cancel the preview in the Placement controls.'
-        : props.creationType
-          ? 'In Add mode, click a location or focus this map and press Enter or Space to choose its visible center. Arrow keys pan the map.'
-          : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.'"
+      aria-describedby="workspace-map-tool-shortcut-help system-map-keyboard-help"
       :data-system-id="system.id"
       :data-system-object-move-targeting="props.moveTargeting ? 'true' : undefined"
       tabindex="0"
