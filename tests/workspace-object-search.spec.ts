@@ -11,6 +11,7 @@ import {
   createSingleSystemWorkspace,
   jsonMapImportInput,
   openWorkspaceHierarchy,
+  panMap,
   resolveImportReview,
   returnToClusterMap,
   setHeaderMapActionsOpen,
@@ -230,20 +231,28 @@ function scaleFromTransform(transform: string | null): number {
   return Number(scale)
 }
 
-test('search frames the selected nested object and its rotated hosted branch below 25 percent', async ({ page }, testInfo) => {
-  const fixture = branchSearchMap()
+async function importAndOpenBranchSearchSystem(
+  page: Page,
+  fixture: ReturnType<typeof branchSearchMap>,
+  fileName: string,
+): Promise<Locator> {
   await createSingleSystemWorkspace(page)
   await setHeaderMapActionsOpen(page, true)
   await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
   await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), 'branch-atlas.json', fixture.content)
+  await setJsonFile(jsonMapImportInput(page), fileName, fixture.content)
   await resolveImportReview(page.getByRole('dialog', { name: 'Review import', exact: true }), 'confirm')
 
   await returnToClusterMap(page)
   await setWorkspaceMapMode(page, 'Navigate')
   const importedSystem = page.getByRole('button', { name: `Open ${fixture.systemName} system map`, exact: true })
   await importedSystem.click()
-  const systemMap = page.getByRole('group', { name: `${fixture.systemName} star system map`, exact: true })
+  return page.getByRole('group', { name: `${fixture.systemName} star system map`, exact: true })
+}
+
+test('search caps an isolated leaf while keeping a readable hosted branch beside the Inspector', async ({ page }, testInfo) => {
+  const fixture = branchSearchMap()
+  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-readable.json')
   const content = systemMap.locator('.system-map-content')
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
@@ -312,10 +321,23 @@ test('search frames the selected nested object and its rotated hosted branch bel
     path: readableScreenshot,
     contentType: 'image/png',
   })
+})
+
+test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
+  const fixture = branchSearchMap()
+  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
+  const content = systemMap.locator('.system-map-content')
+  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  await inspectToggle.click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector).toBeVisible()
 
   const beforeFrame = await content.getAttribute('transform')
   if (!beforeFrame) throw new Error('The imported system has no rendered camera transform.')
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+  await searchButton.click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
   await expect(searchDialog).toBeVisible()
   await query.fill(fixture.targetName)
   const result = searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) })
@@ -386,14 +408,41 @@ test('search frames the selected nested object and its rotated hosted branch bel
   const screenshotPath = testInfo.outputPath('object-search-large-rotated-branch.png')
   await page.screenshot({ path: screenshotPath, animations: 'disabled' })
   await testInfo.attach('object-search-large-rotated-branch', { path: screenshotPath, contentType: 'image/png' })
+})
+
+test('repeated object search recenters the map and restores its lower zoom floor after navigation', async ({ page }) => {
+  const fixture = branchSearchMap()
+  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-revisit.json')
+  const content = systemMap.locator('.system-map-content')
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+
+  await searchButton.click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  await query.fill(fixture.targetName)
+  await searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) }).click()
+  await expect(searchDialog).toHaveCount(0)
+  await expect(systemMap).toBeFocused()
+
+  const initialFrameCamera = await content.getAttribute('transform')
+  if (!initialFrameCamera) throw new Error('The search framed no rendered camera transform.')
+  const frameScale = scaleFromTransform(initialFrameCamera)
+  expect(frameScale).toBeLessThan(0.25)
+
+  await setWorkspaceMapMode(page, 'Navigate')
+  await panMap(page, systemMap, { x: 36, y: 24 })
+  const pannedCamera = await content.getAttribute('transform')
+  if (!pannedCamera) throw new Error('The manually panned system has no camera transform.')
+  expect(pannedCamera).not.toBe(initialFrameCamera)
 
   const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await searchButton.click()
   await expect(searchDialog).toBeVisible()
   await query.fill(fixture.targetName)
   await searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
+  await expect(content).toHaveAttribute('transform', initialFrameCamera)
   expect(scaleFromTransform(await content.getAttribute('transform'))).toBeCloseTo(frameScale, 3)
   await expect(zoomOut).toBeDisabled()
 
