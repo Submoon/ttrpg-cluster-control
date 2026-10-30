@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -408,6 +408,7 @@
               :save-error="saveError"
               :export-error="exportError"
               @edit-chart-names="beginChartNamesEdit"
+              @preview-player-view="playerPreviewOpen = true"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @show-chart-details="showChartDetails"
@@ -472,10 +473,20 @@
       :form-error="formError"
       :target-system-name="chartDraftSystemName"
       @update:open="setChartNamesDialogOpen"
+      v-model:player-title="playerTitle"
+      v-model:publication="publication"
       @apply="submitNames"
       @discard="cancelChartNamesEdit"
       @resolve-transition="resolveTransitionChoice"
     />
+
+    <PlayerViewPreviewDialog
+      v-if="workspace && playerClusterDocument"
+      :open="playerPreviewOpen"
+      :document="playerClusterDocument"
+      @update:open="playerPreviewOpen = $event"
+    />
+
 
     <WorkspaceHistoryCapacityDialog :request="historyCapacityRequest" @resolve="resolveHistoryCapacity" />
 
@@ -487,7 +498,7 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
@@ -500,6 +511,7 @@ import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
+import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 
 const {
   workspace,
@@ -521,6 +533,8 @@ let readEditorHistoryBlockReason: () => string | null = () => 'The editor is ope
 let endCleanHistorySessions: () => void = () => undefined
 let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = () => undefined
 const historyOpen = ref(false)
+const playerPreviewOpen = ref(false)
+const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
 const history = useWorkspaceHistory({
   workspace,
   appliedRevision,
@@ -547,7 +561,7 @@ const {
   selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
 } = navigation
 const {
-  clusterName, systemName, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
+  clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
   transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
   cancelNamesEdit: cancelChartNamesEdit, setDialogOpen: setChartNamesDialogOpen,
   resolveTransition, resolveTransitionChoice, beginNamesEdit: beginChartNamesEdit,
@@ -915,7 +929,7 @@ const {
 
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
-  if (chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
+  if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
   }
@@ -929,7 +943,7 @@ endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 useWorkspaceHistoryShortcuts({
   status: historyStatus,
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,

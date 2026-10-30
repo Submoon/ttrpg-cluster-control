@@ -522,12 +522,12 @@ test('print-light image export preserves the live dark workspace and hidden char
   await expect(systemMap).toBeVisible()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartDialog.getByLabel('Star system').fill('Unapplied Vesper')
   await page.keyboard.press('Escape')
   await expect(chartDialog).toBeHidden()
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' })
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' })
   await expect(resumeDraft).toBeVisible()
 
   const appliedBefore = await downloadJson(page, 'Export star system JSON')
@@ -647,10 +647,10 @@ for (const mapCase of mapCases) {
         if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
         await page.getByRole('button', { name: 'Chart details', exact: true }).click()
         const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-        await inspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-        const names = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+        await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+        const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
         await names.getByLabel('Star system', { exact: true }).fill(expectedTitle)
-        await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+        await names.getByRole('button', { name: 'Apply details', exact: true }).click()
         map = page.getByRole('group', { name: `${expectedTitle} star system map`, exact: true })
         await expect(map).toBeVisible()
       }
@@ -1033,8 +1033,8 @@ test('failed saves preserve the latest applied image and separate PNG export err
   await expect(map).toBeVisible()
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-  await inspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const chartNames = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const chartNames = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   const expectedTitle = 'Vesper Prime Applied Despite Save Failure'
   await chartNames.getByLabel('Star system', { exact: true }).fill(expectedTitle)
 
@@ -1059,7 +1059,7 @@ test('failed saves preserve the latest applied image and separate PNG export err
   })
 
   try {
-    await chartNames.getByRole('button', { name: 'Apply names', exact: true }).click()
+    await chartNames.getByRole('button', { name: 'Apply details', exact: true }).click()
     await expect(chartNames).toBeHidden()
     const feedback = activeWorkspaceFeedback(page)
     await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')

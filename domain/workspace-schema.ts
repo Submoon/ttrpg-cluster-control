@@ -100,6 +100,7 @@ export function isStarSystem(value: unknown): value is StarSystem {
   }
 
   const name = value.name
+  const publication = value.publication
   const objects = value.objects
   const orbits = value.orbits
   if (
@@ -107,13 +108,21 @@ export function isStarSystem(value: unknown): value is StarSystem {
     || !name.trim()
     || name !== name.trim()
     || name.length > maxNameLength
+    || !isPublicationMode(publication)
     || !isArrayOf(objects, isSystemObject)
     || !isArrayOf(orbits, isOrbit)
   ) {
     return false
   }
 
-  return isSystemStructureValid({ id: value.id, name, objects, orbits })
+  return isSystemStructureValid({ id: value.id, name, publication, objects, orbits })
+}
+
+function isPublicationMode(value: unknown): value is StarSystem['publication'] {
+  return value === 'hidden'
+    || value === 'unknown'
+    || value === 'known-type'
+    || value === 'revealed'
 }
 
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
@@ -135,14 +144,25 @@ type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout
  * @param value Unknown persisted or imported workspace candidate.
  * @returns False if structure, entity IDs/references, layout values, or saved field values are invalid.
  */
-function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
-  if (!isRecord(value) || typeof value.id !== 'string' || !value.id || !isRecord(value.cluster)) {
+function isStoredLocalWorkspace(
+  value: unknown,
+  allowLegacyLayout = false,
+): value is StoredLocalWorkspace {
+  if (
+    !isRecord(value)
+    || value.version !== 2
+    || typeof value.id !== 'string'
+    || !value.id
+    || (!allowLegacyLayout && value.objectFieldSettings === undefined)
+    || !isRecord(value.cluster)
+  ) {
     return false
   }
 
   const cluster = value.cluster
   const clusterId = cluster.id
   const clusterName = cluster.name
+  const playerTitle = cluster.playerTitle
   const systems = cluster.systems
   const routes = cluster.routes
   const layout = value.layout
@@ -155,10 +175,20 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     || !clusterName.trim()
     || clusterName !== clusterName.trim()
     || clusterName.length > maxNameLength
+    || typeof playerTitle !== 'string'
+    || !playerTitle.trim()
+    || playerTitle !== playerTitle.trim()
+    || playerTitle.length > maxNameLength
     || !isArrayOf(systems, isStarSystem)
     || systems.length === 0
     || !isArrayOf(routes, isJumpRoute)
     || !isRecord(layout)
+    || (!allowLegacyLayout && (
+      !isCurrentOrbitRadii(layout.orbitRadii)
+      || layout.orbitEllipseRadii !== undefined
+      || !isCurrentOrbitRotations(layout.orbitRotations)
+      || !isRecord(layout.objectAngles)
+    ))
     || !isPointRecord(systemPositionsValue)
     || (unresolvedExitPositionsValue !== undefined && !isPointRecord(unresolvedExitPositionsValue))
     || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
@@ -224,7 +254,13 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
 
   const positions = systemPositionsValue
   const unresolvedExitPositions = unresolvedExitPositionsValue ?? {}
-  const validatedCluster: JumpCluster = { id: clusterId, name: clusterName, systems, routes }
+  const validatedCluster: JumpCluster = {
+    id: clusterId,
+    name: clusterName,
+    playerTitle,
+    systems,
+    routes,
+  }
   const jumpPoints = new Map(jumpPointsInCluster(validatedCluster).map(reference => [reference.point.id, reference]))
   const orbitRadii = normalizeOrbitRadii(
     layout.orbitRadii ?? {},
@@ -278,6 +314,23 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
       isPoint(positions[system.id])
       && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
     )
+}
+
+function isCurrentOrbitRadii(value: unknown): boolean {
+  return isRecord(value)
+    && Object.values(value).every(radii => isRecord(radii)
+      && typeof radii.horizontal === 'number'
+      && Number.isFinite(radii.horizontal)
+      && typeof radii.vertical === 'number'
+      && Number.isFinite(radii.vertical))
+}
+
+function isCurrentOrbitRotations(value: unknown): boolean {
+  return isRecord(value)
+    && Object.values(value).every(rotation => typeof rotation === 'number'
+      && Number.isFinite(rotation)
+      && rotation >= 0
+      && rotation < 360)
 }
 
 /**
@@ -350,8 +403,33 @@ export function withDefaultJumpLevels(value: unknown): unknown {
  * @returns Current workspace shape, or null when validation or layout normalization fails.
  */
 export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
-  const restored = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
-  if (!isStoredLocalWorkspace(restored)) {
+  if (!isRecord(value)) return null
+
+  const version = value.version
+  const isLegacy = version === undefined
+  let currentValue: unknown = value
+  if (isLegacy) {
+    const cluster = value.cluster
+    if (!isRecord(cluster) || !Array.isArray(cluster.systems)) return null
+    currentValue = {
+      ...value,
+      version: 2,
+      cluster: {
+        ...cluster,
+        playerTitle: 'Player Jump Cluster',
+        systems: cluster.systems.map(system => isRecord(system)
+          ? { ...system, publication: 'hidden' }
+          : system),
+      },
+    }
+  } else if (version !== 2) {
+    return null
+  }
+
+  const restored = isLegacy
+    ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
+    : currentValue
+  if (!isStoredLocalWorkspace(restored, isLegacy)) {
     return null
   }
 

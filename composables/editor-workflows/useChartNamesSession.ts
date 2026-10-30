@@ -1,5 +1,11 @@
 import { computed, ref, shallowRef, watch, type ComputedRef } from 'vue'
-import { createLocalWorkspace, renameLocalWorkspace, type LocalWorkspace, type StarSystem } from '../../domain/workspace'
+import {
+  createLocalWorkspace,
+  updateChartDetails,
+  type LocalWorkspace,
+  type PublicationMode,
+  type StarSystem,
+} from '../../domain/workspace'
 import type { EditorWorkflowOptions } from './types'
 
 export interface ChartNamesSession {
@@ -8,9 +14,11 @@ export interface ChartNamesSession {
   systemId: string
   initialClusterName: string
   initialSystemName: string
+  initialPlayerTitle: string
+  initialPublication: PublicationMode
 }
 
-/** Owns the resumable chart-name draft; Apply validates before publishing changes or finishing a clean edit. */
+/** Owns the resumable chart-details draft; Apply validates before publishing changes or finishing a clean edit. */
 export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'workspace' | 'saveState' | 'saveError' | 'mutations' | 'initializeWorkspace'> & {
   selectedSystem: ComputedRef<StarSystem | undefined>
   beforeWorkspaceOperation?: () => Promise<boolean>
@@ -26,6 +34,8 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   } = options
   const clusterName = ref('New Jump Cluster')
   const systemName = ref('First System')
+  const playerTitle = ref('Player Jump Cluster')
+  const publication = ref<PublicationMode>('known-type')
   const editing = ref(false)
   const formError = ref('')
   const session = shallowRef<ChartNamesSession | null>(null)
@@ -34,8 +44,12 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   const hasDraft = computed(() => session.value !== null)
   const hasChangedNames = computed(() => {
     const active = session.value
-    return !!active && (clusterName.value.trim() !== active.initialClusterName
-      || systemName.value.trim() !== active.initialSystemName)
+    return !!active && (
+      clusterName.value.trim() !== active.initialClusterName
+      || systemName.value.trim() !== active.initialSystemName
+      || playerTitle.value.trim() !== active.initialPlayerTitle
+      || publication.value !== active.initialPublication
+    )
   })
   const hasUncommittedNames = computed(() => {
     const active = session.value
@@ -66,6 +80,12 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   watch(() => selectedSystem.value?.name, (value) => {
     if (session.value === null && value !== undefined) systemName.value = value
   }, { immediate: true })
+  watch(() => workspace.value?.cluster.playerTitle, (value) => {
+    if (session.value === null && value !== undefined) playerTitle.value = value
+  }, { immediate: true })
+  watch(() => selectedSystem.value?.publication, (value) => {
+    if (session.value === null && value !== undefined) publication.value = value
+  }, { immediate: true })
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -82,9 +102,13 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
       systemId: target.id,
       initialClusterName: currentWorkspace.cluster.name,
       initialSystemName: target.name,
+      initialPlayerTitle: currentWorkspace.cluster.playerTitle,
+      initialPublication: target.publication,
     }
     clusterName.value = currentWorkspace.cluster.name
     systemName.value = target.name
+    playerTitle.value = currentWorkspace.cluster.playerTitle
+    publication.value = target.publication
     editing.value = true
     formError.value = ''
   }
@@ -93,14 +117,21 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   async function apply(): Promise<boolean> {
     const submittedSession = session.value
     if (!submittedSession) {
-      formError.value = 'Start a chart-name edit before applying these names.'
+      formError.value = 'Start a chart-details edit before applying these values.'
       return false
     }
 
     const expectedSessionId = submittedSession.id
     const submittedClusterName = clusterName.value
     const submittedSystemName = systemName.value
-    const submittedSignature = JSON.stringify([submittedClusterName, submittedSystemName])
+    const submittedPlayerTitle = playerTitle.value
+    const submittedPublication = publication.value
+    const submittedSignature = JSON.stringify([
+      submittedClusterName,
+      submittedSystemName,
+      submittedPlayerTitle,
+      submittedPublication,
+    ])
     if (!await beforeWorkspaceOperation()) return false
     if (session.value?.id !== expectedSessionId) return false
 
@@ -108,7 +139,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     const currentWorkspace = workspace.value
     if (!currentWorkspace || !active) return false
     const isSubmittedSessionCurrent = (): boolean => session.value?.id === active.id
-      && JSON.stringify([clusterName.value, systemName.value]) === submittedSignature
+      && JSON.stringify([clusterName.value, systemName.value, playerTitle.value, publication.value]) === submittedSignature
 
     try {
       if (currentWorkspace.cluster.id !== active.clusterId) {
@@ -117,26 +148,43 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
       if (!currentWorkspace.cluster.systems.some(system => system.id === active.systemId)) {
         throw new Error('The star system for this draft no longer exists.')
       }
-      renameLocalWorkspace(currentWorkspace, submittedClusterName, submittedSystemName, active.systemId)
-      const submittedNamesChanged = submittedClusterName.trim() !== active.initialClusterName
+      updateChartDetails(currentWorkspace, active.systemId, {
+        clusterName: submittedClusterName,
+        systemName: submittedSystemName,
+        playerTitle: submittedPlayerTitle,
+        publication: submittedPublication,
+      })
+      const submittedValuesChanged = submittedClusterName.trim() !== active.initialClusterName
         || submittedSystemName.trim() !== active.initialSystemName
-      if (!submittedNamesChanged) {
+        || submittedPlayerTitle.trim() !== active.initialPlayerTitle
+        || submittedPublication !== active.initialPublication
+      if (!submittedValuesChanged) {
         if (!isSubmittedSessionCurrent()) return false
         session.value = null
         editing.value = false
         formError.value = ''
-        syncNames(active.systemId)
+        syncValues(active.systemId)
         return true
       }
 
+      const publicationDetailsChanged = submittedPlayerTitle.trim() !== active.initialPlayerTitle
+        || submittedPublication !== active.initialPublication
+
       const result = await mutations.execute({
         action: {
-          kind: 'rename',
-          label: 'Rename Jump Cluster and star system',
+          kind: publicationDetailsChanged ? 'update' : 'rename',
+          label: publicationDetailsChanged
+            ? 'Update player-facing chart details'
+            : 'Rename Jump Cluster and star system',
           target: { kind: 'cluster', id: active.clusterId },
           parent: { kind: 'system', id: active.systemId },
         },
-        prepare: current => renameLocalWorkspace(current, submittedClusterName, submittedSystemName, active.systemId),
+        prepare: current => updateChartDetails(current, active.systemId, {
+          clusterName: submittedClusterName,
+          systemName: submittedSystemName,
+          playerTitle: submittedPlayerTitle,
+          publication: submittedPublication,
+        }),
         isCurrent: isSubmittedSessionCurrent,
       })
       if (result.status === 'rejected') {
@@ -152,7 +200,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
       session.value = null
       editing.value = false
       formError.value = ''
-      syncNames(active.systemId)
+      syncValues(active.systemId)
       return true
     } catch (error) {
       if (isSubmittedSessionCurrent()) {
@@ -176,14 +224,20 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     }
   }
 
-  function syncNames(targetSystemId?: string): void {
+  function syncValues(targetSystemId?: string): void {
     const current = workspace.value
     const target = current?.cluster.systems.find(system => system.id === targetSystemId) ?? selectedSystem.value
-    if (current) clusterName.value = current.cluster.name
-    if (target) systemName.value = target.name
+    if (current) {
+      clusterName.value = current.cluster.name
+      playerTitle.value = current.cluster.playerTitle
+    }
+    if (target) {
+      systemName.value = target.name
+      publication.value = target.publication
+    }
   }
 
-  /** Restores committed names for the captured target and discards the chart-name draft. */
+  /** Restores committed chart details for the captured system and discards the session. */
   function discard(expectedId?: number): void {
     const active = session.value
     if (!active || (expectedId !== undefined && active.id !== expectedId)) return
@@ -193,6 +247,8 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     if (current && target) {
       clusterName.value = current.cluster.name
       systemName.value = target.name
+      playerTitle.value = current.cluster.playerTitle
+      publication.value = target.publication
     }
     editing.value = false
     formError.value = ''
@@ -207,6 +263,8 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   return {
     clusterName,
     systemName,
+    playerTitle,
+    publication,
     editing,
     formError,
     session,

@@ -121,13 +121,27 @@ export type JumpRoute = {
 export interface StarSystem {
   id: string
   name: string
+  publication: PublicationMode
   objects: SystemObject[]
   orbits: Orbit[]
+}
+
+/** Controls the name and type information available in the Warden's player-facing preview. */
+export type PublicationMode = 'hidden' | 'unknown' | 'known-type' | 'revealed'
+
+/** Validated values that update private and player-facing chart labels plus one system's publication. */
+export interface ChartDetailsChanges {
+  clusterName: string
+  systemName: string
+  playerTitle: string
+  publication: PublicationMode
 }
 
 export interface JumpCluster {
   id: string
   name: string
+  /** Player-facing title, independent from the private Jump Cluster name. */
+  playerTitle: string
   systems: StarSystem[]
   routes: JumpRoute[]
 }
@@ -141,6 +155,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
+  version: 2
   id: string
   cluster: JumpCluster
   layout: {
@@ -171,7 +186,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 1
+  version: 2
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -180,7 +195,7 @@ export type JumpClusterExport = {
 
 export type StarSystemExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 1
+  version: 2
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings

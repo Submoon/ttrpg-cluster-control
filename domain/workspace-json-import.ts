@@ -24,18 +24,22 @@ import {
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
 import { isObjectFieldSettings, isRecord, objectFieldValidationError } from './workspace-validation'
 
+type ImportableMap =
+  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 })
+  | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 })
+
 /**
- * Validates a version 1 Cluster or standalone-system export, including entity references and layout ownership.
+ * Validates a supported version 1 or version 2 Cluster or standalone-system export.
  * @param value Unknown parsed JSON value.
  * @returns True only when the export and every saved map-specific value satisfy current domain rules.
  */
-function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemExport {
+function isImportedMap(value: unknown): value is ImportableMap {
   if (!isRecord(value)) return false
   const settings = value.objectFieldSettings
   const layout = value.layout
   if (
     value.format !== 'ttrpg-cluster-control-map'
-    || value.version !== 1
+    || (value.version !== 1 && value.version !== 2)
     || !isObjectFieldSettings(settings)
     || !isRecord(layout)
     || layout.version !== 1
@@ -75,6 +79,7 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
     while (validationIds.has(validationId)) validationId = crypto.randomUUID()
 
     const candidate = {
+      version: 2,
       id: validationId,
       cluster,
       objectFieldSettings: settings,
@@ -83,7 +88,7 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
         unresolvedExitPositions: layout.unresolvedExitPositions,
         orbitRadii,
         orbitRotations,
-        objectAngles: layout.objectAngles,
+        objectAngles: layout.objectAngles ?? {},
       },
     }
     if (!isLocalWorkspace(candidate)) return false
@@ -116,6 +121,42 @@ function isImportedMap(value: unknown): value is JumpClusterExport | StarSystemE
     && system.objects.every(object =>
       objectFieldValidationError(object, settings) === null,
     )
+}
+
+/**
+ * Applies only the explicit version 1 disclosure and compatibility defaults before validation.
+ * Version 2 values remain untouched so malformed current data cannot be repaired on import.
+ */
+function normalizeLegacyMap(value: unknown): unknown {
+  if (!isRecord(value) || value.version !== 1) return value
+
+  if (value.type === 'cluster' && isRecord(value.cluster)) {
+    const cluster = value.cluster
+    return {
+      ...value,
+      cluster: {
+        ...cluster,
+        playerTitle: 'Player Jump Cluster',
+        systems: Array.isArray(cluster.systems)
+          ? cluster.systems.map(system => isRecord(system)
+            ? { ...system, publication: 'hidden' }
+            : system)
+          : cluster.systems,
+      },
+    }
+  }
+
+  if (value.type === 'system' && isRecord(value.system)) {
+    return { ...value, system: { ...value.system, publication: 'hidden' } }
+  }
+
+  return value
+}
+
+function prepareImportedMap(value: unknown): unknown {
+  const normalized = normalizeLegacyMap(value)
+  if (!isRecord(value) || value.version !== 1) return normalized
+  return withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(normalized))
 }
 
 /**
@@ -227,9 +268,9 @@ function remapImportedSystem(
  * @throws If the export is invalid, same-name custom fields conflict, or the proposed workspace fails validation.
  */
 export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
-  const map = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
+  const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
   }
 
   const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
@@ -388,14 +429,14 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     map.layout.orbitEllipseRadii ?? {},
   )
   if (!importedOrbitRadii) {
-    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
   }
   for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
     layout.orbitRadii[ids.get(sourceId)!] = radii
   }
   const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
   if (!importedOrbitRotations) {
-    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
   }
   for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
     layout.orbitRotations[ids.get(sourceId)!] = rotation
@@ -443,9 +484,9 @@ export function jsonImportReviewEffects(
   value: unknown,
   prepared: PreparedJsonImport,
 ): { signature: string; existingFieldIds: string[] } {
-  const map = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
+  const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
   }
 
   const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({

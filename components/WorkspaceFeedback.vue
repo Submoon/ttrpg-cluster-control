@@ -1,14 +1,14 @@
 <template>
   <div class="workspace-feedback-content">
     <div v-if="props.hasChartNameDraft" class="workspace-feedback-draft" role="status" aria-live="polite">
-      <span class="feedback">{{ props.hasUncommittedNames ? 'Unapplied chart-name changes' : 'Chart names ready to resume' }}</span>
+      <span class="feedback">{{ props.hasUncommittedNames ? 'Unapplied chart details' : 'Chart details ready to resume' }}</span>
       <UButton
         class="workspace-control resume-chart-draft"
         color="neutral"
         variant="outline"
         size="xs"
-        aria-label="Resume chart name draft"
-        title="Resume chart name draft"
+        aria-label="Resume chart details draft"
+        title="Resume chart details draft"
         @click="emit('resume-chart-draft')"
       >
         Resume

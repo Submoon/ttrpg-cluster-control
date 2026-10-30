@@ -16,6 +16,60 @@ export type WorldPoint = { x: number; y: number }
 
 export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
 
+type WorkspaceWriteFailureGate = {
+  originalPut: typeof IDBObjectStore.prototype.put
+  abortCurrentWrites: number
+  currentWriteCount: number
+}
+
+type WorkspaceWriteFailureWindow = Window & { __workspaceWriteFailureGate?: WorkspaceWriteFailureGate }
+
+/** Aborts a bounded number of current-workspace writes to exercise durable-save recovery. */
+export async function installWorkspaceWriteFailureGate(
+  page: import('@playwright/test').Page,
+  abortCurrentWrites = 1,
+): Promise<void> {
+  await page.evaluate((abortCount) => {
+    const trackedWindow = window as WorkspaceWriteFailureWindow
+    const originalPut = IDBObjectStore.prototype.put
+    const gate: WorkspaceWriteFailureGate = { originalPut, abortCurrentWrites: abortCount, currentWriteCount: 0 }
+    trackedWindow.__workspaceWriteFailureGate = gate
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      const request = originalPut.call(this, value, key)
+      const isCurrentWorkspaceWrite = this.transaction.db.name === 'ttrpg-cluster-control'
+        && this.name === 'workspace'
+        && key === 'current'
+        && this.transaction.mode === 'readwrite'
+      if (isCurrentWorkspaceWrite) {
+        gate.currentWriteCount += 1
+        if (gate.abortCurrentWrites > 0) {
+          gate.abortCurrentWrites -= 1
+          this.transaction.abort()
+        }
+      }
+      return request
+    }
+  }, abortCurrentWrites)
+}
+
+export async function readWorkspaceWriteFailureCount(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const gate = (window as WorkspaceWriteFailureWindow).__workspaceWriteFailureGate
+    if (!gate) throw new Error('The workspace write-failure gate is not installed.')
+    return gate.currentWriteCount
+  })
+}
+
+export async function restoreWorkspaceWriteFailureGate(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const trackedWindow = window as WorkspaceWriteFailureWindow
+    const gate = trackedWindow.__workspaceWriteFailureGate
+    if (!gate) return
+    IDBObjectStore.prototype.put = gate.originalPut
+    delete trackedWindow.__workspaceWriteFailureGate
+  })
+}
+
 /** Captures real map export blobs so assertions can inspect their serialized contents. */
 export async function captureMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
   await page.addInitScript(() => {
@@ -46,6 +100,7 @@ export type ExportedObject = {
 export type ExportedSystem = {
   id: string
   name: string
+  publication?: 'hidden' | 'unknown' | 'known-type' | 'revealed'
   objects: ExportedObject[]
   orbits: Array<{ id: string; hostId: string | null; center?: WorldPoint; order: number }>
 }
@@ -67,7 +122,7 @@ export type ExportedMap = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { id: string; name: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
+  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
   system?: ExportedSystem
   objectFieldSettings: {
     atmosphereOptions: string[]
@@ -682,13 +737,16 @@ export async function openWorkspaceHierarchy(
 export async function openChartDetails(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
+  const detailsRegion = page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+  if (await detailsRegion.isVisible().catch(() => false)) return detailsRegion
+
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await expect(inspectToggle).toBeVisible()
   if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
   await expect(chartDetails).toBeVisible()
   if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
-  return page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+  return detailsRegion
 }
 
 /** Selects a map interaction mode through the shared Dock before a map gesture. */

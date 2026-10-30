@@ -14,11 +14,17 @@ function clusterForRoutes(
   jumpPoints: ReadonlyMap<string, JumpPointReference>,
 ): JumpCluster {
   const systems = [...new Map([...jumpPoints.values()].map(reference => [reference.system.id, reference.system])).values()]
-  return { id: 'cluster-test', name: 'Test Cluster', systems, routes: [...routes] }
+  return {
+    id: 'cluster-test',
+    name: 'Test Cluster',
+    playerTitle: 'Player Jump Cluster',
+    systems,
+    routes: [...routes],
+  }
 }
 
 test('unresolved route geometry uses its saved scene target without clamping it', { tag: '@pure' }, () => {
-  const fromSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const fromSystem: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const fromPoint = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -54,8 +60,8 @@ test('unresolved route geometry uses its saved scene target without clamping it'
 })
 
 test('automatic unresolved targets stay near each origin and spread across all of its Jump Points', { tag: '@pure' }, () => {
-  const leftSystem: StarSystem = { id: 'system-left', name: 'Left', objects: [], orbits: [] }
-  const rightSystem: StarSystem = { id: 'system-right', name: 'Right', objects: [], orbits: [] }
+  const leftSystem: StarSystem = { id: 'system-left', name: 'Left', publication: 'known-type', objects: [], orbits: [] }
+  const rightSystem: StarSystem = { id: 'system-right', name: 'Right', publication: 'known-type', objects: [], orbits: [] }
   const leftPointA = {
     id: 'point-left-a',
     family: 'JumpPoint',
@@ -155,7 +161,7 @@ test('automatic unresolved targets stay near each origin and spread across all o
 })
 
 test('adjacent-row captions clear endpoint badges horizontally', { tag: '@pure' }, () => {
-  const system: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const system: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const point = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -187,7 +193,7 @@ test('adjacent-row captions clear endpoint badges horizontally', { tag: '@pure' 
 })
 
 test('negative-row endpoint captions stay above their source card', { tag: '@pure' }, () => {
-  const system: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const system: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const point = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -217,7 +223,7 @@ test('negative-row endpoint captions stay above their source card', { tag: '@pur
 })
 
 test('automatic targets follow source previews while manual and temporary target positions retain priority', { tag: '@pure' }, () => {
-  const fromSystem: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const fromSystem: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const fromPoint = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -253,7 +259,7 @@ test('automatic targets follow source previews while manual and temporary target
 })
 
 test('a far saved target leaves an unrelated automatic route geometry unchanged', { tag: '@pure' }, () => {
-  const system: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const system: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const point = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -292,7 +298,7 @@ test('a far saved target leaves an unrelated automatic route geometry unchanged'
 })
 
 test('automatic targets near an ordinary off-canvas origin remain compact', { tag: '@pure' }, () => {
-  const system: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const system: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const point = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -318,7 +324,7 @@ test('automatic targets near an ordinary off-canvas origin remain compact', { ta
 })
 
 test('extreme but representable automatic origins keep the near-source defaults', { tag: '@pure' }, () => {
-  const system: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const system: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const point = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -354,7 +360,7 @@ test('extreme but representable automatic origins keep the near-source defaults'
 })
 
 test('scene geometry accepts distant points but rejects renderer-clamped coordinates and aggregate spans', { tag: '@pure' }, () => {
-  const fromSystem: StarSystem = { id: 'system-a', name: 'Aster', objects: [], orbits: [] }
+  const fromSystem: StarSystem = { id: 'system-a', name: 'Aster', publication: 'known-type', objects: [], orbits: [] }
   const fromPoint = {
     id: 'point-a',
     family: 'JumpPoint',
@@ -376,6 +382,7 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
   const cluster: JumpCluster = {
     id: 'cluster-a',
     name: 'Aster Reach',
+    playerTitle: 'Player Jump Cluster',
     systems: [fromSystem],
     routes: [firstRoute, secondRoute],
   }
@@ -405,6 +412,7 @@ test('baseline-safe long labels remain restorable near the renderer boundary', {
   const system: StarSystem = {
     id: 'system-a',
     name: 'Aster',
+    publication: 'known-type',
     objects: [point],
     orbits: [],
   }
@@ -418,6 +426,7 @@ test('baseline-safe long labels remain restorable near the renderer boundary', {
   const cluster: JumpCluster = {
     id: 'cluster-a',
     name: 'Aster Reach',
+    playerTitle: 'Player Jump Cluster',
     systems: [system],
     routes: [route],
   }

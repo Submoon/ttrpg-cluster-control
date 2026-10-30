@@ -376,7 +376,7 @@ test('a type-change review names exact impacts and refreshes after Inspector res
   await expect(review).toContainText('Clear this value')
 
   await definitions.getByRole('button', { name: 'Apply field changes' }).click()
-  const inspectorGuard = page.getByRole('dialog', { name: 'Edit chart names' })
+  const inspectorGuard = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(inspectorGuard).toBeVisible()
   await inspectorGuard.getByRole('button', { name: 'Apply and continue' }).click()
   await expect(inspectorGuard).toBeHidden()

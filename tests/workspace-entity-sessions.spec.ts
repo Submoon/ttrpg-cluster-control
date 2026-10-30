@@ -156,7 +156,7 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await inspector.getByLabel('Name', { exact: true }).fill('Applied Iria')
 
   await nix.click()
-  let guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  let guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toBeHidden()
@@ -164,7 +164,7 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Applied Iria')
 
   await nix.click()
-  guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await guard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(nix).toHaveAttribute('aria-current', 'true')
@@ -173,12 +173,12 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   iria = hierarchy.getByRole('button', { name: 'Select PL-01, Applied Iria', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await iria.click()
-  await expect(page.getByRole('dialog', { name: 'Edit chart names' })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Edit chart details' })).toHaveCount(0)
   await expect(iria).toHaveAttribute('aria-current', 'true')
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Discarded Iria draft')
   await nix.click()
-  guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(nix).toHaveAttribute('aria-current', 'true')
@@ -345,7 +345,7 @@ test('a failed Orbit Apply and continue keeps the transition and Retry persists 
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('45')
   await sibling.click()
-  const guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  const guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
 
   await abortNextWorkspaceWrite(page, async () => {

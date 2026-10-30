@@ -50,10 +50,10 @@ test('Hierarchy still activates when an imported workspace closes the Map files 
 test('an Inspector draft reason is visible beside the desktop panel and remains available after compact hide', async ({ page }) => {
   await createSingleSystemWorkspace(page)
   const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart names' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart names' })
+  await details.getByRole('button', { name: 'Edit chart details' }).click()
+  const names = page.getByRole('dialog', { name: 'Edit chart details' })
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
-  await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+  await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
 
   const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })

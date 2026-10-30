@@ -28,6 +28,7 @@
         :editor-error="props.editorError"
         :session="props.routeSession"
         @edit-chart-names="emit('edit-chart-names', $event)"
+        @preview-player-view="emit('preview-player-view')"
         @open-system="emit('open-system', $event)"
         @delete-system="emit('delete-system', $event)"
         @show-chart-details="emit('show-chart-details')"
@@ -112,6 +113,7 @@
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
           @edit-chart-names="emit('edit-chart-names', $event)"
+          @preview-player-view="emit('preview-player-view')"
           @delete-system="emit('delete-system', $event)"
         />
       </div>
@@ -167,6 +169,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
+  'preview-player-view': []
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
   'show-chart-details': []

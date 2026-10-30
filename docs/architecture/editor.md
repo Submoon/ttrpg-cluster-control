@@ -8,6 +8,8 @@ The Pinia editor store owns shared, transient interface state: selected entity I
 
 Editing sessions remain with focused editor controllers. A controller owns its draft, validation, session identity, and begin, update, apply, or discard operations. Keep object, Orbit, route, and chart sessions specialized where their rules differ. This lets a hidden panel retain its parent-owned draft while the UI store only records whether that panel is shown.
 
+Chart editing also owns the independent player share title and the captured system's player publication mode. They participate in the same draft signature, transition guard and accepted mutation as chart names. The player preview is transient Warden consultation of a pure projected document, rendered without full source system records. It neither writes data nor owns another history/persistence path. The format and privacy boundary is recorded in [ADR 0002](../adr/0002-player-publication-boundary.md).
+
 Browser resources have a shorter, different lifetime. Map component handles, D3 selections and gestures, focus targets, media-query listeners, and previews belong to the mounted page, renderer, or interaction that creates them. Register browser effects at the appropriate client lifecycle point and release them with that owner. Pending confirmation promises and in-flight command bookkeeping stay with the navigation or editing operation that must resolve them; they are not store state.
 
 Disabled native buttons can swallow the compatibility `mouseup` that D3 expects. The canvas's existing pointer-release bridge cancels only the matching owned mouse gesture when it ends over disabled obstruction chrome outside the canvas, excluding view pans. Renderer cancellation rolls back the gesture without publishing data or clearing parent-owned placement previews; a later command cannot complete the abandoned drag.
@@ -59,7 +61,9 @@ The store does not enforce action-only mutation, session ownership, or domain in
 | Continuous Orbit previews, group boundaries and browser listener lifetime | [continuous Orbit adjustments](../../composables/editor-workflows/continuous-orbit-adjustments.ts) |
 | Guarded navigation and remembered visits | [useEditorNavigation](../../composables/editor-workflows/useEditorNavigation.ts) |
 | Draft-resolution sequencing | [useEditorTransitions](../../composables/editor-workflows/useEditorTransitions.ts) |
-| Chart-name draft lifetime | [useChartNamesSession](../../composables/editor-workflows/useChartNamesSession.ts) |
+| Chart-detail draft lifetime (names and player publication) | [useChartNamesSession](../../composables/editor-workflows/useChartNamesSession.ts) |
+| Allowlisted committed player marker document | [player projection](../../domain/player-projection.ts) |
+| DTO-only Warden preview presentation | [player preview dialog](../../components/PlayerViewPreviewDialog.vue), [player cluster renderer](../../components/PlayerClusterMap.vue) |
 | Candidate-request coordination | [useMapInteractionCoordinator](../../composables/editor-workflows/useMapInteractionCoordinator.ts) |
 | Mounted map handles and responsive effects | [useEditorMapControls](../../composables/editor-workflows/useEditorMapControls.ts), [useEditorViewport](../../composables/editor-workflows/useEditorViewport.ts) |
 | Guarded commands for connected Dock/Hierarchy containers | [editor command context](../../composables/editor-workflows/editor-command-context.ts) |

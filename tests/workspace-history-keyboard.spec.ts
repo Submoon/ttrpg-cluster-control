@@ -12,11 +12,11 @@ import {
 test('Ctrl+Z undoes a saved chart-name change from the workspace', async ({ page }) => {
   await createSingleSystemWorkspace(page)
   const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart names' }).click()
+  await details.getByRole('button', { name: 'Edit chart details' }).click()
 
-  const names = page.getByRole('dialog', { name: 'Edit chart names' })
+  const names = page.getByRole('dialog', { name: 'Edit chart details' })
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
-  await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+  await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
@@ -594,10 +594,10 @@ async function applySavedChartRename(
   value: string,
 ): Promise<void> {
   const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart names' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart names' })
+  await details.getByRole('button', { name: 'Edit chart details' }).click()
+  const names = page.getByRole('dialog', { name: 'Edit chart details' })
   await names.getByLabel(field, { exact: true }).fill(value)
-  await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+  await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 }

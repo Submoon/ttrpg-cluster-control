@@ -1,0 +1,43 @@
+---
+title: 'Publish Jump Routes and safe physical Station associations'
+status: open
+type: implementation
+label: wayfinder:implementation
+parent: ../spec.md
+triage_labels:
+  - enhancement
+  - ready-for-agent
+---
+
+# 04: Publish Jump Routes and safe physical Station associations
+
+**Parent:** [Player view and secret-free sharing](../spec.md).
+
+**Source:** [Player view and secret-free export — GitHub #9](https://github.com/Submoon/ttrpg-cluster-control/issues/9). Approved breakdown: 2026-10-29. Planning baseline: `8d4b66504ca6723db5405ed7cb93d0a666264c9a`, equal to fetched origin/main. Refresh source/baseline before implementation.
+
+**What to build:** the Warden chooses which Jump Routes players see and verifies their public connections in the cluster preview. A connection to a Hidden system appears unresolved at its exact map position; private logical endpoints and physical installations stay protected.
+
+**Status:** ready-for-agent. Lifecycle is open and unclaimed.
+
+## Blocked by
+
+- [02: Explore published objects and anonymous Orbit host chains](02-object-publication-host-chains.md).
+
+## Acceptance criteria
+
+- [ ] Route editing exposes a saved, undoable player-sharing setting. New and supported legacy routes default unshared; route sharing is independent of internal Jump Point disclosure.
+- [ ] A shared route requires at least one non-hidden endpoint system. Two retained systems are connected through their public markers; two Hidden systems suppress the route. Unknown presence/Known type system markers can be retained endpoints without opening their internal maps.
+- [ ] With one Hidden endpoint system, show an unresolved player destination at that system's exact schematic map position. Use the retained side as the player origin even if it is the source route's destination. Do not alter the GM route's resolution, orientation, references or source layout.
+- [ ] Player route data/labels keep the Jump level but omit internal route names, logical Jump Point identities/names and hidden system identity/type/properties. Unknown destination labels are generic. Existing GM unresolved-exit strings are not treated as automatically public.
+- [ ] A source-unresolved external route needs a shared setting and a retained origin. Preserve its permitted applied endpoint geometry while projecting only generic player labels. Private routes do not affect published counts, ordinals, bounds or identity metadata.
+- [ ] Projected route references are valid even when internal Jump Point objects are absent; do not smuggle private endpoint objects into the document just to satisfy the source renderer's requirements.
+- [ ] A Jump Point's physical Station association is visible in public inspection only if both objects are Revealed. An association does not auto-promote a Hidden Station. This leaves the separate required-Orbit-host exception intact.
+- [ ] Route sharing and any required metadata survive ordinary editing, save/reload, Undo/Redo, full backup/import remapping and recovery without losing source fields or broadening publication.
+
+## Verification and completion
+
+Exercise actual route editing and preview for both source orientations, shared/unshared routes, partial systems, both-Hidden systems, exact secret-destination coordinates, existing unresolved exits and private siblings. Inspect projected data and accessible route text for forbidden endpoint/source labels. Test Station pairs across disclosure modes, import remapping, history and source graph immutability. Run focused route geometry/projection and public browser regressions with lint/typecheck.
+
+## Scope boundaries
+
+This slice extends the common preview/projection and existing guarded route workflow. It does not depend on public prose/Fields, standalone JSON or URLs. Display the deliberately authorized positions and anonymous structure, but do not treat the player's unresolved representation as a destructive edit to the authoritative domain model. Sensitive review rules apply.

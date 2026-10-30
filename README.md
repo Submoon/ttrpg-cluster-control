@@ -14,10 +14,14 @@ The editor supports desktop and mobile layouts, light/dark themes, catalogue obj
 - Open **Hierarchy** to browse the map and **Inspect** for details. Panels fill the screen on mobile; closing a panel preserves its draft.
 - Choose **Edit** to make changes, then **Apply** or **Discard**. From a system's cluster inspector, **Open system** enters its map without changing tools. Deletions show their consequences before confirmation; the last system cannot be deleted.
 - Open **Fields** to manage reusable definitions. Use **Map files** for JSON import/export and clean SVG/PNG images, with an optional light print palette.
+- In chart details, choose **Edit chart details** to set the independent **Player-facing title** and how players see the selected system: Hidden, Unknown presence, Known type, or Revealed. New systems start as Known type; systems from older maps start Hidden.
+- **Preview player view** shows the committed player-visible cluster markers in a Warden-side dialog. This first preview excludes system internals, routes, Fields and private counts. It does not provide player links, files or images yet; the surrounding Warden workspace still contains its private data.
 
 ## Local data
 
 Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load; failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Storage is local, not cloud-synced; clearing browser/site data can erase it. Export Jump Cluster JSON for backup or transfer. Validated imports append an independent copy rather than overwrite existing work. SVG/PNG files are images, not data backups.
+
+New complete JSON backups use source format version 2 and retain player publication settings as well as all preparation data. Version 1 imports remain supported with Hidden system publication. Appending an imported cluster preserves incoming system settings and the destination cluster's player-facing title; it does not replace the destination chart metadata. New backups are not guaranteed to open in older application versions.
 
 ## Development
 

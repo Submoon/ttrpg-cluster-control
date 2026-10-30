@@ -9,9 +9,9 @@
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -82,9 +82,9 @@
 
     <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
       <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">

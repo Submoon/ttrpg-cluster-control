@@ -120,10 +120,10 @@ test('Move System keeps its preview visible after applying an independent chart-
   await expect(originalNode).not.toHaveAttribute('transform', originalTransform!)
 
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartDialog.getByLabel('Jump Cluster').fill('Kestrel Reach Updated')
-  await chartDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartDialog.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartDialog).toBeHidden()
 
   const updatedMap = page.getByRole('group', { name: 'Kestrel Reach Updated Jump Cluster map', exact: true })

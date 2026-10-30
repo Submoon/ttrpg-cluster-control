@@ -117,7 +117,7 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   expect(afterBlankLabel.system).toEqual(before.system)
   expect(afterBlankLabel.layout).toEqual(before.layout)
   await expect(controls.getByRole('alert')).toContainText('Object type is required.')
-  await expect(page.getByRole('dialog', { name: 'Edit chart names', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Edit chart details', exact: true })).toHaveCount(0)
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
 
@@ -129,7 +129,7 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   await placementToggle.click()
   await clickNormalizedSystemPoint(page, map, { x: 0.25, y: 0.25 })
 
-  const guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
   await expect(guard).toBeHidden()
@@ -476,7 +476,7 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   await expect(betaChoice).toBeVisible()
   await expect(confirmPlanet).toHaveCount(0)
   await alphaChoice.click()
-  const inspectorGuard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  const inspectorGuard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(inspectorGuard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
   await inspectorGuard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
   await expect(inspectorGuard).toBeHidden()

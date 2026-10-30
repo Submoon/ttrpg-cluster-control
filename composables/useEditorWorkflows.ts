@@ -251,7 +251,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const historyGuards = computed(() => {
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
-    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-name draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
     if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
     if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
@@ -333,6 +333,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     charts: {
       clusterName: charts.clusterName,
       systemName: charts.systemName,
+      playerTitle: charts.playerTitle,
+      publication: charts.publication,
       draftSystemName: charts.draftSystemName,
       dialogOpen: transitions.chartNamesDialogOpen,
       transitionGuard: transitions.transitionGuard,

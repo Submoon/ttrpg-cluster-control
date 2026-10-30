@@ -1,11 +1,11 @@
 <template>
   <UModal
     v-model:open="open"
-    title="Edit chart names"
-    :description="guardMode ? 'Resolve this draft before continuing.' : `Rename the current Jump Cluster and ${props.targetSystemName || 'star system'}.`"
+    title="Edit chart details"
+    :description="guardMode ? 'Resolve this draft before continuing.' : `Edit chart details and player visibility for ${props.targetSystemName || 'the selected star system'}.`"
     :dismissible="true"
     :content="{ onOpenAutoFocus: focusOnDialogOpen, onCloseAutoFocus: focusAfterDialogClose }"
-    :ui="{ content: 'chart-names-dialog-content max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto' }"
+    :ui="{ content: 'chart-details-dialog-content max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto' }"
   >
     <template #body>
       <div v-if="guardMode" class="grid gap-5">
@@ -14,15 +14,15 @@
           <h2 class="mb-1 mt-2 text-2xl">Continue without this draft?</h2>
           <p class="inspector-intro m-0">
             {{ guardMode === 'chart'
-              ? 'Apply these chart names, discard the draft, or stay here and keep editing.'
+              ? 'Apply these chart details, discard the draft, or stay here and keep editing.'
               : hasModifiedEntitySession
                 ? 'Apply these Inspector changes, discard them, or stay here and keep editing.'
                 : 'Discard the current inspector changes, or stay here and keep editing.' }}
           </p>
         </div>
       </div>
-      <form v-else id="chart-names-form" class="grid gap-4" @submit.prevent="emit('apply')">
-        <span class="section-kicker">CHART DETAILS / RENAME</span>
+      <form v-else id="chart-details-form" class="grid gap-4" @submit.prevent="emit('apply')">
+        <span class="section-kicker">CHART DETAILS / PUBLICATION</span>
         <UFormField label="Jump Cluster" :error="clusterError || undefined" class="grid gap-1.5">
           <UInput
             id="chart-dialog-cluster-name"
@@ -45,8 +45,35 @@
             <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
           </template>
         </UFormField>
+        <UFormField label="Player-facing title" :error="playerTitleError || undefined" class="grid gap-1.5">
+          <UInput
+            id="chart-dialog-player-title"
+            v-model="playerTitle"
+            maxlength="80"
+            autocomplete="off"
+          />
+          <template #error="{ error }">
+            <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
+          </template>
+        </UFormField>
+        <UFormField label="How players see this system" :error="publicationError || undefined" class="grid gap-1.5">
+          <USelect
+            id="chart-dialog-publication"
+            v-model="publication"
+            :items="publicationItems"
+          />
+          <template #hint>
+            <span v-if="publication === 'unknown'">Players see a neutral presence marker with no system name or type.</span>
+            <span v-else-if="publication === 'known-type'">Players see that a star system is here, without its name.</span>
+            <span v-else-if="publication === 'revealed'">Players see this system's name.</span>
+            <span v-else>Players do not see this system.</span>
+          </template>
+          <template #error="{ error }">
+            <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
+          </template>
+        </UFormField>
         <UAlert
-          v-if="props.formError && !clusterError && !systemError"
+          v-if="props.formError && !clusterError && !systemError && !playerTitleError && !publicationError"
           color="error"
           variant="subtle"
           :description="props.formError"
@@ -72,7 +99,7 @@
         </template>
         <template v-else>
           <UButton color="neutral" variant="ghost" @click="emit('discard')">Discard draft</UButton>
-          <UButton color="primary" type="submit" form="chart-names-form">Apply names</UButton>
+          <UButton color="primary" type="submit" form="chart-details-form">Apply details</UButton>
         </template>
       </div>
     </template>
@@ -82,11 +109,14 @@
 <script setup lang="ts">
 /** Parent-owned chart session presented in a hideable Nuxt UI modal. */
 import { computed, nextTick, watch } from 'vue'
+import type { PublicationMode } from '../domain/workspace'
 import type { TransitionDecision, TransitionGuard } from '../composables/editor-workflows/types'
 
 const open = defineModel<boolean>('open', { required: true })
 const clusterName = defineModel<string>('clusterName', { required: true })
 const systemName = defineModel<string>('systemName', { required: true })
+const playerTitle = defineModel<string>('playerTitle', { required: true })
+const publication = defineModel<PublicationMode>('publication', { required: true })
 
 const props = defineProps<{
   formError: string
@@ -98,6 +128,14 @@ const props = defineProps<{
 
 const clusterError = computed(() => props.formError.startsWith('Jump Cluster name') ? props.formError : '')
 const systemError = computed(() => props.formError.startsWith('Star system name') ? props.formError : '')
+const playerTitleError = computed(() => props.formError.startsWith('Player-facing title') ? props.formError : '')
+const publicationError = computed(() => props.formError.startsWith('Choose a supported publication mode') ? props.formError : '')
+const publicationItems: Array<{ label: string; value: PublicationMode }> = [
+  { label: 'Hidden', value: 'hidden' },
+  { label: 'Unknown presence', value: 'unknown' },
+  { label: 'Known type', value: 'known-type' },
+  { label: 'Revealed', value: 'revealed' },
+]
 
 const emit = defineEmits<{
   apply: []
@@ -134,7 +172,11 @@ function focusAfterDialogClose(event: Event): void {
 function focusNameField(): void {
   const target = props.formError.startsWith('Star system name')
     ? 'chart-dialog-system-name'
-    : 'chart-dialog-cluster-name'
+    : props.formError.startsWith('Player-facing title')
+      ? 'chart-dialog-player-title'
+      : props.formError.startsWith('Choose a supported publication mode')
+        ? 'chart-dialog-publication'
+        : 'chart-dialog-cluster-name'
   document.getElementById(target)?.focus()
 }
 
@@ -157,7 +199,7 @@ watch(
 </script>
 
 <style>
-.chart-names-dialog-content button:focus-visible {
+.chart-details-dialog-content button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   transition: none;

@@ -30,3 +30,12 @@ A short marker unique within a star system that links a map object to its Warden
 
 **Custom field applicability**:
 The catalogue objects a reusable custom field applies to: all objects by default, or selected catalogue categories and subtypes.
+
+**Player publication**:
+The Warden's choice of how a location is presented to players: Hidden, Unknown presence, Known type, or Revealed. Publication does not change the authoritative location or track campaign discovery separately.
+
+**Player share title**:
+A player-facing chart title chosen independently of the Warden's Jump Cluster name.
+
+**Player preview**:
+A Warden-side consultation of the information selected for players. The Warden's surrounding workspace retains its private preparation.

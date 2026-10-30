@@ -30,7 +30,7 @@ export function createHistoryMeasurementWorkspace(systemCount: number, objectsPe
       },
     }))
     const system: StarSystem = {
-      id, name: `Measured System ${systemIndex}`, objects,
+      id, name: `Measured System ${systemIndex}`, publication: 'known-type', objects,
       orbits: [
         { id: `${id}-orbit-1`, hostId: `${id}-object-0`, order: 1 },
         { id: `${id}-orbit-2`, hostId: `${id}-object-1`, order: 1 },

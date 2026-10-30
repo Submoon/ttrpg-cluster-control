@@ -343,13 +343,13 @@ test('Select can rename system B from its inspector while keeping system A activ
   await clusterMap.getByRole('button', { name: 'Select New System 2 system' }).click()
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
-  await expect(dialog).toContainText('Rename the current Jump Cluster and New System 2.')
+  const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
+  await expect(dialog).toContainText('Edit chart details and player visibility for New System 2.')
   await expect(dialog.getByLabel('Star system')).toHaveValue('New System 2')
   await dialog.getByLabel('Star system').fill('Renamed B')
-  await dialog.getByRole('button', { name: 'Apply names' }).click()
+  await dialog.getByRole('button', { name: 'Apply details' }).click()
 
   await expect(clusterMap).toBeVisible()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)

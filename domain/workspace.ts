@@ -21,6 +21,8 @@ export type {
   Orbit,
   JumpRoute,
   StarSystem,
+  PublicationMode,
+  ChartDetailsChanges,
   JumpCluster,
   JumpPointReference,
   LocalWorkspace,
@@ -58,6 +60,7 @@ export {
   createJumpRoute,
   updateJumpRoute,
   renameLocalWorkspace,
+  updateChartDetails,
 } from './workspace-cluster'
 export { planMapEntityDeletion } from './workspace-deletion'
 export { moveUnresolvedExitTarget } from './workspace-exit-placement'
@@ -75,3 +78,5 @@ export { captureEffectiveObjectAngles, defaultObjectOrbitAngle, updateWorkspaceO
 export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
+export { projectPlayerCluster } from './player-projection'
+export type { PlayerSystemMarker, PlayerClusterDocument } from './player-projection'

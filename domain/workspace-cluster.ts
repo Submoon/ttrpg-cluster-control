@@ -6,7 +6,9 @@ import type {
   JumpCluster,
   JumpPointReference,
   JumpRoute,
+  ChartDetailsChanges,
   LocalWorkspace,
+  PublicationMode,
   Point,
   StarSystem,
 } from './workspace-model'
@@ -27,6 +29,7 @@ function initialStarSystem(name: string): StarSystem {
   return {
     id: crypto.randomUUID(),
     name: validName(name, 'Star system name'),
+    publication: 'known-type',
     objects: [{
       id: crypto.randomUUID(),
       family: 'CelestialBody',
@@ -65,10 +68,12 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialStarSystem(systemName)
 
   return {
+    version: 2,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
       name: validName(clusterName, 'Jump Cluster name'),
+      playerTitle: 'Player Jump Cluster',
       systems: [system],
       routes: [],
     },
@@ -295,4 +300,48 @@ export function renameLocalWorkspace(
       ),
     },
   }
+}
+
+/**
+ * Updates one system's publication and chart labels while retaining all source contents and layout.
+ * @param workspace Current immutable workspace.
+ * @param systemId System whose name and publication are changed.
+ * @param changes Proposed private/public chart labels and publication mode.
+ * @returns A detached workspace with validated, trimmed chart details.
+ * @throws If any label, publication mode, or system ID is invalid.
+ */
+export function updateChartDetails(
+  workspace: LocalWorkspace,
+  systemId: string,
+  changes: ChartDetailsChanges,
+): LocalWorkspace {
+  if (!workspace.cluster.systems.some(system => system.id === systemId)) {
+    throw new Error('The local workspace has no matching star system.')
+  }
+  if (!isPublicationMode(changes.publication)) {
+    throw new Error('Choose a supported publication mode.')
+  }
+
+  const clusterName = validName(changes.clusterName, 'Jump Cluster name')
+  const systemName = validName(changes.systemName, 'Star system name')
+  const playerTitle = validText(changes.playerTitle, 'Player-facing title', maxNameLength)
+
+  return {
+    ...workspace,
+    cluster: {
+      ...workspace.cluster,
+      name: clusterName,
+      playerTitle,
+      systems: workspace.cluster.systems.map(system => system.id === systemId
+        ? { ...system, name: systemName, publication: changes.publication }
+        : system),
+    },
+  }
+}
+
+function isPublicationMode(value: unknown): value is PublicationMode {
+  return value === 'hidden'
+    || value === 'unknown'
+    || value === 'known-type'
+    || value === 'revealed'
 }
