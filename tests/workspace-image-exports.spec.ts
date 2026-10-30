@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadImage,
@@ -513,7 +514,7 @@ test('print-light image export preserves the live dark workspace and hidden char
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const theme = page.getByRole('group', { name: 'Theme' })
   const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
@@ -567,7 +568,7 @@ test('print-light image export preserves the live dark workspace and hidden char
 
   await expect(page.locator('html')).toHaveClass(/\bdark\b/)
   await expect(theme.getByText('Dark', { exact: true })).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const appliedAfter = await downloadJson(page, 'Export star system JSON')
   expect(appliedAfter).toEqual(appliedBefore)
   await expect(resumeDraft).toBeVisible()
@@ -877,7 +878,7 @@ test('system image exports retain applied geometry during local and parent-owned
   await expect(workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true }))
     .toHaveAttribute('aria-pressed', 'true')
   await page.mouse.up()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const appliedBeforeObjectPreview = await inspectLiveSystemGeometry(map)
   const appliedBeforeObjectSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')

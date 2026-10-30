@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback, clickDockAction, createSingleSystemWorkspace, openChartDetails, setWorkspaceMapMode,
+  waitForWorkspaceSaved, clickDockAction, createSingleSystemWorkspace, openChartDetails, setWorkspaceMapMode,
 } from './helpers'
 
 test('Dock and Inspector text controls keep their own focus and input', async ({ page }) => {
@@ -240,7 +240,7 @@ test('Ctrl+Z keeps history ownership and does not select a map tool', async ({ p
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply names', exact: true }).click()
   await expect(names).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const renamedMap = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
   await expect(renamedMap).toBeVisible()
 

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, readInspectorSelection, selectInspectorOption } from './helpers'
+import { waitForWorkspaceSaved, readInspectorSelection, selectInspectorOption } from './helpers'
 import { addClusterSystem, ensureMapDragPointsReachable, returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, workspaceZoomOutput, clickDockAction, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, dragOrbitToWorldPoint, panMap, dragBy, editMapObject, saveMapObject, addCatalogueObject } from './helpers'
 
@@ -78,7 +78,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const movedSystemNode = clusterMap.getByRole('button', { name: 'Select Vesper system' })
   await expect(movedSystemNode).not.toHaveAttribute('transform', nodeBeforeDrag!)
   const nodeAfterDrag = await movedSystemNode.getAttribute('transform')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)
@@ -112,7 +112,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), resizeDestination)
   await expect.poll(() => historyUndoDepth(page)).toBeGreaterThan(historyDepthBeforePlacement)
   await expect(undo).toHaveAccessibleName('Undo: Place Iria in Orbit · Iria · Vesper')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const angleBeforeResize = await orbitalAngle(map)
   const orbitRadius = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
   const radiusBeforeResize = Number(await orbitRadius.getAttribute('rx'))
@@ -148,7 +148,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const hazard = map.getByRole('button', { name: /Glass Wake/ })
   await dragToWorldPoint(page, map, hazard.locator('.object-hit-target'), { x: 230, y: 180 })
   const hazardTransform = await hazard.getAttribute('transform')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const systemNavigation = workspaceZoomControls(page)
   const systemZoom = systemNavigation.locator('output').first()
@@ -352,7 +352,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await selectInspectorOption(station, { label: /Vesper Gate/ })
   await saveMapObject(page)
   expect(await readInspectorSelection(station)).toMatch(/Vesper Gate/)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await returnToClusterMap(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
@@ -422,7 +422,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await expect(routeInspector.getByText('Unknown destination: Unknown Rim', { exact: true })).toBeVisible()
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: /Open .* system map/ })).toHaveCount(2)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)

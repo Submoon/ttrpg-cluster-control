@@ -169,6 +169,14 @@ textarea[aria-invalid="true"] {
   box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--map-bg) 65%, transparent);
 }
 
+/* Empty feedback owners must not cover the map or reserve compact recovery space. */
+.workspace-feedback:has(> .workspace-feedback-content[data-feedback-visible="false"]):not(:has(.route-draft-resume)) {
+  display: none;
+}
+.workspace-compact-recovery:has(.workspace-feedback-content[data-feedback-visible="false"]):not(:has(.route-draft-resume)) {
+  display: none;
+}
+
 .workspace-feedback-content {
   display: grid;
   min-width: 0;
@@ -1233,6 +1241,9 @@ p-note {
 .map-editor-layout.compact-modal-open .workspace-side-panel-content-inspector {
   padding: 0;
 }
+.map-editor-layout.compact-modal-open #workspace-hierarchy-panel:has(.workspace-compact-recovery .workspace-feedback-content[data-feedback-visible="false"]):not(:has(.route-draft-resume)) .workspace-side-panel-content {
+  padding-bottom: clamp(0.75rem, 2.5vw, 1.2rem);
+}
 .map-editor-layout.compact-modal-open .workspace-panel-resize-handle { display: none; }
 
 @media (max-width: 1000px) and (min-width: 761px) and (min-height: 601px) {
@@ -1254,8 +1265,16 @@ p-note {
     gap: 0.35rem;
   }
   .workspace-feedback-region { grid-column: 1 / -1; grid-row: 1; justify-self: start; max-width: 100%; }
+  .workspace-feedback-region:has(.workspace-feedback-content[data-feedback-visible="false"]):not(:has(.route-draft-resume)) { display: none; }
   .workspace-zoom-region { grid-column: 2; grid-row: 2; justify-self: end; }
   .workspace-dock-region { grid-column: 1 / -1; grid-row: 3; justify-self: center; }
+  .workspace-bottom-controls:has(.workspace-feedback-region .workspace-feedback-content[data-feedback-visible="false"]):not(:has(.workspace-feedback-region .route-draft-resume)) {
+    grid-template-rows: 0 auto auto;
+    row-gap: 0;
+  }
+  .workspace-bottom-controls:has(.workspace-feedback-region .workspace-feedback-content[data-feedback-visible="false"]):not(:has(.workspace-feedback-region .route-draft-resume)) .workspace-dock-region {
+    margin-top: 0.35rem;
+  }
   .workspace-feedback-region .workspace-feedback { max-width: 100%; }
   .map-workspace-shell .workspace-dock { gap: 0.2rem; padding: 0.25rem; }
   .workspace-dock-mode { justify-content: center; border-right: 0; padding-right: 0; }

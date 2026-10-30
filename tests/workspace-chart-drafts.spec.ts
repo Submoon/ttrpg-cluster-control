@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
+import { waitForWorkspaceSaved, activeWorkspaceFeedback, addClusterSystem, returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   createJumpRoute,
@@ -277,7 +277,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 }
 
 async function beginHiddenChartDraft(
@@ -334,7 +334,7 @@ async function finishHeldImportAndVerifyExport(
   expectedFirstSystemName: string,
 ): Promise<void> {
   await releaseChartWriteGate(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await expectImportedWorkspace(page, expectedClusterName, expectedFirstSystemName)
 
   await returnToClusterMap(page)
@@ -382,7 +382,7 @@ test('hiding the chart-name dialog keeps the draft available to resume', async (
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details' }).click()
   await page.getByRole('complementary', { name: 'Object inspector' })
@@ -410,7 +410,7 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
@@ -436,7 +436,7 @@ test('adding a system preserves a dirty chart-name draft while committing the sy
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await returnToClusterMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
@@ -448,7 +448,7 @@ test('adding a system preserves a dirty chart-name draft while committing the sy
 
   await addClusterSystem(page)
   await expect(dialog).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', { name: 'Open New System 2 system map' })).toBeVisible()
@@ -473,7 +473,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details' }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
@@ -489,7 +489,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await expect(dialog).toBeHidden()
 
   await addCatalogueObject(page, 'jump-point', { preserveDraft: true, noSelection: true })
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
   await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(dialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
@@ -517,7 +517,7 @@ test('restoring both committed names makes a stale validation error a clean tran
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
@@ -548,7 +548,7 @@ test('a guarded transition can stay with the draft or discard it and continue', 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart names' }).click()
@@ -577,7 +577,7 @@ test('export failures stay separate from chart draft and workspace save feedback
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('complementary', { name: 'Object inspector' })
     .getByRole('button', { name: 'Edit chart names' }).click()
@@ -601,7 +601,7 @@ test('export failures stay separate from chart draft and workspace save feedback
       .toContainText('Export failed: Synthetic export failure.')
     await page.keyboard.press('Escape')
     await expect(detailsTrigger).toBeFocused()
-    await expect(feedback.locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     await expect(feedback.getByRole('button', { name: 'Resume chart name draft' }))
       .toBeVisible()
     await feedback.getByRole('button', { name: 'Resume chart name draft' }).click()
@@ -623,7 +623,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await installChartWriteGate(page)
 
   try {
@@ -651,7 +651,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     await expect(compactRecovery.getByRole('status')).toContainText('Saving to this browser. A previous write failed:')
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBeGreaterThan(0)
     await releasePendingChartWrites(page)
-    await expect(compactRecovery.getByRole('status')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect(await beforeUnloadIsPrevented(page)).toBe(false)
 
     await page.getByRole('button', { name: 'Close inspector panel' }).click()
@@ -671,7 +671,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBeGreaterThan(0)
     expect((await readChartWriteGate(page)).writeCount).toBeGreaterThanOrEqual(6)
     await releaseChartWriteGate(page)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect(await beforeUnloadIsPrevented(page)).toBe(false)
 
     const saved = await readCurrentWorkspace(page)
@@ -692,7 +692,7 @@ test('an older successful write cannot mark a newer applied workspace saved or e
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await installChartWriteGate(page)
 
   try {
@@ -709,7 +709,7 @@ test('an older successful write cannot mark a newer applied workspace saved or e
     dialog = page.getByRole('dialog', { name: 'Edit chart names' })
     await dialog.getByLabel('Jump Cluster').fill('Latest Applied Reach')
     await dialog.getByRole('button', { name: 'Apply names' }).click()
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saving to this browser...')
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
 
     await inspector.getByRole('button', { name: 'Edit chart names' }).click()
     dialog = page.getByRole('dialog', { name: 'Edit chart names' })
@@ -720,13 +720,13 @@ test('an older successful write cannot mark a newer applied workspace saved or e
 
     await releaseFirstChartWriteNotification(page)
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saving to this browser...')
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
     await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Newer Unapplied Draft')
     await page.keyboard.press('Escape')
 
     await releaseChartWriteGate(page)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect((await readCurrentWorkspace(page)).cluster.name).toBe('Latest Applied Reach')
     await page.reload()
     await returnToClusterMap(page)
@@ -741,7 +741,7 @@ test('an older failed write cannot replace newer saving feedback or clear a draf
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await installChartWriteGate(page)
 
   try {
@@ -758,7 +758,7 @@ test('an older failed write cannot replace newer saving feedback or clear a draf
     dialog = page.getByRole('dialog', { name: 'Edit chart names' })
     await dialog.getByLabel('Jump Cluster').fill('Latest Applied Reach')
     await dialog.getByRole('button', { name: 'Apply names' }).click()
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saving to this browser...')
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
 
     await inspector.getByRole('button', { name: 'Edit chart names' }).click()
     dialog = page.getByRole('dialog', { name: 'Edit chart names' })
@@ -767,14 +767,14 @@ test('an older failed write cannot replace newer saving feedback or clear a draf
     await releaseFirstChartWriteFailure(page)
 
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saving to this browser...')
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).not.toContainText('Not saved.')
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
+    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveCount(0)
     await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' }).click()
     await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Newer Unapplied Draft')
     await page.keyboard.press('Escape')
 
     await releaseChartWriteGate(page)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect((await readCurrentWorkspace(page)).cluster.name).toBe('Latest Applied Reach')
   } finally {
     await releaseChartWriteGate(page)
@@ -786,7 +786,7 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   await addClusterSystem(page)
   await returnToClusterMap(page)
@@ -794,7 +794,7 @@ test('canceling the initial system-delete review leaves a hidden chart draft and
   const deleteSystemButton = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
   await expect(deleteSystemButton).toBeVisible()
   await expect(deleteSystemButton).toBeEnabled()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
   const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
@@ -858,11 +858,11 @@ test('system deletion resolves its chart target after review and asks again for 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   await addClusterSystem(page, { open: true })
   await returnToClusterMap(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deleteSystemButton = hierarchy.getByRole('button', { name: 'Delete New System 2 system' })
@@ -890,7 +890,7 @@ test('system deletion resolves its chart target after review and asks again for 
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
     .getByRole('button', { name: 'Open Current System 2 system map' })).toHaveCount(0)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.name).toBe('Kestrel Reach Prime')
@@ -968,17 +968,17 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
     const hierarchy = await openWorkspaceHierarchy(page)
     if (selectionKind === 'object') {
       await addCatalogueObject(page, 'planet')
-      await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+      await waitForWorkspaceSaved(page)
     } else if (selectionKind === 'orbit') {
       await addCatalogueObject(page, 'planet')
-      await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+      await waitForWorkspaceSaved(page)
       await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
-      await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+      await waitForWorkspaceSaved(page)
       await hierarchy.getByRole('button', { name: /Select PL-01, New planet 1/ }).click()
       await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-expanded', 'false')
       await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
       await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
-      await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+      await waitForWorkspaceSaved(page)
     } else {
       await returnToClusterMap(page)
     }
@@ -1064,7 +1064,7 @@ test('a delayed import save stays on Vesper until explicit navigation meets an i
       .toBeVisible()
 
     await releaseChartWriteGate(page)
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     await expectImportedWorkspace(page, 'Kestrel Reach', 'Vesper')
   } finally {
     await releaseChartWriteGate(page)
@@ -1101,7 +1101,7 @@ for (const decision of ['apply', 'discard'] as const) {
         .getByRole('heading', { name: expectedClusterName })).toBeVisible()
 
       await releaseChartWriteGate(page)
-      await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+      await waitForWorkspaceSaved(page)
       await expectImportedWorkspace(page, expectedClusterName, expectedSystemName)
       await page.reload()
       await returnToClusterMap(page)

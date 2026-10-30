@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
+import { waitForWorkspaceSaved, openWorkspaceHierarchy } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
 import { importReviewDialog, resolveImportReview } from './helpers'
@@ -106,7 +106,7 @@ test('an attached Orbit with undersized imported radii is rejected without losin
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   const workspace = await readCurrentWorkspace(page) as StoredWorkspace
@@ -172,7 +172,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details' }).click()
@@ -180,7 +180,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
   await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
   await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await page.reload()
@@ -206,7 +206,7 @@ test('a failed backup restore stays unavailable and preserves both records until
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const backupBefore = await readWorkspaceRecord(page, 'last-valid')
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
@@ -318,7 +318,7 @@ test('the recovery screen explains when no local backup is available', async ({ 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await deleteWorkspaceRecord(page, 'last-valid')
@@ -337,7 +337,7 @@ test('a failed IndexedDB save preserves current and backup snapshots @developmen
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const snapshots = await page.evaluate(async (modulePath) => {
     const storage = await import(modulePath) as {
@@ -404,7 +404,7 @@ test('a damaged backup is rejected without replacing the current record', async 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
   await overwriteWorkspaceRecord(page, 'last-valid', { damaged: true })
@@ -447,5 +447,5 @@ test('a temporary IndexedDB opening failure can be retried without exposing a pa
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Aster')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 })
