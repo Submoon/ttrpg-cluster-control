@@ -175,7 +175,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
   const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')

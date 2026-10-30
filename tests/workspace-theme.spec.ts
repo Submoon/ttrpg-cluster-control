@@ -235,7 +235,7 @@ test('theme changes recolor both maps without changing workspace drafts or writi
     .getByRole('button', { name: 'Open Vesper system map' })
     .click()
   await expect(systemMap).toBeVisible()
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
   const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })

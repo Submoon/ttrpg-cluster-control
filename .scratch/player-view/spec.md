@@ -189,7 +189,7 @@ The common projection seam and verification approach were already confirmed in t
 
 ### Approved Implementation Tickets
 
-The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Ticket 01 is now assigned to the coordinator and in progress under the user's separate implementation instruction; other tickets remain unclaimed. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
+The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Ticket 01 is now closed under the user's separate implementation instruction; its publication editing, strict source migration and allowlisted Warden-side preview are implemented and verified. Ticket 02 is available and unclaimed; other tickets remain unstarted. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
 
 | Ticket | End-to-end slice | Blocked by |
 | --- | --- | --- |

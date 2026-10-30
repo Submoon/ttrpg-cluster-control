@@ -1,6 +1,6 @@
 ---
 title: 'Preview system publication in the Jump Cluster'
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -18,7 +18,7 @@ triage_labels:
 
 **What to build:** the Warden can choose how each system appears to players, choose a public share title, and inspect a cluster preview that contains only the permitted system markers. Publication edits are saved and undoable through the ordinary editor flow; full backups retain the settings without losing preparation data.
 
-**Status:** ready-for-agent. Lifecycle is in-progress and assigned to the coordinator. The user authorized implementation of this ticket with subagents and the `implement` skill on 2026-10-30; the remaining tickets are not started.
+**Status:** closed. Implemented and verified by the coordinator and assigned specialists on 2026-10-30 under the user's `implement` instruction. The remaining tickets are not started.
 
 ## Blocked by
 
@@ -26,14 +26,14 @@ None (can start immediately once implementation is authorized).
 
 ## Acceptance criteria
 
-- [ ] The existing system consultation/editing flow exposes Hidden, Unknown presence, Known type and Revealed modes in desktop and compact layouts. Unknown markers have neutral presentation; Known type markers reveal type but no name; only Revealed markers show the system's name.
-- [ ] New systems default Known type. Supported legacy maps initialize system publication as Hidden. Changing a system's mode preserves its full source contents and does not rewrite child settings.
-- [ ] The Warden can choose a player-facing share title. Preview labels never silently substitute the private cluster title. Location keys, internal object/route data, source counts, notes and Fields are absent from this first cluster-only preview.
-- [ ] A pure, allowlisted player projection and its cluster renderer provide the preview. Safe public identities, counts, bounds, visible labels and accessible text are derived from projected content rather than a hidden full-source scene. Unknown source extensions are omitted.
-- [ ] Publication/title changes use the existing validated mutation owner, ordered save queue and ordinary Undo/Redo semantics, including the separate memory-application and durability outcomes. Previewing itself creates no data mutation or history action.
-- [ ] Save/reload and complete GM backup round trips preserve system publication/title and all existing data. Independent-copy append import preserves incoming system modes and the destination cluster's player title, consistent with the existing destination chart-name contract. Old supported file/layout forms remain importable with private defaults; unsupported newer versions fail clearly. Establish the versioned source/public projection boundary without relying on old readers retaining unknown fields.
-- [ ] The preview is visibly a Warden-side consultation, not a secure borrowed-browser mode. It exposes no player download/link action in this slice; the base editor continues using the saved GM workspace.
-- [ ] A later slice can extend the same projection with permitted system internals, text/Fields and routes. This slice emits none of those unsupported source surfaces rather than forwarding them through the preview.
+- [x] The existing system consultation/editing flow exposes Hidden, Unknown presence, Known type and Revealed modes in desktop and compact layouts. Unknown markers have neutral presentation; Known type markers reveal type but no name; only Revealed markers show the system's name.
+- [x] New systems default Known type. Supported legacy maps initialize system publication as Hidden. Changing a system's mode preserves its full source contents and does not rewrite child settings.
+- [x] The Warden can choose a player-facing share title. Preview labels never silently substitute the private cluster title. Location keys, internal object/route data, source counts, notes and Fields are absent from this first cluster-only preview.
+- [x] A pure, allowlisted player projection and its cluster renderer provide the preview. Safe public identities, counts, bounds, visible labels and accessible text are derived from projected content rather than a hidden full-source scene. Unknown source extensions are omitted.
+- [x] Publication/title changes use the existing validated mutation owner, ordered save queue and ordinary Undo/Redo semantics, including the separate memory-application and durability outcomes. Previewing itself creates no data mutation or history action.
+- [x] Save/reload and complete GM backup round trips preserve system publication/title and all existing data. Independent-copy append import preserves incoming system modes and the destination cluster's player title, consistent with the existing destination chart-name contract. Old supported file/layout forms remain importable with private defaults; unsupported newer versions fail clearly. Establish the versioned source/public projection boundary without relying on old readers retaining unknown fields.
+- [x] The preview is visibly a Warden-side consultation, not a secure borrowed-browser mode. It exposes no player download/link action in this slice; the base editor continues using the saved GM workspace.
+- [x] A later slice can extend the same projection with permitted system internals, text/Fields and routes. This slice emits none of those unsupported source surfaces rather than forwarding them through the preview.
 
 ## Verification and completion
 
@@ -42,6 +42,14 @@ Exercise the real system editing command, save/reload, Undo/Redo, legacy restore
 ## Scope boundaries
 
 This is a complete system-publication/preview slice, not a schema-only prerequisite. No separate broad prefactor is required by the plan: introduce only the focused seams needed for this behavior. Internal object navigation, prose/Fields, routes, player files, URLs and images belong to later tickets. Follow the Sensitive route: architecture design before implementation and complementary independent reviews for privacy/persistence. Exact schema/version design is implementation work within the approved specification.
+
+## Resolution
+
+Implemented the four system publication modes, independent public title, guarded editing and a pure allowlisted Warden-side preview. Source version 2 preserves publication metadata through existing persistence, history and complete backup/import paths; legacy data starts private. The preview receives only public markers and has no player transport/download action.
+
+All eight acceptance criteria are resolved. Independent Standards, Spec and complementary privacy/persistence reviews have no blocking findings. Lint, typecheck, production build and compiled entry checks passed. The complete suite ran once (429 passed / 18 initial failures); bounded corrections and replays validated those cases, with the existing long Orbit journey completing under a local 90-second diagnostic limit. Its ordinary 30-second timeout also reproduces on the warm baseline; the repository timeout and test assertions remain unchanged. See the [implementation and verification record](../ticket-01-implementation.md) for exact results and artifacts.
+
+Initial implementation snapshot: `bbe8b0993108414fc494c08918e832453a465b4a`; final corrections and this resolution are committed together on `codex/player-view-ticket-01`. Ticket 02 is now available but unclaimed. GitHub #9 remains open and unchanged.
 
 ## Comments
 

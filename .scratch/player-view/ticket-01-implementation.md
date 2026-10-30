@@ -1,6 +1,6 @@
 ---
 title: Ticket 01 implementation and verification
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -22,7 +22,7 @@ The user already approved the common pure disclosure projection and actual publi
 
 ## Design and verification
 
-Architecture is being resolved before implementation. This record will retain the agreed boundaries and concise actual check outcomes; raw logs/screenshots belong in test artifacts. No product acceptance is claimed yet.
+Architecture was resolved before implementation. Ticket 01 is complete; this record retains the boundaries, actual verification outcomes and remaining local timing limit. Raw logs/screenshots belong in test artifacts.
 
 ### Agreed design
 
@@ -49,3 +49,34 @@ Architecture is being resolved before implementation. This record will retain th
 - The 80-character wide-name geometry tracer first failed on actual rendered SVG text exceeding its viewBox, then passed after a conservative public-label width envelope was applied. No source geometry was changed.
 - Desktop and compact PNG evidence under `test-results/player-view-publication-focused-final` was visually inspected before broad UI/integration checks. The preview remains clearly Warden-side, with reachable closing controls; these viewport checks do not certify physical assistive devices.
 - Lint and typecheck passed after current helper types were made compatible with both v1 raw fixtures and v2 exports. No legacy JSON fixture was converted to mask a current-type error.
+
+- Stable review snapshot: `bbe8b0993108414fc494c08918e832453a465b4a`, compared with the recorded baseline using a three-dot diff. Independent Standards and Spec reviews both identified the same missing preview-event forwarding in the inspected-system consultation. The owner added forwarding and a public open/close/focus/retained-inspection regression; both reviewers closed the correction statically. Runtime validation is included in the full suite.
+- Complementary privacy/persistence review identified a type-bearing accessible list name for Unknown presence. A neutral marker name and an accessibility assertion are pending after the frozen full-suite run. No other confirmed privacy or persistence defect was found.
+- Standards also suggested sharing the two short publication validators as a nonblocking duplication heuristic. This is deferred: mutation and source-restoration admission remain separate, typed and covered boundaries; no behavioral divergence was demonstrated.
+- Production build completed successfully (exit 0; Nuxt/Nitro, 2026-10-30). The four compiled-server entry scenarios passed on the dedicated production port 3128. The later one-line event-forwarding correction does not change the production entry seam; its development-browser regression is included in the integrated run.
+- The one complete integrated run has started on development port 3127: `npm test -- --reporter=line --output=test-results/player-view-full` (447 tests). Raw output: `test-results/player-view-full.log`.
+- All 180 pure cases passed in that run. Its first development-storage case exceeded the existing 30-second limit during cold client initialization, before the welcome form appeared (snapshot: Opening this browser's workspace). The server recorded a 16.7-second first SSR render. Keep the test and timeout unchanged; replay that case on the warm server after the run to distinguish startup overhead from persistence behavior.
+- Pre-completion source refresh on 2026-10-30: fetched `origin/main` remains `8d4b66504ca6723db5405ed7cb93d0a666264c9a` (0/0 against the recorded base); GitHub #9 still has its original body, open state, two labels and no comments. No remote writes were made.
+
+### Integrated run and bounded corrections
+
+The complete run finished with 429 passed / 18 failed (47.6 minutes); all 180 pure cases and all eight new publication journeys passed. The initial failures are retained in the full report, not reported as a clean run. The failed-case selection is copied to `test-results/player-view-failed-replay-selection.json` for exact focused replays without overwriting full-run artifacts.
+
+- Eight existing scenarios encounter partial `Chart details` selectors that now also match `Edit chart details`. Eleven command locators in six files will use exact accessible names, with their behavior assertions unchanged.
+- The keyboard-outline scenario's fixed Tab count predates the two new controls. Its explicit traversal will assert the player title and publication control before measuring the same footer-button outline.
+- The old export expectations must assert current outer version 2 while retaining layout version 1. The named legacy-applicability import fixture must explicitly use outer version 1; current v2 correctly rejects the legacy object applicability scopes. Raw legacy fixtures remain v1.
+- Three maintained footer smoke variants found the newly added preview action in the primary footer, displacing the existing Edit/Open action composition. Move that secondary consultation action into the Player publication summary and retain the original footer geometry assertions.
+- Four cases reached their existing 30-second deadline (cold storage initialization, two catalogue journeys and the long Orbit export journey). Replay unchanged on the warm server before deciding whether any further correction is warranted.
+- The privacy review's type-bearing unknown-marker list name will receive a focused failing accessibility assertion, then the neutral label correction. Only affected checks will rerun after these corrections.
+
+### Final verification and review closure
+
+- `npm run lint` and `npm run typecheck`: passed on the corrected source. `git diff --check`: passed.
+- The focused accessibility regression first failed on the actual `aria-label=Visible star system labels` in an Unknown presence map (`test-results/player-view-aria-red`). After the neutral label correction, the mode/accessibility journey passed. The corrected eight-case publication run had seven passes and one cold setup timeout before publication began; that remaining case passed unchanged in isolation in 16.8 seconds. Artifacts: `test-results/player-view-publication-green` and `test-results/player-view-publication-first-replay`.
+- Final desktop and compact screenshots from the corrected publication run were visually inspected. Preview/close actions remain reachable, the unknown marker is neutral and the secondary Preview action is beside publication settings. The existing three footer geometry/hit-test scenarios passed unchanged at desktop, portrait compact and short landscape sizes.
+- Exact failed-case replay: `npx playwright test --last-failed --reporter=line --output=test-results/player-view-failed-replay`, with `PLAYWRIGHT_LAST_RUN_OUTPUT_FILE` pointing to the copied full-run selection: 17 passed / one old long Orbit journey reached its 30-second deadline. Raw output: `test-results/player-view-failed-replay.log`. The cold storage and catalogue cases passed without changing assertions or timeouts.
+- The unchanged long Orbit journey (`system-orbits.spec.ts:246`) completed all assertions on the candidate with the local CLI diagnostic `--timeout=90000` (one passed, 53.4 seconds). Its normal deadline was not edited or disabled. Artifacts: `test-results/player-view-long-orbit-current`.
+- Baseline comparison used an archived copy of `8d4b66504ca6723db5405ed7cb93d0a666264c9a` under ignored `test-results/player-view-baseline-check`, existing dependencies and separate port 3129. Its only configuration override was a private Vite cache directory to avoid sharing the candidate cache. The first baseline run timed out loading the cold page; with 90 seconds the original scenario completed all assertions (one passed, 1.5 minutes). A subsequent warm baseline run again exceeded 30 seconds at the image-export stage (`system-orbits.spec.ts:757`), matching the initial integrated candidate failure stage. This establishes a pre-existing local timing limit, not a clean default-deadline run. Baseline evidence is retained inside that ignored copy.
+- Completion evidence covers all 447 scenarios: 446 have passing normal-deadline evidence; the long existing Orbit scenario has complete assertion evidence with the local 90-second diagnostic allowance on both baseline and candidate. The full run is deliberately recorded as 429/18, not rewritten as a clean pass.
+- Independent Standards and Spec reviewers closed the inspected-system forwarding defect and reviewed the final bounded corrections without new blocking findings. Complementary privacy/persistence review closed the Unknown-mode ARIA disclosure. No tests were weakened to close these findings. The duplicated-validator heuristic remains the documented nonblocking suggestion.
+- GitHub #9 was reread immediately before closure and remains unchanged and open. Ticket 01 is closed; ticket 02 is available but unclaimed. No later slice, remote issue write, push, PR or merge was performed. Coordinator-owned verification servers are stopped at handoff; unrelated workspace files remain untouched.

@@ -118,14 +118,24 @@ test('desktop and compact previews render only the label allowed by each publica
     await expect(preview).toContainText('Player Jump Cluster')
     if (mode === 'hidden') {
       await expect(preview).toContainText('No star systems are visible to players.')
-      await expect(preview.getByRole('list', { name: 'Visible star system labels' })).toHaveCount(0)
+      await expect(preview.getByRole('list', { name: 'Visible marker labels' })).toHaveCount(0)
     } else {
       const expected = expectedLabels.get(mode)
       if (!expected) throw new Error(`No expected label is defined for ${mode}.`)
-      await expect(preview.getByRole('list', { name: 'Visible star system labels' })).toHaveText(expected)
+      await expect(preview.getByRole('list', { name: 'Visible marker labels' })).toHaveText(expected)
       if (mode === 'revealed') await expect(preview).toContainText('Private Vesper')
       else await expect(preview).not.toContainText('Private Vesper')
-      if (mode === 'unknown') await expect(preview).not.toContainText('Star system')
+      if (mode === 'unknown') {
+        await expect(preview).not.toContainText('Star system')
+        const exposedMapContent = await preview.locator('.player-cluster-map').evaluate(element => {
+          const nodes = [element, ...element.querySelectorAll('*')]
+          const ariaAttributes = nodes.flatMap(node => Array.from(node.attributes)
+            .filter(attribute => attribute.name.startsWith('aria-'))
+            .map(attribute => `${attribute.name}=${attribute.value}`))
+          return [...ariaAttributes, element.textContent ?? ''].join('\n')
+        })
+        expect(exposedMapContent).not.toMatch(/star\s+systems?/i)
+      }
     }
     await expect(preview).not.toContainText('Private Reach')
     if (mode === 'unknown') {
@@ -153,7 +163,7 @@ test('desktop and compact previews render only the label allowed by each publica
   await compactTrigger.click()
   const compactPreview = page.getByRole('dialog', { name: 'Player view preview' })
   await expect(compactPreview).toContainText('Player Jump Cluster')
-  await expect(compactPreview.getByRole('list', { name: 'Visible star system labels' })).toHaveText('Unknown presence')
+  await expect(compactPreview.getByRole('list', { name: 'Visible marker labels' })).toHaveText('Unknown presence')
   const compactScreenshotPath = testInfo.outputPath('compact-player-preview-unknown.png')
   await page.screenshot({ path: compactScreenshotPath, animations: 'disabled' })
   await testInfo.attach('compact-player-preview-unknown', {
@@ -257,6 +267,17 @@ test('editing an inspected system keeps its publication target when another syst
   await clusterMap.getByRole('button', { name: 'Select New System 2 system' }).click()
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
+
+  const previewTrigger = inspector.getByRole('button', { name: 'Preview player view' })
+  await previewTrigger.click()
+  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  await expect(preview).toBeVisible()
+  await expect(preview).toContainText('Player Jump Cluster')
+  await page.keyboard.press('Escape')
+  await expect(preview).toBeHidden()
+  await expect(previewTrigger).toBeFocused()
+  await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
+
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
 
   const edit = page.getByRole('dialog', { name: 'Edit chart details' })

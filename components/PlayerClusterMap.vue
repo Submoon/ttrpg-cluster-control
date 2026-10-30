@@ -27,7 +27,7 @@
         >{{ system.label }}</text>
       </g>
     </svg>
-    <ul v-if="props.document.systems.length" class="sr-only" aria-label="Visible star system labels">
+    <ul v-if="props.document.systems.length" class="sr-only" aria-label="Visible marker labels">
       <li v-for="system in props.document.systems" :key="system.id">{{ system.label }}</li>
     </ul>
   </section>

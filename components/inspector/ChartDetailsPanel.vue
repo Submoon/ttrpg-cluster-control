@@ -36,15 +36,15 @@
           <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ publicationLabel }}</dd>
         </template>
       </dl>
+      <UButton block class="mt-3 w-full justify-center" color="neutral" variant="outline" @click="emit('preview-player-view')">
+        Preview player view
+      </UButton>
     </section>
 
     <template #footer>
       <div class="chart-details-actions grid gap-2" :class="{ 'chart-details-actions--system': props.allowOpenSystem && props.mode === 'system' && props.selectedSystem }">
         <UButton block class="w-full min-w-0 justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
           {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
-        </UButton>
-        <UButton block class="w-full min-w-0 justify-center" color="neutral" variant="outline" @click="emit('preview-player-view')">
-          Preview player view
         </UButton>
         <UButton
           v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"

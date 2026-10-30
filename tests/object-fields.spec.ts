@@ -190,7 +190,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const chartDetails = page.getByRole('button', { name: 'Chart details' })
+  const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
   const hierarchy = await openWorkspaceHierarchy(page)
   const systemInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await expect(chartDetails).toHaveAttribute('aria-pressed', 'true')
@@ -231,7 +231,7 @@ test('Chart details is an active, keyboard-accessible inspector view', async ({ 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await clickDockAction(page, 'Add Jump Route')
-  await expect(page.getByRole('button', { name: 'Chart details' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Chart details', exact: true })).toHaveCount(0)
   await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Exit (Vesper)')
   await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('Beyond the Reach')

@@ -58,6 +58,7 @@
     :editor-error="props.editorError"
     :saving="props.saving"
     @edit-chart-names="emit('edit-chart-names', $event)"
+    @preview-player-view="emit('preview-player-view')"
     @open-system="emit('open-system', $event)"
     @delete-system="emit('delete-system', $event)"
   />

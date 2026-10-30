@@ -384,7 +384,7 @@ test('hiding the chart-name dialog keeps the draft available to resume', async (
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   await page.getByRole('complementary', { name: 'Object inspector' })
     .getByRole('button', { name: 'Edit chart details' })
     .click()
@@ -475,7 +475,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
@@ -629,7 +629,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
   try {
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
     await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-    await page.getByRole('button', { name: 'Chart details' }).click()
+    await page.getByRole('button', { name: 'Chart details', exact: true }).click()
     const inspector = page.getByRole('dialog', { name: 'Object inspector' })
     await inspector.getByRole('button', { name: 'Edit chart details' }).click()
     const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
@@ -909,6 +909,11 @@ test('chart-name dialog buttons show the semantic keyboard focus outline', async
   await page.keyboard.press('Tab')
   await expect(dialog.getByLabel('Star system')).toBeFocused()
   await page.keyboard.press('Tab')
+  await expect(dialog.getByLabel('Player-facing title')).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(dialog.getByLabel('How players see this system')).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(dialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
 
   const focusedButton = await page.evaluate(() => {
     const element = document.activeElement

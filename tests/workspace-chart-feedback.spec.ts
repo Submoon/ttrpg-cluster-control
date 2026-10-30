@@ -60,7 +60,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
 test('a hidden clean chart-name session remains resumable without claiming unapplied changes', async ({ page }) => {
   await createWorkspace(page)
 
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
