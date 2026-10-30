@@ -38,3 +38,13 @@ Final `npm run lint`, `npm run typecheck` and `npm run build` passed, with deliv
 ## Resolution
 
 Implementation and local verification completed on 2026-10-30 with no unresolved reviewer findings. The owned development server is stopped. Source, tests and these planning records are ready for the authorized commit and PR; generated test artifacts and unrelated environment files are excluded. GitHub CI results belong to the published PR and are not claimed by this local record.
+
+## CI follow-up
+
+PR [#35](https://github.com/Submoon/ttrpg-cluster-control/pull/35) initially passed static checks and browser shard 2. Shard 1 passed 137/138 scenarios; its sole failure was the existing elliptical Orbit export/import journey, expecting horizontal radius 320 after a native drag but receiving 319. The quality gate failed as a consequence.
+
+A minimized public-UI reproduction confirmed integral CSS-pixel quantization at fractional zoom: scale `0.5754602689861453`, intended client X `792.4208954914542`, rounded client X `792`, resulting world radius 319. The unchanged renderer produced exactly that radius. The corrected probe passed using the captured pre-gesture transform and measured native mouse delivery, with exact radius assertions and start/end errors bounded by `Math.SQRT1_2` CSS pixels. Temporary instrumentation and the probe were removed.
+
+Only `tests/system-orbits.spec.ts` changes in the correction: horizontal-axis expectations now derive from actual delivered input through the existing shared helpers; dependent axis/global-scale assertions reuse that radius. Production behavior and radius tolerances are unchanged. The original journey passed three consecutive runs against the unchanged production build (3/3, one minute). Independent review found no defects or blockers and confirmed downstream angle, persistence, export and import assertions remain meaningful. Follow-up lint/typecheck and the new exact-head CI run are recorded in the PR; this local record does not predict their outcome.
+
+Branch preview: [map tool shortcuts](https://ttrpg-cluster-control-git-codex-issue-29-map-too-1010d8-submoon.vercel.app). This alias follows the branch; CI selects the immutable deployment for each tested head.
