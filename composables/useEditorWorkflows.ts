@@ -446,6 +446,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
       requestPanel: viewport.requestPanel,
       closePanel: viewport.closePanel,
       togglePanel: viewport.togglePanel,
+      focusActiveMap: mapControls.focusActiveMap,
       recordViewport: mapControls.recordViewport,
       setViewportPercentage: mapControls.setViewportPercentage,
       fitActiveMap: mapControls.fitActiveMap,

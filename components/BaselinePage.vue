@@ -143,6 +143,7 @@
 
           <template #dock>
             <WorkspaceDock
+              ref="workspaceDockRef"
               v-model:add-open="creationChooserOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
@@ -178,6 +179,7 @@
               @begin-orbit-center-move="beginOrbitCenterMapMove"
               @confirm-orbit-center-move="confirmOrbitCenterMove"
               @cancel-orbit-center-move="cancelOrbitCenterMove"
+              @keyboard-add-escape="restoreMapFocusAfterKeyboardAdd"
             >
               <template #add="{ close }">
                 <template v-if="activeView === 'cluster'">
@@ -496,6 +498,7 @@ import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
+import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -571,7 +574,7 @@ watch(hydrationState, (state, previous) => {
 }, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
-  isCompactViewport, compactPanelOpen, compactPanel, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
+  isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
 } = mapControls
 const {
@@ -719,6 +722,8 @@ const recoveryDetailsOpen = ref(false)
 const workspaceFeedbackRef = ref<HTMLElement | null>(null)
 const objectPaletteActiveFamily = ref<ObjectFamily>('CelestialBody')
 const creationChooserOpen = ref(false)
+const workspaceDockRef = ref<{ openAddChooserFromKeyboard(): void } | null>(null)
+const keyboardAddOriginMapKey = ref<string | null>(null)
 const creationTypeLabel = computed(() => {
   const type = creationSession.value?.type
   if (!type) return ''
@@ -936,6 +941,33 @@ useWorkspaceHistoryShortcuts({
   undo: undoWorkspace,
   redo: redoWorkspace,
 })
+
+useMapToolShortcuts({
+  workspaceEnabled: () => workspace.value !== null,
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
+    || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
+    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  editingGestureActive: () => editingGestureActive.value,
+  activeMapKey: () => activeMapKey.value,
+  mapMode: () => mapMode.value,
+  addIntentActive: () => creationSession.value !== null || clusterAddType.value !== null,
+  changeMapMode,
+  openAddChooser: openMapAddChooserFromKeyboard,
+  focusActiveMap: mapControls.focusActiveMap,
+})
+
+function openMapAddChooserFromKeyboard(): void {
+  keyboardAddOriginMapKey.value = activeMapKey.value
+  workspaceDockRef.value?.openAddChooserFromKeyboard()
+}
+
+function restoreMapFocusAfterKeyboardAdd(): void {
+  const originMapKey = keyboardAddOriginMapKey.value
+  keyboardAddOriginMapKey.value = null
+  if (!originMapKey || originMapKey !== activeMapKey.value || !document.hasFocus()) return
+  mapControls.focusActiveMap()
+}
 
 async function openImportFieldsDraft(): Promise<void> {
   if (!await beforeWorkspaceOperation()) return
