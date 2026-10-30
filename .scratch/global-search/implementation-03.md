@@ -1,7 +1,17 @@
 ---
 title: "Global object search: implementation and verification"
-status: in-progress
+status: closed
 ---
+
+## Resolution
+
+Ticket 03 and the parent local specification are complete at source candidate **7564ec447e9d521520aab649a0c78b5d63baa047**, pushed on the single **codex/global-search** branch in [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36). Final upstream baseline is **d40e5f515baf1afeb0e2135461287b243b2a1f6c**, merged at `c0241267` with both upstream save/startup expectations and native Tree locators preserved.
+
+[CI run 41096614548](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41096614548) passed lint, full Nuxt typecheck, production build, preview resolution, **221 checks/storage cases**, **159 + 151 browser cases** against the exact Vercel Preview, and the final quality gate: **531/531 discovered tests passed**. Independent Standards and Spec reviews confirmed all reported source findings closed at this exact revision. The older local deadline failures below remain historical evidence; the final CI includes the unchanged nested construction scenario and all predecessor regressions.
+
+Local native Search/Tree/panel checks passed 27/27. The final opening-shortcut/gesture/dialog/responsive selection passed 12/12 plus a 1/1 cleanup follow-up. The user repeated the native software-keyboard/reveal/Stay journey successfully on Nothing Phone 4a Pro / Firefox; see [the actual-device record](mobile-validation.md). [The native-refactor record](dashboard-refactor.md) contains current evidence and historical diagnostic corrections.
+
+The redundant initial instruction is removed. Control+K (Windows/Linux) and Command+K (macOS) belong to this ticket and preserve query/draft/map ownership. All three implementation slices remain on the same branch. No merge to main, release or remote source-issue closure was performed.
 
 ## Scope, branch and baseline
 
@@ -73,4 +83,4 @@ The user then explicitly requested native presentation components, extending thi
 
 The native presentation refactor and its verification are recorded in [the current checkpoint](dashboard-refactor.md). Navbar, Toolbar, CommandPalette and nested Tree preserve existing guarded commands and session ownership. The user validated the replacement Palette on the Nothing Phone 4a Pro / Firefox branch preview at `dfc5c362`. Subsequent steering removed redundant initial instructions and attached Control/Command+K to this ticket as story 53.
 
-Fresh `origin/main` advanced through PR #38 to `d40e5f51`; it was integrated at `c0241267`, preserving both durable-save acknowledgement checks and Tree row semantics in the three conflict hunks. The final shortcut/public integration selection passed 12/12, its animation cleanup follow-up passed 1/1, and lint/prepared types passed. The pre-existing complex nested-map construction still hit its unchanged local deadline on two runs; full CI remains the completion gate. No merge to main, release or source-issue closure is authorized or performed.
+Fresh `origin/main` advanced through PR #38 to `d40e5f51`; it was integrated at `c0241267`, preserving both durable-save acknowledgement checks and Tree row semantics in the three conflict hunks. The final shortcut/public integration selection passed 12/12, its animation cleanup follow-up passed 1/1, and lint/prepared types passed. The pre-existing complex nested-map construction hit its unchanged local deadline on two runs; the subsequently green complete CI is recorded in Resolution. No merge to main, release or source-issue closure is authorized or performed.

@@ -126,3 +126,7 @@ Closed on 2026-10-29 after approval and publication of these local implementatio
 3. [Find and reveal objects across every system](tickets/03-global-object-reveal.md)
 
 The 35 reviewed acceptance items were preserved in those tickets, along with their scope, verification requirements and blocking links. Ticket 01 is the only initial frontier. The full specification remains open until implemented and verified; GitHub #7 is unchanged and remains open. No product code, commits, remote tracker writes or implementation claims were created by this planning step.
+
+### Implementation outcome
+
+All three separately authorized tickets are now closed on the single **codex/global-search** branch. [Ticket 03's resolution](tickets/03-global-object-reveal.md) records the complete all-workspace feature, native UI follow-up, Control/Command+K entry, successful actual-phone journey and green 531-case integrated CI. The original dependency graph remains 01 -> 02 -> 03; no fourth implementation slice was introduced. [Draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) remains unmerged and the coordinator did not close the remote source issue.

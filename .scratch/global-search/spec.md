@@ -1,6 +1,6 @@
 ---
 title: "Global search with branch-aware map framing"
-status: open
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -194,9 +194,9 @@ After fetching `origin` on 2026-10-29, this isolated worktree's detached `HEAD`,
 
 ### Readiness and remaining design work
 
-Product behavior and the proposed test seams are confirmed. The specification is open and `ready-for-agent`, with an approved local ticket set; that state alone is not authorization to start implementation. Separately authorized tickets 01 and 02 have delivered the visible entry, matching/identity contract, guarded reveal and active-system branch framing. Their implementation records capture the chosen layout, 200% isolated-target cap, lower zoom support and verification limits. No prototype or new domain ADR is currently required to settle a product question.
+Product behavior and the proposed test seams were confirmed before implementation. Separately authorized tickets 01, 02 and 03 have now delivered and verified the complete effort. Their records preserve the initial readiness, actual baselines, chosen native layout, 200% isolated-target cap, lower zoom support and validation outcomes. No prototype or new domain ADR was required.
 
-The remaining implementation risk is extending the complete guarded reveal across systems, including inactive maps, while retaining the delivered branch bounds, valid lower zoom and camera/focus ownership after restoration and panel/keyboard changes. Keep these responsibilities connected in ticket 03. Recheck the source issue and baseline before implementation and report divergence rather than overwriting confirmed decisions.
+Ticket 03 completed the guarded reveal across systems, including inactive maps, retaining complete branch bounds, valid lower zoom and camera/focus ownership after restoration and panel/keyboard changes. Story 53's opening shortcut was delivered in the same slice and branch.
 
 ### Approved implementation tickets
 
@@ -208,10 +208,14 @@ On 2026-10-29, the user approved the three vertical slices and the dependency gr
 | [Find an object and frame its branch in the active system](tickets/02-active-system-object-branches.md) | [Find and reveal the cluster and its systems](tickets/01-cluster-system-search.md) (closed) | Active-system object names/keys and complete hosted-branch framing. |
 | [Find and reveal objects across every system](tickets/03-global-object-reveal.md) | [Find an object and frame its branch in the active system](tickets/02-active-system-object-branches.md) (closed) | All-workspace object discovery and guarded cross-map reveal. |
 
-Tickets 01 and 02 are closed following their separately authorized implementations. On 2026-10-30 the user required **one feature branch**: all predecessor commits were preserved and pushed on **codex/global-search**, and ticket 03 is claimed there. Historical ticket-specific branch names in earlier records are past provenance. See [Cluster and system search: implementation and verification](implementation-01.md), [Active-system object search: implementation and verification](implementation-02.md) and [Global object search: implementation and verification](implementation-03.md) for actual baselines, behavior, checks and limits. Ready-for-agent metadata is distinct from implementation authorization. Full global-object acceptance still requires ticket 03, including its actual software-keyboard evidence.
+All three tickets are closed following their separately authorized implementations. On 2026-10-30 the user required **one feature branch**: every predecessor commit was preserved and the complete effort is pushed on **codex/global-search**. Historical ticket-specific branch names are past provenance. See [Cluster and system search: implementation and verification](implementation-01.md), [Active-system object search: implementation and verification](implementation-02.md) and [Global object search: implementation and verification](implementation-03.md) for actual baselines, behavior, checks and limits. Ready-for-agent metadata remains distinct from implementation authorization.
 
 The source issue and baseline were refreshed before publication as recorded above. Later authorizations covered all three implementation slices, pushing completed ticket 02, and one canonical feature branch. The user subsequently authorized draft PR #36 for its rolling branch preview, the native UI refactor and ticket 03's opening shortcut. Merge to main, release and a remote source-issue update remain outside scope. GitHub #7 was re-read unchanged before ticket 03 implementation and remains OPEN.
 
 ### Specification verification
 
-The initial specification deliverable was documentation only. Subsequent ticket 01/02 runtime, automated checks, screenshots and limitations are recorded in their linked implementation records. Ticket 02's full suite was 483/487 on its first complete invocation; three failures passed on unchanged targeted reruns and the remaining Orbit timeout also reproduced on the predecessor. No fully green suite or physical software-keyboard/screen-reader certification is claimed. Global cross-system object checks remain future completion requirements; the parent specification stays open.
+The initial specification deliverable was documentation only. Predecessor runtime, screenshots and initial suite limitations remain in their implementation records. Final cumulative verification at `7564ec44` passed all **531 discovered cases**, including all earlier slice regressions, with production build, exact-preview browser shards and the required quality gate. Actual phone software-keyboard/reveal/Stay testimony is recorded separately; no external physical-keyboard or screen-reader certification is claimed.
+
+## Resolution
+
+The complete 53-story local effort is implemented and verified in [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) on **codex/global-search**. [Final CI](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41096614548) and [ticket 03's resolution](tickets/03-global-object-reveal.md) record the exact source candidate, current-main integration, independent review closure and actual mobile evidence. The [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app) exposes the complete feature. This closes the local implementation effort; merge, release and the remote source issue remain under the user's control.

@@ -1,11 +1,11 @@
 ---
 title: "Native Nuxt UI presentation refactor"
-status: in-progress
+status: closed
 ---
 
 ## Current checkpoint
 
-Native Navbar, Toolbar, CommandPalette and Tree are implemented. The redundant empty-query instruction is removed. Ticket 03 also includes Control+K on Windows/Linux and Command+K on macOS, an accessible `UKbd` hint, idempotent query refocusing and live gesture/dialog admission.
+Native Navbar, Toolbar, CommandPalette and Tree are implemented and verified at **7564ec447e9d521520aab649a0c78b5d63baa047**. The redundant empty-query instruction is removed. Ticket 03 also includes Control+K on Windows/Linux and Command+K on macOS, an accessible `UKbd` hint, idempotent query refocusing and live gesture/dialog admission.
 
 The latest upstream baseline is **d40e5f515baf1afeb0e2135461287b243b2a1f6c** (PR #38); it is merged at **c0241267d91f9d2da1a8a7e34a46dfe18bb745eb**. Main is checked out in another worktree, so its local reference was not force-updated. Three conflicting test hunks preserve both `waitForWorkspaceSaved` acknowledgements and native `treeitem` locators. No merge was aborted and no local work was discarded.
 
@@ -18,12 +18,18 @@ The latest upstream baseline is **d40e5f515baf1afeb0e2135461287b243b2a1f6c** (PR
 | Shortcut, closing modal, held pans, old map-shortcut guards and responsive states | 12/12 passed; `test-results/search-shortcut-final-browser/report.json` |
 | Closing-modal test cleanup correction | 1/1 passed; `test-results/search-shortcut-closing-cleanup/report.json` |
 | Final shortcut lint / prepared Nuxt types | Both passed; `test-results/search-shortcut-pan-final-{lint,typecheck}.log` |
-| Independent source reviews | Original native P2s closed; shortcut gesture P2 source closure accepted; final commit pin pending |
-| Complete integrated CI for latest shortcut + main | Pending |
+| Independent source reviews | Standards and Spec confirm zero remaining blocking/source findings at `7564ec44` |
+| Complete integrated CI for latest shortcut + main | **531/531 passed**: 221 checks/storage + 159 and 151 browser cases; build, preview resolution and quality gate succeeded in [run 41096614548](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41096614548) |
 
-The complex existing nested-map construction test reached its unchanged 30-second local deadline twice after the latest merge, at different Add completion steps. No assertion established a product defect and no deadline/skip was changed. Other conflict-affected field configuration, delayed-import guard and Tree history tests passed. Complete CI must still run this scenario; do not describe the local merge checkpoint as entirely green.
+The complex existing nested-map construction test reached its unchanged 30-second local deadline twice after the latest merge, at different Add completion steps. No assertion established a product defect and no deadline/skip was changed. Other conflict-affected field configuration, delayed-import guard and Tree history tests passed. Complete CI subsequently passed every discovered case, including the unchanged construction scenario. The earlier local merge checkpoint remains a timed-out run rather than a clean local suite.
 
 The shortcut's active-contact guard reads a live predicate exposed by the existing map-tool shortcut owner. Its pointer/touch Sets and capture/release/cancel/blur/unmount lifecycle remain unchanged; Search does not duplicate tracking or cache that nonreactive state. Competing dialogs remain owners throughout actual visible exit animations. The new public closing-Fields regression pauses/resumes the native animation with guaranteed cleanup and checks suppression, opener focus and a fresh admitted chord.
+
+## Resolution
+
+All native-refactor and opening-shortcut criteria are satisfied. The source candidate `7564ec44` is pushed on the sole feature branch **codex/global-search** in [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36); its exact Vercel Preview passed both full browser shards. The public rolling URL remains [the branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app). The final follow-up only records this outcome in documentation; source and tests are unchanged from the fully verified candidate.
+
+The physical-phone evidence is actual user testimony for the native Palette input/reveal/Stay path. Automated chord tests cover browser events and platform emulation; no external physical keyboard or screen-reader certification is claimed. No merge to main, release, or source-issue closure was performed.
 
 ## Authorization and baseline
 

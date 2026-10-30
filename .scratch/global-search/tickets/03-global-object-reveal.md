@@ -1,6 +1,6 @@
 ---
 title: "Find and reveal objects across every system"
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -32,19 +32,19 @@ Completes User Stories 2 and 24 and extends all applicable matching, identity, a
 
 ## Acceptance criteria
 
-- [ ] Object-name and Location-key results cover all systems in the current workspace from both cluster and system views. Remove the active-system-only limitation; unopened maps are included without loading another workspace or recovery snapshot.
-- [ ] Preserve one row per entity while ranking across all eligible fields and kinds. Repeated names, same keys across systems, case-distinct keys and duplicate imported systems/objects remain distinct stable-ID destinations with contextual labels and occurrence numbers.
-- [ ] One command accepts explicit destination identity, resolves existing modified sessions and revalidates target/context after waits. The search UI does not chain void-returning system-selection and object-selection commands or infer success from a changed view.
-- [ ] Successful cross-system activation opens the owning system, selects the intended object and applies the complete branch framing from 02. Neither a same-named object in the starting system nor a remembered destination selection can win.
-- [ ] Destination mount, visit restoration, panel closure, software-keyboard layout and deferred focus/camera work are sequenced with request ownership checks. A newer activation, removed destination or editor reset cannot receive an obsolete completion.
-- [ ] Apply/Discard/Stay and invalid Apply behave consistently for visible/hidden object, Orbit, route and chart-name sessions. Rejected navigation preserves the starting map/selection/camera/query; same-target session reuse remains intact. A legitimate accepted guard Apply is neither rolled back nor replayed if the later reveal becomes stale.
-- [ ] Renaming, importing, deletion and Undo/Redo update global matches and disambiguation. Applied values remain searchable during pending durability; drafts/previews remain excluded. Query retention/reset and accessible reachability of all results remain correct.
-- [ ] Cluster/system destinations stay unchanged: a system result still frames its cluster node rather than entering its map. Search reactivation overrides the destination camera for that activation; normal Back/revisit still restores valid per-map state.
-- [ ] Desktop/compact users can discover, scroll to and deliberately activate a result in another system, see its full branch with Inspect closed as specified and continue with map focus. Search Escape/composition/input ownership and retained drafts survive nested guards and rotation/reflow.
-- [ ] A representative larger workspace proves that later matches are reachable and selection remains usable without silent truncation. Do not infer numerical capacity/latency guarantees from tiny existing fixtures.
-- [ ] Real command and public-browser scenarios cover cluster-to-object, system-A-to-system-B, same-system reactivation, identical imports, context/target changes during confirmation and remembered-camera races. Include all earlier slice regressions and full-spec acceptance evidence.
-- [ ] Record actual software-keyboard/input evidence for the mobile journey and clearly distinguish any remaining physical keyboard/screen-reader certification limits from browser emulation. Do not mark the full mobile criterion satisfied solely by viewport emulation.
-- [ ] Remove the redundant initial empty-query instruction while keeping an inviting input and explicit no-match state. Control+K on Windows/Linux and Command+K on macOS open Search with query focus and a visible keyboard hint; repeated opening preserves the query. Preserve ordinary desktop drafts, competing dialog/fullscreen-panel ownership, composition and active gestures.
+- [x] Object-name and Location-key results cover all systems in the current workspace from both cluster and system views. Remove the active-system-only limitation; unopened maps are included without loading another workspace or recovery snapshot.
+- [x] Preserve one row per entity while ranking across all eligible fields and kinds. Repeated names, same keys across systems, case-distinct keys and duplicate imported systems/objects remain distinct stable-ID destinations with contextual labels and occurrence numbers.
+- [x] One command accepts explicit destination identity, resolves existing modified sessions and revalidates target/context after waits. The search UI does not chain void-returning system-selection and object-selection commands or infer success from a changed view.
+- [x] Successful cross-system activation opens the owning system, selects the intended object and applies the complete branch framing from 02. Neither a same-named object in the starting system nor a remembered destination selection can win.
+- [x] Destination mount, visit restoration, panel closure, software-keyboard layout and deferred focus/camera work are sequenced with request ownership checks. A newer activation, removed destination or editor reset cannot receive an obsolete completion.
+- [x] Apply/Discard/Stay and invalid Apply behave consistently for visible/hidden object, Orbit, route and chart-name sessions. Rejected navigation preserves the starting map/selection/camera/query; same-target session reuse remains intact. A legitimate accepted guard Apply is neither rolled back nor replayed if the later reveal becomes stale.
+- [x] Renaming, importing, deletion and Undo/Redo update global matches and disambiguation. Applied values remain searchable during pending durability; drafts/previews remain excluded. Query retention/reset and accessible reachability of all results remain correct.
+- [x] Cluster/system destinations stay unchanged: a system result still frames its cluster node rather than entering its map. Search reactivation overrides the destination camera for that activation; normal Back/revisit still restores valid per-map state.
+- [x] Desktop/compact users can discover, scroll to and deliberately activate a result in another system, see its full branch with Inspect closed as specified and continue with map focus. Search Escape/composition/input ownership and retained drafts survive nested guards and rotation/reflow.
+- [x] A representative larger workspace proves that later matches are reachable and selection remains usable without silent truncation. Do not infer numerical capacity/latency guarantees from tiny existing fixtures.
+- [x] Real command and public-browser scenarios cover cluster-to-object, system-A-to-system-B, same-system reactivation, identical imports, context/target changes during confirmation and remembered-camera races. Include all earlier slice regressions and full-spec acceptance evidence.
+- [x] Record actual software-keyboard/input evidence for the mobile journey and clearly distinguish any remaining physical keyboard/screen-reader certification limits from browser emulation. Do not mark the full mobile criterion satisfied solely by viewport emulation.
+- [x] Remove the redundant initial empty-query instruction while keeping an inviting input and explicit no-match state. Control+K on Windows/Linux and Command+K on macOS open Search with query focus and a visible keyboard hint; repeated opening preserves the query. Preserve ordinary desktop drafts, competing dialog/fullscreen-panel ownership, composition and active gestures.
 
 ## Verification and completion boundary
 
@@ -82,3 +82,11 @@ Freshly fetched `origin/main` and local `main` are **971e91c0ad2fc78e4f92c1e6250
 Use the Complex route: read-only architecture handoff, at most two disjoint developers with TDD at the already approved pure calculations, real composed editor command and public-browser seams, then independent Standards and Spec review. The coordinator owns Git, shared preparation/checks, servers and browsers. See [Global object search: implementation and verification](../implementation-03.md). Actual mobile software-keyboard evidence is a separate explicit acceptance requirement; browser emulation alone must not close it. No PR, merge to main, release or remote issue update is requested.
 
 The user later authorized [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) for its rolling Vercel branch preview, successfully tested the preceding UI on Nothing Phone 4a Pro / Firefox, and requested native Navbar/Toolbar/CommandPalette while proposing Tree for Hierarchy. The [native presentation refactor](../dashboard-refactor.md) is part of this same implementation and branch. Preserve all behavioral criteria; revalidate mobile input after replacing the search widget. Merge, release and source-issue closure remain outside scope.
+
+## Resolution
+
+Completed on **codex/global-search** at source **7564ec447e9d521520aab649a0c78b5d63baa047**, including native Dashboard chrome, CommandPalette, Tree and story 53's Control/Command+K entry. The redundant empty-query instruction is removed. Source baseline `d40e5f51` was merged at `c0241267`, preserving every predecessor commit and both sides of the save-acknowledgement/Tree test conflicts.
+
+[Final CI](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41096614548) passed all **531 cases** (221 checks/storage + 310 browser), production build, preview resolution and the quality gate. Both independent review axes closed their source findings at this exact candidate. Actual software-keyboard/reveal/Stay validation was repeated successfully on Nothing Phone 4a Pro / Firefox after replacing Search with the native Palette. See [the implementation outcome](../implementation-03.md), [native verification](../dashboard-refactor.md) and [actual-device evidence](../mobile-validation.md).
+
+The [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app) and [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) remain available for review. No main merge, release or remote issue closure was performed. Documentation-only completion records follow the fully tested source without changing its source or tests.
