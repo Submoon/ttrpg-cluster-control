@@ -54,8 +54,11 @@ test('the Dock and zoom controls expose separate map toolbars', async ({ page })
   const zoom = workspaceZoomControls(page)
   await expect(dock).toBeVisible()
   await expect(zoom).toBeVisible()
-  await expect(dock.getByRole('group', { name: 'Map interaction mode' }).getByRole('button'))
-    .toHaveText(['Select', 'Navigate', 'Move'])
+  const modeButtons = dock.getByRole('group', { name: 'Map interaction mode' }).getByRole('button')
+  await expect(modeButtons).toHaveCount(3)
+  for (const [index, name] of ['Select', 'Navigate', 'Move'].entries()) {
+    await expect(modeButtons.nth(index)).toHaveAccessibleName(name)
+  }
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true')
   await expect(dock.getByRole('button', { name: 'Fit map' })).toHaveCount(0)
   const zoomNavigation = await openWorkspaceZoomNavigation(page)
