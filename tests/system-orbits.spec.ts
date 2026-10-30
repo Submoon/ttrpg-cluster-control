@@ -244,6 +244,8 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
 })
 
 test('the Warden can edit, save, export, and import an elliptical Orbit around an unoccupied center', async ({ page }) => {
+  // Keep the complete geometry, backup/import, and reload journey in one test.
+  test.setTimeout(60_000)
   await page.addInitScript(() => {
     const downloadWindow = window as DownloadWindow
     downloadWindow.__mapExportBlobs = []

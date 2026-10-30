@@ -1,6 +1,6 @@
 ---
 title: Tickets 03 and 04 implementation and verification
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -102,3 +102,23 @@ The focused zoom correction exposes `zoomIn()` / `zoomOut()` commands from the s
 - Source issue #9 was refreshed again and is unchanged/open, same labels/date/no comments. Origin/main advanced during implementation to `d40e5f515baf1afeb0e2135461287b243b2a1f6c` (four incoming commits: shortcut Kbd and quiet save feedback); HEAD has six local commits relative to their earlier common base. Main is checked out in another workspace at `d4b97331`. This delivery intentionally retains the actual start/review base `4b70c1b`; no late main integration or changes to that other workspace are included. Verification applies to the pinned feature branch, not the subsequently advanced main.
 
 The test-only compact-panel correction was independently reviewed with no new Spec finding. Focused far-route replay then passed 1/1 in 38.0 seconds (`test-results/player-view-34-far-route-replay.log`), including the final exact full-source export comparison. Together with the seven earlier GREEN scenarios, all eight integrated journeys now pass. No application source changed after the pinned review candidate. Final production build and the single complete suite remain pending.
+
+### Production checkpoint
+
+Production build passed on `3b09b09c110eae66a61339ddf383fa4e68ab6fd4` (`test-results/player-view-34-production-build.log`, 5m37s). Existing dependency deprecation/annotation/timing warnings are retained in the log; none failed the build. Compiled localhost port 3148 then passed all 7 selected journeys in 1.5 minutes: four persisted-entry variants, permitted Fields/masks, far-route camera/source preservation and Revealed Station association (`test-results/player-view-34-production-smoke.log`). The owned compiled server was stopped afterward. The single complete suite will use the local development server because its IndexedDB regression imports the development module URL; no source, test or documentation edits will occur during that run.
+
+### Complete suite, targeted corrections and closure
+
+The complete suite ran exactly once on the frozen application/test candidate `3b09b09c110eae66a61339ddf383fa4e68ab6fd4` (only this documentary checkpoint was uncommitted). Command: `npm test -- --reporter=line --output=test-results/player-view-34-full-suite`, with localhost 3147 and the installed Playwright browsers. Result: **514 passed / 4 failed in 43.2 minutes** (`test-results/player-view-34-full-suite.log`). All 218 pure cases, local IndexedDB regression and new player journeys passed. The four failures exhausted existing whole-test 30-second budgets in long legacy browser scenarios; the original `.last-run.json` remains preserved under the full-suite output.
+
+A copied last-failed selection drove an unchanged targeted replay, retaining normal timeouts and every assertion: **2 passed / 2 timed out in 3.0 minutes** (`test-results/player-view-34-full-failed-replay.log`). Both object/Fields cases passed. Read-only diagnosis of their original failures found accumulated workflow time, including a pending final workspace hydration rather than a retained Fields dialog.
+
+The remaining cluster-map and elliptical-Orbit journeys advanced further on replay before hitting the same total limit: cluster-map line 149 to line 190, and system-orbits line 495 to line 552. The coordinator added an explicit **case-local 60-second budget to only those two complete journeys**, with explanatory comments. Assertions, individual expectation deadlines, geometry tolerances, reloads, imports and exports are unchanged. Both independent Standards and Spec reviewers inspected the exact test-only diff and found no weakened verification or other finding. Affected lint passed (`test-results/player-view-34-long-journey-lint.log`); the final targeted replay passed **2/2 in 48.4 seconds** (`test-results/player-view-34-long-journey-replay.log`). There was no second complete-suite run and no application correction after the reviewed application commit `9f3513ce`.
+
+Final review status: Standards **0 findings**, Spec **0 findings**, complementary Sensitive privacy/persistence/UI **0 remaining findings**. Earlier confirmed migration and zoom findings were corrected, checked and explicitly closed; they are recorded above rather than presented as a clean first attempt. Executed evidence covers source compatibility, current/backup restoration, policy/mask preservation, actual editor/history flows, public-only relationships and desktop/compact navigation. Visual evidence uses browser viewport emulation; it does not certify physical-device or screen-reader behavior. These are local checks, not a Vercel/CI run.
+
+The final source refresh confirms GitHub #9 remains open with the same body revision, labels, update timestamp and no comments. Origin/main remains `d40e5f515baf1afeb0e2135461287b243b2a1f6c`; local main is checked out in a separate workspace at `d4b97331b9821b7a4ad9022c50391ba14fc847c9`. Before this closure commit, the feature branch was seven ahead / four behind origin/main. The actual implementation/review base `4b70c1b` is intentionally retained; this delivery does not integrate those subsequent main changes or modify the other checkout. All verification applies to this feature branch.
+
+Both owned servers were stopped. An independent listener check found neither port 3147 nor 3148 listening. Other workspace processes and the pre-existing untracked `.codex/environments/` were preserved. No push, PR, GitHub write or merge into main occurred.
+
+All eight criteria in each of tickets **03 and 04** are checked and both tickets are closed. Parent remains in progress: tickets **05 and 07 are available/unclaimed**, **06 is blocked by 05**, and all three remain unstarted. No transport or player-image implementation is implied by this closure.

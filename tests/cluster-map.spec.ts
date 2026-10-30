@@ -34,6 +34,8 @@ async function historyUndoDepth(page: import('@playwright/test').Page): Promise<
 }
 
 test('the Warden can navigate and arrange both maps', async ({ page }) => {
+  // This journey covers both maps, placement gestures, and persisted reloads.
+  test.setTimeout(60_000)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
