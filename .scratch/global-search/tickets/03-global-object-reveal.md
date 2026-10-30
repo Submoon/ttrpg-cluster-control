@@ -1,6 +1,6 @@
 ---
 title: "Find and reveal objects across every system"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,7 +23,7 @@ A Warden can search every object's name or Location key in the entire current wo
 
 ## Blocked by
 
-- [Find an object and frame its branch in the active system](02-active-system-object-branches.md)
+None. [Find an object and frame its branch in the active system](02-active-system-object-branches.md) is closed. Its active-system object search, guarded reveal and complete hosted-branch framing are the completed predecessor. This ticket is available and unclaimed; refresh source/baseline and preserve predecessor work before an authorized implementation. Its remaining validation limitation is recorded in the linked implementation outcome.
 
 ## Specification coverage
 

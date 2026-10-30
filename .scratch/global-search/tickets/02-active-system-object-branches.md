@@ -1,6 +1,6 @@
 ---
 title: "Find an object and frame its branch in the active system"
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -32,17 +32,17 @@ User Stories 5-6, 10, 17, 29-30 and 32-34; extends 7-20, 21, 25-28 and 35-52 to 
 
 ## Acceptance criteria
 
-- [ ] In system view, the shared search includes all catalogue families/subtypes in the active system by object name and Location key, alongside the cluster/system results already available. In this intermediate slice, objects outside the active system are not yet included; do not claim final global-object coverage.
-- [ ] Name/key matching follows the same literal normalization and ranking. An entity matching both fields appears once at its strongest rank. Distinct IDs and valid case-distinct keys remain separate.
-- [ ] Object rows expose type, system context and Location key, with a deterministic result-only number for otherwise identical labels. Applied renames/key changes/imports/deletions/Undo/Redo refresh the results without persisting another index.
-- [ ] The principal reveal command selects the exact active-system object through real session guards, with stale target/context checks and an observable accepted/rejected outcome. Selecting the current draft target retains its session; Stay or invalid Apply cannot partly retarget the editor.
-- [ ] Frame the object, all Orbits it hosts, their occupants and recursively hosted branches. Exclude its parent Orbit, siblings, unrelated Jump Routes and optional physical Station-reference targets.
-- [ ] Branch bounds contain visible object marks, Location keys/names and Orbit rings, excluding invisible hit areas and edit handles. Flat renderer groups must not be mistaken for domain parentage.
-- [ ] Contain the whole branch with a margin, including rotated/nested ellipses and descendants on either side. Prioritize the full extent over small-label readability; support a valid lower scale when the former system floor prevents the fit and coordinate it with zoom controls and viewport restoration.
-- [ ] For an isolated object, retain useful context and a reasonable scale rather than zooming its small glyph to maximum. Concrete margins/caps are design choices verified in rendered desktop and compact states.
-- [ ] Account for desktop obstructions and compact panel/keyboard layout. Success closes search and shows the framed map, focuses it and leaves Inspect available; retained drafts survive hiding panels and responsive reflow.
-- [ ] All query, keyboard/composition/touch, no-write/history, reactivation and ordinary visit guarantees from 01 continue to apply to objects. Pending gestures/continuous proposals retain established completion/cancellation semantics.
-- [ ] Pure cases verify branch membership and geometry; composed commands verify real same-system guards; public browser journeys show leaf/nested branches, parent/sibling exclusion, large-branch fit, desktop overlays and compact focus without regression to cluster/system results.
+- [x] In system view, the shared search includes all catalogue families/subtypes in the active system by object name and Location key, alongside the cluster/system results already available. In this intermediate slice, objects outside the active system are not yet included; do not claim final global-object coverage.
+- [x] Name/key matching follows the same literal normalization and ranking. An entity matching both fields appears once at its strongest rank. Distinct IDs and valid case-distinct keys remain separate.
+- [x] Object rows expose type, system context and Location key, with a deterministic result-only number for otherwise identical labels. Applied renames/key changes/imports/deletions/Undo/Redo refresh the results without persisting another index.
+- [x] The principal reveal command selects the exact active-system object through real session guards, with stale target/context checks and an observable accepted/rejected outcome. Selecting the current draft target retains its session; Stay or invalid Apply cannot partly retarget the editor.
+- [x] Frame the object, all Orbits it hosts, their occupants and recursively hosted branches. Exclude its parent Orbit, siblings, unrelated Jump Routes and optional physical Station-reference targets.
+- [x] Branch bounds contain visible object marks, Location keys/names and Orbit rings, excluding invisible hit areas and edit handles. Flat renderer groups must not be mistaken for domain parentage.
+- [x] Contain the whole branch with a margin, including rotated/nested ellipses and descendants on either side. Prioritize the full extent over small-label readability; support a valid lower scale when the former system floor prevents the fit and coordinate it with zoom controls and viewport restoration.
+- [x] For an isolated object, retain useful context and a reasonable scale rather than zooming its small glyph to maximum. Concrete margins/caps are design choices verified in rendered desktop and compact states.
+- [x] Account for desktop obstructions and compact panel/keyboard layout. Success closes search and shows the framed map, focuses it and leaves Inspect available; retained drafts survive hiding panels and responsive reflow.
+- [x] All query, keyboard/composition/touch, no-write/history, reactivation and ordinary visit guarantees from 01 continue to apply to objects. Pending gestures/continuous proposals retain established completion/cancellation semantics.
+- [x] Pure cases verify branch membership and geometry; composed commands verify real same-system guards; public browser journeys show leaf/nested branches, parent/sibling exclusion, large-branch fit, desktop overlays and compact focus without regression to cluster/system results.
 
 ## Verification and continuation
 
@@ -74,3 +74,11 @@ The tickets are fully specified (enhancement, ready-for-agent) but lifecycle and
 On 2026-10-30, the user explicitly requested pushing ticket 01 and coordinating this ticket through the implement skill with sub-agents. Ticket 01 was pushed to `origin/codex/global-search-ticket-01`. The coordinator claims ticket 02 on **codex/global-search-ticket-02**, based on **f60da958d75cd671cb801ae538a84076c638ff3d** to preserve its completed predecessor. Freshly fetched `origin/main` and local `main` remain **8d4b66504ca6723db5405ed7cb93d0a666264c9a**; the intentional implementation base is five commits ahead and zero behind. No fast-forward is needed. GitHub #7 was re-read unchanged, OPEN, with enhancement / priority:P1 and no comments.
 
 Use the Complex route: architect before implementation, at most two disjoint developers, TDD at the previously approved pure calculation, real composed command and public browser seams, then independent Standards and Spec review. The coordinator owns Git, ports, browser sessions, preparation and integrated checks. See [Active-system object search: implementation and verification](../implementation-02.md). Ticket 03 remains outside this authorization. Commit completed work locally; no PR, merge or remote issue update is requested.
+
+## Resolution
+
+Implemented on **codex/global-search-ticket-02**, source/test candidate **d5cd1ad7a483250a686ccaa08bb8e4b08a64e277**, based on pushed predecessor `f60da958`. System-view Search now finds every active-system object by name or Location key, preserves distinct identities and shows type/system/key context. One real guarded reveal selects the exact object and frames its complete hosted Orbit branch, excluding parents/siblings/references. Its mounted zoom floor, controls and remembered camera support valid scales below 25%; isolated targets retain context. Matching drafts and compact focus/panel behavior are preserved.
+
+Lint, typecheck, production build, 45 focused pure cases and five public object journeys passed. Independent Standards and Spec reviews closed with zero blockers. The complete 487-test run passed 483 and failed four; three failed scenarios subsequently passed unchanged, while the remaining old Orbit journey also exceeded 30s on the actual predecessor. The full suite is not claimed green. See [Active-system object search: implementation and verification](../implementation-02.md) for reports, comparison provenance and emulated-mobile limits.
+
+The source GitHub #7 was re-read unchanged and remains OPEN. Ticket 03 becomes available and unclaimed; the parent specification remains open. Ticket 02 is committed locally, without push, PR or remote issue modification.
