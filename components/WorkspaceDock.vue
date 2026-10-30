@@ -20,7 +20,7 @@
             @click="commands.map.changeMode(mode.value)"
           >
             <span>{{ mode.label }}</span>
-            <kbd class="workspace-shortcut-key" aria-hidden="true">{{ mode.shortcut }}</kbd>
+            <UKbd size="sm" aria-hidden="true">{{ mode.shortcut }}</UKbd>
           </UButton>
         </UTooltip>
       </div>
@@ -61,7 +61,7 @@
           >
             <UIcon name="i-lucide-plus" aria-hidden="true" />
             <span>Add</span>
-            <kbd class="workspace-shortcut-key" aria-hidden="true">A</kbd>
+            <UKbd size="sm" aria-hidden="true">A</UKbd>
             <span v-if="props.creationSession || props.clusterAddLabel" class="workspace-dock-add-separator" aria-hidden="true">·</span>
             <span
               v-if="props.creationSession || props.clusterAddLabel"
@@ -468,26 +468,6 @@ defineExpose({ openAddChooserFromKeyboard })
 
 .workspace-dock-mode {
   flex-wrap: wrap;
-}
-
-:deep(.workspace-dock-mode > button) {
-  gap: 0.4rem;
-}
-
-.workspace-shortcut-key {
-  display: inline-flex;
-  min-width: 1.1rem;
-  min-height: 1.1rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line-soft);
-  border-radius: 0.2rem;
-  padding: 0 0.2rem;
-  background: var(--panel-raised);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 0.68rem;
-  line-height: 1;
 }
 
 :global(.workspace-map-shortcut-tooltip-content) {
