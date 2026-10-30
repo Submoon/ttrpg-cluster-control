@@ -37,7 +37,11 @@
                 :model-value="objectOrbitValue"
                 :items="objectOrbitItems"
                 @update:model-value="updateObjectOrbit"
-              />
+              >
+                <template #item-label="{ item }">
+                  <span :data-orbit-id="item.orbitId">{{ item.label }}</span>
+                </template>
+              </USelect>
             </UFormField>
             <p v-if="objectOrbitValue === freeValue" class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
               Click a free location on the map to add this object.
@@ -61,7 +65,11 @@
                 :model-value="hostValue"
                 :items="hostItems"
                 @update:model-value="updateHost"
-              />
+              >
+                <template #item-label="{ item }">
+                  <span :data-object-id="item.objectId">{{ item.label }}</span>
+                </template>
+              </USelect>
             </UFormField>
             <p v-if="hostValue === centerValue" class="system-creation-form-wide m-0 text-xs text-[var(--text-muted)]" role="status">
               Click a free location on the map to place this Orbit center.
@@ -169,17 +177,21 @@ const visibleSessionError = computed(() => {
 const objectOrbitValue = computed(() => props.session?.inputs.orbitId || freeValue)
 const hostValue = computed(() => props.session?.inputs.hostId || centerValue)
 const objectOrbitItems = computed(() => [
-  { label: 'Free map position', value: freeValue },
+  { label: 'Free map position', value: freeValue, orbitId: undefined },
   ...(props.selectedSystem?.orbits ?? []).map(orbit => {
     const host = orbit.hostId === null
       ? 'unoccupied center'
       : props.selectedSystem?.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown host'
-    return { label: `Orbit ${orbit.order} around ${host}`, value: orbit.id }
+    return { label: `Orbit ${orbit.order} around ${host}`, value: orbit.id, orbitId: orbit.id }
   }),
 ])
 const hostItems = computed(() => [
-  { label: 'Unoccupied center', value: centerValue },
-  ...(props.selectedSystem?.objects ?? []).map(object => ({ label: `Around ${object.name}`, value: object.id })),
+  { label: 'Unoccupied center', value: centerValue, objectId: undefined },
+  ...(props.selectedSystem?.objects ?? []).map(object => ({
+    label: `Around ${object.name}`,
+    value: object.id,
+    objectId: object.id,
+  })),
 ])
 
 watch(() => [props.chooserOpen, props.session?.id] as const, ([chooserOpen]) => {

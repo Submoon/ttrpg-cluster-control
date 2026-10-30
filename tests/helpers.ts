@@ -31,12 +31,115 @@ export function activeWorkspaceFeedback(page: import('@playwright/test').Page): 
 export function workspaceMapContextType(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   // The adjacent heading is user-controlled and may exactly match either context label.
   return page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-    .locator('.workspace-map-heading > span')
+    .getByTestId('workspace-map-context-kind')
 }
 
 export type WorldPoint = { x: number; y: number }
 
-export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+export type MapCameraTransform = { x: number; y: number; k: number }
+
+/** Parses a map scene's D3 translate/scale attribute into camera coordinates for exact movement checks. */
+export function parseMapCameraTransform(transform: string | null): MapCameraTransform {
+  const number = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?`
+  const match = transform
+    ? new RegExp(`^translate\\(\\s*(${number})\\s*,\\s*(${number})\\s*\\)\\s*scale\\(\\s*(${number})\\s*\\)$`, 'i').exec(transform)
+    : null
+  if (!match) throw new Error(`Could not read the map camera from "${transform}".`)
+  return { x: Number(match[1]), y: Number(match[2]), k: Number(match[3]) }
+}
+
+type DomainIdentityAttribute = 'data-object-id' | 'data-orbit-id' | 'data-system-id'
+
+function domainIdentitySelector(attribute: DomainIdentityAttribute, id: string): string {
+  return `[${attribute}="${escapeAttributeSelectorValue(id)}"]`
+}
+
+async function domainIdentityValues(
+  scope: import('@playwright/test').Locator,
+  attribute: DomainIdentityAttribute,
+): Promise<string[]> {
+  return scope.evaluateAll((elements, identityAttribute) => elements
+    .map(element => element.getAttribute(identityAttribute))
+    .filter((id): id is string => id !== null), attribute)
+}
+
+async function newDomainIdentity(
+  scope: import('@playwright/test').Locator,
+  attribute: DomainIdentityAttribute,
+  previousIds: ReadonlySet<string>,
+): Promise<string> {
+  const addedIds = (await domainIdentityValues(scope, attribute)).filter(id => !previousIds.has(id))
+  if (addedIds.length !== 1 || !addedIds[0]) {
+    throw new Error(`Expected one new ${attribute} value, observed ${addedIds.length}.`)
+  }
+  return addedIds[0]
+}
+
+export type DownloadWindow = Window & {
+  __mapExportBlobs?: Blob[]
+  __mapExportCapture?: {
+    cleanup: () => void
+  }
+}
+
+type WorkspaceWriteAbortWindow = Window & {
+  __workspaceWriteAbort?: {
+    id: string
+    original: PropertyDescriptor
+    aborted: number
+  }
+}
+
+/** Aborts one real workspace IndexedDB write around an operation and always restores the prototype. */
+export async function abortNextWorkspaceWrite(
+  page: import('@playwright/test').Page,
+  operation: () => Promise<void>,
+): Promise<void> {
+  const id = `${Date.now()}-${Math.random()}`
+
+  try {
+    await page.evaluate((probeId) => {
+      const probeWindow = window as WorkspaceWriteAbortWindow
+      if (probeWindow.__workspaceWriteAbort) {
+        throw new Error('A workspace-write abort probe is already active.')
+      }
+
+      const original = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')
+      if (!original || typeof original.value !== 'function') {
+        throw new Error('IndexedDB put is unavailable.')
+      }
+
+      const state = { id: probeId, original, aborted: 0 }
+      probeWindow.__workspaceWriteAbort = state
+      Object.defineProperty(IDBObjectStore.prototype, 'put', {
+        ...original,
+        value: function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
+          const request = original.value!.apply(this, args)
+          if (!state.aborted && this.transaction.db.name === 'ttrpg-cluster-control'
+            && this.name === 'workspace' && this.transaction.mode === 'readwrite' && args[1] === 'current') {
+            state.aborted += 1
+            this.transaction.abort()
+          }
+          return request
+        },
+      })
+    }, id)
+
+    await operation()
+    const aborted = await page.evaluate(() =>
+      (window as WorkspaceWriteAbortWindow).__workspaceWriteAbort?.aborted ?? 0,
+    )
+    expect(aborted).toBe(1)
+  } finally {
+    await page.evaluate((probeId) => {
+      const probeWindow = window as WorkspaceWriteAbortWindow
+      const state = probeWindow.__workspaceWriteAbort
+      if (!state || state.id !== probeId) return
+      Object.defineProperty(IDBObjectStore.prototype, 'put', state.original)
+      delete probeWindow.__workspaceWriteAbort
+    }, id)
+  }
+}
 
 type WorkspaceWriteFailureGate = {
   originalPut: typeof IDBObjectStore.prototype.put
@@ -121,15 +224,34 @@ export async function restoreWorkspaceWriteFailureGate(page: import('@playwright
 
 /** Captures real map export blobs so assertions can inspect their serialized contents. */
 export async function captureMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => {
-    const downloadWindow = window as DownloadWindow
-    downloadWindow.__mapExportBlobs = []
-    const createObjectURL = URL.createObjectURL.bind(URL)
-    URL.createObjectURL = (object) => {
-      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
-      return createObjectURL(object)
-    }
-  })
+  await page.addInitScript(installMapExportCapture)
+  await page.evaluate(installMapExportCapture)
+}
+
+/** Releases the current document's export observer; the page fixture calls this during teardown. */
+export async function releaseMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
+  if (page.isClosed()) return
+  await page.evaluate(() => (window as DownloadWindow).__mapExportCapture?.cleanup())
+}
+
+function installMapExportCapture(): void {
+  const downloadWindow = window as DownloadWindow
+  if (downloadWindow.__mapExportCapture) return
+
+  downloadWindow.__mapExportBlobs = []
+  const original = URL.createObjectURL
+  const patched = function (object: Blob | MediaSource): string {
+    if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
+    return original.call(URL, object)
+  }
+  URL.createObjectURL = patched
+  downloadWindow.__mapExportCapture = {
+    cleanup() {
+      if (URL.createObjectURL === patched) URL.createObjectURL = original
+      delete downloadWindow.__mapExportCapture
+      delete downloadWindow.__mapExportBlobs
+    },
+  }
 }
 
 export type ExportedObject = {
@@ -433,10 +555,12 @@ export function clickNormalizedSystemPoint(
 export async function clickSystemOrbitPoint(
   page: import('@playwright/test').Page,
   map: import('@playwright/test').Locator,
-  orbitLabel: string,
+  orbit: string | { id: string },
   angleDegrees: number,
 ): Promise<WorldPoint> {
-  const ring = map.getByRole('group', { name: orbitLabel, exact: true }).locator('.orbit-ring')
+  const ring = typeof orbit === 'string'
+    ? map.getByRole('group', { name: orbit, exact: true }).locator('.orbit-ring')
+    : map.locator(`${domainIdentitySelector('data-orbit-id', orbit.id)} .orbit-ring`)
   const point = await ring.evaluate((element, degrees) => {
     const ellipse = element as SVGEllipseElement
     const content = ellipse.closest('svg')?.querySelector<SVGGElement>('.system-map-content')
@@ -723,7 +847,7 @@ export type SingleSystemWorkspaceOptions = {
 export async function createSingleSystemWorkspace(
   page: import('@playwright/test').Page,
   options: SingleSystemWorkspaceOptions = {},
-): Promise<{ clusterName: string; systemName: string }> {
+): Promise<{ clusterName: string; systemName: string; systemId: string; primaryObjectId: string }> {
   const clusterName = options.clusterName ?? 'Kestrel Reach'
   const systemName = options.systemName ?? 'Vesper'
   if (options.viewport) await page.setViewportSize(options.viewport)
@@ -763,7 +887,13 @@ export async function createSingleSystemWorkspace(
 
   await expect(page.getByRole('group', { name: 'Map interaction mode' })
     .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  return { clusterName, systemName }
+  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  const systemId = await systemMap.getAttribute('data-system-id')
+  const primaryObjects = systemMap.locator('.system-object[data-object-id]')
+  await expect(primaryObjects).toHaveCount(1)
+  const primaryObjectId = await primaryObjects.first().getAttribute('data-object-id')
+  if (!systemId || !primaryObjectId) throw new Error('The created system map is missing its domain identities.')
+  return { clusterName, systemName, systemId, primaryObjectId }
 }
 
 /** Reaches the public minimum zoom without assuming a particular starting level. */
@@ -790,7 +920,10 @@ export async function openWorkspaceZoomNavigation(
   return controls
 }
 
-/** Opens Hierarchy through its public Map chrome control when a test needs its contents. */
+/**
+ * Opens Hierarchy through public Map chrome and intentionally dismisses the Add chooser first.
+ * Reuse the returned locator after preparing a palette drag source; calling this helper again dismisses that chooser.
+ */
 export async function openWorkspaceHierarchy(
   page: import('@playwright/test').Page,
   name: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
@@ -872,63 +1005,48 @@ export async function clickDockAction(
   page: import('@playwright/test').Page,
   name: string,
   options: OrbitCreationOptions = {},
-): Promise<void> {
+): Promise<string | undefined> {
   await (await dockAction(page, name)).click()
   await dismissAddChooser(page)
 
-  if (name === 'Add orbit') await completeOrbitCreation(page, options)
+  if (name === 'Add orbit') return completeOrbitCreation(page, options)
+  return undefined
 }
 
-/** Creates a Cluster system at a public map point and optionally enters it. */
+/** Creates a Cluster system through the public map and returns its observed system identity. */
 export async function addClusterSystem(
   page: import('@playwright/test').Page,
   options: { open?: boolean; position?: WorldPoint } = {},
 ): Promise<string | undefined> {
   const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
-  const existingSystemNames = options.open
-    ? await Promise.all((await clusterMap.locator('.cluster-system-node').all()).map(async button => {
-      const label = await button.getAttribute('aria-label')
-      const match = label?.match(/^(?:Select (.+) system|Open (.+) system map)$/)
-      const systemName = match?.[1] ?? match?.[2]
-      if (!systemName) throw new Error(`Could not read a system name from "${label}".`)
-      return systemName
-    }))
-    : []
+  const systemMarks = clusterMap.locator('.cluster-system-node[data-system-id]')
+  await expect(clusterMap).toBeVisible()
+  await expect(systemMarks.first()).toBeAttached()
+  const existingSystemIds = new Set(await domainIdentityValues(systemMarks, 'data-system-id'))
+  expect(existingSystemIds.size).toBeGreaterThan(0)
 
   await clickDockAction(page, 'Add star system')
 
   const position = options.position ?? { x: 0.75, y: 0.75 }
-  const previousSystemCount = await clusterMap.locator('.cluster-system-node').count()
   await clickNormalizedClusterPoint(page, clusterMap, position)
-  await expect(clusterMap.locator('.cluster-system-node')).toHaveCount(previousSystemCount + 1)
+  await expect(systemMarks).toHaveCount(existingSystemIds.size + 1)
+  const systemId = await newDomainIdentity(systemMarks, 'data-system-id', existingSystemIds)
   await quitSystemAdd(page)
 
-  if (!options.open) return undefined
+  if (!options.open) return systemId
 
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap).toBeVisible()
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const existingSystemActions = clusterMap.getByRole('button', { name: /^Open .* system map$/ })
-  await expect(existingSystemActions).toHaveCount(existingSystemNames.length + 1)
-  const currentSystemActions = await existingSystemActions.all()
-  let createdAction: import('@playwright/test').Locator | undefined
-  let createdLabel: string | null = null
-  for (const action of currentSystemActions) {
-    const label = await action.getAttribute('aria-label')
-    const systemName = label?.match(/^Open (.+) system map$/)?.[1]
-    if (systemName && !existingSystemNames.includes(systemName)) {
-      createdAction = action
-      createdLabel = label
-      break
-    }
-  }
-  if (!createdAction || !createdLabel) throw new Error('The cluster map does not expose the newly added system.')
-
-  const systemName = createdLabel.match(/^Open (.+) system map$/)?.[1]
-  if (!systemName) throw new Error(`Could not read the new system name from "${createdLabel}".`)
+  const createdAction = clusterMap.locator(domainIdentitySelector('data-system-id', systemId))
+  await expect(createdAction).toBeVisible()
+  await expect(createdAction).toHaveAttribute('role', 'button')
+  await expect(createdAction).toHaveAccessibleName(/^Open .+ system map$/)
   await createdAction.click()
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
-  return systemName
+  const openedSystemMap = page.getByRole('group', { name: /star system map$/ })
+  await expect(openedSystemMap).toBeVisible()
+  await expect(openedSystemMap).toHaveAttribute('data-system-id', systemId)
+  return systemId
 }
 
 async function dismissAddChooser(page: import('@playwright/test').Page): Promise<void> {
@@ -1021,10 +1139,12 @@ export async function editMapObject(page: import('@playwright/test').Page): Prom
 }
 
 export async function saveMapObject(page: import('@playwright/test').Page): Promise<void> {
-  await page.getByRole('button', { name: 'Save map object' }).click()
+  await page.getByRole('button', { name: /^Apply changes/ }).click()
 }
 
-export type InspectorSelectionOption = string | { label: string | RegExp; value?: string }
+export type InspectorSelectionOption = string
+  | { label: string | RegExp; value?: string }
+  | { identity: { attribute: 'data-object-id' | 'data-orbit-id'; id: string } }
 
 /** Selects through the Inspector's public semantic control, whether a legacy native select or Nuxt UI Select. */
 export async function selectInspectorOption(
@@ -1035,6 +1155,8 @@ export async function selectInspectorOption(
   if (tagName === 'SELECT') {
     if (typeof option === 'string') {
       await control.selectOption(option)
+    } else if ('identity' in option) {
+      await control.selectOption(option.identity.id)
     } else if (option.value !== undefined) {
       await control.selectOption(option.value)
     } else if (typeof option.label === 'string') {
@@ -1042,6 +1164,17 @@ export async function selectInspectorOption(
     } else {
       throw new Error('Native select options need a string label or value.')
     }
+    return
+  }
+
+  if (typeof option !== 'string' && 'identity' in option) {
+    await control.click()
+    const { attribute, id } = option.identity
+    const selector = `[${attribute}="${escapeAttributeSelectorValue(id)}"]`
+    const optionControl = control.page().getByRole('option').filter({ has: control.page().locator(selector) })
+    await expect(optionControl).toHaveCount(1)
+    await expect(optionControl).toBeVisible()
+    await optionControl.click()
     return
   }
 
@@ -1268,6 +1401,7 @@ export const objectPaletteCategoryBySubtype: Record<typeof catalogueSubtypes[num
 
 export type CatalogueCreationTarget =
   | { kind: 'free'; x: number; y: number }
+  | { kind: 'orbit'; orbitId: string; angleDegrees?: number }
   | { kind: 'orbit'; label: string; angleDegrees?: number }
 
 export type CatalogueCreationOptions = {
@@ -1279,6 +1413,7 @@ export type CatalogueCreationOptions = {
 
 export type OrbitCreationTarget =
   | { kind: 'center'; x: number; y: number }
+  | { kind: 'host'; objectId: string }
   | { kind: 'host'; name: string }
 
 export type OrbitCreationOptions = {
@@ -1315,9 +1450,9 @@ export async function addCatalogueObject(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
   options: CatalogueCreationOptions = {},
-): Promise<void> {
+): Promise<string> {
   await (await selectCatalogueObjectButton(page, subtype)).click()
-  await completeCatalogueObjectCreation(page, subtype, options)
+  return completeCatalogueObjectCreation(page, subtype, options)
 }
 
 /** Completes an armed catalogue type by choosing its logical destination and clicking the map. */
@@ -1325,7 +1460,7 @@ export async function completeCatalogueObjectCreation(
   page: import('@playwright/test').Page,
   subtype: typeof catalogueSubtypes[number],
   options: CatalogueCreationOptions = {},
-): Promise<void> {
+): Promise<string> {
   const subtypeLabel = subtype.split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
@@ -1334,15 +1469,24 @@ export async function completeCatalogueObjectCreation(
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
 
   const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const mapObjects = map.locator('.system-object[data-object-id]')
+  const existingObjectIds = new Set(await domainIdentityValues(mapObjects, 'data-object-id'))
   const target = options.target ?? await defaultCatalogueCreationTarget(page, map, options)
   if (subtype === 'other') {
     await page.getByLabel('Type label', { exact: true }).fill(options.typeLabel ?? 'Other object')
   }
 
   if (target.kind === 'orbit') {
-    await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), target.label)
+    if ('orbitId' in target) {
+      await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), {
+        identity: { attribute: 'data-orbit-id', id: target.orbitId },
+      })
+    } else {
+      await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), target.label)
+    }
     if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
-    await clickSystemOrbitPoint(page, map, target.label, target.angleDegrees ?? 0)
+    const orbit = 'orbitId' in target ? { id: target.orbitId } : target.label
+    await clickSystemOrbitPoint(page, map, orbit, target.angleDegrees ?? 0)
   } else {
     await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
     if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
@@ -1352,13 +1496,14 @@ export async function completeCatalogueObjectCreation(
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 
+  const createdObjectId = await newDomainIdentity(mapObjects, 'data-object-id', existingObjectIds)
   if (!options.noSelection && !options.preserveDraft) {
     const hierarchy = await openWorkspaceHierarchy(page)
-    const generatedType = subtype.toLowerCase() === 'jump-point' ? 'jump point' : subtype
-    const createdObject = hierarchy.getByRole('treeitem', { name: new RegExp(`New ${escapeRegExp(generatedType)}`, 'i') }).last()
+    const createdObject = hierarchy.locator(domainIdentitySelector('data-object-id', createdObjectId))
     await expect(createdObject).toBeVisible()
     await createdObject.click()
   }
+  return createdObjectId
 }
 
 async function defaultCatalogueCreationTarget(
@@ -1372,9 +1517,8 @@ async function defaultCatalogueCreationTarget(
   if (await hierarchy.count() > 0) {
     const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
     if (await selected.count() > 0) {
-      const selectedLabel = await selected.first().getAttribute('aria-label') ?? await selected.first().innerText()
-      const orbitLabel = selectedLabel.replace(/\s+/g, ' ').match(/Orbit \d+ around .+?(?=, \d+ objects?$|$)/i)?.[0]
-      if (orbitLabel) return { kind: 'orbit', label: orbitLabel }
+      const orbitId = await selected.first().getAttribute('data-orbit-id')
+      if (orbitId) return { kind: 'orbit', orbitId }
     }
   }
 
@@ -1394,16 +1538,24 @@ async function nextFreeSystemPoint(map: import('@playwright/test').Locator): Pro
 export async function completeOrbitCreation(
   page: import('@playwright/test').Page,
   options: OrbitCreationOptions = {},
-): Promise<void> {
+): Promise<string> {
   const controls = page.getByRole('group', { name: 'Orbit creation controls' })
   const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
 
   const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const mapOrbits = map.locator('.orbit-mark[data-orbit-id]')
+  const existingOrbitIds = new Set(await domainIdentityValues(mapOrbits, 'data-orbit-id'))
   const target = options.target ?? await defaultOrbitCreationTarget(page, map, options)
   const targetControl = page.getByLabel('Orbit center or host', { exact: true })
   if (target.kind === 'host') {
-    await selectInspectorOption(targetControl, `Around ${target.name}`)
+    if ('objectId' in target) {
+      await selectInspectorOption(targetControl, {
+        identity: { attribute: 'data-object-id', id: target.objectId },
+      })
+    } else {
+      await selectInspectorOption(targetControl, `Around ${target.name}`)
+    }
   } else {
     await selectInspectorOption(targetControl, 'Unoccupied center')
     if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
@@ -1417,15 +1569,14 @@ export async function completeOrbitCreation(
   if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
   await quitSystemAdd(page)
 
+  const createdOrbitId = await newDomainIdentity(mapOrbits, 'data-orbit-id', existingOrbitIds)
   if (!options.noSelection && !options.preserveDraft) {
     const hierarchy = await openWorkspaceHierarchy(page)
-    const hostLabel = target.kind === 'host' ? target.name : 'unoccupied center'
-    const createdOrbit = hierarchy.getByRole('treeitem', {
-      name: new RegExp(`^Orbit \\d+ around ${escapeRegExp(hostLabel)}`, 'i'),
-    }).last()
+    const createdOrbit = hierarchy.locator(domainIdentitySelector('data-orbit-id', createdOrbitId))
     await expect(createdOrbit).toBeVisible()
     await createdOrbit.click()
   }
+  return createdOrbitId
 }
 
 async function defaultOrbitCreationTarget(
@@ -1439,13 +1590,9 @@ async function defaultOrbitCreationTarget(
   if (await hierarchy.count() > 0) {
     const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
     if (await selected.count() > 0) {
-      const selectedLabel = (await selected.first().getAttribute('aria-label') ?? await selected.first().innerText())
-        .replace(/\s+/g, ' ')
-      const orbitHost = selectedLabel.match(/Orbit \d+ around (.+?)(?=, \d+ objects?$|$)/i)?.[1]
-      if (orbitHost && !/^unoccupied center$/i.test(orbitHost)) return { kind: 'host', name: orbitHost }
-
-      const objectName = selectedLabel.match(/^Select [^,]+,\s*(.+?)(?:\s+\([^)]*\))?$/i)?.[1]
-      if (objectName) return { kind: 'host', name: objectName }
+      const objectId = await selected.first().getAttribute('data-object-id')
+        ?? await selected.first().getAttribute('data-host-object-id')
+      if (objectId) return { kind: 'host', objectId }
     }
   }
 
@@ -1460,6 +1607,6 @@ export async function quitSystemAdd(page: import('@playwright/test').Page): Prom
   await quit.click()
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+function escapeAttributeSelectorValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }

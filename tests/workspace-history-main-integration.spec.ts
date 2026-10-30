@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
-import { computed, effectScope, ref, shallowRef, watchEffect } from 'vue'
+import { computed, effectScope, nextTick, ref, shallowRef, watchEffect } from 'vue'
 import {
   createLocalWorkspace,
   type LocalWorkspace,
@@ -22,6 +22,7 @@ import {
 import type { MapNavigationHandle, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { mountController, withControlledBrowserEnvironment } from './support/mounted-controller'
 
 interface HistoryHarnessOptions {
   limits?: { maxActions?: number; maxBytes?: number }
@@ -32,12 +33,14 @@ function createHistoryHarness(initial: LocalWorkspace, options: HistoryHarnessOp
   const workspace = shallowRef<LocalWorkspace | null>(createWorkspaceSnapshot(initial))
   const blockedReason = ref<string | null>(null)
   let revision = 0
+  let publicationCount = 0
   const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
     getRevision: () => revision,
     publishWorkspace: next => {
       workspace.value = createWorkspaceSnapshot(next)
       revision += 1
+      publicationCount += 1
       return { durable: Promise.resolve() }
     },
     getTraversalBlockReason: () => blockedReason.value,
@@ -48,6 +51,7 @@ function createHistoryHarness(initial: LocalWorkspace, options: HistoryHarnessOp
     workspace,
     blockedReason,
     history,
+    get publicationCount() { return publicationCount },
     dispose: () => history.dispose(),
   }
 }
@@ -172,10 +176,12 @@ function mapNavigationStub(): MapNavigationHandle {
   } as unknown as MapNavigationHandle
 }
 
-function systemMapStub(): SystemMapHandle {
+function systemMapStub(
+  onOrbitCenterPreview: (orbitId: string, scenePoint: Parameters<SystemMapHandle['setOrbitCenterMovePreview']>[1]) => void = () => undefined,
+): SystemMapHandle {
   return {
     focusMap: () => undefined,
-    setOrbitCenterMovePreview: () => undefined,
+    setOrbitCenterMovePreview: onOrbitCenterPreview,
   } as unknown as SystemMapHandle
 }
 
@@ -264,8 +270,8 @@ test('unresolved-exit direct moves and confirmed previews round-trip through the
 function createOrbitCenterControllers(
   harness: ReturnType<typeof createHistoryHarness>,
   fixture: UnoccupiedOrbitFixture,
+  onOrbitCenterPreview?: (orbitId: string, scenePoint: Parameters<SystemMapHandle['setOrbitCenterMovePreview']>[1]) => void,
 ) {
-  const scope = effectScope()
   const store = useEditorUiStore()
   store.setSelection({
     activeView: 'system',
@@ -273,17 +279,15 @@ function createOrbitCenterControllers(
     selectedOrbitId: fixture.orbitId,
   })
   store.setMode('move')
-  const systemMapRef = shallowRef<SystemMapHandle | null>(systemMapStub())
+  const systemMapRef = shallowRef<SystemMapHandle | null>(systemMapStub(onOrbitCenterPreview))
   const orbitAdjustments = createContinuousOrbitAdjustmentController({ history: harness.history })
   const beforeWorkspaceOperation = async (): Promise<boolean> => {
     const result = await orbitAdjustments.beforeOperation()
     if (result.status === 'applied') void result.durable.catch(() => undefined)
     return result.status !== 'rejected'
   }
-  let mapWorkflows: ReturnType<typeof useMapWorkflows> | undefined
-  let placement: ReturnType<typeof useOrbitCenterPlacement> | undefined
-  scope.run(() => {
-    mapWorkflows = useMapWorkflows({
+  const owner = mountController(() => {
+    const mapWorkflows = useMapWorkflows({
       workspace: harness.workspace,
       mutations: harness.history,
       systemMapRef,
@@ -295,24 +299,66 @@ function createOrbitCenterControllers(
       orbitAdjustments,
       beforeWorkspaceOperation,
     })
-    placement = useOrbitCenterPlacement({
+    const placement = useOrbitCenterPlacement({
       workspace: harness.workspace,
       creationActive: computed(() => false),
       systemMapRef,
       isEntityCommandBlocked: () => false,
       moveOrbitCenter: mapWorkflows.moveMapOrbitCenter,
     })
+    return { mapWorkflows, placement }
   })
-  if (!mapWorkflows || !placement) throw new Error('The Orbit-center workflows were not created.')
+  let disposed = false
   return {
-    placement,
-    mapWorkflows,
+    ...owner.value,
+    systemMapRef,
     dispose() {
+      if (disposed) return
+      disposed = true
       orbitAdjustments.dispose()
-      scope.stop()
+      owner.unmount()
     },
   }
 }
+
+test('an Orbit-center owner clears its renderer preview when unmounted @pure', async () => {
+  setActivePinia(createPinia())
+  const fixture = await createUnoccupiedOrbitWorkspace()
+  const harness = createHistoryHarness(fixture.workspace)
+  const publications: Array<{
+    orbitId: string
+    scenePoint: Parameters<SystemMapHandle['setOrbitCenterMovePreview']>[1]
+  }> = []
+  const controllers = createOrbitCenterControllers(harness, fixture, (orbitId, scenePoint) => {
+    publications.push({ orbitId, scenePoint })
+  })
+
+  try {
+    expect(controllers.placement.beginOrbitCenterMapMove()).toBe(true)
+    expect(controllers.placement.previewOrbitCenterMoveAt({ x: 64 + 0.7 * 832, y: 72 + 0.6 * 416 })).toBe(true)
+    await nextTick()
+    expect(publications.at(-1)?.orbitId).toBe(fixture.orbitId)
+    expect(publications.at(-1)?.scenePoint).not.toBeNull()
+
+    controllers.dispose()
+
+    expect(publications.at(-1)).toEqual({ orbitId: fixture.orbitId, scenePoint: null })
+    const publicationCountAfterUnmount = publications.length
+    const replacementPublications: typeof publications = []
+    controllers.systemMapRef.value = systemMapStub((orbitId, scenePoint) => {
+      replacementPublications.push({ orbitId, scenePoint })
+    })
+    expect(controllers.placement.previewOrbitCenterMoveAt({ x: 64 + 0.74 * 832, y: 72 + 0.64 * 416 })).toBe(true)
+    await nextTick()
+
+    expect(publications).toHaveLength(publicationCountAfterUnmount)
+    expect(replacementPublications).toEqual([])
+    expect(harness.history.getStatus().totalActions).toBe(0)
+  } finally {
+    controllers.dispose()
+    harness.dispose()
+  }
+})
 
 test('unoccupied Orbit-center previews survive capacity cancellation and accepted moves round-trip @pure', async () => {
   setActivePinia(createPinia())
@@ -470,61 +516,126 @@ test('a map-mode change invalidates an Orbit-center preview while capacity conse
 })
 
 async function verifyAcceptedOrbitCenterMovesRetainInspectorSessions(reorderPropertiesForRegression: boolean): Promise<void> {
-  setActivePinia(createPinia())
-  const fixture = await createUnoccupiedOrbitWorkspace(reorderPropertiesForRegression)
-  const initialOrbitKeys = Object.keys(fixture.workspace.cluster.systems[0]!.orbits[0]!)
-  if (reorderPropertiesForRegression) {
-    expect(initialOrbitKeys).toEqual(['center', 'id', 'order', 'hostId'])
-  }
-  const harness = createHistoryHarness(fixture.workspace)
-  const scope = effectScope()
-  const workflows = scope.run(() => useEditorWorkflows({
-    workspace: harness.workspace,
-    mutations: harness.history,
-    initializeWorkspace: async () => undefined,
-    saveState: ref<SaveState>('saved'),
-    saveError: ref<string | null>(null),
-  }))
-  if (!workflows) throw new Error('The editor workflows were not created.')
+  await withControlledBrowserEnvironment(async () => {
+    setActivePinia(createPinia())
+    const fixture = await createUnoccupiedOrbitWorkspace(reorderPropertiesForRegression)
+    const initialOrbitKeys = Object.keys(fixture.workspace.cluster.systems[0]!.orbits[0]!)
+    if (reorderPropertiesForRegression) {
+      expect(initialOrbitKeys).toEqual(['center', 'id', 'order', 'hostId'])
+    }
+    const harness = createHistoryHarness(fixture.workspace)
+    const owner = mountController(() => useEditorWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      initializeWorkspace: async () => undefined,
+      saveState: ref<SaveState>('saved'),
+      saveError: ref<string | null>(null),
+    }))
+    const workflows = owner.value
+    try {
+      const store = useEditorUiStore()
+      store.setSelection({
+        activeView: 'system',
+        selectedSystemId: fixture.systemId,
+        selectedOrbitId: fixture.orbitId,
+      })
+      await workflows.inspector.beginOrbitEdit()
+      const cleanSession = workflows.inspector.entitySession.value
+      expect(cleanSession?.kind).toBe('orbit')
+      if (!cleanSession || cleanSession.kind !== 'orbit') throw new Error('The Orbit Inspector session did not start.')
 
-  const store = useEditorUiStore()
-  store.setSelection({
-    activeView: 'system',
-    selectedSystemId: fixture.systemId,
-    selectedOrbitId: fixture.orbitId,
+      expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.62, y: 0.71 }, null)).toBe(true)
+      expect(Object.keys(harness.workspace.value!.cluster.systems[0]!.orbits[0]!)).not.toEqual(initialOrbitKeys)
+      expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
+      expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
+
+      cleanSession.draft.horizontalRadius = '240'
+      expect(workflows.inspector.hasModifiedEntitySession.value).toBe(true)
+      expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.74, y: 0.39 }, null)).toBe(true)
+      expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
+      expect(workflows.inspector.entitySession.value?.kind === 'orbit'
+        ? workflows.inspector.entitySession.value.draft.horizontalRadius
+        : null).toBe('240')
+      expect(await workflows.inspector.applyEntitySession(cleanSession.id)).toBe(true)
+      expect(harness.workspace.value?.layout.orbitRadii[fixture.orbitId]?.horizontal).toBe(240)
+    } finally {
+      owner.unmount()
+      harness.dispose()
+    }
   })
-  await workflows.inspector.beginOrbitEdit()
-  const cleanSession = workflows.inspector.entitySession.value
-  expect(cleanSession?.kind).toBe('orbit')
-  if (!cleanSession || cleanSession.kind !== 'orbit') throw new Error('The Orbit Inspector session did not start.')
-
-  expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.62, y: 0.71 }, null)).toBe(true)
-  expect(Object.keys(harness.workspace.value!.cluster.systems[0]!.orbits[0]!)).not.toEqual(initialOrbitKeys)
-  expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
-  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
-
-  cleanSession.draft.horizontalRadius = '240'
-  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(true)
-  expect(await workflows.placement.map.moveMapOrbitCenter(fixture.orbitId, { x: 0.74, y: 0.39 }, null)).toBe(true)
-  expect(workflows.inspector.entitySession.value?.id).toBe(cleanSession.id)
-  expect(workflows.inspector.entitySession.value?.kind === 'orbit'
-    ? workflows.inspector.entitySession.value.draft.horizontalRadius
-    : null).toBe('240')
-  expect(await workflows.inspector.applyEntitySession(cleanSession.id)).toBe(true)
-  expect(harness.workspace.value?.layout.orbitRadii[fixture.orbitId]?.horizontal).toBe(240)
-
-  workflows.adjustments.resetOrbitAdjustments()
-  scope.stop()
-  harness.dispose()
 }
 
 test('accepted Orbit-center moves retain Inspector sessions from production Add records @pure', async () => {
   await verifyAcceptedOrbitCenterMovesRetainInspectorSessions(false)
 })
 
-test('accepted Orbit-center moves ignore deterministic Orbit property reordering @pure', async () => {
-  await verifyAcceptedOrbitCenterMovesRetainInspectorSessions(true)
+test('the editor owner cancels previews, listeners and focus frames when unmounted @pure', async () => {
+  await withControlledBrowserEnvironment(async browser => {
+    setActivePinia(createPinia())
+    const fixture = await createUnoccupiedOrbitWorkspace()
+    const harness = createHistoryHarness(fixture.workspace)
+    const owner = mountController(() => useEditorWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      initializeWorkspace: async () => undefined,
+      saveState: ref<SaveState>('saved'),
+      saveError: ref<string | null>(null),
+    }))
+    const workflows = owner.value
+    const store = useEditorUiStore()
+    try {
+      store.setSelection({
+        activeView: 'system',
+        selectedSystemId: fixture.systemId,
+        selectedOrbitId: fixture.orbitId,
+      })
+      store.setMode('move')
+      expect(await workflows.adjustments.updateOrbitAdjustment({
+        workspaceId: fixture.workspace.id,
+        systemId: fixture.systemId,
+        orbitId: fixture.orbitId,
+        inputKind: 'keyboard',
+        keyCode: 'ArrowRight',
+        change: { kind: 'radii', axis: 'horizontal', operation: 'delta', delta: 1, minimum: 24 },
+      })).toEqual({ status: 'preview' })
+      expect(workflows.adjustments.orbitAdjustmentPreview.value).not.toBeNull()
+      expect(harness.publicationCount).toBe(0)
+      expect(store.workspaceId).toBe(`${fixture.workspace.id}:${fixture.workspace.cluster.id}`)
+
+      expect(browser.windowEvents.listenerCount('keyup')).toBe(1)
+      expect(browser.windowEvents.listenerCount('blur')).toBe(1)
+      expect(browser.windowEvents.listenerCount('keydown')).toBe(1)
+      expect(browser.documentEvents.listenerCount('focusin')).toBe(1)
+      expect(browser.documentEvents.listenerCount('focusout')).toBe(1)
+      expect(browser.documentEvents.listenerCount('visibilitychange')).toBe(1)
+      expect(browser.mediaQueryEvents.listenerCount('change')).toBe(1)
+      browser.documentEvents.dispatch('focusout')
+      expect(browser.queuedAnimationFrameCount).toBe(1)
+
+      const publicationsBeforeUnmount = harness.publicationCount
+      owner.unmount()
+
+      expect(workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
+      expect(store.workspaceId).toBeNull()
+      expect(harness.publicationCount).toBe(publicationsBeforeUnmount)
+      expect(browser.windowEvents.listenerCount()).toBe(0)
+      expect(browser.documentEvents.listenerCount()).toBe(0)
+      expect(browser.mediaQueryEvents.listenerCount()).toBe(0)
+      expect(browser.queuedAnimationFrameCount).toBe(0)
+      expect(browser.cancelledAnimationFrameCount).toBe(1)
+
+      harness.workspace.value = createLocalWorkspace('Replacement Reach', 'North Star')
+      await nextTick()
+      expect(store.workspaceId).toBeNull()
+      expect(harness.publicationCount).toBe(publicationsBeforeUnmount)
+    } finally {
+      owner.unmount()
+      harness.dispose()
+    }
+  })
 })
+
+
 
 test('Orbit Inspector still rejects changed hosts and radii @pure', async () => {
   async function expectStaleDraft(
@@ -668,83 +779,88 @@ test('capacity-delayed Orbit-center moves do not rebase a replacement Inspector 
 })
 
 test('accepted object-position moves retain the clean Object Inspector session @pure', async () => {
-  setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const system = initial.cluster.systems[0]!
-  const object = system.objects[0]!
-  const harness = createHistoryHarness(initial)
-  const scope = effectScope()
-  const workflows = scope.run(() => useEditorWorkflows({
-    workspace: harness.workspace,
-    mutations: harness.history,
-    initializeWorkspace: async () => undefined,
-    saveState: ref<SaveState>('saved'),
-    saveError: ref<string | null>(null),
-  }))
-  if (!workflows) throw new Error('The editor workflows were not created.')
+  await withControlledBrowserEnvironment(async () => {
+    setActivePinia(createPinia())
+    const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+    const system = initial.cluster.systems[0]!
+    const object = system.objects[0]!
+    const harness = createHistoryHarness(initial)
+    const owner = mountController(() => useEditorWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      initializeWorkspace: async () => undefined,
+      saveState: ref<SaveState>('saved'),
+      saveError: ref<string | null>(null),
+    }))
+    const workflows = owner.value
+    try {
+      useEditorUiStore().setSelection({
+        activeView: 'system',
+        selectedSystemId: system.id,
+        selectedObjectId: object.id,
+      })
+      await workflows.inspector.beginObjectEdit()
+      const session = workflows.inspector.entitySession.value
+      expect(session?.kind).toBe('object')
+      if (!session || session.kind !== 'object') throw new Error('The Object Inspector session did not start.')
 
-  useEditorUiStore().setSelection({
-    activeView: 'system',
-    selectedSystemId: system.id,
-    selectedObjectId: object.id,
+      const target = { x: 0.68, y: 0.42 }
+      await workflows.placement.map.moveMapObject(object.id, target)
+
+      expect(harness.workspace.value?.cluster.systems[0]?.objects[0]?.placement)
+        .toEqual({ kind: 'system', ...target })
+      expect(workflows.inspector.entitySession.value?.id).toBe(session.id)
+      expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
+      expect(session.initial.object.placement).toEqual({ kind: 'system', ...target })
+    } finally {
+      owner.unmount()
+      harness.dispose()
+    }
   })
-  await workflows.inspector.beginObjectEdit()
-  const session = workflows.inspector.entitySession.value
-  expect(session?.kind).toBe('object')
-  if (!session || session.kind !== 'object') throw new Error('The Object Inspector session did not start.')
-
-  const target = { x: 0.68, y: 0.42 }
-  await workflows.placement.map.moveMapObject(object.id, target)
-
-  expect(harness.workspace.value?.cluster.systems[0]?.objects[0]?.placement)
-    .toEqual({ kind: 'system', ...target })
-  expect(workflows.inspector.entitySession.value?.id).toBe(session.id)
-  expect(workflows.inspector.hasModifiedEntitySession.value).toBe(false)
-  expect(session.initial.object.placement).toEqual({ kind: 'system', ...target })
-
-  workflows.adjustments.resetOrbitAdjustments()
-  scope.stop()
-  harness.dispose()
 })
 
 test('a blank route-creation session blocks Undo while a clean armed system Add does not @pure', async () => {
-  setActivePinia(createPinia())
-  const harness = createHistoryHarness(createLocalWorkspace('Kestrel Reach', 'Vesper'))
-  const workflows = useEditorWorkflows({
-    workspace: harness.workspace,
-    mutations: harness.history,
-    initializeWorkspace: async () => undefined,
-    saveState: ref<SaveState>('saved'),
-    saveError: ref<string | null>(null),
+  await withControlledBrowserEnvironment(async () => {
+    setActivePinia(createPinia())
+    const harness = createHistoryHarness(createLocalWorkspace('Kestrel Reach', 'Vesper'))
+    const owner = mountController(() => useEditorWorkflows({
+      workspace: harness.workspace,
+      mutations: harness.history,
+      initializeWorkspace: async () => undefined,
+      saveState: ref<SaveState>('saved'),
+      saveError: ref<string | null>(null),
+    }))
+    const workflows = owner.value
+    const store = useEditorUiStore()
+    store.setSelection({ activeView: 'cluster' })
+    const stopGuard = watchEffect(() => {
+      harness.blockedReason.value = workflows.historyGuards.blockReason.value
+    }, { flush: 'sync' })
+    try {
+      const before = harness.workspace.value!
+      const rename = await harness.history.execute({
+        action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: before.cluster.id } },
+        prepare: current => ({ ...current, cluster: { ...current.cluster, name: 'Kestrel Reach Prime' } }),
+      })
+      expect(rename.status).toBe('applied')
+      await workflows.cluster.beginRoute()
+      expect(workflows.inspector.routeSession.value?.routeId).toBeNull()
+      expect(workflows.historyGuards.blockReason.value).toBe('Finish or cancel the current Cluster route action first.')
+      expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+      expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
+
+      await workflows.placement.quitAdd()
+      expect(workflows.inspector.routeSession.value).toBeNull()
+      expect(workflows.historyGuards.blockReason.value).toBeNull()
+      workflows.placement.clusterSystem.armSystemAdd()
+      expect(workflows.historyGuards.blockReason.value).toBeNull()
+      expect((await harness.history.undo()).status).toBe('applied')
+      expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach')
+      expect(workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+    } finally {
+      stopGuard()
+      owner.unmount()
+      harness.dispose()
+    }
   })
-  const store = useEditorUiStore()
-  store.setSelection({ activeView: 'cluster' })
-  const stopGuard = watchEffect(() => {
-    harness.blockedReason.value = workflows.historyGuards.blockReason.value
-  }, { flush: 'sync' })
-
-  const before = harness.workspace.value!
-  const rename = await harness.history.execute({
-    action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: before.cluster.id } },
-    prepare: current => ({ ...current, cluster: { ...current.cluster, name: 'Kestrel Reach Prime' } }),
-  })
-  expect(rename.status).toBe('applied')
-  await workflows.cluster.beginRoute()
-  expect(workflows.inspector.routeSession.value?.routeId).toBeNull()
-  expect(workflows.historyGuards.blockReason.value).toBe('Finish or cancel the current Cluster route action first.')
-  expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
-  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
-
-  await workflows.placement.quitAdd()
-  expect(workflows.inspector.routeSession.value).toBeNull()
-  expect(workflows.historyGuards.blockReason.value).toBeNull()
-  workflows.placement.clusterSystem.armSystemAdd()
-  expect(workflows.historyGuards.blockReason.value).toBeNull()
-  expect((await harness.history.undo()).status).toBe('applied')
-  expect(harness.workspace.value?.cluster.name).toBe('Kestrel Reach')
-  expect(workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
-
-  stopGuard()
-  workflows.adjustments.resetOrbitAdjustments()
-  harness.dispose()
 })

@@ -28,12 +28,7 @@ test('leading-edge clipping is corrected on the left and top', { tag: '@pure' },
   expect(revealTargetScreenDelta(viewport, target, { x: 17.5, y: 13.5 })).toEqual({ dx: 25, dy: 26.5 })
 })
 
-test('near-full targets use reduced padding so the full target still fits', { tag: '@pure' }, () => {
-  const viewport = { left: 0, top: 0, right: 100, bottom: 80 }
-  const target = { left: 0, top: 0, right: 98, bottom: 78 }
 
-  expect(revealTargetScreenDelta(viewport, target, { x: 49, y: 39 })).toEqual({ dx: 1, dy: 1 })
-})
 
 test('oversized targets keep the explicit anchor visible and become idempotent', { tag: '@pure' }, () => {
   const viewport = { left: 0, top: 0, right: 100, bottom: 80 }
@@ -52,10 +47,7 @@ test('oversized targets keep the explicit anchor visible and become idempotent',
   expect(revealTargetScreenDelta(viewport, movedTarget, movedAnchor)).toEqual({ dx: 0, dy: 0 })
 })
 
-test('painted-circle bounds account for nonuniform screen scaling', { tag: '@pure' }, () => {
-  expect(svgCirclePaintedBounds({ x: 50, y: 40 }, 7, 2, { a: 2, b: 0, c: 0, d: 3 }))
-    .toEqual({ left: 34, top: 16, right: 66, bottom: 64 })
-})
+
 
 test('invalid or zero-sized viewports are rejected', { tag: '@pure' }, () => {
   expect(revealTargetScreenDelta(

@@ -7,16 +7,17 @@ const ignoredDirectories = new Set([
   '.git', '.nuxt', '.output', '.vercel', 'coverage', 'dist', 'node_modules', 'playwright-report',
   'test-results',
 ])
+const ignoredRootRelativeDirectories = new Set(['.codex/environments'])
 
 /** @typedef {{ invalidated: Promise<string>, check: () => Promise<string | undefined>, close: () => Promise<void> }} LocalSourceMonitor */
 
 /**
  * Watches bounded source, test, documentation-policy, and config roots. Generated output and
  * dependencies are pruned before traversal; unclassified file changes remain relevant.
- * @param {{ rootDirectory: string, intervalMs?: number, scan?: typeof scanRelevantInputs }} options
+ * @param {{ rootDirectory: string, intervalMs?: number, scan?: typeof scanRelevantInputs, ignoreFile?: (relativePath: string) => boolean, onIgnoredFileChange?: (relativePath: string) => void }} options
  * @returns {Promise<LocalSourceMonitor>}
  */
-export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250, scan = scanRelevantInputs }) {
+export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250, scan = scanRelevantInputs, ignoreFile = () => false, onIgnoredFileChange = () => {} }) {
   // libuv's Windows directory watcher requires a canonical path prefix for its event filter.
   const root = await realpath(resolve(rootDirectory))
   let closed = false
@@ -28,6 +29,7 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
   let timer
   /** @type {Promise<string | undefined> | undefined} */
   let scanInProgress
+  const pendingWatchEvents = new Set()
   /** @type {string | undefined} */
   let invalidation
   /** @type {(reason: string) => void} */
@@ -70,7 +72,7 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
     const path = resolve(directory, filename.toString())
     const relativePath = toPosixPath(relative(root, path))
     if (isIgnoredInputPath(relativePath) || isDocumentationPath(relativePath)) return
-    void (async () => {
+    const observation = (async () => {
       try {
         const metadata = await lstat(path)
         if (closed) return
@@ -79,7 +81,16 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
           return
         }
         if (!metadata.isDirectory()) {
+          if (isDocumentationPath(relativePath)) return
+          const currentFingerprint = fileFingerprint(metadata)
           const previousFingerprint = baselineReady ? baseline.files.get(relativePath) : undefined
+          if (ignoreFile(relativePath)) {
+            if (!baselineReady || previousFingerprint === undefined || previousFingerprint !== currentFingerprint) {
+              onIgnoredFileChange(relativePath)
+              if (baselineReady) baseline.files.set(relativePath, currentFingerprint)
+            }
+            return
+          }
           if (previousFingerprint === undefined || previousFingerprint !== fileFingerprint(metadata)) {
             invalidate(`Local verification input changed during the run: ${relativePath}.`)
           }
@@ -93,12 +104,18 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
           invalidate(`Local verification directory was added during the run: ${relativePath}.`)
           return
         }
-        await check()
+        void check().catch(error => {
+          if (!closed) invalidate(`Could not check local verification inputs: ${error.message}`)
+        })
       } catch (error) {
         if (closed) return
         if (error?.code === 'ENOENT') {
           if (baselineReady && baseline.directories.includes(path)) {
             invalidate(`Local verification directory was removed during the run: ${relativePath}.`)
+          } else if (ignoreFile(relativePath)) {
+            onIgnoredFileChange(relativePath)
+            if (baselineReady) baseline.files.delete(relativePath)
+            return
           } else {
             invalidate(`Local verification input changed during the run: ${relativePath}.`)
           }
@@ -107,6 +124,8 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
         invalidate(`Could not inspect local verification input ${relativePath}: ${error.message}`)
       }
     })()
+    pendingWatchEvents.add(observation)
+    void observation.finally(() => pendingWatchEvents.delete(observation))
   }
 
   try {
@@ -140,7 +159,10 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
       try {
         const next = await scan(root)
         if (closed) return undefined
-        const changedPaths = changedInputPaths(baseline.files, next.files)
+        const fileChanges = changedInputPaths(baseline.files, next.files)
+        const compatibleFileChanges = fileChanges.filter(path => ignoreFile(path))
+        for (const path of compatibleFileChanges) onIgnoredFileChange(path)
+        const changedPaths = fileChanges.filter(path => !ignoreFile(path))
         changedPaths.push(...changedDirectoryPaths(root, baseline.directories, next.directories))
         changedPaths.sort()
         baseline = next
@@ -155,7 +177,13 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
         scanInProgress = undefined
       }
     })()
-    return scanInProgress
+    const result = await scanInProgress
+    if (closed) return undefined
+    // Let filesystem notifications queued during the scan inspect their entries before the
+    // caller makes a final result-validity decision.
+    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    while (pendingWatchEvents.size) await Promise.all([...pendingWatchEvents])
+    return invalidation ?? result
   }
 
   baselineReady = true
@@ -189,12 +217,13 @@ export async function createLocalSourceMonitor({ rootDirectory, intervalMs = 250
         }
       }
       if (scanInProgress) await scanInProgress
+      if (pendingWatchEvents.size) await Promise.all([...pendingWatchEvents])
       if (closeErrors.length) throw new AggregateError(closeErrors, 'Could not close all local input watchers.')
     },
   }
 }
 
-/** @param {string} root @param {(directory: string) => void} [onDirectory] @returns {Promise<{ files: Map<string, string>, directories: string[] }>} */
+/** @param {string} root @param {(directory: string) => void} [onDirectory] @param {(relativePath: string) => boolean} [ignoreFile] @returns {Promise<{ files: Map<string, string>, directories: string[] }>} */
 async function scanRelevantInputs(root, onDirectory = () => {}) {
   const files = new Map()
   const directories = [root]
@@ -221,12 +250,14 @@ async function scanDirectory(root, directory, files, directories, onDirectory) {
   onDirectory(directory)
   const entries = await readdir(directory, { withFileTypes: true })
   for (const entry of entries) {
+    const entryPath = resolve(directory, entry.name)
+    const relativePath = toPosixPath(relative(root, entryPath))
     if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) {
-        await scanDirectory(root, resolve(directory, entry.name), files, directories, onDirectory)
+      if (!isIgnoredInputPath(relativePath)) {
+        await scanDirectory(root, entryPath, files, directories, onDirectory)
       }
     } else {
-      await addFile(root, resolve(directory, entry.name), files)
+      await addFile(root, entryPath, files)
     }
   }
 }
@@ -270,5 +301,9 @@ function toPosixPath(path) {
 
 /** @param {string} path */
 function isIgnoredInputPath(path) {
-  return path.split('/').some(segment => ignoredDirectories.has(segment))
+  if (path.split('/').some(segment => ignoredDirectories.has(segment))) return true
+  for (const directory of ignoredRootRelativeDirectories) {
+    if (path === directory || path.startsWith(`${directory}/`)) return true
+  }
+  return false
 }

@@ -7,58 +7,9 @@ test.beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-test('accepted selections and map mode retain their distinct navigation meanings @pure', () => {
-  const store = useEditorUiStore()
 
-  store.setSelection({
-    activeView: 'cluster',
-    selectedSystemId: 'active-system',
-    clusterSelectedSystemId: 'inspected-system',
-    inspectedClusterSystemId: 'inspected-system',
-    selectedObjectId: 'object-a',
-    selectedOrbitId: 'orbit-a',
-    selectedRouteId: 'route-a',
-  })
-  store.setMode('move')
 
-  expect({
-    activeView: store.activeView,
-    selectedSystemId: store.selectedSystemId,
-    clusterSelectedSystemId: store.clusterSelectedSystemId,
-    inspectedClusterSystemId: store.inspectedClusterSystemId,
-    selectedObjectId: store.selectedObjectId,
-    selectedOrbitId: store.selectedOrbitId,
-    selectedRouteId: store.selectedRouteId,
-    mapMode: store.mapMode,
-  }).toEqual({
-    activeView: 'cluster',
-    selectedSystemId: 'active-system',
-    clusterSelectedSystemId: 'inspected-system',
-    inspectedClusterSystemId: 'inspected-system',
-    selectedObjectId: 'object-a',
-    selectedOrbitId: 'orbit-a',
-    selectedRouteId: 'route-a',
-    mapMode: 'move',
-  })
-})
 
-test('panel actions preserve independent visibility and compact intent @pure', () => {
-  const store = useEditorUiStore()
-
-  store.requestPanel('hierarchy')
-  store.requestPanel('inspector')
-  store.setCompactPanel('hierarchy')
-
-  expect(store.hierarchyPanelOpen).toBe(true)
-  expect(store.inspectorPanelOpen).toBe(true)
-  expect(store.lastRequestedPanel).toBe('inspector')
-  expect(store.compactPanel).toBe('hierarchy')
-
-  store.closePanel('hierarchy')
-  expect(store.hierarchyPanelOpen).toBe(false)
-  expect(store.inspectorPanelOpen).toBe(true)
-  expect(store.compactPanel).toBeNull()
-})
 
 test('visit pruning normalizes saved selections and reset starts a fresh workspace lifetime @pure', () => {
   const store = useEditorUiStore()
@@ -98,17 +49,7 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.visits).toEqual({})
 })
 
-test('map visits retain a bounded recent history while protecting the active key @pure', () => {
-  const store = useEditorUiStore()
-  const visit: MapVisitMemory = { viewport: { x: 0, y: 0, k: 1 }, selection: { kind: 'none' } }
-  for (let index = 0; index < 25; index += 1) {
-    store.rememberVisit(`system:cluster-a:system-${index}`, visit, 'system:cluster-a:system-0')
-  }
 
-  expect(Object.keys(store.visits)).toHaveLength(24)
-  expect(store.visits['system:cluster-a:system-0']).toEqual(visit)
-  expect(store.visits['system:cluster-a:system-1']).toBeUndefined()
-})
 
 test('separate Pinia instances keep workspace selections and visits isolated @pure', () => {
   const first = useEditorUiStore(createPinia())

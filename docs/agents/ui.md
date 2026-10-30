@@ -37,6 +37,6 @@ Establish what a measurement represents before diagnosing a product defect: a ro
 
 ## Verification
 
-Use `npm run test:ui` for the maintained smoke selection; narrow further with Playwright's existing CLI when appropriate. It checks action states, destructive styling, footer geometry and hit targets, with screenshot attachments in the report. Mechanical assertions belong in tests rather than a growing prose checklist. A pass supplements review of the requested composition and adjacent affected states.
+Use `npm run test:ui` for the maintained smoke selection and narrow it with Playwright's CLI when appropriate. The selection protects action states, focus and usable hit targets in representative layouts. Review destructive styling and other visual changes in the affected composition. Keep diagnostic screenshots in the report or PR when they help reviewers inspect a specific result.
 
 Reuse `tests/helpers.ts` and real public UI flows. `createSingleSystemWorkspace` establishes a one-system precondition; importing a map appends an independent copy and does not establish that precondition. Keep upload, import confirmation and fixture setup explicit.

@@ -11,6 +11,7 @@ import {
   importCampaignWorkspace,
   openImportedCampaignWorkspace,
 } from './scenarios/campaign-workspace'
+import { releaseMapExportBlobs } from './helpers'
 
 export { expect, type Locator, type Page }
 
@@ -40,6 +41,13 @@ export const test = playwrightTest.extend<object, PreviewWorkerFixtures>({
   context: async ({ context, previewCookies }, use) => {
     if (previewCookies.length) await context.addCookies(previewCookies)
     await use(context)
+  },
+  page: async ({ page }, use) => {
+    try {
+      await use(page)
+    } finally {
+      await releaseMapExportBlobs(page)
+    }
   },
 })
 
@@ -101,4 +109,16 @@ export const campaignTest = test.extend<CampaignFixtures, CampaignWorkerFixtures
     }
     await use(page)
   },
+})
+
+/**
+ * Prepare the public import during worker setup, before a prepared scenario's test budget starts.
+ * Every test still receives a cloned snapshot in its own fresh browser context.
+ */
+export const preparedCampaignTest = campaignTest.extend({
+  campaignPreparation: 'prepared-snapshot',
+  campaignSnapshotProvider: [async ({ campaignSnapshotProvider }, use) => {
+    await campaignSnapshotProvider()
+    await use(campaignSnapshotProvider)
+  }, { scope: 'worker' }],
 })

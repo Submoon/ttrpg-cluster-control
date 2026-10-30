@@ -7,6 +7,7 @@ import type { SaveState } from '../composables/editor-workflows/types'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { mountController, withControlledBrowserEnvironment } from './support/mounted-controller'
 
 function createHarness(options: { maxBytes?: number; allowCapacity?: boolean } = {}) {
   setActivePinia(createPinia())
@@ -44,13 +45,14 @@ function createHarness(options: { maxBytes?: number; allowCapacity?: boolean } =
     },
     limits: options.maxBytes === undefined ? undefined : { maxBytes: options.maxBytes },
   })
-  const workflows = useEditorWorkflows({
+  const owner = mountController(() => useEditorWorkflows({
     workspace,
     mutations: history,
     initializeWorkspace: async () => undefined,
     saveState: ref<SaveState>('saved'),
     saveError: ref<string | null>(null),
-  })
+  }))
+  const workflows = owner.value
   const store = useEditorUiStore()
   store.setSelection({
     activeView: 'system',
@@ -88,53 +90,66 @@ function createHarness(options: { maxBytes?: number; allowCapacity?: boolean } =
       })
     },
     dispose() {
-      workflows.adjustments.resetOrbitAdjustments()
+      owner.unmount()
       history.dispose()
     },
   }
 }
 
+async function withHarness(
+  run: (harness: ReturnType<typeof createHarness>) => Promise<void>,
+  options: Parameters<typeof createHarness>[0] = {},
+): Promise<void> {
+  await withControlledBrowserEnvironment(async () => {
+    const harness = createHarness(options)
+    try {
+      await run(harness)
+    } finally {
+      harness.dispose()
+    }
+  })
+}
+
 test('public Inspector Apply finalizes the Orbit group before applying its captured draft @pure', async () => {
-  const harness = createHarness()
-  const session = await harness.beginModifiedStarDraft()
-  expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
+  await withHarness(async harness => {
+    const session = await harness.beginModifiedStarDraft()
+    expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
 
-  expect(await harness.workflows.inspector.applyEntitySession(session.id)).toBe(true)
+    expect(await harness.workflows.inspector.applyEntitySession(session.id)).toBe(true)
 
-  const latest = harness.workspace.value!
-  expect(latest.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.name).toBe('Primary Star Prime')
-  expect(latest.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(113)
-  expect(harness.workflows.inspector.entitySession.value).toBeNull()
-  expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(false)
-  expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 2, redoDepth: 0, hasPendingGroup: false })
-  expect(harness.publications).toBe(2)
-  harness.dispose()
+    const latest = harness.workspace.value!
+    expect(latest.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.name).toBe('Primary Star Prime')
+    expect(latest.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(113)
+    expect(harness.workflows.inspector.entitySession.value).toBeNull()
+    expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(false)
+    expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
+    expect(harness.history.getStatus()).toMatchObject({ undoDepth: 2, redoDepth: 0, hasPendingGroup: false })
+    expect(harness.publications).toBe(2)
+  })
 })
 
 test('canceling Orbit capacity consent preserves the Inspector draft and applied data @pure', async () => {
-  const harness = createHarness({ maxBytes: 0, allowCapacity: false })
-  const session = await harness.beginModifiedStarDraft()
-  const originalWorkspace = harness.workspace.value
-  expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
+  await withHarness(async harness => {
+    const session = await harness.beginModifiedStarDraft()
+    const originalWorkspace = harness.workspace.value
+    expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
 
-  expect(await harness.workflows.inspector.applyEntitySession(session.id)).toBe(false)
+    expect(await harness.workflows.inspector.applyEntitySession(session.id)).toBe(false)
 
-  expect(harness.capacityQuestions).toBe(1)
-  expect(harness.workspace.value).toBe(originalWorkspace)
-  expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.name)
-    .not.toBe('Primary Star Prime')
-  expect(harness.workflows.inspector.entitySession.value?.id).toBe(session.id)
-  expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(true)
-  expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
-  expect(harness.history.getStatus()).toMatchObject({ totalActions: 0, hasPendingGroup: false, undoDepth: 0, redoDepth: 0 })
-  expect(harness.publications).toBe(0)
-  harness.dispose()
+    expect(harness.capacityQuestions).toBe(1)
+    expect(harness.workspace.value).toBe(originalWorkspace)
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.name)
+      .not.toBe('Primary Star Prime')
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(session.id)
+    expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(true)
+    expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
+    expect(harness.history.getStatus()).toMatchObject({ totalActions: 0, hasPendingGroup: false, undoDepth: 0, redoDepth: 0 })
+    expect(harness.publications).toBe(0)
+  }, { maxBytes: 0, allowCapacity: false })
 })
 
 test('quick publication completes the pending Orbit adjustment once before its update @pure', async () => {
-  const harness = createHarness()
-  try {
+  await withHarness(async harness => {
     const originalWorkspace = createWorkspaceSnapshot(harness.workspace.value!)
     expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
 
@@ -166,14 +181,11 @@ test('quick publication completes the pending Orbit adjustment once before its u
     expect(harness.workspace.value?.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(113)
     await harness.history.undo()
     expect(harness.workspace.value).toEqual(originalWorkspace)
-  } finally {
-    harness.dispose()
-  }
+  })
 })
 
 test('canceling Orbit capacity during quick publication leaves it unapplied @pure', async () => {
-  const harness = createHarness({ maxBytes: 0, allowCapacity: false })
-  try {
+  await withHarness(async harness => {
     const originalWorkspace = harness.workspace.value
     expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
 
@@ -195,7 +207,5 @@ test('canceling Orbit capacity during quick publication leaves it unapplied @pur
       redoDepth: 0,
     })
     expect(harness.publications).toBe(0)
-  } finally {
-    harness.dispose()
-  }
+  }, { maxBytes: 0, allowCapacity: false })
 })

@@ -103,16 +103,16 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
   await inspector.getByLabel('Name', { exact: true }).fill('Foo')
   await inspector.getByLabel('GM notes', { exact: true }).fill('Old object draft')
-  await inspector.getByRole('button', { name: 'Apply changes Save map object', exact: true }).click()
+  await inspector.getByRole('button', { name: /^Apply changes/ }).click()
 
   await beginPlanetAdd(page)
   await addPlanetAt(page, { x: 0.21, y: 0.31 })
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 2')
-  const survivingObject = (await downloadJson(page, 'Export star system JSON')).system?.objects
+  const originalExport = await downloadJson(page, 'Export star system JSON')
+  const survivingObject = originalExport.system?.objects
     .find(object => object.subtype === 'planet' && object.name === 'New planet 2')
   expect(survivingObject).toBeDefined()
 
-  const originalExport = await downloadJson(page, 'Export star system JSON')
   const originalObject = originalExport.system?.objects.find(object => object.name === 'Foo')
   expect(originalObject).toBeDefined()
   expect(originalObject?.placement.kind).toBe('system')

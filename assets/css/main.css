@@ -5,6 +5,7 @@
 @source not "../../docs/";
 @source not "../../.scratch/";
 @source not "../../.agents/";
+@source not "../../.codex/environments/";
 @source not "../../README.md";
 @source not "../../AGENTS.md";
 @source not "../../CONTEXT.md";

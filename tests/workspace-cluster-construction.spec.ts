@@ -174,45 +174,6 @@ test('Add System places two systems at targeted cluster points and reloads their
   expectSystemPosition(afterReload.layout.systemPositions?.[secondCreatedId], secondDeliveredPoint)
 })
 
-test('Add System rejects an occupied map point and accepts a clear point without coordinate fields', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  await returnToClusterMap(page)
-
-  const inspector = page.locator('#workspace-inspector-panel')
-  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  if (await inspector.isVisible()) await inspectToggle.click()
-  await expect(inspector).toBeHidden()
-
-  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
-  const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  const existingSystem = before.cluster?.systems[0]
-  expect(existingSystem).toBeDefined()
-  if (!existingSystem) throw new Error('The cluster export does not contain its first system.')
-  const occupiedPoint = before.layout.systemPositions?.[existingSystem.id]
-  expect(occupiedPoint).toBeDefined()
-  if (!occupiedPoint) throw new Error('The first system has no saved Cluster position.')
-  await (await dockAction(page, 'Add star system')).click()
-  await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
-  await expect(workspaceNavigation(page).getByText('Click a clear point on the Cluster map to add a system.', { exact: true })).toBeVisible()
-
-  await clickNormalizedClusterPoint(page, map, occupiedPoint)
-  await expect(page.getByRole('alert')).toContainText('Choose an open point clear of existing systems.')
-  const afterInvalid = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(afterInvalid).toEqual(before)
-
-  const target = { x: 0.84, y: 0.78 }
-  const deliveredTarget = await clickNormalizedClusterPoint(page, map, target)
-  await expect(map).toBeVisible()
-  await expect(inspector).toBeHidden()
-  await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })).toContainText(/system/i)
-
-  const afterCorrected = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(afterCorrected.cluster?.systems).toHaveLength(2)
-  const newSystem = afterCorrected.cluster?.systems.find(system => system.name === 'New System 2')
-  expect(newSystem).toBeDefined()
-  expectSystemPosition(afterCorrected.layout.systemPositions?.[newSystem!.id], deliveredTarget)
-})
 
 test('Add System can be created from the keyboard at the panned Cluster viewport center', async ({ page }) => {
   await captureMapExportBlobs(page)

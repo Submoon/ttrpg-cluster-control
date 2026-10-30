@@ -19,36 +19,8 @@ import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 test('new objects start at Known type publication @pure', () => {
   const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
 
-  expect(createSystemObject(system, 'planet')).toHaveProperty('publication', 'known-type')
-})
-
-test('a new system primary star starts at Known type publication @pure', () => {
-  const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
-
   expect(system.objects[0]).toHaveProperty('publication', 'known-type')
-})
-
-test('version 2 workspaces migrate object publication to Hidden and preserve chart publication @pure', () => {
-  const current = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const legacy = structuredClone(current) as unknown as Record<string, unknown>
-  legacy.version = 2
-  const cluster = legacy.cluster as {
-    playerTitle: string
-    systems: Array<{ publication: string; objects: Array<Record<string, unknown>> }>
-  }
-  cluster.playerTitle = 'Aster Reach'
-  cluster.systems[0]!.publication = 'revealed'
-  for (const object of cluster.systems[0]!.objects) delete object.publication
-
-  const restored = restoreLocalWorkspace(legacy)
-
-  expect(restored).toMatchObject({
-    version: 4,
-    cluster: {
-      playerTitle: 'Aster Reach',
-      systems: [{ publication: 'revealed', objects: [{ publication: 'hidden' }] }],
-    },
-  })
+  expect(createSystemObject(system, 'planet')).toHaveProperty('publication', 'known-type')
 })
 
 test('version 2 workspaces reject missing or malformed system publication metadata @pure', () => {

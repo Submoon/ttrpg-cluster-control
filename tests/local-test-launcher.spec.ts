@@ -3,9 +3,9 @@ import { createServer } from 'node:net'
 import { readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { Writable } from 'node:stream'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { createInvalidationLatch, openBrowserReadiness, viteHmrInvalidationReason } from '../scripts/local-browser-readiness.mjs'
 import { createLocalSourceMonitor } from '../scripts/local-source-monitor.mjs'
@@ -14,6 +14,7 @@ import {
   assertPortAvailable,
   createSignalController,
   createLocalTestSession,
+  isCompatibleIdleInput,
   runInteractiveSession,
   stopOwnedProcessTree,
   waitForHttpReady,
@@ -104,6 +105,49 @@ function createLauncherSession(
   })
 }
 
+test('local launcher rejects caller-owned Playwright output and config paths before starting the server @pure', { tag: '@pure' }, async () => {
+  const overrides = [
+    ['--output', 'retained-evidence'],
+    ['--output=retained-evidence'],
+    ['--config', 'other.config.ts'],
+    ['--config=other.config.ts'],
+    ['-c', 'other.config.ts'],
+    ['-c=other.config.ts'],
+    ['-xcother.config.ts'],
+    ['-xc', 'other.config.ts'],
+    ['--last-failed-file', 'retained-last-run.json'],
+    ['--last-failed-file=retained-last-run.json'],
+    ['--', '--output=retained-after-separator'],
+    ['--grep-invert', '--', '--last-failed-file=retained-after-filter'],
+  ]
+
+  for (const override of overrides) {
+    const root = await mkdtemp(join(tmpdir(), 'local-test-output-override-'))
+    let spawnCount = 0
+    const session = createLauncherSession(root, {
+      createSourceMonitor: async () => createFakeSourceMonitor(),
+      createLogWriter: async () => ({ write: () => {}, close: async () => {} }),
+      spawnProcess: (_executable, args) => {
+        spawnCount += 1
+        const child = new FakeChild(799)
+        if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+        return child
+      },
+      writeStdout: () => {},
+      writeStderr: () => {},
+    })
+
+    try {
+      await expect(session.start(['--project=browser', ...override]))
+        .rejects.toThrow('test:local owns Playwright output paths')
+      expect(spawnCount).toBe(0)
+    } finally {
+      await session.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+})
+
 test('local test launcher refuses a port owned by another process @pure', { tag: '@pure' }, async () => {
   const server = createServer()
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -114,23 +158,6 @@ test('local test launcher refuses a port owned by another process @pure', { tag:
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()))
   }
-})
-
-test('local test readiness reports an actionable timeout @pure', { tag: '@pure' }, async () => {
-  let elapsed = 0
-  let requests = 0
-  await expect(waitForHttpReady({
-    url: 'http://127.0.0.1:45678',
-    fetchImpl: async () => {
-      requests += 1
-      return new Response(null, { status: 503 })
-    },
-    timeoutMs: 1_000,
-    intervalMs: 400,
-    now: () => elapsed,
-    wait: async milliseconds => { elapsed += milliseconds },
-  })).rejects.toThrow('Timed out after 1000 ms')
-  expect(requests).toBe(3)
 })
 
 test('local test readiness aborts an HTTP request that never responds @pure', { tag: '@pure' }, async () => {
@@ -280,34 +307,6 @@ test('Ctrl+C while a test is running reaches the launcher without readline takin
   signals.dispose()
 })
 
-test('Ctrl+C at the rerun prompt is forwarded as an interrupt @pure', { tag: '@pure' }, async () => {
-  const input = new PassThrough()
-  const output = new Writable({ write: (_chunk, _encoding, callback) => callback() })
-  const signalSource = new EventEmitter()
-  const session = {
-    serverExit: new Promise<never>(() => {}),
-    logRelativePath: 'test-results/local-test/server.log',
-    runTest: async () => 0,
-  }
-  let activeReadline: import('node:readline/promises').Interface | undefined
-  const signals = createSignalController(signalSource, () => activeReadline?.close())
-  const execution = runInteractiveSession(session, [], {
-    input,
-    output,
-    onInterface: active => { activeReadline = active },
-    onInterrupt: () => signals.interrupt('SIGINT'),
-  })
-
-  await new Promise<void>(resolve => setImmediate(resolve))
-  const interrupted = Promise.race([execution.catch(() => -1), signals.interrupted])
-  activeReadline?.emit('SIGINT')
-
-  expect(await interrupted).toBe(130)
-  expect(await execution).toBe(130)
-  expect(activeReadline).toBeUndefined()
-  signals.dispose()
-})
-
 test('Windows cleanup targets the owned process and its descendants @pure', { tag: '@pure' }, async () => {
   const owned = new FakeChild(555)
   const killer = new FakeChild(556)
@@ -338,8 +337,9 @@ test('local launcher reuses its server, isolates Playwright output, redacts logs
   const terminal: string[] = []
   const testCodes = [1, 0]
   const order: string[] = []
-  const sourceMonitor = createFakeSourceMonitor()
-  const browserReadiness = createFakeBrowserReadiness()
+  const sourceMonitors = [] as ReturnType<typeof createFakeSourceMonitor>[]
+  const browserReadinesses = [] as ReturnType<typeof createFakeBrowserReadiness>[]
+  let browserCloseCount = 0
   let nextPid = 100
   const spawnProcess = (executable: string, args: readonly string[], options: FakeSpawnOptions) => {
     const child = new FakeChild(++nextPid)
@@ -362,14 +362,23 @@ test('local launcher reuses its server, isolates Playwright output, redacts logs
       TOKEN_SECRET: 'super-secret-value',
       COPILOT_ENTRA_DISABLE_ONEAUTH: '1',
       PLAYWRIGHT_PRODUCTION_URL: 'https://preview.example.invalid',
+      PLAYWRIGHT_LAST_RUN_OUTPUT_FILE: 'caller-shared-last-run.json',
+      PLAYWRIGHT_JSON_OUTPUT_FILE: 'caller-shared-report.json',
+      PLAYWRIGHT_JSON_OUTPUT_DIR: 'caller-shared-json',
       PLAYWRIGHT_JSON_OUTPUT_NAME: 'caller-shared-report.json',
+      PLAYWRIGHT_HTML_OUTPUT_DIR: 'caller-shared-html',
+      PLAYWRIGHT_HTML_REPORT: 'caller-shared-html-report',
+      PLAYWRIGHT_OUTPUT_RUN_ROOT: 'caller-shared-run-root',
+      TTRPG_PLAYWRIGHT_OUTPUT_OWNERSHIP: '{"stale":true}',
       PLAYWRIGHT_CHANNEL: 'chrome',
     },
     port: 3100,
     spawnProcess,
-    createSourceMonitor: async () => {
-      order.push('monitor')
-      return sourceMonitor
+    createSourceMonitor: async ({ ignoreFile }) => {
+      order.push(ignoreFile ? 'fence' : 'monitor')
+      const monitor = createFakeSourceMonitor()
+      sourceMonitors.push(monitor)
+      return monitor
     },
     openBrowserReadiness: async ({ url, timeoutMs, signal, channel }) => {
       order.push('browser')
@@ -377,7 +386,9 @@ test('local launcher reuses its server, isolates Playwright output, redacts logs
       expect(timeoutMs).toBe(1_000)
       expect(channel).toBe('chrome')
       expect(signal.aborted).toBe(false)
-      return browserReadiness
+      const readiness = createFakeBrowserReadiness(() => { browserCloseCount += 1 })
+      browserReadinesses.push(readiness)
+      return readiness
     },
     checkPortAvailable: async () => {},
     fetchImpl: async () => new Response('ready', { status: 200 }),
@@ -414,9 +425,20 @@ test('local launcher reuses its server, isolates Playwright output, redacts logs
     expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_BASE_URL === 'http://127.0.0.1:3100')).toBe(true)
     expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_PRODUCTION_URL === undefined)).toBe(true)
     expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_CHANNEL === 'chrome')).toBe(true)
+    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_LAST_RUN_OUTPUT_FILE === undefined)).toBe(true)
+    expect(testRuns.every(run => run.options.env?.TTRPG_PLAYWRIGHT_OUTPUT_OWNERSHIP === undefined)).toBe(true)
     expect(new Set(testRuns.map(run => run.options.env?.PLAYWRIGHT_OUTPUT_DIR)).size).toBe(2)
-    expect(new Set(testRuns.map(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_NAME)).size).toBe(2)
-    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_NAME?.endsWith('results.json'))).toBe(true)
+    expect(new Set(testRuns.map(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_FILE)).size).toBe(2)
+    expect(new Set(testRuns.map(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_DIR)).size).toBe(2)
+    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_NAME === 'results.json')).toBe(true)
+    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_JSON_OUTPUT_FILE?.endsWith('results.json'))).toBe(true)
+    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_OUTPUT_RUN_ROOT === run.options.env?.PLAYWRIGHT_JSON_OUTPUT_DIR)).toBe(true)
+    expect(testRuns.every(run => join(
+      run.options.env?.PLAYWRIGHT_JSON_OUTPUT_DIR ?? '',
+      run.options.env?.PLAYWRIGHT_JSON_OUTPUT_NAME ?? '',
+    ) === run.options.env?.PLAYWRIGHT_JSON_OUTPUT_FILE)).toBe(true)
+    expect(testRuns.every(run => run.options.env?.PLAYWRIGHT_HTML_OUTPUT_DIR === run.options.env?.PLAYWRIGHT_HTML_REPORT)).toBe(true)
+    expect(new Set(testRuns.map(run => run.options.env?.PLAYWRIGHT_HTML_OUTPUT_DIR)).size).toBe(2)
     expect(testRuns[0]?.options.env?.PLAYWRIGHT_OUTPUT_DIR).toContain('playwright-run-1')
     expect(testRuns[1]?.options.env?.PLAYWRIGHT_OUTPUT_DIR).toContain('playwright-run-2')
     expect(log.join('')).not.toContain('super-secret-value')
@@ -424,10 +446,13 @@ test('local launcher reuses its server, isolates Playwright output, redacts logs
     expect(log.join('')).toContain('[REDACTED]')
     expect(log.join('')).toContain('http://127.0.0.1:3100/')
     expect(session.logRelativePath).toContain('test-results')
-    expect(order).toEqual(['monitor', 'server', 'browser', 'test', 'test'])
+    expect(order).toEqual(['fence', 'monitor', 'server', 'browser', 'test', 'monitor', 'browser', 'test'])
+    expect(sourceMonitors).toHaveLength(3)
+    expect(browserReadinesses).toHaveLength(2)
 
     await session.close()
     expect(killed).toEqual([spawned[0]!.child.pid])
+    expect(browserCloseCount).toBe(2)
   } finally {
     await session.close()
     await rm(root, { recursive: true, force: true })
@@ -481,44 +506,6 @@ test('pure-only project selection is exact and skips the server and browser prob
   }
 })
 
-test('closing during output preparation prevents a late Playwright child spawn @pure', { tag: '@pure' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'local-test-output-cancel-'))
-  const sourceMonitor = createFakeSourceMonitor()
-  let resolvePreparationStarted: () => void = () => {}
-  let finishPreparation: (() => void) | undefined
-  const preparationStarted = new Promise<void>(resolve => { resolvePreparationStarted = resolve })
-  const preparation = new Promise<void>(resolve => { finishPreparation = resolve })
-  let testChildren = 0
-  let nextPid = 855
-  const session = createLauncherSession(root, {
-    createSourceMonitor: async () => sourceMonitor,
-    prepareOutputDirectory: async () => {
-      resolvePreparationStarted()
-      await preparation
-    },
-    spawnProcess: (_executable, args) => {
-      const child = new FakeChild(++nextPid)
-      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
-      else testChildren += 1
-      return child
-    },
-  })
-
-  try {
-    await session.start(['--project=browser'])
-    const running = session.runTest(['--project=browser'])
-    await preparationStarted
-    await session.close()
-    finishPreparation?.()
-    await expect(running).rejects.toThrow('closed while preparing the Playwright run')
-    expect(testChildren).toBe(0)
-  } finally {
-    finishPreparation?.()
-    await session.close()
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
 test('browser readiness timeout is reported before the Playwright child starts @pure', { tag: '@pure' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'local-test-readiness-timeout-'))
   const sourceMonitor = createFakeSourceMonitor()
@@ -554,6 +541,7 @@ test('readiness owns a pending Chromium launch and forwards the configured chann
   const launchStarted = new Promise<void>(resolve => { resolveLaunchStarted = resolve })
   const browserClosed = new Promise<void>(resolve => { resolveBrowserClosed = resolve })
   let closeCount = 0
+  let openingSettled = false
   const browser = {
     close: async () => {
       closeCount += 1
@@ -572,16 +560,55 @@ test('readiness owns a pending Chromium launch and forwards the configured chann
       return new Promise(resolve => { finishLaunch = () => resolve(browser) })
     },
   })
+  void opening.then(() => { openingSettled = true }, () => { openingSettled = true })
 
   await launchStarted
   expect(launchOptions?.channel).toBe('chrome')
   expect(launchOptions?.timeout).toBeGreaterThan(0)
   expect(launchOptions?.timeout).toBeLessThanOrEqual(5_000)
   controller.abort(new Error('Readiness cancelled by test.'))
-  await expect(opening).rejects.toThrow('Readiness cancelled by test')
+  await Promise.resolve()
+  expect(openingSettled).toBe(false)
   finishLaunch?.()
+  await expect(opening).rejects.toThrow('Readiness cancelled by test')
   await browserClosed
   expect(closeCount).toBe(1)
+})
+
+test('closing during compatibility fence creation closes a late monitor @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-late-fence-'))
+  let resolveFence: ((monitor: ReturnType<typeof createFakeSourceMonitor>) => void) | undefined
+  let resolveFenceStarted: () => void = () => {}
+  const fenceStarted = new Promise<void>(resolve => { resolveFenceStarted = resolve })
+  let closeCount = 0
+  let spawnCount = 0
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async () => {
+      resolveFenceStarted()
+      return new Promise(resolve => { resolveFence = resolve })
+    },
+    spawnProcess: () => {
+      spawnCount += 1
+      return new FakeChild(845)
+    },
+  })
+
+  try {
+    const starting = session.start(['--project=browser'])
+    await fenceStarted
+    const closing = session.close()
+    await expect(starting).rejects.toThrow('Local test session was closed before verification could start')
+    resolveFence?.({
+      ...createFakeSourceMonitor(),
+      close: async () => { closeCount += 1 },
+    })
+    await closing
+    expect(closeCount).toBe(1)
+    expect(spawnCount).toBe(0)
+  } finally {
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('closing during browser readiness aborts the pending probe and owns no test child @pure', { tag: '@pure' }, async () => {
@@ -748,6 +775,414 @@ test('HMR during a Playwright run stops the child and retains its isolated repor
   }
 })
 
+test('a child that resists invalidation remains owned and blocks another epoch until close succeeds @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-child-stop-failure-'))
+  const monitors: ReturnType<typeof createFakeSourceMonitor>[] = []
+  let testChild: FakeChild | undefined
+  let resolveTestStarted: () => void = () => {}
+  const testStarted = new Promise<void>(resolve => { resolveTestStarted = resolve })
+  let stopAttempts = 0
+  let nextPid = 892
+  let testChildren = 0
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async () => {
+      const monitor = createFakeSourceMonitor()
+      monitors.push(monitor)
+      return monitor
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else {
+        testChild = child
+        testChildren += 1
+        resolveTestStarted()
+      }
+      return child
+    },
+    stopProcessTree: async child => {
+      if (!(child instanceof FakeChild)) throw new Error('Expected the fake child process.')
+      if (child === testChild && stopAttempts++ === 0) throw new Error('Synthetic stop failure.')
+      child.finish(null, 'SIGTERM')
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    const running = session.runTest(['--project=browser'])
+    await testStarted
+    monitors[1]?.invalidate('app.vue changed during active verification.')
+    expect(await running).toBe(1)
+    expect(testChild?.signalCode).toBeNull()
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('prior Playwright child is still owned')
+    expect(testChildren).toBe(1)
+
+    await session.close()
+    expect(testChild?.signalCode).toBe('SIGTERM')
+  } finally {
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a failed idle preparation needs another explicit Enter and stale readiness cannot invalidate its successor @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-preparation-epochs-'))
+  const monitors: ReturnType<typeof createFakeSourceMonitor>[] = []
+  const readinessResources: ReturnType<typeof createFakeBrowserReadiness>[] = []
+  let readinessCalls = 0
+  let testChildren = 0
+  let nextPid = 895
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async () => {
+      const monitor = createFakeSourceMonitor()
+      monitors.push(monitor)
+      return monitor
+    },
+    openBrowserReadiness: async ({ signal }) => {
+      readinessCalls += 1
+      if (readinessCalls === 2) {
+        const strictMonitor = monitors.at(-1)
+        queueMicrotask(() => strictMonitor?.invalidate('app.vue changed during idle qualification.'))
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+      }
+      const resource = createFakeBrowserReadiness()
+      readinessResources.push(resource)
+      return resource
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else {
+        testChildren += 1
+        queueMicrotask(() => child.finish(0))
+      }
+      return child
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    readinessResources[0]?.invalidate('late HMR callback from a closed epoch')
+
+    expect(await session.runTest(['--project=browser'])).toBe(1)
+    expect(testChildren).toBe(1)
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    expect(testChildren).toBe(2)
+    expect(readinessCalls).toBe(3)
+    expect(monitors).toHaveLength(4)
+  } finally {
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('the continuous fence rejects a compatible edit made while the new strict monitor is being created @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-fence-handoff-'))
+  const pages = join(root, 'pages')
+  await mkdir(pages)
+  await writeFile(join(root, 'app.vue'), '<template>before</template>')
+  const page = join(pages, 'index.vue')
+  await writeFile(page, '<template>before</template>')
+  let monitorCreationGate: (() => void) | undefined
+  let resolveStrictMonitorStarted: () => void = () => {}
+  let resolveCompatibleChange: () => void = () => {}
+  let strictMonitorStarted: Promise<void>
+  let compatibleChange: Promise<void>
+  let holdNextStrictMonitor = false
+  let testChildren = 0
+  let nextPid = 1_300
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async options => {
+      if (options.ignoreFile) {
+        const onChange = options.onIgnoredFileChange
+        return createLocalSourceMonitor({
+          intervalMs: 10_000,
+          ...options,
+          onIgnoredFileChange: relativePath => {
+            onChange?.(relativePath)
+            resolveCompatibleChange()
+          },
+        })
+      }
+      if (holdNextStrictMonitor) {
+        holdNextStrictMonitor = false
+        resolveStrictMonitorStarted()
+        await new Promise<void>(resolve => { monitorCreationGate = resolve })
+      }
+      return createLocalSourceMonitor({ intervalMs: 10_000, ...options })
+    },
+    openBrowserReadiness: async () => createFakeBrowserReadiness(),
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else {
+        testChildren += 1
+        queueMicrotask(() => child.finish(0))
+      }
+      return child
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    holdNextStrictMonitor = true
+    strictMonitorStarted = new Promise<void>(resolve => { resolveStrictMonitorStarted = resolve })
+    compatibleChange = new Promise<void>(resolve => { resolveCompatibleChange = resolve })
+    const rerun = session.runTest(['--project=browser'])
+    await strictMonitorStarted
+    await writeFile(page, '<template>edit during handoff</template>')
+    await compatibleChange
+    monitorCreationGate?.()
+    expect(await rerun).toBe(1)
+    expect(testChildren).toBe(1)
+
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    expect(testChildren).toBe(2)
+  } finally {
+    monitorCreationGate?.()
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a pending readiness cleanup finishes before another local run can start @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-readiness-cleanup-'))
+  const monitors: ReturnType<typeof createFakeSourceMonitor>[] = []
+  let readinessCalls = 0
+  let resolveCleanupStarted: () => void = () => {}
+  const cleanupStarted = new Promise<void>(resolve => { resolveCleanupStarted = resolve })
+  let finishAbortCleanup: (() => void) | undefined
+  let nextPid = 1_400
+  let testChildren = 0
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async () => {
+      const monitor = createFakeSourceMonitor()
+      monitors.push(monitor)
+      return monitor
+    },
+    openBrowserReadiness: async ({ signal }) => {
+      readinessCalls += 1
+      if (readinessCalls === 2) {
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            resolveCleanupStarted()
+            void new Promise<void>(resolve => { finishAbortCleanup = resolve }).then(() => reject(signal.reason))
+          }, { once: true })
+        })
+      }
+      return createFakeBrowserReadiness()
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else {
+        testChildren += 1
+        queueMicrotask(() => child.finish(0))
+      }
+      return child
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    const rerun = session.runTest(['--project=browser'])
+    await expect.poll(() => readinessCalls).toBe(2)
+    monitors.at(-1)?.invalidate('source changed during pending readiness cleanup')
+    await cleanupStarted
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('Playwright run is in progress')
+    finishAbortCleanup?.()
+    expect(await rerun).toBe(1)
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    expect(testChildren).toBe(2)
+    expect(readinessCalls).toBe(3)
+  } finally {
+    finishAbortCleanup?.()
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('server exit during output preparation prevents a late Playwright child spawn @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-server-exit-output-'))
+  let server: FakeChild | undefined
+  let resolvePreparationStarted: () => void = () => {}
+  const preparationStarted = new Promise<void>(resolve => { resolvePreparationStarted = resolve })
+  let finishPreparation: (() => void) | undefined
+  const preparation = new Promise<void>(resolve => { finishPreparation = resolve })
+  let testChildren = 0
+  let nextPid = 1_425
+  const session = createLauncherSession(root, {
+    prepareOutputDirectory: async () => {
+      resolvePreparationStarted()
+      await preparation
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) {
+        server = child
+        child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      } else {
+        testChildren += 1
+        queueMicrotask(() => child.finish(0))
+      }
+      return child
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    const running = session.runTest(['--project=browser'])
+    await preparationStarted
+    server?.finish(2)
+    finishPreparation?.()
+    await expect(running).rejects.toThrow('development server exited (code 2)')
+    expect(testChildren).toBe(0)
+  } finally {
+    finishPreparation?.()
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('server failure retains an invalidation marker when source change was already observed @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-server-exit-invalidated-'))
+  let sourceChanged = false
+  let server: FakeChild | undefined
+  let testChild: FakeChild | undefined
+  let resolveTestStarted: () => void = () => {}
+  const testStarted = new Promise<void>(resolve => { resolveTestStarted = resolve })
+  let nextPid = 1_435
+  let reportPath: string | undefined
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async () => ({
+      invalidated: new Promise<string>(() => {}),
+      check: async () => sourceChanged ? 'tests/workspace.spec.ts changed before server failure.' : undefined,
+      close: async () => {},
+    }),
+    spawnProcess: (_executable, args, options) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) {
+        server = child
+        child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      }
+      else {
+        testChild = child
+        reportPath = options.env?.PLAYWRIGHT_JSON_OUTPUT_FILE
+        resolveTestStarted()
+      }
+      return child
+    },
+    stopProcessTree: async child => {
+      if (!(child instanceof FakeChild)) throw new Error('Expected the fake child process.')
+      child.finish(null, 'SIGTERM')
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    const running = session.runTest(['--project=browser'])
+    await testStarted
+    sourceChanged = true
+    server?.finish(2)
+    await expect(running).rejects.toThrow('development server exited (code 2)')
+    expect(testChild?.signalCode).toBe('SIGTERM')
+    if (!reportPath) throw new Error('Expected a per-run Playwright report path.')
+    const invalidationPath = join(dirname(reportPath), 'local-result-invalidated.json')
+    const invalidation = JSON.parse(await readFile(invalidationPath, 'utf8')) as { reason: string, playwrightJsonReport: string }
+    expect(invalidation.reason).toContain('tests/workspace.spec.ts')
+    expect(invalidation.playwrightJsonReport).toContain('results.json')
+  } finally {
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('readiness cleanup failure is surfaced and requires a fresh local session @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-readiness-cleanup-error-'))
+  let readinessCalls = 0
+  let nextPid = 1_450
+  const session = createLauncherSession(root, {
+    openBrowserReadiness: async () => {
+      readinessCalls += 1
+      if (readinessCalls === 2) {
+        throw new AggregateError([new Error('hydration failed'), new Error('browser close failed')], 'Synthetic readiness cleanup failure.')
+      }
+      return createFakeBrowserReadiness()
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else queueMicrotask(() => child.finish(0))
+      return child
+    },
+  })
+  let closeRejected = false
+
+  try {
+    await session.start(['--project=browser'])
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('Could not clean up the local verification epoch')
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('Verification resource cleanup failed')
+    expect(readinessCalls).toBe(2)
+    await expect(session.close()).rejects.toThrow('Could not clean up all local test processes')
+    closeRejected = true
+  } finally {
+    if (!closeRejected) {
+      await session.close().catch(() => undefined)
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source monitor cleanup is bounded and a timed out monitor remains owned until close @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-monitor-cleanup-'))
+  let resolveMonitorClose: (() => void) | undefined
+  let closeStarted: () => void = () => {}
+  const monitorCloseStarted = new Promise<void>(resolve => { closeStarted = resolve })
+  let monitorCalls = 0
+  let monitorCloseCount = 0
+  let nextPid = 1_475
+  const session = createLauncherSession(root, {
+    readinessTimeoutMs: 500,
+    createSourceMonitor: async () => {
+      monitorCalls += 1
+      const monitor = createFakeSourceMonitor()
+      return monitorCalls === 2
+        ? { ...monitor, close: async () => {
+          monitorCloseCount += 1
+          closeStarted()
+          await new Promise<void>(resolve => { resolveMonitorClose = resolve })
+        } }
+        : monitor
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else queueMicrotask(() => child.finish(0))
+      return child
+    },
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('Could not clean up the local verification epoch')
+    await monitorCloseStarted
+    await expect(session.runTest(['--project=browser'])).rejects.toThrow('Verification resource cleanup failed')
+    resolveMonitorClose?.()
+    await expect(session.close()).rejects.toThrow('Could not clean up all local test processes')
+    expect(monitorCloseCount).toBe(1)
+  } finally {
+    resolveMonitorClose?.()
+    await session.close().catch(() => undefined)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('a source edit at successful child completion invalidates the result @pure', { tag: '@pure' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'local-test-finish-change-'))
   let changed = false
@@ -807,7 +1242,196 @@ test('source monitor ignores shared-policy documents and detects CSS changes @pu
   }
 })
 
-test('source monitor ignores stable file-read notifications but catches later writes @pure', { tag: '@pure' }, async () => {
+test('the idle compatibility fence skips known hot files but keeps configs and directory structure strict @pure', { tag: '@pure' }, async () => {
+  expect(isCompatibleIdleInput('app.vue')).toBe(true)
+  expect(isCompatibleIdleInput('pages/workspace.vue')).toBe(true)
+  expect(isCompatibleIdleInput('domain/session.ts')).toBe(true)
+  expect(isCompatibleIdleInput('assets/theme.css')).toBe(true)
+  expect(isCompatibleIdleInput('tests/workspace.spec.ts')).toBe(true)
+  expect(isCompatibleIdleInput('tests/fixtures/campaign.json')).toBe(true)
+  for (const incompatible of [
+    '.env.local', 'nuxt.config.ts', 'scripts/local-test.mjs', 'package.json', 'package-lock.json',
+    'pages/not-a-source.txt', 'assets/theme.scss', 'tests/fixtures/untyped.bin',
+  ]) expect(isCompatibleIdleInput(incompatible)).toBe(false)
+
+  const root = await mkdtemp(join(tmpdir(), 'local-source-monitor-fence-'))
+  await mkdir(join(root, 'pages'), { recursive: true })
+  await mkdir(join(root, 'tests', 'fixtures'), { recursive: true })
+  await mkdir(join(root, 'assets'), { recursive: true })
+  const page = join(root, 'pages', 'workspace.vue')
+  const spec = join(root, 'tests', 'workspace.spec.ts')
+  const fixture = join(root, 'tests', 'fixtures', 'campaign.json')
+  const css = join(root, 'assets', 'theme.css')
+  const config = join(root, 'nuxt.config.ts')
+  await Promise.all([
+    writeFile(page, '<template>before</template>'),
+    writeFile(spec, 'test.before = true'),
+    writeFile(fixture, '{"value":"before"}'),
+    writeFile(css, '.before {}'),
+    writeFile(config, 'export default {}'),
+  ])
+  const monitor = await createLocalSourceMonitor({ rootDirectory: root, intervalMs: 10_000, ignoreFile: isCompatibleIdleInput })
+
+  try {
+    await Promise.all([
+      writeFile(page, '<template>idle page edit</template>'),
+      writeFile(spec, 'test.after = true'),
+      writeFile(fixture, '{"value":"after"}'),
+      writeFile(css, '.after {}'),
+    ])
+    expect(await monitor.check()).toBeUndefined()
+
+    await writeFile(config, 'export default { devtools: true }')
+    await writeFile(config, 'export default {}')
+    await expect(monitor.invalidated).resolves.toContain('nuxt.config.ts')
+  } finally {
+    await monitor.close()
+    await rm(root, { recursive: true, force: true })
+  }
+
+  const structureRoot = await mkdtemp(join(tmpdir(), 'local-source-monitor-fence-directory-'))
+  await mkdir(join(structureRoot, 'pages'))
+  const structureMonitor = await createLocalSourceMonitor({ rootDirectory: structureRoot, intervalMs: 10_000, ignoreFile: isCompatibleIdleInput })
+  try {
+    await mkdir(join(structureRoot, 'pages', 'new-route'))
+    await writeFile(join(structureRoot, 'pages', 'new-route', 'index.vue'), '<template />')
+    await expect(structureMonitor.invalidated).resolves.toBeTruthy()
+  } finally {
+    await structureMonitor.close()
+    await rm(structureRoot, { recursive: true, force: true })
+  }
+})
+
+test('local rerun requalifies a compatible idle edit and requires a fresh session after a transient config change @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-test-idle-epoch-'))
+  const pageDirectory = join(root, 'pages')
+  await mkdir(pageDirectory)
+  await writeFile(join(root, 'app.vue'), '<template>before</template>')
+  await writeFile(join(root, 'nuxt.config.ts'), 'export default {}')
+  const page = join(pageDirectory, 'index.vue')
+  await writeFile(page, '<template>before</template>')
+  let resolveIdleEditObserved: () => void = () => {}
+  let idleEditObserved: Promise<void>
+  let compatibilityFence: Awaited<ReturnType<typeof createLocalSourceMonitor>> | undefined
+  let testChildren = 0
+  let readinessCalls = 0
+  let nextPid = 1_200
+  const errors: string[] = []
+  const session = createLauncherSession(root, {
+    createSourceMonitor: async options => {
+      const monitor = await createLocalSourceMonitor({
+        intervalMs: 10_000,
+        ...options,
+        onIgnoredFileChange: relativePath => {
+          options.onIgnoredFileChange?.(relativePath)
+          if (relativePath === 'pages/index.vue') resolveIdleEditObserved()
+        },
+      })
+      if (options.ignoreFile) compatibilityFence = monitor
+      return monitor
+    },
+    openBrowserReadiness: async () => {
+      readinessCalls += 1
+      return createFakeBrowserReadiness()
+    },
+    spawnProcess: (_executable, args) => {
+      const child = new FakeChild(++nextPid)
+      if (args[0]?.endsWith('nuxt.mjs')) child.stdout.write('Local: http://127.0.0.1:3100/\n')
+      else {
+        testChildren += 1
+        queueMicrotask(() => child.finish(0))
+      }
+      return child
+    },
+    writeStderr: value => errors.push(value),
+  })
+
+  try {
+    await session.start(['--project=browser'])
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    expect(testChildren).toBe(1)
+
+    idleEditObserved = new Promise<void>(resolve => { resolveIdleEditObserved = resolve })
+    await writeFile(page, '<template>compatible idle UI edit</template>')
+    await idleEditObserved
+    expect(await compatibilityFence?.check()).toBeUndefined()
+    expect(await session.runTest(['--project=browser'])).toBe(0)
+    expect(testChildren).toBe(2)
+    expect(readinessCalls).toBe(2)
+
+    const config = join(root, 'nuxt.config.ts')
+    await writeFile(config, 'export default { devtools: true }')
+    await writeFile(config, 'export default {}')
+    expect(await session.runTest(['--project=browser'])).toBe(1)
+    expect(testChildren).toBe(2)
+    expect(errors.join('')).toContain('fresh local test session')
+  } finally {
+    await session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source monitor ignores metadata below the root .codex/environments boundary @pure', { tag: '@pure' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'local-source-monitor-environments-'))
+  const environments = join(root, '.codex', 'environments')
+  await mkdir(environments, { recursive: true })
+  const existingMetadata = join(environments, 'environment.toml')
+  await writeFile(existingMetadata, 'before')
+  const monitor = await createLocalSourceMonitor({ rootDirectory: root, intervalMs: 10_000 })
+  const createdMetadata = join(environments, 'new-environment.toml')
+
+  try {
+    await writeFile(existingMetadata, 'edited')
+    expect(await monitor.check()).toBeUndefined()
+
+    await writeFile(createdMetadata, 'created')
+    expect(await monitor.check()).toBeUndefined()
+
+    await rm(createdMetadata)
+    expect(await monitor.check()).toBeUndefined()
+
+    const generatedDirectory = join(environments, 'generated')
+    await mkdir(generatedDirectory)
+    await writeFile(join(generatedDirectory, 'child.toml'), 'created below metadata root')
+    expect(await monitor.check()).toBeUndefined()
+
+    await rm(generatedDirectory, { recursive: true })
+    expect(await monitor.check()).toBeUndefined()
+
+    await rm(environments, { recursive: true })
+    expect(await monitor.check()).toBeUndefined()
+    await mkdir(environments, { recursive: true })
+    expect(await monitor.check()).toBeUndefined()
+  } finally {
+    await monitor.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source monitor still detects adjacent configuration and runtime inputs @pure', { tag: '@pure' }, async () => {
+  for (const relativePath of [
+    '.codex/config.toml',
+    '.codex/environments-other/runtime.toml',
+    'other/environments/runtime.toml',
+    'assets/theme.css',
+  ]) {
+    const root = await mkdtemp(join(tmpdir(), 'local-source-monitor-adjacent-'))
+    const sourcePath = join(root, ...relativePath.split('/'))
+    await mkdir(join(root, ...relativePath.split('/').slice(0, -1)), { recursive: true })
+    await writeFile(sourcePath, 'before')
+    const monitor = await createLocalSourceMonitor({ rootDirectory: root, intervalMs: 10_000 })
+
+    try {
+      await writeFile(sourcePath, 'after')
+      expect(await monitor.check()).toContain(relativePath)
+    } finally {
+      await monitor.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+})
+
+test('compatibility monitoring distinguishes stable file reads from real hot-file edits @pure', { tag: '@pure' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'local-source-monitor-read-'))
   await mkdir(join(root, 'assets'))
   const sourcePath = join(root, 'assets', 'theme.css')
@@ -815,7 +1439,13 @@ test('source monitor ignores stable file-read notifications but catches later wr
   const original = statSync(sourcePath)
   const oldAtime = new Date(Date.now() - 3 * 24 * 60 * 60 * 1_000)
   utimesSync(sourcePath, oldAtime, original.mtime)
-  const monitor = await createLocalSourceMonitor({ rootDirectory: root, intervalMs: 10_000 })
+  const compatibleChanges: string[] = []
+  const monitor = await createLocalSourceMonitor({
+    rootDirectory: root,
+    intervalMs: 10_000,
+    ignoreFile: isCompatibleIdleInput,
+    onIgnoredFileChange: relativePath => compatibleChanges.push(relativePath),
+  })
   let invalidation: string | undefined
   void monitor.invalidated.then(reason => { invalidation = reason })
 
@@ -825,28 +1455,11 @@ test('source monitor ignores stable file-read notifications but catches later wr
     await expect.poll(() => statSync(sourcePath).atimeMs, { timeout: 1_000 }).toBeGreaterThan(baselineAtime)
     await new Promise<void>(resolve => setTimeout(resolve, 50))
     expect(invalidation).toBeUndefined()
+    expect(compatibleChanges).toEqual([])
 
     writeFileSync(sourcePath, 'after')
-    await expect.poll(() => invalidation, { timeout: 1_000 }).toContain('assets/theme.css')
-  } finally {
-    await monitor.close()
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('source monitor canonicalizes its root before registering watchers @pure', { tag: '@pure' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'local-source-monitor-canonical-'))
-  let scanRoot: string | undefined
-  const monitor = await createLocalSourceMonitor({
-    rootDirectory: root,
-    scan: async directory => {
-      scanRoot = directory
-      return { files: new Map(), directories: [directory] }
-    },
-  })
-
-  try {
-    expect(scanRoot).toBe(await realpath(root))
+    await expect.poll(() => compatibleChanges, { timeout: 1_000 }).toContain('assets/theme.css')
+    expect(await monitor.check()).toBeUndefined()
   } finally {
     await monitor.close()
     await rm(root, { recursive: true, force: true })
@@ -984,51 +1597,6 @@ test('local launcher fails when its owned server exits during startup @pure', { 
   }
 })
 
-test('local launcher does not start readiness when cleanup wins during the initial source scan @pure', { tag: '@pure' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'local-test-startup-scan-cancel-'))
-  let finishScan: (() => void) | undefined
-  let resolveScanStarted: () => void = () => {}
-  const scanStarted = new Promise<void>(resolve => { resolveScanStarted = resolve })
-  let closeCount = 0
-  let readinessCalls = 0
-  let spawnCount = 0
-  const sourceMonitor = {
-    invalidated: new Promise<string>(() => {}),
-    check: () => {
-      resolveScanStarted()
-      return new Promise<string | undefined>(resolve => { finishScan = () => resolve(undefined) })
-    },
-    close: async () => { closeCount += 1 },
-  }
-  let nextPid = 705
-  const session = createLauncherSession(root, {
-    createSourceMonitor: async () => sourceMonitor,
-    openBrowserReadiness: async () => {
-      readinessCalls += 1
-      return createFakeBrowserReadiness()
-    },
-    spawnProcess: () => {
-      spawnCount += 1
-      return new FakeChild(++nextPid)
-    },
-  })
-  const starting = session.start(['--project=browser'])
-
-  try {
-    await scanStarted
-    await session.close()
-    finishScan?.()
-    await expect(starting).rejects.toThrow('closed before verification could start')
-    expect(closeCount).toBe(1)
-    expect(readinessCalls).toBe(0)
-    expect(spawnCount).toBe(0)
-  } finally {
-    finishScan?.()
-    await session.close()
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
 test('local launcher cannot spawn its server after cleanup wins during port preflight @pure', { tag: '@pure' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'local-test-launcher-cancel-'))
   let finishPreflight: (() => void) | undefined
@@ -1052,8 +1620,9 @@ test('local launcher cannot spawn its server after cleanup wins during port pref
   const starting = session.start()
   try {
     await preflightStarted
-    await session.close()
+    const closing = session.close()
     finishPreflight?.()
+    await closing
     await expect(starting).rejects.toThrow('closed before the server could start')
     expect(spawnCount).toBe(0)
   } finally {

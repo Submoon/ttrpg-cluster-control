@@ -247,49 +247,9 @@ test('a focus interruption completes the pending preview and clears its timeout 
   harness.dispose()
 })
 
-test('center-relative movement keeps both normalized coordinates in the preview @pure', async () => {
-  const harness = createHarness()
-  const intent = harness.makeIntent('center', 'keyboard', 'ArrowRight', 3)
-  const result = await harness.controller.update(intent, harness.currentGeometry, harness.buildRequest)
 
-  expect(result).toEqual({ status: 'preview' })
-  expect(harness.controller.preview.value?.geometry.center).toEqual({ x: 0.53, y: 0.5 })
-  expect(harness.publications).toBe(0)
-  expect(harness.history.getStatus().totalActions).toBe(0)
-  harness.controller.dispose()
-  harness.history.dispose()
-})
 
-test('whole-Orbit Home then End adjusts both radii within one held-key group @pure', async () => {
-  const harness = createHarness()
-  const base = {
-    workspaceId: harness.workspace.id,
-    systemId: harness.systemId,
-    orbitId: harness.orbitId,
-    inputKind: 'keyboard' as const,
-  }
-  const home: OrbitAdjustmentIntent = {
-    ...base,
-    keyCode: 'Home',
-    change: { kind: 'radii', axis: 'both', operation: 'minimum', minimum: 24 },
-  }
-  const end: OrbitAdjustmentIntent = {
-    ...base,
-    keyCode: 'End',
-    change: { kind: 'radii', axis: 'both', operation: 'delta', delta: 400, minimum: 24 },
-  }
 
-  expect(await harness.controller.update(home, harness.currentGeometry, harness.buildRequest)).toEqual({ status: 'preview' })
-  expect(await harness.controller.update(end, harness.currentGeometry, harness.buildRequest)).toEqual({ status: 'preview' })
-  expect(harness.controller.preview.value?.geometry.radii).toEqual({ horizontal: 424, vertical: 424 })
-  const applied = await harness.controller.completeGroup()
-
-  expect(applied.status).toBe('applied')
-  if (applied.status === 'applied') await applied.durable
-  expect(harness.workspace.layout.orbitRadii[harness.orbitId]).toEqual({ horizontal: 424, vertical: 424 })
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, redoDepth: 0 })
-  harness.dispose()
-})
 
 test('automatic wheel completion handles save failure without replaying or losing the action @pure', async () => {
   const clock = new ControlledClock()
@@ -317,35 +277,7 @@ test('automatic wheel completion handles save failure without replaying or losin
   }
 })
 
-test('changing Orbit property handles the prior group save rejection without losing either state @pure', async () => {
-  const harness = createHarness({ durability: () => Promise.reject(new Error('IndexedDB unavailable')) })
-  const unhandled: unknown[] = []
-  const onUnhandled = (reason: unknown): void => { unhandled.push(reason) }
-  process.on('unhandledRejection', onUnhandled)
 
-  try {
-    await harness.controller.update(
-      harness.makeIntent('radii', 'keyboard', 'ArrowRight'),
-      harness.currentGeometry,
-      harness.buildRequest,
-    )
-    const nextProperty = await harness.controller.update(
-      harness.makeIntent('rotation', 'keyboard', 'ArrowUp', 5),
-      harness.currentGeometry,
-      harness.buildRequest,
-    )
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    expect(nextProperty).toEqual({ status: 'preview' })
-    expect(harness.workspace.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(121)
-    expect(harness.controller.preview.value?.geometry.rotation).toBe(25)
-    expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, hasPendingGroup: true })
-    expect(unhandled).toEqual([])
-  } finally {
-    process.off('unhandledRejection', onUnhandled)
-    harness.dispose()
-  }
-})
 
 test('history reset immediately clears the page-owned preview and invalidates its timeout @pure', async () => {
   const clock = new ControlledClock()

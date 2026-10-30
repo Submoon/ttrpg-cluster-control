@@ -2,6 +2,12 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-10-08',
   ssr: true,
   modules: ['@nuxt/ui', '@pinia/nuxt'],
+  typescript: {
+    tsConfig: {
+      // Reports contain generated third-party bundles, not project source.
+      exclude: ['../test-results/**', '../playwright-report/**'],
+    },
+  },
   pinia: {
     storesDirs: ['./stores/**'],
   },

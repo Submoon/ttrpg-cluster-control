@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { computed, createRenderer, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 import type { SaveState } from '../composables/editor-workflows/types'
 import { useEditorTransitions } from '../composables/editor-workflows/useEditorTransitions'
@@ -8,6 +8,7 @@ import type { EntityInspectorSession } from '../composables/editor-workflows/typ
 import type { RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type { RouteDraftValues } from '../composables/editor-workflows/useRouteInspectorSession'
 import { useEntityInspectorSession } from '../composables/editor-workflows/useEntityInspectorSession'
+import { mountController } from './support/mounted-controller'
 import {
   createWorkspaceHistoryCoordinator,
   createWorkspaceMutationExecutor,
@@ -16,48 +17,9 @@ import {
   type WorkspaceMutationResult,
 } from '../composables/editor-workflows/workspace-mutations'
 
-interface HostNode {
-  children: HostNode[]
-  parent: HostNode | null
-}
-
-const renderer = createRenderer<HostNode, HostNode>({
-  patchProp: () => undefined,
-  insert: (child, parent, anchor) => {
-    child.parent = parent
-    const index = anchor ? parent.children.indexOf(anchor) : -1
-    if (index < 0) parent.children.push(child)
-    else parent.children.splice(index, 0, child)
-  },
-  remove: child => {
-    if (!child.parent) return
-    child.parent.children = child.parent.children.filter(candidate => candidate !== child)
-    child.parent = null
-  },
-  createElement: () => ({ children: [], parent: null }),
-  createText: () => ({ children: [], parent: null }),
-  createComment: () => ({ children: [], parent: null }),
-  setText: () => undefined,
-  setElementText: () => undefined,
-  parentNode: node => node.parent,
-  nextSibling: node => {
-    if (!node.parent) return null
-    const index = node.parent.children.indexOf(node)
-    return node.parent.children[index + 1] ?? null
-  },
-})
-
 function mountTransitions(options: Parameters<typeof useEditorTransitions>[0]) {
-  let transitions: ReturnType<typeof useEditorTransitions> | undefined
-  const app = renderer.createApp({
-    setup() {
-      transitions = useEditorTransitions(options)
-      return () => null
-    },
-  })
-  app.mount({ children: [], parent: null })
-  if (!transitions) throw new Error('The transition controller was not created.')
-  return { transitions, dispose: () => app.unmount() }
+  const owner = mountController(() => useEditorTransitions(options))
+  return { transitions: owner.value, dispose: owner.unmount }
 }
 
 interface PendingMutation {

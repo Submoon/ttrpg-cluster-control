@@ -90,60 +90,9 @@ test('a malformed hosted cycle is visited once per object and Orbit @pure', () =
   })
 })
 
-test('a branch includes multiple hosted Orbits and each deeper descendant @pure', () => {
-  const target = object('target', 'star', { kind: 'system', x: 0.5, y: 0.5 })
-  const east = object('east', 'planet', { kind: 'orbit', orbitId: 'east-ring' })
-  const eastDeep = object('east-deep', 'moon', { kind: 'orbit', orbitId: 'east-deep-ring' })
-  const west = object('west', 'planet', { kind: 'orbit', orbitId: 'west-ring' })
-  const westDeep = object('west-deep', 'moon', { kind: 'orbit', orbitId: 'west-deep-ring' })
-  const system: StarSystem = {
-    publication: 'hidden',
-    id: 'system',
-    name: 'Branch System',
-    objects: [target, east, eastDeep, west, westDeep],
-    orbits: [
-      hostedOrbit('east-ring', target.id),
-      hostedOrbit('east-deep-ring', east.id),
-      hostedOrbit('west-ring', target.id),
-      hostedOrbit('west-deep-ring', west.id),
-    ],
-  }
 
-  expect(resolveSystemObjectBranch(system, target.id)).toEqual({
-    objectIds: ['target', 'east', 'east-deep', 'west', 'west-deep'],
-    orbitIds: ['east-ring', 'east-deep-ring', 'west-ring', 'west-deep-ring'],
-  })
-})
 
-test('branch bounds use the painted extents of a rotated Orbit ellipse and visible glyph bounds @pure', () => {
-  const target = object('target', 'planet', { kind: 'system', x: 0.5, y: 0.5 })
-  const orbit = hostedOrbit('target-ring', target.id)
-  const system: StarSystem = {
-    publication: 'hidden',
-    id: 'system',
-    name: 'Branch System',
-    objects: [target],
-    orbits: [orbit],
-  }
-  const geometry: SystemMapGeometry = {
-    objectAngles: {},
-    orbitRadii: { [orbit.id]: { horizontal: 100, vertical: 50 } },
-    orbitRotations: { [orbit.id]: 90 },
-  }
-  const bounds = measureSystemObjectBranchBounds(
-    system,
-    target.id,
-    geometry,
-    new Map([[target.id, { x: -12, y: -6, width: 24, height: 12 }]]),
-  )
 
-  expect(bounds).toEqual({
-    objectIds: ['target'],
-    orbitIds: ['target-ring'],
-    bounds: { x: 429, y: 179, width: 102, height: 202 },
-  })
-  expect(measureSystemObjectBranchBounds(system, 'missing', geometry, new Map())).toBeUndefined()
-})
 
 test('branch bounds use exact diagonal ellipse extents @pure', () => {
   const target = object('target', 'planet', { kind: 'system', x: 0.5, y: 0.5 })

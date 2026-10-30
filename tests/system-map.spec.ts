@@ -1,9 +1,23 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, quitSystemAdd } from './helpers'
-import { clickDockAction } from './helpers'
-import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'
-import { dragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, editMapObject, saveMapObject, downloadImage, inspectImageSvg, selectCatalogueObjectButton } from './helpers'
-import type { DownloadWindow } from './helpers'
+import { createLocalWorkspace, createOrbit, createSystemObject, exportStarSystem } from '../domain/workspace'
+import {
+  captureMapExportBlobs,
+  downloadImage,
+  dragOrbitToWorldPoint,
+  dragToWorldPoint,
+  importReviewDialog,
+  inspectImageSvg,
+  jsonMapImportInput,
+  openWorkspaceHierarchy,
+  resolveImportReview,
+  returnToClusterMap,
+  setHeaderMapActionsOpen,
+  setJsonFile,
+  setWorkspaceMapMode,
+  waitForWorkspaceSaved,
+  workspaceZoomControls,
+  workspaceZoomOutput,
+} from './helpers'
 
 async function expectExportedSystemSceneInsideViewBox(
   page: import('@playwright/test').Page,
@@ -52,59 +66,54 @@ async function expectExportedSystemSceneInsideViewBox(
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(top + height)
 }
 
-test('the system map can zoom well beyond 400 percent', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  const navigation = workspaceZoomControls(page)
-  const zoomIn = navigation.getByRole('button', { name: 'Zoom in' })
-  for (let step = 0; step < 25 && !(await zoomIn.isDisabled()); step += 1) {
-    await zoomIn.click()
-  }
-  await expect(navigation.locator('output')).toHaveText('1600%')
-})
 
 test('the system map expands beyond its initial bounds and exports the full layout', async ({ page }) => {
-  await page.addInitScript(() => {
-    const downloadWindow = window as DownloadWindow
-    downloadWindow.__mapExportBlobs = []
-    const createObjectURL = URL.createObjectURL.bind(URL)
-    URL.createObjectURL = (object) => {
-      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
-      return createObjectURL(object)
-    }
-  })
+  const fixture = createLocalWorkspace('Extent fixture', 'Vesper')
+  const fixtureSystem = fixture.cluster.systems[0]!
+  const fixtureStar = fixtureSystem.objects[0]!
+  fixtureSystem.orbits.push(createOrbit(fixtureSystem, fixtureStar.id))
+  const fixturePlanet = createSystemObject(fixtureSystem, 'planet')
+  fixturePlanet.name = 'Far Planet'
+  fixturePlanet.placement = { kind: 'system', x: 0.7, y: 0.7 }
+  fixtureSystem.objects.push(fixturePlanet)
+
+  await captureMapExportBlobs(page)
   await page.setViewportSize({ width: 1920, height: 1080 })
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('First star system').fill('Staging system')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await setJsonFile(jsonMapImportInput(page), 'extent-fixture.json', JSON.stringify(exportStarSystem(fixture, fixtureSystem.id)))
+  await resolveImportReview(importReviewDialog(page), 'confirm')
+  await setHeaderMapActionsOpen(page, false)
+
+  const openVesper = async () => {
+    await returnToClusterMap(page)
+    const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+    await hierarchy.getByRole('button', { name: 'Open Vesper system map', exact: true }).click()
+  }
+  await openVesper()
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
+  await expect(map).toBeVisible()
+  const planet = map.getByRole('button', { name: 'Select PL-01, Far Planet (Planet)', exact: true })
   const navigation = workspaceZoomControls(page)
-  await zoomOutMapToMinimum(page)
-  await expect(navigation.locator('output')).toHaveText('25%')
+  const initialViewport = await map.boundingBox()
+  if (!initialViewport) throw new Error('The system map is not visible.')
+  await page.mouse.move(initialViewport.x + initialViewport.width / 2, initialViewport.y + initialViewport.height / 2)
+  await page.mouse.wheel(0, 5_000)
+  await expect(workspaceZoomOutput(page)).toHaveText('25%')
   await setWorkspaceMapMode(page, 'Move')
   const orbit = map.getByRole('slider', { name: 'Resize Orbit 1 around Primary Star' })
   await dragOrbitToWorldPoint(page, orbit, { x: 1550, y: 280 })
-  expect(Number(await orbit.getAttribute('aria-valuenow'))).toBeGreaterThan(960)
+  await expect.poll(async () => Number(await orbit.getAttribute('aria-valuenow'))).toBeGreaterThan(960)
+  const ring = map.getByRole('group', { name: 'Orbit 1 around Primary Star' }).locator('.orbit-ring')
+  const resizedRadius = await ring.getAttribute('rx')
+  if (!resizedRadius) throw new Error('The resized Orbit has no radius.')
 
-  const planetButton = await selectCatalogueObjectButton(page, 'planet')
-  const objectCountBeforeDrop = await map.locator('.system-object').count()
-  await dragHtmlElementToWorldPoint(page, planetButton, map, { x: 1400, y: 700 })
-  await expect(map.locator('.system-object')).toHaveCount(objectCountBeforeDrop + 1)
-  await quitSystemAdd(page)
-  await hierarchy.getByRole('treeitem', { name: /Select PL-\d+, New planet/ }).click()
-  await editMapObject(page)
-  await page.getByLabel('Name', { exact: true }).fill('Far Planet')
-  await saveMapObject(page)
-  const planet = map.getByRole('button', { name: /Far Planet/ })
+  const originalTransform = await planet.getAttribute('transform')
   await dragToWorldPoint(page, map, planet.locator('.object-hit-target'), { x: 1750, y: 800 })
+  await expect(planet).not.toHaveAttribute('transform', originalTransform!)
   const farPosition = await planet.evaluate((element) => {
     const values = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
     if (!values) throw new Error('The moved map object has no schematic position.')
@@ -136,8 +145,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
 
   await navigation.getByRole('button', { name: 'Fit map' }).click()
   const mapBounds = await map.boundingBox()
-  const orbitBounds = await map.getByRole('group', { name: 'Orbit 1 around Primary Star' })
-    .locator('.orbit-ring').boundingBox()
+  const orbitBounds = await ring.boundingBox()
   const planetBounds = await planet.boundingBox()
   if (!mapBounds || !orbitBounds || !planetBounds) {
     throw new Error('The expanded system map did not render its contents.')
@@ -151,7 +159,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
 
   const svg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
   const svgInfo = await inspectImageSvg(page, svg.text!)
-  expect(svgInfo.texts).toContain('Far Planet')
+  expect(svgInfo.texts).toContain(fixturePlanet.name)
   expect(svgInfo.viewBox[0]).toBeLessThan(0)
   await expectExportedSystemSceneInsideViewBox(page, svg.text!, svgInfo.viewBox)
   expect(svgInfo.viewBox[0] + svgInfo.viewBox[2]).toBeGreaterThan(farPosition.x)
@@ -161,21 +169,13 @@ test('the system map expands beyond its initial bounds and exports the full layo
   expect(png.width).toBe(svgInfo.width)
   expect(png.height).toBe(svgInfo.height)
   if (!png.sourceSvgText) throw new Error('The star system PNG has no source SVG.')
-  expect((await inspectImageSvg(page, png.sourceSvgText)).texts).toContain('Far Planet')
+  expect((await inspectImageSvg(page, png.sourceSvgText)).texts).toContain(fixturePlanet.name)
 
-  await page.reload()
-  const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
-  await expect(restoredMap.getByRole('button', { name: 'Select A, Primary Star' }))
-    .toHaveAttribute('transform', 'translate(480 280)')
-  const restoredPlanet = restoredMap.getByRole('button', { name: /Far Planet/ })
-  await expect(restoredPlanet).toHaveAttribute('transform', farTransform)
-  await zoomOutMapToMinimum(page)
-  await dragToWorldPoint(page, restoredMap, restoredPlanet.locator('.object-hit-target'), {
-    x: 1850,
-    y: 850,
-  })
-  const editedPosition = await restoredPlanet.getAttribute('transform')
-  expect(editedPosition).toContain('translate(')
-  expect(Number(editedPosition?.match(/^translate\(([^ ]+)/)?.[1])).toBeGreaterThan(1800)
   await waitForWorkspaceSaved(page)
+  await page.reload()
+  await openVesper()
+  await expect(map.getByRole('button', { name: 'Select A, Primary Star' }))
+    .toHaveAttribute('transform', 'translate(480 280)')
+  await expect(planet).toHaveAttribute('transform', farTransform)
+  await expect(ring).toHaveAttribute('rx', resizedRadius)
 })

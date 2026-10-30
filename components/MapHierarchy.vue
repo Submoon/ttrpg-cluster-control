@@ -166,6 +166,9 @@
           :aria-description="item.ariaDescription"
           :aria-current="selected ? 'true' : undefined"
           :data-hierarchy-level="level"
+          :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
+          :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
+          :data-host-object-id="item.kind === 'orbit' ? item.row.host?.id : undefined"
           @contextmenu="openHierarchyMenu($event, item)"
           @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
         >

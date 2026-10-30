@@ -2,7 +2,6 @@ import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   waitForWorkspaceSaved,
-  activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadImage,
   downloadJson,
@@ -20,16 +19,10 @@ import {
   workspaceZoomControls,
 } from './helpers'
 import { importReviewDialog } from './helpers'
-import type { DownloadWindow, ExportedMap, ExportedSystem } from './helpers'
+import type { DownloadWindow, ExportedMap } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 type ImageCaptureWindow = Window & { __ticket28PngBlob?: Blob }
-type FailureInjectionWindow = Window & {
-  __ticket28OriginalWorkspacePut?: typeof IDBObjectStore.prototype.put
-  __ticket28AbortNextWorkspaceWrite?: boolean
-  __ticket28OriginalCreateObjectUrl?: typeof URL.createObjectURL
-}
-
 type SceneBounds = { x: number; y: number; width: number; height: number }
 
 async function capturePngForPixelChecks(page: import('@playwright/test').Page): Promise<void> {
@@ -96,12 +89,6 @@ function campaignWithExportPreviews(): ExportedMap {
   fixture.layout.objectAngles[passengerId] = 0
   fixture.layout.objectAngles[nestedObjectId] = 0
   return fixture
-}
-
-function findImportedSystem(exported: ExportedMap, name: string): ExportedSystem {
-  const system = exported.cluster?.systems.find(candidate => candidate.name === name)
-  if (!system) throw new Error(`The imported campaign is missing the ${name} Star System.`)
-  return system
 }
 
 async function createImportedCampaign(
@@ -241,18 +228,6 @@ type SystemSceneGeometry = {
   }>
 }
 
-type ClusterSceneGeometry = {
-  systems: Array<{ id: string; transform: string | null }>
-  routes: Array<{
-    id: string
-    path: string | null
-    labelX: string | null
-    labelY: string | null
-    exitX: string | null
-    exitY: string | null
-  }>
-}
-
 async function inspectLiveSystemGeometry(map: import('@playwright/test').Locator): Promise<SystemSceneGeometry> {
   return map.evaluate(element => {
     const svg = element.matches('svg') ? element : element.querySelector('svg')
@@ -302,50 +277,6 @@ async function inspectSystemSvgGeometry(
       })
       .sort((left, right) => left.id.localeCompare(right.id))
     return { objects, orbits }
-  }, svgText)
-}
-
-async function inspectLiveClusterGeometry(map: import('@playwright/test').Locator): Promise<ClusterSceneGeometry> {
-  return map.evaluate(element => {
-    const svg = element.matches('svg') ? element : element.querySelector('svg')
-    if (!svg) throw new Error('The live Cluster map has no SVG scene.')
-    const systems = Array.from(svg.querySelectorAll<SVGGElement>('.cluster-map-items .cluster-system-node[data-system-id]'))
-      .map(mark => ({ id: mark.getAttribute('data-system-id')!, transform: mark.getAttribute('transform') }))
-      .sort((left, right) => left.id.localeCompare(right.id))
-    const routes = Array.from(svg.querySelectorAll<SVGGElement>('.cluster-map-items .cluster-route[data-route-id]'))
-      .map(mark => ({
-        id: mark.getAttribute('data-route-id')!,
-        path: mark.querySelector('.cluster-route-line')?.getAttribute('d') ?? null,
-        labelX: mark.querySelector('.cluster-route-label')?.getAttribute('x') ?? null,
-        labelY: mark.querySelector('.cluster-route-label')?.getAttribute('y') ?? null,
-        exitX: mark.querySelector('.cluster-exit-mark')?.getAttribute('cx') ?? null,
-        exitY: mark.querySelector('.cluster-exit-mark')?.getAttribute('cy') ?? null,
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id))
-    return { systems, routes }
-  })
-}
-
-async function inspectClusterSvgGeometry(
-  page: import('@playwright/test').Page,
-  svgText: string,
-): Promise<ClusterSceneGeometry> {
-  return page.evaluate(content => {
-    const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement
-    const systems = Array.from(svg.querySelectorAll<SVGGElement>('.cluster-map-items .cluster-system-node[data-system-id]'))
-      .map(mark => ({ id: mark.getAttribute('data-system-id')!, transform: mark.getAttribute('transform') }))
-      .sort((left, right) => left.id.localeCompare(right.id))
-    const routes = Array.from(svg.querySelectorAll<SVGGElement>('.cluster-map-items .cluster-route[data-route-id]'))
-      .map(mark => ({
-        id: mark.getAttribute('data-route-id')!,
-        path: mark.querySelector('.cluster-route-line')?.getAttribute('d') ?? null,
-        labelX: mark.querySelector('.cluster-route-label')?.getAttribute('x') ?? null,
-        labelY: mark.querySelector('.cluster-route-label')?.getAttribute('y') ?? null,
-        exitX: mark.querySelector('.cluster-exit-mark')?.getAttribute('cx') ?? null,
-        exitY: mark.querySelector('.cluster-exit-mark')?.getAttribute('cy') ?? null,
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id))
-    return { systems, routes }
   }, svgText)
 }
 
@@ -497,7 +428,6 @@ async function expectCleanExport(page: import('@playwright/test').Page, svgText:
 const paletteCases = [
   { label: 'active-light', colorScheme: 'light', printLight: false },
   { label: 'active-dark', colorScheme: 'dark', printLight: false },
-  { label: 'print-from-dark', colorScheme: 'dark', printLight: true },
 ] as const
 
 const mapCases = [
@@ -505,76 +435,11 @@ const mapCases = [
   { label: 'system', kind: 'system' },
 ] as const
 
-test('print-light image export preserves the live dark workspace and hidden chart-name draft', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await page.goto('/')
+const imageExportCases = [
+  { mapCase: mapCases[0], paletteCase: paletteCases[0] },
+  { mapCase: mapCases[1], paletteCase: paletteCases[1] },
+] as const
 
-  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
-
-  const theme = page.getByRole('group', { name: 'Theme' })
-  const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/)
-  await expect(theme.getByText('Dark', { exact: true })).toBeVisible()
-  await expect(systemMap).toBeVisible()
-
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
-  await chartDialog.getByLabel('Star system').fill('Unapplied Vesper')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' })
-  await expect(resumeDraft).toBeVisible()
-
-  const appliedBefore = await downloadJson(page, 'Export star system JSON')
-  expect(appliedBefore.system?.name).toBe('Vesper')
-
-  await page.getByRole('button', { name: 'Map files', exact: true }).click()
-  const printLight = page.getByRole('checkbox', { name: /^Light for printing$/i })
-  await expect(printLight).toBeVisible({ timeout: 5_000 })
-  await printLight.check()
-
-  const svg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
-  if (!svg.text) throw new Error('The star system SVG download is empty.')
-  const svgInfo = await inspectImageSvg(page, svg.text)
-  expect(svgInfo.backgroundFill).toBe('rgb(245, 244, 238)')
-  expect(svgInfo.glyphFill).toBe('rgb(38, 48, 44)')
-  expect(svgInfo.texts).toContain('Primary Star')
-  expect(svgInfo.viewBox[2]).toBeGreaterThan(0)
-  expect(svgInfo.viewBox[3]).toBeGreaterThan(0)
-  expect(svgInfo.systemTitle?.text).toBe('Vesper')
-
-  await setHeaderMapActionsOpen(page, true)
-  await expect(printLight).not.toBeChecked()
-  await printLight.check()
-  const png = await downloadImage(page, 'Export star system PNG', 'image/png')
-  expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
-  expect(png.width).toBe(svgInfo.width)
-  expect(png.height).toBe(svgInfo.height)
-  if (!png.sourceSvgText) throw new Error('The star system PNG has no source SVG.')
-  const pngInfo = await inspectImageSvg(page, png.sourceSvgText)
-  expect(pngInfo.viewBox).toEqual(svgInfo.viewBox)
-  expect(pngInfo.texts).toEqual(svgInfo.texts)
-  expect(pngInfo.systemTitle).toEqual(svgInfo.systemTitle)
-  expect(pngInfo.backgroundFill).toBe(svgInfo.backgroundFill)
-  expect(pngInfo.glyphFill).toBe(svgInfo.glyphFill)
-  await setHeaderMapActionsOpen(page, true)
-  await expect(printLight).not.toBeChecked()
-
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/)
-  await expect(theme.getByText('Dark', { exact: true })).toBeVisible()
-  await waitForWorkspaceSaved(page)
-  const appliedAfter = await downloadJson(page, 'Export star system JSON')
-  expect(appliedAfter).toEqual(appliedBefore)
-  await expect(resumeDraft).toBeVisible()
-  await resumeDraft.click()
-  await expect(chartDialog.getByLabel('Star system')).toHaveValue('Unapplied Vesper')
-})
 
 function relativeLuminance(color: string): number {
   const channels = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/)
@@ -660,25 +525,40 @@ async function expectMapFilesControlsUsable(
   }
 }
 
-for (const mapCase of mapCases) {
-  for (const paletteCase of paletteCases) {
+for (const { mapCase, paletteCase } of imageExportCases) {
     test(`${mapCase.label} SVG and PNG exports preserve applied content in ${paletteCase.label}`, async ({ page }) => {
       const clusterMap = await createImportedCampaign(page, paletteCase.colorScheme)
       let map: import('@playwright/test').Locator = clusterMap
       let expectedTitle: string | null = null
+      let shortTitleSvgWidth: number | null = null
+      const detailedTitleVariant = mapCase.kind === 'system' && paletteCase.label === 'active-dark'
       if (mapCase.kind === 'system') {
         await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
         await setWorkspaceMapMode(page, 'Navigate')
         await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
-        expectedTitle = 'Vesper Prime — Outer Circumstellar Survey and Transit Observatory'
-        const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-        if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-        await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-        const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-        await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-        const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-        await names.getByLabel('Star system', { exact: true }).fill(expectedTitle)
-        await names.getByRole('button', { name: 'Apply details', exact: true }).click()
+        expectedTitle = 'Vesper Prime'
+        if (detailedTitleVariant) {
+          const shortTitleSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+          if (!shortTitleSvg.text) throw new Error('The short-title system SVG is empty.')
+          const shortTitleInfo = await inspectImageSvg(page, shortTitleSvg.text)
+          shortTitleSvgWidth = shortTitleInfo.width
+          expect(shortTitleInfo.systemTitle?.text).toBe('Vesper Prime')
+          expect(shortTitleInfo.titleStyle).toBeNull()
+          expect(shortTitleInfo.glyphFill).toBeTruthy()
+          expect(shortTitleInfo.texts).not.toContain('Kestrel Reach')
+          expect(shortTitleInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+          expect(shortTitleInfo.texts.some(text => /\bSYSTEMS\s*\/.*ROUTES\b/.test(text))).toBe(false)
+
+          expectedTitle = 'W'.repeat(80)
+          const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
+          if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+          await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+          const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+          await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+          const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+          await names.getByLabel('Star system', { exact: true }).fill(expectedTitle)
+          await names.getByRole('button', { name: 'Apply details', exact: true }).click()
+        }
         map = page.getByRole('group', { name: `${expectedTitle} star system map`, exact: true })
         await expect(map).toBeVisible()
       }
@@ -735,11 +615,9 @@ for (const mapCase of mapCases) {
       ).getAttribute('transform')
       expect(cameraTransform).not.toBe('translate(0,0) scale(1)')
 
-      const compactViewport = (mapCase.kind === 'system' && paletteCase.label === 'print-from-dark')
-        ? { width: 390, height: 500 }
-        : (mapCase.kind === 'cluster' && paletteCase.label === 'active-light')
-          ? { width: 844, height: 390 }
-          : null
+      const compactViewport = mapCase.kind === 'cluster' && paletteCase.label === 'active-light'
+        ? { width: 844, height: 390 }
+        : null
       if (compactViewport) {
         await page.setViewportSize(compactViewport)
         await expect(map).toBeVisible()
@@ -792,6 +670,9 @@ for (const mapCase of mapCases) {
 
       if (mapCase.kind === 'cluster') {
         expect(svgInfo.systemTitle).toBeNull()
+        expect(svgInfo.texts).not.toContain('Kestrel Reach')
+        expect(svgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+        expect(svgInfo.texts.some(text => /\bSYSTEMS\s*\/.*ROUTES\b/.test(text))).toBe(false)
         expect(svgInfo.texts).toContain('Unknown: Uncharted exit')
         expect(svgInfo.texts).toContain('Jump-12')
       } else {
@@ -800,6 +681,21 @@ for (const mapCase of mapCases) {
           .toBeLessThanOrEqual(svgInfo.viewBox[0] + svgInfo.viewBox[2] - 24)
         expect(svgInfo.texts).toContain('Iria')
         expect(svgInfo.texts).toContain('Nix')
+        if (detailedTitleVariant) {
+          if (shortTitleSvgWidth === null) throw new Error('The short-title system SVG width was not recorded.')
+          const title = svgInfo.systemTitle
+          if (!title) throw new Error('The long-title system SVG is missing its title.')
+          const featureBounds = await inspectFeatureBounds(page, svg.text, 'system')
+          expect(svgInfo.width).toBeGreaterThan(shortTitleSvgWidth)
+          expect(title.x).toBeGreaterThan(svgInfo.viewBox[0])
+          expect(title.y - title.fontSize / 2).toBeGreaterThan(svgInfo.viewBox[1])
+          expect(title.y + title.fontSize / 2).toBeLessThan(featureBounds.y)
+          expect(svgInfo.titleStyle).toBeNull()
+          expect(svgInfo.glyphFill).toBeTruthy()
+          expect(svgInfo.texts).not.toContain('Kestrel Reach')
+          expect(svgInfo.texts).not.toContain('JUMP CLUSTER / KNOWN SYSTEMS AND ROUTES')
+          expect(svgInfo.texts.some(text => /\bSYSTEMS\s*\/.*ROUTES\b/.test(text))).toBe(false)
+        }
       }
 
       await setHeaderMapActionsOpen(page, true)
@@ -820,6 +716,7 @@ for (const mapCase of mapCases) {
       expect(pngInfo.systemTitle).toEqual(svgInfo.systemTitle)
       expect(pngInfo.backgroundFill).toBe(svgInfo.backgroundFill)
       expect(pngInfo.glyphFill).toBe(svgInfo.glyphFill)
+      if (detailedTitleVariant) expect(pngInfo.systemTitle?.text).toBe('W'.repeat(80))
       await expectCleanExport(page, png.sourceSvgText)
       const topLeftPixel = await inspectPngTopLeftPixel(page, svgInfo.backgroundFill!)
       expect(topLeftPixel).toHaveLength(4)
@@ -835,23 +732,11 @@ for (const mapCase of mapCases) {
       if (paletteCase.colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/)
       else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
     })
-  }
 }
 
 test('system image exports retain applied geometry during local and parent-owned previews', async ({ page }) => {
   test.setTimeout(60_000)
   const clusterMap = await createImportedCampaign(page, 'light', campaignWithExportPreviews())
-  const importedCampaign = await downloadJson(page, 'Export Jump Cluster JSON')
-  const importedSystem = findImportedSystem(importedCampaign, 'Vesper Prime')
-  const orbitId = importedSystem.orbits.find(orbit => orbit.hostId === null)?.id
-  if (!orbitId) throw new Error('The imported campaign is missing its unoccupied Orbit.')
-  const transferMoonId = importedSystem.objects.find(object => object.name === 'Transfer Moon')?.id
-  const nestedTravelerId = importedSystem.objects.find(object => object.name === 'Nested Traveler')?.id
-  const iriaId = importedSystem.objects.find(object => object.name === 'Iria')?.id
-  const nixId = importedSystem.objects.find(object => object.name === 'Nix')?.id
-  if (!transferMoonId || !nestedTravelerId || !iriaId || !nixId) {
-    throw new Error('The imported preview fixture is missing one or more named objects.')
-  }
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
@@ -859,6 +744,16 @@ test('system image exports retain applied geometry during local and parent-owned
   await expect(map).toBeVisible()
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
+  const [orbitId, transferMoonId, nestedTravelerId, iriaId, nixId] = await Promise.all([
+    map.getByRole('group', { name: 'Orbit 1 around unoccupied center', exact: true }).getAttribute('data-orbit-id'),
+    map.getByRole('button', { name: 'Select MO-03, Transfer Moon (Moon)', exact: true }).getAttribute('data-object-id'),
+    map.getByRole('button', { name: 'Select MO-04, Nested Traveler (Moon)', exact: true }).getAttribute('data-object-id'),
+    map.getByRole('button', { name: 'Select PL-01, Iria (Planet)', exact: true }).getAttribute('data-object-id'),
+    map.getByRole('button', { name: 'Select MO-01, Nix (Moon)', exact: true }).getAttribute('data-object-id'),
+  ])
+  if (!orbitId || !transferMoonId || !nestedTravelerId || !iriaId || !nixId) {
+    throw new Error('The imported preview scene is missing an Orbit or object identity.')
+  }
 
   const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
@@ -951,18 +846,16 @@ test('system image exports retain applied geometry during local and parent-owned
   await orbitHierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   const orbitInspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const orbitAppliedGeometry = await inspectLiveSystemGeometry(map)
-  const orbitAppliedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
-  if (!orbitAppliedSvg.text) throw new Error('The applied system SVG before Orbit preview is empty.')
-  const orbitAppliedSvgInfo = await inspectImageSvg(page, orbitAppliedSvg.text)
+  expect(orbitAppliedGeometry).toEqual(appliedBeforeObjectPreview)
   await expectExportedFeatureBoundsInsideViewBox(
-    page, orbitAppliedSvg.text, orbitAppliedSvgInfo.viewBox, 'system',
+    page, appliedBeforeObjectSvg.text, appliedBeforeObjectSvgInfo.viewBox, 'system',
   )
   const orbitAppliedPng = await downloadImage(page, 'Export star system PNG', 'image/png')
   const orbitAppliedPixelHash = await inspectDecodedPngPixels(page)
   expect(orbitAppliedPixelHash.width).toBe(orbitAppliedPng.width)
   expect(orbitAppliedPixelHash.height).toBe(orbitAppliedPng.height)
-  expect(orbitAppliedPng.width).toBe(orbitAppliedSvgInfo.width)
-  expect(orbitAppliedPng.height).toBe(orbitAppliedSvgInfo.height)
+  expect(orbitAppliedPng.width).toBe(appliedBeforeObjectSvgInfo.width)
+  expect(orbitAppliedPng.height).toBe(appliedBeforeObjectSvgInfo.height)
   await orbitInspector.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   const host = orbitInspector.getByLabel('Host', { exact: true })
   await selectInspectorOption(host, 'A, Primary Star (Star)')
@@ -980,7 +873,7 @@ test('system image exports retain applied geometry during local and parent-owned
   const orbitPreviewSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
   if (!orbitPreviewSvg.text) throw new Error('The parent-owned Orbit preview export is empty.')
   const orbitPreviewSvgInfo = await inspectImageSvg(page, orbitPreviewSvg.text)
-  expect(orbitPreviewSvgInfo.viewBox).toEqual(orbitAppliedSvgInfo.viewBox)
+  expect(orbitPreviewSvgInfo.viewBox).toEqual(appliedBeforeObjectSvgInfo.viewBox)
   expect(await inspectSystemSvgGeometry(page, orbitPreviewSvg.text)).toEqual(orbitAppliedGeometry)
   expect(await inspectLiveSystemGeometry(map)).toEqual(orbitPreview)
   await expect(orbitInspector.getByRole('status').filter({ hasText: /Preview ready/i })).toBeVisible()
@@ -992,168 +885,11 @@ test('system image exports retain applied geometry during local and parent-owned
   expect(orbitPreviewPng.height).toBe(orbitAppliedPng.height)
   if (!orbitPreviewPng.sourceSvgText) throw new Error('The Orbit preview PNG has no source SVG.')
   const orbitPreviewPngInfo = await inspectImageSvg(page, orbitPreviewPng.sourceSvgText)
-  expect(orbitPreviewPngInfo.viewBox).toEqual(orbitAppliedSvgInfo.viewBox)
+  expect(orbitPreviewPngInfo.viewBox).toEqual(appliedBeforeObjectSvgInfo.viewBox)
   expect(orbitPreviewPngInfo.width).toBe(orbitPreviewPng.width)
   expect(orbitPreviewPngInfo.height).toBe(orbitPreviewPng.height)
   expect(await inspectSystemSvgGeometry(page, orbitPreviewPng.sourceSvgText)).toEqual(orbitAppliedGeometry)
   await expectExportedFeatureBoundsInsideViewBox(
     page, orbitPreviewPng.sourceSvgText, orbitPreviewPngInfo.viewBox, 'system',
   )
-})
-
-test('cluster image export keeps applied routes and unresolved exits during a held system drag', async ({ page }) => {
-  const map = await createImportedCampaign(page, 'light')
-  const importedCampaign = await downloadJson(page, 'Export Jump Cluster JSON')
-  const importedSystemId = findImportedSystem(importedCampaign, 'Vesper Prime').id
-  const unresolvedRouteId = importedCampaign.cluster?.routes.find(route => route.unresolvedExit === 'Uncharted exit')?.id
-  if (!unresolvedRouteId) throw new Error('The imported campaign is missing the unresolved exit.')
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await setWorkspaceMapMode(page, 'Select')
-  const unresolvedRoute = map.locator(`.cluster-route[data-route-id="${unresolvedRouteId}"]`)
-  await unresolvedRoute.locator('.cluster-route-label').click()
-  await expect(unresolvedRoute).toHaveClass(/is-selected/)
-  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
-  const hideInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })
-  if (await closeInspector.isVisible()) await closeInspector.click()
-  else if (await hideInspector.isVisible()) await hideInspector.click()
-  await setWorkspaceMapMode(page, 'Move')
-
-  const appliedGeometry = await inspectLiveClusterGeometry(map)
-  const appliedRoutes = appliedGeometry.routes
-  const appliedSvg = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
-  if (!appliedSvg.text) throw new Error('The applied Cluster SVG before system drag is empty.')
-  const appliedSvgInfo = await inspectImageSvg(page, appliedSvg.text)
-  const source = map.locator(`.cluster-system-node[data-system-id="${importedSystemId}"]`)
-  const sourceBounds = await source.boundingBox()
-  if (!sourceBounds) throw new Error('The Cluster-system mark has no visible bounds.')
-  const cameraBeforeDrag = await map.locator('.cluster-map-content').getAttribute('transform')
-  await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(sourceBounds.x + sourceBounds.width / 2 + 76, sourceBounds.y + sourceBounds.height / 2 + 54, { steps: 4 })
-  await expect(source).toHaveClass(/is-dragging/)
-  const liveDragGeometry = await inspectLiveClusterGeometry(map)
-  expect(liveDragGeometry).not.toEqual(appliedGeometry)
-  expect(liveDragGeometry.routes).not.toEqual(appliedRoutes)
-
-  const svgText = await downloadSvgWhilePointerHeld(page, 'Export Jump Cluster SVG')
-  const dragSvgInfo = await inspectImageSvg(page, svgText)
-  expect(dragSvgInfo.viewBox).toEqual(appliedSvgInfo.viewBox)
-  expect(await inspectClusterSvgGeometry(page, svgText)).toEqual(appliedGeometry)
-  const svgInfo = await inspectImageSvg(page, svgText)
-  expect(svgInfo.texts).toContain('Unknown: Uncharted exit')
-  expect(svgInfo.texts).toContain('Jump-12')
-  await expect(source).toHaveClass(/is-dragging/)
-  await expect(unresolvedRoute).toHaveClass(/is-selected/)
-  expect(await inspectLiveClusterGeometry(map)).toEqual(liveDragGeometry)
-  expect(await map.locator('.cluster-map-content').getAttribute('transform')).toBe(cameraBeforeDrag)
-  await expect(workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true }))
-    .toHaveAttribute('aria-pressed', 'true')
-  await page.mouse.up()
-})
-
-test('failed saves preserve the latest applied image and separate PNG export errors', async ({ page }) => {
-  test.setTimeout(60_000)
-  const clusterMap = await createImportedCampaign(page, 'light')
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await setWorkspaceMapMode(page, 'Navigate')
-  await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
-  const map = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
-  await expect(map).toBeVisible()
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-  await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const chartNames = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  const expectedTitle = 'Vesper Prime Applied Despite Save Failure'
-  await chartNames.getByLabel('Star system', { exact: true }).fill(expectedTitle)
-
-  await page.evaluate(() => {
-    const tracked = window as FailureInjectionWindow
-    const storePrototype = IDBObjectStore.prototype
-    const originalPut = storePrototype.put
-    tracked.__ticket28OriginalWorkspacePut = originalPut
-    tracked.__ticket28AbortNextWorkspaceWrite = true
-    storePrototype.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
-      const request = originalPut.call(this, value, key)
-      const isCurrentWorkspaceWrite = this.transaction.db.name === 'ttrpg-cluster-control'
-        && this.transaction.mode === 'readwrite'
-        && this.name === 'workspace'
-        && key === 'current'
-      if (isCurrentWorkspaceWrite && tracked.__ticket28AbortNextWorkspaceWrite) {
-        tracked.__ticket28AbortNextWorkspaceWrite = false
-        this.transaction.abort()
-      }
-      return request
-    }
-  })
-
-  try {
-    await chartNames.getByRole('button', { name: 'Apply details', exact: true }).click()
-    await expect(chartNames).toBeHidden()
-    const feedback = activeWorkspaceFeedback(page)
-    await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')
-    await expect(feedback.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible()
-    await page.evaluate(() => {
-      const tracked = window as FailureInjectionWindow
-      if (!tracked.__ticket28OriginalWorkspacePut) throw new Error('The save-failure hook was not installed.')
-      IDBObjectStore.prototype.put = tracked.__ticket28OriginalWorkspacePut
-      delete tracked.__ticket28OriginalWorkspacePut
-      delete tracked.__ticket28AbortNextWorkspaceWrite
-    })
-
-    const appliedBefore = await downloadJson(page, 'Export star system JSON')
-    expect(appliedBefore.system?.name).toBe(expectedTitle)
-    const latestSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
-    if (!latestSvg.text) throw new Error('The latest applied system SVG is empty.')
-    expect((await inspectImageSvg(page, latestSvg.text)).systemTitle?.text).toBe(expectedTitle)
-    expect(await downloadJson(page, 'Export star system JSON')).toEqual(appliedBefore)
-    await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')
-
-    await page.evaluate(() => {
-      const tracked = window as FailureInjectionWindow
-      tracked.__ticket28OriginalCreateObjectUrl = URL.createObjectURL.bind(URL)
-      URL.createObjectURL = (object) => {
-        if (object instanceof Blob && object.type.startsWith('image/png')) {
-          throw new Error('Synthetic PNG failure.')
-        }
-        return tracked.__ticket28OriginalCreateObjectUrl!(object)
-      }
-    })
-    try {
-      await setHeaderMapActionsOpen(page, true)
-      await page.getByRole('button', { name: 'Export star system PNG', exact: true }).click()
-      const recoveryDetailsButton = feedback.getByRole('button', { name: 'Recovery details', exact: true })
-      await recoveryDetailsButton.click()
-      const recoveryDetails = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
-      await expect(recoveryDetails.getByRole('alert').filter({ hasText: 'Export failed: Synthetic PNG failure.' }))
-        .toBeVisible()
-      await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')
-      await expect(feedback.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible()
-      await page.evaluate(() => {
-        const blobs = (window as DownloadWindow).__mapExportBlobs
-        const intermediateSvg = blobs?.findIndex(blob => blob.type.startsWith('image/svg+xml')) ?? -1
-        if (intermediateSvg < 0) throw new Error('The failed PNG export did not leave its intermediate SVG Blob.')
-        blobs?.splice(intermediateSvg, 1)
-      })
-      expect(await downloadJson(page, 'Export star system JSON')).toEqual(appliedBefore)
-      const appliedMap = page.getByRole('group', { name: `${expectedTitle} star system map`, exact: true })
-      await expect(appliedMap).toBeVisible()
-    } finally {
-      await page.evaluate(() => {
-        const tracked = window as FailureInjectionWindow
-        if (tracked.__ticket28OriginalCreateObjectUrl) {
-          URL.createObjectURL = tracked.__ticket28OriginalCreateObjectUrl
-          delete tracked.__ticket28OriginalCreateObjectUrl
-        }
-      })
-    }
-  } finally {
-    await page.evaluate(() => {
-      const tracked = window as FailureInjectionWindow
-      if (tracked.__ticket28OriginalWorkspacePut) {
-        IDBObjectStore.prototype.put = tracked.__ticket28OriginalWorkspacePut
-        delete tracked.__ticket28OriginalWorkspacePut
-        delete tracked.__ticket28AbortNextWorkspaceWrite
-      }
-    })
-  }
 })

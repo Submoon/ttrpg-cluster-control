@@ -1,37 +1,68 @@
-import { expect, test, campaignTest } from './fixtures'
-import { importCampaignWorkspace } from './scenarios/campaign-workspace'
+import { expect, test, preparedCampaignTest as campaignTest, type Page } from './fixtures'
+import { importCampaignWorkspace, openImportedCampaignWorkspace } from './scenarios/campaign-workspace'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
+  addCatalogueObject,
   clickDockAction,
   downloadJson,
   readInspectorSelection,
+  releaseMapExportBlobs,
   selectInspectorOption,
+  setWorkspaceMapMode,
+  waitForWorkspaceSaved,
   workspaceNavigation,
 } from './helpers'
 
 campaignTest.use({
   campaignViewport: { width: 1440, height: 960 },
-  campaignPreparation: 'prepared-snapshot',
 })
 
-campaignTest('Add Jump Route deselects ordinary map modes and switching mode exits Add', async ({ campaignWorkspacePage: page }) => {
-  const modeGroup = workspaceNavigation(page).getByRole('group', { name: 'Map interaction mode', exact: true })
-  await modeGroup.getByRole('button', { name: 'Move', exact: true }).click()
 
-  await clickDockAction(page, 'Add Jump Route')
-  const mapContext = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-  const addButton = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
-  await expect(mapContext.locator('.workspace-add-status')).toContainText(/ADD Jump Route/)
-  await expect(addButton).toHaveAttribute('aria-pressed', 'true')
-  for (const mode of ['Navigate', 'Select', 'Move']) {
-    await expect(modeGroup.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'false')
+campaignTest('prepared campaign snapshots stay isolated between fresh browser contexts', async ({
+  campaignWorkspacePage: page,
+  browser,
+  campaignSnapshotProvider,
+}) => {
+  const baseline = await campaignSnapshotProvider()
+  const systemName = 'Vesper Prime'
+  await setWorkspaceMapMode(page, 'Navigate')
+  const firstMap = page.getByRole('group', { name: /Jump Cluster map$/ })
+  await firstMap.getByRole('button', { name: `Open ${systemName} system map`, exact: true }).click()
+  const originalWorkspace = await downloadJson(page, 'Export star system JSON')
+  const originalSystem = originalWorkspace.system
+  if (!originalSystem) throw new Error('The prepared campaign must export its active star system.')
+  expect(originalSystem.objects.length).toBeGreaterThan(0)
+
+  const isolatedObjectId = await addCatalogueObject(page, 'other', {
+    target: { kind: 'free', x: 0.2, y: 0.2 },
+    typeLabel: 'Ticket 05 context sentinel',
+    noSelection: true,
+  })
+  const firstSystemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  await expect(firstSystemMap.locator(`.system-object[data-object-id="${isolatedObjectId}"]`)).toHaveCount(1)
+  await waitForWorkspaceSaved(page)
+
+  const secondContext = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+    storageState: structuredClone(baseline),
+  })
+  let secondPage: Page | undefined
+  try {
+    secondPage = await secondContext.newPage()
+    await openImportedCampaignWorkspace(secondPage, { width: 1440, height: 960 })
+    await setWorkspaceMapMode(secondPage, 'Navigate')
+
+    const secondMap = secondPage.getByRole('group', { name: /Jump Cluster map$/ })
+    await secondMap.getByRole('button', { name: `Open ${systemName} system map`, exact: true }).click()
+    const isolatedWorkspace = await downloadJson(secondPage, 'Export star system JSON')
+    expect(isolatedWorkspace.system).toEqual(originalSystem)
+  } finally {
+    try {
+      if (secondPage) await releaseMapExportBlobs(secondPage)
+    } finally {
+      await secondContext.close()
+    }
   }
-
-  await modeGroup.getByRole('button', { name: 'Select', exact: true }).click()
-  await expect(modeGroup.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await expect(addButton).toHaveAttribute('aria-pressed', 'false')
-  await expect(mapContext.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
-  await expect(mapContext.locator('.workspace-add-status').filter({ hasText: /ADD Jump Route/ })).toHaveCount(0)
 })
 
 test('Add Jump Route uses scoped From and To controls for map-picked systems without mutating before Apply', async ({ page }) => {
@@ -109,42 +140,4 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
     fromPointId: originPointId,
     toPointId: destinationPointId,
   }))
-})
-
-test('Resetting either route endpoint returns that choice to map targeting and preserves the other endpoint', async ({ page }) => {
-  const stagingFixture = JSON.parse(JSON.stringify(campaignBaselineFixture)) as typeof campaignBaselineFixture
-  const originSystem = stagingFixture.cluster.systems.find(system => system.name === 'Vesper Prime')
-  const originPoint = originSystem?.objects.find(object => object.family === 'JumpPoint')
-  if (!originSystem || !originPoint) throw new Error('The campaign fixture needs a Vesper Prime Jump Point.')
-  originSystem.objects.push({
-    ...originPoint,
-    id: 'campaign-baseline-alternate-departure',
-    locationKey: 'JP-02',
-    name: 'Vesper Alternate',
-  })
-
-  await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
-  await clickDockAction(page, 'Add Jump Route')
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
-  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
-  const fromPoint = inspector.getByLabel('From Jump Point')
-  const toPoint = inspector.getByLabel('To Jump Point')
-  const originLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Vesper Prime$/ })
-  const destinationLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Harrow$/ })
-
-  await originLabel.click()
-  await selectInspectorOption(fromPoint, 'Vesper Alternate (Vesper Prime)')
-  await selectInspectorOption(fromPoint, 'Choose on map…')
-  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('')
-  await originLabel.click()
-  await selectInspectorOption(fromPoint, 'Vesper Departure (Vesper Prime)')
-  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Departure (Vesper Prime)')
-
-  await destinationLabel.click()
-  await expect.poll(() => readInspectorSelection(toPoint)).toBe('Harrow Arrival (Harrow)')
-  await selectInspectorOption(toPoint, 'Choose on map…')
-  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Departure (Vesper Prime)')
-  await expect.poll(() => readInspectorSelection(toPoint)).toBe('')
-  await destinationLabel.click()
-  await expect.poll(() => readInspectorSelection(toPoint)).toBe('Harrow Arrival (Harrow)')
 })

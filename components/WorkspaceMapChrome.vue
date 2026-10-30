@@ -25,7 +25,7 @@
             <span>Back</span>
           </UButton>
           <div class="workspace-map-heading">
-            <span>{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
+            <span data-testid="workspace-map-context-kind">{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
             <h2>{{ contextName }}</h2>
           </div>
         </div>

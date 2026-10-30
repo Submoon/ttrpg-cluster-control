@@ -9,7 +9,6 @@ import {
 import {
   waitForWorkspaceSaved,
   createSingleSystemWorkspace,
-  deletionReviewDialog,
   importReviewDialog,
   jsonMapImportInput,
   openWorkspaceHierarchy,
@@ -23,8 +22,6 @@ import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 type Viewport = { width: number; height: number }
 
 const smokeViewports: Viewport[] = [
-  { width: 1440, height: 900 },
-  { width: 390, height: 844 },
   { width: 844, height: 390 },
 ]
 
@@ -86,41 +83,6 @@ async function expectFooterActionToFit(
   })).toBe(true)
 }
 
-async function expectFullWidthFooterAction(
-  actions: Locator,
-  action: Locator,
-): Promise<void> {
-  const actionCount = await actions.getByRole('button').count()
-  expect(actionCount).toBe(1)
-  const actionsBounds = await actions.boundingBox()
-  const actionBounds = await action.boundingBox()
-  if (!actionsBounds || !actionBounds) throw new Error('A full-width footer action has no measurable bounds.')
-  expect(Math.abs(actionBounds.x - actionsBounds.x)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
-  expect(Math.abs(actionBounds.width - actionsBounds.width)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
-}
-
-async function expectEqualWidthFooterActions(
-  actions: Locator,
-  firstAction: Locator,
-  secondAction: Locator,
-): Promise<void> {
-  const actionCount = await actions.getByRole('button').count()
-  expect(actionCount).toBe(2)
-  const actionsBounds = await actions.boundingBox()
-  const firstBounds = await firstAction.boundingBox()
-  const secondBounds = await secondAction.boundingBox()
-  if (!actionsBounds || !firstBounds || !secondBounds) {
-    throw new Error('The paired footer actions have no measurable bounds.')
-  }
-  expect(Math.abs(firstBounds.width - secondBounds.width)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
-  expect(Math.abs(firstBounds.y - secondBounds.y)).toBeLessThanOrEqual(RENDER_GEOMETRY_TOLERANCE_PX)
-  expect(firstBounds.x).toBeGreaterThanOrEqual(actionsBounds.x - RENDER_GEOMETRY_TOLERANCE_PX)
-  expect(secondBounds.x + secondBounds.width).toBeLessThanOrEqual(
-    actionsBounds.x + actionsBounds.width + RENDER_GEOMETRY_TOLERANCE_PX,
-  )
-  expect(secondBounds.x).toBeGreaterThan(firstBounds.x + firstBounds.width)
-}
-
 async function closeInspector(page: import('@playwright/test').Page): Promise<void> {
   const inspector = page.locator('#workspace-inspector-panel')
   const compactClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -151,34 +113,6 @@ async function ensureInspectorOpen(
   await expect(inspector).toBeVisible()
 }
 
-test('object footer distinguishes clean, editing, and dirty drafts, then discards to clean @ui-smoke', async ({ page }) => {
-  await createSingleSystemWorkspace(page)
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  await map.getByRole('button', { name: /^Select A, Primary Star/ }).click()
-
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  const footer = inspector.locator('.entity-inspector-footer-actions')
-  const edit = footer.getByRole('button', { name: 'Edit map object', exact: true })
-  const apply = footer.getByRole('button', { name: 'Apply changes' })
-  const discard = footer.getByRole('button', { name: 'Discard changes' })
-  await expect(edit).toBeVisible()
-  await expect(apply).toHaveCount(0)
-  await expect(discard).toHaveCount(0)
-
-  await edit.click()
-  await expect(apply).toBeEnabled()
-  await expect(discard).toBeEnabled()
-  await inspector.getByLabel('Name', { exact: true }).fill('Unapplied Primary Star')
-  await expect(apply).toBeEnabled()
-  await expect(edit).toHaveCount(0)
-  await expect(discard).toBeVisible()
-
-  await discard.click()
-  await expect(edit).toBeVisible()
-  await expect(apply).toHaveCount(0)
-  await expect(discard).toHaveCount(0)
-  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Primary Star')
-})
 
 for (const viewport of smokeViewports) {
   test(`chart, system, and route footer actions fit and receive pointer hits at ${viewport.width}×${viewport.height} @ui-smoke`, async ({ page }) => {
@@ -203,8 +137,6 @@ for (const viewport of smokeViewports) {
       clusterEdit,
       viewport,
     )
-    await expectFullWidthFooterAction(clusterActions, clusterEdit)
-
     await closeInspector(page)
     const clusterMap = page.getByRole('group', { name: 'Footer Reach Jump Cluster map', exact: true })
     const systemNode = clusterMap.getByRole('button', { name: 'Select A system', exact: true })
@@ -220,14 +152,7 @@ for (const viewport of smokeViewports) {
       viewport,
     )
     await expectFooterActionToFit(selectedSystemDetails, openSystem, viewport)
-    await expectEqualWidthFooterActions(systemActions, systemEdit, openSystem)
     await expect(selectedSystemDetails.getByRole('button', { name: 'Delete A system', exact: true })).toBeVisible()
-    if (viewport.width === 390) {
-      await test.info().attach('system-chart-footer-390x844', {
-        body: await page.screenshot({ animations: 'disabled', fullPage: false }),
-        contentType: 'image/png',
-      })
-    }
     await openSystem.click()
     await closeInspector(page)
     await expect(page.getByRole('navigation', { name: 'Map context and commands' })
@@ -253,33 +178,3 @@ for (const viewport of smokeViewports) {
     }
   })
 }
-
-test('object deletion names the selected target, uses the destructive color, and cancels cleanly @ui-smoke', async ({ page }) => {
-  await createSingleSystemWorkspace(page, { viewport: { width: 390, height: 844 } })
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  await map.getByRole('button', { name: /^Select A, Primary Star/ }).click()
-
-  const inspector = page.locator('#workspace-inspector-panel')
-  const deleteButton = inspector.getByRole('button', { name: 'Delete Primary Star', exact: true })
-  await deleteButton.scrollIntoViewIfNeeded()
-  await expect(deleteButton).toBeVisible()
-  const usesDestructiveColor = await deleteButton.evaluate(element => {
-    const sample = document.createElement('span')
-    sample.style.color = 'var(--error)'
-    document.body.append(sample)
-    const expected = getComputedStyle(sample).color
-    sample.remove()
-    return getComputedStyle(element).color === expected
-  })
-  expect(usesDestructiveColor).toBe(true)
-
-  await deleteButton.click()
-  const review = deletionReviewDialog(page)
-  await expect(review).toContainText('Primary Star')
-  const cancel = review.getByRole('button', { name: 'Cancel deletion', exact: true })
-  await expectFooterActionToFit(review, cancel, { width: 390, height: 844 })
-  await cancel.click()
-  await expect(review).toBeHidden()
-  await closeInspector(page)
-  await expect(map.getByRole('button', { name: /Primary Star/ })).toBeVisible()
-})

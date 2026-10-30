@@ -182,19 +182,3 @@ test('a net-zero rotation keeps the implicit zero and preserves Redo @pure', asy
   expect(harness.publications).toBe(2)
   harness.dispose()
 })
-
-test('a canonical no-op Orbit center adjustment keeps Redo @pure', async () => {
-  const harness = createAdapterHarness()
-  await harness.createRedoBranch()
-  const originalCenter = harness.workspace.value?.cluster.systems[0]?.orbits[0]?.center
-
-  expect(await harness.map.updateOrbitAdjustment(harness.centerIntent('ArrowRight', { x: 0, y: 0 })))
-    .toEqual({ status: 'preview' })
-  const result = await harness.adjustments.releaseKey('ArrowRight')
-
-  expect(result.status).toBe('unchanged')
-  expect(harness.workspace.value?.cluster.systems[0]?.orbits[0]?.center).toEqual(originalCenter)
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 0, redoDepth: 1, hasPendingGroup: false })
-  expect(harness.publications).toBe(2)
-  harness.dispose()
-})

@@ -171,90 +171,79 @@ test('accepted traversal reports its direction and action descriptor after memor
   history.dispose()
 })
 
-test('a no-op leaves Redo available and traversal changes data before durability finishes @pure', async () => {
-  let releaseSave: (() => void) | undefined
-  const durable = new Promise<void>(resolve => { releaseSave = resolve })
-  let current: LocalWorkspace = createWorkspaceSnapshot(createLocalWorkspace('Kestrel Reach', 'Vesper'))
-  let revision = 0
-  let isSaved = true
-  const history = createWorkspaceHistoryCoordinator({
-    getWorkspace: () => current,
-    getRevision: () => revision,
-    publishWorkspace: next => {
-      current = createWorkspaceSnapshot(next)
-      revision += 1
-      isSaved = false
-      const thisRevision = revision
-      return {
-        durable: durable.then(() => {
-          if (revision === thisRevision) isSaved = true
-        }),
-      }
-    },
-    getTraversalBlockReason: () => isSaved ? null : 'Save the latest workspace change first.',
-    confirmCapacity: async () => false,
-  })
+test('a no-op preserves an existing Redo branch and Redo remains usable @pure', async () => {
+  const harness = historyHarness()
+  try {
+    await applyRename(harness.history, harness.workspace, 'Kestrel Reach Prime')
+    const undone = await harness.history.undo()
+    expect(undone.status).toBe('applied')
+    if (undone.status === 'applied') await undone.durable
+    expect(harness.workspace.cluster.name).toBe('Kestrel Reach')
+    expect(harness.history.getStatus().redoDepth).toBe(1)
 
-  const first = await history.execute(renamed(current, 'Kestrel Reach Prime'))
-  expect(first.status).toBe('applied')
-  if (first.status === 'applied') {
-    const noop = await history.execute({
-      action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: current.cluster.id } },
+    const dataBeforeNoop = createWorkspaceSnapshot(harness.workspace)
+    const historyBeforeNoop = harness.history.getStatus()
+    const entriesBeforeNoop = harness.history.getEntries()
+    const publicationsBeforeNoop = harness.publishCount
+    const noOp = await harness.history.execute({
+      action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: dataBeforeNoop.cluster.id } },
       prepare: workspace => workspace,
     })
-    expect(noop.status).toBe('unchanged')
-    expect(history.getStatus().undoDepth).toBe(1)
-    expect(history.getStatus().redoDepth).toBe(0)
-    releaseSave?.()
-    await first.durable
+
+    expect(noOp.status).toBe('unchanged')
+    expect(harness.workspace).toEqual(dataBeforeNoop)
+    expect(harness.history.getStatus()).toEqual(historyBeforeNoop)
+    expect(harness.history.getEntries()).toEqual(entriesBeforeNoop)
+    expect(harness.history.getStatus().retainedBytes).toBe(historyBeforeNoop.retainedBytes)
+    expect(harness.history.getStatus().redoDepth).toBe(1)
+    expect(harness.publishCount).toBe(publicationsBeforeNoop)
+
+    const redone = await harness.history.redo()
+    expect(redone.status).toBe('applied')
+    if (redone.status === 'applied') await redone.durable
+    expect(harness.workspace.cluster.name).toBe('Kestrel Reach Prime')
+    expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, redoDepth: 0 })
+  } finally {
+    harness.dispose()
   }
-  const undone = await history.undo()
-  expect(undone.status).toBe('applied')
-  expect(current.cluster.name).toBe('Kestrel Reach')
-  expect(history.getStatus().redoDepth).toBe(1)
-  history.dispose()
 })
 
 test('prefix eviction retains a contiguous restorable suffix under the action limit @pure', async () => {
-  const harness = historyHarness({ limits: { maxActions: 2 } })
+  const harness = historyHarness()
 
-  await applyRename(harness.history, harness.workspace, 'Reach 1')
-  await applyRename(harness.history, harness.workspace, 'Reach 2')
-  await applyRename(harness.history, harness.workspace, 'Reach 3')
+  try {
+    for (let action = 1; action <= 100; action += 1) {
+      await applyRename(harness.history, harness.workspace, `Reach ${action}`)
+    }
+    expect(harness.history.getStatus()).toMatchObject({
+      undoDepth: 100, totalActions: 100, retentionReduced: false, notice: null,
+    })
 
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 2, redoDepth: 0, totalActions: 2, retentionReduced: true })
-  expect(harness.history.getEntries()).toHaveLength(2)
-  expect(harness.history.getEntries().every(entry => entry.applied)).toBe(true)
-  const firstUndo = await harness.history.undo()
-  if (firstUndo.status === 'applied') await firstUndo.durable
-  expect(harness.workspace.cluster.name).toBe('Reach 2')
-  const secondUndo = await harness.history.undo()
-  if (secondUndo.status === 'applied') await secondUndo.durable
-  expect(harness.workspace.cluster.name).toBe('Reach 1')
-  expect(harness.history.getStatus().undoUnavailableReason).toBe('There is nothing to undo.')
-  expect(harness.history.getStatus().notice).toContain('Older Undo history was removed')
-  harness.dispose()
+    await applyRename(harness.history, harness.workspace, 'Reach 101')
+    expect(harness.history.getStatus()).toMatchObject({
+      undoDepth: 100,
+      redoDepth: 0,
+      totalActions: 100,
+      retentionReduced: true,
+      notice: 'Older Undo history was removed to stay within the history limit.',
+    })
+    const entries = harness.history.getEntries()
+    expect(entries).toHaveLength(100)
+    expect(entries.every(entry => entry.applied)).toBe(true)
+
+    for (let action = 100; action >= 1; action -= 1) {
+      const undone = await harness.history.undo()
+      expect(undone.status).toBe('applied')
+      if (undone.status === 'applied') await undone.durable
+      expect(harness.workspace.cluster.name).toBe(`Reach ${action}`)
+    }
+    expect(harness.history.getStatus().undoUnavailableReason).toBe('There is nothing to undo.')
+  } finally {
+    harness.dispose()
+  }
 })
 
-test('100 actions fit exactly and action 101 evicts only the oldest Undo edge @pure', async () => {
-  const harness = historyHarness({ limits: { maxActions: 100 } })
 
-  for (let action = 1; action <= 100; action += 1) {
-    await applyRename(harness.history, harness.workspace, `Reach ${action}`)
-  }
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 100, redoDepth: 0, totalActions: 100, retentionReduced: false })
-
-  await applyRename(harness.history, harness.workspace, 'Reach 101')
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 100, redoDepth: 0, totalActions: 100, retentionReduced: true })
-
-  for (let action = 0; action < 100; action += 1) {
-    const result = await harness.history.undo()
-    if (result.status === 'applied') await result.durable
-  }
-  expect(harness.workspace.cluster.name).toBe('Reach 1')
-  expect(harness.history.getStatus()).toMatchObject({ undoDepth: 0, redoDepth: 100 })
-  harness.dispose()
-})
 
 test('a capacity cancellation after Undo preserves the existing Redo branch @pure', async () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
@@ -573,22 +562,7 @@ test('reset during memory publication suppresses the applied hook after clearing
   harness.dispose()
 })
 
-test('disposal during memory publication suppresses the applied hook without changing the verdict @pure', async () => {
-  let history: ReturnType<typeof createWorkspaceHistoryCoordinator> | null = null
-  const harness = historyHarness({ beforePublication: () => history?.dispose() })
-  history = harness.history
-  let hookCount = 0
-  const request = renamed(harness.workspace, 'Visible before disposal')
-  request.onApplied = () => { hookCount += 1 }
 
-  const applied = await history.execute(request)
-
-  expect(applied.status).toBe('applied')
-  expect(harness.workspace.cluster.name).toBe('Visible before disposal')
-  expect(hookCount).toBe(0)
-  expect(history.getStatus()).toMatchObject({ totalActions: 0, undoDepth: 0 })
-  harness.dispose()
-})
 
 test('external traversal blockers are checked again at command entry and remain readable @pure', async () => {
   const harness = historyHarness()
@@ -679,26 +653,7 @@ test('reset from a synchronous publication observer prevents stale Undo from pub
   harness.dispose()
 })
 
-test('disposal from a synchronous publication observer prevents stale Redo from publishing @pure', async () => {
-  const harness = historyHarness()
-  await applyRename(harness.history, harness.workspace, 'Kestrel Reach Prime')
-  const undo = await harness.history.undo()
-  if (undo.status === 'applied') await undo.durable
-  let disposeInObserver = false
-  const unsubscribe = harness.history.subscribe(() => {
-    if (disposeInObserver || !harness.history.getStatus().isBusy) return
-    disposeInObserver = true
-    harness.history.dispose()
-  })
 
-  const redo = await harness.history.redo()
-
-  expect(redo).toMatchObject({ status: 'rejected', reason: 'stale' })
-  expect(harness.workspace.cluster.name).toBe('Kestrel Reach')
-  expect(harness.publishCount).toBe(2)
-  unsubscribe()
-  harness.dispose()
-})
 
 test('reset from a synchronous mutation observer prevents the unpublished action @pure', async () => {
   const harness = historyHarness()

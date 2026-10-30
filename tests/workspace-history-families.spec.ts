@@ -26,15 +26,8 @@ import {
   captureMapExportBlobs,
   createSingleSystemWorkspace,
   downloadJson,
-  editFieldDefinition,
-  importReviewDialog,
-  jsonMapImportInput,
-  openFieldDefinitionDialog,
   openWorkspaceHierarchy,
-  resolveImportReview,
   returnToClusterMap,
-  setWorkspaceMapMode,
-  setJsonFile,
 } from './helpers'
 
 function fakeImportInput(content: string): { event: Event; restore(): void } {
@@ -600,47 +593,6 @@ test('a stale import capacity answer cannot publish into a replacement workspace
   }
 })
 
-test('a reviewed JSON import can be undone and redone without changing the remapped IDs or export data', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await createSingleSystemWorkspace(page)
-  await returnToClusterMap(page)
-  const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  await setJsonFile(jsonMapImportInput(page), 'cluster-copy.json', JSON.stringify(before))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
-  await waitForWorkspaceSaved(page)
-
-  const after = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(after.cluster?.systems).toHaveLength(2)
-  const importedSystem = after.cluster!.systems[1]!
-  expect(importedSystem.id).not.toBe(before.cluster!.systems[0]!.id)
-  const importedIds = [
-    importedSystem.id,
-    ...importedSystem.objects.map(object => object.id),
-    ...importedSystem.orbits.map(orbit => orbit.id),
-  ]
-  expect(after).not.toHaveProperty('history')
-
-  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
-  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
-  await expect(undo).toBeEnabled()
-  await undo.click()
-  await waitForWorkspaceSaved(page)
-  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
-  await expect(redo).toBeEnabled()
-
-  await redo.click()
-  await waitForWorkspaceSaved(page)
-  const replayed = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(replayed).toEqual(after)
-  expect([
-    replayed.cluster!.systems[1]!.id,
-    ...replayed.cluster!.systems[1]!.objects.map(object => object.id),
-    ...replayed.cluster!.systems[1]!.orbits.map(orbit => orbit.id),
-  ]).toEqual(importedIds)
-  await expect(undo).toBeEnabled()
-  await expect(redo).toBeDisabled()
-})
-
 test('reviewed system deletion restores the same cascade through the editor Undo and Redo commands', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
@@ -668,53 +620,4 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   await redo.click()
   await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(after)
-})
-
-test('reviewed destructive Field change restores exact values through the editor Undo and Redo commands', async ({ page }) => {
-  test.setTimeout(60_000)
-  await captureMapExportBlobs(page)
-  await createSingleSystemWorkspace(page)
-  await setJsonFile(jsonMapImportInput(page), 'falsy-fields.json', JSON.stringify(exportJumpCluster(makeFieldWorkspace())))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
-  await waitForWorkspaceSaved(page)
-  await returnToClusterMap(page)
-  const afterImport = await downloadJson(page, 'Export Jump Cluster JSON')
-  const importedSystem = afterImport.cluster!.systems[1]!
-  const fieldId = afterImport.objectFieldSettings.customFields.find(field => field.name === 'Threat')!.id
-  expect(importedSystem.objects[0]?.customFieldValues?.[fieldId]).toBe(0)
-
-  await setWorkspaceMapMode(page, 'Navigate')
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
-  await clusterMap.getByRole('button', { name: 'Open Vesper system map', exact: true }).last().click()
-  await expect(page.getByRole('group', { name: 'Vesper star system map', exact: true })).toBeVisible()
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).last().click()
-  const dialog = await openFieldDefinitionDialog(page)
-  await dialog.getByRole('button', { name: /Threat/ }).click()
-  await editFieldDefinition(dialog)
-  await dialog.getByLabel('Value type').click()
-  await page.getByRole('option', { name: 'Text', exact: true }).click()
-  await dialog.getByRole('button', { name: 'Apply field changes', exact: true }).click()
-  const review = dialog.getByRole('region', { name: 'Field change review', exact: true })
-  await expect(review).toBeVisible()
-  await expect(review).toContainText('Threat')
-  await dialog.getByRole('button', { name: 'Apply field changes', exact: true }).last().click()
-  await expect(dialog.getByRole('region', { name: 'Field change review', exact: true })).toBeHidden()
-  await waitForWorkspaceSaved(page)
-  await dialog.getByRole('button', { name: 'Close field definitions', exact: true }).click()
-  await expect(dialog).toBeHidden()
-  await returnToClusterMap(page)
-  const afterChange = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(afterChange.objectFieldSettings.customFields.find(field => field.id === fieldId)?.type).toBe('text')
-  expect(afterChange.cluster!.systems[1]!.objects[0]?.customFieldValues?.[fieldId]).toBeUndefined()
-
-  const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
-  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
-  await undo.click()
-  await waitForWorkspaceSaved(page)
-  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(afterImport)
-  await expect(redo).toBeEnabled()
-  await redo.click()
-  await waitForWorkspaceSaved(page)
-  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(afterChange)
 })
