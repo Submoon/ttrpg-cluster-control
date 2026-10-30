@@ -5,6 +5,7 @@ export {
   catalogueTypes,
   customFieldApplicabilityTargetKey,
   defaultObjectFieldSettings,
+  nativePlayerFieldIds,
 } from './workspace-model'
 export type {
   Point,
@@ -12,6 +13,7 @@ export type {
   ObjectFamily,
   CustomFieldType,
   CustomFieldValue,
+  NativePlayerFieldId,
   CustomFieldApplicabilityTarget,
   CustomFieldDefinition,
   ObjectFieldSettings,
@@ -46,6 +48,7 @@ export {
   isCustomFieldValueCompatible,
   updateCustomFieldType,
   removeCustomFieldDefinition,
+  updateFieldPlayerSharing,
 } from './workspace-fields'
 export {
   initialSystemPlacement,
@@ -85,5 +88,7 @@ export type {
   PlayerClusterDocument,
   PlayerSystemDocument,
   PlayerObjectMarker,
+  PlayerFieldValue,
   PlayerOrbit,
+  PlayerRoute,
 } from './player-projection'

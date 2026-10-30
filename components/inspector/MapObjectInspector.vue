@@ -94,7 +94,17 @@
               maxlength="80"
             />
           </UFormField>
-          <UFormField label="Description" class="entity-inspector-full-row" :error="fieldError('description')">
+          <UFormField label="Player text" class="entity-inspector-full-row" :error="fieldError('playerText')">
+            <UTextarea
+              :id="controlId('playerText')"
+              v-model="objectDraft.playerText"
+              class="entity-inspector-full"
+              :rows="4"
+              autoresize
+            />
+            <template #hint>This text appears in the player preview when this object is Revealed.</template>
+          </UFormField>
+          <UFormField label="GM notes" class="entity-inspector-full-row" :error="fieldError('description')">
             <UTextarea
               :id="controlId('description')"
               v-model="objectDraft.description"
@@ -102,6 +112,7 @@
               :rows="5"
               autoresize
             />
+            <template #hint>Private Warden notes are never included in the player preview.</template>
           </UFormField>
         </fieldset>
       </section>
@@ -145,22 +156,40 @@
           <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
         <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
-          <UFormField v-if="hasAtmosphere" label="Atmosphere" :error="fieldError('native:atmosphere')">
-            <USelect
-              :id="controlId('native:atmosphere')"
-              :model-value="atmosphereSelectValue"
-              :items="atmosphereItems"
-              @update:model-value="value => objectDraft.atmosphere = decodeSelectValue('native:atmosphere', atmosphereChoices, String(value))"
+          <div v-if="hasAtmosphere" class="grid min-w-0 gap-2">
+            <UFormField label="Atmosphere" :error="fieldError('native:atmosphere')">
+              <USelect
+                :id="controlId('native:atmosphere')"
+                :model-value="atmosphereSelectValue"
+                :items="atmosphereItems"
+                @update:model-value="value => objectDraft.atmosphere = decodeSelectValue('native:atmosphere', atmosphereChoices, String(value))"
+              />
+            </UFormField>
+            <UCheckbox
+              :id="controlId(`playerFieldMask:${nativeFieldIds.atmosphere}`)"
+              :model-value="isPlayerFieldMasked(nativeFieldIds.atmosphere)"
+              label="Hide this value from players"
+              aria-description="For Atmosphere."
+              @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.atmosphere, value)"
             />
-          </UFormField>
-          <UFormField v-if="selectedObject.family === 'Installation'" label="Port class" :error="fieldError('native:portClass')">
-            <USelect
-              :id="controlId('native:portClass')"
-              :model-value="portClassSelectValue"
-              :items="portClassItems"
-              @update:model-value="value => objectDraft.portClass = decodeSelectValue('native:portClass', portClassChoices, String(value))"
+          </div>
+          <div v-if="selectedObject.family === 'Installation'" class="grid min-w-0 gap-2">
+            <UFormField label="Port class" :error="fieldError('native:portClass')">
+              <USelect
+                :id="controlId('native:portClass')"
+                :model-value="portClassSelectValue"
+                :items="portClassItems"
+                @update:model-value="value => objectDraft.portClass = decodeSelectValue('native:portClass', portClassChoices, String(value))"
+              />
+            </UFormField>
+            <UCheckbox
+              :id="controlId(`playerFieldMask:${nativeFieldIds.portClass}`)"
+              :model-value="isPlayerFieldMasked(nativeFieldIds.portClass)"
+              label="Hide this value from players"
+              aria-description="For Port class."
+              @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.portClass, value)"
             />
-          </UFormField>
+          </div>
         </fieldset>
       </section>
 
@@ -184,38 +213,49 @@
           </UButton>
         </div>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
-          <UFormField
+          <div
             v-for="field in applicableCustomFields"
             :key="field.id"
-            :label="field.name"
-            :error="fieldError(`custom:${field.id}`)"
+            class="grid min-w-0 gap-2"
           >
-            <USelect
-              v-if="field.type === 'single-select' || field.type === 'boolean'"
-              :id="controlId(`custom:${field.id}`)"
-              :model-value="customSelectValue(field)"
-              :items="customSelectItems(field)"
-              @update:model-value="value => setCustomSelectValue(field, String(value))"
+            <UFormField
+              :label="field.name"
+              :error="fieldError(`custom:${field.id}`)"
+            >
+              <USelect
+                v-if="field.type === 'single-select' || field.type === 'boolean'"
+                :id="controlId(`custom:${field.id}`)"
+                :model-value="customSelectValue(field)"
+                :items="customSelectItems(field)"
+                @update:model-value="value => setCustomSelectValue(field, String(value))"
+              />
+              <UTextarea
+                v-else-if="field.type === 'text'"
+                :id="controlId(`custom:${field.id}`)"
+                :model-value="objectDraft.customFieldValues[field.id]"
+                @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
+                class="entity-inspector-full"
+                :rows="3"
+                autoresize
+              />
+              <UInput
+                v-else
+                :id="controlId(`custom:${field.id}`)"
+                :model-value="objectDraft.customFieldValues[field.id]"
+                @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
+                type="number"
+                step="any"
+                inputmode="decimal"
+              />
+            </UFormField>
+            <UCheckbox
+              :id="controlId(`playerFieldMask:${field.id}`)"
+              :model-value="isPlayerFieldMasked(field.id)"
+              label="Hide this value from players"
+              :aria-description="`For ${field.name}.`"
+              @update:model-value="value => updatePlayerFieldMask(field.id, value)"
             />
-            <UTextarea
-              v-else-if="field.type === 'text'"
-              :id="controlId(`custom:${field.id}`)"
-              :model-value="objectDraft.customFieldValues[field.id]"
-              @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
-              class="entity-inspector-full"
-              :rows="3"
-              autoresize
-            />
-            <UInput
-              v-else
-              :id="controlId(`custom:${field.id}`)"
-              :model-value="objectDraft.customFieldValues[field.id]"
-              @update:model-value="value => objectDraft.customFieldValues[field.id] = String(value ?? '')"
-              type="number"
-              step="any"
-              inputmode="decimal"
-            />
-          </UFormField>
+          </div>
           <p v-if="applicableCustomFields.length === 0" class="empty-copy m-0">No custom fields apply to this object.</p>
         </fieldset>
       </section>
@@ -311,6 +351,7 @@ import {
   canPlaceObjectInOrbit,
   isCustomFieldApplicableToObject,
   isPublicationMode,
+  nativePlayerFieldIds,
   type CustomFieldDefinition,
   type LocalWorkspace,
   type PublicationMode,
@@ -365,6 +406,7 @@ const objectSession = computed(() => {
 })
 const objectDraft = computed<ObjectDraft>(() => objectSession.value?.draft
   ?? objectDraftValuesFor(selectedObject.value, props.workspace.objectFieldSettings))
+const nativeFieldIds = nativePlayerFieldIds
 const unsetSelectValue = '__entity_inspector_unset__'
 const selectValuePrefix = '__entity_inspector_option__:'
 const formId = computed(() => `object-inspector-form-${selectedObject.value?.id ?? 'current'}`)
@@ -463,6 +505,21 @@ function updatePublication(value: string | number): void {
   if (!objectSession.value) return
   const publication = String(value)
   if (isPublicationMode(publication)) objectDraft.value.publication = publication
+}
+
+function isPlayerFieldMasked(fieldId: string): boolean {
+  return objectDraft.value.playerFieldMasks.includes(fieldId)
+}
+
+function updatePlayerFieldMask(fieldId: string, value: boolean | 'indeterminate'): void {
+  if (!objectSession.value) return
+  const masks = objectDraft.value.playerFieldMasks
+  const isMasked = masks.includes(fieldId)
+  if (isMasked === (value === true)) return
+  objectDraft.value.playerFieldMasks = (value === true
+    ? [...masks, fieldId]
+    : masks.filter(candidate => candidate !== fieldId))
+    .sort()
 }
 
 function customSelectChoices(field: CustomFieldDefinition): StoredSelectOption[] {

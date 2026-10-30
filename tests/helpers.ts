@@ -120,6 +120,9 @@ export type ExportedObject = {
   subtype: string
   locationKey: string
   description: string
+  /** Supported legacy files omit the v4 player content metadata. */
+  playerText?: string
+  playerFieldMasks?: string[]
   placement: { kind: 'system'; x: number; y: number } | { kind: 'orbit'; orbitId: string }
   atmosphere?: string
   portClass?: string
@@ -137,6 +140,7 @@ export type ExportedSystem = {
 
 export type ExportedRoute = {
   id: string
+  playerShared?: boolean
   name?: string
   jumpLevel?: number
   fromPointId: string
@@ -157,10 +161,12 @@ export type ExportedMap = {
   objectFieldSettings: {
     atmosphereOptions: string[]
     portClassOptions: string[]
+    nativePlayerSharing?: { atmosphere: boolean; portClass: boolean }
     customFields: Array<{
       id: string
       name: string
       type: string
+      playerShared?: boolean
       options?: string[]
       applicability?: ExportedCustomFieldApplicabilityTarget[]
     }>

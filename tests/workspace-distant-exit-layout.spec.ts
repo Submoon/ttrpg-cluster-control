@@ -19,6 +19,8 @@ test('negative distant exit positions survive workspace restore and route-remapp
     locationKey: 'JP1',
     name: 'North Gate',
     description: '',
+    playerText: '',
+    playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const route = {
@@ -27,6 +29,7 @@ test('negative distant exit positions survive workspace restore and route-remapp
     toPointId: null,
     unresolvedExit: 'Rim',
     jumpLevel: 2,
+    playerShared: false,
   } as const
   const withRoute = {
     ...workspace,

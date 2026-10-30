@@ -17,6 +17,8 @@ function object(
     locationKey: `PRIVATE-${id}`,
     name: `PRIVATE NAME ${id}`,
     description: `PRIVATE DESCRIPTION ${id}`,
+    playerText: '',
+    playerFieldMasks: [],
     placement,
     ...overrides,
   }

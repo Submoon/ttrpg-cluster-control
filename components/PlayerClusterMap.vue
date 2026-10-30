@@ -3,14 +3,66 @@
     <p v-if="props.document.systems.length === 0" class="player-cluster-map-empty" role="status">
       No star systems are visible to players.
     </p>
+    <div v-if="props.document.systems.length" class="player-cluster-map-navigation" role="group" aria-label="Player cluster map navigation">
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-left" aria-label="Pan left" :disabled="!canPan" @click="panView(-1, 0)" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-up" aria-label="Pan up" :disabled="!canPan" @click="panView(0, -1)" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-down" aria-label="Pan down" :disabled="!canPan" @click="panView(0, 1)" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-right" aria-label="Pan right" :disabled="!canPan" @click="panView(1, 0)" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-minus" aria-label="Zoom out" :disabled="!canZoomOut" @click="zoomOut" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-plus" aria-label="Zoom in" :disabled="!canZoomIn" @click="zoomIn" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-maximize" aria-label="Fit player map" :disabled="!props.active" @click="fitPlayerMap" />
+    </div>
     <svg
-      v-else
+      v-if="props.document.systems.length"
+      ref="mapElement"
       class="player-cluster-map-scene"
+      :class="{ 'player-cluster-map-scene--panning': panGesture !== null }"
       role="group"
       :aria-label="`${props.document.title} player map`"
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
       :viewBox="viewBox"
       preserveAspectRatio="xMidYMid meet"
+      tabindex="0"
+      @keydown="handleMapKeydown"
+      @pointerdown.stop="startPan"
+      @pointermove.stop="movePan"
+      @pointerup.stop="finishPan"
+      @pointercancel.stop="cancelPan"
+      @lostpointercapture.stop="cancelPan"
+      @wheel.stop.prevent="handleWheel"
     >
+      <g
+        v-for="route in routeGeometries"
+        :key="route.id"
+        class="player-cluster-route"
+        role="group"
+        :aria-label="route.accessibleLabel"
+      >
+        <path class="player-cluster-route-path" :d="route.path" />
+        <g class="player-cluster-route-level">
+          <rect
+            :x="route.labelX - route.labelWidth / 2"
+            :y="route.labelY - 15"
+            :width="route.labelWidth"
+            height="20"
+            rx="2"
+          />
+          <text :x="route.labelX" :y="route.labelY" text-anchor="middle">{{ route.label }}</text>
+        </g>
+        <template v-if="route.destination">
+          <circle
+            class="player-cluster-route-unknown-destination"
+            :cx="route.destination.position.x"
+            :cy="route.destination.position.y"
+            r="8"
+          />
+          <text
+            class="player-cluster-route-unknown-label"
+            :x="route.destination.position.x + 16"
+            :y="route.destination.position.y + 5"
+          >{{ route.destination.label }}</text>
+        </template>
+      </g>
       <g
         v-for="system in props.document.systems"
         :key="system.id"
@@ -38,34 +90,86 @@
 
 <script setup lang="ts">
 /** Draws only an allowlisted player projection; this component never accepts a Warden workspace. */
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/workspace'
+import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
+import { playerClusterGeometry } from '../utils/player-cluster-geometry'
 
-const props = defineProps<{ document: PlayerClusterDocument }>()
+const props = withDefaults(defineProps<{ document: PlayerClusterDocument; active?: boolean }>(), { active: true })
 const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
-const bounds = computed(() => {
-  const systems = props.document.systems
-  if (!systems.length) return { minX: 0, minY: 0, width: 1, height: 1 }
+const geometry = computed(() => playerClusterGeometry(props.document))
+const routeGeometries = computed(() => geometry.value.routes)
+const bounds = computed(() => geometry.value.bounds)
+const fittedBounds = computed(() => ({
+  left: bounds.value.minX,
+  top: bounds.value.minY,
+  width: bounds.value.width,
+  height: bounds.value.height,
+}))
+const mapElement = ref<SVGSVGElement | null>(null)
+const viewportSize = ref({ width: 960, height: 560 })
+const maximumZoom = computed(() => {
+  const scale = Math.min(
+    viewportSize.value.width / fittedBounds.value.width,
+    viewportSize.value.height / fittedBounds.value.height,
+  )
+  return Number.isFinite(scale) && scale > 0 ? Math.max(4, 13 / (14 * scale)) : 4
+})
+const viewport = usePlayerMapViewport({
+  element: mapElement,
+  fittedBounds,
+  active: computed(() => props.active),
+  maximumZoom,
+  isInteractiveTarget: isSystemMarkerTarget,
+})
+const {
+  canPan,
+  canZoomIn,
+  canZoomOut,
+  fitPlayerMap,
+  handleMapKeydown,
+  handleWheel,
+  movePan,
+  panGesture,
+  panView,
+  resetViewport,
+  startPan,
+  finishPan,
+  cancelPan,
+  viewBox,
+  zoomIn,
+  zoomOut,
+} = viewport
 
-  const labelEnvelopePerCharacter = 24
-  const left = Math.min(...systems.map(system => system.position.x))
-  const top = Math.min(...systems.map(system => system.position.y))
-  const right = Math.max(...systems.map(system => system.disclosure === 'unknown'
-    ? system.position.x + 18
-    : system.position.x + 28 + system.label.length * labelEnvelopePerCharacter))
-  const bottom = Math.max(...systems.map(system => system.position.y + 18))
-  const padding = Math.max((right - left) * 0.12, (bottom - top) * 0.18, 56)
-  return {
-    minX: left - padding,
-    minY: top - padding,
-    width: right - left + padding * 2,
-    height: bottom - top + padding * 2,
+let resizeObserver: ResizeObserver | null = null
+
+watch(() => props.document, resetViewport, { flush: 'post' })
+onMounted(() => {
+  measureViewport()
+  if (typeof ResizeObserver !== 'undefined' && mapElement.value) {
+    resizeObserver = new ResizeObserver(measureViewport)
+    resizeObserver.observe(mapElement.value)
   }
 })
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
-const viewBox = computed(() => `${bounds.value.minX} ${bounds.value.minY} ${bounds.value.width} ${bounds.value.height}`)
 const labelOffset = { x: 28, y: 7 }
+
+function measureViewport(): void {
+  const svg = mapElement.value
+  if (!svg) return
+  const bounds = svg.getBoundingClientRect()
+  if (bounds.width <= 0 || bounds.height <= 0) return
+  viewportSize.value = {
+    width: svg.clientWidth || bounds.width,
+    height: svg.clientHeight || bounds.height,
+  }
+}
+
+function isSystemMarkerTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.player-cluster-map-marker') !== null
+}
 
 function openSystem(system: PlayerSystemMarker): void {
   if (system.disclosure === 'revealed') emit('open-system', system.id)
@@ -100,6 +204,25 @@ function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker
   width: 100%;
   max-height: 56vh;
   min-height: 14rem;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  background: var(--map-bg);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.player-cluster-map-scene:focus-visible {
+  outline: 2px solid var(--focus, var(--accent-hover));
+  outline-offset: 2px;
+}
+.player-cluster-map-scene--panning {
+  cursor: grabbing;
+}
+.player-cluster-map-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem;
 }
 
 .player-cluster-map-marker circle { stroke-width: 3; }
@@ -111,6 +234,29 @@ function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker
 .player-cluster-map-marker text {
   fill: var(--text-primary);
   font: 20px Georgia, serif;
+}
+.player-cluster-route-path {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 3;
+}
+.player-cluster-route-level rect {
+  fill: var(--panel-bg);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.player-cluster-route-level text {
+  fill: var(--text-primary);
+  font: 12px system-ui, sans-serif;
+}
+.player-cluster-route-unknown-destination {
+  fill: var(--map-bg);
+  stroke: var(--text-muted);
+  stroke-width: 3;
+}
+.player-cluster-route-unknown-label {
+  fill: var(--text-secondary);
+  font: 14px system-ui, sans-serif;
 }
 .player-cluster-map-marker--unknown circle {
   fill: var(--map-bg);

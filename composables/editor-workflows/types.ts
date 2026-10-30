@@ -56,6 +56,8 @@ export interface ObjectDraft {
   locationKey: string
   name: string
   description: string
+  playerText: string
+  playerFieldMasks: string[]
   publication: PublicationMode
   subtype: string
   placement: string
@@ -101,6 +103,10 @@ export interface ObjectEditBaseline {
   nativeFieldOptions: {
     atmosphereOptions?: string[]
     portClassOptions?: string[]
+  }
+  nativePlayerSharing: {
+    atmosphere?: boolean
+    portClass?: boolean
   }
 }
 
@@ -369,6 +375,7 @@ export type FieldDefinitionsScreen = 'list' | 'detail' | 'edit' | 'new'
 export interface FieldDefinitionDraft {
   name: string
   type: CustomFieldType
+  playerShared: boolean
   /** Newline-delimited option input, retained even while another type is selected. */
   options: string
   applicability: CustomFieldApplicabilityTarget[] | undefined
@@ -380,6 +387,7 @@ export interface NativeFieldDefinitionSnapshot {
   name: string
   type: 'single-select'
   options: string[]
+  playerShared: boolean
   applicability?: undefined
 }
 
@@ -445,6 +453,7 @@ export interface FieldDefinitionUpdateRequest {
   fieldId: string
   name: string
   type: CustomFieldType
+  playerShared: boolean
   options: string[]
   applicability: CustomFieldApplicabilityTarget[] | undefined
 }
@@ -453,5 +462,6 @@ export interface FieldDefinitionUpdateRequest {
 export interface CustomFieldCreateRequest {
   name: string
   type: CustomFieldType
+  playerShared: boolean
   options: string[]
 }

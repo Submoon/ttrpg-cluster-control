@@ -11,6 +11,7 @@ import {
   renameCustomFieldDefinition,
   updateCustomFieldApplicability,
   updateCustomFieldType,
+  updateFieldPlayerSharing,
   updateNativeFieldOptions,
   type CustomFieldApplicabilityTarget,
   type CustomFieldType,
@@ -106,6 +107,7 @@ export function useFieldDefinitionWorkflows({
     return {
       name: definition.name,
       type: definition.type,
+      playerShared: definition.playerShared,
       options: definition.type === 'single-select' ? definition.options.join('\n') : '',
       applicability: definition.applicability?.map(target => ({ ...target })),
       baseline,
@@ -113,7 +115,7 @@ export function useFieldDefinitionWorkflows({
   }
 
   function emptyDefinitionDraft(): FieldDefinitionDraft {
-    return { name: '', type: 'text', options: '', applicability: undefined }
+    return { name: '', type: 'text', playerShared: false, options: '', applicability: undefined }
   }
 
   function hasDefinitionChanges(): boolean {
@@ -124,6 +126,7 @@ export function useFieldDefinitionWorkflows({
       : ''
     return draft.name !== draft.baseline.name
       || draft.type !== draft.baseline.type
+      || draft.playerShared !== draft.baseline.playerShared
       || draft.options !== baselineOptions
       || !sameCustomFieldApplicability(draft.applicability, draft.baseline.applicability)
   }
@@ -133,6 +136,7 @@ export function useFieldDefinitionWorkflows({
     return !!draft && (
       draft.name !== ''
       || draft.type !== 'text'
+      || draft.playerShared
       || draft.options !== ''
       || draft.applicability !== undefined
     )
@@ -439,6 +443,7 @@ export function useFieldDefinitionWorkflows({
         name: 'Atmosphere',
         type: 'single-select',
         options: [...currentWorkspace.objectFieldSettings.atmosphereOptions],
+        playerShared: currentWorkspace.objectFieldSettings.nativePlayerSharing.atmosphere,
       }
     }
     if (fieldId === 'native:port-class') {
@@ -447,6 +452,7 @@ export function useFieldDefinitionWorkflows({
         name: 'Port class',
         type: 'single-select',
         options: [...currentWorkspace.objectFieldSettings.portClassOptions],
+        playerShared: currentWorkspace.objectFieldSettings.nativePlayerSharing.portClass,
       }
     }
     return currentWorkspace.objectFieldSettings.customFields.find(field => field.id === fieldId) ?? null
@@ -458,6 +464,7 @@ export function useFieldDefinitionWorkflows({
     return first.id === second.id
       && first.name === second.name
       && first.type === second.type
+      && first.playerShared === second.playerShared
       && sameFieldOptions(firstOptions, secondOptions)
       && sameCustomFieldApplicability(first.applicability, second.applicability)
   }
@@ -580,6 +587,9 @@ export function useFieldDefinitionWorkflows({
         const current = currentWorkspace.objectFieldSettings.customFields.find(field => field.id === fieldId)
         if (!current) throw new Error('The selected custom field no longer exists.')
         if (request.name !== current.name) candidate = renameCustomFieldDefinition(candidate, fieldId, request.name)
+        if (request.playerShared !== current.playerShared) {
+          candidate = updateFieldPlayerSharing(candidate, fieldId, request.playerShared)
+        }
         if (
           request.type !== current.type
           || (request.type === 'single-select'
@@ -591,6 +601,9 @@ export function useFieldDefinitionWorkflows({
         if (!sameCustomFieldApplicability(current.applicability, request.applicability)) {
           candidate = updateCustomFieldApplicability(candidate, fieldId, request.applicability)
         }
+      }
+      if (fieldId.startsWith('native:') && request.playerShared !== definition.playerShared) {
+        candidate = updateFieldPlayerSharing(candidate, fieldId, request.playerShared)
       }
       after = definitionInWorkspace(candidate, fieldId)
       if (!after) throw new Error('The updated field definition could not be identified.')
@@ -632,6 +645,7 @@ export function useFieldDefinitionWorkflows({
       ? 'delete'
       : after?.name !== before.name
         && after?.type === before.type
+        && after?.playerShared === before.playerShared
         && sameFieldOptions(after?.type === 'single-select' ? after.options : [], before.type === 'single-select' ? before.options : [])
         && sameCustomFieldApplicability(after?.applicability, before.applicability)
         ? 'rename'
@@ -817,6 +831,7 @@ export function useFieldDefinitionWorkflows({
         request.name,
         request.type,
         request.options,
+        request.playerShared,
       )
       const oldFieldIds = new Set(currentWorkspace.objectFieldSettings.customFields.map(field => field.id))
       const initialField = initialCandidate.objectFieldSettings.customFields.find(field => !oldFieldIds.has(field.id))
@@ -840,6 +855,7 @@ export function useFieldDefinitionWorkflows({
             request: {
               name: fieldDefinitionsSession.createDraft?.name,
               type: fieldDefinitionsSession.createDraft?.type,
+              playerShared: fieldDefinitionsSession.createDraft?.playerShared,
               options: fieldDefinitionsSession.createDraft?.type === 'single-select'
                 ? optionsFromDraft(fieldDefinitionsSession.createDraft.options)
                 : [],
@@ -849,7 +865,13 @@ export function useFieldDefinitionWorkflows({
         },
         prepare: (latestWorkspace) => {
           if (latestWorkspace.cluster.id !== currentWorkspace.cluster.id) throw new Error('The workspace changed before this field could be created.')
-          let candidate = addCustomFieldDefinition(latestWorkspace, request.name, request.type, request.options)
+          let candidate = addCustomFieldDefinition(
+            latestWorkspace,
+            request.name,
+            request.type,
+            request.options,
+            request.playerShared,
+          )
           const previousIds = new Set(latestWorkspace.objectFieldSettings.customFields.map(field => field.id))
           const generatedField = candidate.objectFieldSettings.customFields.find(field => !previousIds.has(field.id))
           if (!generatedField) throw new Error('The new field definition could not be identified.')
@@ -925,6 +947,7 @@ export function useFieldDefinitionWorkflows({
       const request: CustomFieldCreateRequest = {
         name: createDraft.name,
         type: createDraft.type,
+        playerShared: createDraft.playerShared,
         options: createDraft.type === 'single-select' ? optionsFromDraft(createDraft.options) : [],
       }
       return publishCreatedDefinition(request, afterApply)
@@ -938,6 +961,7 @@ export function useFieldDefinitionWorkflows({
       fieldId: editDraft.baseline.id,
       name: editDraft.name,
       type: editDraft.type,
+      playerShared: editDraft.playerShared,
       options: editDraft.type === 'single-select' ? optionsFromDraft(editDraft.options) : [],
       applicability: editDraft.applicability,
     }, editDraft.baseline, afterApply)

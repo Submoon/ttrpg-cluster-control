@@ -86,6 +86,8 @@ export function createSystemObject(
     locationKey: nextLocationKey(system, catalogueType.keyPrefix),
     name,
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement,
   }
 }

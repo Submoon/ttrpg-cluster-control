@@ -42,3 +42,18 @@ A Warden-side consultation of the information selected for players. The Warden's
 
 **Required Orbit host chain**:
 An orbital object's host and each further host in its placement ancestry. Player publication can show otherwise Hidden required hosts as Unknown presences without revealing unrelated satellites. An unoccupied Orbit center is geometry, not a physical host object.
+
+**GM notes**:
+Private object prose retained for the Warden's preparation.
+
+**Player text**:
+Object prose deliberately authored for player inspection when the object is Revealed, separate from GM notes.
+
+**Field publication**:
+The shared choice to permit an applicable native or custom Field's assigned value on Revealed objects. Publication does not change applicability or erase stored assignments.
+
+**Player Field mask**:
+An object's additional restriction that hides one Field value from players. A mask cannot make a private Field public.
+
+**Shared Jump Route**:
+A route deliberately included in player publication when at least one endpoint system is present. Sharing does not reveal its logical Jump Points. A Hidden endpoint is represented as an unknown destination at its exact schematic position.

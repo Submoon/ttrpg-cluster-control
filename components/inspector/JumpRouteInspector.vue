@@ -164,6 +164,18 @@
           </p>
         </template>
 
+        <div class="route-sharing-control">
+          <UCheckbox
+            id="route-player-shared"
+            :model-value="props.session.draft.playerShared"
+            label="Share with players"
+            @update:model-value="update('playerShared', $event)"
+          />
+          <p class="inspector-intro m-0">
+            Shared routes keep their Jump level. Hidden destinations use a generic label; logical Jump Point names stay private.
+          </p>
+        </div>
+
         <p v-if="props.session.routeId === null && !jumpPointItems.length" class="empty-copy m-0" role="status">
           Open a star system and add a Jump Point before creating a route.
         </p>
@@ -236,7 +248,7 @@ const emit = defineEmits<{
   'request-route-edit': [routeId: string]
   'delete-route': []
   'clear-error': []
-  'update-route-input': [sessionId: number, field: RouteDraftField, value: string]
+  'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]
   'discard-route-session': [sessionId: number]
@@ -284,6 +296,7 @@ const fieldLabels: Record<RouteDraftField, string> = {
   destination: 'Route destination',
   toPointId: 'To Jump Point',
   unresolvedExit: 'Unknown destination label',
+  playerShared: 'Share with players',
 }
 const controlIds: Record<RouteDraftField, string> = {
   jumpLevel: 'route-level',
@@ -291,6 +304,7 @@ const controlIds: Record<RouteDraftField, string> = {
   destination: 'route-destination',
   toPointId: 'route-to',
   unresolvedExit: 'route-exit',
+  playerShared: 'route-player-shared',
 }
 const validationSummary = ref<HTMLElement | null>(null)
 let pendingApplyFocusSessionId: number | null = null
@@ -370,6 +384,10 @@ function focusControl(field: RouteDraftField | 'form'): void {
 function update(field: RouteDraftField, value: unknown): void {
   const session = props.session
   if (!session) return
+  if (field === 'playerShared') {
+    if (typeof value === 'boolean') emit('update-route-input', session.id, field, value)
+    return
+  }
   emit('update-route-input', session.id, field, String(value ?? ''))
 }
 
@@ -451,6 +469,13 @@ function updateToPoint(value: unknown): void {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: .8rem .9rem;
+}
+
+.route-sharing-control {
+  display: grid;
+  gap: .4rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: .8rem;
 }
 
 .route-validation-summary {

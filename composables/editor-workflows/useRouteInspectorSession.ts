@@ -10,13 +10,14 @@ import { isJumpLevel, maxNameLength, validText } from '../../domain/workspace-va
 import type { EntityCommand } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
 
-export type RouteDraftField = 'jumpLevel' | 'fromPointId' | 'destination' | 'toPointId' | 'unresolvedExit'
+export type RouteDraftField = 'jumpLevel' | 'fromPointId' | 'destination' | 'toPointId' | 'unresolvedExit' | 'playerShared'
 export type RouteDraftValues = {
   jumpLevel: string
   fromPointId: string
   destination: 'point' | 'external'
   toPointId: string
   unresolvedExit: string
+  playerShared: boolean
 }
 
 export interface RouteInspectorSession {
@@ -43,6 +44,7 @@ const blankDraft = (): RouteDraftValues => ({
   destination: 'point',
   toPointId: '',
   unresolvedExit: '',
+  playerShared: false,
 })
 
 function cloneDraft(draft: RouteDraftValues): RouteDraftValues {
@@ -75,6 +77,7 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
     destination: route.toPointId === null ? 'external' : 'point',
     toPointId: route.toPointId ?? '',
     unresolvedExit: route.toPointId === null ? route.unresolvedExit : '',
+    playerShared: route.playerShared,
   }
 }
 
@@ -110,10 +113,16 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     return id
   }
 
-  function updateRouteInput(id: number, field: RouteDraftField, value: string): void {
+  function updateRouteInput(id: number, field: RouteDraftField, value: string | boolean): void {
     const active = session.value
     if (!active || active.id !== id) return
-    if (field === 'destination') {
+    if (field === 'playerShared') {
+      if (typeof value !== 'boolean') return
+      active.draft.playerShared = value
+      delete active.errors.playerShared
+    } else if (typeof value !== 'string') {
+      return
+    } else if (field === 'destination') {
       active.draft.destination = value === 'external' ? 'external' : 'point'
       if (active.draft.destination === 'external') {
         active.draft.toPointId = ''
@@ -279,8 +288,10 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     }
     try {
       const route = active.routeId
-        ? updateJumpRoute(current.cluster, active.routeId, jumpLevel, active.draft.fromPointId, toPointId, active.draft.unresolvedExit)
-        : createJumpRoute(current.cluster, jumpLevel, active.draft.fromPointId, toPointId, active.draft.unresolvedExit)
+        ? updateJumpRoute(current.cluster, active.routeId, jumpLevel, active.draft.fromPointId, toPointId,
+            active.draft.unresolvedExit, active.draft.playerShared)
+        : createJumpRoute(current.cluster, jumpLevel, active.draft.fromPointId, toPointId,
+            active.draft.unresolvedExit, active.draft.playerShared)
       const routes = current.cluster.routes.some(candidate => candidate.id === route.id)
         ? current.cluster.routes.map(candidate => candidate.id === route.id ? route : candidate)
         : [...current.cluster.routes, route]

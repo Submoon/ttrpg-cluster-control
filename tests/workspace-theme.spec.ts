@@ -339,7 +339,7 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit map object' }).click()
   const objectName = inspector.getByLabel('Name', { exact: true })
-  const objectDescription = inspector.getByLabel('Description')
+  const objectDescription = inspector.getByLabel('GM notes')
   await objectName.fill('Tentative gate')
   await objectDescription.fill('A draft survives the palette change.')
   await switchTheme(page, 'light')

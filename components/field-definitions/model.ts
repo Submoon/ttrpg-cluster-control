@@ -21,6 +21,7 @@ export type FieldDefinitionSummary =
       nativeField: 'atmosphere' | 'portClass'
       type: 'single-select'
       options: string[]
+      playerShared: boolean
     }
   | {
       id: string
@@ -28,6 +29,7 @@ export type FieldDefinitionSummary =
       kind: 'custom'
       type: CustomFieldType
       options: string[]
+      playerShared: boolean
       applicability?: CustomFieldApplicabilityTarget[]
     }
 
@@ -41,6 +43,7 @@ export interface FieldValueAssignment {
 export type FieldDefinitionUpdate = {
   fieldId: string
   name: string
+  playerShared: boolean
   options: string[]
   applicability: CustomFieldApplicabilityTarget[] | undefined
 }
@@ -48,6 +51,7 @@ export type FieldDefinitionUpdate = {
 export type CustomFieldCreate = {
   name: string
   type: CustomFieldType
+  playerShared: boolean
   options: string[]
 }
 
@@ -90,6 +94,7 @@ export function fieldDefinitionSummaries(workspace: LocalWorkspace): FieldDefini
       nativeField: 'atmosphere',
       type: 'single-select',
       options: settings.atmosphereOptions,
+      playerShared: settings.nativePlayerSharing.atmosphere,
     },
     {
       id: 'native:port-class',
@@ -98,6 +103,7 @@ export function fieldDefinitionSummaries(workspace: LocalWorkspace): FieldDefini
       nativeField: 'portClass',
       type: 'single-select',
       options: settings.portClassOptions,
+      playerShared: settings.nativePlayerSharing.portClass,
     },
     ...settings.customFields.map((field): FieldDefinitionSummary => ({
       id: field.id,
@@ -105,6 +111,7 @@ export function fieldDefinitionSummaries(workspace: LocalWorkspace): FieldDefini
       kind: 'custom',
       type: field.type,
       options: field.type === 'single-select' ? field.options : [],
+      playerShared: field.playerShared,
       applicability: field.applicability,
     })),
   ] satisfies FieldDefinitionSummary[]

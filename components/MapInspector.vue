@@ -188,7 +188,7 @@ const emit = defineEmits<{
   'detach-orbit': []
   'delete-orbit': []
   'request-route-edit': [routeId: string]
-  'update-route-input': [sessionId: number, field: RouteDraftField, value: string]
+  'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]
   'discard-route-session': [sessionId: number]

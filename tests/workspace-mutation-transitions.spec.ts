@@ -280,6 +280,7 @@ test('an accepted route result cannot apply an entity session replaced while the
   originalEntitySession.draft.name = 'An applied object edit'
 
   const routeDraft: RouteDraftValues = {
+    playerShared: false,
     jumpLevel: '1',
     fromPointId: 'point-a',
     destination: 'point',

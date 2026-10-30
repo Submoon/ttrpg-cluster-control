@@ -5,9 +5,9 @@ import { createWorkspaceSnapshot } from '../../utils/workspace-storage'
 export function createHistoryMeasurementWorkspace(systemCount: number, objectsPerSystem: number): LocalWorkspace {
   const workspace = createLocalWorkspace('Measured Reach', 'Measured System')
   workspace.objectFieldSettings.customFields = [
-    { id: 'measurement-notes', name: 'Campaign notes', type: 'text' },
-    { id: 'measurement-threat', name: 'Threat', type: 'number' },
-    { id: 'measurement-known', name: 'Known', type: 'boolean' },
+    { id: 'measurement-notes', name: 'Campaign notes', type: 'text', playerShared: false },
+    { id: 'measurement-threat', name: 'Threat', type: 'number', playerShared: false },
+    { id: 'measurement-known', name: 'Known', type: 'boolean', playerShared: false },
   ]
   workspace.cluster.systems = []
   workspace.layout.systemPositions = {}
@@ -21,6 +21,8 @@ export function createHistoryMeasurementWorkspace(systemCount: number, objectsPe
       family: objectIndex === 3 ? 'JumpPoint' : 'CelestialBody',
       subtype: objectIndex === 3 ? 'jump-point' : objectIndex === 0 ? 'star' : 'planet',
       description: '星🚀'.repeat(300),
+      playerText: '',
+      playerFieldMasks: [],
       placement: objectIndex === 1 || objectIndex === 2
         ? { kind: 'orbit', orbitId: `${id}-orbit-${objectIndex}` }
         : { kind: 'system', x: (objectIndex % 10) / 10, y: Math.floor(objectIndex / 10) / 10 },
@@ -47,6 +49,7 @@ export function createHistoryMeasurementWorkspace(systemCount: number, objectsPe
     if (systemIndex > 0) {
       workspace.cluster.routes.push({
         id: `measurement-route-${systemIndex}`,
+        playerShared: false,
         fromPointId: `measurement-system-${systemIndex - 1}-object-3`,
         toPointId: `${id}-object-3`, jumpLevel: 1,
       })

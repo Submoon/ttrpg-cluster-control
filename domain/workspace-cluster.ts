@@ -43,6 +43,8 @@ function initialStarSystem(name: string): StarSystem {
       locationKey: 'A',
       name: 'Primary Star',
       description: '',
+      playerText: '',
+      playerFieldMasks: [],
       placement: { kind: 'system', x: 0.5, y: 0.5 },
     }],
     orbits: [],
@@ -74,7 +76,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialStarSystem(systemName)
 
   return {
-    version: 3,
+    version: 4,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -184,6 +186,7 @@ export function jumpPointsInCluster(cluster: JumpCluster): JumpPointReference[] 
  * @param fromPointId Existing logical origin Jump Point ID.
  * @param toPointId Existing destination ID, or null for an external exit.
  * @param unresolvedExit Label used only when toPointId is null.
+ * @param playerShared Whether the new route is shared with players; defaults to private.
  * @returns A new route with a generated ID.
  * @throws If the level, endpoint IDs, or unresolved-exit label is invalid.
  */
@@ -193,10 +196,15 @@ export function createJumpRoute(
   fromPointId: string,
   toPointId: string | null,
   unresolvedExit = 'Uncharted exit',
+  playerShared = false,
 ): JumpRoute {
+  if (typeof playerShared !== 'boolean') {
+    throw new Error('Choose whether this Jump Route is shared with players.')
+  }
   return {
     id: crypto.randomUUID(),
     ...jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit),
+    playerShared,
   }
 }
 
@@ -208,6 +216,7 @@ export function createJumpRoute(
  * @param fromPointId Existing logical origin Jump Point ID.
  * @param toPointId Existing destination ID, or null for an external exit.
  * @param unresolvedExit Label used only when toPointId is null.
+ * @param playerShared Optional publication setting; omitted edits preserve the existing setting.
  * @returns Updated route data with its prior identity and name.
  * @throws If the route is missing or any new route detail is invalid.
  */
@@ -218,10 +227,14 @@ export function updateJumpRoute(
   fromPointId: string,
   toPointId: string | null,
   unresolvedExit = 'Uncharted exit',
+  playerShared?: boolean,
 ): JumpRoute {
   const route = cluster.routes.find(candidate => candidate.id === routeId)
   if (!route) {
     throw new Error('The selected Jump Route no longer exists.')
+  }
+  if (playerShared !== undefined && typeof playerShared !== 'boolean') {
+    throw new Error('Choose whether this Jump Route is shared with players.')
   }
 
   const details = jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit)
@@ -229,6 +242,7 @@ export function updateJumpRoute(
     id: route.id,
     ...(route.name !== undefined ? { name: route.name } : {}),
     ...details,
+    playerShared: playerShared ?? route.playerShared,
   }
 }
 

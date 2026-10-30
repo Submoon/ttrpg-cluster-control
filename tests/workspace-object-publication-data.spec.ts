@@ -43,7 +43,7 @@ test('version 2 workspaces migrate object publication to Hidden and preserve cha
   const restored = restoreLocalWorkspace(legacy)
 
   expect(restored).toMatchObject({
-    version: 3,
+    version: 4,
     cluster: {
       playerTitle: 'Aster Reach',
       systems: [{ publication: 'revealed', objects: [{ publication: 'hidden' }] }],
@@ -107,7 +107,7 @@ test('object edits validate and preserve their saved publication mode @pure', ()
     .toThrow(/valid object publication mode/)
 })
 
-test('version 3 object publication survives snapshots and full-map imports with remapped Orbit references @pure', () => {
+test('version 4 object publication survives snapshots and full-map imports with remapped Orbit references @pure', () => {
   const initial = createLocalWorkspace('Source Reach', 'Iria')
   const system = initial.cluster.systems[0]!
   const star = system.objects[0]!
@@ -134,7 +134,7 @@ test('version 3 object publication survives snapshots and full-map imports with 
 
   const snapshot = createWorkspaceSnapshot(source)
   const restored = restoreLocalWorkspace(snapshot)
-  expect(snapshot.version).toBe(3)
+  expect(snapshot.version).toBe(4)
   expect(restored?.cluster.systems[0]?.objects[1]?.publication).toBe('revealed')
 
   const destinationStart = createLocalWorkspace('Destination Reach', 'Vesper')
@@ -145,21 +145,21 @@ test('version 3 object publication survives snapshots and full-map imports with 
     publication: 'known-type',
   })
   const clusterExport = exportJumpCluster(source)
-  const importedV3 = prepareJsonImport(destination, clusterExport)
-  const copiedSystem = importedV3.workspace.cluster.systems[1]!
+  const importedCurrent = prepareJsonImport(destination, clusterExport)
+  const copiedSystem = importedCurrent.workspace.cluster.systems[1]!
   const copiedPlanet = copiedSystem.objects.find(object => object.subtype === 'planet')!
-  expect(clusterExport.version).toBe(3)
+  expect(clusterExport.version).toBe(4)
   expect(copiedSystem.publication).toBe('revealed')
   expect(copiedPlanet.publication).toBe('revealed')
   expect(copiedPlanet.id).not.toBe(planet.id)
   expect(copiedPlanet.placement).toEqual({ kind: 'orbit', orbitId: copiedSystem.orbits[0]?.id })
   expect(copiedSystem.orbits[0]?.id).not.toBe(orbit.id)
-  expect(importedV3.workspace.cluster.playerTitle).toBe('Destination Player Title')
+  expect(importedCurrent.workspace.cluster.playerTitle).toBe('Destination Player Title')
 
   const systemExport = exportStarSystem(source, system.id)
   const importedStandalone = prepareJsonImport(destination, systemExport)
   const standaloneSystem = importedStandalone.workspace.cluster.systems[1]!
-  expect(systemExport.version).toBe(3)
+  expect(systemExport.version).toBe(4)
   expect(standaloneSystem.objects.find(object => object.subtype === 'planet')?.publication).toBe('revealed')
   expect(standaloneSystem.objects.find(object => object.subtype === 'planet')?.placement)
     .toEqual({ kind: 'orbit', orbitId: standaloneSystem.orbits[0]?.id })

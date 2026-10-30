@@ -36,6 +36,8 @@ function createPlacementFixture(): PlacementFixture {
     locationKey: id,
     name,
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'orbit', orbitId },
   })
   const system: StarSystem = {

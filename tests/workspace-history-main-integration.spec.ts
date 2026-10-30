@@ -64,6 +64,8 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
     locationKey: 'J',
     name: 'Far Gate',
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'system', x: 0.78, y: 0.5 },
   }
   const routeId = 'history-integration-unresolved-route'
@@ -80,6 +82,7 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
           toPointId: null,
           unresolvedExit: 'Beyond the known Cluster',
           jumpLevel: 1,
+          playerShared: false,
         }],
       },
     }),

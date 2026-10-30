@@ -32,7 +32,7 @@ test('unresolved route geometry uses its saved scene target without clamping it'
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([
@@ -43,7 +43,7 @@ test('unresolved route geometry uses its saved scene target without clamping it'
     fromPointId: fromPoint.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
 
   const geometry = clusterRouteGeometry(
@@ -70,7 +70,7 @@ test('automatic unresolved targets stay near each origin and spread across all o
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const leftPointB = { ...leftPointA, id: 'point-left-b', locationKey: 'JP2', name: 'South Gate' } as const
@@ -87,7 +87,7 @@ test('automatic unresolved targets stay near each origin and spread across all o
     fromPointId,
     toPointId: null,
     unresolvedExit: id,
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   })
   const first = unresolved('route-left-first', leftPointA.id)
   const interveningOtherSystem = unresolved('route-right-interleaved', rightPoint.id)
@@ -95,7 +95,7 @@ test('automatic unresolved targets stay near each origin and spread across all o
     id: 'route-known-interleaved',
     fromPointId: leftPointA.id,
     toPointId: destinationPoint.id,
-    jumpLevel: 3,
+    playerShared: false, jumpLevel: 3,
   }
   const remaining = [
     unresolved('route-left-second', leftPointB.id),
@@ -171,7 +171,7 @@ test('adjacent-row captions clear endpoint badges horizontally', { tag: '@pure' 
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
@@ -180,7 +180,7 @@ test('adjacent-row captions clear endpoint badges horizontally', { tag: '@pure' 
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'First',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const second = { ...first, id: 'route-second', unresolvedExit: 'Second' }
   const cluster = clusterForRoutes([first, second], jumpPoints)
@@ -204,7 +204,7 @@ test('negative-row endpoint captions stay above their source card', { tag: '@pur
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
@@ -213,7 +213,7 @@ test('negative-row endpoint captions stay above their source card', { tag: '@pur
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'First',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const routes = [first, { ...first, id: 'route-second' }, { ...first, id: 'route-negative' }]
   const cluster = clusterForRoutes(routes, jumpPoints)
@@ -235,7 +235,7 @@ test('automatic targets follow source previews while manual and temporary target
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([
@@ -246,7 +246,7 @@ test('automatic targets follow source previews while manual and temporary target
     fromPointId: fromPoint.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const routes = [route]
   const systemPositions = { [fromSystem.id]: { x: 0.5, y: 0.5 } }
@@ -272,7 +272,7 @@ test('a far saved target leaves an unrelated automatic route geometry unchanged'
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
@@ -281,7 +281,7 @@ test('a far saved target leaves an unrelated automatic route geometry unchanged'
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const savedSibling: JumpRoute = { ...automaticRoute, id: 'route-saved', unresolvedExit: 'Far Side' }
   const cluster = clusterForRoutes([automaticRoute, savedSibling], jumpPoints)
@@ -312,7 +312,7 @@ test('automatic targets near an ordinary off-canvas origin remain compact', { ta
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
@@ -321,7 +321,7 @@ test('automatic targets near an ordinary off-canvas origin remain compact', { ta
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const offCanvasThousands = { [system.id]: { x: (12_000 - 112) / 736, y: (-2_800 - 96) / 368 } }
 
@@ -339,7 +339,7 @@ test('extreme but representable automatic origins keep the near-source defaults'
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
@@ -348,7 +348,7 @@ test('extreme but representable automatic origins keep the near-source defaults'
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const secondRoute = { ...route, id: 'route-b', unresolvedExit: 'Far Side' }
   const cluster = clusterForRoutes([route, secondRoute], jumpPoints)
@@ -376,7 +376,7 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   fromSystem.objects.push(fromPoint)
@@ -385,7 +385,7 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
     fromPointId: fromPoint.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const secondRoute: JumpRoute = { ...firstRoute, id: 'route-b', unresolvedExit: 'Far Side' }
   const cluster: JumpCluster = {
@@ -416,7 +416,7 @@ test('baseline-safe long labels remain restorable near the renderer boundary', {
     publication: 'known-type',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const system: StarSystem = {
@@ -431,7 +431,7 @@ test('baseline-safe long labels remain restorable near the renderer boundary', {
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'X'.repeat(80),
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   }
   const cluster: JumpCluster = {
     id: 'cluster-a',

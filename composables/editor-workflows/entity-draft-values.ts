@@ -23,6 +23,8 @@ export function objectDraftValuesFor(
     locationKey: object?.locationKey ?? '',
     name: object?.name ?? '',
     description: object?.description ?? '',
+    playerText: object ? object.playerText : '',
+    playerFieldMasks: object ? [...object.playerFieldMasks].sort() : [],
     publication: object?.publication ?? 'hidden',
     subtype: object?.subtype ?? '',
     placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',

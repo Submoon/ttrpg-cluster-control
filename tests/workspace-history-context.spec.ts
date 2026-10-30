@@ -151,15 +151,15 @@ test('route context retains endpoint, system, level and cluster details within t
   const firstPoint: SystemObject = {
     publication: 'known-type',
     id: crypto.randomUUID(), family: 'JumpPoint', subtype: 'jump-point', locationKey: 'J1',
-    name: 'A'.repeat(80), description: '', placement: { kind: 'system', x: 0.3, y: 0.5 },
+    name: 'A'.repeat(80), description: '', playerText: '', playerFieldMasks: [], placement: { kind: 'system', x: 0.3, y: 0.5 },
   }
   const secondPoint: SystemObject = {
     publication: 'known-type',
     id: crypto.randomUUID(), family: 'JumpPoint', subtype: 'jump-point', locationKey: 'J2',
-    name: 'B'.repeat(80), description: '', placement: { kind: 'system', x: 0.7, y: 0.5 },
+    name: 'B'.repeat(80), description: '', playerText: '', playerFieldMasks: [], placement: { kind: 'system', x: 0.7, y: 0.5 },
   }
   const route = {
-    id: crypto.randomUUID(), jumpLevel: 1, fromPointId: firstPoint.id, toPointId: secondPoint.id,
+    id: crypto.randomUUID(), jumpLevel: 1, playerShared: false, fromPointId: firstPoint.id, toPointId: secondPoint.id,
   }
   const workspace: LocalWorkspace = {
     ...added.workspace,

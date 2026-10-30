@@ -36,6 +36,7 @@
         <PlayerClusterMap
           v-show="!selectedSystem"
           :document="props.document"
+          :active="props.open && !selectedSystem"
           @open-system="openSystem"
         />
         <PlayerSystemMap
@@ -43,6 +44,7 @@
           :document="selectedSystem.map"
           :label="selectedSystem.label"
           :selected-object-id="selectedObjectId"
+          :active="props.open && selectedSystem !== null"
           @inspect-object="inspectObject"
         />
       </section>

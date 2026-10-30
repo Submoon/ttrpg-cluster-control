@@ -46,7 +46,7 @@
             icon="i-lucide-minus"
             aria-label="Zoom out"
             :disabled="!canZoomOut"
-            @click="zoomView(1 / zoomStep)"
+            @click="zoomOut"
           />
           <UButton
             color="neutral"
@@ -55,7 +55,7 @@
             icon="i-lucide-plus"
             aria-label="Zoom in"
             :disabled="!canZoomIn"
-            @click="zoomView(zoomStep)"
+            @click="zoomIn"
           />
           <UButton
             color="neutral"
@@ -153,6 +153,36 @@
           <p v-if="selectedObject.disclosure !== 'unknown'" class="inspector-intro m-0">
             {{ catalogueSubtypeLabel(selectedObject) }}
           </p>
+          <p v-if="selectedObject.disclosure === 'revealed' && selectedObject.playerText" class="inspector-intro m-0 whitespace-pre-wrap">
+            {{ selectedObject.playerText }}
+          </p>
+          <dl
+            v-if="selectedObject.disclosure === 'revealed' && selectedObject.fields.length"
+            class="m-0 grid gap-2"
+            aria-label="Player-visible Fields"
+          >
+            <div v-for="(field, index) in selectedObject.fields" :key="`${field.name}:${field.type}:${index}`">
+              <dt class="font-semibold">{{ field.name }}</dt>
+              <dd class="m-0">{{ field.type }}: {{ field.value }}</dd>
+            </div>
+          </dl>
+          <section
+            v-if="selectedStation"
+            class="player-system-station-association"
+            aria-label="Physical Station association"
+          >
+            <strong>Physical Station</strong>
+            <UButton
+              class="player-system-station-link"
+              color="neutral"
+              variant="link"
+              size="sm"
+              :aria-label="`Inspect ${selectedStation.label}`"
+              @click="emit('inspect-object', selectedStation.id)"
+            >
+              {{ selectedStation.label }}
+            </UButton>
+          </section>
         </section>
 
         <section v-if="props.document.orbits.length" aria-label="Visible Orbit layout" class="grid content-start gap-2">
@@ -170,9 +200,10 @@
 
 <script setup lang="ts">
 /** Renders only the allowlisted public system document; it never receives source entities or editor state. */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/workspace'
 import { catalogueSubtypeLabel } from '../utils/catalogue-labels'
+import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 
 interface SceneBounds {
   left: number
@@ -181,19 +212,11 @@ interface SceneBounds {
   height: number
 }
 
-interface PanGesture {
-  pointerId: number
-  startX: number
-  startY: number
-  startBounds: SceneBounds
-  startedAtFit: boolean
-  screenToScene: DOMMatrix
-}
-
 const props = defineProps<{
   document: PlayerSystemDocument
   label: string
   selectedObjectId?: string | null
+  active?: boolean
 }>()
 
 const emit = defineEmits<{ 'inspect-object': [publicObjectId: string] }>()
@@ -202,34 +225,53 @@ const selectedObject = computed(() => props.document.objects.find(object => obje
 const unoccupiedOrbits = computed(() => props.document.orbits.filter(orbit => orbit.hostId === null))
 const objectsById = computed(() => new Map(props.document.objects.map(object => [object.id, object])))
 const orbitsById = computed(() => new Map(props.document.orbits.map(orbit => [orbit.id, orbit])))
+const selectedStation = computed(() => {
+  const object = selectedObject.value
+  if (object?.disclosure !== 'revealed' || object.family !== 'JumpPoint' || !object.stationId) return null
+  const station = objectsById.value.get(object.stationId)
+  return station?.disclosure === 'revealed' ? station : null
+})
 const mapElement = ref<SVGSVGElement | null>(null)
 const measuredBounds = ref<SceneBounds | null>(null)
-const viewportBounds = ref<SceneBounds | null>(null)
-const panGesture = ref<PanGesture | null>(null)
-const zoomStep = 1.25
-const maximumZoom = 4
 
 const estimatedBounds = computed(() => {
   const bounds = rawSceneBounds(true)
   return paddedBounds(bounds.left, bounds.top, bounds.left + bounds.width, bounds.top + bounds.height)
 })
 const fittedBounds = computed(() => measuredBounds.value ?? estimatedBounds.value)
-const currentBounds = computed(() => viewportBounds.value ?? fittedBounds.value)
-const zoomLevel = computed(() => fittedBounds.value.width / currentBounds.value.width)
-const canZoomIn = computed(() => zoomLevel.value < maximumZoom - 0.001)
-const canZoomOut = computed(() => zoomLevel.value > 1.001)
-const canPan = computed(() => canZoomOut.value)
-const viewBox = computed(() => `${currentBounds.value.left} ${currentBounds.value.top} ${currentBounds.value.width} ${currentBounds.value.height}`)
+const viewport = usePlayerMapViewport({
+  element: mapElement,
+  fittedBounds,
+  active: computed(() => props.active !== false),
+  maximumZoom: computed(() => 4),
+  isInteractiveTarget: isObjectMarkerTarget,
+})
+const {
+  canPan,
+  canZoomIn,
+  canZoomOut,
+  fitPlayerMap,
+  handleMapKeydown,
+  handleWheel,
+  movePan,
+  panGesture,
+  panView,
+  resetViewport,
+  startPan,
+  finishPan,
+  cancelPan,
+  viewBox,
+  zoomIn,
+  zoomOut,
+} = viewport
 
 watch(() => props.document, () => {
-  cancelOwnedPan(false)
-  viewportBounds.value = null
   measuredBounds.value = null
+  resetViewport()
   void fitMapToDocument()
 }, { flush: 'post' })
 
 onMounted(() => { void fitMapToDocument() })
-onBeforeUnmount(() => { cancelOwnedPan(false) })
 
 function rawSceneBounds(estimateLabels: boolean): SceneBounds {
   const xValues: number[] = []
@@ -281,6 +323,10 @@ async function fitMapToDocument(): Promise<void> {
   const svg = mapElement.value
   if (!svg) return
 
+  if (!svg.getClientRects().length) {
+    measuredBounds.value = estimatedBounds.value
+    return
+  }
   const geometryBounds = rawSceneBounds(false)
   let left = geometryBounds.left
   let top = geometryBounds.top
@@ -288,151 +334,28 @@ async function fitMapToDocument(): Promise<void> {
   let bottom = geometryBounds.top + geometryBounds.height
 
   const rootMatrix = svg.getCTM()
-  if (rootMatrix) {
-    for (const label of svg.querySelectorAll<SVGGraphicsElement>('.player-system-object-marker text')) {
-      const labelMatrix = label.getCTM()
-      if (!labelMatrix) continue
-      const labelToRoot = rootMatrix.inverse().multiply(labelMatrix)
-      const box = label.getBBox()
-      const corners = [
-        new DOMPoint(box.x, box.y),
-        new DOMPoint(box.x + box.width, box.y),
-        new DOMPoint(box.x, box.y + box.height),
-        new DOMPoint(box.x + box.width, box.y + box.height),
-      ].map(point => point.matrixTransform(labelToRoot))
-      left = Math.min(left, ...corners.map(point => point.x))
-      top = Math.min(top, ...corners.map(point => point.y))
-      right = Math.max(right, ...corners.map(point => point.x))
-      bottom = Math.max(bottom, ...corners.map(point => point.y))
-    }
+  if (!rootMatrix) {
+    measuredBounds.value = estimatedBounds.value
+    return
+  }
+  for (const label of svg.querySelectorAll<SVGGraphicsElement>('.player-system-object-marker text')) {
+    const labelMatrix = label.getCTM()
+    if (!labelMatrix) continue
+    const labelToRoot = rootMatrix.inverse().multiply(labelMatrix)
+    const box = label.getBBox()
+    const corners = [
+      new DOMPoint(box.x, box.y),
+      new DOMPoint(box.x + box.width, box.y),
+      new DOMPoint(box.x, box.y + box.height),
+      new DOMPoint(box.x + box.width, box.y + box.height),
+    ].map(point => point.matrixTransform(labelToRoot))
+    left = Math.min(left, ...corners.map(point => point.x))
+    top = Math.min(top, ...corners.map(point => point.y))
+    right = Math.max(right, ...corners.map(point => point.x))
+    bottom = Math.max(bottom, ...corners.map(point => point.y))
   }
 
   measuredBounds.value = paddedBounds(left, top, right, bottom)
-}
-
-function fitPlayerMap(): void {
-  viewportBounds.value = null
-}
-
-function zoomView(factor: number, anchor?: DOMPoint): void {
-  const fitted = fittedBounds.value
-  const current = currentBounds.value
-  const nextZoom = Math.max(1, Math.min(maximumZoom, zoomLevel.value * factor))
-  if (nextZoom <= 1.001) {
-    viewportBounds.value = null
-    return
-  }
-
-  const width = fitted.width / nextZoom
-  const height = fitted.height / nextZoom
-  const centerX = anchor?.x ?? current.left + current.width / 2
-  const centerY = anchor?.y ?? current.top + current.height / 2
-  const ratio = width / current.width
-  const left = centerX - (centerX - current.left) * ratio
-  const top = centerY - (centerY - current.top) * ratio
-  viewportBounds.value = clampViewport({ left, top, width, height }, fitted)
-}
-
-function panView(horizontal: -1 | 0 | 1, vertical: -1 | 0 | 1): void {
-  if (!canPan.value) return
-  const current = currentBounds.value
-  viewportBounds.value = clampViewport({
-    left: current.left + horizontal * current.width * 0.16,
-    top: current.top + vertical * current.height * 0.16,
-    width: current.width,
-    height: current.height,
-  }, fittedBounds.value)
-}
-
-function clampViewport(candidate: SceneBounds, fitted: SceneBounds): SceneBounds {
-  const width = Math.min(candidate.width, fitted.width)
-  const height = Math.min(candidate.height, fitted.height)
-  return {
-    left: Math.max(fitted.left, Math.min(fitted.left + fitted.width - width, candidate.left)),
-    top: Math.max(fitted.top, Math.min(fitted.top + fitted.height - height, candidate.top)),
-    width,
-    height,
-  }
-}
-
-function handleMapKeydown(event: KeyboardEvent): void {
-  switch (event.key) {
-    case 'ArrowLeft': panView(-1, 0); break
-    case 'ArrowRight': panView(1, 0); break
-    case 'ArrowUp': panView(0, -1); break
-    case 'ArrowDown': panView(0, 1); break
-    case '+':
-    case '=': zoomView(zoomStep); break
-    case '-': zoomView(1 / zoomStep); break
-    case '0': fitPlayerMap(); break
-    default: return
-  }
-  event.preventDefault()
-}
-
-function handleWheel(event: WheelEvent): void {
-  const svg = mapElement.value
-  const transform = svg?.getScreenCTM()
-  const anchor = transform
-    ? new DOMPoint(event.clientX, event.clientY).matrixTransform(transform.inverse())
-    : undefined
-  zoomView(event.deltaY < 0 ? zoomStep : 1 / zoomStep, anchor)
-}
-
-function startPan(event: PointerEvent): void {
-  if (event.button !== 0 || !event.isPrimary || isObjectMarkerTarget(event.target)) return
-  const svg = mapElement.value
-  const screenMatrix = svg?.getScreenCTM()
-  if (!svg || !screenMatrix) return
-
-  const screenToScene = screenMatrix.inverse()
-  const start = new DOMPoint(event.clientX, event.clientY).matrixTransform(screenToScene)
-  panGesture.value = {
-    pointerId: event.pointerId,
-    startX: start.x,
-    startY: start.y,
-    startBounds: { ...currentBounds.value },
-    startedAtFit: viewportBounds.value === null,
-    screenToScene,
-  }
-  svg.setPointerCapture(event.pointerId)
-  event.preventDefault()
-}
-
-function movePan(event: PointerEvent): void {
-  const gesture = panGesture.value
-  if (!gesture || gesture.pointerId !== event.pointerId) return
-  const current = new DOMPoint(event.clientX, event.clientY).matrixTransform(gesture.screenToScene)
-  viewportBounds.value = clampViewport({
-    left: gesture.startBounds.left - (current.x - gesture.startX),
-    top: gesture.startBounds.top - (current.y - gesture.startY),
-    width: gesture.startBounds.width,
-    height: gesture.startBounds.height,
-  }, fittedBounds.value)
-}
-
-function finishPan(event: PointerEvent): void {
-  if (panGesture.value?.pointerId !== event.pointerId) return
-  panGesture.value = null
-  releasePanCapture(event.pointerId)
-}
-
-function cancelPan(event: PointerEvent): void {
-  if (panGesture.value?.pointerId !== event.pointerId) return
-  cancelOwnedPan(true)
-}
-
-function cancelOwnedPan(restoreStart: boolean): void {
-  const gesture = panGesture.value
-  if (!gesture) return
-  if (restoreStart) viewportBounds.value = gesture.startedAtFit ? null : gesture.startBounds
-  panGesture.value = null
-  releasePanCapture(gesture.pointerId)
-}
-
-function releasePanCapture(pointerId: number): void {
-  const svg = mapElement.value
-  if (svg?.hasPointerCapture(pointerId)) svg.releasePointerCapture(pointerId)
 }
 
 function isObjectMarkerTarget(target: EventTarget | null): boolean {
@@ -550,6 +473,18 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
 
 .player-system-unoccupied-center {
   fill: var(--text-muted);
+}
+
+.player-system-station-association {
+  display: grid;
+  justify-items: start;
+  gap: .125rem;
+}
+
+.player-system-station-link {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .player-system-hierarchy-item {

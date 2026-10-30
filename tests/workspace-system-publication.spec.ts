@@ -37,7 +37,7 @@ test('a Warden can publish a player title and open its cluster preview', async (
   const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
   await objectInspector.getByLabel('Name', { exact: true }).fill('Private Object Marker')
-  await objectInspector.getByLabel('Description', { exact: true }).fill('Private Source Note')
+  await objectInspector.getByLabel('GM notes', { exact: true }).fill('Private Source Note')
   const privateLocationKey = await objectInspector.getByLabel('Location key', { exact: true }).inputValue()
   await saveMapObject(page)
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')

@@ -104,6 +104,8 @@ function createObjectOrbitWorkspace(): { workspace: LocalWorkspace; objectId: st
     locationKey: 'B',
     name: 'Test Planet',
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'orbit' as const, orbitId: orbit.id },
   }
   return {
