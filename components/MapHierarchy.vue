@@ -168,7 +168,7 @@
             :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
             :aria-expanded="expanded"
             :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-            @click.stop="handleToggle"
+            @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
           >
             <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
           </UButton>
@@ -336,6 +336,13 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
 
 function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {
   if (event.detail.originalEvent.type === 'click') event.preventDefault()
+}
+
+function toggleHierarchyItemAndRestoreFocus(event: MouseEvent, handleToggle: () => void): void {
+  handleToggle()
+  if (event.currentTarget instanceof HTMLElement) {
+    event.currentTarget.closest<HTMLElement>('[role="treeitem"]')?.focus({ preventScroll: true })
+  }
 }
 
 function stopComposingTreeKeys(event: KeyboardEvent): void {

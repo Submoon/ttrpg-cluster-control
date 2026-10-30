@@ -62,6 +62,53 @@ campaignTest('selecting a parent Orbit tree item keeps a dirty nested object dra
   await expect(map.locator('.system-object.is-selected')).toHaveCount(0)
 })
 
+campaignTest('the Orbit expander keeps native Tree arrow keys available without changing selection or a draft', async ({ campaignWorkspacePage: page }) => {
+  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await clusterHierarchy.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
+
+  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  const iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true })
+  const primaryOrbit = hierarchy.getByRole('treeitem', {
+    name: 'Orbit 1 around Primary Star, 1 object',
+    exact: true,
+  })
+  await iria.click()
+  await expect(iria).toHaveAttribute('aria-selected', 'true')
+
+  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
+  const draftName = 'Iria chevron keeps draft'
+  const nameField = inspector.getByLabel('Name', { exact: true })
+  await nameField.fill(draftName)
+  await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
+
+  const map = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
+  const selectedMapObject = map.locator('.system-object.is-selected')
+  await expect(selectedMapObject).toHaveCount(1)
+  const selectedObjectId = await selectedMapObject.getAttribute('data-object-id')
+  if (!selectedObjectId) throw new Error('The selected map object has no stable identity.')
+
+  await hierarchy.getByRole('button', {
+    name: 'Collapse Orbit 1 around Primary Star, 1 object',
+    exact: true,
+  }).click()
+  await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'false')
+  await expect(iria).toBeHidden()
+  await expect(selectedMapObject).toHaveAttribute('data-object-id', selectedObjectId)
+  await expect(nameField).toHaveValue(draftName)
+
+  await page.keyboard.press('ArrowRight')
+  await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'true')
+  await expect(iria).toBeVisible()
+  await page.keyboard.press('ArrowDown')
+  await expect(iria).toBeFocused()
+  await expect(iria).toHaveAttribute('aria-selected', 'true')
+  await expect(primaryOrbit).toHaveAttribute('aria-selected', 'false')
+  await expect(nameField).toHaveValue(draftName)
+  await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Edit chart names', exact: true })).toHaveCount(0)
+})
+
 campaignTest('tree keyboard expansion and shortcuts stay local through hierarchy hide and compact reflow', async ({ campaignWorkspacePage: page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')

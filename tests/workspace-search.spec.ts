@@ -153,6 +153,7 @@ test('compact short-landscape search keeps imported homonyms distinct and makes 
   await query.fill('Vesper')
 
   const results = searchDialog.getByRole('listbox')
+  const resultsViewport = results.locator('[data-slot="viewport"]')
   const resultOptions = results.getByRole('option')
   await expect(resultOptions).toHaveCount(13)
   await expect(resultOptions.first()).toHaveAccessibleName(/Vesper.*Star System.*Jump Cluster: Kestrel Reach.*occurrence 1/i)
@@ -167,7 +168,7 @@ test('compact short-landscape search keeps imported homonyms distinct and makes 
   expect(searchBounds.y + searchBounds.height).toBeLessThanOrEqual(390)
   expect(inputBounds.width).toBeGreaterThan(250)
   expect(resultsBounds.height).toBeGreaterThan(60)
-  expect(await results.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+  expect(await resultsViewport.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
 
   const screenshotPath = testInfo.outputPath('search-homonyms-compact-short-landscape.png')
   await page.screenshot({ path: screenshotPath, animations: 'disabled' })

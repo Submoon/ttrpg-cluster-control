@@ -284,6 +284,7 @@ function anotherModalOwnsFocus(): boolean {
 
 function selectResult(event: Event, result: SearchResult): void {
   event.preventDefault()
+  focusSearchInput()
   returnToOpener = false
   const selection = ++selectionGeneration
   void activateResult(result, selection)
