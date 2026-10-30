@@ -3,6 +3,28 @@ title: "Native Nuxt UI presentation refactor"
 status: in-progress
 ---
 
+## Current checkpoint
+
+Native Navbar, Toolbar, CommandPalette and Tree are implemented. The redundant empty-query instruction is removed. Ticket 03 also includes Control+K on Windows/Linux and Command+K on macOS, an accessible `UKbd` hint, idempotent query refocusing and live gesture/dialog admission.
+
+The latest upstream baseline is **d40e5f515baf1afeb0e2135461287b243b2a1f6c** (PR #38); it is merged at **c0241267d91f9d2da1a8a7e34a46dfe18bb745eb**. Main is checked out in another worktree, so its local reference was not force-updated. Three conflicting test hunks preserve both `waitForWorkspaceSaved` acknowledgements and native `treeitem` locators. No merge was aborted and no local work was discarded.
+
+| Evidence | Result |
+| --- | --- |
+| Native Search/Tree/panel journeys at `dfc5c362` | 27/27 passed; `test-results/dashboard-focus-final-browser/report.json` |
+| Phone input after native replacement | User-reported success on Nothing Phone 4a Pro / Firefox at `dfc5c362`; see mobile record |
+| Two chained Tree locators found by first native CI | Corrected; exact 2/2 rerun passed |
+| Shortcut first slice | Intended red before implementation, complete green from a dirty Inspector (11.3s) |
+| Shortcut, closing modal, held pans, old map-shortcut guards and responsive states | 12/12 passed; `test-results/search-shortcut-final-browser/report.json` |
+| Closing-modal test cleanup correction | 1/1 passed; `test-results/search-shortcut-closing-cleanup/report.json` |
+| Final shortcut lint / prepared Nuxt types | Both passed; `test-results/search-shortcut-pan-final-{lint,typecheck}.log` |
+| Independent source reviews | Original native P2s closed; shortcut gesture P2 source closure accepted; final commit pin pending |
+| Complete integrated CI for latest shortcut + main | Pending |
+
+The complex existing nested-map construction test reached its unchanged 30-second local deadline twice after the latest merge, at different Add completion steps. No assertion established a product defect and no deadline/skip was changed. Other conflict-affected field configuration, delayed-import guard and Tree history tests passed. Complete CI must still run this scenario; do not describe the local merge checkpoint as entirely green.
+
+The shortcut's active-contact guard reads a live predicate exposed by the existing map-tool shortcut owner. Its pointer/touch Sets and capture/release/cancel/blur/unmount lifecycle remain unchanged; Search does not duplicate tracking or cache that nonreactive state. Competing dialogs remain owners throughout actual visible exit animations. The new public closing-Fields regression pauses/resumes the native animation with guaranteed cleanup and checks suppression, opener focus and a fresh admitted chord.
+
 ## Authorization and baseline
 
 The user requested replacing the existing presentation with `UDashboardNavbar`, `UDashboardToolbar` and `UCommandPalette` on 2026-10-30, then proposed `UTree` for Hierarchy. Continue on the single **codex/global-search** branch and [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36). Preserve the accepted global-search specification, guarded commands, applied data, camera framing and session lifetimes.

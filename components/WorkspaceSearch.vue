@@ -119,7 +119,7 @@ type WorkspaceSearchPaletteGroup = CommandPaletteGroup<WorkspaceSearchPaletteIte
 const props = defineProps<{
   results: readonly SearchResult[]
   reveal: (target: SearchTarget) => Promise<RevealOutcome>
-  shortcutEnabled: boolean
+  canOpenSearchShortcut: () => boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -180,8 +180,6 @@ function isSearchShortcut(event: KeyboardEvent): boolean {
 function isVisibleDialog(dialog: HTMLElement): boolean {
   if (!dialog.isConnected || dialog.hasAttribute('hidden') || dialog.getAttribute('aria-hidden') === 'true') return false
   if (dialog.closest('[hidden], [inert], [aria-hidden="true"]')) return false
-  const state = dialog.getAttribute('data-state')
-  if (state !== null && state !== 'open') return false
   const style = window.getComputedStyle(dialog)
   const bounds = dialog.getBoundingClientRect()
   return style.display !== 'none'
@@ -202,7 +200,7 @@ function handleSearchShortcut(event: KeyboardEvent): void {
     || event.isComposing
     || event.keyCode === 229
     || shortcutCompositionActive
-    || !props.shortcutEnabled
+    || !props.canOpenSearchShortcut()
     || anotherVisibleDialogOwnsShortcut()) return
 
   event.preventDefault()

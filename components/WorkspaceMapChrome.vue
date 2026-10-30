@@ -88,7 +88,7 @@
         v-model:query="searchQuery"
         :results="props.searchResults"
         :reveal="props.revealSearchTarget"
-        :shortcut-enabled="props.searchShortcutEnabled"
+        :can-open-search-shortcut="props.canOpenSearchShortcut"
       />
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
@@ -261,7 +261,7 @@ const props = withDefaults(defineProps<{
   creationTypeLabel?: string
   clusterAddPresentation?: { label: string; status: string; error?: string } | null
   clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
-  searchShortcutEnabled: boolean
+  canOpenSearchShortcut: () => boolean
   searchResults: readonly SearchResult[]
   revealSearchTarget: (target: SearchTarget) => Promise<
     { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }

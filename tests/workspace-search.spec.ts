@@ -6,8 +6,10 @@ import {
   clickNormalizedClusterPoint,
   createSingleSystemWorkspace,
   jsonMapImportInput,
+  openWorkspaceHierarchy,
   resolveImportReview,
   returnToClusterMap,
+  setWorkspaceMapMode,
   setJsonFile,
 } from './helpers'
 
@@ -43,6 +45,48 @@ async function tapVisibleTarget(
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
 }
 
+type SearchKeydownOverrides = {
+  shift?: boolean
+  alt?: boolean
+  meta?: boolean
+  altGraph?: boolean
+  repeat?: boolean
+  composing?: boolean
+  keyCode?: number
+  handled?: boolean
+  compositionActive?: boolean
+}
+
+async function dispatchSearchKeydown(
+  target: import('@playwright/test').Locator,
+  overrides: SearchKeydownOverrides = {},
+): Promise<{ preventedBefore: boolean; preventedAfter: boolean }> {
+  return target.evaluate((element, options) => {
+    if (!(element instanceof HTMLElement)) throw new Error('The shortcut test target is not an HTML element.')
+    if (options.compositionActive) element.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'k',
+      ctrlKey: true,
+      metaKey: options.meta ?? false,
+      altKey: options.alt ?? false,
+      shiftKey: options.shift ?? false,
+      bubbles: true,
+      cancelable: true,
+    })
+    if (options.altGraph) {
+      Object.defineProperty(event, 'getModifierState', { value: (key: string) => key === 'AltGraph' })
+    }
+    if (options.repeat !== undefined) Object.defineProperty(event, 'repeat', { value: options.repeat })
+    if (options.composing !== undefined) Object.defineProperty(event, 'isComposing', { value: options.composing })
+    if (options.keyCode !== undefined) Object.defineProperty(event, 'keyCode', { value: options.keyCode })
+    if (options.handled) event.preventDefault()
+    const preventedBefore = event.defaultPrevented
+    element.dispatchEvent(event)
+    if (options.compositionActive) element.dispatchEvent(new Event('compositionend', { bubbles: true }))
+    return { preventedBefore, preventedAfter: event.defaultPrevented }
+  }, overrides)
+}
+
 test('workspace search is visibly available from system and cluster map contexts', async ({ page }) => {
   await createSingleSystemWorkspace(page)
 
@@ -53,7 +97,7 @@ test('workspace search is visibly available from system and cluster map contexts
   await expect(mapContext.getByRole('button', { name: 'Search', exact: true })).toBeVisible()
 })
 
-test('Ctrl+K opens Search from a dirty Inspector and preserves its session and map state', async ({ page }) => {
+test('Ctrl+K opens Search from a dirty Inspector and preserves its session and map state', async ({ page }, testInfo) => {
   await createSingleSystemWorkspace(page)
 
   const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true, includeHidden: true })
@@ -69,8 +113,7 @@ test('Ctrl+K opens Search from a dirty Inspector and preserves its session and m
   await objectName.fill('Primary Star draft')
   const selectedObject = systemMap.locator('.system-object.is-selected')
   await expect(selectedObject).toHaveCount(1)
-  const selectMode = page.getByRole('group', { name: 'Map interaction mode' })
-    .getByRole('button', { name: 'Select', exact: true })
+  const selectMode = page.locator('.workspace-dock-mode button[aria-label="Select"]')
 
   await page.keyboard.press('Control+k')
 
@@ -78,6 +121,12 @@ test('Ctrl+K opens Search from a dirty Inspector and preserves its session and m
   const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await expect(searchDialog).toBeVisible()
   await expect(query).toBeFocused()
+  const emptySearchScreenshot = testInfo.outputPath('search-shortcut-empty-state.png')
+  await page.screenshot({ path: emptySearchScreenshot, animations: 'disabled' })
+  await testInfo.attach('search-shortcut-empty-state', {
+    path: emptySearchScreenshot,
+    contentType: 'image/png',
+  })
   await expect(objectName).toHaveValue('Primary Star draft')
   await expect(selectedObject).toHaveCount(1)
   await expect(systemContent).toHaveAttribute('transform', initialCamera)
@@ -106,6 +155,135 @@ test('Ctrl+K opens Search from a dirty Inspector and preserves its session and m
   await expect(query).toBeFocused()
   await expect(query).toHaveValue('Vesper')
 })
+
+test('Meta+K opens Search on macOS and the button advertises the platform chord', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    })
+  })
+  await createSingleSystemWorkspace(page)
+
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  await expect(searchButton).toHaveAttribute('aria-keyshortcuts', 'Meta+K')
+  await expect(searchButton.locator('kbd').first()).toHaveText('⌘')
+  await expect(searchButton.locator('kbd').nth(1)).toHaveText('K')
+
+  await searchButton.focus()
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toHaveCount(0)
+  await page.keyboard.press('Meta+k')
+  await expect(searchDialog).toBeVisible()
+  await expect(searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })).toBeFocused()
+})
+
+test('Search shortcut ignores composition, handled events, repeats, and modified chords', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true, includeHidden: true })
+  await systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true }).click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector).toBeVisible()
+  await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
+  const objectName = inspector.getByLabel('Name', { exact: true })
+  await objectName.fill('Primary Star draft')
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+
+  const suppressedEvents = [
+    await dispatchSearchKeydown(objectName, { compositionActive: true }),
+    await dispatchSearchKeydown(objectName, { composing: true }),
+    await dispatchSearchKeydown(objectName, { keyCode: 229 }),
+    await dispatchSearchKeydown(objectName, { repeat: true }),
+    await dispatchSearchKeydown(objectName, { shift: true }),
+    await dispatchSearchKeydown(objectName, { alt: true }),
+    await dispatchSearchKeydown(objectName, { meta: true }),
+    await dispatchSearchKeydown(objectName, { altGraph: true }),
+    await dispatchSearchKeydown(objectName, { handled: true }),
+  ]
+
+  expect(suppressedEvents).toEqual([
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: false, preventedAfter: false },
+    { preventedBefore: true, preventedAfter: true },
+  ])
+  await expect(searchDialog).toHaveCount(0)
+  await expect(objectName).toHaveValue('Primary Star draft')
+})
+
+test('Search shortcut yields to Fields, chart-name, and compact panel dialogs', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const fieldsButton = page.getByRole('button', { name: 'Open field definitions', exact: true })
+  await fieldsButton.click()
+  const fieldsDialog = page.getByRole('dialog', { name: 'Field definitions', exact: true })
+  await expect(fieldsDialog).toBeVisible()
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(fieldsDialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(fieldsDialog).toBeHidden()
+
+  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  await hierarchy.getByRole('button', { name: 'Edit chart names', exact: true }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await expect(chartDialog).toBeVisible()
+  await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach shortcut draft')
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Kestrel Reach shortcut draft')
+  await page.keyboard.press('Escape')
+  await expect(chartDialog).toBeHidden()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const compactHierarchy = page.getByRole('dialog', { name: 'System hierarchy', exact: true })
+  await expect(compactHierarchy).toBeVisible()
+  await page.keyboard.press('Control+k')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(compactHierarchy).toBeVisible()
+})
+
+for (const view of ['system', 'cluster'] as const) {
+  test(`Ctrl+K waits until a held ${view} map pan ends`, async ({ page }) => {
+    await createSingleSystemWorkspace(page)
+    if (view === 'cluster') await returnToClusterMap(page)
+    await setWorkspaceMapMode(page, 'Navigate')
+
+    const mapName = view === 'system' ? 'Vesper star system map' : 'Kestrel Reach Jump Cluster map'
+    const map = page.getByRole('group', { name: mapName, exact: true })
+    const scene = map.locator(view === 'system' ? '.system-map-content' : '.cluster-map-content')
+    const initialCamera = await scene.getAttribute('transform')
+    const bounds = await map.boundingBox()
+    if (!initialCamera || !bounds) throw new Error(`The active ${view} map has no usable pan bounds.`)
+    const start = { x: bounds.x + 24, y: bounds.y + 24 }
+    const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+
+    await map.focus()
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down({ button: 'right' })
+    try {
+      await page.mouse.move(start.x + 54, start.y + 32, { steps: 4 })
+      await page.keyboard.press('Control+k')
+      await expect(searchDialog).toHaveCount(0)
+      await expect(map).toBeVisible()
+    } finally {
+      await page.mouse.up({ button: 'right' })
+    }
+
+    await expect.poll(() => scene.getAttribute('transform')).not.toBe(initialCamera)
+    await page.keyboard.press('Control+k')
+    await expect(searchDialog).toBeVisible()
+    await expect(searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })).toBeFocused()
+  })
+}
 
 test('a system result can be searched without changing the map and deliberately revealed on the cluster', async ({ page }, testInfo) => {
   await createSingleSystemWorkspace(page)
