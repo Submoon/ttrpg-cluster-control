@@ -243,7 +243,12 @@ test('explicit Move exits Add when Move is already active', async ({ page }) => 
   await expect(controls).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true }))
     .toHaveCount(0)
-  await expect(addTrigger).toHaveText('Add')
+  await expect(addTrigger).toHaveAttribute('aria-pressed', 'false')
+  await expect(addTrigger).toHaveAttribute('aria-expanded', 'false')
+  await expect(addTrigger).toHaveAccessibleName('Add to map')
+  await expect(addTrigger.getByText('Add', { exact: true })).toBeVisible()
+  await expect(addTrigger.locator('kbd')).toHaveText('A')
+  await expect(addTrigger.locator('#workspace-dock-add-type')).toHaveCount(0)
   await expect(move).toHaveAttribute('aria-pressed', 'true')
 
   await dragToWorldPoint(

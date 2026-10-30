@@ -388,8 +388,49 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   const verticalHandle = orbit.locator('.orbit-axis-handle--vertical')
   await expect(horizontalHandle).toBeVisible()
   await expect(verticalHandle).toBeVisible()
-  await dragToWorldPoint(page, map, horizontalHandle, { x: geometry.cx + 320, y: geometry.cy }, true)
-  await expect(ring).toHaveAttribute('rx', '320')
+  const horizontalResizeStart = await orbit.evaluate((element) => {
+    const ring = element.querySelector<SVGEllipseElement>('.orbit-ring')
+    if (!ring) throw new Error('Could not capture the Orbit geometry before the horizontal gesture.')
+    return {
+      center: {
+        x: Number(ring.getAttribute('cx')),
+        y: Number(ring.getAttribute('cy')),
+      },
+      horizontalRadius: Number(ring.getAttribute('rx')),
+    }
+  })
+  const horizontalContentCoordinates = await snapshotSvgCoordinates(map.locator('.system-map-content'))
+  const horizontalResizeStartPoint = {
+    x: horizontalResizeStart.center.x + horizontalResizeStart.horizontalRadius,
+    y: horizontalResizeStart.center.y,
+  }
+  const horizontalResizeEndPoint = {
+    x: horizontalResizeStart.center.x + 320,
+    y: horizontalResizeStart.center.y,
+  }
+  const expectedHorizontalStartScreen = horizontalContentCoordinates.toClient(horizontalResizeStartPoint)
+  const expectedHorizontalEndScreen = horizontalContentCoordinates.toClient(horizontalResizeEndPoint)
+  const deliveredHorizontalDrag = await measureMouseDrag(
+    page,
+    expectedHorizontalStartScreen,
+    expectedHorizontalEndScreen,
+  )
+  const deliveredHorizontalStartScreenError = Math.hypot(
+    deliveredHorizontalDrag.down.x - expectedHorizontalStartScreen.x,
+    deliveredHorizontalDrag.down.y - expectedHorizontalStartScreen.y,
+  )
+  const deliveredHorizontalEndScreenError = Math.hypot(
+    deliveredHorizontalDrag.up.x - expectedHorizontalEndScreen.x,
+    deliveredHorizontalDrag.up.y - expectedHorizontalEndScreen.y,
+  )
+  const deliveredHorizontalEndPoint = horizontalContentCoordinates.fromClient(deliveredHorizontalDrag.up)
+  const axisResizedHorizontalRadius = Math.round(
+    Math.abs(deliveredHorizontalEndPoint.x - horizontalResizeStart.center.x),
+  )
+  // Integral CSS-pixel input can yield a neighboring scene radius at this map transform.
+  expect(deliveredHorizontalStartScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
+  expect(deliveredHorizontalEndScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
+  await expect(ring).toHaveAttribute('rx', String(axisResizedHorizontalRadius))
   await expect(ring).toHaveAttribute('ry', '50')
   const verticalHandleCenterIsHitTarget = await verticalHandle.evaluate(element => {
     const bounds = element.getBoundingClientRect()
@@ -420,7 +461,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   })
   expect(verticalResizeTarget.screenDistance).toBeLessThanOrEqual(Math.SQRT1_2)
   await dragToWorldPoint(page, map, verticalHandle, verticalResizeTarget.point, true)
-  await expect(ring).toHaveAttribute('rx', '320')
+  await expect(ring).toHaveAttribute('rx', String(axisResizedHorizontalRadius))
   await expect(ring).toHaveAttribute('ry', String(verticalResizeTarget.radius))
   const axisResizedVerticalRadius = verticalResizeTarget.radius
 
@@ -485,7 +526,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   expect(deliveredResize.endScreenError).toBeLessThanOrEqual(Math.SQRT1_2)
   expect(globallyResizedHorizontalRadius).toBe(deliveredResize.horizontalRadius)
   expect(globallyResizedVerticalRadius).toBe(deliveredResize.verticalRadius)
-  expect(Math.abs(globallyResizedHorizontalRadius / 320
+  expect(Math.abs(globallyResizedHorizontalRadius / axisResizedHorizontalRadius
     - globallyResizedVerticalRadius / axisResizedVerticalRadius))
     .toBeLessThan(0.02)
   await expect.poll(() => ellipticalOrbitAngle(map, orbitLabel, 'Binary A'))

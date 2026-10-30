@@ -2,18 +2,27 @@
   <nav class="workspace-dock" role="toolbar" aria-label="Workspace navigation">
     <div class="workspace-dock-tools">
       <div class="workspace-dock-mode" role="group" aria-label="Map interaction mode">
-        <UButton
+        <UTooltip
           v-for="mode in modes"
           :key="mode.value"
-          color="neutral"
-          :variant="!addActive && store.mapMode === mode.value ? 'solid' : 'outline'"
-          size="sm"
-          :aria-pressed="!addActive && store.mapMode === mode.value"
-          class="workspace-control"
-          @click="commands.map.changeMode(mode.value)"
+          :text="`Shortcut ${mode.shortcut}: ${mode.label} map mode. Focus the map or a map item to use tool shortcuts.`"
+          :ui="shortcutTooltipUi"
         >
-          {{ mode.label }}
-        </UButton>
+          <UButton
+            color="neutral"
+            :variant="!addActive && store.mapMode === mode.value ? 'solid' : 'outline'"
+            size="sm"
+            :aria-pressed="!addActive && store.mapMode === mode.value"
+            :aria-label="mode.label"
+            :aria-keyshortcuts="mode.shortcut"
+            aria-describedby="workspace-map-tool-shortcut-help"
+            class="workspace-control"
+            @click="commands.map.changeMode(mode.value)"
+          >
+            <span>{{ mode.label }}</span>
+            <kbd class="workspace-shortcut-key" aria-hidden="true">{{ mode.shortcut }}</kbd>
+          </UButton>
+        </UTooltip>
       </div>
 
       <UPopover
@@ -25,31 +34,42 @@
           sideOffset: 8,
           collisionPadding: 12,
           avoidCollisions: true,
+          onOpenAutoFocus: focusFirstAddChoice,
           onEscapeKeyDown: consumeChooserEscape,
+          onCloseAutoFocus: restoreMapFocusAfterKeyboardAdd,
         }"
         :ui="{ content: 'workspace-add-popover-content' }"
       >
-        <UButton
-          class="workspace-control workspace-dock-add"
-          color="primary"
-          :variant="addActive ? 'solid' : 'outline'"
-          size="sm"
-          aria-label="Add to map"
-          aria-controls="workspace-add-menu"
-          :aria-describedby="props.creationSession || props.clusterAddLabel ? 'workspace-dock-add-type' : undefined"
-          :aria-expanded="addOpen"
-          :aria-pressed="addActive"
-          ref="addTrigger"
+        <UTooltip
+          text="Shortcut A: open the contextual Add chooser. Focus the map or a map item to use tool shortcuts."
+          :ui="shortcutTooltipUi"
         >
-          <UIcon name="i-lucide-plus" aria-hidden="true" />
-          <span>Add</span>
-          <span v-if="props.creationSession || props.clusterAddLabel" class="workspace-dock-add-separator" aria-hidden="true">·</span>
-          <span
-            v-if="props.creationSession || props.clusterAddLabel"
-            id="workspace-dock-add-type"
-            class="workspace-dock-add-type"
-          >{{ props.clusterAddLabel ?? props.creationTypeLabel }}</span>
-        </UButton>
+          <UButton
+            class="workspace-control workspace-dock-add"
+            color="primary"
+            :variant="addActive ? 'solid' : 'outline'"
+            size="sm"
+            aria-label="Add to map"
+            aria-controls="workspace-add-menu"
+            :aria-describedby="props.creationSession || props.clusterAddLabel
+              ? 'workspace-map-tool-shortcut-help workspace-dock-add-type'
+              : 'workspace-map-tool-shortcut-help'"
+            aria-keyshortcuts="A"
+            :aria-expanded="addOpen"
+            :aria-pressed="addActive"
+            ref="addTrigger"
+          >
+            <UIcon name="i-lucide-plus" aria-hidden="true" />
+            <span>Add</span>
+            <kbd class="workspace-shortcut-key" aria-hidden="true">A</kbd>
+            <span v-if="props.creationSession || props.clusterAddLabel" class="workspace-dock-add-separator" aria-hidden="true">·</span>
+            <span
+              v-if="props.creationSession || props.clusterAddLabel"
+              id="workspace-dock-add-type"
+              class="workspace-dock-add-type"
+            >{{ props.clusterAddLabel ?? props.creationTypeLabel }}</span>
+          </UButton>
+        </UTooltip>
         <template #content>
           <div
             id="workspace-add-menu"
@@ -110,12 +130,15 @@
         @confirm="emit('confirm-orbit-center-move', $event)"
         @cancel="emit('cancel-orbit-center-move')"
       />
+      <p id="workspace-map-tool-shortcut-help" class="sr-only" role="note">
+        Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
+      </p>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type {
@@ -188,21 +211,28 @@ const emit = defineEmits<{
   'cancel-unresolved-exit-move': []
   'begin-orbit-center-move': []
   'confirm-orbit-center-move': [token: number]
-  'cancel-orbit-center-move': []
+  'cancel-orbit-center-move': [],
+  'keyboard-add-escape': []
 }>()
 
 const store = useEditorUiStore()
 const commands = useEditorCommands()
 
-const modes: Array<{ value: MapInteractionMode; label: string }> = [
-  { value: 'select', label: 'Select' },
-  { value: 'navigate', label: 'Navigate' },
-  { value: 'move', label: 'Move' },
+const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string }> = [
+  { value: 'select', label: 'Select', shortcut: 'S' },
+  { value: 'navigate', label: 'Navigate', shortcut: 'N' },
+  { value: 'move', label: 'Move', shortcut: 'M' },
 ]
+const shortcutTooltipUi = {
+  content: 'workspace-map-shortcut-tooltip-content',
+  text: 'workspace-map-shortcut-tooltip-text',
+}
 const addActive = computed(() => !!(props.creationSession || props.clusterAddLabel))
 const addOpen = defineModel<boolean>('addOpen', { default: false })
 const addTrigger = ref<ComponentPublicInstance | null>(null)
 const addMenu = ref<HTMLElement | null>(null)
+let keyboardOpenedAddChooser = false
+let returnFocusToMapAfterClose = false
 
 type DismissedAddSequence = {
   pointerId: number | null
@@ -373,13 +403,54 @@ watch(() => [
 
 function closeAdd(): void {
   addOpen.value = false
+  keyboardOpenedAddChooser = false
 }
 
 function consumeChooserEscape(event: KeyboardEvent): void {
   event.preventDefault()
   event.stopPropagation()
+  returnFocusToMapAfterClose = keyboardOpenedAddChooser
   closeAdd()
 }
+
+function restoreMapFocusAfterKeyboardAdd(event: Event): void {
+  if (!returnFocusToMapAfterClose) return
+  returnFocusToMapAfterClose = false
+  const activeElement = document.activeElement
+  const focusStillBelongsToChooser = activeElement === document.body
+    || addTriggerElement()?.contains(activeElement) === true
+    || addMenu.value?.contains(activeElement) === true
+  event.preventDefault()
+  if (addOpen.value || !focusStillBelongsToChooser || !document.hasFocus()) return
+  emit('keyboard-add-escape')
+}
+
+function focusFirstAddChoice(event: Event): void {
+  if (!keyboardOpenedAddChooser || !addOpen.value || !addMenu.value) return
+  const firstChoice = addMenu.value.querySelector<HTMLElement>('.object-palette-items button:not(:disabled)')
+    ?? addMenu.value.querySelector<HTMLElement>('button:not(:disabled)')
+  if (!firstChoice) return
+  event.preventDefault()
+  firstChoice.focus({ preventScroll: true })
+}
+
+function openAddChooserFromKeyboard(): void {
+  const focusOwner = document.activeElement
+  keyboardOpenedAddChooser = true
+  returnFocusToMapAfterClose = false
+  addOpen.value = true
+  void nextTick(() => {
+    if (!addOpen.value || !keyboardOpenedAddChooser || !addMenu.value || !document.hasFocus()) return
+    const activeElement = document.activeElement
+    const focusStillBelongsToMapOrChooser = activeElement === focusOwner || addMenu.value.contains(activeElement)
+    if (!focusStillBelongsToMapOrChooser) return
+    const firstChoice = addMenu.value.querySelector<HTMLElement>('.object-palette-items button:not(:disabled)')
+      ?? addMenu.value.querySelector<HTMLElement>('button:not(:disabled)')
+    firstChoice?.focus({ preventScroll: true })
+  })
+}
+
+defineExpose({ openAddChooserFromKeyboard })
 </script>
 
 <style scoped>
@@ -397,6 +468,40 @@ function consumeChooserEscape(event: KeyboardEvent): void {
 
 .workspace-dock-mode {
   flex-wrap: wrap;
+}
+
+:deep(.workspace-dock-mode > button) {
+  gap: 0.4rem;
+}
+
+.workspace-shortcut-key {
+  display: inline-flex;
+  min-width: 1.1rem;
+  min-height: 1.1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.2rem;
+  padding: 0 0.2rem;
+  background: var(--panel-raised);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+:global(.workspace-map-shortcut-tooltip-content) {
+  box-sizing: border-box;
+  height: auto;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+:global(.workspace-map-shortcut-tooltip-text) {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .workspace-dock-add {

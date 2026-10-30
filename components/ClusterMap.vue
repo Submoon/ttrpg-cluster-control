@@ -1,5 +1,10 @@
 <template>
   <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <p id="cluster-map-keyboard-help" class="sr-only">
+      {{ moveTargeting
+        ? 'Choose a destination with a click or use the arrow keys to adjust the movement preview.'
+        : 'Focus this map and use the arrow keys to pan. Focus a map item to use its keyboard controls.' }}
+    </p>
     <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
       <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= minimumZoomScale * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
@@ -13,9 +18,7 @@
       viewBox="0 0 960 560"
       role="group"
       :aria-label="`${cluster.name} Jump Cluster map`"
-      :aria-description="moveTargeting
-        ? 'Choose a destination with a click or use the arrow keys to adjust the movement preview.'
-        : 'Focus this map and use the arrow keys to pan. Focus a map item to use its keyboard controls.'"
+      aria-describedby="workspace-map-tool-shortcut-help cluster-map-keyboard-help"
       tabindex="0"
       @touchstart.capture="startTouchNavigation"
       @keydown="activateClusterTargetFromKeyboard"
