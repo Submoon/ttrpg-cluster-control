@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { expectPaletteOptionActive } from './scenarios/search-palette'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
   clickDockAction,
@@ -63,9 +64,9 @@ test('a system result can be searched without changing the map and deliberately 
 
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
   await expect(searchDialog).toBeVisible()
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Vesper')
-  const systemResult = searchDialog.getByRole('button', { name: /Vesper.*Star system.*Kestrel Reach/i })
+  const systemResult = searchDialog.getByRole('option', { name: /Vesper.*Star system.*Kestrel Reach/i })
   await expect(systemResult).toBeVisible()
   await expect(systemContent).toHaveAttribute('transform', systemViewport)
   const resultsScreenshot = testInfo.outputPath('search-system-results-desktop.png')
@@ -105,9 +106,9 @@ test('keyboard search keeps composition in the input, returns focus on Escape, a
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Vesper')
-  const systemResult = searchDialog.getByRole('button', { name: /Vesper.*Star system.*Kestrel Reach/i })
+  const systemResult = searchDialog.getByRole('option', { name: /Vesper.*Star system.*Kestrel Reach/i })
   await expect(systemResult).toBeVisible()
 
   await query.evaluate(input => {
@@ -126,7 +127,7 @@ test('keyboard search keeps composition in the input, returns focus on Escape, a
   await searchButton.click()
   await expect(query).toHaveValue('Vesper')
   await query.press('ArrowDown')
-  await expect(systemResult).toBeFocused()
+  await expectPaletteOptionActive(query, systemResult)
   await systemResult.press('Enter')
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
@@ -147,17 +148,17 @@ test('compact short-landscape search keeps imported homonyms distinct and makes 
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await expect(searchDialog).toBeVisible()
   await query.fill('Vesper')
 
-  const results = searchDialog.locator('#workspace-search-results')
-  const resultButtons = results.getByRole('button')
-  await expect(resultButtons).toHaveCount(13)
-  await expect(resultButtons.first()).toHaveAccessibleName(/Vesper.*Star System.*Jump Cluster: Kestrel Reach.*occurrence 1/i)
-  await expect(resultButtons.last()).toHaveAccessibleName(/Vesper.*Star System.*Jump Cluster: Kestrel Reach.*occurrence 13/i)
-  await expect(resultButtons.first()).toContainText('Star System')
-  await expect(resultButtons.first()).toContainText('Jump Cluster: Kestrel Reach')
+  const results = searchDialog.getByRole('listbox')
+  const resultOptions = results.getByRole('option')
+  await expect(resultOptions).toHaveCount(13)
+  await expect(resultOptions.first()).toHaveAccessibleName(/Vesper.*Star System.*Jump Cluster: Kestrel Reach.*occurrence 1/i)
+  await expect(resultOptions.last()).toHaveAccessibleName(/Vesper.*Star System.*Jump Cluster: Kestrel Reach.*occurrence 13/i)
+  await expect(resultOptions.first()).toContainText('Star System')
+  await expect(resultOptions.first()).toContainText('Jump Cluster: Kestrel Reach')
 
   const searchBounds = await searchDialog.boundingBox()
   const inputBounds = await query.boundingBox()
@@ -173,10 +174,10 @@ test('compact short-landscape search keeps imported homonyms distinct and makes 
   await testInfo.attach('search-homonyms-compact-short-landscape', { path: screenshotPath, contentType: 'image/png' })
 
   await query.press('ArrowDown')
-  await expect(resultButtons.first()).toBeFocused()
+  await expectPaletteOptionActive(query, resultOptions.first())
   await page.keyboard.press('End')
-  await expect(resultButtons.last()).toBeFocused()
-  await expect(resultButtons.last()).toBeInViewport()
+  await expectPaletteOptionActive(query, resultOptions.last())
+  await expect(resultOptions.last()).toBeInViewport()
 
   await query.fill('no such chart')
   await expect(searchDialog.getByRole('status')).toContainText('No matches for')
@@ -202,9 +203,9 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Kestrel')
-  const clusterResult = searchDialog.getByRole('button', { name: /Kestrel Reach.*Jump Cluster.*Current workspace/i })
+  const clusterResult = searchDialog.getByRole('option', { name: /Kestrel Reach.*Jump Cluster.*Current workspace/i })
   await clusterResult.click()
 
   let guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
@@ -275,13 +276,13 @@ test('portrait touch search keeps controls in view and reveals a framed system',
 
     await tapVisibleTarget(cdp, searchButton)
     const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-    const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+    const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
     await expect(query).toBeVisible()
     const queryBounds = await query.boundingBox()
     if (!queryBounds) throw new Error('The portrait search input has no visible bounds.')
     expect(queryBounds.y + queryBounds.height).toBeLessThanOrEqual(844)
     await query.fill('Vesper')
-    const result = searchDialog.getByRole('button', { name: /Vesper.*Star System.*Kestrel Reach/i })
+    const result = searchDialog.getByRole('option', { name: /Vesper.*Star System.*Kestrel Reach/i })
     await expect(result).toBeVisible()
 
     const resultScreenshot = testInfo.outputPath('search-portrait-touch-results.png')
@@ -314,7 +315,7 @@ test('portrait touch search keeps controls in view and reveals a framed system',
   }
 })
 
-test('Delete on a focused Search result does not open a deletion review', async ({ page }) => {
+test('Delete while a Search option is active does not open a deletion review', async ({ page }) => {
   await createSingleSystemWorkspace(page)
 
   const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
@@ -322,16 +323,107 @@ test('Delete on a focused Search result does not open a deletion review', async 
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Vesper')
-  const result = searchDialog.getByRole('button', { name: /Vesper.*Star System.*Kestrel Reach/i })
+  const result = searchDialog.getByRole('option', { name: /Vesper.*Star System.*Kestrel Reach/i })
   await expect(result).toBeVisible()
   await query.press('ArrowDown')
-  await expect(result).toBeFocused()
+  await expectPaletteOptionActive(query, result)
 
   await page.keyboard.press('Delete')
 
   await expect(page.getByRole('dialog', { name: 'Review deletion', exact: true })).toHaveCount(0)
+})
+
+test('Palette editing retains native caret and IME behavior while shielding map shortcuts', async ({ page }) => {
+  await createSingleSystemWorkspace(page)
+  const selectMode = page.locator('.workspace-dock-mode button[aria-label="Select"]')
+  const addButton = page.locator('.workspace-dock-add')
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+  await searchButton.click()
+
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
+  await query.fill('Vesper')
+  await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    input.setSelectionRange(3, 3)
+  })
+  await query.press('Home')
+  expect(await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    return input.selectionStart
+  })).toBe(0)
+  await query.press('End')
+  expect(await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    return input.selectionStart
+  })).toBe('Vesper'.length)
+
+  const resultOptions = searchDialog.getByRole('listbox').getByRole('option')
+  await expect(resultOptions.first()).toBeVisible()
+  await query.press('ArrowDown')
+  await expectPaletteOptionActive(query, resultOptions.first())
+  await query.press('End')
+  await expectPaletteOptionActive(query, resultOptions.last())
+  await query.press('Home')
+  await expectPaletteOptionActive(query, resultOptions.first())
+  await query.press('ArrowUp')
+  await expect(query).toBeFocused()
+  await query.press('End')
+  expect(await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    return input.selectionStart
+  })).toBe('Vesper'.length)
+
+  const composingEnter = await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    })
+    input.dispatchEvent(event)
+    return { defaultPrevented: event.defaultPrevented, value: input.value }
+  })
+  expect(composingEnter).toEqual({ defaultPrevented: false, value: 'Vesper' })
+  await expect(searchDialog).toBeVisible()
+  await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }))
+  })
+
+  await query.press('Control+A')
+  for (const key of ['n', 's', 'm', 'a']) await query.press(key)
+  await expect(query).toHaveValue('nsma')
+  await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
+  await expect(addButton).toHaveAttribute('aria-expanded', 'false')
+  await expect(searchDialog).toBeVisible()
+
+  const composingEscape = await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    })
+    input.dispatchEvent(event)
+    return { defaultPrevented: event.defaultPrevented, value: input.value }
+  })
+  expect(composingEscape).toEqual({ defaultPrevented: false, value: 'nsma' })
+  await expect(searchDialog).toBeVisible()
+  await query.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) throw new Error('The Palette combobox is not a native input.')
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }))
+  })
+
+  await page.keyboard.press('Escape')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(searchButton).toBeFocused()
 })
 
 test('revealing a system from armed Cluster Add cannot place a system on the map', async ({ page }) => {
@@ -346,9 +438,9 @@ test('revealing a system from armed Cluster Add cannot place a system on the map
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Vesper')
-  const result = searchDialog.getByRole('button', { name: /Vesper.*Star System.*Kestrel Reach/i })
+  const result = searchDialog.getByRole('option', { name: /Vesper.*Star System.*Kestrel Reach/i })
   await expect(result).toBeVisible()
   await result.click()
 

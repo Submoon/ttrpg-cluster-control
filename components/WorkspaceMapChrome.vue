@@ -1,12 +1,14 @@
 <template>
-  <nav
+  <UDashboardToolbar
     v-if="workspace"
+    as="nav"
     class="workspace-map-chrome"
+    :ui="{ left: 'workspace-map-context', right: 'workspace-map-actions' }"
     aria-label="Map context and commands"
     data-map-obstruction
     :inert="props.compactModalOpen ? true : undefined"
   >
-    <div class="workspace-map-context">
+    <template #left>
       <div class="workspace-map-context-line">
         <div class="workspace-map-title">
           <UButton
@@ -76,9 +78,9 @@
       <p v-else-if="props.clusterMovePresentation?.error" class="workspace-add-error" role="alert">
         {{ props.clusterMovePresentation.error }}
       </p>
-    </div>
+    </template>
 
-    <div class="workspace-map-actions">
+    <template #right>
       <slot name="history" />
       <WorkspaceSearch
         ref="workspaceSearch"
@@ -232,8 +234,8 @@
           </div>
         </template>
       </UPopover>
-    </div>
-  </nav>
+    </template>
+  </UDashboardToolbar>
 </template>
 
 <script setup lang="ts">
@@ -350,12 +352,13 @@ defineExpose({ whenSearchClosingFocusSettled })
 </script>
 
 <style scoped>
-.workspace-map-chrome {
+:global(.workspace-map-chrome) {
   position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 0.65rem;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 0.35rem;
   padding: 0.5rem 0.65rem;
@@ -363,7 +366,7 @@ defineExpose({ whenSearchClosingFocusSettled })
   color: var(--text-primary);
 }
 
-.workspace-map-context {
+:global(.workspace-map-chrome .workspace-map-context) {
   display: grid;
   min-width: 0;
   flex: 1 1 9rem;
@@ -379,7 +382,7 @@ defineExpose({ whenSearchClosingFocusSettled })
   text-transform: uppercase;
 }
 
-.workspace-map-context h2 {
+:global(.workspace-map-chrome .workspace-map-context h2) {
   min-width: 0;
   max-width: min(32vw, 28rem);
   flex: 0 1 auto;
@@ -432,7 +435,7 @@ defineExpose({ whenSearchClosingFocusSettled })
   overflow-wrap: anywhere;
 }
 
-.workspace-map-actions,
+:global(.workspace-map-chrome .workspace-map-actions),
 .workspace-map-panel-actions {
   display: flex;
   min-width: 0;
@@ -441,7 +444,7 @@ defineExpose({ whenSearchClosingFocusSettled })
   gap: 0.3rem;
 }
 
-.workspace-map-actions {
+:global(.workspace-map-chrome .workspace-map-actions) {
   justify-content: flex-end;
 }
 
@@ -504,22 +507,22 @@ defineExpose({ whenSearchClosingFocusSettled })
 }
 
 @media (max-width: 760px), (max-height: 600px) {
-  .workspace-map-chrome {
+  :global(.workspace-map-chrome) {
     flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0.4rem 0.5rem;
   }
 
-  .workspace-map-context {
+  :global(.workspace-map-chrome .workspace-map-context) {
     flex: 1 1 8rem;
   }
 
-  .workspace-map-context h2 {
+  :global(.workspace-map-chrome .workspace-map-context h2) {
     max-width: min(52vw, 20rem);
     font-size: 0.9rem;
   }
 
-  .workspace-map-actions {
+  :global(.workspace-map-chrome .workspace-map-actions) {
     width: 100%;
     justify-content: space-between;
   }

@@ -147,7 +147,7 @@ test('mobile Fields retains an unsaved native-field draft across Back, hide, the
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   const hierarchy = page.getByRole('dialog', { name: 'System hierarchy' })
   await expect(hierarchy).toBeVisible()
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   const manageFields = page.getByRole('button', { name: 'Manage field definitions' })
   await expect(manageFields).toBeVisible()
   await manageFields.click()
@@ -346,7 +346,7 @@ test('a type-change review names exact impacts and refreshes after Inspector res
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   const hierarchy = page.getByRole('dialog', { name: 'System hierarchy' })
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   const inspector = page.getByRole('dialog', { name: 'Object inspector' })
   await expect(inspector).toBeVisible()
 

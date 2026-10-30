@@ -122,7 +122,7 @@ test('History displays its retained limit, scrolls without moving, and resets af
   const restoredMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
   await expect(restoredMap).toBeVisible()
   const restoredHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await restoredHierarchy.getByRole('button', { name: new RegExp(`^${orbitLabel}`) }).click()
+  await restoredHierarchy.getByRole('treeitem', { name: new RegExp(`^${orbitLabel}`) }).click()
   if (await hierarchyClose.isVisible()) await hierarchyClose.click()
   await setWorkspaceMapMode(page, 'Move')
   const restoredOrbit = restoredMap.getByRole('group', { name: orbitLabel, exact: true })

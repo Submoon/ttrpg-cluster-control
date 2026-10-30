@@ -284,7 +284,7 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   await createSingleSystemWorkspace(page)
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await addCatalogueObject(page, 'planet', {
     target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },

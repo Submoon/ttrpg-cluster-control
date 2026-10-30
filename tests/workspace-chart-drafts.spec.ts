@@ -974,7 +974,7 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
       await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
       await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
-      await hierarchy.getByRole('button', { name: /Select PL-01, New planet 1/ }).click()
+      await hierarchy.getByRole('treeitem', { name: /Select PL-01, New planet 1/ }).click()
       await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-expanded', 'false')
       await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
       await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'New planet 1' } })
@@ -999,9 +999,9 @@ for (const selectionKind of ['object', 'orbit', 'route'] as const) {
 
       let target: import('@playwright/test').Locator
       if (selectionKind === 'object') {
-        target = hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true })
+        target = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true })
       } else if (selectionKind === 'orbit') {
-        target = hierarchy.getByRole('button', { name: /Orbit 1 around New planet 1/ })
+        target = hierarchy.getByRole('treeitem', { name: /Orbit 1 around New planet 1/ })
       } else {
         target = page.getByRole('navigation', { name: 'Jump Routes' })
           .getByRole('button', { name: /Select Jump Level 1:/ })

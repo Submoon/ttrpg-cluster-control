@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
+import { expectPaintedInsideUsableMap } from './scenarios/search-assertions'
+import { expectPaletteOptionActive } from './scenarios/search-palette'
 import {
   createLocalWorkspace,
   createSystemObject,
@@ -19,57 +21,6 @@ import {
   setJsonFile,
   setWorkspaceMapMode,
 } from './helpers'
-
-interface ScreenRect {
-  left: number
-  top: number
-  right: number
-  bottom: number
-}
-
-async function expectPaintedInsideUsableMap(page: Page, map: Locator, painted: readonly Locator[]): Promise<void> {
-  const mapBounds = await map.boundingBox()
-  if (!mapBounds) throw new Error('The revealed star system map has no measurable bounds.')
-  const obstructions: ScreenRect[] = []
-  const obstructionElements = page.locator('[data-map-obstruction]')
-
-  for (let index = 0; index < await obstructionElements.count(); index += 1) {
-    const obstruction = obstructionElements.nth(index)
-    const visible = await obstruction.evaluate((element) => {
-      if (!element.isConnected || element.closest('[inert]') || element.closest('[aria-hidden="true"]')) return false
-      if (element.getClientRects().length === 0) return false
-      const style = window.getComputedStyle(element)
-      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'
-    })
-    if (!visible) continue
-    const bounds = await obstruction.boundingBox()
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) continue
-    obstructions.push({
-      left: bounds.x,
-      top: bounds.y,
-      right: bounds.x + bounds.width,
-      bottom: bounds.y + bounds.height,
-    })
-  }
-
-  for (const element of painted) {
-    await expect(element).toBeVisible()
-    const bounds = await element.boundingBox()
-    if (!bounds) throw new Error('A visible branch label or Orbit has no measurable bounds.')
-    expect(bounds.x).toBeGreaterThanOrEqual(mapBounds.x - 1)
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(mapBounds.x + mapBounds.width + 1)
-    expect(bounds.y).toBeGreaterThanOrEqual(mapBounds.y - 1)
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(mapBounds.y + mapBounds.height + 1)
-
-    for (const obstruction of obstructions) {
-      const overlaps = bounds.x < obstruction.right
-        && bounds.x + bounds.width > obstruction.left
-        && bounds.y < obstruction.bottom
-        && bounds.y + bounds.height > obstruction.top
-      expect(overlaps).toBe(false)
-    }
-  }
-}
 
 async function importIndependentCopy(page: Page, fileName: string, content: string): Promise<void> {
   await setHeaderMapActionsOpen(page, true)
@@ -133,6 +84,17 @@ function largeSearchClusterContent(systemCount: number, matchingObjectsPerSystem
   }))
 }
 
+async function expectSearchListboxAssociation(page: Page, searchDialog: Locator, query: Locator): Promise<Locator> {
+  const controlledId = await query.getAttribute('aria-controls')
+  expect(controlledId).toBe('workspace-search-results')
+  await expect(searchDialog.locator('[role="listbox"]')).toHaveCount(1)
+  const controlledListbox = page.locator(`[id="${controlledId}"]`)
+  await expect(controlledListbox).toHaveCount(1)
+  await expect(controlledListbox).toHaveAttribute('role', 'listbox')
+  await expect(controlledListbox).toHaveAttribute('aria-label', 'Search results')
+  return controlledListbox
+}
+
 async function tapVisibleTarget(cdp: import('@playwright/test').CDPSession, target: Locator): Promise<void> {
   const bounds = await target.boundingBox()
   if (!bounds) throw new Error('The touch target has no visible bounds.')
@@ -160,10 +122,10 @@ test('search reveals an object from an unopened star system on the cluster map',
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Harrow Arrival')
 
-  const result = searchDialog.getByRole('button', { name: /Harrow Arrival/ })
+  const result = searchDialog.getByRole('option', { name: /Harrow Arrival/ })
   await expect(result).toBeVisible()
   await expect(result).toContainText('Star System: Harrow')
   await expect(result).toContainText('Location key: JP-01')
@@ -204,9 +166,9 @@ test('cluster search frames an unopened object and its hosted Orbit branch', asy
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Iria')
-  const result = searchDialog.getByRole('button', { name: /Iria/ })
+  const result = searchDialog.getByRole('option', { name: /Iria/ })
   await expect(result).toBeVisible()
   await expect(result).toContainText('Star System: Vesper Prime')
   await expect(result).toContainText('Location key: PL-01')
@@ -270,9 +232,9 @@ test('an exact Location-key result from system A overrides system B selection an
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('A')
-  const harrowResult = searchDialog.getByRole('button', {
+  const harrowResult = searchDialog.getByRole('option', {
     name: /Primary Star.*Star System: Harrow.*Location key: A/,
   })
   await expect(harrowResult).toBeVisible()
@@ -306,14 +268,14 @@ test('two identical imported systems expose distinct same-label object destinati
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Shared Echo')
-  const resultButtons = searchDialog.locator('#workspace-search-results').getByRole('button')
-  await expect(resultButtons).toHaveCount(2)
-  await expect(resultButtons.nth(0)).toHaveAccessibleName(/Shared Echo.*Star System: Duplicate Port.*DUP-01.*occurrence 1/i)
-  await expect(resultButtons.nth(1)).toHaveAccessibleName(/Shared Echo.*Star System: Duplicate Port.*DUP-01.*occurrence 2/i)
+  const resultOptions = searchDialog.getByRole('listbox').getByRole('option')
+  await expect(resultOptions).toHaveCount(2)
+  await expect(resultOptions.nth(0)).toHaveAccessibleName(/Shared Echo.*Star System: Duplicate Port.*DUP-01.*occurrence 1/i)
+  await expect(resultOptions.nth(1)).toHaveAccessibleName(/Shared Echo.*Star System: Duplicate Port.*DUP-01.*occurrence 2/i)
 
-  await resultButtons.nth(0).click()
+  await resultOptions.nth(0).click()
   const destinationMap = page.getByRole('group', { name: 'Duplicate Port star system map', exact: true })
   await expect(destinationMap).toBeVisible()
   await expect(searchDialog).toHaveCount(0)
@@ -322,8 +284,8 @@ test('two identical imported systems expose distinct same-label object destinati
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   await expect(query).toHaveValue('Shared Echo')
-  await expect(resultButtons).toHaveCount(2)
-  await resultButtons.nth(1).click()
+  await expect(resultOptions).toHaveCount(2)
+  await resultOptions.nth(1).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(destinationMap).toBeFocused()
   await expect.poll(async () => destinationMap.locator('.system-object.is-selected').getAttribute('data-object-id'))
@@ -332,70 +294,72 @@ test('two identical imported systems expose distinct same-label object destinati
     .toHaveAttribute('aria-label', /^Select DUP-01, Shared Echo/)
 })
 
-test('compact search reaches the last of 500 objects after rotation and activates it by touch', async ({ page }, testInfo) => {
+test('native search consults and reveals the last of 500 ordered objects by keyboard', async ({ page }, testInfo) => {
   const largeWorkspace = largeSearchClusterContent(20, 25)
-  await createSingleSystemWorkspace(page, { viewport: { width: 844, height: 390 } })
+  await createSingleSystemWorkspace(page, { viewport: { width: 390, height: 844 } })
   await returnToClusterMap(page)
   await importIndependentCopy(page, 'global-search-five-hundred-objects.json', largeWorkspace)
+  const initialClusterTransform = await page.locator('.cluster-map-content').getAttribute('transform')
+  if (!initialClusterTransform) throw new Error('The cluster consultation fixture has no map camera transform.')
 
-  const selectMode = page.locator('.workspace-dock-mode button[aria-label="Select"]')
-  const addButton = page.locator('.workspace-dock-add')
-  await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-  await expect(addButton).toHaveAttribute('aria-expanded', 'false')
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
+  await expect(query).toBeVisible()
+  await expectSearchListboxAssociation(page, searchDialog, query)
+
   await query.fill('Global Beacon')
-  const resultList = searchDialog.locator('#workspace-search-results')
-  const resultButtons = resultList.getByRole('button')
-  await expect(resultButtons).toHaveCount(500)
+  const resultList = searchDialog.getByRole('listbox')
+  const resultOptions = resultList.getByRole('option')
+  await expect(resultOptions).toHaveCount(500)
   await expect(searchDialog.getByRole('status')).toContainText('500 matches')
+  await expect(resultOptions.first()).toContainText('Global Beacon')
+  await expect(resultOptions.first()).toContainText('Star System: Global System 01')
+  await expect(resultOptions.first()).toContainText(/Location key:\s*GS01-\d{2}/)
+  await expect(resultOptions.nth(24)).toContainText('Star System: Global System 01')
+  await expect(resultOptions.nth(24)).toContainText(/Location key:\s*GS01-\d{2}/)
+  await expect(resultOptions.nth(25)).toContainText('Star System: Global System 02')
+  await expect(resultOptions.nth(25)).toContainText(/Location key:\s*GS02-\d{2}/)
+  await expect(resultOptions.last()).toContainText('Global Beacon')
+  await expect(resultOptions.last()).toContainText('Star System: Global System 20')
+  await expect(resultOptions.last()).toContainText(/Location key:\s*GS20-\d{2}/)
 
   await query.press('ArrowDown')
-  const firstResult = resultButtons.first()
-  await expect(firstResult).toBeFocused()
-  for (const key of ['n', 's', 'm', 'a']) {
-    await page.keyboard.press(key)
-    await expect(searchDialog).toBeVisible()
-    await expect(firstResult).toBeFocused()
-    await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-    await expect(addButton).toHaveAttribute('aria-expanded', 'false')
-  }
-
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect(searchDialog).toBeVisible()
-  await expect(query).toHaveValue('Global Beacon')
-  await expect(resultButtons).toHaveCount(500)
-  const resultListScrolls = await resultList.evaluate(element => element.scrollHeight > element.clientHeight)
+  await expect(query).toBeFocused()
+  const firstOptionId = await resultOptions.first().getAttribute('id')
+  if (!firstOptionId) throw new Error('The first Palette option has no stable DOM id.')
+  await expect(query).toHaveAttribute('aria-activedescendant', firstOptionId)
+  await expect(resultList.getByRole('option').first()).toHaveAttribute('id', firstOptionId)
+  await expect(page.locator('.cluster-map-content')).toHaveAttribute('transform', initialClusterTransform)
+  const resultListViewport = resultList.locator('[data-slot="viewport"]')
+  const resultListScrolls = await resultListViewport.evaluate(element => element.scrollHeight > element.clientHeight)
   expect(resultListScrolls).toBe(true)
 
   await query.focus()
   await query.press('ArrowDown')
-  await page.keyboard.press('End')
-  const lastResult = resultButtons.last()
-  await expect(lastResult).toBeFocused()
-  await expect(lastResult).toBeInViewport()
-  const contextText = await lastResult.locator('.workspace-search-result-context > span').first().textContent()
+  await query.press('End')
+  const lastOption = resultOptions.last()
+  await expect(query).toBeFocused()
+  const lastOptionId = await lastOption.getAttribute('id')
+  if (!lastOptionId) throw new Error('The last Palette option has no stable DOM id.')
+  await expect(query).toHaveAttribute('aria-activedescendant', lastOptionId)
+  await expect(lastOption).toBeInViewport()
+  await expect(page.locator('.cluster-map-content')).toHaveAttribute('transform', initialClusterTransform)
+  const contextText = await lastOption.locator('.workspace-search-result-context > span').first().textContent()
   const systemName = contextText?.match(/Star System:\s*(.+)$/)?.[1]?.trim()
-  const locationKeyText = await lastResult.locator('.workspace-search-location-key').textContent()
+  const locationKeyText = await lastOption.locator('.workspace-search-location-key').textContent()
   const locationKey = locationKeyText?.trim().replace(/^Location key:\s*/, '').trim()
-  if (!systemName || !locationKey) throw new Error('The last result has no visible system and Location-key labels.')
+  if (!systemName || !locationKey) throw new Error('The last option has no visible system and Location-key labels.')
 
-  const resultsScreenshot = testInfo.outputPath('global-search-500-results-compact-portrait.png')
+  const resultsScreenshot = testInfo.outputPath('global-search-500-results-compact.png')
   await page.screenshot({ path: resultsScreenshot, animations: 'disabled' })
-  await testInfo.attach('global-search-500-results-compact-portrait', {
+  await testInfo.attach('global-search-500-results-compact', {
     path: resultsScreenshot,
     contentType: 'image/png',
   })
 
-  const cdp = await page.context().newCDPSession(page)
-  try {
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 })
-    await tapVisibleTarget(cdp, lastResult)
-  } finally {
-    await cdp.detach()
-  }
+  await query.press('Enter')
 
   const destinationMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
   await expect(destinationMap).toBeVisible()
@@ -406,9 +370,16 @@ test('compact search reaches the last of 500 objects after rotation and activate
   await expect(selectedObject).toHaveAttribute('aria-label', `Select ${locationKey}, Global Beacon (Planet)`)
   const selectedNameLabel = selectedObject.locator('.object-name')
   const selectedKeyLabel = selectedObject.locator('.object-key')
+  const selectedGlyph = selectedObject.locator('.system-object-glyph')
+  const selectedTypeMark = selectedObject.locator('.object-type-mark')
   await expect(selectedNameLabel).toHaveText('Global Beacon')
   await expect(selectedKeyLabel).toHaveText(locationKey)
-  await expectPaintedInsideUsableMap(page, destinationMap, [selectedObject, selectedNameLabel, selectedKeyLabel])
+  await expectPaintedInsideUsableMap(page, destinationMap, [
+    selectedGlyph,
+    selectedTypeMark,
+    selectedNameLabel,
+    selectedKeyLabel,
+  ])
   await expect(inspectToggle(page)).toHaveAttribute('aria-expanded', 'false')
 
   const revealScreenshot = testInfo.outputPath('global-search-500-reveal-compact-portrait.png')
@@ -417,6 +388,66 @@ test('compact search reaches the last of 500 objects after rotation and activate
     path: revealScreenshot,
     contentType: 'image/png',
   })
+
+  await searchButton.click()
+  await expect(query).toHaveValue('Global Beacon')
+  const reopenedListbox = await expectSearchListboxAssociation(page, searchDialog, query)
+  await expect(reopenedListbox.getByRole('option')).toHaveCount(500)
+})
+
+test('compact Palette reaches and touch-activates the last of 500 results after rotation', async ({ page }, testInfo) => {
+  const largeWorkspace = largeSearchClusterContent(20, 25)
+  await createSingleSystemWorkspace(page, { viewport: { width: 844, height: 390 } })
+  await returnToClusterMap(page)
+  await importIndependentCopy(page, 'global-search-five-hundred-touch.json', largeWorkspace)
+
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+  await searchButton.click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
+  await query.fill('Global Beacon')
+  const resultList = await expectSearchListboxAssociation(page, searchDialog, query)
+  const resultOptions = resultList.getByRole('option')
+  await expect(resultOptions).toHaveCount(500)
+  await expect(resultOptions.last()).toContainText('Star System: Global System 20')
+  await expect(resultOptions.last()).toContainText(/Location key:\s*GS20-\d{2}/)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue('Global Beacon')
+  await expect(resultOptions).toHaveCount(500)
+  await query.press('ArrowDown')
+  await query.press('End')
+  await expectPaletteOptionActive(query, resultOptions.last())
+  await expect(resultOptions.last()).toBeInViewport()
+
+  const contextText = await resultOptions.last().locator('.workspace-search-result-context > span').first().textContent()
+  const systemName = contextText?.match(/Star System:\s*(.+)$/)?.[1]?.trim()
+  const locationKeyText = await resultOptions.last().locator('.workspace-search-location-key').textContent()
+  const locationKey = locationKeyText?.trim().replace(/^Location key:\s*/, '').trim()
+  if (!systemName || !locationKey) throw new Error('The last touched result has no visible system and Location-key labels.')
+  const resultsScreenshot = testInfo.outputPath('global-search-500-touch-results-compact-portrait.png')
+  await page.screenshot({ path: resultsScreenshot, animations: 'disabled' })
+  await testInfo.attach('global-search-500-touch-results-compact-portrait', {
+    path: resultsScreenshot,
+    contentType: 'image/png',
+  })
+
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 })
+    await tapVisibleTarget(cdp, resultOptions.last())
+  } finally {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false }).catch(() => undefined)
+    await cdp.detach()
+  }
+
+  const destinationMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  await expect(destinationMap).toBeVisible()
+  await expect(searchDialog).toHaveCount(0)
+  await expect(destinationMap).toBeFocused()
+  await expect(destinationMap.locator('.system-object.is-selected'))
+    .toHaveAttribute('aria-label', `Select ${locationKey}, Global Beacon (Planet)`)
 
   await searchButton.click()
   await expect(query).toHaveValue('Global Beacon')

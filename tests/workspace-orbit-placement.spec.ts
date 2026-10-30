@@ -188,11 +188,11 @@ test('an unoccupied Orbit previews attachment safely and applies with the new ho
   }
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around Primary Star, 2 objects', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around Primary Star, 2 objects', exact: true }).click()
   await expect(inspector.getByRole('button', { name: 'Detach Orbit', exact: true })).toBeVisible()
   await expect(inspector.getByLabel('Host', { exact: true })).toHaveCount(0)
 
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   const host = inspector.getByLabel('Host', { exact: true })
   await expect(host).toBeVisible()
@@ -236,7 +236,7 @@ test('an unoccupied Orbit previews attachment safely and applies with the new ho
   await expectObjectPosition(map, nestedObject.id, originalNestedPosition)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
 
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await selectInspectorOption(inspector.getByLabel('Host', { exact: true }), 'A, Primary Star (Star)')
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
@@ -289,7 +289,7 @@ test('dragging an unoccupied Orbit center onto a host previews and commits attac
 
   const primaryPosition = await objectPosition(map, primary.id)
   const ring = map.locator(`.orbit-mark[data-orbit-id="${orbit.id}"] .orbit-ring`)
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
   await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -354,7 +354,7 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   const primaryPosition = await objectPosition(map, primary.id)
   expect(await objectPosition(map, overlappingHost.id)).toEqual(primaryPosition)
   const ring = map.locator(`.orbit-mark[data-orbit-id="${orbit.id}"] .orbit-ring`)
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
   await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -462,7 +462,7 @@ test('moving a free Orbit center to a nearby free point commits instead of treat
   const originalNestedPosition = await objectPosition(map, nestedObject.id)
   const target = { x: initialCenter.x + 20, y: initialCenter.y }
 
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
   await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -541,7 +541,7 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
   const hostPosition = await objectPosition(map, oldPlanet.id)
   const neighborPosition = await objectPosition(map, neighbor.id)
 
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
   await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })

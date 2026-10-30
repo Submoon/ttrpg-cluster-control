@@ -107,44 +107,74 @@
       <span class="subsection-label">OBJECTS / ORBITS</span>
       <span class="tree-count whitespace-nowrap">{{ hierarchyRows.length }} records</span>
     </div>
-    <nav class="object-tree grid gap-[0.1rem]" aria-label="Map object and Orbit hierarchy">
-      <p v-if="hierarchyRows.length === 0" class="empty-copy my-[0.65rem]">No objects charted yet.</p>
-      <template v-for="row in hierarchyRows" :key="row.kind === 'object' ? row.object.id : row.orbit.id">
-        <button
-          v-if="row.kind === 'object'"
-          class="tree-row object-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-          :class="{ active: row.object.id === store.selectedObjectId }"
-          type="button"
-          :style="{ paddingLeft: `${0.55 + row.depth * 0.8}rem` }"
-          :aria-label="`Select ${row.object.locationKey}, ${row.object.name}`"
-          :aria-current="row.object.id === store.selectedObjectId ? 'true' : undefined"
-          @click="commands.navigation.selectObject(row.object.id)"
+    <p v-if="hierarchyRows.length === 0" class="empty-copy my-[0.65rem]">No objects charted yet.</p>
+    <!-- @vue-generic {HierarchyTreeItem[]} -->
+    <UTree
+      v-else
+      :items="hierarchyItems"
+      :model-value="selectedHierarchyItem"
+      :expanded="expandedHierarchyKeys"
+      :get-key="getHierarchyItemKey"
+      label-key="label"
+      class="object-tree"
+      aria-label="Map object and Orbit hierarchy"
+      :ui="{ listWithChildren: 'border-s border-[var(--line-soft)]' }"
+      @update:expanded="updateExpandedHierarchyKeys"
+      @select="selectHierarchyItem"
+      @toggle="toggleHierarchyItem"
+      @keydown.capture="stopComposingTreeKeys"
+      @compositionstart="beginHierarchyComposition"
+      @compositionend="endHierarchyComposition"
+    >
+      <template #item-wrapper="{ item, expanded, selected, handleToggle, ui }">
+        <div
+          :class="ui.link({
+            class: [
+              'tree-row flex min-h-[2.55rem] w-full items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left',
+              item.kind === 'object' ? 'object-row' : 'orbit-row',
+              { active: selected },
+            ],
+            selected,
+          })"
+          :aria-label="item.ariaLabel"
+          :aria-current="selected ? 'true' : undefined"
         >
-          <span class="key-tag">{{ row.object.locationKey }}</span>
-          <span class="object-mark" aria-hidden="true">{{ objectMark(row.object) }}</span>
-          <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-            {{ row.object.name }}
-            <small class="mt-[0.18rem] block">{{ catalogueFamilyLabel(row.object.family) }} / {{ catalogueSubtypeLabel(row.object) }}</small>
-          </span>
-        </button>
-        <button
-          v-else
-          class="tree-row orbit-row flex min-h-[2.55rem] w-full cursor-pointer items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
-          :class="{ active: row.orbit.id === store.selectedOrbitId }"
-          type="button"
-          :style="{ paddingLeft: `${0.55 + row.depth * 0.8}rem` }"
-          :aria-label="`Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`"
-          :aria-current="row.orbit.id === store.selectedOrbitId ? 'true' : undefined"
-          @click="commands.navigation.selectOrbit(row.orbit.id)"
-        >
-          <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
-          <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-            Orbit {{ row.orbit.order }}
-            <small class="mt-[0.18rem] block">{{ row.host?.name ?? 'Unoccupied center' }} / {{ row.childCount }} object{{ row.childCount === 1 ? '' : 's' }}</small>
-          </span>
-        </button>
+          <template v-if="item.kind === 'object'">
+            <span class="key-tag shrink-0 whitespace-nowrap">{{ item.row.object.locationKey }}</span>
+            <span class="object-mark" aria-hidden="true">{{ objectMark(item.row.object) }}</span>
+            <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
+              {{ item.row.object.name }}
+              <small class="mt-[0.18rem] block">
+                {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
+              </small>
+            </span>
+          </template>
+          <template v-else>
+            <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
+            <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
+              Orbit {{ item.row.orbit.order }}
+              <small class="mt-[0.18rem] block">
+                {{ item.row.host?.name ?? 'Unoccupied center' }} / {{ item.row.childCount }} object{{ item.row.childCount === 1 ? '' : 's' }}
+              </small>
+            </span>
+          </template>
+          <UButton
+            v-if="item.children?.length"
+            class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :tabindex="-1"
+            :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+            :aria-expanded="expanded"
+            :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+            @click.stop="handleToggle"
+          >
+            <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+          </UButton>
+        </div>
       </template>
-    </nav>
+    </UTree>
     <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Choose Add Orbit from Add, then click the map to place it, or drag Orbit onto a map object to host it. Empty Orbits stay on the chart.</p>
   </template>
 </template>
@@ -153,15 +183,36 @@
 /**
  * Owns cluster navigation and projects nested objects/Orbits into a selectable hierarchy.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   type LocalWorkspace,
 } from '../domain/workspace'
 import { objectMark } from '../utils/catalogue-marks'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../utils/catalogue-labels'
-import { buildMapHierarchy } from '../utils/map-hierarchy'
+import {
+  buildMapHierarchy,
+  type MapHierarchyRow,
+  type ObjectHierarchyRow,
+  type OrbitHierarchyRow,
+} from '../utils/map-hierarchy'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
+
+interface HierarchyTreeItemBase {
+  key: string
+  label: string
+  textValue: string
+  ariaLabel: string
+  ancestorKeys: string[]
+  children?: HierarchyTreeItem[]
+  [key: string]: unknown
+}
+
+type HierarchyTreeItem = HierarchyTreeItemBase & (
+  | { kind: 'object'; row: ObjectHierarchyRow }
+  | { kind: 'orbit'; row: OrbitHierarchyRow }
+)
 
 const props = defineProps<{
   workspace: LocalWorkspace
@@ -180,6 +231,124 @@ const selectedSystem = computed(() =>
 )
 
 const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
+const hierarchyItems = computed(() => buildHierarchyTreeItems(hierarchyRows.value))
+const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
+const selectedHierarchyKey = computed(() => {
+  if (store.selectedObjectId) return `object:${store.selectedObjectId}`
+  if (store.selectedOrbitId) return `orbit:${store.selectedOrbitId}`
+  return ''
+})
+const selectedHierarchyItem = computed(() => flatHierarchyItems.value.find(item => item.key === selectedHierarchyKey.value))
+const selectedHierarchyPath = computed(() => selectedHierarchyItem.value?.ancestorKeys.join('\u001f') ?? '')
+const hierarchyIdentity = computed(() => JSON.stringify([
+  props.workspace.cluster.id,
+  selectedSystem.value?.id ?? null,
+]))
+const hierarchyBranchKeys = computed(() => flatHierarchyItems.value
+  .filter(item => item.children?.length)
+  .map(item => item.key))
+const expandedHierarchyKeys = ref<string[]>([])
+const isHierarchyComposing = ref(false)
+
+watch(hierarchyIdentity, () => {
+  expandedHierarchyKeys.value = hierarchyBranchKeys.value
+}, { immediate: true })
+
+watch(hierarchyBranchKeys, (keys, previousKeys) => {
+  const expanded = new Set(expandedHierarchyKeys.value)
+  const previouslyExpandable = new Set(previousKeys ?? [])
+  expandedHierarchyKeys.value = keys.filter(key => !previouslyExpandable.has(key) || expanded.has(key))
+}, { immediate: true })
+
+watch(
+  [hierarchyIdentity, selectedHierarchyKey, selectedHierarchyPath],
+  ([, selectedKey, selectedPath]) => {
+    if (!selectedKey || !selectedPath) return
+    const expanded = new Set(expandedHierarchyKeys.value)
+    for (const ancestorKey of selectedPath.split('\u001f')) expanded.add(ancestorKey)
+    expandedHierarchyKeys.value = [...expanded]
+  },
+  { immediate: true },
+)
+
+function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
+  const roots: HierarchyTreeItem[] = []
+  const parentsAtDepth: HierarchyTreeItem[] = []
+
+  for (const row of rows) {
+    const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : undefined
+    const ancestorKeys = parent ? [...parent.ancestorKeys, parent.key] : []
+    const item: HierarchyTreeItem = row.kind === 'object'
+      ? {
+          kind: 'object',
+          row,
+          key: `object:${row.object.id}`,
+          label: row.object.name,
+          textValue: row.object.name,
+          ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
+          ancestorKeys,
+        }
+      : {
+          kind: 'orbit',
+          row,
+          key: `orbit:${row.orbit.id}`,
+          label: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          textValue: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          ariaLabel: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          ancestorKeys,
+        }
+
+    if (parent) {
+      parent.children ??= []
+      parent.children.push(item)
+    } else {
+      roots.push(item)
+    }
+
+    parentsAtDepth[row.depth] = item
+    parentsAtDepth.length = row.depth + 1
+  }
+
+  return roots
+}
+
+function flattenHierarchyTreeItems(items: HierarchyTreeItem[], flattened: HierarchyTreeItem[] = []): HierarchyTreeItem[] {
+  for (const item of items) {
+    flattened.push(item)
+    if (item.children) flattenHierarchyTreeItems(item.children, flattened)
+  }
+  return flattened
+}
+
+function getHierarchyItemKey(item: HierarchyTreeItem): string {
+  return item.key
+}
+
+function updateExpandedHierarchyKeys(keys: string[]): void {
+  expandedHierarchyKeys.value = keys
+}
+
+function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
+  event.preventDefault()
+  if (item.kind === 'object') void commands.navigation.selectObject(item.row.object.id)
+  else void commands.navigation.selectOrbit(item.row.orbit.id)
+}
+
+function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {
+  if (event.detail.originalEvent.type === 'click') event.preventDefault()
+}
+
+function stopComposingTreeKeys(event: KeyboardEvent): void {
+  if (isHierarchyComposing.value || event.isComposing || event.keyCode === 229) event.stopPropagation()
+}
+
+function beginHierarchyComposition(): void {
+  isHierarchyComposing.value = true
+}
+
+function endHierarchyComposition(): void {
+  isHierarchyComposing.value = false
+}
 </script>
 
 <style>

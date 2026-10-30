@@ -107,7 +107,7 @@ test('object deletion reviews the current cascade before resolving its inspector
   })
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await editMapObject(page)
   const nameInput = page.getByLabel('Name', { exact: true })
   await nameInput.fill('Unapplied star')
@@ -141,7 +141,7 @@ test('object deletion reviews the current cascade before resolving its inspector
   await review.getByRole('button', { name: 'Cancel deletion', exact: true }).click()
   await expect(review).toBeHidden()
 
-  await expect(hierarchy.getByRole('button', { name: 'Select A, Unapplied star', exact: true })).toBeVisible()
+  await expect(hierarchy.getByRole('treeitem', { name: 'Select A, Unapplied star', exact: true })).toBeVisible()
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Unapplied star')
 })
 
@@ -177,7 +177,7 @@ test('deleting an Orbit host prunes only its pending Add target and keeps the ot
   await clusterMap.getByRole('button', { name: 'Open A system map', exact: true }).click()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await (await dockAction(page, 'Add orbit')).click()
 
   const controls = page.getByRole('group', { name: 'Orbit creation controls' })
@@ -204,7 +204,7 @@ test('deleting an Orbit host prunes only its pending Add target and keeps the ot
 
   await selectInspectorOption(host, 'Around Iria')
   await page.getByRole('form', { name: 'Placement', exact: true }).getByRole('button', { name: 'Add', exact: true }).click()
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria/ })).toBeVisible()
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria/ })).toBeVisible()
 })
 
 test('current-system deletion uses the review flow and protects the final system', async ({ page }) => {

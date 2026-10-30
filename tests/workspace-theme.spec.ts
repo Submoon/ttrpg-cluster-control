@@ -335,7 +335,7 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await setWorkspaceMapMode(page, 'Navigate')
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: /Vesper Arrival/ }).first().click()
+  await hierarchy.getByRole('treeitem', { name: /Vesper Arrival/ }).first().click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await inspector.getByRole('button', { name: 'Edit map object' }).click()
   const objectName = inspector.getByLabel('Name', { exact: true })

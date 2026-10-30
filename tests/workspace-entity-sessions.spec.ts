@@ -94,7 +94,7 @@ async function abortNextWorkspaceWrite(page: Page, operation: () => Promise<void
 
 test('object Apply preserves typed zero, false and hidden assignments while an unrelated definition changes', async ({ page }) => {
   const { hierarchy, inspector } = await openSessionLab(page)
-  await hierarchy.getByRole('button', { name: 'Select PL-01, Iria', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
 
   await expect(inspector.getByLabel('Threat level', { exact: true })).toHaveValue('3')
@@ -139,7 +139,7 @@ test('object Apply preserves typed zero, false and hidden assignments while an u
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await clusterHierarchy.getByRole('button', { name: 'Open Session Lab system map', exact: true }).click()
   const reloadedHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await reloadedHierarchy.getByRole('button', { name: 'Select PL-01, Iria, revised', exact: true }).click()
+  await reloadedHierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria, revised', exact: true }).click()
   await expect(inspector.getByLabel('Threat level', { exact: true })).toHaveValue('0')
   expect(await readInspectorSelection(inspector.getByLabel('Hostile', { exact: true }))).toBe('No')
   await expect(inspector.getByLabel('Description', { exact: true })).toHaveValue('A distinct world description.')
@@ -149,8 +149,8 @@ test('object Apply preserves typed zero, false and hidden assignments while an u
 
 test('object transitions keep Stay, Apply and Discard distinct, while a clean edit leaves directly', async ({ page }) => {
   const { hierarchy, inspector } = await openSessionLab(page)
-  let iria = hierarchy.getByRole('button', { name: 'Select PL-01, Iria', exact: true })
-  const nix = hierarchy.getByRole('button', { name: 'Select MO-01, Nix', exact: true })
+  let iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true })
+  const nix = hierarchy.getByRole('treeitem', { name: 'Select MO-01, Nix', exact: true })
   await iria.click()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Applied Iria')
@@ -170,7 +170,7 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await expect(nix).toHaveAttribute('aria-current', 'true')
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
 
-  iria = hierarchy.getByRole('button', { name: 'Select PL-01, Applied Iria', exact: true })
+  iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await iria.click()
   await expect(page.getByRole('dialog', { name: 'Edit chart names' })).toHaveCount(0)
@@ -195,7 +195,7 @@ test('a geometry-only Orbit draft preserves an independently moved free host', a
   const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
   const orbit = initial.system!.orbits.find(candidate => candidate.hostId === primary.id && candidate.order === 2)!
 
-  await hierarchy.getByRole('button', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('45')
 
@@ -227,7 +227,7 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
   const firstOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
   const secondOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
 
-  await hierarchy.getByRole('button', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await expect(page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true })).toHaveValue('170')
   await expect(page.getByRole('spinbutton', { name: 'Vertical radius', exact: true })).toHaveValue('170')
@@ -268,7 +268,7 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
 
   await ensureMapDragPointsReachable(page, map, addOrbit, { x: 771, y: 280 })
   await dragHtmlElementToWorldPoint(page, addOrbit, map, { x: 771, y: 280 })
-  await expect(hierarchy.getByRole('button', { name: 'Orbit 2 around Distant Star, 0 objects', exact: true })).toBeVisible()
+  await expect(hierarchy.getByRole('treeitem', { name: 'Orbit 2 around Distant Star, 0 objects', exact: true })).toBeVisible()
   await quitSystemAdd(page)
   await expect(page.getByRole('spinbutton', { name: 'Orbit order', exact: true })).toHaveValue('1')
   await expect(page.getByRole('button', { name: /Apply changes/ })).toBeVisible()
@@ -304,7 +304,7 @@ test('Orbit sessions allow occupant-angle and unrelated-host changes, block rela
 
 test('a failed Inspector save leaves current memory intact and Retry save persists only the applied record', async ({ page }) => {
   const { hierarchy, inspector } = await openSessionLab(page)
-  await hierarchy.getByRole('button', { name: 'Select PL-01, Iria', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Durable Iria')
   await abortNextWorkspaceWrite(page, async () => {
@@ -330,7 +330,7 @@ test('a failed Inspector save leaves current memory intact and Retry save persis
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await clusterHierarchy.getByRole('button', { name: 'Open Session Lab system map', exact: true }).click()
   const reloadedHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await reloadedHierarchy.getByRole('button', { name: 'Select PL-01, Durable Iria', exact: true }).click()
+  await reloadedHierarchy.getByRole('treeitem', { name: 'Select PL-01, Durable Iria', exact: true }).click()
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Durable Iria')
 })
 
@@ -339,9 +339,9 @@ test('a failed Orbit Apply and continue keeps the transition and Retry persists 
   const initial = await downloadJson(page, 'Export star system JSON')
   const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
   const target = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
-  const sibling = hierarchy.getByRole('button', { name: 'Orbit 1 around Primary Star, 1 object', exact: true })
+  const sibling = hierarchy.getByRole('treeitem', { name: 'Orbit 1 around Primary Star, 1 object', exact: true })
 
-  await hierarchy.getByRole('button', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 2 around Primary Star, 1 object', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('45')
   await sibling.click()

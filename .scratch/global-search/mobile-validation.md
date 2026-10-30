@@ -1,11 +1,11 @@
 ---
 title: "Global search: actual mobile input validation"
-status: open
+status: in-progress
 ---
 
 ## Evidence boundary
 
-Ticket 03 requires an actual phone's software keyboard. Desktop Chromium viewport/touch emulation supplements this check but does not satisfy it. No real-device run has been collected. The candidate revision and reachable test URL must be recorded before this protocol is executed; do not test an older deployed build as evidence for the local candidate.
+Ticket 03 requires an actual phone's software keyboard. Desktop Chromium viewport/touch emulation supplements this check but does not satisfy it. The user executed the requested journey on the branch preview after its deployment of candidate `afa33c00` was verified ready; the actual-device result is recorded below.
 
 ## Setup
 
@@ -24,4 +24,8 @@ Attach a short recording or screenshots showing actual keyboard entry, result ac
 
 ## Result
 
-Pending actual-device access and execution. Do not close the mobile acceptance criterion from this protocol's existence.
+On 2026-10-30 the user reported: **“Nothing Phone 4a pro, firefox, et ça fonctionne”**, answering the explicit request to test software-keyboard entry, tapping an object result in another system, keyboard dismissal followed by visible target/branch framing, and draft preservation after Stay. Record this as a successful user-reported actual-phone journey on **Nothing Phone 4a Pro / Firefox** at the [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app), deployed from `afa33c00` when shared.
+
+The OS version, Firefox version and a recording/screenshots were not supplied. No broader physical-keyboard or screen-reader certification is claimed. This result is actual-device user testimony, separate from the coordinator's automated desktop/compact Chromium evidence.
+
+The user subsequently requested native Navbar/Toolbar/CommandPalette and proposed Tree. The preceding result remains valid for `afa33c00`; the new Palette changes the mobile input/list interaction, so a focused repeat on the updated branch preview is pending. See [the native presentation refactor](dashboard-refactor.md).

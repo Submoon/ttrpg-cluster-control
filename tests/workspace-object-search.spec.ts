@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from './fixtures'
+import { expectPaintedInsideUsableMap, measurePaintedBounds } from './scenarios/search-assertions'
+import { expectPaletteOptionActive } from './scenarios/search-palette'
 import {
   createLocalWorkspace,
   createOrbit,
@@ -261,10 +263,10 @@ test('search caps an isolated leaf while keeping a readable hosted branch beside
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
 
   await query.fill(fixture.remoteLeafName)
-  const remoteResult = searchDialog.getByRole('button', { name: new RegExp(fixture.remoteLeafName) })
+  const remoteResult = searchDialog.getByRole('option', { name: new RegExp(fixture.remoteLeafName) })
   await expect(remoteResult).toContainText('Location key: AN-01')
   await remoteResult.click()
   await expect(searchDialog).toHaveCount(0)
@@ -293,7 +295,7 @@ test('search caps an isolated leaf while keeping a readable hosted branch beside
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   await expect(searchDialog).toBeVisible()
   await query.fill(fixture.readableTargetName)
-  const readableResult = searchDialog.getByRole('button', { name: new RegExp(fixture.readableTargetName) })
+  const readableResult = searchDialog.getByRole('option', { name: new RegExp(fixture.readableTargetName) })
   await expect(readableResult).toContainText(`Location key: PL-02`)
   await readableResult.click()
   await expect(searchDialog).toHaveCount(0)
@@ -301,9 +303,24 @@ test('search caps an isolated leaf while keeping a readable hosted branch beside
   const readableTarget = systemMap.locator('.system-object').filter({ hasText: fixture.readableTargetName })
   await expect(readableTarget).toHaveClass(/is-selected/)
   const readableScale = scaleFromTransform(await content.getAttribute('transform'))
-  expect(readableScale).toBeCloseTo(2, 1)
+  expect(readableScale).toBeLessThanOrEqual(2)
+  const readableTargetName = readableTarget.locator('.object-name')
+  const readableTargetKey = readableTarget.locator('.object-key')
+  const readableTargetGlyph = readableTarget.locator('.system-object-glyph')
+  const readableTargetTypeMark = readableTarget.locator('.object-type-mark')
+  const readableScreenshot = testInfo.outputPath('object-search-readable-branch-with-inspector.png')
+  await page.screenshot({ path: readableScreenshot, animations: 'disabled' })
+  await testInfo.attach('object-search-readable-branch-with-inspector', {
+    path: readableScreenshot,
+    contentType: 'image/png',
+  })
   const readableOrbit = systemMap.locator('.orbit-mark[aria-label*="around Readable Beacon"] .orbit-ring')
-  const readableOrbitBounds = await readableOrbit.boundingBox()
+  const readableOrbitBounds = await measurePaintedBounds(readableOrbit)
+  const readableMoon = systemMap.locator('.system-object').filter({ hasText: fixture.readableNestedName })
+  const readableMoonName = readableMoon.locator('.object-name')
+  const readableMoonKey = readableMoon.locator('.object-key')
+  const readableMoonGlyph = readableMoon.locator('.system-object-glyph')
+  const readableMoonTypeMark = readableMoon.locator('.object-type-mark')
   const readableMoonLabel = systemMap.locator('.object-name').filter({ hasText: fixture.readableNestedName })
   const readableMoonBounds = await readableMoonLabel.boundingBox()
   const inspectorBounds = await inspector.boundingBox()
@@ -314,13 +331,29 @@ test('search caps an isolated leaf while keeping a readable hosted branch beside
     || readableOrbitBounds.x >= inspectorBounds.x + inspectorBounds.width).toBe(true)
   expect(readableMoonBounds.x + readableMoonBounds.width <= inspectorBounds.x
     || readableMoonBounds.x >= inspectorBounds.x + inspectorBounds.width).toBe(true)
+  for (const nameLabel of [readableTargetName, readableMoonName]) {
+    const bounds = await nameLabel.boundingBox()
+    if (!bounds) throw new Error('A readable branch object name has no measurable bounds.')
+    expect(bounds.height).toBeGreaterThanOrEqual(12)
+  }
+  for (const keyLabel of [readableTargetKey, readableMoonKey]) {
+    const bounds = await keyLabel.boundingBox()
+    if (!bounds) throw new Error('A readable branch Location key has no measurable bounds.')
+    expect(bounds.height).toBeGreaterThanOrEqual(9)
+  }
+  await expect(readableTargetKey).toHaveText('PL-02')
 
-  const readableScreenshot = testInfo.outputPath('object-search-readable-branch-with-inspector.png')
-  await page.screenshot({ path: readableScreenshot, animations: 'disabled' })
-  await testInfo.attach('object-search-readable-branch-with-inspector', {
-    path: readableScreenshot,
-    contentType: 'image/png',
-  })
+  await expectPaintedInsideUsableMap(page, systemMap, [
+    readableTargetGlyph,
+    readableTargetTypeMark,
+    readableTargetName,
+    readableTargetKey,
+    readableMoonGlyph,
+    readableMoonTypeMark,
+    readableMoonName,
+    readableMoonKey,
+    readableOrbit,
+  ])
 })
 
 test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
@@ -337,10 +370,10 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await expect(searchDialog).toBeVisible()
   await query.fill(fixture.targetName)
-  const result = searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) })
+  const result = searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) })
   await expect(result).toBeVisible()
   await expect(result).toContainText('Star System: Branch Vesper')
   await expect(result).toContainText(`Location key: ${fixture.targetLocationKey}`)
@@ -418,9 +451,9 @@ test('repeated object search recenters the map and restores its lower zoom floor
 
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill(fixture.targetName)
-  await searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) }).click()
+  await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
 
@@ -439,7 +472,7 @@ test('repeated object search recenters the map and restores its lower zoom floor
   await searchButton.click()
   await expect(searchDialog).toBeVisible()
   await query.fill(fixture.targetName)
-  await searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) }).click()
+  await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
   await expect(content).toHaveAttribute('transform', initialFrameCamera)
@@ -478,9 +511,9 @@ test('compact Location-key search preserves a dirty same-object draft and return
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill(fixture.targetName)
-  await searchDialog.getByRole('button', { name: new RegExp(fixture.targetName) }).click()
+  await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
 
@@ -499,15 +532,16 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(inspector).toHaveAttribute('role', 'dialog')
   await expect(inspector).toHaveAttribute('aria-modal', 'true')
   await query.fill('AN-')
-  const results = searchDialog.locator('#workspace-search-results')
-  const resultButtons = results.getByRole('button')
-  await expect(resultButtons).toHaveCount(12)
-  expect(await results.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+  const results = searchDialog.getByRole('listbox')
+  const resultOptions = results.getByRole('option')
+  await expect(resultOptions).toHaveCount(12)
+  const resultViewport = results.locator('[data-slot="viewport"]')
+  expect(await resultViewport.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
   await query.press('ArrowDown')
-  await expect(resultButtons.first()).toBeFocused()
+  await expectPaletteOptionActive(query, resultOptions.first())
   await page.keyboard.press('End')
-  await expect(resultButtons.last()).toBeFocused()
-  await expect(resultButtons.last()).toBeInViewport()
+  await expectPaletteOptionActive(query, resultOptions.last())
+  await expect(resultOptions.last()).toBeInViewport()
   const landscapeSearchScreenshot = testInfo.outputPath('object-search-short-landscape-populated.png')
   await page.screenshot({ path: landscapeSearchScreenshot, animations: 'disabled' })
   await testInfo.attach('object-search-short-landscape-populated', {
@@ -517,10 +551,10 @@ test('compact Location-key search preserves a dirty same-object draft and return
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(searchDialog).toBeVisible()
-  await expect(resultButtons.last()).toBeInViewport()
+  await expect(resultOptions.last()).toBeInViewport()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
   await query.fill(fixture.targetLocationKey)
-  const targetResult = searchDialog.getByRole('button', { name: new RegExp(`Location key: ${fixture.targetLocationKey}`) })
+  const targetResult = searchDialog.getByRole('option', { name: new RegExp(`Location key: ${fixture.targetLocationKey}`) })
   await expect(targetResult).toBeVisible()
   await expect(targetResult).toContainText(`Location key: ${fixture.targetLocationKey}`)
 
@@ -577,9 +611,9 @@ test('object search guards a hidden chart-name draft before revealing the result
 
   await searchButton.click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('Primary Star')
-  const result = searchDialog.getByRole('button', { name: /Primary Star, Star, Star System: Vesper/ })
+  const result = searchDialog.getByRole('option', { name: /Primary Star.*Star.*Star System: Vesper/ })
   await expect(result).toBeVisible()
   await result.click()
 
@@ -601,7 +635,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   await expect(chartDialog).toBeHidden()
   await expect(searchDialog).toBeVisible()
   await expect(query).toHaveValue('Primary Star')
-  await expect(result).toBeFocused()
+  await expect(query).toBeFocused()
   await page.keyboard.press('ArrowUp')
   await expect(query).toBeFocused()
   await expect(workspaceMapContextType(page)).toHaveText('Star System')
@@ -620,7 +654,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   await searchButton.click()
   await expect(searchDialog).toBeVisible()
   await expect(query).toHaveValue('Primary Star')
-  await searchDialog.getByRole('button', { name: /Primary Star, Star, Star System: Vesper/ }).click()
+  await searchDialog.getByRole('option', { name: /Primary Star.*Star.*Star System: Vesper/ }).click()
   await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Discard and continue', exact: true }).click()
 

@@ -680,7 +680,7 @@ for (const mapCase of mapCases) {
         await expect(routeSelection).toHaveClass(/is-selected/)
       } else if (selectedObject) {
         const hierarchy = await openWorkspaceHierarchy(page)
-        await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
+        await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
         await expect(selectedObject).toHaveClass(/is-selected/)
         const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
         if (await closeHierarchy.isVisible()) await closeHierarchy.click()
@@ -833,7 +833,7 @@ test('system image exports retain applied geometry during local and parent-owned
   await setWorkspaceMapMode(page, 'Move')
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
   if (await closeHierarchy.isVisible()) await closeHierarchy.click()
   const hideInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })
@@ -884,7 +884,7 @@ test('system image exports retain applied geometry during local and parent-owned
   if (!appliedBeforeObjectSvg.text) throw new Error('The applied system SVG before object placement preview is empty.')
   const appliedBeforeObjectSvgInfo = await inspectImageSvg(page, appliedBeforeObjectSvg.text)
   const objectHierarchy = await openWorkspaceHierarchy(page)
-  await objectHierarchy.getByRole('button', { name: /^Select PL-01, Iria$/ }).click()
+  await objectHierarchy.getByRole('treeitem', { name: /^Select PL-01, Iria$/ }).click()
   const closeObjectHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
   if (await closeObjectHierarchy.isVisible()) await closeObjectHierarchy.click()
   const hideObjectInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })
@@ -920,7 +920,7 @@ test('system image exports retain applied geometry during local and parent-owned
   if (await placement.getAttribute('aria-expanded') === 'true') await placement.click()
 
   const orbitHierarchy = await openWorkspaceHierarchy(page)
-  await orbitHierarchy.getByRole('button', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
+  await orbitHierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   const orbitInspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const orbitAppliedGeometry = await inspectLiveSystemGeometry(map)
   const orbitAppliedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')

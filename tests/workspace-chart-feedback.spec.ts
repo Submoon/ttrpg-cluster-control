@@ -195,7 +195,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
 
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   const hierarchy = page.locator('#workspace-hierarchy-panel')
-  await hierarchy.getByRole('button', { name: /^Select PL-01, New planet 1/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select PL-01, New planet 1/ }).click()
   await closeCompactPanels(page)
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
