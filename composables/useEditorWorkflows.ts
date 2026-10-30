@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { EditorWorkflowOptions, ObjectInspectorFocusRequest } from './editor-workflows/types'
+import type { EditorWorkflowOptions, ObjectInspectorFocusRequest, SearchContextChangeLease, SearchContextChangeOutcome } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
@@ -129,10 +129,27 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     entitySession: entity.entitySession,
   })
   const viewport = useEditorViewport(store)
+  type SearchContextOwner = {
+    workspaceId: string
+    clusterId: string
+    activeView: typeof store.activeView
+    selectedSystemId: string | null
+    lease: SearchContextChangeLease
+    finish(outcome: SearchContextChangeOutcome): void
+  }
+  let activeSearchContextOwner: SearchContextOwner | null = null
+  function isSearchContextChangeHeld(): boolean {
+    const owner = activeSearchContextOwner
+    const currentWorkspace = workspace.value
+    return !!owner && currentWorkspace?.id === owner.workspaceId
+      && currentWorkspace.cluster.id === owner.clusterId
+  }
+  let createSearchContextLease = (requestId: number): SearchContextChangeLease =>
+    mapControls.beginSearchContextChange(requestId)
   const navigation = useEditorNavigation({
     workspace,
     waitForSearchPresentation: options.waitForSearchPresentation,
-    onSearchNavigationAccepted: endAcceptedSearchAddIntent,
+    beginSearchContextChange: requestId => createSearchContextLease(requestId),
     store,
     mapControls,
     chart: charts,
@@ -152,11 +169,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     set: (query: string) => store.setSearchQuery(query),
   })
   const searchResults = computed<SearchResult[]>(() => workspace.value
-    ? searchWorkspace(
-      workspace.value,
-      searchQuery.value,
-      store.activeView === 'system' ? store.selectedSystemId ?? undefined : undefined,
-    )
+    ? searchWorkspace(workspace.value, searchQuery.value)
     : [])
 
   const fields = useFieldDefinitionWorkflows({
@@ -189,6 +202,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     resolveObjectCreationTransition: () => transitions.resolveTransition({ leaveChart: false }),
     beforeWorkspaceOperation,
+    isSearchContextChangeHeld,
     onObjectCreated: async (objectId) => {
       await navigation.selectObject(objectId, !viewport.isCompactViewport.value, { leaveChart: false })
       if (store.activeView !== 'system' || store.selectedObjectId !== objectId) return
@@ -229,6 +243,47 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     mutations,
     beforeWorkspaceOperation,
   })
+  function sameSearchContextOwnerSource(owner: SearchContextOwner): boolean {
+    const currentWorkspace = workspace.value
+    return currentWorkspace?.id === owner.workspaceId
+      && currentWorkspace.cluster.id === owner.clusterId
+      && store.activeView === owner.activeView
+      && (owner.activeView !== 'system' || store.selectedSystemId === owner.selectedSystemId)
+  }
+  createSearchContextLease = (requestId: number): SearchContextChangeLease => {
+    activeSearchContextOwner?.finish('abandoned')
+    const currentWorkspace = workspace.value
+    const mapLease = mapControls.beginSearchContextChange(requestId)
+    if (!currentWorkspace) return mapLease
+
+    const clearSystemCreation = systemCreation.captureSearchContextCleanup()
+    const clearClusterAdd = clusterSystemPlacement.captureSearchContextCleanup()
+    let finished = false
+    const owner: SearchContextOwner = {
+      workspaceId: currentWorkspace.id,
+      clusterId: currentWorkspace.cluster.id,
+      activeView: store.activeView,
+      selectedSystemId: store.selectedSystemId,
+      lease: mapLease,
+      finish(outcome) {
+        if (finished) return
+        finished = true
+        if (activeSearchContextOwner === owner) activeSearchContextOwner = null
+        mapLease.finish(outcome)
+        if (outcome === 'accepted' || !sameSearchContextOwnerSource(owner)) {
+          clearSystemCreation?.()
+          clearClusterAdd?.()
+        }
+      },
+    }
+    activeSearchContextOwner = owner
+    return owner
+  }
+  watch([() => store.activeView, () => store.selectedSystemId], () => {
+    if (isSearchContextChangeHeld()) return
+    if (systemCreation.creationSession.value) systemCreation.quitAdd()
+    if (clusterSystemPlacement.clusterAddType.value) clusterSystemPlacement.quitClusterAdd()
+  }, { flush: 'sync' })
   watch(route.routeSession, session => {
     if (!session && clusterSystemPlacement.clusterAddType.value === 'route') {
       clusterSystemPlacement.quitClusterAdd()
@@ -255,11 +310,6 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     editorError,
     beforeWorkspaceOperation,
   })
-  function endAcceptedSearchAddIntent(): void {
-    clusterSystemPlacement.quitClusterAdd()
-    route.cancelRouteCreation()
-    systemCreation.quitAdd()
-  }
   const interactions = useMapInteractionCoordinator({
     workspace,
     store,

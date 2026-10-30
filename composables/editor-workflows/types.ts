@@ -253,7 +253,7 @@ export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
   workspace: Readonly<Ref<LocalWorkspace | null>>
   /** Resolves after guarded navigation overlays have completed their presentation teardown. */
-  waitForSearchPresentation?: () => Promise<void>
+  waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
   /** Shared application boundary for ordinary editor mutations. */
   mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
@@ -340,6 +340,14 @@ export type MapVisitSelection =
   | { kind: 'object'; id: string }
   | { kind: 'orbit'; id: string }
   | { kind: 'none' }
+
+export type SearchContextChangeOutcome = 'accepted' | 'restored' | 'abandoned'
+export type SearchPresentationSettlement = 'settled' | 'unavailable' | 'cancelled'
+
+/** Keeps provisional Search map feedback from replacing a visit until navigation settles. */
+export interface SearchContextChangeLease {
+  finish(outcome: SearchContextChangeOutcome): void
+}
 
 /** Session-only camera and selection, keyed by the owning cluster or system ID. */
 export interface MapVisitMemory {

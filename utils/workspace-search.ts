@@ -55,35 +55,32 @@ function matchRank(name: string, query: string): number | null {
 }
 
 /** Searches the current applied workspace snapshot; callers must not supply draft or preview data. */
-export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string, activeSystemId?: string): SearchResult[] {
+export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): SearchResult[] {
   const query = normalizeSearchText(rawQuery.trim())
   if (!query) return []
 
-  const activeSystem = activeSystemId
-    ? workspace.cluster.systems.find(system => system.id === activeSystemId)
-    : undefined
-  const objectCandidates: SearchCandidate[] = activeSystem
-    ? activeSystem.objects.map((object): SearchCandidate => ({
+  const objectCandidates: SearchCandidate[] = workspace.cluster.systems.flatMap(system =>
+    system.objects.map((object): SearchCandidate => ({
       result: {
         key: '',
         target: {
           workspaceId: workspace.id,
           clusterId: workspace.cluster.id,
           kind: 'object',
-          systemId: activeSystem.id,
+          systemId: system.id,
           objectId: object.id,
         },
         name: object.name,
         typeLabel: catalogueSubtypeLabel(object),
-        contextLabel: `Star System: ${activeSystem.name}`,
+        contextLabel: `Star System: ${system.name}`,
         locationKey: object.locationKey,
         occurrence: null,
       },
       normalizedName: normalizeSearchText(object.name),
       normalizedLocationKey: normalizeSearchText(object.locationKey),
-      identityOrder: `object:${activeSystem.id}:${object.id}`,
-    }))
-    : []
+      identityOrder: `object:${system.id}:${object.id}`,
+    })),
+  )
 
   const candidates: SearchCandidate[] = [
     {

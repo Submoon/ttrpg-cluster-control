@@ -1,6 +1,7 @@
 ---
 title: "Find and reveal objects across every system"
-status: open
+status: in-progress
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,7 +24,7 @@ A Warden can search every object's name or Location key in the entire current wo
 
 ## Blocked by
 
-None. [Find an object and frame its branch in the active system](02-active-system-object-branches.md) is closed. Its active-system object search, guarded reveal and complete hosted-branch framing are the completed predecessor. This ticket is available and unclaimed; refresh source/baseline and preserve predecessor work before an authorized implementation. Its remaining validation limitation is recorded in the linked implementation outcome.
+None. [Find an object and frame its branch in the active system](02-active-system-object-branches.md) is closed. Its active-system object search, guarded reveal and complete hosted-branch framing are the completed predecessor. Its remaining validation limitation is recorded in the linked implementation outcome.
 
 ## Specification coverage
 
@@ -70,3 +71,11 @@ Completion means the full local specification is satisfied with recorded evidenc
 The user explicitly approved these three vertical slices and the dependency graph 01 -> 02 -> 03 on 2026-10-29. This authorizes local ticket publication only, not product implementation, commits, pushes, PRs, merges, releases or changes to the parent GitHub issue.
 
 The tickets are fully specified (enhancement, ready-for-agent) but lifecycle and dependency availability are separate. At publication, ticket 01 is open and unclaimed; tickets 02 and 03 are blocked until their linked predecessor is closed. Remove the dependency blocker and return a ticket to open when it clears; claim it only after implementation is authorized. Refresh source/baseline and preserve completed predecessor work rather than resetting to the historical planning revision.
+
+## Implementation authorization and baseline
+
+On 2026-10-30, the user requested pushing ticket 02 and coordinating this ticket with the implement skill and sub-agents, then explicitly required **one branch for the entire feature**. The current canonical branch is **codex/global-search**, pushed with both completed predecessor slices at `a230349258de37b480123da76a9f681d473a19f0`. No ticket-specific branch is created for this slice. Historical branch names in predecessor records describe past provenance only.
+
+Freshly fetched `origin/main` and local `main` are **971e91c0ad2fc78e4f92c1e625091a577960b41b**. They include three newer map-tool-shortcut commits absent from the predecessor. The coordinator merged them without conflicts, preserving all feature work; the pinned ticket 03 implementation/review baseline is **f2ca2fc5c8c8d1e211a9af4604d4f99822537e4a**. No main fast-forward was needed. GitHub #7 was re-read unchanged, OPEN, with enhancement / priority:P1 and no comments.
+
+Use the Complex route: read-only architecture handoff, at most two disjoint developers with TDD at the already approved pure calculations, real composed editor command and public-browser seams, then independent Standards and Spec review. The coordinator owns Git, shared preparation/checks, servers and browsers. See [Global object search: implementation and verification](../implementation-03.md). Actual mobile software-keyboard evidence is a separate explicit acceptance requirement; browser emulation alone must not close it. No PR, merge to main, release or remote issue update is requested.

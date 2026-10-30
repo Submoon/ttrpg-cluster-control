@@ -89,6 +89,8 @@ Following repository guidance for presentation-only changes, unchanged script/ty
 
 ## Resolution
 
+Branch continuity update (2026-10-30): the user subsequently required one branch for the whole feature. All ticket 01/02 commits are preserved and pushed on **codex/global-search**; branch names elsewhere in this record describe historical execution provenance.
+
 Ticket 01 is complete on `codex/global-search-ticket-01`, with source commits `2f24884c`, `5d9a1d45`, `31c01b4d` and `d970f0ce`. Cluster/system discovery, protected reveal, camera/focus sequencing and session consultation meet this slice's criteria. Both independent review axes are closed. All scenarios from the completed suite have passing evidence after the recorded isolated reruns/correction; the first full invocation remains recorded as 448 passed / 9 failed rather than a clean pass.
 
 GitHub #7 was re-fetched before completion and remains unchanged and OPEN, with enhancement / priority:P1 and no comments. Ticket 02 becomes open and unclaimed; ticket 03 stays blocked. The parent specification remains open because object discovery/branch framing is still pending. No push, PR, merge, release or remote tracker write was performed. Physical device/software-keyboard and screen-reader certification remain outside the collected browser evidence.

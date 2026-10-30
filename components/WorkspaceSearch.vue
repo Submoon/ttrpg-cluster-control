@@ -17,7 +17,7 @@
     <UModal
       v-model:open="open"
       title="Search workspace"
-      description="Find the Jump Cluster or a star system by name, or an object in the active star system by name or Location key."
+      description="Find the Jump Cluster or any star system by name, or any object in the workspace by name or Location key."
       :dismissible="true"
       :content="{ onOpenAutoFocus: focusSearchOnOpen, onCloseAutoFocus: focusAfterSearchClose }"
       :ui="{ content: 'workspace-search-dialog-content max-h-[calc(100dvh-1rem)] overflow-hidden', body: 'min-h-0 overflow-hidden' }"
@@ -37,7 +37,7 @@
           </UFormField>
 
           <p v-if="!query.trim()" class="workspace-search-hint" role="status">
-            Type a cluster or star system name, or an object name or Location key in the active star system.
+            Type a cluster or star system name, or an object name or Location key from any star system.
           </p>
           <p v-else-if="!props.results.length" class="workspace-search-hint" role="status">
             No matches for “{{ query.trim() }}”.

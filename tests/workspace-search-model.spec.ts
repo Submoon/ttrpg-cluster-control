@@ -59,7 +59,7 @@ test('duplicate names remain distinct and receive deterministic result-only occu
   expect(new Set(results.map(result => result.key)).size).toBe(3)
 })
 
-test('workspace search finds an active-system object by its Location key @pure', () => {
+test('workspace search finds an object by its Location key @pure', () => {
   const workspace = createLocalWorkspace('Reach', 'Vesper')
   const system = workspace.cluster.systems[0]
   const object = system?.objects[0]
@@ -67,7 +67,7 @@ test('workspace search finds an active-system object by its Location key @pure',
   object.name = 'Whispering World'
   object.locationKey = 'VEIL-03'
 
-  const results = searchWorkspace(workspace, '  veil-03  ', system.id)
+  const results = searchWorkspace(workspace, '  veil-03  ')
 
   expect(results).toHaveLength(1)
   expect(results[0]?.target).toEqual({
@@ -84,6 +84,34 @@ test('workspace search finds an active-system object by its Location key @pure',
   })
 })
 
+test('workspace search finds objects by name and Location key in unopened systems @pure', () => {
+  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const firstSystem = workspace.cluster.systems[0]
+  const template = firstSystem?.objects[0]
+  if (!firstSystem || !template) throw new Error('The local workspace did not create its first system object.')
+  const remoteObject = { ...template, id: 'remote-beacon', name: 'Distant Beacon', locationKey: 'FAR-09' }
+  const remoteSystem = {
+    ...firstSystem,
+    id: 'unopened-harrow',
+    name: 'Harrow',
+    objects: [remoteObject],
+  }
+  workspace.cluster.systems.push(remoteSystem)
+
+  const nameResult = searchWorkspace(workspace, 'distant')
+  const keyResult = searchWorkspace(workspace, 'far-09')
+
+  expect(nameResult.map(result => result.target)).toEqual([{
+    workspaceId: workspace.id,
+    clusterId: workspace.cluster.id,
+    kind: 'object',
+    systemId: remoteSystem.id,
+    objectId: remoteObject.id,
+  }])
+  expect(keyResult.map(result => result.target)).toEqual(nameResult.map(result => result.target))
+  expect(nameResult[0]).toMatchObject({ name: 'Distant Beacon', contextLabel: 'Star System: Harrow' })
+})
+
 test('workspace search keeps case-distinct Location keys visible as separate labels @pure', () => {
   const workspace = createLocalWorkspace('Reach', 'Vesper')
   const system = workspace.cluster.systems[0]
@@ -93,7 +121,7 @@ test('workspace search keeps case-distinct Location keys visible as separate lab
   object.locationKey = 'A'
   system.objects.push({ ...object, id: 'object-lowercase-key', locationKey: 'a' })
 
-  const results = searchWorkspace(workspace, 'echo', system.id)
+  const results = searchWorkspace(workspace, 'echo')
 
   expect(results.filter(result => result.target.kind === 'object').map(result => [result.locationKey, result.occurrence])).toEqual([
     ['A', null],
@@ -112,7 +140,7 @@ test('object matches are ranked once by their strongest name or Location key mat
   const substringObject = { ...firstObject, id: 'object-substring-name', name: 'The Echo', locationKey: 'OTHER' }
   system.objects.push(exactNameObject, substringObject)
 
-  const results = searchWorkspace(workspace, 'echo', system.id)
+  const results = searchWorkspace(workspace, 'echo')
   const objects = results.filter(result => result.target.kind === 'object')
 
   expect(objects.map(result => result.name)).toEqual(['Echo', 'Far Echo', 'The Echo'])
@@ -137,7 +165,7 @@ test('workspace search includes every catalogue subtype and a custom Other label
   ]
   system.objects.splice(0, system.objects.length, ...searchableObjects)
 
-  const results = searchWorkspace(workspace, 'marker', system.id).filter(result => result.target.kind === 'object')
+  const results = searchWorkspace(workspace, 'marker').filter(result => result.target.kind === 'object')
 
   expect(results.map(result => result.target.kind === 'object' ? result.target.objectId : '')).toEqual(
     searchableObjects.map(object => object.id),

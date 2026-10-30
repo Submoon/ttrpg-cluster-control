@@ -86,6 +86,8 @@ The final Spec reviewer inspected the full/targeted/differential reports and fou
 
 ## Resolution
 
+Branch continuity update (2026-10-30): the user subsequently requested the push of ticket 02 and one branch for the entire feature. All completed ticket 01/02 commits were pushed on **codex/global-search**. Historical branch names and the local-only state below refer to the earlier completion point; ticket 03 continues on the canonical feature branch.
+
 Ticket 02 is complete on **codex/global-search-ticket-02**, based on the pushed ticket 01 predecessor. Source/test commits are `a9d20ee4`, `4e7acb83`, `73640c5b` and `d5cd1ad7`. Active-system object names/Location keys, distinct result identities, real guarded selection, complete hosted-branch framing and lower-scale visit/control behavior meet this slice's criteria. The final independent Standards and Spec reviews have zero remaining blockers. Lint, typecheck, production build, 45 focused pure cases and five final object browser journeys passed; integrated results and their residual baseline limitation are recorded above.
 
 GitHub #7 was re-fetched before completion and remains unchanged and OPEN, with enhancement / priority:P1 and no comments. Ticket 03 is now open and unclaimed; inactive-system object discovery remains unimplemented. The parent specification stays open. Only ticket 01 was pushed as explicitly requested; ticket 02 is committed locally. No PR, merge, release or remote issue update was performed. Unrelated environment configuration is preserved, and coordinator-owned servers are stopped.

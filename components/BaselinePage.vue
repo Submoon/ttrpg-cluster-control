@@ -496,7 +496,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
-import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
+import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
@@ -548,19 +548,177 @@ const {
 } = history
 const chartNamesDialog = ref<InstanceType<typeof ChartNamesDialog> | null>(null)
 const workspaceMapChrome = ref<InstanceType<typeof WorkspaceMapChrome> | null>(null)
+interface SearchPresentationGeometry {
+  values: number[]
+}
+
+const SEARCH_PRESENTATION_GRACE_MS = 250
+const SEARCH_PRESENTATION_QUIET_MS = 100
+const SEARCH_PRESENTATION_TIMEOUT_MS = 800
+
+function searchPresentationGeometry(container: HTMLElement): SearchPresentationGeometry | null {
+  if (!container.isConnected || container.getClientRects().length === 0 || document.visibilityState === 'hidden') return null
+  const style = window.getComputedStyle(container)
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return null
+  const rect = container.getBoundingClientRect()
+  const visual = window.visualViewport
+  const values = [
+    rect.left, rect.top, rect.width, rect.height, rect.right, rect.bottom,
+    window.innerWidth, window.innerHeight,
+    visual?.offsetLeft ?? 0, visual?.offsetTop ?? 0,
+    visual?.width ?? window.innerWidth, visual?.height ?? window.innerHeight, visual?.scale ?? 1,
+  ]
+  return rect.width > 0 && rect.height > 0 && values.every(Number.isFinite) ? { values } : null
+}
+
+function searchPresentationGeometryMatches(left: SearchPresentationGeometry, right: SearchPresentationGeometry): boolean {
+  return left.values.length === right.values.length
+    && left.values.every((value, index) => Math.abs(value - (right.values[index] ?? Number.NaN)) <= 1)
+}
+
+/** Waits for the destination's captured map area and software-keyboard viewport to stop changing. */
+function waitForStableSearchPresentationLayout(
+  container: HTMLElement,
+  signal: AbortSignal,
+): Promise<SearchPresentationSettlement> {
+  return new Promise(resolve => {
+    const startedAt = Date.now()
+    let lastChangeAt = startedAt
+    let previousGeometry = searchPresentationGeometry(container)
+    let finished = false
+    let quietTimer: ReturnType<typeof setTimeout> | null = null
+    let graceTimer: ReturnType<typeof setTimeout> | null = null
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+    let frameIds: number[] = []
+    let resizeObserver: ResizeObserver | null = null
+    let checkingFrames = false
+
+    const cleanup = (): void => {
+      if (quietTimer !== null) clearTimeout(quietTimer)
+      if (graceTimer !== null) clearTimeout(graceTimer)
+      if (deadlineTimer !== null) clearTimeout(deadlineTimer)
+      for (const frameId of frameIds) cancelAnimationFrame(frameId)
+      frameIds = []
+      resizeObserver?.disconnect()
+      resizeObserver = null
+      window.removeEventListener('resize', observeGeometry)
+      window.removeEventListener('scroll', observeGeometry, true)
+      window.visualViewport?.removeEventListener('resize', observeGeometry)
+      window.visualViewport?.removeEventListener('scroll', observeGeometry)
+      signal.removeEventListener('abort', onAbort)
+    }
+
+    const finish = (result: SearchPresentationSettlement): void => {
+      if (finished) return
+      finished = true
+      cleanup()
+      resolve(result)
+    }
+
+    const onAbort = (): void => finish('cancelled')
+
+    const restartQuietPeriod = (): void => {
+      if (quietTimer !== null) clearTimeout(quietTimer)
+      const remaining = Math.max(0, SEARCH_PRESENTATION_QUIET_MS - (Date.now() - lastChangeAt))
+      quietTimer = setTimeout(attemptSettlement, remaining)
+    }
+
+    const changedGeometry = (geometry: SearchPresentationGeometry): void => {
+      previousGeometry = geometry
+      lastChangeAt = Date.now()
+      checkingFrames = false
+      for (const frameId of frameIds) cancelAnimationFrame(frameId)
+      frameIds = []
+      restartQuietPeriod()
+    }
+
+    const confirmWithFrames = (geometry: SearchPresentationGeometry): void => {
+      if (checkingFrames || finished) return
+      checkingFrames = true
+      frameIds.push(requestAnimationFrame(() => {
+        if (finished || signal.aborted) return onAbort()
+        const firstFrameGeometry = searchPresentationGeometry(container)
+        if (!firstFrameGeometry) return finish('unavailable')
+        if (!searchPresentationGeometryMatches(geometry, firstFrameGeometry)) {
+          checkingFrames = false
+          changedGeometry(firstFrameGeometry)
+          return
+        }
+        frameIds.push(requestAnimationFrame(() => {
+          if (finished || signal.aborted) return onAbort()
+          const secondFrameGeometry = searchPresentationGeometry(container)
+          if (!secondFrameGeometry) return finish('unavailable')
+          if (!searchPresentationGeometryMatches(firstFrameGeometry, secondFrameGeometry)) {
+            checkingFrames = false
+            changedGeometry(secondFrameGeometry)
+            return
+          }
+          finish('settled')
+        }))
+      }))
+    }
+
+    function attemptSettlement(): void {
+      if (finished) return
+      if (signal.aborted) return onAbort()
+      const currentGeometry = searchPresentationGeometry(container)
+      if (!currentGeometry) return finish('unavailable')
+      if (!previousGeometry || !searchPresentationGeometryMatches(previousGeometry, currentGeometry)) {
+        changedGeometry(currentGeometry)
+        return
+      }
+      const now = Date.now()
+      if (now - startedAt < SEARCH_PRESENTATION_GRACE_MS
+        || now - lastChangeAt < SEARCH_PRESENTATION_QUIET_MS) return
+      confirmWithFrames(currentGeometry)
+    }
+
+    function observeGeometry(): void {
+      if (finished) return
+      if (signal.aborted) return onAbort()
+      const currentGeometry = searchPresentationGeometry(container)
+      if (!currentGeometry) return finish('unavailable')
+      if (!previousGeometry || !searchPresentationGeometryMatches(previousGeometry, currentGeometry)) {
+        changedGeometry(currentGeometry)
+      }
+    }
+
+    if (signal.aborted) return onAbort()
+    if (!previousGeometry) return finish('unavailable')
+    signal.addEventListener('abort', onAbort, { once: true })
+    window.addEventListener('resize', observeGeometry)
+    window.addEventListener('scroll', observeGeometry, true)
+    window.visualViewport?.addEventListener('resize', observeGeometry)
+    window.visualViewport?.addEventListener('scroll', observeGeometry)
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(observeGeometry)
+      resizeObserver.observe(container)
+    }
+    graceTimer = setTimeout(attemptSettlement, SEARCH_PRESENTATION_GRACE_MS)
+    deadlineTimer = setTimeout(() => finish('unavailable'), SEARCH_PRESENTATION_TIMEOUT_MS)
+    restartQuietPeriod()
+  })
+}
+
+async function waitForSearchPresentation(signal: AbortSignal): Promise<SearchPresentationSettlement> {
+  await Promise.all([
+    chartNamesDialog.value?.whenClosingFocusSettled() ?? Promise.resolve(),
+    workspaceMapChrome.value?.whenSearchClosingFocusSettled() ?? Promise.resolve(),
+  ])
+  await nextTick()
+  if (signal.aborted) return 'cancelled'
+  const destinationCanvas = document.querySelector<HTMLElement>('.workspace-map-canvas-region > .workspace-map-canvas')
+  if (!destinationCanvas) return 'unavailable'
+  return await waitForStableSearchPresentationLayout(destinationCanvas, signal)
+}
+
 const workflows = useEditorWorkflows({
   workspace,
   saveState,
   saveError,
   mutations,
   initializeWorkspace: commit,
-  waitForSearchPresentation: async () => {
-    await Promise.all([
-      chartNamesDialog.value?.whenClosingFocusSettled() ?? Promise.resolve(),
-      workspaceMapChrome.value?.whenSearchClosingFocusSettled() ?? Promise.resolve(),
-    ])
-    await nextTick()
-  },
+  waitForSearchPresentation,
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search } = workflows
 const searchOpen = search.open
@@ -791,9 +949,6 @@ watch(
   [activeView, selectedSystemId, clusterSelectedSystemId, mapMode, hierarchyPanelVisible, inspectorPanelVisible, isCompactViewport],
   () => { creationChooserOpen.value = false },
 )
-watch([activeView, selectedSystemId], () => {
-  if (creationSession.value || clusterAddType.value) quitSystemAdd()
-})
 watch([creationSession, clusterAddType], ([creationIntent, clusterIntent]) => {
   if (creationIntent || clusterIntent) cancelMapMove()
 }, { flush: 'sync' })
@@ -978,6 +1133,7 @@ useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
+    || searchOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   editingGestureActive: () => editingGestureActive.value,

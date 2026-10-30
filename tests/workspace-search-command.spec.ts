@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, ref } from 'vue'
 import { createLocalWorkspace, createOrbit, planMapEntityDeletion, updateWorkspaceObject } from '../domain/workspace'
-import type { MapNavigationHandle, SaveState, SystemMapHandle } from '../composables/editor-workflows/types'
+import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useEditorUiStore } from '../stores/editor-ui'
@@ -78,7 +78,7 @@ function createSearchHarness(
   systemName = 'Vesper',
   durable: Promise<void> = Promise.resolve(),
   additionalSystemName?: string,
-  waitForSearchPresentation?: () => Promise<void>,
+  waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>,
   compact = false,
 ) {
   const restoreBrowserBoundary = installBrowserLifecycleBoundary(compact)
@@ -239,7 +239,7 @@ test('Stay keeps the modified chart draft, map context, and search query when a 
   }
 })
 
-test('search results add applied objects from the active system by name and Location key @pure', () => {
+test('search results add applied objects from every system by name and Location key @pure', () => {
   const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
   try {
     const activeSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
@@ -257,11 +257,11 @@ test('search results add applied objects from the active system by name and Loca
     search.query.value = 'veil-03'
     expect(search.results.value.find(result => result.target.kind === 'object')?.locationKey).toBe('VEIL-03')
     search.query.value = 'hidden away'
-    expect(search.results.value.some(result => result.target.kind === 'object')).toBe(false)
+    expect(search.results.value.find(result => result.target.kind === 'object')?.contextLabel).toBe('Star System: Altair')
 
     harness.store.setSelection({ activeView: 'cluster' })
     search.query.value = 'whispering'
-    expect(search.results.value.some(result => result.target.kind === 'object')).toBe(false)
+    expect(search.results.value.find(result => result.target.kind === 'object')?.name).toBe('Whispering World')
   } finally {
     harness.dispose()
   }
@@ -349,28 +349,288 @@ test('an accepted object result selects and frames it in the active system witho
   }
 })
 
-test('an object result captured in one system view cannot activate after leaving that view @pure', async () => {
-  const harness = createSearchHarness()
+test('a cross-system object target opens its exact system and selects the object @pure', async () => {
+  const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
   try {
-    const system = harness.workspace.value.cluster.systems[0]
-    const object = system?.objects[0]
-    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
-    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id })
+    const sourceSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
+    const targetSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Altair')
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !targetSystem || !sourceObject) throw new Error('The search fixture did not create both systems.')
+    const targetObject = { ...sourceObject, id: 'cross-system-search-target', name: 'Hidden Away', locationKey: 'AWAY-01' }
+    targetSystem.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: sourceSystem.id, selectedObjectId: sourceObject.id })
+    const framedTargets: Parameters<NonNullable<MapNavigationHandle['frameSearchTarget']>>[0][] = []
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: target => {
+        framedTargets.push(target)
+        return true
+      },
+      focusMap: () => undefined,
+    })
     const search = harness.workflows.search
     search.open.value = true
-    search.query.value = object.locationKey
-    const objectResult = search.results.value.find(result => result.target.kind === 'object')
-    if (!objectResult) throw new Error('The active-system Location key did not produce an object result.')
-    harness.store.setSelection({ activeView: 'cluster' })
+    search.query.value = targetObject.locationKey
+    const target = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      kind: 'object' as const,
+      systemId: targetSystem.id,
+      objectId: targetObject.id,
+    }
 
-    expect(await search.reveal(objectResult.target)).toEqual({ status: 'rejected', reason: 'stale' })
-    expect(harness.store.activeView).toBe('cluster')
-    expect(harness.store.selectedSystemId).toBe(system.id)
-    expect(harness.store.selectedObjectId).toBeNull()
-    expect(search.open.value).toBe(true)
-    expect(search.query.value).toBe(object.locationKey)
+    expect(await search.reveal(target)).toEqual({ status: 'revealed' })
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(targetSystem.id)
+    expect(harness.store.selectedObjectId).toBe(targetObject.id)
+    expect(search.open.value).toBe(false)
+    expect(search.query.value).toBe(targetObject.locationKey)
+    expect(framedTargets).toEqual([target])
     expect(harness.history.getStatus().totalActions).toBe(0)
   } finally {
+    harness.dispose()
+  }
+})
+
+test('a refused cross-system reveal preserves the destination map visit @pure', async () => {
+  const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
+  const ready = deferred<boolean>()
+  let readyWaits = 0
+  try {
+    const sourceSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
+    const targetSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Altair')
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !targetSystem || !sourceObject) throw new Error('The search fixture did not create both systems.')
+    const targetObject = { ...sourceObject, id: 'cross-system-visit-target', name: 'Hidden Away', locationKey: 'AWAY-01' }
+    const rememberedObject = { ...sourceObject, id: 'remembered-visit-selection', name: 'Remembered World', locationKey: 'AWAY-02' }
+    targetSystem.objects.push(targetObject, rememberedObject)
+
+    const destinationKey = `system:${harness.workspace.value.cluster.id}:${targetSystem.id}`
+    const rememberedVisit = {
+      viewport: { x: 35, y: -12, k: 1.4 },
+      selection: { kind: 'object' as const, id: rememberedObject.id },
+    }
+    harness.store.rememberVisit(destinationKey, rememberedVisit)
+    harness.store.setSelection({ activeView: 'cluster', selectedSystemId: sourceSystem.id })
+    harness.workflows.placement.clusterSystem.armSystemAdd()
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+
+    const sourceMap = createMapHandle({ whenReady: async () => true, frameSearchTarget: () => true, focusMap: () => undefined })
+    sourceMap.getViewport = () => ({ x: 8, y: 11, k: 0.8 })
+    harness.workflows.mapControls.clusterMapRef.value = sourceMap
+    const destinationMap = createSystemMapHandle({
+      whenReady: () => {
+        readyWaits += 1
+        return ready.promise
+      },
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+    destinationMap.getViewport = () => ({ x: 0, y: 0, k: 1 })
+    harness.workflows.mapControls.systemMapRef.value = destinationMap
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = targetObject.locationKey
+    const target = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      kind: 'object' as const,
+      systemId: targetSystem.id,
+      objectId: targetObject.id,
+    }
+
+    const reveal = search.reveal(target)
+    await expect.poll(() => readyWaits).toBe(1)
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+    harness.workflows.mapControls.recordViewport(destinationKey, { x: 91, y: 42, k: 1.8 })
+    ready.resolve(false)
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'unavailable' })
+    expect(harness.store.visits[destinationKey]).toEqual(rememberedVisit)
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedSystemId).toBe(sourceSystem.id)
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+    expect(search.open.value).toBe(true)
+    expect(search.query.value).toBe(targetObject.locationKey)
+  } finally {
+    ready.resolve(false)
+    harness.dispose()
+  }
+})
+
+test('an unsettled search presentation restores the source context without framing @pure', async () => {
+  const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair', async () => 'unavailable')
+  let frameCount = 0
+  try {
+    const sourceSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
+    const targetSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Altair')
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !targetSystem || !sourceObject) throw new Error('The search fixture did not create both systems.')
+    const targetObject = { ...sourceObject, id: 'unsettled-search-target', name: 'Hidden Away', locationKey: 'AWAY-03' }
+    targetSystem.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'cluster', selectedSystemId: sourceSystem.id })
+    harness.workflows.placement.clusterSystem.armSystemAdd()
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => {
+        frameCount += 1
+        return true
+      },
+      focusMap: () => undefined,
+    })
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = targetObject.locationKey
+    const target = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      kind: 'object' as const,
+      systemId: targetSystem.id,
+      objectId: targetObject.id,
+    }
+
+    expect(await search.reveal(target)).toEqual({ status: 'rejected', reason: 'unavailable' })
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedSystemId).toBe(sourceSystem.id)
+    expect(harness.workflows.placement.clusterSystem.clusterAddType.value).toBe('system')
+    expect(search.open.value).toBe(true)
+    expect(search.query.value).toBe(targetObject.locationKey)
+    expect(frameCount).toBe(0)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('accepted search cleanup does not end a newer destination Add session @pure', async () => {
+  const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
+  const ready = deferred<boolean>()
+  let readyWaits = 0
+  try {
+    const sourceSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
+    const targetSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Altair')
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !targetSystem || !sourceObject) throw new Error('The search fixture did not create both systems.')
+    const targetObject = { ...sourceObject, id: 'new-add-search-target', name: 'Hidden Away', locationKey: 'AWAY-04' }
+    targetSystem.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: sourceSystem.id })
+    expect(await harness.workflows.placement.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    const sourceAddId = harness.workflows.placement.creation.creationSession.value?.id
+    if (sourceAddId === undefined) throw new Error('The source Add session was not created.')
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: () => {
+        readyWaits += 1
+        return ready.promise
+      },
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = targetObject.locationKey
+    const target = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      kind: 'object' as const,
+      systemId: targetSystem.id,
+      objectId: targetObject.id,
+    }
+
+    const reveal = search.reveal(target)
+    await expect.poll(() => readyWaits).toBe(1)
+    expect(harness.store.selectedSystemId).toBe(targetSystem.id)
+    expect(await harness.workflows.placement.creation.chooseCreationType({ kind: 'object', subtype: 'planet' })).toBe(true)
+    const destinationAdd = harness.workflows.placement.creation.creationSession.value
+    if (!destinationAdd || destinationAdd.id === sourceAddId) throw new Error('The destination Add intent did not replace the source session.')
+    ready.resolve(true)
+
+    expect(await reveal).toEqual({ status: 'revealed' })
+    expect(harness.workflows.placement.creation.creationSession.value?.id).toBe(destinationAdd.id)
+    expect(harness.workflows.placement.creation.creationSession.value?.systemId).toBe(targetSystem.id)
+  } finally {
+    ready.resolve(false)
+    harness.dispose()
+  }
+})
+
+test('an accepted source-draft Apply survives deletion of the later search target @pure', async () => {
+  const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
+  const ready = deferred<boolean>()
+  let readyWaits = 0
+  let frameCount = 0
+  try {
+    const sourceSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Vesper')
+    const targetSystem = harness.workspace.value.cluster.systems.find(system => system.name === 'Altair')
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !targetSystem || !sourceObject) throw new Error('The search fixture did not create both systems.')
+    const targetObject = {
+      ...sourceObject,
+      id: 'apply-before-cross-system-delete',
+      name: 'Later Target',
+      locationKey: 'AWAY-05',
+      placement: { kind: 'system' as const, x: 0.34, y: 0.61 },
+    }
+    targetSystem.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: sourceSystem.id, selectedObjectId: sourceObject.id })
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.entitySession.value
+    if (!session || session.kind !== 'object') throw new Error('The source object draft was not created.')
+    session.draft.name = 'Vesper Applied'
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: () => {
+        readyWaits += 1
+        return ready.promise
+      },
+      frameSearchTarget: () => {
+        frameCount += 1
+        return true
+      },
+      focusMap: () => undefined,
+    })
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = targetObject.locationKey
+    const target = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      kind: 'object' as const,
+      systemId: targetSystem.id,
+      objectId: targetObject.id,
+    }
+
+    const reveal = search.reveal(target)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+    await expect.poll(() => readyWaits).toBe(1)
+    expect(harness.workflows.inspector.entitySession.value).toBeNull()
+
+    const deleted = await harness.history.execute({
+      action: { kind: 'delete', label: 'Delete Later Target', target: { kind: 'object', id: targetObject.id, systemId: targetSystem.id } },
+      prepare: current => planMapEntityDeletion(current, {
+        kind: 'object',
+        systemId: targetSystem.id,
+        objectId: targetObject.id,
+      }).workspace,
+    })
+    expect(deleted.status).toBe('applied')
+    ready.resolve(true)
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'unavailable' })
+    expect(harness.workspace.value.cluster.systems.find(system => system.id === sourceSystem.id)?.objects
+      .find(object => object.id === sourceObject.id)?.name).toBe('Vesper Applied')
+    expect(harness.workflows.inspector.entitySession.value).toBeNull()
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(sourceSystem.id)
+    expect(harness.store.selectedObjectId).toBe(sourceObject.id)
+    expect(search.open.value).toBe(true)
+    expect(search.query.value).toBe(targetObject.locationKey)
+    expect(harness.history.getStatus().totalActions).toBe(2)
+    expect(frameCount).toBe(0)
+  } finally {
+    ready.resolve(false)
     harness.dispose()
   }
 })
@@ -1256,6 +1516,7 @@ test('deleting a captured system while its destination map is mounting restores 
 test('reopening search while overlay teardown is pending prevents a stale map focus @pure', async () => {
   const presentation = deferred<void>()
   let presentationWaits = 0
+  let presentationAborted = false
   let frameCount = 0
   let focusCount = 0
   const harness = createSearchHarness(
@@ -1263,9 +1524,15 @@ test('reopening search while overlay teardown is pending prevents a stale map fo
     'Vesper',
     Promise.resolve(),
     undefined,
-    () => {
+    (signal) => {
       presentationWaits += 1
-      return presentation.promise
+      return new Promise<SearchPresentationSettlement>((resolve) => {
+        signal.addEventListener('abort', () => {
+          presentationAborted = true
+          resolve('cancelled')
+        }, { once: true })
+        void presentation.promise.then(() => resolve('settled'))
+      })
     },
   )
   try {
@@ -1296,6 +1563,7 @@ test('reopening search while overlay teardown is pending prevents a stale map fo
     expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
     expect(search.open.value).toBe(true)
     expect(search.query.value).toBe('Vesper')
+    expect(presentationAborted).toBe(true)
     expect(frameCount).toBe(0)
     expect(focusCount).toBe(0)
   } finally {
@@ -1313,7 +1581,10 @@ test('reopening then closing search does not revive a pending reveal @pure', asy
     'Vesper',
     Promise.resolve(),
     undefined,
-    () => presentation.promise,
+    (signal) => new Promise<SearchPresentationSettlement>((resolve) => {
+      signal.addEventListener('abort', () => resolve('cancelled'), { once: true })
+      void presentation.promise.then(() => resolve('settled'))
+    }),
   )
   try {
     const system = harness.workspace.value.cluster.systems[0]
