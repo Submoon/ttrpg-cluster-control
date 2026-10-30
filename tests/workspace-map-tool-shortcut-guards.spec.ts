@@ -235,10 +235,10 @@ test('Ctrl+Z keeps history ownership and does not select a map tool', async ({ p
   await createSingleSystemWorkspace(page)
 
   const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await details.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
-  await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+  await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
   await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
   const renamedMap = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })

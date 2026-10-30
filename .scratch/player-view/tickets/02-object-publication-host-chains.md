@@ -1,6 +1,6 @@
 ---
 title: 'Explore published objects and anonymous Orbit host chains'
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -18,7 +18,7 @@ triage_labels:
 
 **What to build:** the Warden can set an object's disclosure mode and explore the resulting player system preview. Visible objects retain their applied geometry, and their required secret host chain appears anonymously without revealing unrelated objects.
 
-**Status:** in-progress and assigned to the coordinator. The user authorized implementation with `implement` and subagents on 2026-10-30. Ticket 01 is closed; tickets 03–07 remain unstarted.
+**Status:** closed. The user authorized implementation with `implement` and subagents on 2026-10-30. Tickets 01 and 02 are closed; tickets 03–07 remain unstarted.
 
 ## Blocked by
 
@@ -26,14 +26,14 @@ triage_labels:
 
 ## Acceptance criteria
 
-- [ ] Object editing exposes the four saved, undoable disclosure modes. Hidden omits the object except for the required-host exception; Unknown presence gives a neutral marker; Known type shows only type; Revealed shows permitted name/type. New objects default Known type and legacy objects initialize Hidden.
-- [ ] Only Revealed systems open an internal player preview. Hidden/Unknown presence/Known type systems include no internal objects even if a child's saved setting is more permissive. The Warden's source child settings survive a parent-mode change.
-- [ ] Partial object modes contain no source name, subtype-bearing key, descriptive text or properties. Unknown presence does not expose true type through a glyph, halo, class/attribute, accessible label, identifier or hierarchy row. Warden Location keys remain private in every player mode.
-- [ ] A published object's required chain of secret object hosts is included recursively as Unknown presences, with the necessary Orbits. A host already permitted at a higher disclosure level is neither duplicated nor downgraded. Do not include hidden siblings, unrelated Orbit branches or independently empty Orbits.
-- [ ] Unoccupied geometric centers remain geometry; do not invent physical objects for them. Project valid safe references and only the necessary geometry without embedding omitted source identities or metadata.
-- [ ] Effective applied positions, radii, rotations and angles remain stable after filtering, including missing-value defaults and nested Orbits. Resolve required source geometry before removal; hidden sibling order must not move public objects or leak through private labels/counts.
-- [ ] All new object publication data survives normal save/reload, Undo/Redo, complete GM backup/import ID remapping and recovery, preserving the original objects and orbital structure.
-- [ ] Object public prose/Fields and physical Station associations remain absent from the preview until their own slices add them. No player transport is exposed by this ticket.
+- [x] Object editing exposes the four saved, undoable disclosure modes. Hidden omits the object except for the required-host exception; Unknown presence gives a neutral marker; Known type shows only type; Revealed shows permitted name/type. New objects default Known type and legacy objects initialize Hidden.
+- [x] Only Revealed systems open an internal player preview. Hidden/Unknown presence/Known type systems include no internal objects even if a child's saved setting is more permissive. The Warden's source child settings survive a parent-mode change.
+- [x] Partial object modes contain no source name, subtype-bearing key, descriptive text or properties. Unknown presence does not expose true type through a glyph, halo, class/attribute, accessible label, identifier or hierarchy row. Warden Location keys remain private in every player mode.
+- [x] A published object's required chain of secret object hosts is included recursively as Unknown presences, with the necessary Orbits. A host already permitted at a higher disclosure level is neither duplicated nor downgraded. Do not include hidden siblings, unrelated Orbit branches or independently empty Orbits.
+- [x] Unoccupied geometric centers remain geometry; do not invent physical objects for them. Project valid safe references and only the necessary geometry without embedding omitted source identities or metadata.
+- [x] Effective applied positions, radii, rotations and angles remain stable after filtering, including missing-value defaults and nested Orbits. Resolve required source geometry before removal; hidden sibling order must not move public objects or leak through private labels/counts.
+- [x] All new object publication data survives normal save/reload, Undo/Redo, complete GM backup/import ID remapping and recovery, preserving the original objects and orbital structure.
+- [x] Object public prose/Fields and physical Station associations remain absent from the preview until their own slices add them. No player transport is exposed by this ticket.
 
 ## Verification and completion
 
@@ -42,6 +42,14 @@ Through real object editing and preview navigation, verify all modes, parent-sys
 ## Scope boundaries
 
 Extend the established common projection/preview rather than create a second disclosure implementation. Text/Fields are handled by ticket 03; routes/Station association by ticket 04. The source writer, history and authoritative geometry remain unchanged in ownership. Sensitive design/review rules apply.
+
+## Resolution
+
+Implemented all eight criteria: saved object disclosure through the existing draft/history/writer, strict source version 3 with private legacy object defaults, and Revealed-only internal player maps. The common allowlisted projection preserves applied geometry and recursively retains only necessary anonymous hosts and Orbits. Public navigation, hierarchy, inspection and viewport controls consume detached player data and leave the GM workspace unchanged. Text/Fields, Station associations and player transport remain for later slices.
+
+Candidate `2afe07f23cbc00907695bc5496770dc9eab770d5` passed lint, typecheck, a production build, focused projection/geometry/persistence scenarios, compiled entry journeys and desktop/compact visual inspection. The complete suite ran once: 471 passed / 13 failed. An unchanged targeted replay passed 12/13; the remaining newly merged shortcut test used obsolete chart-dialog labels. Correcting only its three exact locators produced an 8/8 passing whole-file replay, with assertions and timeouts preserved. Standards, Spec and complementary privacy/persistence reviews have no blockers; one optional Low migration-duplication suggestion is deferred. See the [implementation record](../ticket-02-implementation.md) for commands, evidence and limits.
+
+The correction and closure are committed locally on `codex/player-view-ticket-01`. Tickets 03 and 04 are available but unclaimed; no later implementation, push, remote write or merge into main occurred. GitHub #9 was reread before completion and remains open and unchanged.
 
 ## Comments
 

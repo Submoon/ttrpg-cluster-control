@@ -1,6 +1,6 @@
 ---
 title: Ticket 02 implementation and verification
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -22,7 +22,7 @@ The existing approved specification covers the common pure player projection/geo
 
 ## Design and verification
 
-Architecture is resolving the smallest extension of the established projection/preview. A geometry specialist traces applied defaults and host dependencies independently. No implementation or acceptance is claimed yet. Raw logs, traces and screenshots belong in ignored test artifacts.
+Architecture resolved the smallest extension of the established projection/preview before the two implementation writers started. A geometry specialist traced applied defaults and host dependencies independently. The chronological evidence below records initial failures, corrections and completed verification. Raw logs, traces and screenshots belong in ignored test artifacts.
 
 The prior ticket's local timing evidence is historical: one unchanged long Orbit journey exceeded 30 seconds on both its old baseline and candidate, completing with a local 90-second diagnostic limit. The newly integrated main also updates Orbit pointer expectations; reassess actual current failures rather than assuming the old result applies.
 
@@ -72,3 +72,29 @@ The prior ticket's local timing evidence is historical: one unchanged long Orbit
 - Compiled-server focused run on port 3148: 11/12 passed, covering four production entry variants plus preview/host geometry, long labels, viewport, parent gates, Undo/Redo/reload/Retry and real backup recovery with nondefault publication/private source data. The remaining mode-loop test assumed the scene was empty when its planet was Hidden, overlooking the independently Known type initial star; it also needed explicit object inspection before expecting details. After those test-only corrections, all four modes passed (1/1, 23.5 seconds; `test-results/player-view-02-production-modes-final`). No application behavior was changed to satisfy those expectations.
 - Final desktop/compact images from `test-results/player-view-02-production-focused` were inspected again after viewport sizing/controls. The initial map now fits above the footer, and the compact body scrolls to its hierarchy while retaining the closing controls.
 - All eight new public journeys now have passing evidence on the production build (seven in the focused batch plus the mode-loop replay); all four compiled entry checks passed. The complete local suite will run once on the final integrated source, followed by affected replays only if required.
+
+### Integrated suite and final correction
+
+- Integrated implementation snapshot: `2afe07f23cbc00907695bc5496770dc9eab770d5` (`feat: explore published objects and anonymous orbit hosts`). Application source stayed frozen throughout the complete suite and its targeted replays. The dev server was warmed through a real UI journey first (1/1 passed; `test-results/player-view-02-dev-warmup.log`).
+- Full command: `npm test -- --reporter=line --output=test-results/player-view-02-full`, with explicit local base URL `http://127.0.0.1:3147`, existing installed Chromium, one worker and no retries. Result: **471 passed / 13 failed, 484 total, 1.1 hours**. All 191 pure checks, the local storage check and all eight new object-publication browser journeys passed. Log and original failed selection remain at `test-results/player-view-02-full.log` and `test-results/player-view-02-full/.last-run.json`.
+- The failures initially presented as overall 30-second deadlines or five-second loading waits in existing map, Orbit, navigation and campaign-preparation journeys. An untouched copy of the failed selection was used with `PLAYWRIGHT_LAST_RUN_OUTPUT_FILE` and `--last-failed --output=test-results/player-view-02-failed-replay`, retaining the complete run's artifacts. Result: **12 passed / 1 failed in 3.0 minutes**, with the same source, dev server, assertions and deadlines. Log: `test-results/player-view-02-failed-replay.log`. These twelve outcomes are successful replays, not a clean first full-suite pass.
+- The persistent Ctrl+Z case was diagnosed from its captured page: the chart-details region and `Edit chart details` button were present, while the scenario introduced by merged main still requested pre-ticket-01 `Edit chart names`. Its dialog and submit locators also retained the old names. The editor writer changed only those three exact strings to the existing `Edit chart details` / `Apply details` labels; no application code, assertion, timeout or shortcut expectation changed.
+- The whole affected file then passed **8/8 in 1.5 minutes**: `npx playwright test tests/workspace-map-tool-shortcut-guards.spec.ts --project=browser --reporter=line --output=test-results/player-view-02-shortcut-guards-final`. Log: `test-results/player-view-02-shortcut-guards-final.log`. It exercises actual naming, saving, map focus, Ctrl+Z, original-name restoration and unchanged Select mode. All thirteen original failures therefore have passing evidence through unchanged replay or this corrected-file run. The complete suite was not rerun.
+- Final application lint/typecheck/build evidence above remains applicable to unchanged application source. Scoped ESLint passed (exit 0) for the final test-only label correction: `npx eslint tests/workspace-map-tool-shortcut-guards.spec.ts --max-warnings 0`, log `test-results/player-view-02-shortcut-lint-final.log`. No validation was disabled or warning suppressed.
+
+### Independent review closure
+
+The review fixed point is `61aa6cb1accaf67f196cffa284109cdf35674189`; the implementation diff is `git diff 61aa6cb1accaf67f196cffa284109cdf35674189...2afe07f23cbc00907695bc5496770dc9eab770d5`. Independent reviewers inspected Standards and Spec in parallel, with a complementary Sensitive review covering the frozen domain phase and then the integrated UI candidate. Both Standards and Spec reviewers subsequently inspected the three-line locator correction and confirmed closure without weakened coverage.
+
+- **Standards:** zero documented-standard violations or blocking findings. One **Low, optional Duplicated Code heuristic** notes the repeated raw-object Hidden initialization in local workspace and portable import legacy migrations. Deferred: the present implementations agree, retain distinct version-specific system/title admission, and are covered by strict current/v2/legacy tests. No refactor is required for correctness. The large public map component's cohesion was separately assessed by the architect and Standards reviewer as recorded above.
+- **Spec:** zero findings; all eight ticket criteria are implemented without missing behavior or consequential scope creep.
+- **Sensitive privacy/persistence:** zero confirmed findings. Public renderers receive allowlisted detached DTOs, hidden host closure uses safe references, Unknown markup/ARIA omits true type and identity, navigation/viewport resources remain local, and publication follows the existing writer/history/recovery owner.
+- Runtime evidence is coordinator-owned. Desktop and compact screenshots and browser accessibility snapshots were inspected; physical keyboard devices and screen-reader behavior were not independently certified.
+
+### Resolution and handoff
+
+All eight ticket 02 criteria are resolved. The source workspace and full GM maps now use version 3; player DTO/layout versions remain 1. Only Revealed systems carry an internal map. Newly created objects use Known type, supported old object data starts Hidden, and complete GM operations preserve private source data and publication settings. No prose/Fields, physical Station association, player JSON/link or player image export was added by this ticket.
+
+Before completion, origin was fetched again: origin/main remains `971e91c0ad2fc78e4f92c1e625091a577960b41b`, with the candidate four commits ahead / zero behind. GitHub #9 was reread and its body, labels, open state and absence of comments remain unchanged. The implementation baseline intentionally remains the merge commit `61aa6cb1`; there was no need to integrate a newer base.
+
+The implementation snapshot and final test correction/resolution are local commits on `codex/player-view-ticket-01`. The coordinator stopped the owned dev server after browser checks. The unrelated untracked `.codex/environments/` remains untouched. No push, remote write, PR or merge into main occurred. Tickets 03 and 04 are available but unclaimed; tickets 03–07 remain unstarted and the parent feature remains in progress.

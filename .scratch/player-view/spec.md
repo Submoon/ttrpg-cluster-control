@@ -14,7 +14,7 @@ ticket_count: 7
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02 with subagents and the `implement` workflow. Ticket 01 is closed and ticket 02 is in progress; tickets 03–07 remain unstarted. The source GitHub issue remains open; no remote write, push, PR or merge into main is authorized by this specification.
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02 with subagents and the `implement` workflow. Tickets 01 and 02 are closed; tickets 03–07 remain unstarted. The source GitHub issue remains open; no remote write, push, PR or merge into main is authorized by this specification.
 
 ## Source issue
 
@@ -189,7 +189,7 @@ The common projection seam and verification approach were already confirmed in t
 
 ### Approved Implementation Tickets
 
-The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Ticket 01 is closed under the user's separate implementation instruction; its publication editing, strict source migration and allowlisted Warden-side preview are implemented and verified. Ticket 02 is in progress and assigned to the coordinator; tickets 03–07 remain unstarted. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
+The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Tickets 01 and 02 are closed under the user's separate implementation instructions. System/object publication, strict source migration and allowlisted Warden-side previews with anonymous host chains are implemented and verified. Tickets 03–07 remain unstarted. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
 
 | Ticket | End-to-end slice | Blocked by |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ The user approved these seven end-to-end slices and their exact blocking edges t
 | 06 | [Share compressed player links with a JSON fallback](tickets/06-compressed-player-links.md) | 05 |
 | 07 | [Export player-safe SVG and PNG maps](tickets/07-player-svg-png-exports.md) | 04 |
 
-At publication the initial executable frontier was ticket 01 only. Ticket 01 is now closed and ticket 02 is active under separate authorization; no later implementation is started automatically. After 02, tickets 03 and 04 can advance independently; after 04, image work can advance without waiting for JSON/URL transport. The common object/relationship scene is the image prerequisite; public prose/Fields are not drawn as map imagery, so 03 is not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules.
+At publication the initial executable frontier was ticket 01 only. Tickets 01 and 02 are now closed; tickets 03 and 04 are available and unclaimed. No later implementation is started automatically. Tickets 03 and 04 can advance independently; after 04, image work can advance without waiting for JSON/URL transport. The common object/relationship scene is the image prerequisite; public prose/Fields are not drawn as map imagery, so 03 is not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules.
 
 No standalone prefactor or horizontal schema/test ticket is needed: the focused projection/persistence boundaries are introduced through the first demoable preview slice. Tickets 01–04 expose only the Warden-side preview; player JSON waits for both content and relationship projection, and image sharing waits for the complete relationship scene. Each slice owns relevant privacy/compatibility checks. Run the integrated full suite once on the stable completed candidate, followed by required Sensitive reviews; do not defer individual ticket verification to an unspecified final cleanup ticket.
 
