@@ -395,6 +395,9 @@ test('far player routes stay inspectable with local camera controls without chan
 
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
+  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  await expect(closeInspector).toBeVisible()
+  await closeInspector.click()
   await returnToClusterMap(page)
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after).toEqual(before)
