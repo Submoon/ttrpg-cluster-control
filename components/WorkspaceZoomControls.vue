@@ -256,4 +256,45 @@ const sliderValue = computed({
     font-size: 0.65rem;
   }
 }
+
+@media (min-width: 761px) and (max-height: 600px) {
+  .workspace-zoom-navigation {
+    width: min(18rem, calc(100vw - 1.5rem));
+    grid-template:
+      'heading pan' auto
+      'slider pan' auto
+      'note pan' auto
+      / minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.15rem 0.5rem;
+    padding: 0.4rem;
+  }
+
+  .workspace-zoom-slider-heading {
+    grid-area: heading;
+    font-size: 0.7rem;
+  }
+
+  .workspace-zoom-slider {
+    grid-area: slider;
+    width: 100%;
+    margin: 0;
+  }
+
+  .workspace-zoom-pan {
+    grid-area: pan;
+    grid-template: 2.5rem / repeat(4, 2.5rem);
+    gap: 0.1rem;
+  }
+
+  .workspace-zoom-pan-up { grid-area: 1 / 2; }
+  .workspace-zoom-pan-left { grid-area: 1 / 1; }
+  .workspace-zoom-pan-down { grid-area: 1 / 3; }
+  .workspace-zoom-pan-right { grid-area: 1 / 4; }
+
+  .workspace-zoom-range-note {
+    grid-area: note;
+    text-align: left;
+  }
+}
 </style>

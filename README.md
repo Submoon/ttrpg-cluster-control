@@ -12,6 +12,7 @@ The editor supports desktop and mobile layouts, light/dark themes, catalogue obj
 
 - Use the bottom dock: **Select** (default) to inspect, **Navigate** to pan or enter systems, **Move** to reposition map elements, and **Add** for repeated placement.
 - Open **Hierarchy** to browse the map and **Inspect** for details. Panels fill the screen on mobile; closing a panel preserves its draft.
+- Use **Search** from either map context to find the current Jump Cluster or any star system by name, or an object in any system by name or Location key. Choosing an object frames its hosted Orbit branch. Existing draft guards still apply.
 - Choose **Edit** to make changes, then **Apply** or **Discard**. From a system's cluster inspector, **Open system** enters its map without changing tools. Deletions show their consequences before confirmation; the last system cannot be deleted.
 - Open **Fields** to manage reusable definitions. Use **Map files** for JSON import/export and clean SVG/PNG images, with an optional light print palette.
 

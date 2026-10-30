@@ -84,7 +84,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   const navigation = workspaceZoomControls(page)
   await zoomOutMapToMinimum(page)
@@ -99,7 +99,7 @@ test('the system map expands beyond its initial bounds and exports the full layo
   await dragHtmlElementToWorldPoint(page, planetButton, map, { x: 1400, y: 700 })
   await expect(map.locator('.system-object')).toHaveCount(objectCountBeforeDrop + 1)
   await quitSystemAdd(page)
-  await hierarchy.getByRole('button', { name: /Select PL-\d+, New planet/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select PL-\d+, New planet/ }).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Far Planet')
   await saveMapObject(page)

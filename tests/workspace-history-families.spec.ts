@@ -688,7 +688,7 @@ test('reviewed destructive Field change restores exact values through the editor
   await clusterMap.getByRole('button', { name: 'Open Vesper system map', exact: true }).last().click()
   await expect(page.getByRole('group', { name: 'Vesper star system map', exact: true })).toBeVisible()
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).last().click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).last().click()
   const dialog = await openFieldDefinitionDialog(page)
   await dialog.getByRole('button', { name: /Threat/ }).click()
   await editFieldDefinition(dialog)

@@ -51,6 +51,60 @@ async function attachViewportScreenshot(page: Page, name: string): Promise<void>
   })
 }
 
+async function expectWorkspaceHeaderToFit(page: Page, width: number, height: number): Promise<void> {
+  const header = page.locator('.workspace-header')
+  const brand = header.locator('.workspace-header-brand')
+  const cluster = header.getByRole('region', { name: 'Current Jump Cluster' })
+  const clusterName = cluster.getByRole('heading', { name: 'Kestrel Reach', exact: true })
+  await expect(clusterName).toBeVisible()
+
+  const headerBounds = await header.boundingBox()
+  const brandBounds = await brand.boundingBox()
+  const clusterBounds = await cluster.boundingBox()
+  const headingBounds = await clusterName.boundingBox()
+  if (!headerBounds || !brandBounds || !clusterBounds || !headingBounds) {
+    throw new Error('A workspace header element has no visible bounds.')
+  }
+
+  expect(headingBounds.x).toBeGreaterThanOrEqual(headerBounds.x)
+  expect(headingBounds.x + headingBounds.width).toBeLessThanOrEqual(headerBounds.x + headerBounds.width)
+  expect(await page.locator('html').evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(width)
+  if (width <= 760 || height <= 600) expect(clusterBounds.y).toBeGreaterThan(brandBounds.y)
+
+  const mapToolbar = page.getByRole('navigation', { name: 'Map context and commands' })
+  const mapTitle = mapToolbar.locator('.workspace-map-context h2')
+  const mapActions = mapToolbar.locator('.workspace-map-actions')
+  await expect(mapTitle).toHaveText('Vesper')
+  const toolbarBounds = await mapToolbar.boundingBox()
+  const mapTitleBounds = await mapTitle.boundingBox()
+  const mapActionsBounds = await mapActions.boundingBox()
+  if (!toolbarBounds || !mapTitleBounds || !mapActionsBounds) {
+    throw new Error('A map toolbar element has no visible bounds.')
+  }
+
+  for (const bounds of [mapTitleBounds, mapActionsBounds]) {
+    expect(bounds.x).toBeGreaterThanOrEqual(toolbarBounds.x)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(toolbarBounds.x + toolbarBounds.width)
+  }
+  const titleOverlapsActions = mapTitleBounds.x < mapActionsBounds.x + mapActionsBounds.width
+    && mapTitleBounds.x + mapTitleBounds.width > mapActionsBounds.x
+    && mapTitleBounds.y < mapActionsBounds.y + mapActionsBounds.height
+    && mapTitleBounds.y + mapTitleBounds.height > mapActionsBounds.y
+  expect(titleOverlapsActions).toBe(false)
+}
+
+test('workspace header and map toolbar fit compact portrait and desktop viewports', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
+  await page.getByLabel('First star system', { exact: true }).fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
+
+  await expectWorkspaceHeaderToFit(page, 390, 844)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expectWorkspaceHeaderToFit(page, 1440, 900)
+})
+
 for (const viewport of reviewViewports) {
   test(`deletion and import reviews fit and return focus at ${viewport.width}×${viewport.height} ${viewport.theme}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
@@ -62,6 +116,7 @@ for (const viewport of reviewViewports) {
     await page.getByLabel('First star system', { exact: true }).fill('Vesper')
     await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 
+    await expectWorkspaceHeaderToFit(page, viewport.width, viewport.height)
     await setWorkspaceMapMode(page, 'Select')
     const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
     const primaryStar = systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })

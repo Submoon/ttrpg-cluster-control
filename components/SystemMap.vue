@@ -8,7 +8,7 @@
           : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.' }}
     </p>
     <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
-      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= MAP_ZOOM_MIN_SCALE * 100" @click="zoomBy(1 / 1.2)">−</button>
+      <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= minimumZoomScale * 100" @click="zoomBy(1 / 1.2)">−</button>
       <output aria-label="Zoom level" aria-live="polite">{{ zoomLevel }}%</output>
       <button type="button" aria-label="Zoom in" :disabled="zoomLevel >= MAP_ZOOM_MAX_SCALE * 100" @click="zoomBy(1.2)">+</button>
       <button type="button" aria-label="Fit map" @click="fitMap">Fit</button>
@@ -77,6 +77,13 @@ import {
   type SystemMapEventHandlers,
   type SystemMapRenderer,
 } from './maps/system-map-renderer'
+import {
+  measureSystemObjectBranchBounds,
+  resolveSystemObjectBranch,
+} from '../utils/system-object-branch'
+
+const SYSTEM_OBJECT_BRANCH_FRAME_MAX_SCALE = 2
+const SYSTEM_ORBIT_RING_STROKE_WIDTH = 2
 
 const props = withDefaults(defineProps<{
   system: StarSystem
@@ -133,6 +140,7 @@ const emit = defineEmits<{
 
 const svgElement = ref<SVGSVGElement | null>(null)
 const zoomLevel = ref(100)
+const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const orbitRotationWheelEvents = new WeakSet<Event>()
 const mapGeometry = computed<SystemMapGeometry>(() => ({
   objectAngles: props.objectAngles,
@@ -215,10 +223,24 @@ function getViewport(): MapViewport {
   return { x: transform.x, y: transform.y, k: transform.k }
 }
 
+/** Returns the current floor shared by the D3 gesture, map controls, and retained visits. */
+function getMinimumZoomScale(): number {
+  return minimumZoomScale.value
+}
+
+/** Lowers the mounted map's floor only when a valid remembered or framed camera needs it. */
+function lowerMinimumZoomScale(candidate: number): number | undefined {
+  if (!Number.isFinite(candidate) || candidate <= 0 || candidate > MAP_ZOOM_MAX_SCALE) return undefined
+  minimumZoomScale.value = Math.min(minimumZoomScale.value, candidate)
+  mapRenderer?.zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  return minimumZoomScale.value
+}
+
 /** Applies a finite viewport through D3 so scene transforms and zoom feedback stay synchronized. */
 function setViewport(viewport: MapViewport): void {
   const element = svgElement.value
-  const next = clampMapViewport(viewport)
+  if (Number.isFinite(viewport.k) && viewport.k > 0) lowerMinimumZoomScale(viewport.k)
+  const next = clampMapViewport(viewport, minimumZoomScale.value)
   if (!element || !mapRenderer || !next) return
   select(element).call(
     mapRenderer.zoomBehavior.transform,
@@ -303,7 +325,7 @@ function moveTouchNavigation(event: TouchEvent): void {
     const second = touchPoint(event.touches[1]!, element)
     const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
     const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-    const scale = Math.max(MAP_ZOOM_MIN_SCALE, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+    const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
     select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale).scale(scale))
   } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
     const point = touchPoint(event.touches[0]!, element)
@@ -464,6 +486,99 @@ function fitMap(usableRect?: SvgViewportRect): void {
   setViewport(viewport ?? { x: 0, y: 0, k: 1 })
 }
 
+function measureVisibleObjectGlyphBounds(mark: SVGGElement): SvgViewportRect | undefined {
+  const visibleChildren = [...mark.querySelectorAll<SVGGraphicsElement>(
+    '.system-object-glyph, .object-glyph-halo, .object-key, .object-name, .object-type-mark',
+  )]
+  let bounds: SvgViewportRect | undefined
+  for (const child of visibleChildren) {
+    let box: DOMRect
+    let style: CSSStyleDeclaration
+    try {
+      box = child.getBBox()
+      style = window.getComputedStyle(child)
+    } catch {
+      return undefined
+    }
+    if (![box.x, box.y, box.width, box.height].every(Number.isFinite)
+      || box.width < 0 || box.height < 0) return undefined
+    if (box.width === 0 && box.height === 0) continue
+
+    const strokeWidth = style.stroke !== 'none' && style.stroke !== 'transparent'
+      ? Number.parseFloat(style.strokeWidth)
+      : 0
+    if (!Number.isFinite(strokeWidth) || strokeWidth < 0) return undefined
+    const halfStroke = strokeWidth / 2
+    const next = {
+      x: box.x - halfStroke,
+      y: box.y - halfStroke,
+      width: box.width + strokeWidth,
+      height: box.height + strokeWidth,
+    }
+    if (!bounds) bounds = next
+    else {
+      const left = Math.min(bounds.x, next.x)
+      const top = Math.min(bounds.y, next.y)
+      const right = Math.max(bounds.x + bounds.width, next.x + next.width)
+      const bottom = Math.max(bounds.y + bounds.height, next.y + next.height)
+      bounds = { x: left, y: top, width: right - left, height: bottom - top }
+    }
+  }
+  return bounds
+}
+
+/** Frames an object's applied hosted branch inside the obstruction-aware map area. */
+function frameObjectBranch(objectId: string, usableRect: SvgViewportRect): boolean {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  const rect = normalizeSvgViewportRect(usableRect)
+  if (!element || !zoomBehavior || !rect) return false
+
+  const branch = resolveSystemObjectBranch(props.system, objectId)
+  if (!branch) return false
+  const objectMarks = [...element.querySelectorAll<SVGGElement>('.system-object[data-object-id]')]
+  const glyphBounds = new Map<string, SvgViewportRect>()
+  for (const branchObjectId of branch.objectIds) {
+    const mark = objectMarks.find(candidate => candidate.getAttribute('data-object-id') === branchObjectId)
+    const bounds = mark && measureVisibleObjectGlyphBounds(mark)
+    if (!bounds) return false
+    glyphBounds.set(branchObjectId, bounds)
+  }
+
+  const measured = measureSystemObjectBranchBounds(
+    props.system,
+    objectId,
+    mapGeometry.value,
+    glyphBounds,
+    SYSTEM_ORBIT_RING_STROKE_WIDTH,
+  )
+  if (!measured) return false
+  const fitted = fitMapViewport(measured.bounds, rect, Number.MIN_VALUE)
+  if (!fitted) return false
+
+  const scale = Math.min(SYSTEM_OBJECT_BRANCH_FRAME_MAX_SCALE, fitted.k)
+  const viewport = scale === fitted.k
+    ? fitted
+    : {
+        x: rect.x + (rect.width - measured.bounds.width * scale) / 2 - measured.bounds.x * scale,
+        y: rect.y + (rect.height - measured.bounds.height * scale) / 2 - measured.bounds.y * scale,
+        k: scale,
+      }
+  const nextMinimum = Math.min(minimumZoomScale.value, scale)
+  const safeViewport = clampMapViewport(viewport, nextMinimum)
+  if (!safeViewport) return false
+
+  zoomExtentOverride = rect
+  zoomBehavior.extent(() => svgViewportExtent(zoomExtentOverride ?? getSvgViewportRect(element)))
+  minimumZoomScale.value = nextMinimum
+  zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  select(element).call(
+    zoomBehavior.transform,
+    zoomIdentity.translate(safeViewport.x, safeViewport.y).scale(safeViewport.k),
+  )
+  return true
+}
+
 /**
  * Rebuilds the D3 scene; creation-only redraws leave active view navigation intact.
  */
@@ -500,6 +615,7 @@ function render(preserveNavigation = false): void {
     },
     onViewportChange: viewport => emit('viewport-change', viewport),
   })
+  mapRenderer.zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
   const zoomExtent = zoomExtentOverride
   if (zoomExtent) mapRenderer.zoomBehavior.extent(() => svgViewportExtent(zoomExtent))
 }
@@ -528,7 +644,14 @@ onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
   cancelActiveGesture()
 })
-watch(() => props.system, () => render(), { deep: true })
+let renderedSystemId = props.system.id
+watch(() => props.system, () => {
+  if (props.system.id !== renderedSystemId) {
+    renderedSystemId = props.system.id
+    minimumZoomScale.value = MAP_ZOOM_MIN_SCALE
+  }
+  render()
+}, { deep: true })
 watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })
@@ -548,12 +671,14 @@ defineExpose({
   getDetachedOrbitCenter,
   getCreationCandidates,
   getViewport,
+  getMinimumZoomScale,
   setViewport,
   zoomBy,
   panBy,
   revealHistoryTarget,
   focusMap,
   fitMap,
+  frameObjectBranch,
   cancelActiveGesture,
   cancelCreationPreview,
   setObjectPlacementPreview,

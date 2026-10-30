@@ -98,7 +98,7 @@ test('Other map Add explains a blank label and recovers through Placement', asyn
   await createWorkspace(page)
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
   await expect(inspector).toBeVisible()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
@@ -270,7 +270,7 @@ test('Orbit form Add retains its host, corrects each axis, and retries one appli
   await waitForWorkspaceSaved(page)
   const inspector = page.locator('#workspace-inspector-panel')
   const starHierarchy = await openWorkspaceHierarchy(page)
-  await starHierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await starHierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await expect(inspector).toBeVisible()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Unapplied Primary Star')
@@ -418,7 +418,7 @@ test('an Orbit draft blocks same-host Orbit creation and is resolved before obje
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await clusterHierarchy.getByRole('button', { name: 'Open Dense Reach system map', exact: true }).click()
   const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await hierarchy.getByRole('button', { name: /^Orbit 1 around Primary Star,/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Orbit 1 around Primary Star,/ }).click()
 
   const inspector = page.locator('#workspace-inspector-panel')
   await expect(inspector).toBeVisible()

@@ -1,4 +1,4 @@
-import { computed, nextTick, watch, type Ref } from 'vue'
+import { computed, getCurrentScope, nextTick, onScopeDispose, watch, type Ref } from 'vue'
 import {
   jumpPointsInCluster,
   type JumpRoute,
@@ -6,7 +6,7 @@ import {
   type MapDeletionPlan,
 } from '../../domain/workspace'
 import type { EditorUiSelection, useEditorUiStore } from '../../stores/editor-ui'
-import type { EntityCommand, MapHistoryTarget, MapInteractionMode, TransitionOptions } from './types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, MapNavigationHandle, SearchContextChangeLease, SearchContextChangeOutcome, SearchPresentationSettlement, TransitionOptions } from './types'
 import type { WorkspaceHistoryTraversalContext, WorkspaceMutationTarget } from './workspace-mutations'
 import type { useEditorMapControls } from './useEditorMapControls'
 import type { useChartNamesSession } from './useChartNamesSession'
@@ -14,6 +14,7 @@ import type { useEditorTransitions } from './useEditorTransitions'
 import type { useEditorViewport } from './useEditorViewport'
 import type { useEntityInspectorSession } from './useEntityInspectorSession'
 import type { useRouteInspectorSession } from './useRouteInspectorSession'
+import type { SearchTarget } from '../../utils/workspace-search'
 
 type EditorUiStore = ReturnType<typeof useEditorUiStore>
 type MapControls = ReturnType<typeof useEditorMapControls>
@@ -21,10 +22,24 @@ type ChartController = ReturnType<typeof useChartNamesSession>
 type Transitions = ReturnType<typeof useEditorTransitions>
 type EntityController = ReturnType<typeof useEntityInspectorSession>
 type RouteController = ReturnType<typeof useRouteInspectorSession>
+type SearchContextLeaseState = {
+  requestId: number
+  lease: SearchContextChangeLease | null
+  outcome: SearchContextChangeOutcome
+  finished: boolean
+}
+
+interface SearchDestinationSignature {
+  selection: EditorUiSelection
+  mapMode: MapInteractionMode
+  compactPanel: EditorUiStore['compactPanel']
+}
 
 /** Owns guarded navigation and selection restoration; accepted state is published through focused Pinia actions. */
 export function useEditorNavigation(options: {
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
+  beginSearchContextChange?: (requestId: number) => SearchContextChangeLease
   store: EditorUiStore
   mapControls: MapControls
   chart: ChartController
@@ -50,6 +65,64 @@ export function useEditorNavigation(options: {
   const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
   const selectedRoute = computed(() => workspace.value?.cluster.routes.find(item => item.id === store.selectedRouteId))
   const jumpPoints = computed(() => workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [])
+  let searchContextGeneration = 0
+  let searchRequestSequence = 0
+  let activeSearchContextLease: SearchContextLeaseState | null = null
+  let activeSearchPresentationController: AbortController | null = null
+  let publishingSearchContext = false
+
+  function abortSearchPresentation(): void {
+    activeSearchPresentationController?.abort()
+    activeSearchPresentationController = null
+  }
+
+  function finishSearchContextLease(state: SearchContextLeaseState, outcome: SearchContextChangeOutcome): void {
+    if (state.finished) return
+    state.finished = true
+    if (activeSearchContextLease === state) activeSearchContextLease = null
+    state.lease?.finish(outcome)
+  }
+
+  function abandonSearchContextLease(): void {
+    if (activeSearchContextLease) finishSearchContextLease(activeSearchContextLease, 'abandoned')
+  }
+
+  if (getCurrentScope()) onScopeDispose(() => {
+    searchRequestSequence += 1
+    abortSearchPresentation()
+    abandonSearchContextLease()
+  })
+
+  /** Prevents a deferred search camera action from overriding a newer navigation command. */
+  function invalidatePendingSearchReveal(): void {
+    searchRequestSequence += 1
+    abortSearchPresentation()
+    abandonSearchContextLease()
+  }
+
+  watch([
+    () => workspace.value?.id,
+    () => workspace.value?.cluster.id,
+    () => store.activeView,
+    () => store.mapMode,
+    () => store.selectedSystemId,
+    () => store.clusterSelectedSystemId,
+    () => store.inspectedClusterSystemId,
+    () => store.selectedObjectId,
+    () => store.selectedOrbitId,
+    () => store.selectedRouteId,
+    () => store.searchOpen,
+    () => store.compactPanel,
+  ], () => {
+    if (!publishingSearchContext) {
+      searchContextGeneration += 1
+      abortSearchPresentation()
+    }
+  }, { flush: 'sync' })
+
+  watch(() => store.searchOpen, (isOpen, wasOpen) => {
+    if (isOpen !== wasOpen && !publishingSearchContext) invalidatePendingSearchReveal()
+  }, { flush: 'sync' })
 
   function setSelection(patch: Partial<EditorUiSelection>): void {
     store.setSelection({
@@ -117,6 +190,7 @@ export function useEditorNavigation(options: {
   }
 
   async function setMapMode(mode: MapInteractionMode): Promise<boolean> {
+    invalidatePendingSearchReveal()
     if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
     store.setMode(mode)
     return true
@@ -202,6 +276,7 @@ export function useEditorNavigation(options: {
   }
 
   async function showClusterMap(): Promise<void> {
+    invalidatePendingSearchReveal()
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
     if (!await transitions.resolveTransition() || !acceptNavigationTransition(startingStamp, startingSessionId)) return
@@ -212,6 +287,7 @@ export function useEditorNavigation(options: {
   }
 
   async function selectSystem(systemId: string): Promise<void> {
+    invalidatePendingSearchReveal()
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
@@ -225,6 +301,7 @@ export function useEditorNavigation(options: {
   }
 
   async function selectClusterSystem(systemId: string, openInspector = true): Promise<void> {
+    invalidatePendingSearchReveal()
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
@@ -241,11 +318,432 @@ export function useEditorNavigation(options: {
     editorError.value = ''
   }
 
+  function sameSearchWorkspace(currentWorkspace: LocalWorkspace | null, target: SearchTarget): boolean {
+    return currentWorkspace?.id === target.workspaceId
+      && currentWorkspace.cluster.id === target.clusterId
+  }
+
+  function searchTargetExists(currentWorkspace: LocalWorkspace | null, target: SearchTarget): boolean {
+    if (!currentWorkspace || !sameSearchWorkspace(currentWorkspace, target)) return false
+    if (target.kind === 'cluster') return true
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === target.systemId)
+    return target.kind === 'system'
+      ? system !== undefined
+      : system?.objects.some(object => object.id === target.objectId) ?? false
+  }
+
+  function searchDestinationSignature(): SearchDestinationSignature {
+    return {
+      selection: {
+        activeView: store.activeView,
+        selectedSystemId: store.selectedSystemId,
+        clusterSelectedSystemId: store.clusterSelectedSystemId,
+        inspectedClusterSystemId: store.inspectedClusterSystemId,
+        selectedObjectId: store.selectedObjectId,
+        selectedOrbitId: store.selectedOrbitId,
+        selectedRouteId: store.selectedRouteId,
+      },
+      mapMode: store.mapMode,
+      compactPanel: store.compactPanel,
+    }
+  }
+
+  function ownsSearchDestination(signature: SearchDestinationSignature): boolean {
+    return JSON.stringify(searchDestinationSignature()) === JSON.stringify(signature)
+  }
+
+  function searchTargetIsSelected(target: SearchTarget, signature: SearchDestinationSignature): boolean {
+    const selection = signature.selection
+    if (target.kind === 'cluster') return selection.activeView === 'cluster'
+    if (target.kind === 'system') {
+      return selection.activeView === 'cluster'
+        && selection.clusterSelectedSystemId === target.systemId
+        && selection.selectedObjectId === null
+        && selection.selectedOrbitId === null
+        && selection.selectedRouteId === null
+    }
+    return selection.activeView === 'system'
+      && selection.selectedSystemId === target.systemId
+      && selection.selectedObjectId === target.objectId
+      && selection.selectedOrbitId === null
+      && selection.selectedRouteId === null
+      && selection.clusterSelectedSystemId === null
+      && selection.inspectedClusterSystemId === null
+  }
+
+  function searchDestinationMap(target: SearchTarget): MapNavigationHandle | null {
+    return target.kind === 'object' ? mapControls.systemMapRef.value : mapControls.clusterMapRef.value
+  }
+
+  function ownsSearchDestinationMap(target: SearchTarget, destinationMap: MapNavigationHandle): boolean {
+    return target.kind === 'object'
+      ? store.activeView === 'system' && mapControls.systemMapRef.value === destinationMap
+      : store.activeView === 'cluster' && mapControls.clusterMapRef.value === destinationMap
+  }
+
+  function ownsAcceptedSearchState(
+    requestId: number,
+    acceptedGeneration: number,
+    target: SearchTarget,
+    acceptedDestination: SearchDestinationSignature,
+  ): boolean {
+    const currentWorkspace = workspace.value
+    return searchRequestSequence === requestId
+      && searchContextGeneration === acceptedGeneration
+      && currentWorkspace !== null
+      && currentWorkspace.id === target.workspaceId
+      && currentWorkspace.cluster.id === target.clusterId
+      && ownsSearchDestination(acceptedDestination)
+      && searchTargetIsSelected(target, acceptedDestination)
+      && !store.searchOpen
+  }
+
+  /** Allows only the synchronous selection cleanup caused by deletion of this request's target. */
+  function searchDestinationAfterTargetRemoval(
+    target: SearchTarget,
+    acceptedDestination: SearchDestinationSignature,
+    currentWorkspace: LocalWorkspace,
+  ): SearchDestinationSignature {
+    const next: SearchDestinationSignature = {
+      ...acceptedDestination,
+      selection: { ...acceptedDestination.selection },
+    }
+    if (target.kind === 'object') {
+      next.selection.selectedObjectId = null
+      if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)) {
+        next.selection.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
+        next.selection.selectedOrbitId = null
+      }
+    } else if (target.kind === 'system') {
+      if (next.selection.clusterSelectedSystemId === target.systemId) next.selection.clusterSelectedSystemId = null
+      if (next.selection.inspectedClusterSystemId === target.systemId) next.selection.inspectedClusterSystemId = null
+      if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)
+        && next.selection.selectedSystemId === target.systemId) {
+        next.selection.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
+        next.selection.selectedObjectId = null
+        next.selection.selectedOrbitId = null
+      }
+    }
+    return next
+  }
+
+  /** Allows rollback only after target removal normalized its destination and no newer command took ownership. */
+  function ownsSearchStateAfterTargetRemoval(
+    requestId: number,
+    target: SearchTarget,
+    acceptedDestination: SearchDestinationSignature,
+  ): boolean {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace || searchRequestSequence !== requestId
+      || !sameSearchWorkspace(currentWorkspace, target)
+      || searchTargetExists(currentWorkspace, target)
+      || store.searchOpen) return false
+    return ownsSearchDestination(searchDestinationAfterTargetRemoval(target, acceptedDestination, currentWorkspace))
+  }
+
+  function survivingSearchSelection(
+    selection: EditorUiSelection,
+    currentWorkspace: LocalWorkspace | null,
+  ): EditorUiSelection {
+    if (!currentWorkspace) return selection
+    const next = { ...selection }
+    const selectedSystem = currentWorkspace.cluster.systems.find(system => system.id === next.selectedSystemId)
+    if (!selectedSystem) {
+      next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
+      next.activeView = 'cluster'
+      next.selectedObjectId = null
+      next.selectedOrbitId = null
+    } else {
+      if (!selectedSystem.objects.some(object => object.id === next.selectedObjectId)) next.selectedObjectId = null
+      if (!selectedSystem.orbits.some(orbit => orbit.id === next.selectedOrbitId)) next.selectedOrbitId = null
+    }
+    if (!currentWorkspace.cluster.systems.some(system => system.id === next.clusterSelectedSystemId)) {
+      next.clusterSelectedSystemId = null
+    }
+    if (!currentWorkspace.cluster.systems.some(system => system.id === next.inspectedClusterSystemId)) {
+      next.inspectedClusterSystemId = null
+    }
+    if (!currentWorkspace.cluster.routes.some(routeValue => routeValue.id === next.selectedRouteId)) {
+      next.selectedRouteId = null
+    }
+    return next
+  }
+
+  function rejectSearchAfterAcceptedState(
+    requestId: number,
+    acceptedGeneration: number,
+    target: SearchTarget,
+    reason: 'stale' | 'unavailable',
+    initialSelection: EditorUiSelection,
+    initialMode: MapInteractionMode,
+    initialCompactPanel: ReturnType<typeof useEditorUiStore>['compactPanel'],
+    initialSearchOpen: boolean,
+    acceptedDestination: SearchDestinationSignature,
+    onRestored: () => void,
+  ): { status: 'rejected'; reason: 'stale' | 'unavailable' } {
+    const currentWorkspace = workspace.value
+    const canRestore = ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)
+      || ownsSearchStateAfterTargetRemoval(requestId, target, acceptedDestination)
+    if (canRestore) {
+      publishingSearchContext = true
+      setSelection(survivingSearchSelection(initialSelection, currentWorkspace))
+      store.setMode(initialMode)
+      store.setCompactPanel(initialCompactPanel)
+      store.setSearchOpen(initialSearchOpen)
+      publishingSearchContext = false
+      onRestored()
+    }
+    return { status: 'rejected', reason }
+  }
+
+  /** Performs the one guarded transition for a search result and frames it only after canvas restoration. */
+  async function revealSearchTarget(target: SearchTarget): Promise<
+    { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
+  > {
+    const requestId = ++searchRequestSequence
+    abortSearchPresentation()
+    abandonSearchContextLease()
+    const presentationController = new AbortController()
+    activeSearchPresentationController = presentationController
+    const leaseState: SearchContextLeaseState = {
+      requestId,
+      lease: null,
+      outcome: 'abandoned',
+      finished: false,
+    }
+
+    try {
+      const startingGeneration = searchContextGeneration
+      const currentWorkspace = workspace.value
+      if (!searchTargetExists(currentWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
+
+      const activeMap = store.activeView === 'cluster' ? mapControls.clusterMapRef.value : mapControls.systemMapRef.value
+      activeMap?.cancelActiveGesture()
+      const chartSessionMatches = target.kind === 'system' && chart.session.value?.systemId === target.systemId
+      const entityDraft = entity.entitySession.value
+      const sameObjectDraft = target.kind === 'object'
+        && entityDraft?.kind === 'object'
+        && entityDraft.clusterId === target.clusterId
+        && entityDraft.systemId === target.systemId
+        && entityDraft.targetId === target.objectId
+      const accepted = await transitions.resolveTransition({
+        leaveChart: !chartSessionMatches,
+        leaveEntitySession: !sameObjectDraft,
+      })
+      if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+      if (!accepted) return { status: 'rejected', reason: 'guard' }
+      if (searchContextGeneration !== startingGeneration) return { status: 'rejected', reason: 'stale' }
+
+      const latestWorkspace = workspace.value
+      if (!searchTargetExists(latestWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
+      if (!latestWorkspace) return { status: 'rejected', reason: 'unavailable' }
+
+      const initialSelection: EditorUiSelection = {
+        activeView: store.activeView,
+        selectedSystemId: store.selectedSystemId,
+        clusterSelectedSystemId: store.clusterSelectedSystemId,
+        inspectedClusterSystemId: store.inspectedClusterSystemId,
+        selectedObjectId: store.selectedObjectId,
+        selectedOrbitId: store.selectedOrbitId,
+        selectedRouteId: store.selectedRouteId,
+      }
+      const initialMode = store.mapMode
+      const initialCompactPanel = store.compactPanel
+      const initialSearchOpen = store.searchOpen
+      mapControls.captureActiveMap()
+      leaseState.lease = options.beginSearchContextChange?.(requestId)
+        ?? mapControls.beginSearchContextChange(requestId)
+      activeSearchContextLease = leaseState
+
+      publishingSearchContext = true
+    if (target.kind === 'cluster') {
+      setSelection({ activeView: 'cluster' })
+      restoreActiveSelection()
+    } else if (target.kind === 'system') {
+      setSelection({
+        activeView: 'cluster',
+        clusterSelectedSystemId: target.systemId,
+        inspectedClusterSystemId: null,
+        selectedObjectId: null,
+        selectedOrbitId: null,
+        selectedRouteId: null,
+      })
+    } else {
+      setSelection({
+        activeView: 'system',
+        selectedSystemId: target.systemId,
+        clusterSelectedSystemId: null,
+        inspectedClusterSystemId: null,
+        selectedObjectId: target.objectId,
+        selectedOrbitId: null,
+        selectedRouteId: null,
+      })
+    }
+    store.setMode('select')
+    if (viewport.isCompactViewport.value) store.setCompactPanel(null)
+    store.setSearchOpen(false)
+    publishingSearchContext = false
+    const acceptedGeneration = searchContextGeneration
+    const acceptedDestination = searchDestinationSignature()
+
+    await nextTick()
+    const workspaceAfterMount = workspace.value
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!sameSearchWorkspace(workspaceAfterMount, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(workspaceAfterMount, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)) {
+      return { status: 'rejected', reason: 'stale' }
+    }
+
+    const destinationMap = searchDestinationMap(target)
+    if (!destinationMap?.whenReady) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    const destinationReady = await destinationMap.whenReady()
+    const workspaceAfterReady = workspace.value
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!sameSearchWorkspace(workspaceAfterReady, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(workspaceAfterReady, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)) {
+      return { status: 'rejected', reason: 'stale' }
+    }
+    if (!ownsSearchDestinationMap(target, destinationMap)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'stale', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!destinationReady) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+
+    const presentationSettlement = options.waitForSearchPresentation
+      ? await options.waitForSearchPresentation(presentationController.signal)
+      : 'settled'
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    const workspaceAfterPresentation = workspace.value
+    if (!sameSearchWorkspace(workspaceAfterPresentation, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(workspaceAfterPresentation, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (presentationSettlement === 'cancelled') return { status: 'rejected', reason: 'stale' }
+    if (presentationSettlement === 'unavailable') {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)
+      || !ownsSearchDestinationMap(target, destinationMap)) return { status: 'rejected', reason: 'stale' }
+
+    await nextTick()
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    const workspaceAfterPresentationTick = workspace.value
+    if (!sameSearchWorkspace(workspaceAfterPresentationTick, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(workspaceAfterPresentationTick, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)
+      || !ownsSearchDestinationMap(target, destinationMap)) return { status: 'rejected', reason: 'stale' }
+
+    const latestSearchWorkspace = workspace.value
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!sameSearchWorkspace(latestSearchWorkspace, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(latestSearchWorkspace, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)) {
+      return { status: 'rejected', reason: 'stale' }
+    }
+    if (!ownsSearchDestinationMap(target, destinationMap)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'stale', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+
+    const framed = destinationMap.frameSearchTarget?.(target) ?? false
+    const workspaceAfterFrame = workspace.value
+    if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!sameSearchWorkspace(workspaceAfterFrame, target)) return { status: 'rejected', reason: 'stale' }
+    if (!searchTargetExists(workspaceAfterFrame, target)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)) {
+      return { status: 'rejected', reason: 'stale' }
+    }
+    if (!ownsSearchDestinationMap(target, destinationMap)) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'stale', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    if (!framed) {
+      return rejectSearchAfterAcceptedState(
+        requestId, acceptedGeneration, target, 'unavailable', initialSelection, initialMode,
+        initialCompactPanel, initialSearchOpen, acceptedDestination,
+        () => { leaseState.outcome = 'restored' },
+      )
+    }
+    destinationMap.focusMap?.()
+    if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)
+      || !ownsSearchDestinationMap(target, destinationMap)) return { status: 'rejected', reason: 'stale' }
+    editorError.value = ''
+    leaseState.outcome = 'accepted'
+    return { status: 'revealed' }
+    } finally {
+      if (leaseState.outcome === 'restored') await nextTick()
+      finishSearchContextLease(leaseState, leaseState.outcome)
+      if (activeSearchPresentationController === presentationController) activeSearchPresentationController = null
+    }
+  }
+
   async function selectObject(
     objectId: string,
     openInspector = true,
     transitionOptions: TransitionOptions = {},
   ): Promise<void> {
+    invalidatePendingSearchReveal()
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
@@ -278,6 +776,7 @@ export function useEditorNavigation(options: {
   }
 
   async function selectOrbit(orbitId: string, openInspector = true): Promise<void> {
+    invalidatePendingSearchReveal()
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
@@ -307,6 +806,7 @@ export function useEditorNavigation(options: {
   }
 
   async function selectRoute(routeId: string, openInspector = true): Promise<void> {
+    invalidatePendingSearchReveal()
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
@@ -526,6 +1026,7 @@ export function useEditorNavigation(options: {
     showChartDetails,
     cleanupAfterDeletion,
     revealHistoryContext,
+    revealSearchTarget,
     setMapMode,
     isEntityCommandBlocked: (command: EntityCommand) => entity.isEntityCommandBlocked(command),
   }

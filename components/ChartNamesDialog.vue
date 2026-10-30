@@ -83,10 +83,12 @@
 /** Parent-owned chart session presented in a hideable Nuxt UI modal. */
 import { computed, nextTick, watch } from 'vue'
 import type { TransitionDecision, TransitionGuard } from '../composables/editor-workflows/types'
+import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
 
 const open = defineModel<boolean>('open', { required: true })
 const clusterName = defineModel<string>('clusterName', { required: true })
 const systemName = defineModel<string>('systemName', { required: true })
+const closeFocus = useDialogCloseFocusBarrier(open)
 
 const props = defineProps<{
   formError: string
@@ -124,11 +126,16 @@ function isVisibleFocusTarget(element: HTMLElement): boolean {
 
 function focusAfterDialogClose(event: Event): void {
   event.preventDefault()
+  if (open.value) {
+    closeFocus.settleClosingFocus()
+    return
+  }
   const target = dialogOpener && isVisibleFocusTarget(dialogOpener)
     ? dialogOpener
     : document.getElementById('workspace-main')
   target?.focus()
   dialogOpener = null
+  closeFocus.settleClosingFocus()
 }
 
 function focusNameField(): void {
@@ -154,6 +161,8 @@ watch(
   },
   { flush: 'post' },
 )
+
+defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
 </script>
 
 <style>

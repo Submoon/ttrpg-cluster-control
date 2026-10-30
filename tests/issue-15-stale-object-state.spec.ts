@@ -123,7 +123,7 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
 
   await setWorkspaceMapMode(page, 'Select')
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: /^Select PL-\d+, Foo$/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select PL-\d+, Foo$/ }).click()
   await inspector.getByRole('button', { name: 'Delete Foo', exact: true }).click()
   const review = deletionReviewDialog(page)
   await expect(review).toContainText('Foo')

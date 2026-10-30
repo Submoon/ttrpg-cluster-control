@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import type { LocalWorkspace } from '../../domain/workspace'
-import type { EntityInspectorSession, MapHistoryTarget, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SystemMapHandle } from './types'
+import type { EntityInspectorSession, MapHistoryTarget, MapNavigationHandle, MapVisitMemory, MapVisitSelection, OrbitPlacementPreview, SearchContextChangeLease, SearchContextChangeOutcome, SystemMapHandle } from './types'
 import type { useEditorUiStore } from '../../stores/editor-ui'
 import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE, type MapViewport } from '../../utils/map-zoom'
 
@@ -18,6 +18,7 @@ export function useEditorMapControls(
   const clusterMapRef = shallowRef<MapNavigationHandle | null>(null)
   const systemMapRef = shallowRef<SystemMapHandle | null>(null)
   const editingGestureActive = ref(false)
+  const searchContextChangeRequestId = ref<number | null>(null)
   function setEditingGestureActive(active: boolean): void {
     editingGestureActive.value = active
   }
@@ -131,8 +132,24 @@ export function useEditorMapControls(
     rememberCurrent(key, viewport)
   }
 
+  /** Holds map visit writes while Search temporarily mounts a different destination context. */
+  function beginSearchContextChange(requestId: number): SearchContextChangeLease {
+    searchContextChangeRequestId.value = requestId
+    let finished = false
+    return {
+      finish(outcome: SearchContextChangeOutcome): void {
+        if (finished) return
+        finished = true
+        if (searchContextChangeRequestId.value !== requestId) return
+        searchContextChangeRequestId.value = null
+        if (outcome === 'accepted') captureActiveMap()
+      },
+    }
+  }
+
   /** Accepts viewport feedback only from the still-active map context. */
   function recordViewport(key: string, viewport: MapViewport): void {
+    if (searchContextChangeRequestId.value !== null) return
     const currentWorkspace = workspace.value
     if (!currentWorkspace || key !== activeMapKey.value) return
     if (key.startsWith('system:')) {
@@ -186,6 +203,7 @@ export function useEditorMapControls(
     clusterMapRef,
     systemMapRef,
     activeMapKey,
+    searchContextChangeRequestId,
     editingGestureActive,
     setEditingGestureActive,
     initialViewport,
@@ -194,6 +212,7 @@ export function useEditorMapControls(
     selectionForActiveMap,
     validVisitSelection,
     captureActiveMap,
+    beginSearchContextChange,
     recordViewport,
     pruneVisits,
     setViewportPercentage,

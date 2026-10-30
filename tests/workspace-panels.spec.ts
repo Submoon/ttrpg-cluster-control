@@ -128,7 +128,7 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
 
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await expectCompactPanel(page, 'inspector')
 })
 

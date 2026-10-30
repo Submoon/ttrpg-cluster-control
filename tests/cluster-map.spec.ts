@@ -91,7 +91,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
 
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await addCatalogueObject(page, 'planet', {
     target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
@@ -130,7 +130,7 @@ test('the Warden can navigate and arrange both maps', async ({ page }) => {
   const resizedOrbitRadius = Number(await orbitRadius.getAttribute('aria-valuenow'))
   expect(Math.abs(await orbitalAngle(map) - angleBeforeResize)).toBeLessThan(0.02)
 
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await setWorkspaceMapMode(page, 'Move')
   const largeOrbitRadius = map.getByRole('slider', { name: 'Resize Orbit 2 around Primary Star' })
@@ -346,7 +346,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await page.getByLabel('Name', { exact: true }).fill('Vesper Gate')
   await saveMapObject(page)
 
-  await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Vesper Exit/ }).click()
   await editMapObject(page)
   const station = page.getByLabel('Physical Station association')
   await selectInspectorOption(station, { label: /Vesper Gate/ })
@@ -395,7 +395,7 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   const vesperSystem = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map' }).click()
   await vesperSystem.click()
-  await hierarchy.getByRole('button', { name: /Vesper Exit/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Vesper Exit/ }).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
   await saveMapObject(page)
@@ -436,6 +436,6 @@ test('the Warden can connect Jump Points across a cluster and record an unresolv
   await setWorkspaceMapMode(page, 'Navigate')
   await restoredMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   const restoredHierarchy = await openWorkspaceHierarchy(page)
-  await restoredHierarchy.getByRole('button', { name: /Vesper Arrival/ }).click()
+  await restoredHierarchy.getByRole('treeitem', { name: /Vesper Arrival/ }).click()
   expect(await readInspectorSelection(page.getByLabel('Physical Station association'))).toMatch(/Vesper Gate/)
 })

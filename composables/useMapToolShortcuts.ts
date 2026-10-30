@@ -19,7 +19,7 @@ const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg'
 const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target'
 
 /** Owns map-scoped, single-letter tool shortcuts and their temporary browser input state. */
-export function useMapToolShortcuts(options: MapToolShortcutOptions): void {
+export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInputActive(): boolean } {
   let compositionActive = false
   let listening = false
   const activePointers = new Set<number>()
@@ -151,6 +151,8 @@ export function useMapToolShortcuts(options: MapToolShortcutOptions): void {
     clearActiveInput()
     listening = false
   })
+
+  return { isMapInputActive: () => activePointers.size > 0 || activeTouches.size > 0 }
 }
 
 function mapRootForTarget(target: EventTarget | null): Element | null {

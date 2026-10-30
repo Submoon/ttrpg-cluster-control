@@ -109,6 +109,7 @@ import type {
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapViewport } from '../utils/map-zoom'
+import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import ClusterMap from './ClusterMap.vue'
@@ -205,6 +206,10 @@ let consumedAddPointerId: number | null = null
 let consumedAddTouchId: number | null = null
 const sourceMapKey = props.mapKey
 let mapReady = false
+let mapDisposed = false
+let mapReadinessResult: boolean | undefined
+let resolveMapReadiness: (ready: boolean) => void = () => undefined
+const mapReadiness = new Promise<boolean>(resolve => { resolveMapReadiness = resolve })
 let suppressNextClick = false
 let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
@@ -649,20 +654,13 @@ function emitViewport(viewport: MapViewport): void {
   if (mapReady) emit('viewport-change', { key: sourceMapKey, viewport })
 }
 
-function fitMap(usableRect?: SvgViewportRect): void {
-  const map = currentMap()
-  if (!map) return
-  if (usableRect !== undefined) {
-    map.fitMap(usableRect)
-    return
-  }
-
+function measureUnobstructedViewport(): SvgViewportRect | undefined {
   const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
-  if (!svg) return
+  if (!svg) return undefined
   const svgBounds = svg.getBoundingClientRect()
   const board = svg.closest<HTMLElement>('[data-map-board]')
   const dashboard = svg.closest<HTMLElement>('[data-workspace-dashboard]')
-  if (!board || !dashboard || !isUsableClientRect(svgBounds)) return
+  if (!board || !dashboard || !isUsableClientRect(svgBounds)) return undefined
 
   const svgRect: ClientRectBounds = {
     left: svgBounds.left,
@@ -687,9 +685,48 @@ function fitMap(usableRect?: SvgViewportRect): void {
     .filter(isUsableClientRect)
     .map(rect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }))
   const usableClientRect = largestUnobstructedClientRect(svgRect, obstructions)
-  if (!usableClientRect) return
-  const measuredRect = clientRectToSvgViewportRect(svg, usableClientRect)
-  if (measuredRect) map.fitMap(measuredRect)
+  if (!usableClientRect) return undefined
+  return clientRectToSvgViewportRect(svg, usableClientRect)
+}
+
+function fitMap(usableRect?: SvgViewportRect): void {
+  const map = currentMap()
+  if (!map) return
+  const rect = usableRect ?? measureUnobstructedViewport()
+  if (rect) map.fitMap(rect)
+}
+
+/** Fits the whole cluster or one visible system node inside the post-overlay usable map area. */
+function frameSearchTarget(target: SearchTarget): boolean {
+  const map = currentMap()
+  const usableRect = measureUnobstructedViewport()
+  if (!map || !usableRect) return false
+  if (target.kind === 'cluster') {
+    map.fitMap(usableRect)
+    return true
+  }
+  if (target.kind === 'object') {
+    return props.activeView === 'system'
+      && props.workspace.id === target.workspaceId
+      && props.workspace.cluster.id === target.clusterId
+      && props.system?.id === target.systemId
+      ? systemMapRef.value?.frameObjectBranch(target.objectId, usableRect) ?? false
+      : false
+  }
+  return props.activeView === 'cluster'
+    ? clusterMapRef.value?.frameSystem(target.systemId, usableRect) ?? false
+    : false
+}
+
+function whenReady(): Promise<boolean> {
+  return mapReadinessResult === undefined ? mapReadiness : Promise.resolve(mapReadinessResult)
+}
+
+function settleMapReadiness(ready: boolean): void {
+  if (mapReadinessResult !== undefined) return
+  mapReadinessResult = ready
+  mapReady = ready
+  resolveMapReadiness(ready)
 }
 
 function isUsableClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'>): boolean {
@@ -712,20 +749,25 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   document.addEventListener('freeze', onDocumentFreeze)
   await nextTick()
+  if (mapDisposed) return
   const map = currentMap()
   if (!map) return
   if (props.initialViewport) map.setViewport(props.initialViewport)
   else {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    if (mapDisposed) return
     await nextTick()
     fitMap()
   }
   await nextTick()
-  mapReady = true
+  if (mapDisposed) return
+  settleMapReadiness(true)
   emitViewport(map.getViewport())
 })
 
 onBeforeUnmount(() => {
+  mapDisposed = true
+  settleMapReadiness(false)
   cancelCanvasGesture()
   if (suppressClickTimer) clearTimeout(suppressClickTimer)
   if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
@@ -764,11 +806,13 @@ defineExpose({
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
-    : MAP_ZOOM_MIN_SCALE,
+    : systemMapRef.value?.getMinimumZoomScale() ?? MAP_ZOOM_MIN_SCALE,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
   revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
+  whenReady,
+  frameSearchTarget,
   focusMap: () => currentMap()?.focusMap?.(),
   fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),
