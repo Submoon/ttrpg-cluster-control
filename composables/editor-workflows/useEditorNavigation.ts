@@ -488,7 +488,7 @@ export function useEditorNavigation(options: {
     const activeMap = store.activeView === 'cluster' ? mapControls.clusterMapRef.value : mapControls.systemMapRef.value
     activeMap?.cancelActiveGesture()
 
-    const chartSessionMatches = target.kind !== 'cluster' && chart.session.value?.systemId === target.systemId
+    const chartSessionMatches = target.kind === 'system' && chart.session.value?.systemId === target.systemId
     const entityDraft = entity.entitySession.value
     const sameObjectDraft = target.kind === 'object'
       && entityDraft?.kind === 'object'

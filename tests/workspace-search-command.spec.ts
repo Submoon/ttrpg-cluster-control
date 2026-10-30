@@ -994,6 +994,146 @@ test('a system result preserves its matching chart-name session and its unapplie
   }
 })
 
+test('a hidden modified chart-name draft guards an object result and Stay leaves the system untouched @pure', async () => {
+  const harness = createSearchHarness()
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const selectedObject = system?.objects[0]
+    if (!system || !selectedObject) throw new Error('The local workspace did not create its first system object.')
+    const targetObject = { ...selectedObject, id: 'chart-stay-target', name: 'Destination World', locationKey: 'VEIL-11' }
+    system.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id, selectedObjectId: selectedObject.id })
+    harness.store.setMode('move')
+    await harness.workflows.charts.beginNamesEdit()
+    harness.workflows.charts.systemName.value = 'Vesper Prime'
+    harness.workflows.charts.setDialogOpen(false)
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = 'VEIL-11'
+    const objectResult = search.results.value.find(result => result.target.kind === 'object')
+    if (!objectResult || objectResult.target.kind !== 'object' || objectResult.target.objectId !== targetObject.id) {
+      throw new Error('The destination object did not produce the captured result.')
+    }
+
+    const reveal = search.reveal(objectResult.target)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('chart')
+    const observedGuard = harness.workflows.charts.transitionGuard.value
+    await harness.workflows.charts.resolveTransitionChoice('stay')
+    const outcome = await reveal
+
+    expect(observedGuard).toBe('chart')
+    expect(outcome).toEqual({ status: 'rejected', reason: 'guard' })
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(system.id)
+    expect(harness.store.selectedObjectId).toBe(selectedObject.id)
+    expect(harness.store.mapMode).toBe('move')
+    expect(harness.workflows.charts.hasChartNameDraft.value).toBe(true)
+    expect(harness.workflows.charts.hasUncommittedNames.value).toBe(true)
+    expect(harness.workflows.charts.systemName.value).toBe('Vesper Prime')
+    expect(harness.workflows.charts.dialogOpen.value).toBe(true)
+    expect(search.open.value).toBe(true)
+    expect(search.query.value).toBe('VEIL-11')
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('invalid Apply on a hidden chart-name draft cannot partly select an object result @pure', async () => {
+  const harness = createSearchHarness()
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const selectedObject = system?.objects[0]
+    if (!system || !selectedObject) throw new Error('The local workspace did not create its first system object.')
+    const targetObject = { ...selectedObject, id: 'chart-apply-target', name: 'Destination World', locationKey: 'VEIL-12' }
+    system.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id, selectedObjectId: selectedObject.id })
+    harness.store.setMode('move')
+    await harness.workflows.charts.beginNamesEdit()
+    harness.workflows.charts.systemName.value = '   '
+    harness.workflows.charts.setDialogOpen(false)
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = 'VEIL-12'
+    const objectResult = search.results.value.find(result => result.target.kind === 'object')
+    if (!objectResult || objectResult.target.kind !== 'object' || objectResult.target.objectId !== targetObject.id) {
+      throw new Error('The destination object did not produce the captured result.')
+    }
+
+    const reveal = search.reveal(objectResult.target)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('chart')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'guard' })
+    expect(harness.workflows.charts.hasChartNameDraft.value).toBe(true)
+    expect(harness.workflows.charts.hasUncommittedNames.value).toBe(true)
+    expect(harness.workflows.charts.formError.value).not.toBe('')
+    expect(harness.workspace.value.cluster.systems[0]?.name).toBe(system.name)
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(system.id)
+    expect(harness.store.selectedObjectId).toBe(selectedObject.id)
+    expect(harness.store.mapMode).toBe('move')
+    expect(search.open.value).toBe(true)
+    expect(search.query.value).toBe('VEIL-12')
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('valid Apply on a hidden chart-name draft publishes before the object result is revealed @pure', async () => {
+  const harness = createSearchHarness()
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const selectedObject = system?.objects[0]
+    if (!system || !selectedObject) throw new Error('The local workspace did not create its first system object.')
+    const targetObject = { ...selectedObject, id: 'chart-valid-apply-target', name: 'Destination World', locationKey: 'VEIL-13' }
+    system.objects.push(targetObject)
+    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id, selectedObjectId: selectedObject.id })
+    await harness.workflows.charts.beginNamesEdit()
+    harness.workflows.charts.systemName.value = 'Vesper Prime'
+    harness.workflows.charts.setDialogOpen(false)
+    let focusCount = 0
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => { focusCount += 1 },
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = 'VEIL-13'
+    const objectResult = search.results.value.find(result => result.target.kind === 'object')
+    if (!objectResult || objectResult.target.kind !== 'object' || objectResult.target.objectId !== targetObject.id) {
+      throw new Error('The destination object did not produce the captured result.')
+    }
+
+    const reveal = search.reveal(objectResult.target)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('chart')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+
+    expect(await reveal).toEqual({ status: 'revealed' })
+    expect(harness.workspace.value.cluster.systems[0]?.name).toBe('Vesper Prime')
+    expect(harness.workflows.charts.hasChartNameDraft.value).toBe(false)
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(system.id)
+    expect(harness.store.selectedObjectId).toBe(targetObject.id)
+    expect(search.open.value).toBe(false)
+    expect(search.query.value).toBe('VEIL-13')
+    expect(focusCount).toBe(1)
+    expect(harness.history.getStatus().totalActions).toBe(1)
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('a changed navigation context during confirmation makes the captured result stale @pure', async () => {
   const harness = createSearchHarness()
   try {

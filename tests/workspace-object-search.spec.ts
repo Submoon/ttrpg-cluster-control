@@ -7,13 +7,16 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import {
+  activeWorkspaceFeedback,
   createSingleSystemWorkspace,
   jsonMapImportInput,
+  openWorkspaceHierarchy,
   resolveImportReview,
   returnToClusterMap,
   setHeaderMapActionsOpen,
   setJsonFile,
   setWorkspaceMapMode,
+  workspaceMapContextType,
   workspaceZoomControls,
 } from './helpers'
 
@@ -499,4 +502,72 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(inspector).toBeVisible()
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Leaf Reliquary draft')
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
+})
+
+test('object search guards a hidden chart-name draft before revealing the result', async ({ page }) => {
+  const { systemName } = await createSingleSystemWorkspace(page)
+  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  await hierarchy.getByRole('button', { name: 'Edit chart names', exact: true }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  const clusterDraft = 'Kestrel Reach draft'
+  const systemDraft = 'Vesper draft'
+  await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill(clusterDraft)
+  await chartDialog.getByLabel('Star system', { exact: true }).fill(systemDraft)
+  await page.keyboard.press('Escape')
+  await expect(chartDialog).toBeHidden()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+  await expect(hierarchy).toBeHidden()
+
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })
+  await expect(resumeDraft).toBeVisible()
+  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
+  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  const systemContent = systemMap.locator('.system-map-content')
+  const initialCamera = await systemContent.getAttribute('transform')
+  if (!initialCamera) throw new Error('The active system map has no rendered camera transform.')
+
+  await searchButton.click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const query = searchDialog.getByRole('searchbox', { name: 'Search workspace', exact: true })
+  await query.fill('Primary Star')
+  const result = searchDialog.getByRole('button', { name: /Primary Star, Star, Star System: Vesper/ })
+  await expect(result).toBeVisible()
+  await result.click()
+
+  const guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
+  await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
+  await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
+  await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
+
+  await expect(guard).toHaveCount(0)
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue('Primary Star')
+  await expect(query).toBeFocused()
+  await expect(workspaceMapContextType(page)).toHaveText('Star System')
+  await expect(systemContent).toHaveAttribute('transform', initialCamera)
+  await expect(systemMap.locator('.system-object.is-selected')).toHaveCount(0)
+
+  await page.keyboard.press('Escape')
+  await expect(searchDialog).toHaveCount(0)
+  await expect(searchButton).toBeFocused()
+  await resumeDraft.click()
+  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
+  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
+  await page.keyboard.press('Escape')
+  await expect(chartDialog).toBeHidden()
+
+  await searchButton.click()
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue('Primary Star')
+  await searchDialog.getByRole('button', { name: /Primary Star, Star, Star System: Vesper/ }).click()
+  await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
+  await guard.getByRole('button', { name: 'Discard and continue', exact: true }).click()
+
+  await expect(searchDialog).toHaveCount(0)
+  await expect(systemMap).toBeFocused()
+  const selectedStar = systemMap.locator('.system-object').filter({ hasText: 'Primary Star' })
+  await expect(selectedStar).toHaveClass(/is-selected/)
+  expect(scaleFromTransform(await systemContent.getAttribute('transform'))).toBeCloseTo(2, 1)
+  await expect(resumeDraft).toHaveCount(0)
 })

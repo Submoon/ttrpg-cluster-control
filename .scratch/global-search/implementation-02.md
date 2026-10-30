@@ -49,6 +49,14 @@ The final browser oracle is independent of the product's usable-area calculation
 
 Final lint, typecheck, production build, independent review and one complete-suite run are pending. Stop the owned development server during shared preparation/build; restart and warm it before the full suite. Source remains frozen except confirmed-review corrections.
 
+## Independent review
+
+Initial integrated candidate: **a9d20ee4de838e2772e1477dfd1605d2c1ed022b**. Its final lint and typecheck passed (`test-results/search02-final-lint.log`, `search02-final-typecheck.log`). The production build was stopped before completion for the confirmed Spec correction below and is not claimed as a successful build.
+
+The independent Standards reviewer found zero actionable violations or significant smell-baseline concerns after inspecting source/callers, ownership, tests/report JSON and all five visual states. The independent Spec reviewer identified one P2: object results matched a chart-name session solely by system ID and therefore bypassed the hidden dirty chart guard. Ordinary object selection guards that transition; selecting an object is not reselecting the chart editing target. The coordinator confirmed the source evidence and assigned a real-command regression/minimal correction plus a public hidden-chart Search regression. Restrict the chart-session exception to system-name results, retaining matching object draft preservation. Reviewer closure and corrected-candidate checks remain pending.
+
+The core developer reproduced the P2 with the real composed operation: a modified hidden chart-name session produced no guard (`observedGuard === null`). The one-line correction restores the exception to `target.kind === 'system'`. Hidden-chart object Stay, invalid Apply and valid Apply then passed; the existing matching system-result chart draft remains preserved. All 37 owned pure search cases passed in `test-results/global-search02-core-pure-final-after-chart-guard`. The UI developer added a public Search regression for Stay/context/camera/query/draft retention followed by Discard/reveal/focus; it is frozen for coordinator verification. No other product behavior changed for this correction.
+
 ## Review and completion
 
 Independent Standards and Spec reviews compare the integrated candidate with the pinned predecessor baseline, using the repository rules and ticket/spec criteria. Resolve confirmed findings through the owning developer and obtain reviewer closure. Close ticket 02 only after acceptance and appropriate verification; then unblock ticket 03 without claiming it. The parent specification and GitHub #7 remain open until global object search is complete.
