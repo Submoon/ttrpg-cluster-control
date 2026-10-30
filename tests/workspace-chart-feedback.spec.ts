@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, addCatalogueObject, workspaceZoomControls } from './helpers'
+import { activeWorkspaceFeedback, addCatalogueObject, waitForWorkspaceSaved, workspaceZoomControls } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -54,7 +54,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 test('a hidden clean chart-name session remains resumable without claiming unapplied changes', async ({ page }) => {
@@ -79,59 +79,74 @@ test('a hidden clean chart-name session remains resumable without claiming unapp
   await expect(dialog.getByLabel('Star system')).toHaveValue('Vesper')
 })
 
-test('save feedback has one compact bottom owner and leaves map controls hit-testable', async ({ page }) => {
+test('routine save feedback takes no space on desktop or in compact recovery', async ({ page }, testInfo) => {
   await createWorkspace(page)
 
-  const feedback = page.getByRole('region', { name: 'Workspace feedback and recovery' })
-  await expect(feedback).toBeVisible()
+  const feedback = page.locator('.workspace-feedback:not([inert])')
+  await expect(feedback).toBeHidden()
+  expect(await feedback.boundingBox()).toBeNull()
+  await expect(feedback.locator('.save-feedback')).toHaveCount(0)
   await expect(page.locator('.workspace-header-save-state')).toHaveCount(0)
   await expect(page.locator('.workspace-dock [role="status"][aria-live]')).toHaveCount(0)
-  await expect(feedback.locator('.save-feedback')).toHaveCount(1)
+  const desktopScreenshot = testInfo.outputPath('clean-save-feedback-desktop.png')
+  await page.screenshot({ path: desktopScreenshot })
+  await testInfo.attach('clean-save-feedback-desktop', { path: desktopScreenshot, contentType: 'image/png' })
 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 500 }]) {
     await page.setViewportSize(viewport)
     if (viewport.width === 390) {
       const compactRecovery = page.locator('.workspace-compact-recovery')
       await expect(page.getByRole('dialog', { name: 'Object inspector' })).toBeVisible()
-      await expect(compactRecovery).toBeVisible()
+      const inspectorContent = page.locator('#workspace-inspector-panel .workspace-side-panel-content')
+      await expect(inspectorContent).toHaveCSS('padding-bottom', '0px')
+      await expect(compactRecovery).toBeHidden()
+      expect(await compactRecovery.boundingBox()).toBeNull()
       await expect(page.locator('.workspace-feedback')).toHaveAttribute('inert', '')
-      await expect(compactRecovery.locator('.save-feedback')).toHaveCount(1)
-      const bounds = await compactRecovery.boundingBox()
-      if (!bounds) throw new Error('The compact panel recovery surface has no visible bounds.')
-      expect(bounds.x).toBeGreaterThanOrEqual(0)
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width)
-      expect(bounds.y + bounds.height).toBeGreaterThan(viewport.height - 200)
+
+      await page.getByRole('button', { name: 'Close inspector panel', exact: true }).click()
+      await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+      await expect(page.getByRole('dialog', { name: 'System hierarchy' })).toBeVisible()
+      const hierarchyContent = page.locator('#workspace-hierarchy-panel .workspace-side-panel-content')
+      const hierarchyPadding = await hierarchyContent.evaluate(element => {
+        const style = getComputedStyle(element)
+        return { bottom: style.paddingBottom, top: style.paddingTop }
+      })
+      expect(hierarchyPadding.bottom).toBe(hierarchyPadding.top)
+      await expect(compactRecovery).toBeHidden()
+      expect(await compactRecovery.boundingBox()).toBeNull()
+      const compactScreenshot = testInfo.outputPath('clean-save-feedback-compact.png')
+      await page.screenshot({ path: compactScreenshot })
+      await testInfo.attach('clean-save-feedback-compact', { path: compactScreenshot, contentType: 'image/png' })
+
+      await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
+      const cleanControlsLayout = await page.locator('.workspace-bottom-controls').evaluate(element => {
+        const feedbackRegion = element.querySelector<HTMLElement>('.workspace-feedback-region')
+        const zoomRegion = element.querySelector<HTMLElement>('.workspace-zoom-region')
+        const dockRegion = element.querySelector<HTMLElement>('.workspace-dock-region')
+        if (!feedbackRegion || !zoomRegion || !dockRegion) throw new Error('A bottom-control region is missing.')
+        const controlsBounds = element.getBoundingClientRect()
+        const zoomBounds = zoomRegion.getBoundingClientRect()
+        const dockBounds = dockRegion.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          firstRow: style.gridTemplateRows.split(' ')[0],
+          rowGap: style.rowGap,
+          feedbackDisplay: getComputedStyle(feedbackRegion).display,
+          controlsBottom: controlsBounds.bottom,
+          zoomBottom: zoomBounds.bottom,
+          dockTop: dockBounds.top,
+        }
+      })
+      expect(cleanControlsLayout.firstRow).toBe('0px')
+      expect(cleanControlsLayout.rowGap).toBe('0px')
+      expect(cleanControlsLayout.feedbackDisplay).toBe('none')
+      expect(cleanControlsLayout.dockTop - cleanControlsLayout.zoomBottom).toBeCloseTo(5.6, 0)
+      expect(cleanControlsLayout.dockTop).toBeLessThan(cleanControlsLayout.controlsBottom)
       continue
     }
 
-    await expect(feedback).toBeVisible()
-    const geometry = await page.evaluate(() => {
-      const feedback = document.querySelector<HTMLElement>('.workspace-feedback:not([inert])')
-      const shell = document.querySelector<HTMLElement>('.map-workspace-shell')
-      const canvas = document.querySelector<HTMLElement>('.workspace-canvas')
-      const missing = [
-        !shell && 'workspace shell',
-        !feedback && 'active workspace feedback',
-        !canvas && 'map canvas',
-      ].filter(Boolean)
-      if (missing.length) throw new Error(`Missing ${missing.join(', ')}.`)
-      if (!shell || !feedback || !canvas) throw new Error('Workspace geometry could not be read.')
-      const shellBounds = shell.getBoundingClientRect()
-      const feedbackBounds = feedback.getBoundingClientRect()
-      const canvasBounds = canvas.getBoundingClientRect()
-      return {
-        feedbackWidth: feedbackBounds.width,
-        feedbackHeight: feedbackBounds.height,
-        shellWidth: shellBounds.width,
-        shellBottom: shellBounds.bottom,
-        feedbackBottom: feedbackBounds.bottom,
-        canvasBottom: canvasBounds.bottom,
-      }
-    })
-    expect(geometry.feedbackWidth).toBeLessThan(geometry.shellWidth * 0.8)
-    expect(geometry.feedbackHeight).toBeLessThanOrEqual(112)
-    expect(Math.abs(geometry.shellBottom - geometry.feedbackBottom)).toBeLessThanOrEqual(20)
-    expect(geometry.canvasBottom).toBeGreaterThan(geometry.feedbackBottom - geometry.feedbackHeight)
+    await expect(feedback).toBeHidden()
+    expect(await feedback.boundingBox()).toBeNull()
 
     const dock = page.getByRole('toolbar', { name: 'Workspace navigation' })
     const controls = [
@@ -176,6 +191,11 @@ test('save feedback has one compact bottom owner and leaves map controls hit-tes
         return target === element || element.contains(target)
       })).toBe(true)
       await dialog.getByRole('button', { name: 'Close' }).click()
+      const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' })
+      await expect(resumeDraft).toBeVisible()
+      await resumeDraft.click()
+      await page.getByRole('dialog', { name: 'Edit chart names' }).getByRole('button', { name: 'Discard draft' }).click()
+      await expect(page.locator('.workspace-feedback')).toBeHidden()
     }
   }
 })
@@ -187,10 +207,10 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
   await page.getByLabel('First star system', { exact: true }).fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await addCatalogueObject(page, 'planet', { noSelection: true, target: { kind: 'free', x: 0.9, y: 0.9 } })
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await closeCompactPanels(page)
 
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
@@ -198,8 +218,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await hierarchy.getByRole('treeitem', { name: /^Select PL-01, New planet 1/ }).click()
   await closeCompactPanels(page)
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector.locator('.entity-inspector-save-feedback').getByRole('status', { name: 'Saved on this device', exact: true })).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await closeCompactPanels(page)
 
   const systemMap = page.locator('.system-map-content')
@@ -272,4 +291,11 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', { name: 'Edit chart names' })).toBeHidden()
+
+  const recoveryDetailsTrigger = activeWorkspaceFeedback(page).getByRole('button', { name: 'Recovery details', exact: true })
+  await recoveryDetailsTrigger.click()
+  const retryDetails = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
+  await retryDetails.getByRole('button', { name: 'Retry save', exact: true }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(page.locator('#workspace-main')).toBeFocused()
 })

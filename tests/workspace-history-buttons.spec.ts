@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback, addCatalogueObject, captureMapExportBlobs, clickDockAction,
   createSingleSystemWorkspace, dragToWorldPoint, downloadJson, editMapObject,
   ensureMapDragPointsReachable, openChartDetails, openWorkspaceHierarchy,
@@ -36,7 +37,7 @@ test('saved names can be undone and redone through directly reachable history bu
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply names', exact: true }).click()
   await expect(names).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(undo).toBeEnabled()
   await expect(undo).toHaveText('Undo 1')
   await expect(redo).toHaveText('Redo 0')
@@ -247,7 +248,7 @@ test('traversal keeps its visible result through delayed and failed IndexedDB sa
 test('an older real save acknowledgement cannot enable traversal of a newer applied revision', async ({ page }) => {
   test.setTimeout(60_000)
   await createSingleSystemWorkspace(page)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await installHistoryStorageGate(page)
   try {
     await setHistoryStorageGate(page, { hold: true })
@@ -264,7 +265,7 @@ test('an older real save acknowledgement cannot enable traversal of a newer appl
     await expect(undo).toBeDisabled()
     await releaseNextHistoryAcknowledgement(page)
     await expect.poll(() => pendingHistoryAcknowledgements(page)).toBe(1)
-    await expect(activeWorkspaceFeedback(page)).toContainText('Saving to this browser.')
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     await expect(undo).toBeDisabled()
     await expect(page.getByRole('navigation', { name: 'Map context and commands' })
       .getByRole('heading', { name: 'Vesper Third', exact: true })).toBeVisible()
@@ -346,6 +347,6 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   await dragToWorldPoint(page, map, hitTarget, validDestination)
   await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease + 1)
   await expect(undo).toHaveAccessibleName('Undo: Place Iria in Orbit · Iria · Vesper')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(planet).not.toHaveAttribute('transform', initialTransform)
 })

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback, addCustomFieldThroughDialog, captureMapExportBlobs, clickNormalizedClusterPoint,
+  waitForWorkspaceSaved, addCustomFieldThroughDialog, captureMapExportBlobs, clickNormalizedClusterPoint,
   clickDockAction, clickNormalizedSystemPoint, createSingleSystemWorkspace, downloadJson, editMapObject,
   openChartDetails, openWorkspaceHierarchy, openWorkspaceZoomNavigation, returnToClusterMap,
   selectCatalogueObjectButton, selectInspectorOption,
@@ -18,7 +18,7 @@ test('Ctrl+Z undoes a saved chart-name change from the workspace', async ({ page
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply names', exact: true }).click()
   await expect(names).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.keyboard.press('Control+z')
 
@@ -37,7 +37,7 @@ test('saved object creation supports Undo and Redo while Object Add stays armed'
   const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
   await clickNormalizedSystemPoint(page, map, { x: 0.8, y: 0.8 })
   await expect(objects).toHaveCount(2)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
@@ -121,7 +121,7 @@ test('saved Orbit creation supports Undo and Redo while Orbit Add stays armed', 
     .getByRole('button', { name: 'Add', exact: true }).click()
 
   await expect(orbit).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
@@ -146,7 +146,7 @@ test('saved Cluster system placement supports Undo and Redo while system Add sta
   await page.getByRole('button', { name: 'Add star system', exact: true }).click()
   await clickNormalizedClusterPoint(page, map, { x: 0.75, y: 0.75 })
   await expect(systems).toHaveCount(2)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
@@ -599,7 +599,7 @@ async function applySavedChartRename(
   await names.getByLabel(field, { exact: true }).fill(value)
   await names.getByRole('button', { name: 'Apply names', exact: true }).click()
   await expect(names).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 async function expectClusterSystemName(

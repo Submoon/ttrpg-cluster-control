@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   captureMapExportBlobs,
   clickNormalizedClusterPoint,
   clickDockAction,
@@ -298,7 +298,7 @@ test('an unresolved exit drag blocks history traversal until its gesture is canc
   await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('The Rim')
   await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const map = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')

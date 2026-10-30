@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   addCatalogueObject,
   beginDragToWorldPoint,
@@ -32,7 +33,7 @@ async function createWorkspace(page: Page): Promise<void> {
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 async function createHostedOrbit(page: Page): Promise<{
@@ -351,7 +352,7 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
     .toBeGreaterThan(radiusXBefore)
   await expect.poll(async () => Number(await ring.getAttribute('ry')))
     .toBeGreaterThan(radiusYBefore)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const afterFreshDrag = await exportSystemJson(page)
   expect(afterFreshDrag.layout.orbitRadii[orbitId])
     .not.toEqual(before.layout.orbitRadii[orbitId])
@@ -404,7 +405,7 @@ test('a second contact cancels a horizontal Orbit resize before pinch pans the c
     await dragToWorldPoint(page, map, horizontal, { x: centerX + committedHorizontal, y: centerY })
     await expect(ring).toHaveAttribute('rx', String(committedHorizontal))
     await expect(ring).toHaveAttribute('ry', String(verticalBefore))
-    await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+    await waitForWorkspaceSaved(page)
     const afterFreshResize = await exportSystemJson(page)
     expect(afterFreshResize.layout.orbitRadii[orbitId])
       .toEqual({ horizontal: committedHorizontal, vertical: verticalBefore })
@@ -454,7 +455,7 @@ test('a native right-pan cancels a vertical Orbit resize while keeping Move acti
   await dragToWorldPoint(page, map, vertical, { x: centerX, y: centerY - committedVertical })
   await expect(ring).toHaveAttribute('ry', String(committedVertical))
   await expect(ring).toHaveAttribute('rx', String(horizontalBefore))
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const afterFreshResize = await exportSystemJson(page)
   expect(afterFreshResize.layout.orbitRadii[orbitId])
     .toEqual({ horizontal: horizontalBefore, vertical: committedVertical })
@@ -500,7 +501,7 @@ test('keyboard Select cancels a held Orbit rotation preview', async ({ page }) =
   }
   await dragToWorldPoint(page, map, rotation, rotationTarget)
   await expect(ring).not.toHaveAttribute('transform', rotationBefore!)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const afterFreshRotation = await exportSystemJson(page)
   expect(afterFreshRotation.layout.orbitRotations?.[orbitId]).toBeCloseTo(30, 0)
   expect(await readWorkspaceRecords(page)).not.toEqual(recordsBefore)
@@ -596,7 +597,7 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
         .toBe(beforeMove.layout.orbitRotations?.[originalOrbit.id])
 
       await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
-      await expect(activeWorkspaceFeedback(page).getByRole('status').filter({ hasText: 'Saved on this device' })).toBeVisible()
+      await waitForWorkspaceSaved(page)
       expect(await currentWriteAttempts(page)).toBe(2)
     } finally {
       await restoreWorkspaceWrite(page)

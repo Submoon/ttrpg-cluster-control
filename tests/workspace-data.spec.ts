@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
-import { activeWorkspaceFeedback, addClusterSystem, readInspectorSelection, selectInspectorOption } from './helpers'
+import { waitForWorkspaceSaved, deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
+import { addClusterSystem, readInspectorSelection, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { dragToWorldPoint, ensureMapDragPointsReachable, panMap, dragBy, setHeaderMapActionsOpen, downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, downloadImage, inspectImageSvg, setJsonFile, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -1127,7 +1127,7 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
   await page.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
   await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ }))
     .toBeVisible()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await openWorkspaceHierarchy(page)
@@ -1343,7 +1343,7 @@ test('the Warden can import, export, and safely delete versioned campaign data',
   await resolveImportReview(acceptedImport, 'confirm')
   await expect(systemList.getByRole('button', { name: 'Open Far Vesper system map' })).toHaveCount(1)
   await page.reload()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   await expect(clusterMap.getByRole('button', { name: /Jump Level 1.*Alpha Gate.*Beta Gate/ }))
     .toBeVisible()

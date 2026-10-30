@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
-import { createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
-import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
+import { waitForWorkspaceSaved, createSingleSystemWorkspace, importReviewDialog, resolveImportReview } from './helpers'
+import { quitSystemAdd } from './helpers'
 import { clickDockAction, dockAction, selectInspectorOption } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, workspaceZoomControls, jsonMapImportInput, setWorkspaceMapMode, ensureMapDragPointsReachable } from './helpers'
 import { dragToWorldPoint, beginDragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, dragBy, panMap, setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, downloadImage, setJsonFile, selectCatalogueObjectButton, addCatalogueObject, completeCatalogueObjectCreation, clickNormalizedSystemPoint, measureMouseDrag, snapshotSvgCoordinates } from './helpers'
@@ -294,7 +294,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(async () =>
     Math.abs(Number(await ring.getAttribute('cy')) - movedCenter.y),
   ).toBeLessThan(2)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const committedCenter = {
     x: Number(await ring.getAttribute('cx')),
     y: Number(await ring.getAttribute('cy')),
@@ -805,7 +805,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   expect(png.sourceSvgText).not.toContain('orbit-edit-control')
   expect(png.sourceSvgText).not.toContain('class="orbit-label"')
 
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await page.reload()
   await openWorkspaceHierarchy(page)
   const restoredMap = page.getByRole('group', { name: 'Vesper star system map' })
@@ -1075,7 +1075,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     .not.toBe(objectBeforeMove)
   await expect.poll(() => ellipticalOrbitAngle(map, detachedOrbitLabel, 'Nix'))
     .toBeCloseTo(angleBeforeDetach, 2)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const exportedSystem = exported.system

@@ -1,8 +1,7 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, importReviewDialog, resolveImportReview } from './helpers'
 import {
-  activeWorkspaceFeedback,
   beginDragToWorldPoint,
   captureMapExportBlobs,
   clickNormalizedSystemPoint,
@@ -343,7 +342,7 @@ test('an existing attached object previews and confirms an Orbit position chosen
   expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoon)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroid)
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const committed = await downloadJson(page, 'Export star system JSON')
   const expectedCommitted = JSON.parse(JSON.stringify(initial)) as ExportedMap
@@ -455,7 +454,7 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
 
   await ensureObjectPlacementOpen(page)
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const betaCommitted = await downloadJson(page, 'Export star system JSON')
   const expectedBeta = JSON.parse(JSON.stringify(initial)) as ExportedMap
   const committedBetaAngle = betaCommitted.layout.objectAngles[oldPlanet.id]
@@ -534,7 +533,7 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
   expectPointNear(await objectMapPosition(map, nestedMoon.id), expectedNestedMoonFree)
   expectPointNear(await objectMapPosition(map, deepAsteroid.id), expectedDeepAsteroidFree)
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const expectedFree = JSON.parse(JSON.stringify(betaCommitted)) as ExportedMap
   const expectedFreePlanet = expectedFree.system?.objects.find(object => object.id === oldPlanet.id)
@@ -611,7 +610,7 @@ test('an ambiguous object drag offers overlapping Orbit destinations before conf
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
   await ensureObjectPlacementOpen(page)
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const committed = await downloadJson(page, 'Export star system JSON')
   expect(committed.system?.objects.find(object => object.id === oldPlanet.id)?.placement)
@@ -757,7 +756,7 @@ test('short landscape placement keeps Orbit controls usable and free placement o
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
   await ensureObjectPlacementOpen(page)
   await form.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const expectedCommitted = JSON.parse(JSON.stringify(initial)) as ExportedMap
   const expectedPlanet = expectedCommitted.system?.objects.find(object => object.id === oldPlanet.id)

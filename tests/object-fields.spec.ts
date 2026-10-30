@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
-import { deletionReviewDialog, resolveDeletionReview } from './helpers'
-import { activeWorkspaceFeedback, addClusterSystem, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
+import { waitForWorkspaceSaved, deletionReviewDialog, resolveDeletionReview } from './helpers'
+import { addClusterSystem, captureMapExportBlobs, openWorkspaceHierarchy, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
 import { returnToClusterMap, clickDockAction, workspaceZoomControls } from './helpers'
 import { downloadJson, openFieldDefinitionDialog, editFieldDefinition, editMapObject, saveMapObject, addCustomFieldThroughDialog, catalogueSubtypes, addCatalogueObject } from './helpers'
 import type { DownloadWindow } from './helpers'
@@ -129,11 +129,11 @@ test('the Warden can build and edit a nested star-system map', async ({ page }) 
   await saveMapObject(page)
   await expect(map.getByRole('button', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await expect(inspector.getByRole('heading', { name: 'Relay Beacon Kestrel' })).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await openWorkspaceHierarchy(page)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(hierarchy.getByRole('treeitem', { name: /Nix/ })).toBeVisible()
   await expect(hierarchy.getByRole('treeitem', { name: /Relay Beacon Kestrel/ })).toBeVisible()
   await hierarchy.getByRole('treeitem', { name: /Relay Beacon Kestrel/ }).click()
@@ -166,7 +166,7 @@ for (const family of catalogueFamilies) {
       })
     }
 
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     const exported = await downloadJson(page, 'Export star system JSON')
     for (const created of createdObjects) {
       expect(exported.system?.objects).toContainEqual(expect.objectContaining(created))
@@ -338,7 +338,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   expect(await readInspectorSelection(page.getByLabel('Signal class', { exact: true }))).toBe('Red')
   await hierarchy.getByRole('treeitem', { name: /New moon 1/ }).click()
   expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Thin')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await hierarchy.getByRole('treeitem', { name: /New station/ }).click()
   expect(await readInspectorSelection(page.getByLabel('Port class', { exact: true }))).toBe('Class II')
 

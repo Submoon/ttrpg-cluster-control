@@ -1,9 +1,9 @@
 import { expect, campaignTest } from './fixtures'
 import {
-  activeWorkspaceFeedback,
   openWorkspaceHierarchy,
   selectInspectorOption,
   setWorkspaceMapMode,
+  waitForWorkspaceSaved,
   workspaceNavigation,
 } from './helpers'
 
@@ -205,7 +205,7 @@ campaignTest('map selection and relationship Undo/Redo reveal nested rows withou
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await selectInspectorOption(inspector.getByLabel('Placement', { exact: true }), 'System-level position')
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device', { exact: true })).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(nix).toHaveAttribute('aria-selected', 'true')
   await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'true')
 

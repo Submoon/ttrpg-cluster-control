@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   captureMapExportBlobs,
   clickNormalizedClusterPoint,
   downloadJson,
@@ -83,7 +83,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   expect(afterConfirm.cluster?.systems).toHaveLength(beforeMove.cluster?.systems.length ?? 0)
   expect(afterConfirm.layout.systemPositions?.[source.id]?.x).toBeCloseTo(originalPosition!.x + 1 / 736, 8)
   expect(afterConfirm.layout.systemPositions?.[source.id]?.y).toBeCloseTo(originalPosition!.y, 8)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)
@@ -171,7 +171,7 @@ test('Move-mode direct dragging still commits before the explicit preview action
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after.cluster?.systems).toHaveLength(before.cluster?.systems.length ?? 0)
   expect(after.layout.systemPositions?.[source.id]).not.toEqual(beforePosition)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)

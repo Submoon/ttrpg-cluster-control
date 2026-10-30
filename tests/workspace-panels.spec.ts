@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { waitForWorkspaceSaved, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -8,7 +8,7 @@ async function createWorkspace(page: Page, viewport = { width: 1440, height: 960
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 async function expectCompactPanel(

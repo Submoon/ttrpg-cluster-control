@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import entitySessionFixture from './fixtures/workspace-entity-sessions.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, importReviewDialog, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   beginDragToWorldPoint,
@@ -33,7 +33,7 @@ async function openSessionLab(page: Page): Promise<{
   await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
   await page.getByLabel('First star system', { exact: true }).fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   await setJsonFile(jsonMapImportInput(page), 'entity-session-lab.json', JSON.stringify(entitySessionFixture))
@@ -117,7 +117,7 @@ test('object Apply preserves typed zero, false and hidden assignments while an u
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Iria, revised')
   await expect(inspector.getByRole('button', { name: /Apply changes/ })).toBeVisible()
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const exported = await downloadJson(page, 'Export star system JSON')
   const planet = exported.system!.objects.find(object => object.name === 'Iria, revised')!
@@ -168,7 +168,7 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await guard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(nix).toHaveAttribute('aria-current', 'true')
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
@@ -212,7 +212,7 @@ test('a geometry-only Orbit draft preserves an independently moved free host', a
   expect(movedPrimary.placement).not.toEqual(primary.placement)
 
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const applied = await downloadJson(page, 'Export star system JSON')
   expect(applied.system!.orbits.find(candidate => candidate.id === orbit.id)?.id).toBe(orbit.id)
   expect(applied.layout.orbitRotations?.[orbit.id]).toBe(45)
@@ -323,7 +323,7 @@ test('a failed Inspector save leaves current memory intact and Retry save persis
   const details = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
   await expect(details.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible()
   await details.getByRole('button', { name: 'Retry save', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)
@@ -361,7 +361,7 @@ test('a failed Orbit Apply and continue keeps the transition and Retry persists 
   await recovery.getByRole('button', { name: 'Recovery details', exact: true }).click()
   const details = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
   await details.getByRole('button', { name: 'Retry save', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)
