@@ -521,7 +521,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })
   await expect(resumeDraft).toBeVisible()
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
-  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true, includeHidden: true })
   const systemContent = systemMap.locator('.system-map-content')
   const initialCamera = await systemContent.getAttribute('transform')
   if (!initialCamera) throw new Error('The active system map has no rendered camera transform.')
@@ -540,9 +540,20 @@ test('object search guards a hidden chart-name draft before revealing the result
   await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
 
-  await expect(guard).toHaveCount(0)
+  await expect(chartDialog).toBeVisible()
+  await expect(chartDialog.getByRole('button', { name: 'Apply names', exact: true })).toBeVisible()
+  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
+  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
+  await expect.poll(() => chartDialog.evaluate(dialog =>
+    dialog === document.activeElement || dialog.contains(document.activeElement),
+  )).toBe(true)
+
+  await page.keyboard.press('Escape')
+  await expect(chartDialog).toBeHidden()
   await expect(searchDialog).toBeVisible()
   await expect(query).toHaveValue('Primary Star')
+  await expect(result).toBeFocused()
+  await page.keyboard.press('ArrowUp')
   await expect(query).toBeFocused()
   await expect(workspaceMapContextType(page)).toHaveText('Star System')
   await expect(systemContent).toHaveAttribute('transform', initialCamera)
