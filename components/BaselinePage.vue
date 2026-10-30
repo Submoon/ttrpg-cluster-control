@@ -958,7 +958,7 @@ useWorkspaceHistoryShortcuts({
 
 useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,

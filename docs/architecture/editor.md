@@ -18,6 +18,8 @@ Domain calculations accept data and return results. Placement, relationship, and
 
 ## Dependencies and operation flow
 
+Object publication belongs to the existing object Inspector draft and validated mutation flow. The player preview owns only transient public system/object selection and mounted map interaction state. It navigates the projected cluster and Revealed system documents, repairs obsolete public selections and never passes source records into its renderers or hierarchy. Resolve effective committed source geometry before disclosure filtering; only detached public coordinates and remapped relationships reach that presentation.
+
 Screens and map interactions read shared UI state and call focused editor commands. Commands use the relevant session controller, pure domain operations, and the existing workspace writer. The page composes those pieces and connects map components; it should not become a transport layer for every state value. Domain operations remain below UI and persistence concerns, while the Pinia store contains shared editor state rather than workflow implementations.
 
 A guarded navigation illustrates the order: capture the starting context, ask the relevant draft sessions to resolve, then verify that the context and target still exist after the asynchronous wait. Only an accepted transition updates selection or map state. An editing command computes and validates a complete workspace change before asking the writer to apply it. This keeps stale requests from changing a newer selection and keeps related placement rules consistent across entry points.
@@ -66,7 +68,7 @@ The store does not enforce action-only mutation, session ownership, or domain in
 | Draft-resolution sequencing | [useEditorTransitions](../../composables/editor-workflows/useEditorTransitions.ts) |
 | Chart-detail draft lifetime (names and player publication) | [useChartNamesSession](../../composables/editor-workflows/useChartNamesSession.ts) |
 | Allowlisted committed player marker document | [player projection](../../domain/player-projection.ts) |
-| DTO-only Warden preview presentation | [player preview dialog](../../components/PlayerViewPreviewDialog.vue), [player cluster renderer](../../components/PlayerClusterMap.vue) |
+| DTO-only Warden preview presentation | [player preview dialog](../../components/PlayerViewPreviewDialog.vue), [player cluster renderer](../../components/PlayerClusterMap.vue), [player system renderer](../../components/PlayerSystemMap.vue) |
 | Candidate-request coordination | [useMapInteractionCoordinator](../../composables/editor-workflows/useMapInteractionCoordinator.ts) |
 | Mounted map handles and responsive effects | [useEditorMapControls](../../composables/editor-workflows/useEditorMapControls.ts), [useEditorViewport](../../composables/editor-workflows/useEditorViewport.ts) |
 | Guarded commands for connected Dock/Hierarchy containers | [editor command context](../../composables/editor-workflows/editor-command-context.ts) |

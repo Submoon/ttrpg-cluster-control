@@ -8,11 +8,16 @@ import type {
   JumpRoute,
   ChartDetailsChanges,
   LocalWorkspace,
-  PublicationMode,
   Point,
   StarSystem,
 } from './workspace-model'
-import { isJumpLevel, maxNameLength, validName, validText } from './workspace-validation'
+import {
+  isJumpLevel,
+  isPublicationMode,
+  maxNameLength,
+  validName,
+  validText,
+} from './workspace-validation'
 
 type JumpRouteDetails = Pick<JumpRoute, 'jumpLevel' | 'fromPointId'> & (
   | { toPointId: string; unresolvedExit?: never }
@@ -32,6 +37,7 @@ function initialStarSystem(name: string): StarSystem {
     publication: 'known-type',
     objects: [{
       id: crypto.randomUUID(),
+      publication: 'known-type',
       family: 'CelestialBody',
       subtype: 'star',
       locationKey: 'A',
@@ -68,7 +74,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialStarSystem(systemName)
 
   return {
-    version: 2,
+    version: 3,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -337,11 +343,4 @@ export function updateChartDetails(
         : system),
     },
   }
-}
-
-function isPublicationMode(value: unknown): value is PublicationMode {
-  return value === 'hidden'
-    || value === 'unknown'
-    || value === 'known-type'
-    || value === 'revealed'
 }

@@ -15,6 +15,7 @@ export function createHistoryMeasurementWorkspace(systemCount: number, objectsPe
     const id = `measurement-system-${systemIndex}`
     const objects: SystemObject[] = Array.from({ length: objectsPerSystem }, (_, objectIndex) => ({
       id: `${id}-object-${objectIndex}`,
+      publication: 'known-type',
       locationKey: `M${objectIndex}`,
       name: `Measured object ${objectIndex}`,
       family: objectIndex === 3 ? 'JumpPoint' : 'CelestialBody',

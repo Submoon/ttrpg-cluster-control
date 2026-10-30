@@ -76,6 +76,7 @@ export type ObjectPlacement =
  */
 export interface SystemObject {
   id: string
+  publication: PublicationMode
   family: ObjectFamily
   subtype: string
   locationKey: string
@@ -155,7 +156,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 2
+  version: 3
   id: string
   cluster: JumpCluster
   layout: {
@@ -186,7 +187,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 2
+  version: 3
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -195,7 +196,7 @@ export type JumpClusterExport = {
 
 export type StarSystemExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 2
+  version: 3
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
@@ -223,6 +224,7 @@ export interface PreparedJsonImport {
 
 /** Partial fields accepted by the object-edit command; omitted fields retain their current values. */
 export interface SystemObjectChanges {
+  publication?: PublicationMode
   locationKey?: string
   name?: string
   description?: string

@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import type { PublicationMode } from '../domain/workspace'
 
 /** Returns the visible page-level or compact-panel workspace feedback owner. */
 export function activeWorkspaceFeedback(page: import('@playwright/test').Page): import('@playwright/test').Locator {
@@ -23,6 +24,33 @@ type WorkspaceWriteFailureGate = {
 }
 
 type WorkspaceWriteFailureWindow = Window & { __workspaceWriteFailureGate?: WorkspaceWriteFailureGate }
+
+/** Injects a damaged record; recovery assertions remain on the public UI and complete exports. */
+export async function overwriteWorkspaceRecord(
+  page: import('@playwright/test').Page,
+  key: 'current' | 'last-valid',
+  value: unknown,
+): Promise<void> {
+  await page.evaluate(async (stored) => {
+    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
+    })
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('workspace', 'readwrite')
+        transaction.objectStore('workspace').put(stored.value, stored.key)
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
+        transaction.onabort = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
+      })
+    } finally {
+      database.close()
+    }
+  }, { key, value })
+}
 
 /** Aborts a bounded number of current-workspace writes to exercise durable-save recovery. */
 export async function installWorkspaceWriteFailureGate(
@@ -85,6 +113,8 @@ export async function captureMapExportBlobs(page: import('@playwright/test').Pag
 
 export type ExportedObject = {
   id: string
+  /** Raw legacy exports omit publication; current complete exports include it. */
+  publication?: PublicationMode
   name: string
   family: string
   subtype: string
@@ -100,7 +130,7 @@ export type ExportedObject = {
 export type ExportedSystem = {
   id: string
   name: string
-  publication?: 'hidden' | 'unknown' | 'known-type' | 'revealed'
+  publication?: PublicationMode
   objects: ExportedObject[]
   orbits: Array<{ id: string; hostId: string | null; center?: WorldPoint; order: number }>
 }

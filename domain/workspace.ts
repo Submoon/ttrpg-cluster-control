@@ -76,7 +76,14 @@ export {
 } from './workspace-orbits'
 export { captureEffectiveObjectAngles, defaultObjectOrbitAngle, updateWorkspaceObject } from './workspace-placement'
 export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
+export { isPublicationMode } from './workspace-validation'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
 export { projectPlayerCluster } from './player-projection'
-export type { PlayerSystemMarker, PlayerClusterDocument } from './player-projection'
+export type {
+  PlayerSystemMarker,
+  PlayerClusterDocument,
+  PlayerSystemDocument,
+  PlayerObjectMarker,
+  PlayerOrbit,
+} from './player-projection'

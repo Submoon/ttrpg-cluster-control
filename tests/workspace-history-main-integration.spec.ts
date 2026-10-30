@@ -57,6 +57,7 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
   const system = initial.cluster.systems[0]
   if (!system) throw new Error('The initial workspace has no star system.')
   const jumpPoint: SystemObject = {
+    publication: 'known-type',
     id: 'history-integration-jump-point',
     family: 'JumpPoint',
     subtype: 'jump-point',

@@ -6,7 +6,7 @@
     <svg
       v-else
       class="player-cluster-map-scene"
-      role="img"
+      role="group"
       :aria-label="`${props.document.title} player map`"
       :viewBox="viewBox"
       preserveAspectRatio="xMidYMid meet"
@@ -16,8 +16,11 @@
         :key="system.id"
         class="player-cluster-map-marker"
         :class="`player-cluster-map-marker--${system.disclosure}`"
-        role="group"
-        :aria-label="system.label"
+        :role="system.disclosure === 'revealed' ? 'button' : 'group'"
+        :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} system preview` : system.label"
+        :tabindex="system.disclosure === 'revealed' ? 0 : undefined"
+        @click="openSystem(system)"
+        @keydown="event => openSystemFromKeyboard(event, system)"
       >
         <circle :cx="system.position.x" :cy="system.position.y" r="18" />
         <text
@@ -36,9 +39,10 @@
 <script setup lang="ts">
 /** Draws only an allowlisted player projection; this component never accepts a Warden workspace. */
 import { computed } from 'vue'
-import type { PlayerClusterDocument } from '../domain/workspace'
+import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/workspace'
 
 const props = defineProps<{ document: PlayerClusterDocument }>()
+const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
 const bounds = computed(() => {
   const systems = props.document.systems
@@ -62,6 +66,16 @@ const bounds = computed(() => {
 
 const viewBox = computed(() => `${bounds.value.minX} ${bounds.value.minY} ${bounds.value.width} ${bounds.value.height}`)
 const labelOffset = { x: 28, y: 7 }
+
+function openSystem(system: PlayerSystemMarker): void {
+  if (system.disclosure === 'revealed') emit('open-system', system.id)
+}
+
+function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker): void {
+  if (system.disclosure !== 'revealed' || (event.key !== 'Enter' && event.key !== ' ')) return
+  event.preventDefault()
+  emit('open-system', system.id)
+}
 </script>
 
 <style scoped>
@@ -89,6 +103,11 @@ const labelOffset = { x: 28, y: 7 }
 }
 
 .player-cluster-map-marker circle { stroke-width: 3; }
+.player-cluster-map-marker[role="button"] { cursor: pointer; }
+.player-cluster-map-marker[role="button"]:focus-visible circle {
+  stroke: var(--focus, var(--accent-hover));
+  stroke-width: 5;
+}
 .player-cluster-map-marker text {
   fill: var(--text-primary);
   font: 20px Georgia, serif;

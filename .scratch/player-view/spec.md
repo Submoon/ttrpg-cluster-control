@@ -14,7 +14,7 @@ ticket_count: 7
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of ticket 01 with subagents and the `implement` workflow. Later tickets remain unstarted. The source GitHub issue remains open; no remote write, push, PR or merge is authorized by this specification.
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02 with subagents and the `implement` workflow. Ticket 01 is closed and ticket 02 is in progress; tickets 03–07 remain unstarted. The source GitHub issue remains open; no remote write, push, PR or merge into main is authorized by this specification.
 
 ## Source issue
 
@@ -172,7 +172,7 @@ For later implementation: lint, typecheck, focused pure/browser failures and a p
 
 ## Out of Scope
 
-- Automatic implementation of later tickets; pushes, PRs, remote issue edits, merge or source-issue closure. The separate ticket 01 `implement` instruction authorizes its local implementation and commit.
+- Automatic implementation of tickets 03–07; pushes, PRs, remote issue edits, merges into main or source-issue closure. The separate `implement` instructions for tickets 01 and 02 authorize their local implementation and commits.
 - Multiple saved editable GM workspaces, simultaneous GM-tab write-conflict resolution, multiple audience profiles or per-player discovery tracking.
 - Accounts, shared map storage/database/cache, stable mutable share URLs, live updates, access revocation, link-shortening service or self-contained offline HTML app.
 - Full campaign management, journals, factions/NPCs/missions, new external/embedded note features, annotations, or a separate competing domain glossary.
@@ -189,7 +189,7 @@ The common projection seam and verification approach were already confirmed in t
 
 ### Approved Implementation Tickets
 
-The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Ticket 01 is now closed under the user's separate implementation instruction; its publication editing, strict source migration and allowlisted Warden-side preview are implemented and verified. Ticket 02 is available and unclaimed; other tickets remain unstarted. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
+The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Ticket 01 is closed under the user's separate implementation instruction; its publication editing, strict source migration and allowlisted Warden-side preview are implemented and verified. Ticket 02 is in progress and assigned to the coordinator; tickets 03–07 remain unstarted. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
 
 | Ticket | End-to-end slice | Blocked by |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ The user approved these seven end-to-end slices and their exact blocking edges t
 | 06 | [Share compressed player links with a JSON fallback](tickets/06-compressed-player-links.md) | 05 |
 | 07 | [Export player-safe SVG and PNG maps](tickets/07-player-svg-png-exports.md) | 04 |
 
-At publication the initial executable frontier was ticket 01 only. After 01 closes, ticket 02 becomes available; no later implementation is started automatically. After 02, tickets 03 and 04 can advance independently; after 04, image work can advance without waiting for JSON/URL transport. The common object/relationship scene is the image prerequisite; public prose/Fields are not drawn as map imagery, so 03 is not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules.
+At publication the initial executable frontier was ticket 01 only. Ticket 01 is now closed and ticket 02 is active under separate authorization; no later implementation is started automatically. After 02, tickets 03 and 04 can advance independently; after 04, image work can advance without waiting for JSON/URL transport. The common object/relationship scene is the image prerequisite; public prose/Fields are not drawn as map imagery, so 03 is not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules.
 
 No standalone prefactor or horizontal schema/test ticket is needed: the focused projection/persistence boundaries are introduced through the first demoable preview slice. Tickets 01–04 expose only the Warden-side preview; player JSON waits for both content and relationship projection, and image sharing waits for the complete relationship scene. Each slice owns relevant privacy/compatibility checks. Run the integrated full suite once on the stable completed candidate, followed by required Sensitive reviews; do not defer individual ticket verification to an unspecified final cleanup ticket.
 
@@ -221,4 +221,4 @@ Ticket-publication verification: seven files, 57 unchecked acceptance criteria, 
 
 Approved by the user on 2026-10-29: scope and verification plan validated. This covers the consolidated publication rules, a common projection for preview/link/JSON/images, ordinary save and Undo/Redo for publication edits, actual-artifact privacy checks, source preservation, empty-share refusal and isolated invalid-input handling. No product-choice questions remain open. Exact schema/version numbers, URL budget/codec and detailed implementation interfaces remain technical design work within this scope.
 
-At specification publication, origin fetch showed HEAD/main/origin/main at the recorded baseline; GitHub #9 had the same body, labels, state and no comments; all 11 checked local planning/test reference paths existed. That planning-only phase ran no application tests/build and changed no product source or GitHub state. Actual ticket 01 implementation/check evidence is recorded in the [implementation record](ticket-01-implementation.md).
+At specification publication, origin fetch showed HEAD/main/origin/main at the recorded baseline; GitHub #9 had the same body, labels, state and no comments; all 11 checked local planning/test reference paths existed. That planning-only phase ran no application tests/build and changed no product source or GitHub state. Actual implementation/check evidence is recorded separately for [ticket 01](ticket-01-implementation.md) and [ticket 02](ticket-02-implementation.md).

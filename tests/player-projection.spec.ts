@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import {
   addStarSystem,
   createLocalWorkspace,
+  replaceWorkspaceSystem,
   updateChartDetails,
 } from '../domain/workspace'
 import { projectPlayerCluster } from '../domain/player-projection'
@@ -51,6 +52,24 @@ test('player projection emits only the marker information allowed by each public
   expect(document.systems[1]!.position.y).toBeCloseTo(224.8)
   expect(document.systems[2]!.position.x).toBeCloseTo(244.48)
   expect(document.systems[2]!.position.y).toBeCloseTo(335.2)
+  expect(document.systems[0]).not.toHaveProperty('map')
+  expect(document.systems[1]).not.toHaveProperty('map')
+  const revealedMarker = document.systems[2]
+  if (!revealedMarker || revealedMarker.disclosure !== 'revealed') {
+    throw new Error('Expected the revealed player system marker.')
+  }
+  expect(revealedMarker.map).toMatchObject({
+    objects: [{
+      id: 'object-1',
+      position: { x: 480, y: 280 },
+      placement: { kind: 'system' },
+      disclosure: 'known-type',
+      family: 'CelestialBody',
+      subtype: 'star',
+      label: 'Star',
+    }],
+    orbits: [],
+  })
   expect(JSON.stringify(document)).not.toContain('Private Reach')
   expect(JSON.stringify(document)).not.toContain(hiddenId)
   expect(JSON.stringify(document)).not.toContain(withUnknown.system.name)
@@ -61,7 +80,11 @@ test('hidden distant systems and private source extensions do not affect the pub
   const workspace = createLocalWorkspace('Secret Internal Name', 'Revealed System')
   const initialSystem = workspace.cluster.systems[0]!
   const revealed = setPublication(workspace, initialSystem.id, 'revealed')
-  const withHiddenSystem = addStarSystem(revealed, 'Far Hidden System')
+  const revealedWithHiddenChildren = replaceWorkspaceSystem(revealed, {
+    ...revealed.cluster.systems[0]!,
+    objects: revealed.cluster.systems[0]!.objects.map(object => ({ ...object, publication: 'hidden' })),
+  })
+  const withHiddenSystem = addStarSystem(revealedWithHiddenChildren, 'Far Hidden System')
   const hidden = setPublication(withHiddenSystem.workspace, withHiddenSystem.system.id, 'hidden')
   hidden.layout.systemPositions[withHiddenSystem.system.id] = { x: 100_000, y: -100_000 }
   const before = structuredClone(hidden)

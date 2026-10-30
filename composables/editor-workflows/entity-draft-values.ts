@@ -23,6 +23,7 @@ export function objectDraftValuesFor(
     locationKey: object?.locationKey ?? '',
     name: object?.name ?? '',
     description: object?.description ?? '',
+    publication: object?.publication ?? 'hidden',
     subtype: object?.subtype ?? '',
     placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
     atmosphere: object?.atmosphere ?? '',

@@ -10,6 +10,7 @@ import {
   isOrbit,
   isPoint,
   isPointRecord,
+  isPublicationMode,
   isRecord,
   isSystemObject,
   maxNameLength,
@@ -118,13 +119,6 @@ export function isStarSystem(value: unknown): value is StarSystem {
   return isSystemStructureValid({ id: value.id, name, publication, objects, orbits })
 }
 
-function isPublicationMode(value: unknown): value is StarSystem['publication'] {
-  return value === 'hidden'
-    || value === 'unknown'
-    || value === 'known-type'
-    || value === 'revealed'
-}
-
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
   & {
     unresolvedExitPositions?: Record<string, Point>
@@ -150,7 +144,7 @@ function isStoredLocalWorkspace(
 ): value is StoredLocalWorkspace {
   if (
     !isRecord(value)
-    || value.version !== 2
+    || value.version !== 3
     || typeof value.id !== 'string'
     || !value.id
     || (!allowLegacyLayout && value.objectFieldSettings === undefined)
@@ -406,30 +400,59 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
   if (!isRecord(value)) return null
 
   const version = value.version
-  const isLegacy = version === undefined
+  const isUnversionedLegacy = version === undefined
+  const isVersionTwo = version === 2
   let currentValue: unknown = value
-  if (isLegacy) {
+  if (isUnversionedLegacy) {
     const cluster = value.cluster
     if (!isRecord(cluster) || !Array.isArray(cluster.systems)) return null
     currentValue = {
       ...value,
-      version: 2,
+      version: 3,
       cluster: {
         ...cluster,
         playerTitle: 'Player Jump Cluster',
         systems: cluster.systems.map(system => isRecord(system)
-          ? { ...system, publication: 'hidden' }
+          ? {
+              ...system,
+              publication: 'hidden',
+              objects: Array.isArray(system.objects)
+                ? system.objects.map(object => isRecord(object)
+                  ? { ...object, publication: 'hidden' }
+                  : object)
+                : system.objects,
+            }
           : system),
       },
     }
-  } else if (version !== 2) {
+  } else if (isVersionTwo) {
+    const cluster = value.cluster
+    if (!isRecord(cluster) || !Array.isArray(cluster.systems)) return null
+    currentValue = {
+      ...value,
+      version: 3,
+      cluster: {
+        ...cluster,
+        systems: cluster.systems.map(system => isRecord(system)
+          ? {
+              ...system,
+              objects: Array.isArray(system.objects)
+                ? system.objects.map(object => isRecord(object)
+                  ? { ...object, publication: 'hidden' }
+                  : object)
+                : system.objects,
+            }
+          : system),
+      },
+    }
+  } else if (version !== 3) {
     return null
   }
 
-  const restored = isLegacy
+  const restored = isUnversionedLegacy
     ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
     : currentValue
-  if (!isStoredLocalWorkspace(restored, isLegacy)) {
+  if (!isStoredLocalWorkspace(restored, isUnversionedLegacy)) {
     return null
   }
 

@@ -327,7 +327,7 @@ test('a failed chart-details save retains the applied memory and Retry adds no h
   }
 })
 
-test('public v2 JSON import preserves source publication and the destination player title through Undo and Redo', async ({ page }) => {
+test('public v3 JSON import preserves source publication and the destination player title through Undo and Redo', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page, { clusterName: 'Destination Private Reach', systemName: 'Vesper' })
   const destinationDetails = await openChartDetails(page)

@@ -25,11 +25,11 @@ import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbit
 import { isObjectFieldSettings, isRecord, objectFieldValidationError } from './workspace-validation'
 
 type ImportableMap =
-  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 })
-  | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 })
+  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 | 3 })
+  | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 | 3 })
 
 /**
- * Validates a supported version 1 or version 2 Cluster or standalone-system export.
+ * Validates a supported version 1, 2, or 3 Cluster or standalone-system export.
  * @param value Unknown parsed JSON value.
  * @returns True only when the export and every saved map-specific value satisfy current domain rules.
  */
@@ -39,7 +39,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
   const layout = value.layout
   if (
     value.format !== 'ttrpg-cluster-control-map'
-    || (value.version !== 1 && value.version !== 2)
+    || (value.version !== 1 && value.version !== 2 && value.version !== 3)
     || !isObjectFieldSettings(settings)
     || !isRecord(layout)
     || layout.version !== 1
@@ -79,7 +79,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
     while (validationIds.has(validationId)) validationId = crypto.randomUUID()
 
     const candidate = {
-      version: 2,
+      version: 3,
       id: validationId,
       cluster,
       objectFieldSettings: settings,
@@ -124,11 +124,12 @@ function isImportedMap(value: unknown): value is ImportableMap {
 }
 
 /**
- * Applies only the explicit version 1 disclosure and compatibility defaults before validation.
- * Version 2 values remain untouched so malformed current data cannot be repaired on import.
+ * Applies explicit version 1 and 2 object-publication defaults before validation.
+ * Version 2 system publication/title and version 3 object publication remain strict.
  */
 function normalizeLegacyMap(value: unknown): unknown {
-  if (!isRecord(value) || value.version !== 1) return value
+  if (!isRecord(value) || (value.version !== 1 && value.version !== 2)) return value
+  const isVersionOne = value.version === 1
 
   if (value.type === 'cluster' && isRecord(value.cluster)) {
     const cluster = value.cluster
@@ -136,10 +137,18 @@ function normalizeLegacyMap(value: unknown): unknown {
       ...value,
       cluster: {
         ...cluster,
-        playerTitle: 'Player Jump Cluster',
+        ...(isVersionOne ? { playerTitle: 'Player Jump Cluster' } : {}),
         systems: Array.isArray(cluster.systems)
           ? cluster.systems.map(system => isRecord(system)
-            ? { ...system, publication: 'hidden' }
+            ? {
+                ...system,
+                ...(isVersionOne ? { publication: 'hidden' } : {}),
+                objects: Array.isArray(system.objects)
+                  ? system.objects.map(object => isRecord(object)
+                    ? { ...object, publication: 'hidden' }
+                    : object)
+                  : system.objects,
+              }
             : system)
           : cluster.systems,
       },
@@ -147,7 +156,18 @@ function normalizeLegacyMap(value: unknown): unknown {
   }
 
   if (value.type === 'system' && isRecord(value.system)) {
-    return { ...value, system: { ...value.system, publication: 'hidden' } }
+    return {
+      ...value,
+      system: {
+        ...value.system,
+        ...(isVersionOne ? { publication: 'hidden' } : {}),
+        objects: Array.isArray(value.system.objects)
+          ? value.system.objects.map(object => isRecord(object)
+            ? { ...object, publication: 'hidden' }
+            : object)
+          : value.system.objects,
+      },
+    }
   }
 
   return value
@@ -270,7 +290,7 @@ function remapImportedSystem(
 export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, or version 3 Jump Cluster or star system JSON export.')
   }
 
   const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
@@ -429,14 +449,14 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     map.layout.orbitEllipseRadii ?? {},
   )
   if (!importedOrbitRadii) {
-    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, or version 3 Jump Cluster or star system JSON export.')
   }
   for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
     layout.orbitRadii[ids.get(sourceId)!] = radii
   }
   const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
   if (!importedOrbitRotations) {
-    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, or version 3 Jump Cluster or star system JSON export.')
   }
   for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
     layout.orbitRotations[ids.get(sourceId)!] = rotation
@@ -486,7 +506,7 @@ export function jsonImportReviewEffects(
 ): { signature: string; existingFieldIds: string[] } {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1 or version 2 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, or version 3 Jump Cluster or star system JSON export.')
   }
 
   const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({

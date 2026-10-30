@@ -39,3 +39,6 @@ A player-facing chart title chosen independently of the Warden's Jump Cluster na
 
 **Player preview**:
 A Warden-side consultation of the information selected for players. The Warden's surrounding workspace retains its private preparation.
+
+**Required Orbit host chain**:
+An orbital object's host and each further host in its placement ancestry. Player publication can show otherwise Hidden required hosts as Unknown presences without revealing unrelated satellites. An unoccupied Orbit center is geometry, not a physical host object.

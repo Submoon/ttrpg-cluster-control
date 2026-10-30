@@ -13,6 +13,7 @@ test('negative distant exit positions survive workspace restore and route-remapp
   if (!system) throw new Error('The source workspace has no Star System.')
   const point = {
     id: 'distant-exit-point',
+    publication: 'known-type',
     family: 'JumpPoint',
     subtype: 'jump-point',
     locationKey: 'JP1',

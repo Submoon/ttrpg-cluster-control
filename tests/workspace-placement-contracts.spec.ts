@@ -30,6 +30,7 @@ function createPlacementFixture(): PlacementFixture {
     orbitId: string,
   ): SystemObject => ({
     id,
+    publication: 'known-type',
     family: 'CelestialBody',
     subtype: 'planet',
     locationKey: id,

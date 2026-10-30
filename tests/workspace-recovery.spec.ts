@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, openWorkspaceHierarchy } from './helpers'
+import { activeWorkspaceFeedback, openWorkspaceHierarchy, overwriteWorkspaceRecord } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
 import { importReviewDialog, resolveImportReview } from './helpers'
@@ -48,32 +48,6 @@ async function readWorkspaceRecord(
 
 async function readCurrentWorkspace(page: import('@playwright/test').Page): Promise<unknown> {
   return readWorkspaceRecord(page, 'current')
-}
-
-async function overwriteWorkspaceRecord(
-  page: import('@playwright/test').Page,
-  key: WorkspaceRecordKey,
-  value: unknown,
-): Promise<void> {
-  await page.evaluate(async (stored) => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
-    })
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction('workspace', 'readwrite')
-        transaction.objectStore('workspace').put(stored.value, stored.key)
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
-        transaction.onabort = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
-      })
-    } finally {
-      database.close()
-    }
-  }, { key, value })
 }
 
 async function deleteWorkspaceRecord(

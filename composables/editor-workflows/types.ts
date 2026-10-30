@@ -14,6 +14,7 @@ import type {
   Orbit,
   OrbitRadii,
   Point,
+  PublicationMode,
   SystemObject,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
@@ -55,6 +56,7 @@ export interface ObjectDraft {
   locationKey: string
   name: string
   description: string
+  publication: PublicationMode
   subtype: string
   placement: string
   atmosphere: string

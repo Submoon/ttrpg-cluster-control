@@ -633,7 +633,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(clusterExport).toMatchObject({
     format: 'ttrpg-cluster-control-map',
-    version: 2,
+    version: 3,
     type: 'cluster',
     layout: { version: 1 },
   })
@@ -732,7 +732,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const systemExport = await downloadJson(page, 'Export star system JSON')
   expect(systemExport).toMatchObject({
     format: 'ttrpg-cluster-control-map',
-    version: 2,
+    version: 3,
     type: 'system',
     layout: { version: 1 },
   })

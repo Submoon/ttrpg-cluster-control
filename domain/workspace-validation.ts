@@ -12,6 +12,7 @@ import {
   type ObjectFieldSettings,
   type Orbit,
   type Point,
+  type PublicationMode,
   type SystemObject,
 } from './workspace-model'
 
@@ -183,6 +184,14 @@ export function isPointRecord(value: unknown): value is Record<string, Point> {
   return isRecord(value) && Object.values(value).every(isPoint)
 }
 
+/** Narrows unknown saved or edited data to one supported publication mode. */
+export function isPublicationMode(value: unknown): value is PublicationMode {
+  return value === 'hidden'
+    || value === 'unknown'
+    || value === 'known-type'
+    || value === 'revealed'
+}
+
 function isObjectFamily(value: unknown): value is ObjectFamily {
   return value === 'CelestialBody'
     || value === 'SmallBody/Field'
@@ -204,6 +213,7 @@ export function isSystemObject(value: unknown): value is SystemObject {
     !isRecord(value)
     || typeof value.id !== 'string'
     || !value.id
+    || !isPublicationMode(value.publication)
     || !isObjectFamily(value.family)
     || typeof value.subtype !== 'string'
     || !value.subtype.trim()

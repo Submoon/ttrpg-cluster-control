@@ -2,6 +2,7 @@
 import {
   canPlaceObjectInOrbit,
   initialSystemPlacement,
+  isPublicationMode,
   updateWorkspaceObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -83,6 +84,11 @@ export function validateObjectDraft(
   if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (name !== initial.name) changes.name = name
   if (draft.description !== initial.description) changes.description = draft.description
+  if (!isPublicationMode(draft.publication)) {
+    errors.publication = 'Choose a supported publication mode.'
+  } else if (draft.publication !== initial.publication) {
+    changes.publication = draft.publication
+  }
   if (subtype !== initial.subtype) changes.subtype = subtype
 
   if (draft.placement === 'system') {

@@ -149,10 +149,12 @@ test('route context retains endpoint, system, level and cluster details within t
   const secondSystem = added.system
   if (!firstSystem || !secondSystem) throw new Error('The workspace fixture is missing a route system.')
   const firstPoint: SystemObject = {
+    publication: 'known-type',
     id: crypto.randomUUID(), family: 'JumpPoint', subtype: 'jump-point', locationKey: 'J1',
     name: 'A'.repeat(80), description: '', placement: { kind: 'system', x: 0.3, y: 0.5 },
   }
   const secondPoint: SystemObject = {
+    publication: 'known-type',
     id: crypto.randomUUID(), family: 'JumpPoint', subtype: 'jump-point', locationKey: 'J2',
     name: 'B'.repeat(80), description: '', placement: { kind: 'system', x: 0.7, y: 0.5 },
   }

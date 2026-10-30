@@ -68,6 +68,15 @@
               maxlength="80"
             />
           </UFormField>
+          <UFormField label="How players see this object" :error="fieldError('publication')">
+            <USelect
+              :id="controlId('publication')"
+              :model-value="objectDraft.publication"
+              :items="publicationItems"
+              @update:model-value="updatePublication"
+            />
+            <template #hint>{{ publicationSummary }}</template>
+          </UFormField>
           <UFormField label="Location key" :error="fieldError('locationKey')">
             <UInput
               :id="controlId('locationKey')"
@@ -301,8 +310,10 @@ import { computed, nextTick, watch } from 'vue'
 import {
   canPlaceObjectInOrbit,
   isCustomFieldApplicableToObject,
+  isPublicationMode,
   type CustomFieldDefinition,
   type LocalWorkspace,
+  type PublicationMode,
   type StarSystem,
   type SystemObject,
 } from '../../domain/workspace'
@@ -377,6 +388,21 @@ const placeableOrbits = computed(() => {
 const hasAtmosphere = computed(() => selectedObject.value?.family === 'CelestialBody'
   && (selectedObject.value.subtype === 'planet' || selectedObject.value.subtype === 'moon'))
 const hasNativeFields = computed(() => hasAtmosphere.value || selectedObject.value?.family === 'Installation')
+const publicationItems: Array<{ label: string; value: PublicationMode }> = [
+  { label: 'Hidden', value: 'hidden' },
+  { label: 'Unknown presence', value: 'unknown' },
+  { label: 'Known type', value: 'known-type' },
+  { label: 'Revealed', value: 'revealed' },
+]
+const publicationSummary = computed(() => {
+  switch (objectDraft.value.publication) {
+    case 'hidden': return 'Players do not see this object unless it must appear as an anonymous host.'
+    case 'unknown': return 'Players see a neutral presence without the name or type.'
+    case 'known-type': return `Players see ${catalogueSubtypeLabel(selectedObject.value!)} without the name.`
+    case 'revealed': return 'Players see the object name and catalogue type.'
+    default: return 'Choose a supported publication mode.'
+  }
+})
 type StoredSelectOption = { label: string; storedValue: string }
 const placementItems = computed(() => [
   { label: 'System-level position', value: 'system' },
@@ -431,6 +457,12 @@ function updatePlacement(value: string | number): void {
   const session = objectSession.value
   if (!session) return
   emit('update-object-placement', session.id, String(value))
+}
+
+function updatePublication(value: string | number): void {
+  if (!objectSession.value) return
+  const publication = String(value)
+  if (isPublicationMode(publication)) objectDraft.value.publication = publication
 }
 
 function customSelectChoices(field: CustomFieldDefinition): StoredSelectOption[] {
