@@ -17,7 +17,7 @@
     <UModal
       v-model:open="open"
       title="Search workspace"
-      description="Find the Jump Cluster or a star system by name."
+      description="Find the Jump Cluster or a star system by name, or an object in the active star system by name or Location key."
       :dismissible="true"
       :content="{ onOpenAutoFocus: focusSearchOnOpen, onCloseAutoFocus: focusAfterSearchClose }"
       :ui="{ content: 'workspace-search-dialog-content max-h-[calc(100dvh-1rem)] overflow-hidden', body: 'min-h-0 overflow-hidden' }"
@@ -37,7 +37,7 @@
           </UFormField>
 
           <p v-if="!query.trim()" class="workspace-search-hint" role="status">
-            Type a cluster or star system name to find it in this workspace.
+            Type a cluster or star system name, or an object name or Location key in the active star system.
           </p>
           <p v-else-if="!props.results.length" class="workspace-search-hint" role="status">
             No matches for “{{ query.trim() }}”.
@@ -66,6 +66,9 @@
                   <span class="workspace-search-result-name">{{ result.name }}</span>
                   <span class="workspace-search-result-context">
                     <span>{{ result.typeLabel }} · {{ result.contextLabel }}</span>
+                    <span v-if="result.locationKey" class="workspace-search-location-key">
+                      Location key: {{ result.locationKey }}
+                    </span>
                     <span v-if="result.occurrence !== null" class="workspace-search-occurrence">
                       Occurrence {{ result.occurrence }}
                     </span>
@@ -184,7 +187,8 @@ function handleResultKeydown(event: KeyboardEvent): void {
 
 function resultAccessibleName(result: SearchResult): string {
   const occurrence = result.occurrence === null ? '' : `, occurrence ${result.occurrence}`
-  return `${result.name}, ${result.typeLabel}, ${result.contextLabel}${occurrence}`
+  const locationKey = result.locationKey ? `, Location key: ${result.locationKey}` : ''
+  return `${result.name}, ${result.typeLabel}, ${result.contextLabel}${locationKey}${occurrence}`
 }
 
 function anotherModalOwnsFocus(): boolean {

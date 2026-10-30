@@ -705,6 +705,14 @@ function frameSearchTarget(target: SearchTarget): boolean {
     map.fitMap(usableRect)
     return true
   }
+  if (target.kind === 'object') {
+    return props.activeView === 'system'
+      && props.workspace.id === target.workspaceId
+      && props.workspace.cluster.id === target.clusterId
+      && props.system?.id === target.systemId
+      ? systemMapRef.value?.frameObjectBranch(target.objectId, usableRect) ?? false
+      : false
+  }
   return props.activeView === 'cluster'
     ? clusterMapRef.value?.frameSystem(target.systemId, usableRect) ?? false
     : false
@@ -798,7 +806,7 @@ defineExpose({
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
-    : MAP_ZOOM_MIN_SCALE,
+    : systemMapRef.value?.getMinimumZoomScale() ?? MAP_ZOOM_MIN_SCALE,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
   panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),

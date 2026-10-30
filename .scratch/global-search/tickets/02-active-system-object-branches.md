@@ -1,6 +1,7 @@
 ---
 title: "Find an object and frame its branch in the active system"
-status: open
+status: in-progress
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -23,7 +24,7 @@ A Warden on a star-system map can use the same search to find any object in that
 
 ## Blocked by
 
-None. [Find and reveal the cluster and its systems](01-cluster-system-search.md) is closed; its guarded search entry and reveal operation are the completed predecessor. This ticket is now available and unclaimed. Refresh the baseline and preserve predecessor work before an authorized implementation.
+None. [Find and reveal the cluster and its systems](01-cluster-system-search.md) is closed; its guarded search entry and reveal operation are the completed predecessor.
 
 ## Specification coverage
 
@@ -67,3 +68,9 @@ Run affected matching, command, geometry and browser checks plus lint/typecheck.
 The user explicitly approved these three vertical slices and the dependency graph 01 -> 02 -> 03 on 2026-10-29. This authorizes local ticket publication only, not product implementation, commits, pushes, PRs, merges, releases or changes to the parent GitHub issue.
 
 The tickets are fully specified (enhancement, ready-for-agent) but lifecycle and dependency availability are separate. At publication, ticket 01 is open and unclaimed; tickets 02 and 03 are blocked until their linked predecessor is closed. Remove the dependency blocker and return a ticket to open when it clears; claim it only after implementation is authorized. Refresh source/baseline and preserve completed predecessor work rather than resetting to the historical planning revision.
+
+## Implementation authorization and baseline
+
+On 2026-10-30, the user explicitly requested pushing ticket 01 and coordinating this ticket through the implement skill with sub-agents. Ticket 01 was pushed to `origin/codex/global-search-ticket-01`. The coordinator claims ticket 02 on **codex/global-search-ticket-02**, based on **f60da958d75cd671cb801ae538a84076c638ff3d** to preserve its completed predecessor. Freshly fetched `origin/main` and local `main` remain **8d4b66504ca6723db5405ed7cb93d0a666264c9a**; the intentional implementation base is five commits ahead and zero behind. No fast-forward is needed. GitHub #7 was re-read unchanged, OPEN, with enhancement / priority:P1 and no comments.
+
+Use the Complex route: architect before implementation, at most two disjoint developers, TDD at the previously approved pure calculation, real composed command and public browser seams, then independent Standards and Spec review. The coordinator owns Git, ports, browser sessions, preparation and integrated checks. See [Active-system object search: implementation and verification](../implementation-02.md). Ticket 03 remains outside this authorization. Commit completed work locally; no PR, merge or remote issue update is requested.

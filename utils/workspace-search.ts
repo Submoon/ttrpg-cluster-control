@@ -1,7 +1,8 @@
 import type { LocalWorkspace } from '../domain/workspace'
+import { catalogueSubtypeLabel } from './catalogue-labels'
 
 export type SearchTarget = { workspaceId: string; clusterId: string }
-  & ({ kind: 'cluster' } | { kind: 'system'; systemId: string })
+  & ({ kind: 'cluster' } | { kind: 'system'; systemId: string } | { kind: 'object'; systemId: string; objectId: string })
 
 export interface SearchResult {
   /** Stable only for this workspace identity and result target; never display it as disambiguation. */
@@ -10,6 +11,7 @@ export interface SearchResult {
   name: string
   typeLabel: string
   contextLabel: string
+  locationKey?: string
   /** Deterministic result-only disambiguation for otherwise equivalent visible labels. */
   occurrence: number | null
 }
@@ -17,6 +19,7 @@ export interface SearchResult {
 interface SearchCandidate {
   result: SearchResult
   normalizedName: string
+  normalizedLocationKey?: string
   identityOrder: string
 }
 
@@ -33,13 +36,15 @@ function visibleLabelKey(result: SearchResult, normalizedName: string): string {
     normalizedName,
     result.typeLabel,
     normalizeSearchText(result.contextLabel),
+    result.locationKey ?? '',
   ])
 }
 
 function resultKey(target: SearchTarget): string {
-  return target.kind === 'cluster'
-    ? JSON.stringify([target.workspaceId, target.clusterId, target.kind])
-    : JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.systemId])
+  if (target.kind === 'cluster') return JSON.stringify([target.workspaceId, target.clusterId, target.kind])
+  return target.kind === 'system'
+    ? JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.systemId])
+    : JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.systemId, target.objectId])
 }
 
 function matchRank(name: string, query: string): number | null {
@@ -50,9 +55,35 @@ function matchRank(name: string, query: string): number | null {
 }
 
 /** Searches the current applied workspace snapshot; callers must not supply draft or preview data. */
-export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): SearchResult[] {
+export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string, activeSystemId?: string): SearchResult[] {
   const query = normalizeSearchText(rawQuery.trim())
   if (!query) return []
+
+  const activeSystem = activeSystemId
+    ? workspace.cluster.systems.find(system => system.id === activeSystemId)
+    : undefined
+  const objectCandidates: SearchCandidate[] = activeSystem
+    ? activeSystem.objects.map((object): SearchCandidate => ({
+      result: {
+        key: '',
+        target: {
+          workspaceId: workspace.id,
+          clusterId: workspace.cluster.id,
+          kind: 'object',
+          systemId: activeSystem.id,
+          objectId: object.id,
+        },
+        name: object.name,
+        typeLabel: catalogueSubtypeLabel(object),
+        contextLabel: `Star System: ${activeSystem.name}`,
+        locationKey: object.locationKey,
+        occurrence: null,
+      },
+      normalizedName: normalizeSearchText(object.name),
+      normalizedLocationKey: normalizeSearchText(object.locationKey),
+      identityOrder: `object:${activeSystem.id}:${object.id}`,
+    }))
+    : []
 
   const candidates: SearchCandidate[] = [
     {
@@ -88,6 +119,7 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
       normalizedName: normalizeSearchText(system.name),
       identityOrder: `system:${system.id}`,
     })),
+    ...objectCandidates,
   ]
 
   const duplicateLabels = new Map<string, SearchCandidate[]>()
@@ -106,7 +138,18 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
   }
 
   return candidates
-    .map(candidate => ({ candidate, rank: matchRank(candidate.normalizedName, query) }))
+    .map(candidate => {
+      const nameRank = matchRank(candidate.normalizedName, query)
+      const keyRank = candidate.normalizedLocationKey === undefined
+        ? null
+        : matchRank(candidate.normalizedLocationKey, query)
+      const rank = nameRank === null
+        ? keyRank
+        : keyRank === null
+          ? nameRank
+          : Math.min(nameRank, keyRank)
+      return { candidate, rank }
+    })
     .filter((match): match is { candidate: SearchCandidate; rank: number } => match.rank !== null)
     .sort((left, right) => left.rank - right.rank
       || compareText(left.candidate.normalizedName, right.candidate.normalizedName)

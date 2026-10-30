@@ -152,7 +152,11 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     set: (query: string) => store.setSearchQuery(query),
   })
   const searchResults = computed<SearchResult[]>(() => workspace.value
-    ? searchWorkspace(workspace.value, searchQuery.value)
+    ? searchWorkspace(
+      workspace.value,
+      searchQuery.value,
+      store.activeView === 'system' ? store.selectedSystemId ?? undefined : undefined,
+    )
     : [])
 
   const fields = useFieldDefinitionWorkflows({
