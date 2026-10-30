@@ -6,6 +6,7 @@ import {
   exportJumpCluster,
 } from '../domain/workspace'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadJson,
@@ -95,7 +96,7 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   const context = page.getByRole('navigation', { name: 'Map context and commands' })
@@ -138,7 +139,7 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' })
   await expect(resumeDraft).toBeVisible()
   await resumeDraft.click()
@@ -204,7 +205,7 @@ test('an applied import closes review before save failure and Retry persists the
   await page.keyboard.press('Escape')
 
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
-  await expect(saveFeedback).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await page.reload()
   await returnToClusterMap(page)
 

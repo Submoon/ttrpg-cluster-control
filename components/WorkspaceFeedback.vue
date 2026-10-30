@@ -1,5 +1,10 @@
 <template>
-  <div class="workspace-feedback-content">
+  <div
+    v-show="hasVisibleFeedback"
+    class="workspace-feedback-content"
+    :data-save-state="props.saveState"
+    :data-feedback-visible="hasVisibleFeedback"
+  >
     <div v-if="props.hasChartNameDraft" class="workspace-feedback-draft" role="status" aria-live="polite">
       <span class="feedback">{{ props.hasUncommittedNames ? 'Unapplied chart-name changes' : 'Chart names ready to resume' }}</span>
       <UButton
@@ -17,9 +22,9 @@
 
     <div class="workspace-feedback-actions">
       <span
-        ref="saveStatusElement"
+        v-if="props.saveState === 'error' || (props.saveState === 'saving' && props.saveError)"
         class="save-feedback"
-        :class="{ 'error-text': props.saveState === 'error', 'saved-text': props.saveState === 'saved' }"
+        :class="{ 'error-text': props.saveState === 'error' }"
         :role="props.saveState === 'error' ? 'alert' : 'status'"
         :aria-live="props.saveState === 'error' ? 'assertive' : 'polite'"
         :aria-label="props.saveMessage"
@@ -74,7 +79,7 @@
         />
 
         <template #content>
-          <div class="workspace-recovery-popover-content" role="group" aria-label="Workspace recovery details">
+          <div ref="recoveryPopoverElement" class="workspace-recovery-popover-content" role="group" aria-label="Workspace recovery details">
             <p v-if="props.saveError" class="feedback m-0 error-text" role="alert" aria-live="assertive">
               Save failed: {{ props.saveError }}
             </p>
@@ -145,14 +150,14 @@ const emit = defineEmits<{
 }>()
 
 const recoveryOpen = ref(false)
-const saveStatusElement = ref<HTMLElement | null>(null)
-const hasSaveRecovery = computed(() => props.saveState === 'error' || props.saveError !== null)
+const recoveryPopoverElement = ref<HTMLElement | null>(null)
+const hasSaveRecovery = computed(() => props.saveState === 'error' || (props.saveState === 'saving' && props.saveError !== null))
 const hasCurrentJsonRecovery = computed(() => hasSaveRecovery.value || !!props.exportError)
-const hasRecoveryError = computed(() => props.saveState === 'error' || !!props.saveError || !!props.exportError)
+const hasRecoveryError = computed(() => hasSaveRecovery.value || !!props.exportError)
+const hasVisibleFeedback = computed(() => props.hasChartNameDraft || hasRecoveryError.value)
 const visibleSaveMessage = computed(() => {
   if (props.saveState === 'error') return 'Not saved.'
-  if (props.saveState === 'saving' && props.saveError) return 'Saving to this browser. A previous write failed:'
-  return props.saveMessage
+  return 'Saving to this browser. A previous write failed:'
 })
 
 function updateRecoveryOpen(open: boolean): void {
@@ -166,8 +171,30 @@ watch(() => props.active, active => {
 
 watch(hasRecoveryError, hasError => {
   if (hasError || !recoveryOpen.value) return
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  const focusWasInRecovery = activeElement !== null && (
+    recoveryPopoverElement.value?.contains(activeElement) === true
+    || activeElement.closest('.workspace-feedback-icon-button[aria-label="Recovery details"]') !== null
+  )
+  const focusWasLost = typeof document !== 'undefined'
+    && (activeElement === document.body || activeElement === document.documentElement)
   updateRecoveryOpen(false)
-  void nextTick(() => saveStatusElement.value?.focus())
+  if (!focusWasInRecovery && !focusWasLost) return
+  void nextTick(() => {
+    // Preserve a newer focus owner after closing recovery that lost its target.
+    const currentFocus = document.activeElement
+    const focusMovedToAnotherTarget = currentFocus
+      && currentFocus !== document.body
+      && currentFocus !== document.documentElement
+      && currentFocus !== activeElement
+      && currentFocus.isConnected
+    if (focusMovedToAnotherTarget) return
+    const compactPanel = document.querySelector<HTMLElement>('.workspace-resizable-panel-compact[role="dialog"]')
+    const panelControl = compactPanel?.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+    )
+    ;(panelControl ?? document.getElementById('workspace-main'))?.focus()
+  })
 }, { flush: 'sync' })
 
 onBeforeUnmount(() => {

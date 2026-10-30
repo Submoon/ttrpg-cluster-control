@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   clickDockAction,
   createSingleSystemWorkspace,
   openWorkspaceHierarchy,
@@ -27,7 +27,7 @@ test('History displays its retained limit, scrolls without moving, and resets af
   const undo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Undo(?:\b|:)/, includeHidden: true })
   const redo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Redo(?:\b|:)/, includeHidden: true })
   await expect(undo).toBeEnabled()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const initialHorizontalRadius = Number(await resize.getAttribute('aria-valuenow'))
   expect(initialHorizontalRadius + 101).toBeLessThanOrEqual(400)
@@ -39,7 +39,7 @@ test('History displays its retained limit, scrolls without moving, and resets af
     await expect(undo).toBeEnabled()
     await expect(redo).toBeDisabled()
   }
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const historyButton = page.getByRole('button', { name: 'History', exact: true })
   const historyControls = page.locator('.workspace-history-controls')

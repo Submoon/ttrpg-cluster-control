@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   createSingleSystemWorkspace,
   clickNormalizedSystemPoint,
   selectCatalogueObjectButton,
@@ -69,7 +69,7 @@ test('Save finishes a clean new object edit without another workspace write or l
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
   await expect(map.locator('.system-object')).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await installWorkspaceWriteObserver(page)
   const writesBeforeSave = await workspaceWriteCount(page)
@@ -80,7 +80,7 @@ test('Save finishes a clean new object edit without another workspace write or l
     await expect(inspector.getByRole('heading', { name: 'New planet 1', exact: true })).toBeVisible()
     await expect(map.locator('.system-object')).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toBeVisible()
-    await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+    await waitForWorkspaceSaved(page)
     expect(await workspaceWriteCount(page)).toBe(writesBeforeSave)
   } finally {
     await restoreWorkspaceWriteObserver(page)

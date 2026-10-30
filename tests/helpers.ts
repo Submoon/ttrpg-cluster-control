@@ -1,5 +1,16 @@
 import { expect } from '@playwright/test'
 
+/** Waits for the workspace writer's durable acknowledgement without a visible success notice. */
+export async function waitForWorkspaceSaved(page: import('@playwright/test').Page): Promise<void> {
+  await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saved')
+}
+
+/** Waits for client startup and workspace hydration to leave the opening screen, up to 30 seconds. */
+export async function waitForWorkspaceStartup(page: import('@playwright/test').Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: "Opening this browser's workspace...", exact: true }))
+    .toBeHidden({ timeout: 30_000 })
+}
+
 /** Returns the visible page-level or compact-panel workspace feedback owner. */
 export function activeWorkspaceFeedback(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   return page.locator('.workspace-feedback:not([inert]), .workspace-compact-recovery')
@@ -599,7 +610,8 @@ export async function createSingleSystemWorkspace(
   if (options.viewport) await page.setViewportSize(options.viewport)
 
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
+  await waitForWorkspaceStartup(page)
+  await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
   await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
   await page.getByLabel('First star system', { exact: true }).fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()

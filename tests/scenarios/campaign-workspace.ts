@@ -1,13 +1,14 @@
 import { expect, type Page } from '@playwright/test'
 import campaignBaselineFixture from '../fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   captureMapExportBlobs,
   importReviewDialog,
   jsonMapImportInput,
   resolveImportReview,
   returnToClusterMap,
   setJsonFile,
+  waitForWorkspaceStartup,
   workspaceZoomControls,
 } from '../helpers'
 
@@ -22,6 +23,7 @@ export async function importCampaignWorkspace(
   await captureMapExportBlobs(page)
   if (viewport) await page.setViewportSize(viewport)
   await page.goto('/')
+  await waitForWorkspaceStartup(page)
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
@@ -33,8 +35,7 @@ export async function importCampaignWorkspace(
   await resolveImportReview(preview, 'confirm')
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback'))
-    .toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 }
 
 /** Opens imported IndexedDB state and restores the transient cluster/Fit view for each test. */
@@ -45,8 +46,8 @@ export async function openImportedCampaignWorkspace(
   await captureMapExportBlobs(page)
   if (viewport) await page.setViewportSize(viewport)
   await page.goto('/')
+  await waitForWorkspaceStartup(page)
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback'))
-    .toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 }

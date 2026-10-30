@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, downloadJson, setWorkspaceMapMode, workspaceZoomOutput } from './helpers'
+import { waitForWorkspaceSaved, downloadJson, setWorkspaceMapMode, workspaceZoomOutput } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
@@ -14,7 +14,7 @@ async function createWorkspace(
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 async function installDownloadRecorder(page: Page): Promise<void> {
@@ -163,7 +163,7 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     await cdp.detach()
   }
 
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(jsonBefore)
 })
