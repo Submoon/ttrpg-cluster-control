@@ -46,6 +46,14 @@ One independent reviewer covered Standards and both tickets' specifications agai
 
 ## Integration check
 
-The complete suite will run on the exact committed candidate through the existing PR CI. Pending: final candidate revision, CI URL/counts and rolling branch preview readiness. No merge, release or source-issue closure is authorized by this work.
+Implementation candidate `97fbb2e456427f6fa6c67488b40106a84adc0cf9` was committed and pushed on `codex/global-search`. Existing draft [PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) is updated. [CI run 41419142044](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41419142044) passed lint, full Nuxt typecheck, production build and **222/222 pure/storage cases** (32.0s). Exact-candidate Vercel Preview resolution succeeded. Browser shard 1 passed **160/160** (11.3m); shard 2 passed 151 cases and failed the new icon journey's immediate CSS-mask sample. Final outcome: **533 passed / 1 failed**, with the quality gate correctly failing. No cases were skipped or retried.
+
+### CI observation correction
+
+The Search icon test sampled the mounted `span.iconify` before Nuxt Icon asynchronously fetched its data and inserted the mask stylesheet. The installed CSS component mounts the span first, then calls `loadIcon(...).then(mountCSS)` on a cache miss. Both requested icons are present in the local Lucide server bundle; dynamic names are not preloaded in the client bundle. Independent review confirmed this supported transient state and found no missing-icon source defect.
+
+Only the test helper changes: bounded `expect.poll` with the normal expectation timeout waits for an actual computed CSS mask or SVG drawing markup. It retains the final nonzero dimensions, supported representation and CSS-mask checks. No timeout, retry, skip or product behavior changes. A permanently missing icon still fails. Focused test lint passed; the corrected complete Search journey passed locally in 12.6s (`test-results/followups-icons-async-recheck/report.json`). Independent review found zero remaining issues in this correction. A new exact-preview CI run will verify the asynchronous observation in production.
+
+The [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app) retains the existing branch address. Local development runtime is stopped after verification. No merge, release or source-issue closure is authorized by this work.
 
 Browser emulation establishes responsive layout and browser interaction; it does not certify physical-device keyboards or screen readers. Earlier physical-phone validation belongs to the unchanged Search navigation path, not to these follow-ups' new layout.

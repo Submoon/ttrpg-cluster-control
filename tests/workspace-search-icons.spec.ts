@@ -133,17 +133,27 @@ test('Search result marks stay decorative and readable, then activate an existin
 async function expectRenderedCommandIcon(mark: import('@playwright/test').Locator): Promise<void> {
   const icon = mark.locator('.workspace-search-result-icon')
   await expect(icon).toHaveCount(1)
-  const presentation = await icon.evaluate((element) => {
+  const readPresentation = () => icon.evaluate((element) => {
     const style = getComputedStyle(element)
     return {
       isCssIcon: element.localName === 'span' && element.classList.contains('iconify'),
       isSvg: element.localName === 'svg',
+      hasSvgDrawing: element.localName === 'svg' && element.querySelector('path, circle, rect, polygon, line, polyline, ellipse, g') !== null,
       width: element.getBoundingClientRect().width,
       height: element.getBoundingClientRect().height,
       maskImage: style.maskImage,
       webkitMaskImage: style.webkitMaskImage,
     }
   })
+
+  await expect.poll(async () => {
+    const presentation = await readPresentation()
+    return presentation.isCssIcon
+      ? presentation.maskImage !== 'none' || presentation.webkitMaskImage !== 'none'
+      : presentation.isSvg && presentation.hasSvgDrawing
+  }).toBe(true)
+
+  const presentation = await readPresentation()
   expect(presentation.width).toBeGreaterThan(0)
   expect(presentation.height).toBeGreaterThan(0)
   expect(presentation.isCssIcon || presentation.isSvg).toBe(true)
