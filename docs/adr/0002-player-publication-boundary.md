@@ -41,4 +41,18 @@ Player routes refer to public system markers, independently of the logical Jump 
 
 For an authored unresolved exit, resolve its complete committed source geometry before filtering and copy only the endpoint coordinates. Public paths, bends, labels, counts and bounds are then derived from the public graph; they do not receive the source route order or unresolved label. Physical Station links appear only between two Revealed objects and never promote a secret Station into the projection.
 
-This decision covers tickets 01–04. Standalone player file/link loading and player image exports remain later slices of the approved scope.
+## Standalone documents and reader lifetime
+
+Ticket 05 makes the existing player document identity and version 1 the portable JSON format, independent of source workspace version 4. The codec explicitly reconstructs allowlisted records on input and output; it validates disclosure arms, graph references, host acyclicity, required Orbits, Station associations and finite geometry. Size, depth and entity/work limits bound admission. Cumulative output accounting rejects excessive data before constructing the complete serialized string, with a final encoded-byte check retained. Public errors use fixed messages rather than supplied names, keys or parser diagnostics. A player document is never imported as an editable source workspace.
+
+The standalone `/player` route owns only the currently selected file document and its consultation resources. It never starts GM hydration, writes, recovery or history. Selecting another file invalidates pending reads and old navigation; an invalid replacement clears the previous view. File documents are not persisted: reload returns to the chooser and explains that the file must be reopened. This avoids a second storage lifecycle and keeps multiple player tabs independent while base-site tabs retain the saved GM workspace. Ticket 06 will add URL transport using the same codec; no link payload or compression is introduced here.
+
+## Public image preparation and asynchronous ownership
+
+Ticket 07 creates SVG from a public scene rather than a cleaned GM DOM clone. Public renderers and image generation share public geometry and bounds; explicit image paint resolves the active or light-print palette without inheriting private DOM attributes or changing the live theme. PNG rasterizes that sanitized SVG through the same bounded image primitive as GM exports. Titles, accessibility and filenames use only public labels. The source workspace, option inventories and history are never image metadata.
+
+The GM composition captures the requested map, workspace identity and renderer before operation preflight, then prepares one projection from applied memory and captures its post-preflight revision. Preflight may legitimately complete a continuous adjustment. The player file operation combines that captured-context check with its own request/disposal lifetime and rechecks after asynchronous image work and immediately before download or error publication. A stale result cannot download or replace a newer error. Failed durability does not prevent exporting applied memory; generation creates no write or history action.
+
+An entirely empty player cluster cannot be distributed. A Revealed system with an empty internal map remains a valid JSON document and can be entered in the reader, while a featureless current-map image is refused. These are different artifact eligibility rules, not competing publication projections.
+
+This decision covers tickets 01–05 and 07. Compressed player links remain ticket 06.

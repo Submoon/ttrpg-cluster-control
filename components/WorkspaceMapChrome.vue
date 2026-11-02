@@ -191,6 +191,52 @@
               </UButton>
             </div>
 
+            <section class="workspace-player-exports" aria-label="Player exports">
+              <p class="workspace-map-files-heading">Player exports</p>
+              <div class="workspace-player-export-actions">
+                <UButton
+                  class="workspace-control workspace-map-file-button"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  aria-label="Export player JSON"
+                  title="Export the complete public Jump Cluster JSON"
+                  :disabled="!workspace"
+                  @click="emit('export-player-json')"
+                >
+                  Export player JSON
+                </UButton>
+                <UButton
+                  class="workspace-control workspace-map-file-button"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  aria-label="Export player SVG"
+                  title="Export the current public map as SVG"
+                  :disabled="!activeMap"
+                  @click="exportPlayerImage('svg')"
+                >
+                  Export player SVG
+                </UButton>
+                <UButton
+                  class="workspace-control workspace-map-file-button"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  aria-label="Export player PNG"
+                  title="Export the current public map as PNG"
+                  :disabled="!activeMap"
+                  @click="exportPlayerImage('png')"
+                >
+                  Export player PNG
+                </UButton>
+              </div>
+              <a class="workspace-player-reader-link" href="/player" target="_blank" rel="noopener">Open player JSON</a>
+              <p v-if="props.playerExportError" class="workspace-map-export-error" role="alert">
+                {{ props.playerExportError }}
+              </p>
+            </section>
+
             <UCheckbox
               v-model="printLightForPrinting"
               class="workspace-map-print-light"
@@ -242,6 +288,7 @@ const props = withDefaults(defineProps<{
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
+  playerExportError: string
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
   compactModalOpen?: boolean
@@ -262,6 +309,8 @@ const emit = defineEmits<{
   'export-cluster-json': []
   'export-system-json': []
   'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
+  'export-player-json': []
+  'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
   'import-file': [event: Event]
   'show-cluster': []
   'toggle-hierarchy': []
@@ -319,6 +368,12 @@ function exportMapImage(format: MapImageFormat): void {
   printLightForPrinting.value = false
   headerMapActionsOpen.value = false
   emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format, palette)
+}
+
+function exportPlayerImage(format: MapImageFormat): void {
+  const palette: MapImagePalette = printLightForPrinting.value ? 'print-light' : 'active'
+  printLightForPrinting.value = false
+  emit('export-player-image', format, palette)
 }
 
 function openJsonImportPicker(): void {
@@ -447,6 +502,27 @@ function openJsonImportPicker(): void {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
+}
+
+.workspace-player-exports {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.65rem;
+}
+
+.workspace-player-export-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.workspace-player-reader-link {
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .workspace-map-file-button,

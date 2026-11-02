@@ -7,6 +7,7 @@ const ROUTE_BEND = 28
 const ROUTE_LABEL_HEIGHT = 15
 const LABEL_CHARACTER_ADVANCE = 9
 const LABEL_COLLISION_GAP = 20
+const MAX_ROUTE_LABEL_RINGS = 8
 
 interface SceneRect {
   left: number
@@ -117,7 +118,7 @@ function placeRouteLabel(
   const normal = { x: -tangent.y, y: tangent.x }
   const preferredSide = routeIndex % 2 === 0 ? 1 : -1
 
-  for (let ring = 0; ; ring += 1) {
+  for (let ring = 0; ring < MAX_ROUTE_LABEL_RINGS; ring += 1) {
     const distance = ring * (ROUTE_LABEL_HEIGHT * 3 + LABEL_COLLISION_GAP)
     const along = ring * (width + LABEL_COLLISION_GAP)
     const candidates = ring === 0
@@ -138,6 +139,17 @@ function placeRouteLabel(
       return { x, y }
     }
   }
+
+  let rightmostObstacle = Number.NEGATIVE_INFINITY
+  for (const obstacle of obstacles) rightmostObstacle = Math.max(rightmostObstacle, obstacle.right)
+  const fallbackX = rightmostObstacle + LABEL_COLLISION_GAP + width / 2
+  const fallbackRect = routeLabelRect(fallbackX, preferredY, width)
+  if (![rightmostObstacle, fallbackX, preferredY, fallbackRect.left, fallbackRect.top,
+    fallbackRect.right, fallbackRect.bottom].every(Number.isFinite)) {
+    throw new Error('A public Jump Route has invalid rendered geometry.')
+  }
+  obstacles.push(fallbackRect)
+  return { x: fallbackX, y: preferredY }
 }
 
 function routeGeometry(

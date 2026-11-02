@@ -24,6 +24,10 @@ Player text and per-object Field masks belong to that same object session; exist
 
 The two player map renderers share a local viewport controller for camera state and pointer/wheel/keyboard lifecycle. Each mounted map owns its camera independently; neither uses the editor viewport or writer. Renderers retain their own public geometry, label bounds and controls. Cluster zoom adapts to distant public destinations, while system zoom retains its existing limit. Hiding a map cancels its gesture without discarding the cluster camera during a system visit.
 
+The common player document view owns public navigation and selection for both preview and standalone consultation. The preview wrapper retains modal opener/close focus ownership. The `/player` page owns file-reading nonce, safe errors and its local document; it does not compose any GM store, hydration or persistence owner. Replacing a document removes obsolete selection and map resources; reload opens the chooser again.
+
+Player file exports use a focused operation owner separate from GM copy-import review. The page supplies a preparation callback that captures map/workspace/renderer context before preflight and one public snapshot plus applied revision afterward. The file owner checks its own lifetime and that captured context after asynchronous stages and before download/error publication. The public image serializer accepts only the selected public scene; common browser download cleanup and bounded PNG rasterization remain shared primitives. GM complete backups and file import keep their existing ownership and format.
+
 Screens and map interactions read shared UI state and call focused editor commands. Commands use the relevant session controller, pure domain operations, and the existing workspace writer. The page composes those pieces and connects map components; it should not become a transport layer for every state value. Domain operations remain below UI and persistence concerns, while the Pinia store contains shared editor state rather than workflow implementations.
 
 A guarded navigation illustrates the order: capture the starting context, ask the relevant draft sessions to resolve, then verify that the context and target still exist after the asynchronous wait. Only an accepted transition updates selection or map state. An editing command computes and validates a complete workspace change before asking the writer to apply it. This keeps stale requests from changing a newer selection and keeps related placement rules consistent across entry points.
@@ -74,6 +78,10 @@ The store does not enforce action-only mutation, session ownership, or domain in
 | Allowlisted committed player marker document | [player projection](../../domain/player-projection.ts) |
 | DTO-only Warden preview presentation | [player preview dialog](../../components/PlayerViewPreviewDialog.vue), [player cluster renderer](../../components/PlayerClusterMap.vue), [player system renderer](../../components/PlayerSystemMap.vue) |
 | Independent player-map camera and input lifecycle | [player viewport controller](../../composables/usePlayerMapViewport.ts) |
+| Player document admission and serialization | [player codec](../../domain/player-codec.ts) |
+| Shared public navigation and isolated file reader | [player document view](../../components/PlayerDocumentView.vue), [reader route](../../pages/player.vue) |
+| Guarded player file dispatch | [player file exports](../../composables/usePlayerFileExports.ts) |
+| DTO-only public images and common browser download | [player image export](../../utils/player-map-image-export.ts), [browser download](../../utils/browser-download.ts) |
 | Candidate-request coordination | [useMapInteractionCoordinator](../../composables/editor-workflows/useMapInteractionCoordinator.ts) |
 | Mounted map handles and responsive effects | [useEditorMapControls](../../composables/editor-workflows/useEditorMapControls.ts), [useEditorViewport](../../composables/editor-workflows/useEditorViewport.ts) |
 | Guarded commands for connected Dock/Hierarchy containers | [editor command context](../../composables/editor-workflows/editor-command-context.ts) |

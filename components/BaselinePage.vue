@@ -109,6 +109,7 @@
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
+              :player-export-error="playerExportError"
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
@@ -119,6 +120,8 @@
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
+              @export-player-json="downloadPlayerJson"
+              @export-player-image="downloadPlayerImage"
               @import-file="importJsonFile"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
@@ -501,12 +504,14 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
+import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
@@ -881,6 +886,61 @@ async function handleAddEscape(event: KeyboardEvent): Promise<void> {
 }
 
 let importReviewActions: ReturnType<typeof useWorkspaceFiles> | null = null
+
+async function preparePlayerExport() {
+  const initialWorkspace = workspace.value
+  const requestedView = activeView.value
+  const requestedSystemId = requestedView === 'system' ? selectedSystemId.value : null
+  const requestedRenderer = requestedView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+  const workspaceId = initialWorkspace?.id
+  const clusterId = initialWorkspace?.cluster.id
+  if (!initialWorkspace || !requestedRenderer || (requestedView === 'system' && !requestedSystemId)) return null
+
+  const contextIsCurrent = (): boolean => {
+    const currentWorkspace = workspace.value
+    return currentWorkspace !== null
+      && currentWorkspace.id === workspaceId
+      && currentWorkspace.cluster.id === clusterId
+      && activeView.value === requestedView
+      && (requestedView !== 'system' || selectedSystemId.value === requestedSystemId)
+      && (requestedView === 'cluster' ? clusterMapRef.value : systemMapRef.value) === requestedRenderer
+  }
+
+  try {
+    if (!await beforeWorkspaceOperation()) return null
+  } catch (error) {
+    // A preflight rejection belongs to its captured request only; never publish it for a newer map.
+    if (!contextIsCurrent()) return null
+    throw error
+  }
+  if (!contextIsCurrent()) return null
+
+  const capturedAppliedRevision = appliedRevision.value
+  const appliedWorkspace = workspace.value
+  if (!appliedWorkspace) return null
+  const document = projectPlayerCluster(appliedWorkspace)
+  let scene: CurrentPlayerMapScene | null = null
+
+  if (requestedView === 'cluster') {
+    scene = { kind: 'jump-cluster', document }
+  } else {
+    const publicSystemIndex = appliedWorkspace.cluster.systems
+      .filter(system => system.publication !== 'hidden')
+      .findIndex(system => system.id === requestedSystemId)
+    const marker = publicSystemIndex >= 0 ? document.systems[publicSystemIndex] : undefined
+    if (marker?.disclosure === 'revealed' && marker.map) {
+      scene = { kind: 'star-system', document: marker.map, label: marker.label }
+    }
+  }
+
+  const isCurrent = (): boolean => contextIsCurrent()
+    && appliedRevision.value === capturedAppliedRevision
+
+  return { document, scene, isCurrent }
+}
+
+const playerFileExports = usePlayerFileExports({ prepare: preparePlayerExport })
+const { playerExportError, downloadPlayerJson, downloadPlayerImage } = playerFileExports
 
 async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promise<boolean> {
   const hasConflictingEntityDraft = existingFieldIds.some(fieldId =>

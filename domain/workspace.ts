@@ -83,6 +83,13 @@ export { isPublicationMode } from './workspace-validation'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
 export { projectPlayerCluster } from './player-projection'
+export {
+  PlayerDocumentError,
+  parsePlayerJson,
+  restorePlayerDocument,
+  serializePlayerJson,
+} from './player-codec'
+export type { PlayerDocumentErrorCode } from './player-codec'
 export type {
   PlayerSystemMarker,
   PlayerClusterDocument,

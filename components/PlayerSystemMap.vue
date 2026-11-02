@@ -127,19 +127,19 @@
         <section aria-label="Visible system hierarchy" class="grid content-start gap-2">
           <h3 class="m-0 text-sm font-semibold">Visible objects</h3>
           <ul v-if="props.document.objects.length" class="m-0 grid list-none gap-1 p-0">
-            <li v-for="object in props.document.objects" :key="object.id">
+            <li v-for="entry in hierarchyEntries" :key="entry.object.id">
               <button
                 class="player-system-hierarchy-item"
                 type="button"
-                :aria-pressed="props.selectedObjectId === object.id"
-                @click="emit('inspect-object', object.id)"
+                :aria-pressed="props.selectedObjectId === entry.object.id"
+                @click="emit('inspect-object', entry.object.id)"
               >
-                <span>{{ object.label }}</span>
-                <span v-if="object.disclosure !== 'unknown'" class="player-system-hierarchy-type">
-                  {{ catalogueSubtypeLabel(object) }}
+                <span>{{ entry.object.label }}</span>
+                <span v-if="entry.object.disclosure !== 'unknown'" class="player-system-hierarchy-type">
+                  {{ catalogueSubtypeLabel(entry.object) }}
                 </span>
-                <span v-if="hierarchyPath(object)" class="player-system-hierarchy-path">
-                  {{ hierarchyPath(object) }}
+                <span v-if="entry.path" class="player-system-hierarchy-path">
+                  {{ entry.path }}
                 </span>
               </button>
             </li>
@@ -200,17 +200,11 @@
 
 <script setup lang="ts">
 /** Renders only the allowlisted public system document; it never receives source entities or editor state. */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/workspace'
 import { catalogueSubtypeLabel } from '../utils/catalogue-labels'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
-
-interface SceneBounds {
-  left: number
-  top: number
-  width: number
-  height: number
-}
+import { playerSystemGeometry } from '../utils/player-system-geometry'
 
 const props = defineProps<{
   document: PlayerSystemDocument
@@ -225,6 +219,10 @@ const selectedObject = computed(() => props.document.objects.find(object => obje
 const unoccupiedOrbits = computed(() => props.document.orbits.filter(orbit => orbit.hostId === null))
 const objectsById = computed(() => new Map(props.document.objects.map(object => [object.id, object])))
 const orbitsById = computed(() => new Map(props.document.orbits.map(orbit => [orbit.id, orbit])))
+const hierarchyEntries = computed(() => props.document.objects.map(object => ({
+  object,
+  path: hierarchyPath(object),
+})))
 const selectedStation = computed(() => {
   const object = selectedObject.value
   if (object?.disclosure !== 'revealed' || object.family !== 'JumpPoint' || !object.stationId) return null
@@ -232,13 +230,7 @@ const selectedStation = computed(() => {
   return station?.disclosure === 'revealed' ? station : null
 })
 const mapElement = ref<SVGSVGElement | null>(null)
-const measuredBounds = ref<SceneBounds | null>(null)
-
-const estimatedBounds = computed(() => {
-  const bounds = rawSceneBounds(true)
-  return paddedBounds(bounds.left, bounds.top, bounds.left + bounds.width, bounds.top + bounds.height)
-})
-const fittedBounds = computed(() => measuredBounds.value ?? estimatedBounds.value)
+const fittedBounds = computed(() => playerSystemGeometry(props.document).bounds)
 const viewport = usePlayerMapViewport({
   element: mapElement,
   fittedBounds,
@@ -266,104 +258,32 @@ const {
 } = viewport
 
 watch(() => props.document, () => {
-  measuredBounds.value = null
   resetViewport()
-  void fitMapToDocument()
 }, { flush: 'post' })
-
-onMounted(() => { void fitMapToDocument() })
-
-function rawSceneBounds(estimateLabels: boolean): SceneBounds {
-  const xValues: number[] = []
-  const yValues: number[] = []
-  for (const object of props.document.objects) {
-    xValues.push(object.position.x - 10, object.position.x + 10)
-    yValues.push(object.position.y - 10, object.position.y + 10)
-    if (estimateLabels && object.disclosure !== 'unknown') {
-      xValues.push(object.position.x + 16 + object.label.length * 18)
-      yValues.push(object.position.y - 10, object.position.y + 12)
-    }
-  }
-  for (const orbit of props.document.orbits) {
-    const radians = orbit.rotation * Math.PI / 180
-    const horizontalExtent = Math.sqrt(
-      orbit.radii.horizontal ** 2 * Math.cos(radians) ** 2
-        + orbit.radii.vertical ** 2 * Math.sin(radians) ** 2,
-    )
-    const verticalExtent = Math.sqrt(
-      orbit.radii.horizontal ** 2 * Math.sin(radians) ** 2
-        + orbit.radii.vertical ** 2 * Math.cos(radians) ** 2,
-    )
-    xValues.push(orbit.center.x - horizontalExtent, orbit.center.x + horizontalExtent)
-    yValues.push(orbit.center.y - verticalExtent, orbit.center.y + verticalExtent)
-  }
-  if (!xValues.length || !yValues.length) return { left: 0, top: 0, width: 960, height: 560 }
-
-  const left = Math.min(...xValues)
-  const right = Math.max(...xValues)
-  const top = Math.min(...yValues)
-  const bottom = Math.max(...yValues)
-  return { left, top, width: Math.max(right - left, 1), height: Math.max(bottom - top, 1) }
-}
-
-function paddedBounds(left: number, top: number, right: number, bottom: number): SceneBounds {
-  const width = Math.max(right - left, 1)
-  const height = Math.max(bottom - top, 1)
-  const padding = Math.max(width * 0.08, height * 0.12, 48)
-  return {
-    left: left - padding,
-    top: top - padding,
-    width: width + padding * 2,
-    height: height + padding * 2,
-  }
-}
-
-async function fitMapToDocument(): Promise<void> {
-  await nextTick()
-  const svg = mapElement.value
-  if (!svg) return
-
-  if (!svg.getClientRects().length) {
-    measuredBounds.value = estimatedBounds.value
-    return
-  }
-  const geometryBounds = rawSceneBounds(false)
-  let left = geometryBounds.left
-  let top = geometryBounds.top
-  let right = geometryBounds.left + geometryBounds.width
-  let bottom = geometryBounds.top + geometryBounds.height
-
-  const rootMatrix = svg.getCTM()
-  if (!rootMatrix) {
-    measuredBounds.value = estimatedBounds.value
-    return
-  }
-  for (const label of svg.querySelectorAll<SVGGraphicsElement>('.player-system-object-marker text')) {
-    const labelMatrix = label.getCTM()
-    if (!labelMatrix) continue
-    const labelToRoot = rootMatrix.inverse().multiply(labelMatrix)
-    const box = label.getBBox()
-    const corners = [
-      new DOMPoint(box.x, box.y),
-      new DOMPoint(box.x + box.width, box.y),
-      new DOMPoint(box.x, box.y + box.height),
-      new DOMPoint(box.x + box.width, box.y + box.height),
-    ].map(point => point.matrixTransform(labelToRoot))
-    left = Math.min(left, ...corners.map(point => point.x))
-    top = Math.min(top, ...corners.map(point => point.y))
-    right = Math.max(right, ...corners.map(point => point.x))
-    bottom = Math.max(bottom, ...corners.map(point => point.y))
-  }
-
-  measuredBounds.value = paddedBounds(left, top, right, bottom)
-}
 
 function isObjectMarkerTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.player-system-object-marker') !== null
 }
 
 function hostLabel(publicHostId: string): string {
-  return objectsById.value.get(publicHostId)?.label ?? 'Unknown presence'
+  return summarizeHostLabel(objectsById.value.get(publicHostId)?.label ?? 'Unknown presence')
+}
+
+const maximumHostLinks = 8
+const maximumHostLabelLength = 80
+
+/** Caps summaries without reading beyond the fixed prefix or splitting a surrogate pair. */
+function summarizeHostLabel(label: string): string {
+  if (label.length <= maximumHostLabelLength) return label
+
+  const prefixLength = maximumHostLabelLength - 1
+  let prefix = label.slice(0, prefixLength)
+  const lastCodeUnit = prefix.charCodeAt(prefix.length - 1)
+  const nextCodeUnit = label.charCodeAt(prefix.length)
+  const endsWithHighSurrogate = lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF
+  const nextIsLowSurrogate = nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF
+  if (endsWithHighSurrogate && nextIsLowSurrogate) prefix = prefix.slice(0, -1)
+  return `${prefix}…`
 }
 
 /** Follows only remapped DTO placement and host references, so private source labels cannot enter the hierarchy. */
@@ -371,6 +291,7 @@ function hierarchyPath(object: PlayerObjectMarker): string {
   const path: string[] = []
   const visitedOrbitIds = new Set<string>()
   let placement = object.placement
+  let hostLinks = 0
 
   while (placement.kind === 'orbit') {
     const orbit = orbitsById.value.get(placement.orbitId)
@@ -381,12 +302,18 @@ function hierarchyPath(object: PlayerObjectMarker): string {
       break
     }
 
+    if (hostLinks >= maximumHostLinks) {
+      path.push('…')
+      break
+    }
+
     const host = objectsById.value.get(orbit.hostId)
     if (!host) {
       path.push('Orbit around Unknown presence')
       break
     }
-    path.push(`Orbit around ${host.label}`)
+    path.push(`Orbit around ${summarizeHostLabel(host.label)}`)
+    hostLinks += 1
     placement = host.placement
   }
 
