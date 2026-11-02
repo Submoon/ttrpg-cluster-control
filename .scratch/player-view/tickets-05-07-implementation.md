@@ -1,6 +1,6 @@
 ---
 title: Tickets 05 and 07 implementation and verification
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -92,3 +92,43 @@ The last focused browser selection passed **6/7**, followed by its corrected sys
 The final system replay corrected another generic-key false positive in the added JSON assertion: source key `A` must be absent as a complete JSON string, not as a character inside permitted names. Distinct multi-character canaries and explicit `locationKey` absence remain enforced. Sensitive review also identified a P3 test expectation: Light for printing is an established one-shot choice, reset after dispatch just like GM export. The assertion now expects false without changing application policy. Reviewer closed that P3 and verified all 15 application hashes unchanged. No application findings remain from complementary review; both previous P2 closures stand.
 
 All implementation and test writers are frozen. The local feature candidate will be committed on `codex/player-view-ticket-01` for independent Standards and Spec review against `b42d39a4`. Production build, compiled-reader verification and the single complete suite remain pending; tickets stay in progress until those results and review closure are collected.
+
+### Independent final reviews
+
+Pinned candidate: **`c6bca4b38d5f7f1c3e591ac3169eb893291cdbe4`**, `feat(player): export standalone JSON and public map images`. Verified nonempty review command: `git diff b42d39a4cd81b83594695aa22a84be9455cf23b6...HEAD`; commit list contains this one feature commit. Both independent reviewers used fresh contexts and performed no source, planning, Git or runtime mutations.
+
+#### Standards
+
+**0 documented-standard violations, 0 actionable smell findings, 0 blockers; no separate suggestions.** Reviewer inspected source/callers/test assertions for preview/reader navigation, focus and lifecycle; preflight/revision/async ownership; codec admission/output budgeting and geometry boundaries; adjacent GM exports, palette behavior and consultation surfaces. Both former P2 corrections and the established one-shot print-choice assertion are closed by independent inspection. Runtime/build/full-suite evidence remains coordinator-owned.
+
+#### Spec
+
+**0 defects, 0 scope-creep findings, 0 blockers.** Reviewer compared the actual 29-file diff with all nine ticket-05 and eight ticket-07 criteria, the authoritative scope and ADR. Shared projection/codec, isolated reader, applied-state export guards, DTO-only image construction, bounded PNG and GM preservation align with the agreed behavior. The reviewer also inspected desktop/390px reader and print-PNG artifacts and found them readable. Ticket 06 remains outside this implementation. Maximum-input latency and physical accessibility are not established by these checks.
+
+Review totals: Standards **0**, worst issue **none**; Spec **0**, worst issue **none**. Complementary Sensitive review has **0 remaining findings**, with both P2 fixes and the test-only P3 explicitly closed. Production build, compiled entry and the single complete suite are still pending at this checkpoint.
+
+### Production verification and final suite freeze
+
+Production build passed on `c6bca4b3` in **2 minutes 52 seconds** (`player-view-57-production-build.log`). Existing dependency export/deprecation, annotation and bundler-size/timing warnings are retained; none failed the build. The compiled localhost application on port 3158 then passed **18/18 browser journeys in 1.0 minute** (`player-view-57-compiled-smoke.log`): all fourteen new reader/export journeys and four persisted-entry variants. This establishes compiled SSR/client startup, the gated reader input, file admission/isolation/reload, actual cluster/system artifacts and asynchronous guards against the production output. The compiled server was stopped afterward.
+
+The final complete suite will run once against owned localhost 3157 development, because the local IndexedDB regression imports a Vite development module. Application/test candidate remains the reviewed `c6bca4b3`; only this documentary checkpoint is uncommitted. No source, test or documentation changes will occur during that run. All projects are included and reports use unique `player-view-57-full-*` paths; preserve the original last-run result before targeted failure replays. Tickets remain in progress until results and any necessary affected corrections are resolved.
+
+### Complete suite and affected correction
+
+The complete suite ran exactly once on the frozen application/test candidate `c6bca4b3`: **541 passed / 2 failed, zero skipped/retried, in 36.0 minutes**. Command: `npm test -- --output=test-results/player-view-57-full-suite`, with localhost 3157, all three projects and JSON reporting. All 227 pure checks, the IndexedDB case and all fourteen new feature browser journeys passed. Evidence: `player-view-57-full-suite.log`, `player-view-57-full-report.json`; the original last-run file is preserved inside the suite output and copied to `player-view-57-full-original-last-run.json`. No source, test or documentation edit occurred during the run.
+
+An unchanged, normally timed replay selected only the two failed IDs from a separate copied selection file: **one pass / one failure in 14.8 seconds** (`player-view-57-failed-unchanged-replay.log`). The initial one-touch movement case passed without changing its displacement, timeout, assertions, app or test. Read-only diagnosis confirms no diff in that test, native helpers or gesture implementation; available failure artifacts do not establish its intermittent cause. No gesture correction is claimed.
+
+The repeatable failure is a confirmed P2 menu sizing regression in the 844-by-390 landscape review journey. Focus returns correctly, but Import JSON is outside the viewport. Architect traced the added player-action height against the unchanged `min(70vh, 32rem)` cap: it ignored Reka's computed available popover height. The released correction only adds that available-height variable to the existing CSS minimum and retains overflow scrolling. The existing responsive test now attaches a final returned-focus screenshot; expectations and timeouts remain unchanged. Compiler/lint, both responsive cases, player menu actions, visual inspection, delta review and final compiled output are pending. There will be no second complete-suite execution.
+
+### Final closure
+
+The menu correction is committed as **`449bc7eed7549d04d5972d01846f7acb72305a9c`**, `fix(ui): fit map file actions within available popover space`. It changes one CSS declaration and adds one screenshot attachment after existing assertions. Incremental full-project types and affected lint pass (`player-view-57-menu-types.log`, `player-view-57-menu-lint.log`). Both responsive review cases plus all four player-image journeys pass **6/6 in 36.5 seconds** (`player-view-57-menu-green.log`, corresponding JSON report). Returned-focus captures were extracted and visually inspected at 390-by-500 dark and 844-by-390 light: menu scrolling and the complete focused Import action stay inside the viewport.
+
+Independent Standards and Spec delta reviewers inspected `c6bca4b3…449bc7ee`, the actual inherited Reka variable contract, adjacent popover patterns and unchanged assertions. Both explicitly close the responsive P2 with **0 remaining findings/blockers**; Spec also inspected both final menu screenshots. No export, reader, persistence, disclosure or gesture semantics changed. Complementary Sensitive closures remain valid.
+
+Final production build passes on `449bc7ee` in **2 minutes 12 seconds** (`player-view-57-final-production-build.log`). The final compiled application passes **8/8 in 21.6 seconds** (`player-view-57-final-compiled-replay.log`): both responsive review cases, all four actual player image journeys, and both original touch journeys. The touch test remains unchanged; its first full-run failure passed both unchanged development replay and final compiled replay, without establishing the intermittent cause. There was exactly one full-suite execution; affected replay results are not presented as a clean first full run.
+
+Owned development/compiled servers are stopped; loopback checks confirm ports 3157 and 3158 are not listening. Final origin fetch remains `d40e5f51`; the feature source candidate is eleven commits ahead/zero behind origin/main. GitHub #9 remains unchanged/open with no comments. No remote write occurred. The unrelated `.codex/environments/` directory remains untouched.
+
+All nine ticket-05 and eight ticket-07 criteria are complete. Both local tickets are closed; ticket 06 is now available but remains unclaimed and unstarted. Source candidates are local feature commits `c6bca4b3` and `449bc7ee`; a final documentation-only commit records closure. Standards **0 remaining**, worst open issue **none**; Spec **0 remaining**, worst open issue **none**; complementary Sensitive **0 remaining**. Limits retained: maximum adversarial-input latency and physical-device/screen-reader behavior are not certified by these checks.

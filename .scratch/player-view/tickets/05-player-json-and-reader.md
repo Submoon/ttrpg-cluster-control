@@ -1,6 +1,6 @@
 ---
 title: 'Export and open a standalone player JSON snapshot'
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -18,7 +18,7 @@ triage_labels:
 
 **What to build:** the Warden downloads the complete sanitized cluster as a dedicated player JSON document, and a recipient opens it in a standalone read-only reader without the GM file, account or workspace storage. This is the first player data transport and the file fallback for the later URL feature.
 
-**Status:** in-progress and assigned to the coordinator. The user authorized simultaneous implementation of tickets 05 and 07 with `implement` and subagents on 2026-11-02. Ticket 06 remains unstarted.
+**Status:** closed. Implemented with ticket 07 under the user's simultaneous `implement` authorization on 2026-11-02. Ticket 06 remains open and unclaimed.
 
 ## Blocked by
 
@@ -27,15 +27,15 @@ triage_labels:
 
 ## Acceptance criteria
 
-- [ ] A clearly distinct player-file action exports the existing common projection, with a dedicated versioned format, the chosen player title and a safe filename. It includes the permitted cluster rather than only the active system. Full GM backup/export actions remain separate and complete.
-- [ ] The downloaded document obeys all four modes, system-entry gates, public prose/Field masks, minimal Field metadata, route/Station and recursive host-chain rules. Permitted exact unknown-destination positions remain present; excluded source names/keys/IDs, notes, option inventories, history, backups and unknown extensions do not.
-- [ ] Generate safe public identities and valid internal references rather than copying source identity strings that can contain private information. Counts/bounds/accessibility text come from the public document, not omitted source content.
-- [ ] File actions use the existing operation preflight and authoritative applied snapshot. Pending drafts/gestures/previews and stale map/context callbacks cannot contaminate output. Sharing does not mutate GM data/history, and existing failed-save export/retry semantics are preserved.
-- [ ] A recipient can open a player JSON through an explicit public UI flow and use pan/zoom, cluster navigation, Revealed-system entry and public inspection. Unknown/partial systems remain non-openable. The reader exposes no GM editing, history, recovery or private reveal command.
-- [ ] Player loading validates unknown input, version, references, finite geometry and bounded size/work. Invalid, truncated, unsupported and wholly empty inputs fail clearly without falling back to a local GM workspace. Entirely empty share generation is blocked; an otherwise valid Revealed system can have no public internal objects.
-- [ ] Player consultation is independent of the singleton GM hydrate/write/recovery owner and works in a fresh context without GM IndexedDB. Different player documents can coexist while base-site tabs still reopen the saved GM workspace. Loading a player file never appends it through the normal full-map importer.
-- [ ] The player route/composition remains SSR-safe: parse client data at the proper lifecycle boundary without making GM data part of server hydration or module state. Reload, disposal and document changes clear obsolete player selection/map resources.
-- [ ] Supported old GM files still import with private defaults; new full backups retain all source/publication metadata. Do not promise that older applications can open new formats. Keep this player codec usable by the later URL transport without a parallel disclosure implementation.
+- [x] A clearly distinct player-file action exports the existing common projection, with a dedicated versioned format, the chosen player title and a safe filename. It includes the permitted cluster rather than only the active system. Full GM backup/export actions remain separate and complete.
+- [x] The downloaded document obeys all four modes, system-entry gates, public prose/Field masks, minimal Field metadata, route/Station and recursive host-chain rules. Permitted exact unknown-destination positions remain present; excluded source names/keys/IDs, notes, option inventories, history, backups and unknown extensions do not.
+- [x] Generate safe public identities and valid internal references rather than copying source identity strings that can contain private information. Counts/bounds/accessibility text come from the public document, not omitted source content.
+- [x] File actions use the existing operation preflight and authoritative applied snapshot. Pending drafts/gestures/previews and stale map/context callbacks cannot contaminate output. Sharing does not mutate GM data/history, and existing failed-save export/retry semantics are preserved.
+- [x] A recipient can open a player JSON through an explicit public UI flow and use pan/zoom, cluster navigation, Revealed-system entry and public inspection. Unknown/partial systems remain non-openable. The reader exposes no GM editing, history, recovery or private reveal command.
+- [x] Player loading validates unknown input, version, references, finite geometry and bounded size/work. Invalid, truncated, unsupported and wholly empty inputs fail clearly without falling back to a local GM workspace. Entirely empty share generation is blocked; an otherwise valid Revealed system can have no public internal objects.
+- [x] Player consultation is independent of the singleton GM hydrate/write/recovery owner and works in a fresh context without GM IndexedDB. Different player documents can coexist while base-site tabs still reopen the saved GM workspace. Loading a player file never appends it through the normal full-map importer.
+- [x] The player route/composition remains SSR-safe: parse client data at the proper lifecycle boundary without making GM data part of server hydration or module state. Reload, disposal and document changes clear obsolete player selection/map resources.
+- [x] Supported old GM files still import with private defaults; new full backups retain all source/publication metadata. Do not promise that older applications can open new formats. Keep this player codec usable by the later URL transport without a parallel disclosure implementation.
 
 ## Verification and completion
 
@@ -45,6 +45,14 @@ Capture and inspect actual downloaded JSON and open it through the public reader
 
 The player file is a consultation document, not an editable GM import or a stripped backup. No URL compression, cloud publication, image export implementation, additional saved GM workspace or audience profile is included here. This ticket waits for both content and relationship projection slices so the first distributed player format represents the agreed scope. Sensitive privacy/format/persistence reviews apply.
 
+
+## Resolution
+
+Implemented all nine criteria. The distinct player JSON action serializes the complete common public Cluster projection through an allowlisted, versioned and bounded codec. The independent `/player` reader supports public navigation and inspection without GM hydration, importing or persistence. Invalid replacement clears the old document; reload returns to the chooser; reader tabs coexist with an unchanged saved GM workspace. File exports preserve applied-state preflight, stale-operation cancellation, draft/gesture and failed-save behavior. Complete GM backups remain separate.
+
+Actual downloaded JSON, valid/invalid input matrices, pre-read limits, native read races, independent tabs, full GM backup equality and desktop/compact captures passed. The complete suite ran once with 541 passes and two failures; the touch case passed unchanged, and a confirmed landscape file-menu sizing regression was corrected and passed affected development and compiled replays. Strict types, lint, final production build, Standards/Spec and complementary Sensitive reviews have no remaining findings. See the [combined implementation and verification record](../tickets-05-07-implementation.md) for exact candidates, commands, outcomes and verification limits.
+
+Committed locally on `codex/player-view-ticket-01`. No push, PR, remote issue update or feature merge into main occurred. Ticket 06 is now available but has not been started.
 
 ## Comments
 
