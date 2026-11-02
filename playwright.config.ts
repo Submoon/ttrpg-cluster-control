@@ -1,6 +1,7 @@
 import { defineConfig, type ReporterDescription } from '@playwright/test'
 import process from 'node:process'
 import { validatePreviewUrl } from './scripts/ci/vercel-preview.mjs'
+import { isPureOnlySelection } from './scripts/playwright-selection.mjs'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3100'
 const productionURL = process.env.PLAYWRIGHT_PRODUCTION_URL
@@ -43,7 +44,7 @@ const projects = suite === 'checks'
   : suite === 'browser'
     ? [browserProject]
     : allProjects
-const needsLocalServer = suite !== 'browser' || !productionURL
+const needsLocalServer = !isPureOnlySelection(process.argv.slice(2)) && (suite !== 'browser' || !productionURL)
 
 export default defineConfig({
   testDir: './tests',

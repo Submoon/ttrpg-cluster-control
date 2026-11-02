@@ -14,8 +14,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verification-mode:
+    name: determine verification mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      mode: ${{ steps.finalize.outputs.mode }}
+      witness_valid: ${{ steps.finalize.outputs.witness_valid }}
+      workflow_id: ${{ steps.prepare.outputs.workflow_id }}
+      workflow_blob: ${{ steps.prepare.outputs.workflow_blob }}
+    steps:
+      - name: Check out the event merge commit or current commit
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Inspect the pinned base/head diff and look for a direct predecessor witness
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && secrets.GITHUB_TOKEN || '' }}
+          VERIFICATION_EVENT_ACTION: ${{ github.event.action || '' }}
+          VERIFICATION_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
+          VERIFICATION_BEFORE_SHA: ${{ github.event.before || '' }}
+          VERIFICATION_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          VERIFICATION_HEAD_REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          VERIFICATION_PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          VERIFICATION_WORKFLOW_REF: ${{ github.workflow_ref }}
+          VERIFICATION_STATE_PATH: ${{ runner.temp }}/verification-state.json
+        run: node scripts/ci/verification.mjs prepare
+
+      - name: Download the exact predecessor artifact by validated run and artifact ID
+        id: download-witness
+        if: ${{ steps.prepare.outputs.candidate == 'true' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.prepare.outputs.candidate_run_id }}
+          artifact-ids: ${{ steps.prepare.outputs.candidate_artifact_id }}
+          path: ${{ runner.temp }}/verification-witness
+
+      - name: Finalize verification mode after witness download and validation
+        id: finalize
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VERIFICATION_CANDIDATE: ${{ steps.prepare.outputs.candidate }}
+          VERIFICATION_STATE_PATH: ${{ runner.temp }}/verification-state.json
+          VERIFICATION_DOWNLOAD_OUTCOME: ${{ steps.download-witness.outcome }}
+          VERIFICATION_PARENT_RUN_ID: ${{ steps.prepare.outputs.candidate_run_id }}
+          VERIFICATION_PARENT_RUN_ATTEMPT: ${{ steps.prepare.outputs.candidate_run_attempt }}
+          VERIFICATION_WITNESS_PATH: ${{ runner.temp }}/verification-witness/verification-witness.json
+        run: node scripts/ci/verification.mjs finalize
+
   checks:
     name: checks (${{ matrix.playwright_version }})
+    needs: [verification-mode]
+    if: ${{ needs.verification-mode.outputs.mode == 'full' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -31,9 +92,11 @@ jobs:
     env:
       PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
     steps:
-      - name: Check out source
+      - name: Check out the event merge commit or current commit
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -48,6 +111,9 @@ jobs:
       - name: Verify Playwright image and package versions match
         run: |
           node --input-type=module -e "import { readFileSync } from 'node:fs'; const { version } = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')); if (version !== process.env.PLAYWRIGHT_IMAGE_VERSION) { console.error('Playwright image/package mismatch:', process.env.PLAYWRIGHT_IMAGE_VERSION, version); process.exit(1); } console.log('Playwright image and package version:', version);"
+
+      - name: Check Markdown links and headings across the documentation corpus
+        run: node scripts/ci/check-markdown-links.mjs
 
       - name: Lint
         run: npm run lint
@@ -74,9 +140,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  docs-check:
+    name: documentation links
+    needs: [verification-mode]
+    if: ${{ needs.verification-mode.outputs.mode == 'docs' || needs.verification-mode.outputs.mode == 'reuse' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the event merge commit or current commit
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Check Markdown links and headings across the documentation corpus
+        run: node scripts/ci/check-markdown-links.mjs
+
   resolve-preview:
     name: resolve Vercel preview
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [verification-mode]
+    if: ${{ needs.verification-mode.outputs.mode == 'full' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -87,9 +171,11 @@ jobs:
       deployment_sha: ${{ steps.preview.outputs.sha }}
       preview_url: ${{ steps.preview.outputs.preview_url }}
     steps:
-      - name: Check out resolver
+      - name: Check out resolver tooling from the event merge commit
         uses: actions/checkout@v7
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -106,11 +192,78 @@ jobs:
           VERCEL_PREVIEW_TIMEOUT_MS: 600000
         run: node scripts/ci/vercel-preview.mjs
 
+  browser-smoke:
+    name: browser preview smoke (${{ matrix.playwright_version }})
+    needs: [verification-mode, checks, resolve-preview]
+    if: >-
+      always() && needs.verification-mode.result == 'success' &&
+      needs.verification-mode.outputs.mode == 'full' && needs.checks.result == 'success' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.resolve-preview.result == 'success') ||
+      ((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository) && needs.resolve-preview.result == 'skipped'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        playwright_version: ['1.64.0']
+    container:
+      image: mcr.microsoft.com/playwright:v${{ matrix.playwright_version }}-noble
+      options: --init --ipc=host
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
+    steps:
+      - name: Check out the exact PR head or current commit
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the Search and Hierarchy preview smoke cases
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          PLAYWRIGHT_SUITE: browser
+          PLAYWRIGHT_PRODUCTION_URL: ${{ needs.resolve-preview.outputs.preview_url }}
+          PLAYWRIGHT_BASE_URL: ${{ needs.resolve-preview.outputs.preview_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run test:preview-smoke -- --reporter=github,html
+
+      - name: Run the Search and Hierarchy smoke cases against a local server
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+        env:
+          PLAYWRIGHT_SUITE: browser
+        run: npm run test:preview-smoke -- --reporter=github,html
+
+      - name: Upload browser smoke report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-browser-smoke-${{ matrix.playwright_version }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   browser-e2e:
     name: browser-e2e (${{ matrix.playwright_version }}, shard ${{ matrix.shard }}/2)
-    needs: [checks, resolve-preview]
+    needs: [verification-mode, checks, resolve-preview, browser-smoke]
     if: >-
-      always() && needs.checks.result == 'success' &&
+      always() && needs.verification-mode.result == 'success' &&
+      needs.verification-mode.outputs.mode == 'full' && needs.checks.result == 'success' &&
+      needs.browser-smoke.result == 'success' &&
       ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.resolve-preview.result == 'success') ||
       ((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository) && needs.resolve-preview.result == 'skipped'))
     runs-on: ubuntu-latest
@@ -129,7 +282,7 @@ jobs:
     env:
       PLAYWRIGHT_IMAGE_VERSION: ${{ matrix.playwright_version }}
     steps:
-      - name: Check out PR head or current ref
+      - name: Check out the exact PR head or current commit
         uses: actions/checkout@v7
         with:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
@@ -180,32 +333,51 @@ jobs:
   quality:
     name: quality (1.64.0)
     if: always()
-    needs: [checks, resolve-preview, browser-e2e]
+    needs: [verification-mode, checks, docs-check, resolve-preview, browser-smoke, browser-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require checks, preview resolution when applicable, and both browser shards
+      - name: Check out the event merge commit or current commit
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require the jobs selected by the verification mode
         env:
-          CHECKS_RESULT: ${{ needs.checks.result }}
-          PREVIEW_RESULT: ${{ needs.resolve-preview.result }}
-          BROWSER_RESULT: ${{ needs.browser-e2e.result }}
-          PREVIEW_REQUIRED: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-        shell: bash
-        run: |
-          if [[ "$CHECKS_RESULT" != "success" ]]; then
-            echo "Checks job did not succeed: $CHECKS_RESULT"
-            exit 1
-          fi
-          if [[ "$PREVIEW_REQUIRED" == "true" && "$PREVIEW_RESULT" != "success" ]]; then
-            echo "Vercel Preview resolution did not succeed: $PREVIEW_RESULT"
-            exit 1
-          fi
-          if [[ "$PREVIEW_REQUIRED" != "true" && "$PREVIEW_RESULT" != "skipped" ]]; then
-            echo "Unexpected Vercel Preview job result: $PREVIEW_RESULT"
-            exit 1
-          fi
-          if [[ "$BROWSER_RESULT" != "success" ]]; then
-            echo "Browser E2E shards did not both succeed: $BROWSER_RESULT"
-            exit 1
-          fi
-          echo "Required CI checks passed."
+          QUALITY_MODE: ${{ needs.verification-mode.outputs.mode }}
+          QUALITY_VERIFICATION_RESULT: ${{ needs.verification-mode.result }}
+          QUALITY_CHECKS_RESULT: ${{ needs.checks.result }}
+          QUALITY_DOCS_RESULT: ${{ needs.docs-check.result }}
+          QUALITY_PREVIEW_RESULT: ${{ needs.resolve-preview.result }}
+          QUALITY_PREVIEW_REQUIRED: ${{ needs.verification-mode.outputs.mode == 'full' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+          QUALITY_SMOKE_RESULT: ${{ needs.browser-smoke.result }}
+          QUALITY_BROWSER_RESULT: ${{ needs.browser-e2e.result }}
+          QUALITY_WITNESS_VALID: ${{ needs.verification-mode.outputs.witness_valid }}
+        run: node scripts/ci/verification.mjs quality
+
+      - name: Write full qualification witness for this successful run attempt
+        if: ${{ success() && needs.verification-mode.outputs.mode == 'full' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        env:
+          VERIFICATION_WORKFLOW_REF: ${{ github.workflow_ref }}
+          CI_PR_NUMBER: ${{ github.event.pull_request.number }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CI_WORKFLOW_ID: ${{ needs.verification-mode.outputs.workflow_id }}
+          CI_WORKFLOW_BLOB: ${{ needs.verification-mode.outputs.workflow_blob }}
+          CI_WITNESS_OUTPUT: ${{ runner.temp }}/verification-witness.json
+        run: node scripts/ci/verification.mjs write-witness
+
+      - name: Upload full qualification witness
+        if: ${{ success() && needs.verification-mode.outputs.mode == 'full' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-full-witness-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verification-witness.json
+          if-no-files-found: ignore
+          retention-days: 7

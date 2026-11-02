@@ -81,7 +81,7 @@ async function expectReadableObjectName(item: Locator): Promise<void> {
   await expectNoHorizontalOverflow(item.locator('.tree-object-name'))
 }
 
-test('deep object and Orbit rows stay readable at the minimum Hierarchy width', async ({ page }, testInfo) => {
+test('deep object and Orbit rows stay readable at the minimum Hierarchy width @preview-smoke', async ({ page }, testInfo) => {
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
   await setHeaderMapActionsOpen(page, true)

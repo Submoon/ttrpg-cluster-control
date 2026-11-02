@@ -43,7 +43,7 @@ function repeatedSystemImportContent(clusterName: string, systemName: string, sy
   }))
 }
 
-test('Search result marks stay decorative and readable, then activate an existing result', async ({ page }, testInfo) => {
+test('Search result marks stay decorative and readable, then activate an existing result @preview-smoke', async ({ page }, testInfo) => {
   const clusterName = 'Kestrel Reach beyond the Beacon near the Outer Spiral'
   const systemName = 'Vesper in the Observatory of the Quiet Outer Lanterns'
   await createSingleSystemWorkspace(page, {
