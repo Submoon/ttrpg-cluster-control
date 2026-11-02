@@ -242,7 +242,14 @@ test('a generated player link opens the exported public snapshot in a fresh read
     const desktopScreenshot = testInfo.outputPath('player-link-controls-desktop.png')
     await controls.screenshot({ path: desktopScreenshot })
     await testInfo.attach('player-link-controls-desktop', { path: desktopScreenshot, contentType: 'image/png' })
+    await setHeaderMapActionsOpen(page, false)
+    for (const panel of ['inspector', 'hierarchy']) {
+      const close = page.getByRole('button', { name: `Close ${panel} panel`, exact: true })
+      if (await close.isVisible()) await close.click()
+    }
     await page.setViewportSize({ width: 390, height: 844 })
+    await setHeaderMapActionsOpen(page, true)
+    await expect(playerLink).toHaveValue(playerUrl)
     const copy = controls.getByRole('button', { name: 'Copy player link', exact: true })
     await copy.scrollIntoViewIfNeeded()
     await expect(copy).toBeVisible()
@@ -254,6 +261,7 @@ test('a generated player link opens the exported public snapshot in a fresh read
     const compactScreenshot = testInfo.outputPath('player-link-controls-compact.png')
     await page.screenshot({ path: compactScreenshot, fullPage: true })
     await testInfo.attach('player-link-controls-compact', { path: compactScreenshot, contentType: 'image/png' })
+    await setHeaderMapActionsOpen(page, false)
     if (initialViewport) await page.setViewportSize(initialViewport)
   })
   const parsedPlayerUrl = new URL(playerUrl)
