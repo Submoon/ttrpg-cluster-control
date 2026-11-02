@@ -487,7 +487,7 @@ function openJsonImportPicker(): void {
   z-index: 60;
   display: grid;
   width: min(22rem, calc(100vw - 1.5rem));
-  max-height: min(70vh, 32rem);
+  max-height: min(70vh, 32rem, max(0px, var(--reka-popover-content-available-height, 70vh)));
   gap: 0.65rem;
   overflow: auto;
   border: 1px solid var(--line);

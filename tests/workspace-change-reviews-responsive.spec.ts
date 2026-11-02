@@ -126,6 +126,7 @@ for (const viewport of reviewViewports) {
     await expect(importButton).toBeVisible()
     await expect(importButton).toBeFocused()
     await expect(importButton).toBeInViewport({ ratio: 1 })
+    await attachViewportScreenshot(page, `map-files-return-focus-${viewport.width}x${viewport.height}-${viewport.theme}`)
     await setHeaderMapActionsOpen(page, false)
     const unchanged = await downloadJson(page, 'Export Jump Cluster JSON')
     expect(unchanged.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
