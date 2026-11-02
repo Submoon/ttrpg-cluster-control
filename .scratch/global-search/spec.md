@@ -222,5 +222,5 @@ The complete 53-story local effort is implemented and verified in [draft PR #36]
 
 ## Follow-up tickets
 
-- [Show type icons in Search results](tickets/04-search-result-type-icons.md) — implementation and local verification complete; integrated CI pending.
-- [Keep deeply nested Hierarchy rows readable](tickets/05-deep-hierarchy-readability.md) — implementation and local verification complete, including a 31-level branch; integrated CI pending.
+- [Show type icons in Search results](tickets/04-search-result-type-icons.md) — closed: canonical decorative type marks with desktop/compact and production-preview coverage; see the linked resolution and follow-up implementation record.
+- [Keep deeply nested Hierarchy rows readable](tickets/05-deep-hierarchy-readability.md) — closed: readable rows with bounded indentation, verified through level 31; see the linked resolution and follow-up implementation record.

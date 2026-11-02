@@ -1,6 +1,6 @@
 ---
 title: "Search icons and deep Hierarchy readability implementation"
-status: in-progress
+status: closed
 ---
 
 # Search icons and deep Hierarchy readability implementation
@@ -54,6 +54,12 @@ The Search icon test sampled the mounted `span.iconify` before Nuxt Icon asynchr
 
 Only the test helper changes: bounded `expect.poll` with the normal expectation timeout waits for an actual computed CSS mask or SVG drawing markup. It retains the final nonzero dimensions, supported representation and CSS-mask checks. No timeout, retry, skip or product behavior changes. A permanently missing icon still fails. Focused test lint passed; the corrected complete Search journey passed locally in 12.6s (`test-results/followups-icons-async-recheck/report.json`). Independent review found zero remaining issues in this correction. A new exact-preview CI run will verify the asynchronous observation in production.
 
+Final verified candidate: `bbe17d2eb3b35f0a1f5c81c30efb728cd97d564d`. [CI run 41421347433](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41421347433) completed successfully: lint, full Nuxt typecheck, production build, **222/222** pure/storage tests (39.3s), exact-preview resolution, browser shard 1 **160/160** (9.8m), browser shard 2 **152/152** (7.6m), and the final quality gate. Total: **534/534 passed**, with no failed, skipped or retried cases. The corrected actual-painted-icon assertion passed against production Preview. Application source is unchanged from `97fbb2e4`.
+
 The [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app) retains the existing branch address. Local development runtime is stopped after verification. No merge, release or source-issue closure is authorized by this work.
+
+## Resolution
+
+Tickets 04 and 05 are closed. Two specialists implemented disjoint Search/Hierarchy scopes, and the coordinator integrated them on the existing single feature branch. Acceptance criteria, focused browser/model coverage, rendered review, the exact-candidate full suite and independent Standards/Spec findings are resolved. The subsequent closure commit changes documentation only; source and tests remain identical to the verified `bbe17d2e` tree. The PR remains draft and GitHub #7 is not closed by this follow-up.
 
 Browser emulation establishes responsive layout and browser interaction; it does not certify physical-device keyboards or screen readers. Earlier physical-phone validation belongs to the unchanged Search navigation path, not to these follow-ups' new layout.
