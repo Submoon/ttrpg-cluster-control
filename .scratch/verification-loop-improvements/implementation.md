@@ -1,6 +1,6 @@
 ---
 title: "Improve the verification loop after the global-search retrospective"
-status: in-progress
+status: closed
 ---
 
 # Improve the verification loop
@@ -43,4 +43,12 @@ GitHub's run API exposes an immutable `run.head_sha` but a live nested PR head. 
 
 Real owned-launcher smoke passed **2/2** browser journeys in 20.7s after the hydrated welcome form was ready; the server and browser were cleaned up. Report: `test-results/local-test-2026-11-02T11-25-22-589Z-62024/playwright-run-1/results.json`; outer log: `test-results/verification-owned-launcher-final.log`. A separate real pure-only launcher invocation passed **9/9** in 2.3s without a server or browser. Each invocation owns distinct output and JSON report paths.
 
-Refetched `origin` before publication: `origin/main` is unchanged at `d40e5f515baf1afeb0e2135461287b243b2a1f6c`. Exact-preview full CI and a documentation-only reuse demonstration remain pending. Execution logs and screenshots belong under `test-results` or CI artifacts. PR #36 is currently open and ready for review; its state is preserved, with no merge or source-issue closure.
+Refetched `origin` before publication: `origin/main` is unchanged at `d40e5f515baf1afeb0e2135461287b243b2a1f6c`. Execution logs and screenshots belong under `test-results` or CI artifacts. PR #36 is currently open and ready for review; its state is preserved, with no merge or source-issue closure.
+
+## Resolution
+
+Implemented the CI classifier and Markdown checks, direct-predecessor evidence reuse, Preview smoke gate, owned hydration/input monitoring and development/UI guidance. Source candidate `2d73872d8c3f59b249eb66a50ce0f8aef6f671da` passed [full CI run 41437093583](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41437093583): **561/561** cases (249 pure/storage and 160/152 browser), plus **2/2** prerequisite smoke cases. Lint, typecheck, production build and the required `quality (1.64.0)` gate passed. Browser shards used the exact immutable Vercel Preview.
+
+The successful run published the unexpired `ci-full-witness-1` artifact (ID `13137637631`, run attempt 1). Its inspected JSON binds PR #36, the exact source/base SHAs and workflow ID/path/ref/blob. The complete run took 16m44s; the browser test steps took 10.9m and 6.7m. Focused local checks avoided duplicating that full suite.
+
+This documentation-only closure preserves all qualified source/tests and exercises real cross-run reuse. Its resulting CI mode and quality status are recorded on [PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36), keeping the runtime candidate unchanged. A missing or mismatched witness selects full qualification; a reused run cannot mint a new full witness.
