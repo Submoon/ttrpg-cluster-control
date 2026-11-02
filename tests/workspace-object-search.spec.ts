@@ -601,7 +601,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(hierarchy).toBeHidden()
 
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })
   await expect(resumeDraft).toBeVisible()
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true, includeHidden: true })
@@ -624,7 +624,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
 
   await expect(chartDialog).toBeVisible()
-  await expect(chartDialog.getByRole('button', { name: 'Apply names', exact: true })).toBeVisible()
+  await expect(chartDialog.getByRole('button', { name: 'Apply details', exact: true })).toBeVisible()
   await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
   await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
   await expect.poll(() => chartDialog.evaluate(dialog =>

@@ -622,14 +622,41 @@ async function expectMapFilesControlsUsable(
   for (const control of [printChoice, svgButton, pngButton]) {
     await expect(control).toBeVisible()
     await expect(control).toBeEnabled()
+    await control.focus()
+    await expect(control).toBeFocused()
+    await expect(control).toBeInViewport({ ratio: 1 })
     const receivesPointer = await control.evaluate(element => {
       const rect = element.getBoundingClientRect()
       const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
       return hit === element || element.contains(hit)
     })
+    if (!receivesPointer) {
+      const geometry = await control.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        const menu = element.closest('.workspace-map-files-content')
+        const menuRect = menu?.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return {
+          label: element.getAttribute('aria-label') ?? element.textContent,
+          control: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+          menu: menu && menuRect ? {
+            top: menuRect.top, bottom: menuRect.bottom,
+            scrollTop: menu.scrollTop, scrollHeight: menu.scrollHeight, clientHeight: menu.clientHeight,
+          } : null,
+          hit: hit ? { tag: hit.tagName, role: hit.getAttribute('role'), label: hit.getAttribute('aria-label') } : null,
+          viewport: { width: innerWidth, height: innerHeight },
+        }
+      })
+      await test.info().attach('map-files-pointer-geometry', {
+        body: Buffer.from(JSON.stringify(geometry, null, 2)),
+        contentType: 'application/json',
+      })
+      await test.info().attach('map-files-pointer-failure', {
+        body: await page.screenshot({ fullPage: false }),
+        contentType: 'image/png',
+      })
+    }
     expect(receivesPointer).toBe(true)
-    await control.focus()
-    await expect(control).toBeFocused()
   }
 }
 

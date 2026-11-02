@@ -184,7 +184,7 @@ async function selectPrivatePlanet(
   fixture: PrivatePlanetFixture,
 ): Promise<import('@playwright/test').Locator> {
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', {
+  await hierarchy.getByRole('treeitem', {
     name: `Select ${fixture.locationKey}, ${fixture.objectName}`,
     exact: true,
   }).click()

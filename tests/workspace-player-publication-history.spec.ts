@@ -113,7 +113,7 @@ test('Field publication, object masks and separate prose round-trip through real
   expect(before.objectFieldSettings.nativePlayerSharing?.atmosphere).toBe(false)
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: /^Select .*, History World$/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select .*, History World$/ }).click()
   const definitions = await openFieldDefinitionDialog(page)
   await definitions.getByRole('button', { name: /^Atmosphere\b/ }).click()
   await editFieldDefinition(definitions)
