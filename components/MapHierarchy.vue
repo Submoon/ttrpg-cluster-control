@@ -118,7 +118,11 @@
       label-key="label"
       class="object-tree"
       aria-label="Map object and Orbit hierarchy"
-      :ui="{ listWithChildren: 'border-s border-[var(--line-soft)]' }"
+      :ui="{
+        itemWithChildren: 'ps-0 -ms-px',
+        listWithChildren: 'ms-[var(--hierarchy-indent-step)] border-s border-[var(--line-soft)]',
+      }"
+      :style="{ '--hierarchy-indent-step': hierarchyIndentStep }"
       @update:expanded="updateExpandedHierarchyKeys"
       @select="selectHierarchyItem"
       @toggle="toggleHierarchyItem"
@@ -126,41 +130,50 @@
       @compositionstart="beginHierarchyComposition"
       @compositionend="endHierarchyComposition"
     >
-      <template #item-wrapper="{ item, expanded, selected, handleToggle, ui }">
+      <template #item-wrapper="{ item, expanded, selected, handleToggle, level, ui }">
         <div
           :class="ui.link({
             class: [
-              'tree-row flex min-h-[2.55rem] w-full items-center gap-[0.45rem] rounded-[2px] border border-transparent bg-transparent px-2 py-[0.42rem] text-left',
+              'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-1 py-1 text-left',
               item.kind === 'object' ? 'object-row' : 'orbit-row',
               { active: selected },
             ],
             selected,
           })"
           :aria-label="item.ariaLabel"
+          :aria-description="item.ariaDescription"
           :aria-current="selected ? 'true' : undefined"
+          :data-hierarchy-level="level"
         >
           <template v-if="item.kind === 'object'">
-            <span class="key-tag shrink-0 whitespace-nowrap">{{ item.row.object.locationKey }}</span>
-            <span class="object-mark" aria-hidden="true">{{ objectMark(item.row.object) }}</span>
-            <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-              {{ item.row.object.name }}
-              <small class="mt-[0.18rem] block">
+            <span class="tree-copy col-start-1 row-start-1 block min-w-0 [overflow-wrap:anywhere]">
+              <span class="tree-object-title flex min-w-0 items-start gap-1">
+                <span class="object-mark shrink-0" aria-hidden="true">{{ objectMark(item.row.object) }}</span>
+                <span class="tree-object-name min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.name }}</span>
+              </span>
+              <small class="tree-type-label mt-[0.18rem] block [overflow-wrap:anywhere]">
                 {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
               </small>
+              <small class="tree-parent-context mt-[0.12rem] block [overflow-wrap:anywhere]">
+                {{ item.parentContext }}
+              </small>
             </span>
+            <span class="key-tag col-start-1 row-start-2 block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
           </template>
           <template v-else>
-            <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">○</span>
-            <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-              Orbit {{ item.row.orbit.order }}
-              <small class="mt-[0.18rem] block">
+            <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
+              <span class="tree-orbit-title flex min-w-0 items-start gap-1">
+                <span class="orbit-mark shrink-0 text-[var(--map-muted)]" aria-hidden="true">○</span>
+                <span class="min-w-0 [overflow-wrap:anywhere]">Orbit {{ item.row.orbit.order }}</span>
+              </span>
+              <small class="mt-[0.18rem] block [overflow-wrap:anywhere]">
                 {{ item.row.host?.name ?? 'Unoccupied center' }} / {{ item.row.childCount }} object{{ item.row.childCount === 1 ? '' : 's' }}
               </small>
             </span>
           </template>
           <UButton
             v-if="item.children?.length"
-            class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+            class="tree-expand-control col-start-2 row-span-2 min-h-[2rem] min-w-[2rem] shrink-0 self-center justify-center px-0"
             color="neutral"
             variant="ghost"
             size="xs"
@@ -204,6 +217,8 @@ interface HierarchyTreeItemBase {
   label: string
   textValue: string
   ariaLabel: string
+  ariaDescription?: string
+  parentContext?: string
   ancestorKeys: string[]
   children?: HierarchyTreeItem[]
   [key: string]: unknown
@@ -233,6 +248,11 @@ const selectedSystem = computed(() =>
 const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
 const hierarchyItems = computed(() => buildHierarchyTreeItems(hierarchyRows.value))
 const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
+const maximumHierarchyLevel = computed(() => hierarchyRows.value.reduce(
+  (maximum, row) => Math.max(maximum, row.depth + 1),
+  1,
+))
+const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
   if (store.selectedObjectId) return `object:${store.selectedObjectId}`
   if (store.selectedOrbitId) return `orbit:${store.selectedOrbitId}`
@@ -278,6 +298,9 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
   for (const row of rows) {
     const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : undefined
     const ancestorKeys = parent ? [...parent.ancestorKeys, parent.key] : []
+    const parentContext = row.kind === 'object'
+      ? hierarchyParentContext(parent)
+      : undefined
     const item: HierarchyTreeItem = row.kind === 'object'
       ? {
           kind: 'object',
@@ -286,6 +309,8 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
           label: row.object.name,
           textValue: row.object.name,
           ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
+          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}`,
+          parentContext,
           ancestorKeys,
         }
       : {
@@ -310,6 +335,11 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
   }
 
   return roots
+}
+
+function hierarchyParentContext(parent: HierarchyTreeItem | undefined): string {
+  if (parent?.kind !== 'orbit') return 'System map'
+  return `Orbit ${parent.row.orbit.order} around ${parent.row.host?.name ?? 'unoccupied center'}`
 }
 
 function flattenHierarchyTreeItems(items: HierarchyTreeItem[], flattened: HierarchyTreeItem[] = []): HierarchyTreeItem[] {
@@ -409,13 +439,14 @@ function endHierarchyComposition(): void {
   font-size: 0.52rem;
 }
 
-.tree-row {
+.hierarchy-panel .tree-row {
   color: var(--text-secondary);
+  font-size: 0.75rem;
 }
 
 .key-tag {
   color: var(--map-muted);
-  font: 0.58rem Consolas, monospace;
+  font: 0.62rem/1.35 Consolas, monospace;
 }
 
 .orbit-row {
@@ -423,7 +454,19 @@ function endHierarchyComposition(): void {
 }
 
 .hierarchy-panel .orbit-mark {
-  font-size: 1.2rem;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.hierarchy-panel .tree-copy small {
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.hierarchy-panel .tree-object-title .object-mark {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.78rem;
 }
 
 .map-workspace-shell .cluster-map-nav-button {

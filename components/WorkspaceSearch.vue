@@ -73,14 +73,24 @@
             @pointerdown.capture="handlePalettePointerDown"
           >
             <template #item="{ item }">
-              <span class="workspace-search-result-name">{{ item.result.name }}</span>
-              <span class="workspace-search-result-context">
-                <span>{{ item.result.typeLabel }} · {{ item.result.contextLabel }}</span>
-                <span v-if="item.result.locationKey" class="workspace-search-location-key">
-                  Location key: {{ item.result.locationKey }}
-                </span>
-                <span v-if="item.result.occurrence !== null" class="workspace-search-occurrence">
-                  Occurrence {{ item.result.occurrence }}
+              <span class="workspace-search-result-mark" aria-hidden="true">
+                <UIcon
+                  v-if="item.result.leadingMark.kind === 'icon'"
+                  :name="item.result.leadingMark.value"
+                  class="workspace-search-result-icon"
+                />
+                <span v-else>{{ item.result.leadingMark.value }}</span>
+              </span>
+              <span class="workspace-search-result-content">
+                <span class="workspace-search-result-name">{{ item.result.name }}</span>
+                <span class="workspace-search-result-context">
+                  <span>{{ item.result.typeLabel }} · {{ item.result.contextLabel }}</span>
+                  <span v-if="item.result.locationKey" class="workspace-search-location-key">
+                    Location key: {{ item.result.locationKey }}
+                  </span>
+                  <span v-if="item.result.occurrence !== null" class="workspace-search-occurrence">
+                    Occurrence {{ item.result.occurrence }}
+                  </span>
                 </span>
               </span>
             </template>
@@ -420,9 +430,32 @@ defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
 }
 
 .workspace-search-result-name,
-.workspace-search-result-context {
+.workspace-search-result-context,
+.workspace-search-result-content {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.workspace-search-result-content {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.workspace-search-result-mark {
+  display: inline-flex;
+  width: 1.25rem;
+  min-height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.12rem;
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.workspace-search-result-icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .workspace-search-result-name {
@@ -482,9 +515,11 @@ defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
+  min-height: 2.75rem;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
   justify-content: stretch;
-  gap: 0.18rem;
+  align-items: start;
+  gap: 0.5rem;
   border: 1px solid var(--line-soft);
   border-radius: 0.3rem;
   padding: 0.65rem 0.75rem;

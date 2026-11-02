@@ -219,3 +219,8 @@ The initial specification deliverable was documentation only. Predecessor runtim
 ## Resolution
 
 The complete 53-story local effort is implemented and verified in [draft PR #36](https://github.com/Submoon/ttrpg-cluster-control/pull/36) on **codex/global-search**. [Final CI](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/41096614548) and [ticket 03's resolution](tickets/03-global-object-reveal.md) record the exact source candidate, current-main integration, independent review closure and actual mobile evidence. The [rolling branch preview](https://ttrpg-cluster-control-git-codex-global-search-submoon.vercel.app) exposes the complete feature. This closes the local implementation effort; merge, release and the remote source issue remain under the user's control.
+
+## Follow-up tickets
+
+- [Show type icons in Search results](tickets/04-search-result-type-icons.md) — implementation and local verification complete; integrated CI pending.
+- [Keep deeply nested Hierarchy rows readable](tickets/05-deep-hierarchy-readability.md) — implementation and local verification complete, including a 31-level branch; integrated CI pending.

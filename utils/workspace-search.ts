@@ -1,8 +1,13 @@
 import type { LocalWorkspace } from '../domain/workspace'
 import { catalogueSubtypeLabel } from './catalogue-labels'
+import { objectMark } from './catalogue-marks'
 
 export type SearchTarget = { workspaceId: string; clusterId: string }
   & ({ kind: 'cluster' } | { kind: 'system'; systemId: string } | { kind: 'object'; systemId: string; objectId: string })
+
+export type SearchResultMark =
+  | { kind: 'glyph'; value: string }
+  | { kind: 'icon'; value: 'i-lucide-network' | 'i-lucide-orbit' }
 
 export interface SearchResult {
   /** Stable only for this workspace identity and result target; never display it as disambiguation. */
@@ -11,6 +16,7 @@ export interface SearchResult {
   name: string
   typeLabel: string
   contextLabel: string
+  leadingMark: SearchResultMark
   locationKey?: string
   /** Deterministic result-only disambiguation for otherwise equivalent visible labels. */
   occurrence: number | null
@@ -73,6 +79,7 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
         name: object.name,
         typeLabel: catalogueSubtypeLabel(object),
         contextLabel: `Star System: ${system.name}`,
+        leadingMark: { kind: 'glyph', value: objectMark(object) },
         locationKey: object.locationKey,
         occurrence: null,
       },
@@ -94,6 +101,7 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
         name: workspace.cluster.name,
         typeLabel: 'Jump Cluster',
         contextLabel: 'Current workspace',
+        leadingMark: { kind: 'icon', value: 'i-lucide-network' },
         occurrence: null,
       },
       normalizedName: normalizeSearchText(workspace.cluster.name),
@@ -111,6 +119,7 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
         name: system.name,
         typeLabel: 'Star System',
         contextLabel: `Jump Cluster: ${workspace.cluster.name}`,
+        leadingMark: { kind: 'icon', value: 'i-lucide-orbit' },
         occurrence: null,
       },
       normalizedName: normalizeSearchText(system.name),

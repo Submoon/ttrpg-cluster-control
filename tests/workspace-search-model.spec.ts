@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { catalogueTypes, createLocalWorkspace } from '../domain/workspace'
+import { catalogueMarks } from '../utils/catalogue-marks'
 import { searchWorkspace } from '../utils/workspace-search'
 
 test('workspace search trims and normalizes a literal query, then ranks exact, prefix, and substring matches @pure', () => {
@@ -172,4 +173,20 @@ test('workspace search includes every catalogue subtype and a custom Other label
   )
   expect(results.find(result => result.target.kind === 'object' && result.target.objectId === 'custom-other')?.typeLabel)
     .toBe('Signal ghost')
+
+  for (const type of catalogueTypes) {
+    const result = results.find(result => result.target.kind === 'object' && result.target.objectId === `catalogue-${type.value}`)
+    expect(result?.leadingMark).toEqual({ kind: 'glyph', value: catalogueMarks[type.value] })
+  }
+  expect(results.find(result => result.target.kind === 'object' && result.target.objectId === 'custom-other')?.leadingMark)
+    .toEqual({ kind: 'glyph', value: catalogueMarks.other })
+})
+
+test('workspace search assigns distinct editor icons to its cluster and system results @pure', () => {
+  const workspace = createLocalWorkspace('Reach', 'Vesper')
+
+  expect(searchWorkspace(workspace, 'reach').find(result => result.target.kind === 'cluster')?.leadingMark)
+    .toEqual({ kind: 'icon', value: 'i-lucide-network' })
+  expect(searchWorkspace(workspace, 'vesper').find(result => result.target.kind === 'system')?.leadingMark)
+    .toEqual({ kind: 'icon', value: 'i-lucide-orbit' })
 })
