@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace, type CampaignFixture } from './scenarios/campaign-workspace'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   downloadImage,
   downloadJson,
   inspectImageSvg,
@@ -140,7 +140,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
   const requestedDistantScreenPoint = await clickScenePoint(page, clusterMap, distantPoint)
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const appliedDistantPoint = await markerPosition(target)
   const appliedDistantScreenPoint = await screenPointForScenePoint(clusterMap, appliedDistantPoint)
@@ -235,7 +235,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
 
   await page.reload()
   await returnToClusterMap(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   expect((await downloadJson(page, 'Export Jump Cluster JSON')).layout.unresolvedExitPositions?.[route.id])
     .toEqual(committedPosition)
   await expect(clusterMap.locator(`.cluster-route[data-route-id="${route.id}"] .cluster-exit-mark`))

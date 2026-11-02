@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, importReviewDialog, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
@@ -267,7 +267,7 @@ test('explicit Move exits Add when Move is already active', async ({ page }) => 
 test('Orbit form Add retains its host, corrects each axis, and retries one applied write', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const inspector = page.locator('#workspace-inspector-panel')
   const starHierarchy = await openWorkspaceHierarchy(page)
   await starHierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
@@ -316,7 +316,7 @@ test('Orbit form Add retains its host, corrects each axis, and retries one appli
   expect(appliedMemory.layout.orbitRotations?.[appliedOrbit!.id]).toBe(37)
 
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
-  await expect(saveFeedback).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await page.reload()
   const afterReload = await downloadJson(page, 'Export star system JSON')
   expect(afterReload.system?.orbits).toHaveLength(1)

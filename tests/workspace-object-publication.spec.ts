@@ -8,6 +8,7 @@ import {
   type SystemObject,
 } from '../domain/workspace'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   addCatalogueObject,
   captureMapExportBlobs,
@@ -165,7 +166,7 @@ async function createPrivatePlanet(page: import('@playwright/test').Page): Promi
   await inspector.getByLabel('GM notes', { exact: true }).fill(description)
   const locationKey = await inspector.getByLabel('Location key', { exact: true }).inputValue()
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart details' }).click()
@@ -173,7 +174,7 @@ async function createPrivatePlanet(page: import('@playwright/test').Page): Promi
   await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   return { clusterName, systemName, objectName, locationKey, description }
 }
@@ -199,7 +200,7 @@ async function setPrivatePlanetPublication(
   const inspector = await selectPrivatePlanet(page, fixture)
   await selectInspectorOption(inspector.getByLabel('How players see this object'), publication)
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 }
 
 async function setSourceSystemPublication(
@@ -212,7 +213,7 @@ async function setSourceSystemPublication(
   await selectInspectorOption(chartEdit.getByLabel('How players see this system'), publication)
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 }
 
 async function openSourceSystemFromCluster(
@@ -272,7 +273,7 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await expect(objectPublication).toBeVisible({ timeout: 5_000 })
   await selectInspectorOption(objectPublication, 'Revealed')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const systemDetails = await openChartDetails(page)
@@ -281,7 +282,7 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const previewTrigger = systemDetails.getByRole('button', { name: 'Preview player view' })
   await previewTrigger.click()
@@ -335,7 +336,7 @@ test('a Revealed system previews only public objects and the anonymous required 
   await setJsonFile(jsonMapImportInput(page), 'published-host-chain.json', fixture.json)
   const importReview = importReviewDialog(page)
   await resolveImportReview(importReview, 'confirm')
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   const importedSystem = exported.cluster?.systems.find(system => system.name === 'Published Chain')
@@ -418,7 +419,7 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   await objectInspector.getByLabel('Name', { exact: true }).fill(longObjectName)
   await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const details = await openChartDetails(page)
@@ -487,7 +488,7 @@ test('player system pan and zoom stay local to the preview and do not add histor
   await editMapObject(page)
   await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const details = await openChartDetails(page)
@@ -663,12 +664,12 @@ test('object publication changes survive Undo, Redo, reload, and a retried durab
 
   const history = page.getByRole('group', { name: 'Edit history' })
   await history.getByRole('button', { name: /^Undo(?:\b|:)/ }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   let state = await exportPrivatePlanet(page, fixture)
   expect(state.object.publication).toBe('known-type')
 
   await history.getByRole('button', { name: /^Redo(?:\b|:)/ }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   state = await exportPrivatePlanet(page, fixture)
   expect(state.object.publication).toBe('revealed')
 
@@ -692,7 +693,7 @@ test('object publication changes survive Undo, Redo, reload, and a retried durab
     )
 
     await feedback.getByRole('button', { name: 'Retry save' }).click()
-    await expect(feedback.locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect(await readWorkspaceWriteFailureCount(page)).toBe(2)
     const historyAfterRetry = await history.locator('button').evaluateAll(buttons =>
       buttons.map(button => button.getAttribute('aria-label')),
@@ -717,7 +718,7 @@ test('restoring the last valid backup restores Revealed object publication and p
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText(fixture.systemName)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   let state = await exportPrivatePlanet(page, fixture)
   expect(state.object.publication).toBe('revealed')

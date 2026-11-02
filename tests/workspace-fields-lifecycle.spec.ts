@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadJson,
@@ -321,7 +322,7 @@ test('creating a field applies once and retry persists the same definition ident
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Recovery details', exact: true }).click()
   const recovery = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
   await recovery.getByRole('button', { name: 'Retry save', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const afterRetry = await downloadJson(page, 'Export star system JSON')
   const afterRetryFields = afterRetry.objectFieldSettings.customFields.filter(field => field.name === 'Retry marker')

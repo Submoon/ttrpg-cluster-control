@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   clickDockAction,
   downloadImage,
   downloadJson,
@@ -124,7 +124,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('The Rim')
   await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -222,12 +222,12 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
 
   await page.getByRole('button', { name: 'Cancel move', exact: true }).click()
   await expect.poll(() => targetPosition(target)).toEqual(draggedPosition)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
   await clickClusterScenePoint(page, clusterMap, { x: 760, y: 350 })
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const confirmedPosition = await targetPosition(target)
   expect(Math.abs(confirmedPosition.x - 760)).toBeLessThan(1)
   expect(Math.abs(confirmedPosition.y - 350)).toBeLessThan(1)
@@ -252,7 +252,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await expect(page.getByRole('group', { name: `${originSystem.name} star system map`, exact: true })).toBeVisible()
   await undo.click()
   await expect(clusterMap).toBeVisible()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const undoneExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(undoneExport).toEqual(draggedExport)
   expect(undoneExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
@@ -275,13 +275,13 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
 
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(confirmedExport)
 
   await page.reload()
   await returnToClusterMap(page)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const reloadedExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(reloadedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(confirmedPosition)
 

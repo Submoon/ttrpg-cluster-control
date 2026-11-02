@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures'
-import { openWorkspaceHierarchy } from './helpers'
-import { activeWorkspaceFeedback } from './helpers'
+import { waitForWorkspaceSaved, openWorkspaceHierarchy, activeWorkspaceFeedback } from './helpers'
 import { returnToClusterMap, clickDockAction } from './helpers'
 import { addCatalogueObject, editMapObject, saveMapObject, readInspectorSelection, selectInspectorOption, setWorkspaceMapMode } from './helpers'
 
@@ -210,7 +209,7 @@ test('theme changes recolor both maps without changing workspace drafts or writi
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const systemMap = page.locator('.system-map-svg')
   await expect(systemMap).toBeVisible()
@@ -294,18 +293,18 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Departure')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Arrival')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.keyboard.press('Escape')
   await expect(page.getByRole('region', { name: 'Object palette' })).toBeHidden()
@@ -350,14 +349,14 @@ test('theme changes preserve object and route drafts plus pending and failed sav
   await installWorkspaceWriteGate(page)
   try {
     await inspector.getByRole('button', { name: 'Save map object' }).click()
-    await expect(saveStatus).toHaveText(/Saving to this browser\.\.\./)
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     await expect.poll(async () => (await readWorkspaceWriteGate(page)).pendingCount).toBeGreaterThan(0)
     const writesWhileSaving = await readWorkspaceWriteGate(page)
     await switchTheme(page, 'dark')
-    await expect(saveStatus).toHaveText(/Saving to this browser\.\.\./)
+    await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     expect(await readWorkspaceWriteGate(page)).toEqual(writesWhileSaving)
     await releaseWorkspaceWriteGate(page)
-    await expect(saveStatus).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
   } finally {
     await restoreWorkspaceWriteGate(page)
   }
@@ -387,7 +386,7 @@ test('keyboard focus stays fully visible on the Fields command in short landscap
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const fieldsTrigger = page.getByRole('button', { name: 'Open field definitions' })
   await fieldsTrigger.focus()

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   clickDockAction,
   createSingleSystemWorkspace,
   setWorkspaceMapMode,
@@ -99,7 +99,7 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
   await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await undo.click()
   await expect(rotate).toHaveAttribute('aria-valuenow', String(initialRotation))
@@ -125,12 +125,12 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await expect(ring).toHaveAttribute('ry', String(initialVerticalRadius))
   await expect(resize).toBeFocused()
   await expect(undo).toBeDisabled()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await testInfo.attach('held-orbit-key-repeat', { body: await page.screenshot(), contentType: 'image/png' })
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
   await expect(undo).toBeDisabled()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await page.keyboard.up('ArrowRight')
   await expect(undo).toBeEnabled()
   await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))

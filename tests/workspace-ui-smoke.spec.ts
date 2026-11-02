@@ -7,7 +7,7 @@ import {
   exportJumpCluster,
 } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   createSingleSystemWorkspace,
   deletionReviewDialog,
   importReviewDialog,
@@ -58,7 +58,7 @@ async function importRouteFooterWorkspace(page: import('@playwright/test').Page)
   await resolveImportReview(importReviewDialog(page), 'confirm')
   await setHeaderMapActionsOpen(page, false)
   await returnToClusterMap(page)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 async function expectFooterActionToFit(

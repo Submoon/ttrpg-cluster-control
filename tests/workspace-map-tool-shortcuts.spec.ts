@@ -5,6 +5,7 @@ import {
   openWorkspaceHierarchy,
   returnToClusterMap,
   selectCatalogueObjectButton,
+  waitForWorkspaceStartup,
   workspaceZoomControls,
 } from './helpers'
 
@@ -264,6 +265,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 900, height: 720 
   test(`System Hierarchy keeps map placement and zoom controls reachable (${viewport.width}px)`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.goto('/')
+    await waitForWorkspaceStartup(page)
     await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
     await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
     await page.getByLabel('First star system').fill('Vesper')

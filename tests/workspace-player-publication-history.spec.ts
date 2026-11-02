@@ -9,7 +9,7 @@ import {
   replaceWorkspaceSystem,
 } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   captureMapExportBlobs,
   createSingleSystemWorkspace,
   downloadJson,
@@ -97,7 +97,7 @@ async function openHistoryLab(page: Page): Promise<void> {
 }
 
 async function expectSaved(page: Page): Promise<void> {
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 }
 
 test('Field publication, object masks and separate prose round-trip through real Undo, Redo and reload', async ({ page }) => {

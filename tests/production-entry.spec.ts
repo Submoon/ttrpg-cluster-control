@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback } from './helpers'
+import { waitForWorkspaceSaved } from './helpers'
 
 for (const variant of ['A', 'B', 'C', 'baseline'] as const) {
   test(`?variant=${variant} opens a persisted workspace without comparison controls`, async ({ page }) => {
@@ -12,13 +12,13 @@ for (const variant of ['A', 'B', 'C', 'baseline'] as const) {
 
     const workspaceNavigation = page.getByRole('navigation', { name: 'Map context and commands' })
     await expect(workspaceNavigation.getByRole('heading', { name: 'Lark' })).toBeVisible()
-    await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+    await waitForWorkspaceSaved(page)
     await expect(page.getByLabel('Prototype variants')).toHaveCount(0)
 
     await page.reload()
 
     await expect(workspaceNavigation.getByRole('heading', { name: 'Lark' })).toBeVisible()
-    await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+    await waitForWorkspaceSaved(page)
     await expect(page.getByLabel('Prototype variants')).toHaveCount(0)
   })
 }

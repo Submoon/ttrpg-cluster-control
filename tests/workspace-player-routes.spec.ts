@@ -10,7 +10,7 @@ import {
 } from '../domain/workspace'
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   captureMapExportBlobs,
   createSingleSystemWorkspace,
   downloadJson,
@@ -56,7 +56,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEdit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   const beforeSharing = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -74,7 +74,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   await expect(shareRoute).toBeVisible({ timeout: 5_000 })
   await shareRoute.check()
   await routeInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const appliedSharing = await downloadJson(page, 'Export Jump Cluster JSON')
   const appliedSharingRoute = appliedSharing.cluster?.routes.find(route => route.id === sourceRoute.id)
@@ -85,7 +85,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   const undoSharing = history.getByRole('button', { name: /^Undo(?:\b|:)/ })
   await expect(undoSharing).toBeEnabled()
   await undoSharing.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const undoneSharing = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(undoneSharing.cluster?.routes.find(route => route.id === sourceRoute.id)).toEqual(beforeSharingRoute)
   expect(undoneSharing.layout).toEqual(beforeSharing.layout)
@@ -93,7 +93,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   const redoSharing = history.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(redoSharing).toBeEnabled()
   await redoSharing.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const redoneSharing = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(redoneSharing.cluster?.routes.find(route => route.id === sourceRoute.id))
     .toEqual({ ...beforeSharingRoute, playerShared: true })
@@ -212,7 +212,7 @@ test('far player routes stay inspectable with local camera controls without chan
   const importReview = importReviewDialog(page)
   await expect(importReview).toContainText('Jump Routes: 1')
   await resolveImportReview(importReview, 'confirm')
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -455,7 +455,7 @@ test('player inspection shows a Jump Point Station only when both objects are Re
   const importReview = importReviewDialog(page)
   await expect(importReview).toContainText('Star systems: 1')
   await resolveImportReview(importReview, 'confirm')
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   const source = await downloadJson(page, 'Export Jump Cluster JSON')

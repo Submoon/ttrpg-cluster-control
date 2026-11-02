@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster, updateChartDetails } from '../domain/workspace'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   addClusterSystem,
   addCatalogueObject,
@@ -40,7 +41,7 @@ test('a Warden can publish a player title and open its cluster preview', async (
   await objectInspector.getByLabel('GM notes', { exact: true }).fill('Private Source Note')
   const privateLocationKey = await objectInspector.getByLabel('Location key', { exact: true }).inputValue()
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   const source = await downloadJson(page, 'Export Jump Cluster JSON')
   const privateObjectId = source.cluster?.systems[0]?.objects[0]?.id
@@ -105,7 +106,7 @@ test('desktop and compact previews render only the label allowed by each publica
     await choosePublication(edit, optionLabel)
     await edit.getByRole('button', { name: 'Apply details' }).click()
     await expect(edit).toBeHidden()
-    await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     const expectedSummary = mode === 'unknown' ? 'Unknown presence'
       : mode === 'known-type' ? 'Known type: Star system'
         : mode === 'revealed' ? 'Revealed: system name visible'
@@ -158,7 +159,7 @@ test('desktop and compact previews render only the label allowed by each publica
   await choosePublication(compactEdit, 'Unknown presence')
   await compactEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(compactEdit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const compactTrigger = compactDetails.getByRole('button', { name: 'Preview player view' })
   await compactTrigger.click()
   const compactPreview = page.getByRole('dialog', { name: 'Player view preview' })
@@ -206,7 +207,7 @@ test('publication-only chart details stay resumable, honor Stay and Discard, and
   await expect(edit.getByRole('button', { name: 'Discard and continue' })).toBeVisible()
   await edit.getByRole('button', { name: 'Discard and continue' }).click()
   await expect(edit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   const history = page.getByRole('group', { name: 'Edit history' })
   await expect(history.getByRole('button', { name: /^Undo(?:\b|:)/ })).toBeDisabled()
 
@@ -225,7 +226,7 @@ test('applying title and publication drafts uses history, survives reload and su
   await choosePublication(edit, 'Revealed')
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   let exported = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -235,7 +236,7 @@ test('applying title and publication drafts uses history, survives reload and su
   await expect(undo).toHaveAccessibleName(/Update player-facing chart details/)
 
   await undo.click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.playerTitle).toBe('Player Jump Cluster')
@@ -244,7 +245,7 @@ test('applying title and publication drafts uses history, survives reload and su
   const redo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.playerTitle).toBe('Pilgrim Reach')
@@ -317,7 +318,7 @@ test('a failed chart-details save retains the applied memory and Retry adds no h
     await expect(preview).toBeHidden()
 
     await feedback.getByRole('button', { name: 'Retry save' }).click()
-    await expect(feedback.locator('.save-feedback')).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     expect(await readWorkspaceWriteFailureCount(page)).toBe(2)
     const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:\b|:)/ })
     await expect(undo).toHaveAccessibleName(/Update player-facing chart details/)
@@ -336,7 +337,7 @@ test('public v3 JSON import preserves source publication and the destination pla
   await edit.getByLabel('Player-facing title').fill('Destination Public Title')
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
   const sourceWorkspace = createLocalWorkspace('Source Private Reach', 'Source Private System')
@@ -357,7 +358,7 @@ test('public v3 JSON import preserves source publication and the destination pla
   const review = importReviewDialog(page)
   await expect(review).toContainText('Star systems: 1')
   await resolveImportReview(review, 'confirm')
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   let exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.playerTitle).toBe('Destination Public Title')
@@ -370,7 +371,7 @@ test('public v3 JSON import preserves source publication and the destination pla
   const undo = history.getByRole('button', { name: /^Undo(?:\b|:)/ })
   await expect(undo).toHaveAccessibleName(/Import/)
   await undo.click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.playerTitle).toBe('Destination Public Title')
   expect(exported.cluster?.systems.map(system => [system.name, system.publication])).toEqual([
@@ -380,7 +381,7 @@ test('public v3 JSON import preserves source publication and the destination pla
   const redo = history.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
   exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.playerTitle).toBe('Destination Public Title')
   expect(exported.cluster?.systems[1]?.publication).toBe('revealed')

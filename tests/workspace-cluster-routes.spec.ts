@@ -1,7 +1,7 @@
 import { expect, test, campaignTest } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
-import { deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, deletionReviewDialog, importReviewDialog, resolveDeletionReview, resolveImportReview } from './helpers'
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
@@ -90,7 +90,7 @@ test('Add Jump Route retains its origin through pan and zoom, then clears both e
   await expect.poll(() => readInspectorSelection(toPoint)).toBe('')
   await expect(clusterMap.getByRole('button', { name: /Jump Level 12.*Vesper Departure.*Harrow Arrival/ }))
     .toBeVisible()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   await page.reload()
   await returnToClusterMap(page)
@@ -334,7 +334,7 @@ campaignTest('a failed route save keeps the applied route and Retry persists it 
       && route.unresolvedExit === 'The Quiet Expanse')).toHaveLength(1)
 
     await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
-    await expect(saveStatus).toHaveText('Saved on this device')
+    await waitForWorkspaceSaved(page)
     const retriedExport = await downloadJson(page, 'Export Jump Cluster JSON')
     expect(retriedExport.cluster?.routes).toHaveLength(2)
     expect(retriedExport.cluster?.routes?.filter(route => route.jumpLevel === 12

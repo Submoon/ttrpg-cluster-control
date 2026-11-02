@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   addCustomFieldThroughDialog,
   addCatalogueObject,
   createSingleSystemWorkspace,
@@ -30,7 +30,7 @@ test('a Warden can edit Player text separately from GM notes and preview only th
   await objectInspector.getByLabel('GM notes', { exact: true }).fill(gmNotesValue)
   await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
   await saveMapObject(page)
-  await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveText('Saved on this device')
+  await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const chartDetails = await openChartDetails(page)

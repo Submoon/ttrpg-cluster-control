@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import { exportJumpCluster } from '../domain/workspace'
 import { createHistoryMeasurementWorkspace } from './fixtures/history-workspace'
 import {
+  waitForWorkspaceSaved,
   activeWorkspaceFeedback, createSingleSystemWorkspace, importReviewDialog, jsonMapImportInput, openChartDetails,
   resolveImportReview, returnToClusterMap, setHeaderMapActionsOpen, setJsonFile,
 } from './helpers'
@@ -14,7 +15,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await setJsonFile(jsonMapImportInput(page), 'large-history-workspace.json', JSON.stringify(incoming))
   await resolveImportReview(importReviewDialog(page), 'confirm')
   await setHeaderMapActionsOpen(page, false)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
@@ -45,7 +46,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await expect(consent).toBeVisible()
   await consent.getByRole('button', { name: 'Continue and clear history', exact: true }).click()
   await expect(names).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await expect(mapContext.getByRole('heading', { name: 'Accepted large baseline', exact: true })).toBeVisible()
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()

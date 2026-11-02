@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { activeWorkspaceFeedback, quitSystemAdd } from './helpers'
+import { waitForWorkspaceSaved, quitSystemAdd } from './helpers'
 import { clickDockAction } from './helpers'
 import { openWorkspaceHierarchy, workspaceZoomControls, setWorkspaceMapMode, zoomOutMapToMinimum } from './helpers'
 import { dragToWorldPoint, dragHtmlElementToWorldPoint, dragOrbitToWorldPoint, editMapObject, saveMapObject, downloadImage, inspectImageSvg, selectCatalogueObjectButton } from './helpers'
@@ -177,5 +177,5 @@ test('the system map expands beyond its initial bounds and exports the full layo
   const editedPosition = await restoredPlanet.getAttribute('transform')
   expect(editedPosition).toContain('translate(')
   expect(Number(editedPosition?.match(/^translate\(([^ ]+)/)?.[1])).toBeGreaterThan(1800)
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 })

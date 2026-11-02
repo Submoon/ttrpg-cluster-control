@@ -21,7 +21,7 @@ import type { WorkspaceHistoryCapacityDetails } from '../composables/editor-work
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 import {
-  activeWorkspaceFeedback,
+  waitForWorkspaceSaved,
   addClusterSystem,
   captureMapExportBlobs,
   createSingleSystemWorkspace,
@@ -607,7 +607,7 @@ test('a reviewed JSON import can be undone and redone without changing the remap
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   await setJsonFile(jsonMapImportInput(page), 'cluster-copy.json', JSON.stringify(before))
   await resolveImportReview(importReviewDialog(page), 'confirm')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
 
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after.cluster?.systems).toHaveLength(2)
@@ -624,12 +624,12 @@ test('a reviewed JSON import can be undone and redone without changing the remap
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
   await undo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
   await expect(redo).toBeEnabled()
 
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const replayed = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(replayed).toEqual(after)
   expect([
@@ -655,18 +655,18 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   await expect(review).toBeVisible()
   await review.getByRole('button', { name: 'Confirm deletion', exact: true }).click()
   await expect(review).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
 
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await undo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(after)
 })
 
@@ -676,7 +676,7 @@ test('reviewed destructive Field change restores exact values through the editor
   await createSingleSystemWorkspace(page)
   await setJsonFile(jsonMapImportInput(page), 'falsy-fields.json', JSON.stringify(exportJumpCluster(makeFieldWorkspace())))
   await resolveImportReview(importReviewDialog(page), 'confirm')
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
   const afterImport = await downloadJson(page, 'Export Jump Cluster JSON')
   const importedSystem = afterImport.cluster!.systems[1]!
@@ -700,7 +700,7 @@ test('reviewed destructive Field change restores exact values through the editor
   await expect(review).toContainText('Threat')
   await dialog.getByRole('button', { name: 'Apply field changes', exact: true }).last().click()
   await expect(dialog.getByRole('region', { name: 'Field change review', exact: true })).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   await dialog.getByRole('button', { name: 'Close field definitions', exact: true }).click()
   await expect(dialog).toBeHidden()
   await returnToClusterMap(page)
@@ -711,10 +711,10 @@ test('reviewed destructive Field change restores exact values through the editor
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await undo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(afterImport)
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(activeWorkspaceFeedback(page).getByText('Saved on this device')).toBeVisible()
+  await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(afterChange)
 })
