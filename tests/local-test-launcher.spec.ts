@@ -146,6 +146,66 @@ test('local test readiness aborts an HTTP request that never responds @pure', { 
   expect(Date.now() - startedAt).toBeLessThan(1_000)
 })
 
+test('local test readiness retries stalled HTTP attempts within its overall deadline @pure', { tag: '@pure' }, async () => {
+  const attempts: AbortSignal[] = []
+  const response = await waitForHttpReady({
+    url: 'http://127.0.0.1:45678',
+    timeoutMs: 1_000,
+    requestTimeoutMs: 20,
+    intervalMs: 1,
+    fetchImpl: async (_url, init: RequestInit = {}) => {
+      if (!init.signal) throw new Error('Expected an owned request signal.')
+      attempts.push(init.signal)
+      if (attempts.length === 2) return new Response('ready')
+      return new Promise((_resolve, reject) => {
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true })
+      })
+    },
+  })
+  expect(response.ok).toBe(true)
+  expect(attempts).toHaveLength(2)
+  expect(attempts[0]?.aborted).toBe(true)
+})
+
+test('local test readiness reports the latest stalled attempt and preserves owner cancellation @pure', { tag: '@pure' }, async () => {
+  let attempts = 0
+  const startedAt = Date.now()
+  const result = waitForHttpReady({
+    url: 'http://127.0.0.1:45678',
+    timeoutMs: 100,
+    requestTimeoutMs: 15,
+    intervalMs: 1,
+    fetchImpl: async (_url, init: RequestInit = {}) => {
+      attempts += 1
+      if (attempts === 1) return new Response(null, { status: 503 })
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      })
+    },
+  })
+  await expect(result).rejects.toThrow('HTTP request timed out')
+  await expect(result).rejects.not.toThrow('503')
+  expect(attempts).toBeGreaterThan(2)
+  expect(Date.now() - startedAt).toBeLessThan(1_000)
+
+  const controller = new AbortController()
+  const reason = new Error('Owner stopped readiness.')
+  let cancelledAttempts = 0
+  const cancelled = waitForHttpReady({
+    url: 'http://127.0.0.1:45678',
+    timeoutMs: 1_000,
+    requestTimeoutMs: 100,
+    signal: controller.signal,
+    fetchImpl: async (_url, init: RequestInit = {}) => new Promise((_resolve, reject) => {
+      cancelledAttempts += 1
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      queueMicrotask(() => controller.abort(reason))
+    }),
+  })
+  await expect(cancelled).rejects.toBe(reason)
+  expect(cancelledAttempts).toBe(1)
+})
+
 test('interactive local runs repeat the same Playwright command on Enter and keep the latest status on q @pure', { tag: '@pure' }, async () => {
   const input = new PassThrough()
   let outputText = ''
