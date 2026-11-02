@@ -14,7 +14,7 @@ ticket_count: 7
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. Tickets 01–05 and 07 are closed, including simultaneous implementation of 05 and 07 under the user's authorization on 2026-11-02. Ticket 06 remains open, available and unclaimed. The source GitHub issue remains open; no remote write, push, PR or feature merge into main is authorized by this specification.
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. Tickets 01–05 and 07 are closed, including simultaneous implementation of 05 and 07 under the user's authorization on 2026-11-02. Ticket 06 is in progress under the user's explicit `implement` authorization on 2026-11-02. The source GitHub issue remains open; no remote write, push, PR or feature merge into main is authorized by this specification.
 
 ## Source issue
 
@@ -172,7 +172,7 @@ For later implementation: lint, typecheck, focused pure/browser failures and a p
 
 ## Out of Scope
 
-- Automatic implementation of ticket 06; pushes, PRs, remote issue edits, merges into main or source-issue closure. The separate `implement` instructions for tickets 01–05 and 07 authorize their local implementation and commits.
+- Pushes, PRs, remote issue edits, deployments, feature merges into main or source-issue closure. The separate `implement` instructions for tickets 01–07 authorize their local implementation and commits.
 - Multiple saved editable GM workspaces, simultaneous GM-tab write-conflict resolution, multiple audience profiles or per-player discovery tracking.
 - Accounts, shared map storage/database/cache, stable mutable share URLs, live updates, access revocation, link-shortening service or self-contained offline HTML app.
 - Full campaign management, journals, factions/NPCs/missions, new external/embedded note features, annotations, or a separate competing domain glossary.
@@ -189,7 +189,7 @@ The common projection seam and verification approach were already confirmed in t
 
 ### Approved Implementation Tickets
 
-The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Tickets 01–05 and 07 are closed under the user's separate implementation instructions. System/object publication, player text, Field policies/masks, shared routes and safe Station associations are implemented in the common allowlisted preview and independent player JSON reader, with player SVG/PNG exports, strict source migration and complete private backups. Ticket 06 remains open, available and unclaimed. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
+The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Tickets 01–05 and 07 are closed under the user's separate implementation instructions. System/object publication, player text, Field policies/masks, shared routes and safe Station associations are implemented in the common allowlisted preview and independent player JSON reader, with player SVG/PNG exports, strict source migration and complete private backups. Ticket 06 is in progress under the user's explicit `implement` authorization on 2026-11-02. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
 
 | Ticket | End-to-end slice | Blocked by |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ The user approved these seven end-to-end slices and their exact blocking edges t
 | 06 | [Share compressed player links with a JSON fallback](tickets/06-compressed-player-links.md) | 05 |
 | 07 | [Export player-safe SVG and PNG maps](tickets/07-player-svg-png-exports.md) | 04 |
 
-At publication the initial executable frontier was ticket 01 only. Tickets 01–05 and 07 are now closed. Ticket 06 is the sole remaining available ticket: its blocker 05 is resolved, and it remains unclaimed and unstarted. No later implementation is started automatically. Image work did not wait for JSON/URL transport: the common object/relationship scene was its prerequisite; public prose/Fields are not drawn as map imagery, so 03 was not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules. The [tickets 03/04 implementation record](tickets-03-04-implementation.md) preserves its original checks/base; the [tickets 05/07 implementation record](tickets-05-07-implementation.md) records integration with refreshed main, final checks and review closure.
+At publication the initial executable frontier was ticket 01 only. Tickets 01–05 and 07 are now closed. Ticket 06 is the remaining implementation, assigned to the coordinator under the user's explicit instruction; its blocker 05 is resolved. No later implementation is started automatically. Image work did not wait for JSON/URL transport: the common object/relationship scene was its prerequisite; public prose/Fields are not drawn as map imagery, so 03 was not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules. The [tickets 03/04 implementation record](tickets-03-04-implementation.md) preserves its original checks/base; the [tickets 05/07 implementation record](tickets-05-07-implementation.md) records integration with refreshed main, final checks and review closure.
 
 No standalone prefactor or horizontal schema/test ticket is needed: the focused projection/persistence boundaries are introduced through the first demoable preview slice. Tickets 01–04 expose only the Warden-side preview; player JSON waits for both content and relationship projection, and image sharing waits for the complete relationship scene. Each slice owns relevant privacy/compatibility checks. Run the integrated full suite once on the stable completed candidate, followed by required Sensitive reviews; do not defer individual ticket verification to an unspecified final cleanup ticket.
 

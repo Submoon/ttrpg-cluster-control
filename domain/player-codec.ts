@@ -45,7 +45,7 @@ export class PlayerDocumentError extends Error {
 
 const PLAYER_FORMAT = 'ttrpg-cluster-control-player'
 const PLAYER_VERSION = 1
-const MAX_JSON_BYTES = 4 * 1024 * 1024
+export const MAX_PLAYER_JSON_BYTES = 4 * 1024 * 1024
 const MAX_JSON_DEPTH = 64
 const MAX_TEXT_BYTES = 256 * 1024
 const MAX_SYSTEMS = 256
@@ -323,14 +323,14 @@ class SerializedJsonBudget {
 
   private addBytes(value: number): void {
     this.bytes += value
-    if (this.bytes > MAX_JSON_BYTES) tooLarge()
+    if (this.bytes > MAX_PLAYER_JSON_BYTES) tooLarge()
   }
 }
 
 /** Parses bounded UTF-8 player JSON, returning only reconstructed public DTO fields. */
 export function parsePlayerJson(text: string): PlayerClusterDocument {
   if (typeof text !== 'string') return invalidDocument()
-  if (byteLength(text) > MAX_JSON_BYTES) return tooLarge()
+  if (byteLength(text) > MAX_PLAYER_JSON_BYTES) return tooLarge()
   if (!text.trim()) return fail('empty-document')
   checkJsonDepth(text)
 
@@ -398,7 +398,7 @@ export function serializePlayerJson(document: PlayerClusterDocument): string {
   const safeDocument = restorePlayerDocument(document)
   const serialized = JSON.stringify(safeDocument)
   if (typeof serialized !== 'string') return invalidDocument()
-  if (byteLength(serialized) > MAX_JSON_BYTES) return tooLarge()
+  if (byteLength(serialized) > MAX_PLAYER_JSON_BYTES) return tooLarge()
   return serialized
 }
 

@@ -46,6 +46,9 @@ A detached snapshot of the published Jump Cluster and its permitted details and 
 **Player reader**:
 A consultation view of one player document, offering navigation and inspection without map editing or access to Warden preparation.
 
+**Player link**:
+A URL carrying one immutable player document. Generating a new link publishes a new snapshot; previously distributed links keep their own content.
+
 **Required Orbit host chain**:
 An orbital object's host and each further host in its placement ancestry. Player publication can show otherwise Hidden required hosts as Unknown presences without revealing unrelated satellites. An unoccupied Orbit center is geometry, not a physical host object.
 

@@ -45,7 +45,15 @@ For an authored unresolved exit, resolve its complete committed source geometry 
 
 Ticket 05 makes the existing player document identity and version 1 the portable JSON format, independent of source workspace version 4. The codec explicitly reconstructs allowlisted records on input and output; it validates disclosure arms, graph references, host acyclicity, required Orbits, Station associations and finite geometry. Size, depth and entity/work limits bound admission. Cumulative output accounting rejects excessive data before constructing the complete serialized string, with a final encoded-byte check retained. Public errors use fixed messages rather than supplied names, keys or parser diagnostics. A player document is never imported as an editable source workspace.
 
-The standalone `/player` route owns only the currently selected file document and its consultation resources. It never starts GM hydration, writes, recovery or history. Selecting another file invalidates pending reads and old navigation; an invalid replacement clears the previous view. File documents are not persisted: reload returns to the chooser and explains that the file must be reopened. This avoids a second storage lifecycle and keeps multiple player tabs independent while base-site tabs retain the saved GM workspace. Ticket 06 will add URL transport using the same codec; no link payload or compression is introduced here.
+The standalone `/player` route owns only its current document and consultation resources. It never starts GM hydration, writes, recovery or history. Selecting another file or replacing the URL fragment invalidates pending reads and old navigation; an invalid replacement clears the previous view. File documents are not persisted: reload returns to the chooser and explains that the file must be reopened. A player link reloads its embedded snapshot. This avoids a second storage lifecycle and keeps multiple player tabs independent while base-site tabs retain the saved GM workspace.
+
+## Immutable fragment transport
+
+Ticket 06 wraps the same allowlisted JSON codec with independently versioned gzip/base64url transport in `#player=1.gzip.<payload>`. Generation receives an explicit reader URL and never reads global location itself. Only the client reader decodes the raw fragment. HTTP requests and server hydration receive no map payload; errors use fixed messages. Player-route fragments are data rather than selectors, so a client router guard suppresses fragment scrolling there while retaining other routes' scroll behavior.
+
+The complete generated URL, including the actual host, base path and version prefix, is limited to 8,192 UTF-8 bytes. This conservative application budget is measured with native Node and Chromium compression and checked against actual browser navigation; it is not a promise that every messaging service preserves such a URL. Encoded input and compressed output are bounded before further allocation, decompressed collection uses the codec's existing 4 MiB ceiling, and the codec retains its graph/work limits. Failed admission never truncates a snapshot or falls back to the private workspace. Unsupported native compression and oversized links offer the existing player JSON action.
+
+Each link is an immutable snapshot readable and copyable by anyone holding it. A new publication requires a new link; there is no server lookup, revocation, synchronization or mutable sharing identifier. Copying uses the retained generated URL, including after source edits, rather than silently preparing another document. Generation shares the existing export preflight and applied-state ownership checks; superseding operations and reader replacements abort obsolete stream work and fence late results.
 
 ## Public image preparation and asynchronous ownership
 
@@ -55,4 +63,4 @@ The GM composition captures the requested map, workspace identity and renderer b
 
 An entirely empty player cluster cannot be distributed. A Revealed system with an empty internal map remains a valid JSON document and can be entered in the reader, while a featureless current-map image is refused. These are different artifact eligibility rules, not competing publication projections.
 
-This decision covers tickets 01–05 and 07. Compressed player links remain ticket 06.
+This decision covers tickets 01–07.

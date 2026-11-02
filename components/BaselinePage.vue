@@ -111,6 +111,9 @@
               :system-map="systemMapRef"
               :export-error="exportError"
               :player-export-error="playerExportError"
+              :generated-player-url="generatedPlayerUrl"
+              :player-link-busy="playerLinkBusy"
+              :player-link-status="playerLinkStatus"
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
@@ -128,6 +131,8 @@
               @export-map-image="downloadMapImage"
               @export-player-json="downloadPlayerJson"
               @export-player-image="downloadPlayerImage"
+              @generate-player-link="generatePlayerLink"
+              @copy-player-link="copyPlayerLink"
               @import-file="importJsonFile"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
@@ -544,6 +549,7 @@ const {
   retrySaveLatest,
   restoreBackup,
 } = useLocalWorkspace()
+const runtimeConfig = useRuntimeConfig()
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -1126,7 +1132,27 @@ async function preparePlayerExport() {
 }
 
 const playerFileExports = usePlayerFileExports({ prepare: preparePlayerExport })
-const { playerExportError, downloadPlayerJson, downloadPlayerImage } = playerFileExports
+const {
+  playerExportError,
+  generatedPlayerUrl,
+  playerLinkBusy,
+  playerLinkStatus,
+  downloadPlayerJson,
+  downloadPlayerImage,
+} = playerFileExports
+
+function generatePlayerLink(): void {
+  const baseUrl = new URL(runtimeConfig.app.baseURL, window.location.origin)
+  if (!baseUrl.pathname.endsWith('/')) baseUrl.pathname += '/'
+  baseUrl.search = ''
+  baseUrl.hash = ''
+  const readerUrl = new URL('player', baseUrl).toString()
+  void playerFileExports.generatePlayerLink(readerUrl)
+}
+
+function copyPlayerLink(): void {
+  void playerFileExports.copyPlayerLink()
+}
 
 async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promise<boolean> {
   const hasConflictingEntityDraft = existingFieldIds.some(fieldId =>

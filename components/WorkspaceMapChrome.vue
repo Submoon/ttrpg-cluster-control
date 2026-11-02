@@ -241,6 +241,13 @@
                   Export player PNG
                 </UButton>
               </div>
+              <PlayerShareControls
+                :url="props.generatedPlayerUrl"
+                :busy="props.playerLinkBusy"
+                :status="props.playerLinkStatus"
+                @generate="emit('generate-player-link')"
+                @copy="emit('copy-player-link')"
+              />
               <a class="workspace-player-reader-link" href="/player" target="_blank" rel="noopener">Open player JSON</a>
               <p v-if="props.playerExportError" class="workspace-map-export-error" role="alert">
                 {{ props.playerExportError }}
@@ -292,6 +299,7 @@ import type { SystemCreationSession } from '../composables/editor-workflows/type
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import WorkspaceSearch from './WorkspaceSearch.vue'
+import PlayerShareControls from './PlayerShareControls.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -301,6 +309,9 @@ const props = withDefaults(defineProps<{
   systemMap: MapImageExporter | null
   exportError: string
   playerExportError: string
+  generatedPlayerUrl: string
+  playerLinkBusy: boolean
+  playerLinkStatus: string
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
   compactModalOpen?: boolean
@@ -328,6 +339,8 @@ const emit = defineEmits<{
   'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
+  'generate-player-link': []
+  'copy-player-link': []
   'import-file': [event: Event]
   'show-cluster': []
   'toggle-hierarchy': []
