@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { parsePlayerJson } from '../domain/player-codec'
-import { decodePlayerShareFragment } from '../utils/player-share-link'
+import { createPlayerShareUrl, decodePlayerShareFragment } from '../utils/player-share-link'
 import {
   addCatalogueObject,
   createSingleSystemWorkspace,
@@ -125,7 +125,46 @@ function highEntropyPlayerText(length: number): string {
   return characters.join('')
 }
 
-test('a generated player link opens the exported public snapshot in a fresh reader context', async ({ browser, page }) => {
+test('long unbroken player prose stays inside the compact reader viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const playerText = 'PublicArchive'.repeat(1_000)
+  const url = await createPlayerShareUrl({
+    format: 'ttrpg-cluster-control-player',
+    version: 1,
+    title: 'Archive Reach',
+    systems: [{
+      id: 'system-1',
+      position: { x: 480, y: 280 },
+      disclosure: 'revealed',
+      type: 'star-system',
+      label: 'Archive System',
+      map: {
+        objects: [{
+          id: 'object-1',
+          position: { x: 80, y: 280 },
+          placement: { kind: 'system' },
+          disclosure: 'revealed',
+          family: 'CelestialBody',
+          subtype: 'planet',
+          label: 'Archive World',
+          playerText,
+          fields: [],
+        }],
+        orbits: [],
+      },
+    }],
+    routes: [],
+  }, new URL('/player', test.info().project.use.baseURL).href)
+  await page.goto(url)
+  await expectPlayerObject(page, 'Archive Reach', 'Archive System', 'Archive World', playerText)
+  const width = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }))
+  expect(width.document).toBeLessThanOrEqual(width.viewport)
+})
+
+test('a generated player link opens the exported public snapshot in a fresh reader context', async ({ browser, page }, testInfo) => {
   test.setTimeout(90_000)
 
   const privateClusterName = 'PRIVATE LANTERN REACH'
@@ -197,6 +236,26 @@ test('a generated player link opens the exported public snapshot in a fresh read
   await expect(playerLink).toHaveAttribute('readonly', '')
   await expect(playerLink).toHaveValue(/\S/)
   const playerUrl = await playerLink.inputValue()
+  await test.step('inspect generated link controls on desktop and compact viewports', async () => {
+    const initialViewport = page.viewportSize()
+    const controls = page.getByRole('region', { name: 'Player snapshot link', exact: true })
+    const desktopScreenshot = testInfo.outputPath('player-link-controls-desktop.png')
+    await controls.screenshot({ path: desktopScreenshot })
+    await testInfo.attach('player-link-controls-desktop', { path: desktopScreenshot, contentType: 'image/png' })
+    await page.setViewportSize({ width: 390, height: 844 })
+    const copy = controls.getByRole('button', { name: 'Copy player link', exact: true })
+    await copy.scrollIntoViewIfNeeded()
+    await expect(copy).toBeVisible()
+    const width = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }))
+    expect(width.document).toBeLessThanOrEqual(width.viewport)
+    const compactScreenshot = testInfo.outputPath('player-link-controls-compact.png')
+    await page.screenshot({ path: compactScreenshot, fullPage: true })
+    await testInfo.attach('player-link-controls-compact', { path: compactScreenshot, contentType: 'image/png' })
+    if (initialViewport) await page.setViewportSize(initialViewport)
+  })
   const parsedPlayerUrl = new URL(playerUrl)
   expect(parsedPlayerUrl.search).toBe('')
   expect(parsedPlayerUrl.hash).toMatch(/^#player=1\.gzip\.[A-Za-z0-9_-]+$/)
@@ -205,45 +264,51 @@ test('a generated player link opens the exported public snapshot in a fresh read
   const publicDocumentValues = [playerTitle, publicSystemName, publicObjectName, publicPlayerText]
   const privateCanaries = [privateClusterName, privateNotes]
 
-  const nativeJson = await page.evaluate(async (href) => {
-    const fragment = new URL(href).hash
-    const prefix = '#player=1.gzip.'
-    if (!fragment.startsWith(prefix)) throw new Error('The generated link has no versioned gzip fragment.')
-    const encoded = fragment.slice(prefix.length)
-    const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4)
-    const binary = atob(padded)
-    const compressed = Uint8Array.from(binary, character => character.charCodeAt(0))
-    const reader = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')).getReader()
-    const chunks: Uint8Array[] = []
-    let totalBytes = 0
-    try {
-      while (true) {
-        const result = await reader.read()
-        if (result.done) break
-        totalBytes += result.value.byteLength
-        if (totalBytes > 4 * 1024 * 1024) throw new Error('The decompressed player document exceeded its test bound.')
-        chunks.push(result.value)
+  await test.step('independently decompress the URL with native browser gzip', async () => {
+    const nativeJson = await page.evaluate(async (href) => {
+      const fragment = new URL(href).hash
+      const prefix = '#player=1.gzip.'
+      if (!fragment.startsWith(prefix)) throw new Error('The generated link has no versioned gzip fragment.')
+      const encoded = fragment.slice(prefix.length)
+      const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = base64 + '='.repeat((4 - base64.length % 4) % 4)
+      const binary = atob(padded)
+      const compressed = Uint8Array.from(binary, character => character.charCodeAt(0))
+      const reader = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')).getReader()
+      const chunks: Uint8Array[] = []
+      let totalBytes = 0
+      try {
+        while (true) {
+          const result = await reader.read()
+          if (result.done) break
+          totalBytes += result.value.byteLength
+          if (totalBytes > 4 * 1024 * 1024) throw new Error('The decompressed player document exceeded its test bound.')
+          chunks.push(result.value)
+        }
+      } finally {
+        reader.releaseLock()
       }
-    } finally {
-      reader.releaseLock()
-    }
-    const bytes = new Uint8Array(totalBytes)
-    let offset = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  }, playerUrl)
-  expect(nativeJson).toBe(referenceJson)
-  expect(nativeJson).not.toContain(privateClusterName)
-  expect(nativeJson).not.toContain(privateNotes)
-  expect(await decodePlayerShareFragment(rawFragment)).toEqual(referenceDocument)
+      const bytes = new Uint8Array(totalBytes)
+      let offset = 0
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset)
+        offset += chunk.byteLength
+      }
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    }, playerUrl)
+    expect(nativeJson).toBe(referenceJson)
+    expect(nativeJson).not.toContain(privateClusterName)
+    expect(nativeJson).not.toContain(privateNotes)
+  })
 
-  const recipientContext = await browser.newContext({ baseURL: new URL(page.url()).origin })
+  await test.step('production transport decoding matches the JSON export', async () => {
+    expect(await decodePlayerShareFragment(rawFragment)).toEqual(referenceDocument)
+  })
+
+  const recipientContext = await test.step('create an isolated recipient context', async () =>
+    browser.newContext({ baseURL: new URL(page.url()).origin }))
   try {
-    const recipientPage = await recipientContext.newPage()
+    const recipientPage = await test.step('open a fresh recipient tab', async () => recipientContext.newPage())
     const receivedHttpUrls: string[] = []
     const consoleMessages: Array<{ type: string; text: string }> = []
     const pageErrors: string[] = []
@@ -255,56 +320,66 @@ test('a generated player link opens the exported public snapshot in a fresh read
     })
     recipientPage.on('pageerror', error => pageErrors.push(error.message))
 
-    const response = await recipientPage.goto(playerUrl)
-    if (!response) throw new Error('The player link navigation did not receive an HTTP response.')
-    const serverRenderedHtml = await response.text()
-    expect(serverRenderedHtml).not.toContain(rawFragment)
-    expect(serverRenderedHtml).not.toContain(compressedPayload)
-    expect(serverRenderedHtml).not.toContain(referenceJson)
-    expect(serverRenderedHtml).not.toContain(encodeURIComponent(referenceJson))
-    for (const value of [...publicDocumentValues, ...privateCanaries]) {
-      expect(serverRenderedHtml).not.toContain(value)
-    }
+    const response = await test.step('navigate a fresh recipient to the fragment URL', async () => {
+      const response = await recipientPage.goto(playerUrl)
+      if (!response) throw new Error('The player link navigation did not receive an HTTP response.')
+      return response
+    })
 
-    await expect(recipientPage.getByRole('heading', { name: playerTitle, exact: true }))
-      .toBeVisible({ timeout: 30_000 })
-
-    const clusterMap = recipientPage.getByRole('region', { name: 'Player-visible Jump Cluster map' })
-    await clusterMap.getByRole('button', { name: new RegExp(`Open ${publicSystemName}`) }).click()
-    const systemMap = recipientPage.getByRole('region', { name: 'Player-visible system map' })
-    await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true }).click()
-
-    const publicDetails = systemMap.getByRole('region', { name: 'Player object details' })
-    await expect(publicDetails).toContainText(publicPlayerText)
-    await expect(recipientPage.locator('body')).not.toContainText(privateClusterName)
-    await expect(recipientPage.locator('body')).not.toContainText(privateNotes)
-
-    expect(receivedHttpUrls.length).toBeGreaterThan(0)
-    for (const requestUrl of receivedHttpUrls) {
-      const parsedRequestUrl = new URL(requestUrl)
-      expect(parsedRequestUrl.hash).toBe('')
-      expect(requestUrl).not.toContain(referenceJson)
-      expect(requestUrl).not.toContain(encodeURIComponent(referenceJson))
-      for (const value of [compressedPayload, ...publicDocumentValues, ...privateCanaries]) {
-        const encodedValue = encodeURIComponent(value)
-        expect(requestUrl).not.toContain(value)
-        expect(requestUrl).not.toContain(encodedValue)
-        expect(requestUrl).not.toContain(encodedValue.replace(/%20/g, '+'))
+    const serverRenderedHtml = await test.step('read the player route server response body', async () => response.text())
+    await test.step('verify SSR HTML excludes fragment and player document data', async () => {
+      expect(serverRenderedHtml).not.toContain(rawFragment)
+      expect(serverRenderedHtml).not.toContain(compressedPayload)
+      expect(serverRenderedHtml).not.toContain(referenceJson)
+      expect(serverRenderedHtml).not.toContain(encodeURIComponent(referenceJson))
+      for (const value of [...publicDocumentValues, ...privateCanaries]) {
+        expect(serverRenderedHtml).not.toContain(value)
       }
-    }
+    })
 
-    expect(pageErrors).toEqual([])
-    expect(consoleMessages.filter(message => /selector/i.test(message.text)))
-      .toEqual([])
-    for (const message of consoleMessages) {
-      expect(message.text).not.toContain(rawFragment)
-      expect(message.text).not.toContain(referenceJson)
-      expect(message.text).not.toContain(encodeURIComponent(referenceJson))
-      for (const value of [compressedPayload, ...publicDocumentValues, ...privateCanaries]) {
-        expect(message.text).not.toContain(value)
-        expect(message.text).not.toContain(encodeURIComponent(value))
+    await test.step('render and inspect public system, object, and prose', async () => {
+      await expect(recipientPage.getByRole('heading', { name: playerTitle, exact: true }))
+        .toBeVisible({ timeout: 30_000 })
+
+      const clusterMap = recipientPage.getByRole('region', { name: 'Player-visible Jump Cluster map' })
+      await clusterMap.getByRole('button', { name: new RegExp(`Open ${publicSystemName}`) }).click()
+      const systemMap = recipientPage.getByRole('region', { name: 'Player-visible system map' })
+      await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true }).click()
+
+      const publicDetails = systemMap.getByRole('region', { name: 'Player object details' })
+      await expect(publicDetails).toContainText(publicPlayerText)
+      await expect(recipientPage.locator('body')).not.toContainText(privateClusterName)
+      await expect(recipientPage.locator('body')).not.toContainText(privateNotes)
+    })
+
+    await test.step('check requests and diagnostics contain no fragment payload or map data', async () => {
+      expect(receivedHttpUrls.length).toBeGreaterThan(0)
+      for (const requestUrl of receivedHttpUrls) {
+        const parsedRequestUrl = new URL(requestUrl)
+        expect(parsedRequestUrl.hash).toBe('')
+        expect(requestUrl).not.toContain(referenceJson)
+        expect(requestUrl).not.toContain(encodeURIComponent(referenceJson))
+        for (const value of [compressedPayload, ...publicDocumentValues, ...privateCanaries]) {
+          const encodedValue = encodeURIComponent(value)
+          expect(requestUrl).not.toContain(value)
+          expect(requestUrl).not.toContain(encodedValue)
+          expect(requestUrl).not.toContain(encodedValue.replace(/%20/g, '+'))
+        }
       }
-    }
+
+      expect(pageErrors).toEqual([])
+      expect(consoleMessages.filter(message => /selector/i.test(message.text)))
+        .toEqual([])
+      for (const message of consoleMessages) {
+        expect(message.text).not.toContain(rawFragment)
+        expect(message.text).not.toContain(referenceJson)
+        expect(message.text).not.toContain(encodeURIComponent(referenceJson))
+        for (const value of [compressedPayload, ...publicDocumentValues, ...privateCanaries]) {
+          expect(message.text).not.toContain(value)
+          expect(message.text).not.toContain(encodeURIComponent(value))
+        }
+      }
+    })
   } finally {
     await recipientContext.close()
   }

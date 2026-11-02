@@ -332,6 +332,11 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   min-width: 0;
 }
 
+.player-system-object-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .player-system-map-navigation {
   display: flex;
   flex-wrap: wrap;
