@@ -29,7 +29,7 @@ test('free object placement is chosen on the map instead of with coordinate fiel
 
   const hierarchy = await openWorkspaceHierarchy(page)
   await setWorkspaceMapMode(page, 'Move')
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
 
   const dock = workspaceNavigation(page)
   const placement = dock.getByRole('button', { name: 'Placement', exact: true })
@@ -115,7 +115,7 @@ test('map movement commits independently while object changes stay in their draf
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   const hierarchy = await openWorkspaceHierarchy(page)
   await setWorkspaceMapMode(page, 'Move')
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
   const initial = await downloadJson(page, 'Export star system JSON')
@@ -203,7 +203,7 @@ test('an Orbit object metadata draft survives map moves, relationship transfers,
   const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
   const map = page.getByRole('group', { name: 'Session Lab star system map', exact: true })
   await setWorkspaceMapMode(page, 'Move')
-  await hierarchy.getByRole('button', { name: /^Select PL-01, Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select PL-01, Iria/ }).click()
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const placement = workspaceNavigation(page).getByRole('button', { name: 'Placement', exact: true })
@@ -362,7 +362,7 @@ test('a refused free placement move leaves visible feedback and restores reachab
 
   const map = page.getByRole('group', { name: 'Session Lab star system map', exact: true })
   await setWorkspaceMapMode(page, 'Move')
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   await editMapObject(page)
   await selectInspectorOption(inspector.getByLabel('Placement', { exact: true }), 'Orbit 1 around Distant Star')

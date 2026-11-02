@@ -367,6 +367,7 @@ export function useClusterWorkflows({
         || target.closest('input, textarea, select, [contenteditable="true"]')
       ))
       || saveState.value === 'saving'
+      || store.searchOpen
       || chartNamesDialogOpen.value
       || fieldDefinitionDialogOpen.value
     ) return

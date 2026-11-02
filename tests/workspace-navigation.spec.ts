@@ -93,16 +93,16 @@ test('reselecting the current object or Orbit reopens Inspect without changing t
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   const hierarchy = await openWorkspaceHierarchy(page)
-  const orbit = hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ })
+  const orbit = hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ })
   await orbit.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ })).toHaveAttribute('aria-current', 'true')
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ })).toHaveAttribute('aria-current', 'true')
 
   await inspectToggle.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
   await orbit.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ })).toHaveAttribute('aria-current', 'true')
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ })).toHaveAttribute('aria-current', 'true')
 })
 
 test('Navigate opens a system while Select keeps the cluster map active and inspects system data', async ({ page }) => {
@@ -231,7 +231,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await page.getByRole('group', { name: 'Vesper star system map' }).getByRole('button', { name: starLabel }).click()
   const firstHierarchy = await openWorkspaceHierarchy(page)
-  const firstStar = firstHierarchy.getByRole('button', { name: hierarchyStarLabel })
+  const firstStar = firstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })
   await expect(firstStar).toHaveAttribute('aria-current', 'true')
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
@@ -256,7 +256,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
   const restoredFirstHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredFirstHierarchy.getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  await expect(restoredFirstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', firstSystemViewport!)
 
@@ -267,7 +267,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await clusterMapAfterReturn.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   const restoredSecondHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredSecondHierarchy.getByRole('button', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  await expect(restoredSecondHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', secondSystemViewport!)
 })
 

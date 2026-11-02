@@ -137,7 +137,7 @@ test('compact object Add keeps closed Inspect closed and reopens selected editab
 test('Stay keeps a dirty object draft and does not publish or select a new object Add', async ({ page }) => {
   await createSingleSystemWorkspace(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
@@ -149,7 +149,7 @@ test('Stay keeps a dirty object draft and does not publish or select a new objec
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toBeHidden()
-  await expect(hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true })).toHaveAttribute('aria-current', 'true')
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
   await expect(page.getByRole('group', { name: 'Vesper star system map', exact: true }).locator('.system-object')).toHaveCount(1)
   await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toBeVisible()

@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+@source not "../../docs/";
+@source not "../../.scratch/";
+@source not "../../.agents/";
+@source not "../../README.md";
+@source not "../../AGENTS.md";
+@source not "../../CONTEXT.md";
+@source not "../../GLOSSARY.md";
+
 :root {
   color-scheme: light;
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;

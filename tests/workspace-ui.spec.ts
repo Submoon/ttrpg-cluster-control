@@ -322,7 +322,7 @@ test('panel toggles preserve the active mode and Delete remains safe while editi
   await expect(inspector).toBeVisible()
   await expect(move).toHaveAttribute('aria-pressed', 'true')
 
-  const primaryStar = hierarchy.getByRole('button', { name: 'Select A, Primary Star' })
+  const primaryStar = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' })
   await primaryStar.click()
   await editMapObject(page)
   const nameInput = page.getByLabel('Name', { exact: true })

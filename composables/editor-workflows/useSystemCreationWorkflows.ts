@@ -46,6 +46,7 @@ interface SystemCreationWorkflowOptions {
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   resolveObjectCreationTransition: () => Promise<boolean>
   beforeWorkspaceOperation?: () => Promise<boolean>
+  isSearchContextChangeHeld?: () => boolean
   onObjectCreated: (objectId: string) => Promise<void>
 }
 
@@ -95,6 +96,7 @@ export function useSystemCreationWorkflows({
   isEntityCommandBlocked,
   resolveObjectCreationTransition,
   beforeWorkspaceOperation = async () => true,
+  isSearchContextChangeHeld = () => false,
   onObjectCreated,
 }: SystemCreationWorkflowOptions) {
   const store = useEditorUiStore()
@@ -107,8 +109,18 @@ export function useSystemCreationWorkflows({
 
   watch(
     [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
-    () => { explicitObjectOrbitPreference = null },
+    () => {
+      if (!isSearchContextChangeHeld()) explicitObjectOrbitPreference = null
+    },
   )
+
+  function captureSearchContextCleanup(): (() => void) | null {
+    const sessionId = creationSession.value?.id
+    if (sessionId === undefined) return null
+    return () => {
+      if (creationSession.value?.id === sessionId) quitAdd()
+    }
+  }
 
   function setError(key: string, message: string): void {
     if (!creationSession.value) return
@@ -886,6 +898,7 @@ export function useSystemCreationWorkflows({
     addCreationFromInputs,
     cancelCreationPreview,
     quitAdd,
+    captureSearchContextCleanup,
     pruneTargetsAfterDeletion,
   }
 }

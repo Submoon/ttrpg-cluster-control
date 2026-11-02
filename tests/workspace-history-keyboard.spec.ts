@@ -452,7 +452,7 @@ test('a nested Inspector USelect listbox owns Ctrl+Z while open', async ({ page 
   await expect(undo).toBeEnabled()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await editMapObject(page)
   const designation = page.getByLabel('Signal designation', { exact: true })
   await designation.click()

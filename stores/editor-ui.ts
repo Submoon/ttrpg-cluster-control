@@ -27,6 +27,8 @@ export const useEditorUiStore = defineStore('editor-ui', {
     workspaceId: null as string | null,
     ...emptySelection(),
     mapMode: 'select' as MapInteractionMode,
+    searchOpen: false,
+    searchQuery: '',
     hierarchyPanelOpen: false,
     inspectorPanelOpen: true,
     compactPanel: null as WorkspacePanel | null,
@@ -41,6 +43,12 @@ export const useEditorUiStore = defineStore('editor-ui', {
     /** Applies the accepted interaction tool after any pending workflow has been resolved. */
     setMode(mode: MapInteractionMode): void {
       this.mapMode = mode
+    },
+    setSearchOpen(open: boolean): void {
+      this.searchOpen = open
+    },
+    setSearchQuery(query: string): void {
+      this.searchQuery = query
     },
     requestPanel(panel: WorkspacePanel): void {
       this.lastRequestedPanel = panel
@@ -85,6 +93,8 @@ export const useEditorUiStore = defineStore('editor-ui', {
         workspaceId,
         ...emptySelection(),
         mapMode: 'select' as const,
+        searchOpen: false,
+        searchQuery: '',
         hierarchyPanelOpen: false,
         inspectorPanelOpen: true,
         compactPanel: null,

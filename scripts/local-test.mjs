@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import process from 'node:process'
@@ -8,6 +8,9 @@ import { StringDecoder } from 'node:string_decoder'
 import { createInterface } from 'node:readline/promises'
 import { resolve, dirname, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { openBrowserReadiness as openBrowserReadinessDefault } from './local-browser-readiness.mjs'
+import { createLocalSourceMonitor as createLocalSourceMonitorDefault } from './local-source-monitor.mjs'
+import { isPureOnlySelection } from './playwright-selection.mjs'
 
 const defaultPort = 3100
 const serverReadinessTimeoutMs = 300_000
@@ -19,6 +22,8 @@ const defaultHost = '127.0.0.1'
 /** @typedef {{ code?: number | null, signal?: NodeJS.Signals | null, error?: Error }} ServerExit */
 /** @typedef {{ code?: number | null, signal?: NodeJS.Signals | null, error?: Error, timedOut?: boolean }} ChildCloseResult */
 /** @typedef {{ write: (value: string) => void, close: () => Promise<void> }} LogWriter */
+/** @typedef {{ invalidated: Promise<string>, close: () => Promise<void> | void }} BrowserReadinessResource */
+/** @typedef {{ invalidated: Promise<string>, check: () => Promise<string | undefined>, close: () => Promise<void> }} LocalSourceMonitor */
 /** @typedef {{
  * url: string,
  * fetchImpl?: typeof globalThis.fetch,
@@ -38,6 +43,9 @@ const defaultHost = '127.0.0.1'
  * writeStdout?: (value: string) => void,
  * writeStderr?: (value: string) => void,
  * createLogWriter?: (path: string) => Promise<LogWriter>,
+ * openBrowserReadiness?: (options: { url: string, timeoutMs: number, signal: AbortSignal, channel?: string }) => Promise<BrowserReadinessResource>,
+ * createSourceMonitor?: (options: { rootDirectory: string }) => Promise<LocalSourceMonitor>,
+ * prepareOutputDirectory?: (path: string) => Promise<void>,
  * checkPortAvailable?: (port: number) => Promise<void>,
  * stopProcessTree?: (child: LocalChildProcess, options: { platform: NodeJS.Platform, spawnProcess: ProcessSpawner }) => Promise<void>,
  * readinessTimeoutMs?: number,
@@ -165,6 +173,9 @@ export function createLocalTestSession({
   writeStdout = value => process.stdout.write(value),
   writeStderr = value => process.stderr.write(value),
   createLogWriter = createFileLogWriter,
+  openBrowserReadiness = openBrowserReadinessDefault,
+  createSourceMonitor = createLocalSourceMonitorDefault,
+  prepareOutputDirectory = path => mkdir(path, { recursive: true }),
   checkPortAvailable = assertPortAvailable,
   stopProcessTree = stopOwnedProcessTree,
   readinessTimeoutMs = serverReadinessTimeoutMs,
@@ -189,6 +200,17 @@ export function createLocalTestSession({
   let testProcess
   let started = false
   let closed = false
+  let pureOnly = false
+  /** @type {string | undefined} */
+  let readinessFailure
+  /** @type {string | undefined} */
+  let sourceFailure
+  /** @type {BrowserReadinessResource | undefined} */
+  let browserReadiness
+  /** @type {LocalSourceMonitor | undefined} */
+  let sourceMonitor
+  /** @type {AbortController | undefined} */
+  let activeReadinessAbort
   /** @type {ServerExit | undefined} */
   let serverFailure
   let runNumber = 0
@@ -200,11 +222,36 @@ export function createLocalTestSession({
   const serverExit = new Promise(resolveExit => { resolveServerExit = resolveExit })
   /** @type {Promise<void>} */
   const serverAnnouncement = new Promise(resolveAnnouncement => { resolveServerAnnouncement = resolveAnnouncement })
+  /** @type {() => void} */
+  let resolveSessionClosed
+  const sessionClosed = new Promise(resolveClosed => { resolveSessionClosed = resolveClosed })
 
   const noteServerExit = detail => {
     if (serverFailure) return
     serverFailure = detail
     resolveServerExit(detail)
+  }
+
+  const reportInvalidResult = async (reason, jsonReportPath, cleanupError) => {
+    let reportDetail = ' No Playwright report was produced because the test child had not started.'
+    if (jsonReportPath) {
+      const invalidationPath = resolve(dirname(jsonReportPath), 'local-result-invalidated.json')
+      try {
+        await writeFile(invalidationPath, `${JSON.stringify({
+          kind: 'invalidated',
+          reason,
+          playwrightJsonReport: relative(root, jsonReportPath),
+          recordedAt: new Date(now()).toISOString(),
+          cleanupError: cleanupError?.message,
+        }, null, 2)}\n`, { flag: 'wx' })
+        reportDetail = ` Playwright JSON report: ${relative(root, jsonReportPath)}. Invalidation record: ${relative(root, invalidationPath)}.`
+      } catch (error) {
+        reportDetail = ` Playwright JSON report: ${relative(root, jsonReportPath)}. Could not write the invalidation record: ${error.message}.`
+      }
+    }
+    const cleanupDetail = cleanupError ? ` Could not stop the Playwright child cleanly: ${cleanupError.message}.` : ''
+    writeStderr(`Local Playwright result is invalid because ${reason} Rerun after the inputs are stable.${cleanupDetail}${reportDetail}\n`)
+    return 1
   }
 
   return {
@@ -214,11 +261,30 @@ export function createLocalTestSession({
     artifactDirectory,
     serverExit,
 
-    async start() {
+    async start(args = []) {
       if (started) throw new Error('Local test server has already been started.')
       if (closed) throw new Error('Local test session is already closed.')
+      pureOnly = isPureOnlySelection(args)
+      const startupMonitor = await createSourceMonitor({ rootDirectory: root })
+      sourceMonitor = startupMonitor
+      if (closed) {
+        await startupMonitor.close()
+        sourceMonitor = undefined
+        throw new Error('Local test session was closed before verification could start.')
+      }
+      sourceFailure = await startupMonitor.check()
+      if (closed) throw new Error('Local test session was closed before verification could start.')
+      if (sourceFailure) throw invalidRunError(sourceFailure, logRelativePath)
+      if (pureOnly) {
+        started = true
+        writeStdout('Pure Playwright project selected; no local server or browser readiness probe is needed.\n')
+        return
+      }
       await checkPortAvailable(port)
       if (closed) throw new Error('Local test session was closed before the server could start.')
+      sourceFailure = await startupMonitor.check()
+      if (closed) throw new Error('Local test session was closed before the server could start.')
+      if (sourceFailure) throw invalidRunError(sourceFailure, logRelativePath)
       await mkdir(artifactDirectory, { recursive: true })
       if (closed) throw new Error('Local test session was closed before the server could start.')
       logWriter = await createLogWriter(logPath)
@@ -257,6 +323,7 @@ export function createLocalTestSession({
       teeServerStream(serverProcess.stderr, writeStderr, logWriter, secrets, observeStartupOutput)
 
       const abortReadiness = new AbortController()
+      activeReadinessAbort = abortReadiness
       try {
         const deadline = now() + readinessTimeoutMs
         await Promise.race([
@@ -280,26 +347,108 @@ export function createLocalTestSession({
             abortReadiness.abort(new Error('The development server exited before becoming ready.'))
             throw serverExitError(detail, logRelativePath)
           }),
+          startupMonitor.invalidated.then(reason => {
+            sourceFailure = reason
+            abortReadiness.abort(new Error(reason))
+            throw invalidRunError(reason, logRelativePath)
+          }),
+          sessionClosed.then(() => {
+            abortReadiness.abort(new Error('Local test session was closed.'))
+            throw new Error('Local test session was closed while the development server was starting.')
+          }),
         ])
       } catch (error) {
         throw new Error(`Could not start the local development server. ${error.message} Server log: ${logRelativePath}`, { cause: error })
       } finally {
         abortReadiness.abort()
+        activeReadinessAbort = undefined
+      }
+
+      sourceFailure = await startupMonitor.check()
+      if (closed) throw new Error('Local test session was closed before browser readiness could start.')
+      if (sourceFailure) throw invalidRunError(sourceFailure, logRelativePath)
+      const browserAbort = new AbortController()
+      activeReadinessAbort = browserAbort
+      const readinessPromise = Promise.resolve().then(() => {
+        if (closed) throw new Error('Local test session was closed before browser readiness could start.')
+        return openBrowserReadiness({
+          url: baseURL,
+          timeoutMs: readinessTimeoutMs,
+          signal: browserAbort.signal,
+          channel: env.PLAYWRIGHT_CHANNEL || undefined,
+        })
+      }).then(async resource => {
+        if (closed || sourceFailure || readinessFailure) {
+          await resource.close()
+          throw new Error(sourceFailure ?? readinessFailure ?? 'Local test session was closed.')
+        }
+        browserReadiness = resource
+        void resource.invalidated.then(reason => { readinessFailure ??= reason })
+        return resource
+      })
+      try {
+        await Promise.race([
+          readinessPromise,
+          startupMonitor.invalidated.then(reason => {
+            sourceFailure = reason
+            browserAbort.abort(new Error(reason))
+            throw invalidRunError(reason, logRelativePath)
+          }),
+          serverExit.then(detail => {
+            browserAbort.abort(new Error('The development server exited before browser readiness completed.'))
+            throw serverExitError(detail, logRelativePath)
+          }),
+          sessionClosed.then(() => {
+            browserAbort.abort(new Error('Local test session was closed.'))
+            throw new Error('Local test session was closed while browser readiness was pending.')
+          }),
+        ])
+        sourceFailure = await startupMonitor.check()
+        if (closed) throw new Error('Local test session was closed while browser readiness was pending.')
+        if (sourceFailure) throw invalidRunError(sourceFailure, logRelativePath)
+        if (readinessFailure) throw invalidRunError(readinessFailure, logRelativePath)
+      } catch (error) {
+        browserAbort.abort(error)
+        if (browserReadiness) {
+          await browserReadiness.close()
+          browserReadiness = undefined
+        }
+        if (sourceFailure || readinessFailure) throw invalidRunError(sourceFailure ?? readinessFailure, logRelativePath)
+        throw new Error(`Could not verify the local application before Playwright started. ${error.message} Server log: ${logRelativePath}`, { cause: error })
+      } finally {
+        activeReadinessAbort = undefined
       }
       writeStdout(`Local development server ready at ${baseURL}\nServer log: ${logRelativePath}\n`)
     },
 
     async runTest(args) {
       if (!started || closed) throw new Error('Local test session is not running.')
-      if (!serverProcess) throw new Error('Local development server has not started.')
-      if (serverFailure || hasExited(serverProcess)) {
+      const monitor = sourceMonitor
+      if (!monitor) throw new Error('Local source monitor has not started.')
+      if (sourceFailure) return reportInvalidResult(sourceFailure, undefined)
+      if (readinessFailure) return reportInvalidResult(readinessFailure, undefined)
+      sourceFailure = await monitor.check()
+      if (closed) throw new Error('Local test session was closed while preparing the Playwright run.')
+      if (sourceFailure) return reportInvalidResult(sourceFailure, undefined)
+      if (readinessFailure) return reportInvalidResult(readinessFailure, undefined)
+      if (!pureOnly && !serverProcess) throw new Error('Local development server has not started.')
+      if (!pureOnly && (serverFailure || hasExited(serverProcess))) {
         throw serverExitError(serverFailure ?? { code: serverProcess.exitCode, signal: serverProcess.signalCode }, logRelativePath)
       }
       runNumber += 1
       const childEnvironment = { ...env }
       delete childEnvironment.PLAYWRIGHT_PRODUCTION_URL
-      childEnvironment.PLAYWRIGHT_BASE_URL = baseURL
-      childEnvironment.PLAYWRIGHT_OUTPUT_DIR = resolve(artifactDirectory, `playwright-run-${runNumber}`)
+      if (!pureOnly) childEnvironment.PLAYWRIGHT_BASE_URL = baseURL
+      const outputDirectory = resolve(artifactDirectory, `playwright-run-${runNumber}`)
+      const jsonReportPath = resolve(outputDirectory, 'results.json')
+      await prepareOutputDirectory(outputDirectory)
+      if (closed) throw new Error('Local test session was closed while preparing the Playwright run.')
+      sourceFailure = await monitor.check()
+      if (closed) throw new Error('Local test session was closed while preparing the Playwright run.')
+      if (sourceFailure) return reportInvalidResult(sourceFailure, undefined)
+      if (readinessFailure) return reportInvalidResult(readinessFailure, undefined)
+      childEnvironment.PLAYWRIGHT_OUTPUT_DIR = outputDirectory
+      childEnvironment.PLAYWRIGHT_JSON_OUTPUT_NAME = jsonReportPath
       const child = spawnProcess(process.execPath, [playwrightCli, 'test', ...args], {
         cwd: root,
         env: childEnvironment,
@@ -309,16 +458,40 @@ export function createLocalTestSession({
       })
       testProcess = child
       const testExit = waitForChildClose(child)
-      const outcome = await Promise.race([
+      const races = [
         testExit.then(result => ({ kind: 'test', result })),
-        serverExit.then(detail => ({ kind: 'server', detail })),
-      ])
+        monitor.invalidated.then(reason => ({ kind: 'invalid', reason })),
+        browserReadiness?.invalidated.then(reason => ({ kind: 'invalid', reason })) ?? new Promise(() => {}),
+        ...(pureOnly ? [] : [serverExit.then(detail => ({ kind: 'server', detail }))]),
+      ]
+      const outcome = await Promise.race(races)
+      if (closed) throw new Error('Local test session was closed while the Playwright run was active.')
+      if (outcome.kind === 'invalid') {
+        const currentSourceFailure = await monitor.check()
+        if (closed) throw new Error('Local test session was closed while the Playwright run was active.')
+        if (outcome.reason === sourceFailure || currentSourceFailure) sourceFailure ??= outcome.reason
+        else readinessFailure ??= outcome.reason
+        let cleanupError
+        if (!hasExited(child)) {
+          try {
+            await stopProcessTree(child, { platform, spawnProcess })
+          } catch (error) {
+            cleanupError = error
+          }
+        }
+        if (hasExited(child)) testProcess = undefined
+        return reportInvalidResult(outcome.reason, jsonReportPath, cleanupError)
+      }
       if (outcome.kind === 'server') {
         if (!hasExited(child)) await stopProcessTree(child, { platform, spawnProcess })
         testProcess = undefined
         throw serverExitError(outcome.detail, logRelativePath)
       }
       testProcess = undefined
+      sourceFailure = await monitor.check()
+      if (closed) throw new Error('Local test session was closed while the Playwright run was active.')
+      const resultInvalidation = sourceFailure ?? readinessFailure
+      if (resultInvalidation) return reportInvalidResult(resultInvalidation, jsonReportPath)
       if (outcome.result.error) {
         writeStderr(`Could not launch Playwright: ${outcome.result.error.message}\n`)
         return 1
@@ -329,7 +502,20 @@ export function createLocalTestSession({
     async close() {
       if (closed) return
       closed = true
+      activeReadinessAbort?.abort(new Error('Local test session was closed.'))
+      resolveSessionClosed()
       const cleanupErrors = []
+      for (const resource of [sourceMonitor, browserReadiness]) {
+        if (resource) {
+          try {
+            await resource.close()
+          } catch (error) {
+            cleanupErrors.push(error)
+          }
+        }
+      }
+      sourceMonitor = undefined
+      browserReadiness = undefined
       for (const child of [testProcess, serverProcess]) {
         if (child && !hasExited(child)) {
           try {
@@ -442,7 +628,7 @@ export async function main(args = process.argv.slice(2)) {
   })
 
   const execute = (async () => {
-    await session.start()
+    await session.start(args)
     if (!interactive) return session.runTest(args)
     return runInteractiveSession(session, args, {
       onInterface: active => { readline = active },
@@ -484,7 +670,8 @@ Each run has its own Playwright output directory; Nuxt output is saved under
 test-results/local-test-<timestamp>-<pid>/server.log.
 
 Examples:
-  npm run test:local -- --project=browser tests/workspace-ui-smoke.spec.ts
+  npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser
+  npm run test:local -- tests/local-test-launcher.spec.ts --project=pure
   npm run test:local -- --grep "route placement"
 `
 
@@ -607,6 +794,11 @@ function serverExitError(detail, logPath) {
     ? detail.error.message
     : `code ${detail.code ?? 'unknown'}${detail.signal ? `, signal ${detail.signal}` : ''}`
   return new Error(`The owned development server exited (${status}). See ${logPath}.`)
+}
+
+/** @param {string} reason @param {string} logPath */
+function invalidRunError(reason, logPath) {
+  return new Error(`Local verification was invalidated because ${reason} Rerun after the inputs are stable. Server log: ${logPath}.`)
 }
 
 /** @param {LocalChildProcess | undefined} child */

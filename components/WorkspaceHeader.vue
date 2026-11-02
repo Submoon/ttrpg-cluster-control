@@ -1,25 +1,37 @@
 <template>
-  <header class="workspace-header" :inert="props.compactModalOpen ? true : undefined">
-    <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
-      <span class="workspace-header-mark" aria-hidden="true">✦</span>
-      <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
-    </div>
-
-    <section v-if="workspace" class="workspace-header-cluster" aria-label="Current Jump Cluster">
-      <span class="workspace-header-eyebrow">Current Jump Cluster</span>
-      <h1>{{ workspace.cluster.name }}</h1>
-    </section>
-
-    <div class="workspace-header-utilities">
-      <div class="workspace-header-theme" role="group" aria-label="Theme">
-        <ColorScheme>
-          <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
-        </ColorScheme>
-        <UColorModeButton class="theme-control-toggle workspace-control" />
+  <UDashboardNavbar
+    as="header"
+    :toggle="false"
+    class="workspace-header"
+    :ui="{ center: 'workspace-header-center' }"
+    :inert="props.compactModalOpen ? true : undefined"
+  >
+    <template #left>
+      <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
+        <span class="workspace-header-mark" aria-hidden="true">✦</span>
+        <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
       </div>
-      <slot name="field-definitions" />
-    </div>
-  </header>
+    </template>
+
+    <template #default>
+      <section v-if="workspace" class="workspace-header-cluster" aria-label="Current Jump Cluster">
+        <span class="workspace-header-eyebrow">Current Jump Cluster</span>
+        <h1>{{ workspace.cluster.name }}</h1>
+      </section>
+    </template>
+
+    <template #right>
+      <div class="workspace-header-utilities">
+        <div class="workspace-header-theme" role="group" aria-label="Theme">
+          <ColorScheme>
+            <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
+          </ColorScheme>
+          <UColorModeButton class="theme-control-toggle workspace-control" />
+        </div>
+        <slot name="field-definitions" />
+      </div>
+    </template>
+  </UDashboardNavbar>
 </template>
 
 <script setup lang="ts">
@@ -42,9 +54,10 @@ const colorMode = useColorMode()
 </script>
 
 <style scoped>
-.workspace-header {
+:global(.workspace-header) {
   position: relative;
   z-index: 20;
+  height: auto;
   display: flex;
   min-width: 0;
   min-height: 3.5rem;
@@ -55,6 +68,17 @@ const colorMode = useColorMode()
   padding: 0.55rem clamp(0.75rem, 1.8vw, 1.5rem);
   background: var(--panel);
   color: var(--text-primary);
+}
+
+:global(.workspace-header [data-slot="center"]) {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+:global(.workspace-header [data-slot="right"]) {
+  min-width: 0;
 }
 
 .workspace-header-brand,
@@ -130,10 +154,20 @@ const colorMode = useColorMode()
 }
 
 @media (max-width: 760px), (max-height: 600px) {
-  .workspace-header {
+  :global(.workspace-header) {
     flex-wrap: wrap;
     gap: 0.45rem 0.65rem;
     padding: 0.45rem 0.6rem;
+  }
+
+  :global(.workspace-header [data-slot="center"]) {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  :global(.workspace-header [data-slot="right"]) {
+    flex: 0 1 auto;
   }
 
   .workspace-header-brand {
