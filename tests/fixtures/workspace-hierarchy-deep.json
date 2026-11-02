@@ -1,0 +1,102 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 1,
+  "type": "system",
+  "system": {
+    "id": "deep-hierarchy-readability-system",
+    "name": "Deep Readability Atlas",
+    "objects": [
+      {
+        "id": "deep-hierarchy-primary-star",
+        "family": "CelestialBody",
+        "subtype": "star",
+        "locationKey": "A",
+        "name": "Primary Star",
+        "description": "",
+        "placement": { "kind": "system", "x": 0.5, "y": 0.5 }
+      },
+      {
+        "id": "deep-hierarchy-planet-one",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL-01",
+        "name": "New planet 1 — Luminous Reach",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-primary-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-planet-two",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL-02",
+        "name": "New planet 2 — Outer Garden",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-primary-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-moon-one",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO-01",
+        "name": "New moon 1 — Pale Harbor",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-planet-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-moon-two",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO-02",
+        "name": "New moon 2 — Quiet Meridian",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-moon-one-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-moon-three",
+        "family": "CelestialBody",
+        "subtype": "moon",
+        "locationKey": "MO-03",
+        "name": "New moon 3 — Survey Station",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-moon-two-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-planet-six",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL-06-ICE-BELT-09",
+        "name": "New planet 6 — Icebound Outer Observatory",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-moon-three-orbit" }
+      },
+      {
+        "id": "deep-hierarchy-planet-seven",
+        "family": "CelestialBody",
+        "subtype": "planet",
+        "locationKey": "PL-07",
+        "name": "New planet 7 — Far Lantern",
+        "description": "",
+        "placement": { "kind": "orbit", "orbitId": "deep-hierarchy-moon-three-orbit" }
+      }
+    ],
+    "orbits": [
+      { "id": "deep-hierarchy-primary-orbit", "hostId": "deep-hierarchy-primary-star", "order": 1 },
+      { "id": "deep-hierarchy-planet-orbit", "hostId": "deep-hierarchy-planet-one", "order": 1 },
+      { "id": "deep-hierarchy-moon-one-orbit", "hostId": "deep-hierarchy-moon-one", "order": 1 },
+      { "id": "deep-hierarchy-moon-one-empty-orbit", "hostId": "deep-hierarchy-moon-one", "order": 2 },
+      { "id": "deep-hierarchy-moon-two-orbit", "hostId": "deep-hierarchy-moon-two", "order": 1 },
+      { "id": "deep-hierarchy-moon-three-orbit", "hostId": "deep-hierarchy-moon-three", "order": 1 }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": ["Breathable", "Unbreathable", "Vacuum"],
+    "portClassOptions": ["Class I", "Class II", "Class III"],
+    "customFields": []
+  },
+  "layout": {
+    "version": 1,
+    "orbitRadii": {},
+    "orbitRotations": {},
+    "objectAngles": {}
+  }
+}

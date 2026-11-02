@@ -44,6 +44,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
   const systemMoveOrigin = ref<{ clusterId: string; systemId: string; position: Point } | null>(null)
   const nextPreviewToken = ref(0)
   let pendingSystemMoveToken: number | null = null
+  let clusterAddIntentId = 0
   const clusterAddError = computed(() => formError.value)
   const clusterSystemMoveError = computed(() => systemMoveError.value)
   const clusterMoveTargeting = computed(() => store.activeView === 'cluster'
@@ -81,6 +82,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
   function armSystemAdd(): void {
     if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
+    clusterAddIntentId += 1
     clusterAddType.value = 'system'
     clearErrors()
     clusterMapRef.value?.focusMap?.()
@@ -89,14 +91,25 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
   function armRouteAdd(): void {
     if (!workspace.value || store.activeView !== 'cluster') return
     cancelSystemMovePreview()
+    clusterAddIntentId += 1
     clusterAddType.value = 'route'
     clearErrors()
   }
 
   function quitClusterAdd(): void {
+    clusterAddIntentId += 1
     cancelSystemMovePreview()
     clusterAddType.value = null
     clearErrors()
+  }
+
+  function captureSearchContextCleanup(): (() => void) | null {
+    const intent = clusterAddType.value
+    if (!intent) return null
+    const intentId = clusterAddIntentId
+    return () => {
+      if (clusterAddIntentId === intentId && clusterAddType.value === intent) quitClusterAdd()
+    }
   }
 
   function pointOverlapsSystem(
@@ -418,6 +431,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
     armSystemAdd,
     armRouteAdd,
     quitClusterAdd,
+    captureSearchContextCleanup,
     addSystemAt,
     beginClusterSystemMapMove,
     previewSystemMoveAt,

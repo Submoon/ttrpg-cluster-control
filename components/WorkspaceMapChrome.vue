@@ -1,12 +1,14 @@
 <template>
-  <nav
+  <UDashboardToolbar
     v-if="workspace"
+    as="nav"
     class="workspace-map-chrome"
+    :ui="{ left: 'workspace-map-context', right: 'workspace-map-actions' }"
     aria-label="Map context and commands"
     data-map-obstruction
     :inert="props.compactModalOpen ? true : undefined"
   >
-    <div class="workspace-map-context">
+    <template #left>
       <div class="workspace-map-context-line">
         <div class="workspace-map-title">
           <UButton
@@ -76,10 +78,18 @@
       <p v-else-if="props.clusterMovePresentation?.error" class="workspace-add-error" role="alert">
         {{ props.clusterMovePresentation.error }}
       </p>
-    </div>
+    </template>
 
-    <div class="workspace-map-actions">
+    <template #right>
       <slot name="history" />
+      <WorkspaceSearch
+        ref="workspaceSearch"
+        v-model:open="searchOpen"
+        v-model:query="searchQuery"
+        :results="props.searchResults"
+        :reveal="props.revealSearchTarget"
+        :can-open-search-shortcut="props.canOpenSearchShortcut"
+      />
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
           class="workspace-control"
@@ -225,8 +235,8 @@
           </div>
         </template>
       </UPopover>
-    </div>
-  </nav>
+    </template>
+  </UDashboardToolbar>
 </template>
 
 <script setup lang="ts">
@@ -234,6 +244,8 @@ import { computed, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { SearchResult, SearchTarget } from '../utils/workspace-search'
+import WorkspaceSearch from './WorkspaceSearch.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -249,6 +261,11 @@ const props = withDefaults(defineProps<{
   creationTypeLabel?: string
   clusterAddPresentation?: { label: string; status: string; error?: string } | null
   clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
+  canOpenSearchShortcut: () => boolean
+  searchResults: readonly SearchResult[]
+  revealSearchTarget: (target: SearchTarget) => Promise<
+    { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
+  >
 }>(), {
   hierarchyOpen: false,
   inspectorOpen: false,
@@ -273,6 +290,9 @@ const emit = defineEmits<{
 }>()
 
 const headerMapActionsOpen = ref(false)
+const searchOpen = defineModel<boolean>('searchOpen', { required: true })
+const searchQuery = defineModel<string>('searchQuery', { required: true })
+const workspaceSearch = ref<InstanceType<typeof WorkspaceSearch> | null>(null)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -295,6 +315,10 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
   : `star system ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
+
+function whenSearchClosingFocusSettled(): Promise<void> {
+  return workspaceSearch.value?.whenClosingFocusSettled() ?? Promise.resolve()
+}
 
 watch(headerMapActionsOpen, open => emit('files-open-change', open))
 watch(() => props.compactModalOpen, open => {
@@ -325,15 +349,18 @@ function openJsonImportPicker(): void {
   importFileInput.value?.click()
   headerMapActionsOpen.value = false
 }
+
+defineExpose({ whenSearchClosingFocusSettled })
 </script>
 
 <style scoped>
-.workspace-map-chrome {
+:global(.workspace-map-chrome) {
   position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 0.65rem;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 0.35rem;
   padding: 0.5rem 0.65rem;
@@ -341,7 +368,7 @@ function openJsonImportPicker(): void {
   color: var(--text-primary);
 }
 
-.workspace-map-context {
+:global(.workspace-map-chrome .workspace-map-context) {
   display: grid;
   min-width: 0;
   flex: 1 1 9rem;
@@ -357,7 +384,7 @@ function openJsonImportPicker(): void {
   text-transform: uppercase;
 }
 
-.workspace-map-context h2 {
+:global(.workspace-map-chrome .workspace-map-context h2) {
   min-width: 0;
   max-width: min(32vw, 28rem);
   flex: 0 1 auto;
@@ -410,7 +437,7 @@ function openJsonImportPicker(): void {
   overflow-wrap: anywhere;
 }
 
-.workspace-map-actions,
+:global(.workspace-map-chrome .workspace-map-actions),
 .workspace-map-panel-actions {
   display: flex;
   min-width: 0;
@@ -419,7 +446,7 @@ function openJsonImportPicker(): void {
   gap: 0.3rem;
 }
 
-.workspace-map-actions {
+:global(.workspace-map-chrome .workspace-map-actions) {
   justify-content: flex-end;
 }
 
@@ -482,22 +509,22 @@ function openJsonImportPicker(): void {
 }
 
 @media (max-width: 760px), (max-height: 600px) {
-  .workspace-map-chrome {
+  :global(.workspace-map-chrome) {
     flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0.4rem 0.5rem;
   }
 
-  .workspace-map-context {
+  :global(.workspace-map-chrome .workspace-map-context) {
     flex: 1 1 8rem;
   }
 
-  .workspace-map-context h2 {
+  :global(.workspace-map-chrome .workspace-map-context h2) {
     max-width: min(52vw, 20rem);
     font-size: 0.9rem;
   }
 
-  .workspace-map-actions {
+  :global(.workspace-map-chrome .workspace-map-actions) {
     width: 100%;
     justify-content: space-between;
   }

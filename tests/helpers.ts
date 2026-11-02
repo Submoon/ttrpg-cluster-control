@@ -1233,7 +1233,7 @@ export async function completeCatalogueObjectCreation(
   if (!options.noSelection && !options.preserveDraft) {
     const hierarchy = await openWorkspaceHierarchy(page)
     const generatedType = subtype.toLowerCase() === 'jump-point' ? 'jump point' : subtype
-    const createdObject = hierarchy.getByRole('button', { name: new RegExp(`New ${escapeRegExp(generatedType)}`, 'i') }).last()
+    const createdObject = hierarchy.getByRole('treeitem', { name: new RegExp(`New ${escapeRegExp(generatedType)}`, 'i') }).last()
     await expect(createdObject).toBeVisible()
     await createdObject.click()
   }
@@ -1248,7 +1248,7 @@ async function defaultCatalogueCreationTarget(
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   if (await hierarchy.count() > 0) {
-    const selected = hierarchy.locator('button[aria-current="true"]')
+    const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
     if (await selected.count() > 0) {
       const selectedLabel = await selected.first().getAttribute('aria-label') ?? await selected.first().innerText()
       const orbitLabel = selectedLabel.replace(/\s+/g, ' ').match(/Orbit \d+ around .+?(?=, \d+ objects?$|$)/i)?.[0]
@@ -1298,7 +1298,7 @@ export async function completeOrbitCreation(
   if (!options.noSelection && !options.preserveDraft) {
     const hierarchy = await openWorkspaceHierarchy(page)
     const hostLabel = target.kind === 'host' ? target.name : 'unoccupied center'
-    const createdOrbit = hierarchy.getByRole('button', {
+    const createdOrbit = hierarchy.getByRole('treeitem', {
       name: new RegExp(`^Orbit \\d+ around ${escapeRegExp(hostLabel)}`, 'i'),
     }).last()
     await expect(createdOrbit).toBeVisible()
@@ -1315,7 +1315,7 @@ async function defaultOrbitCreationTarget(
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   if (await hierarchy.count() > 0) {
-    const selected = hierarchy.locator('button[aria-current="true"]')
+    const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
     if (await selected.count() > 0) {
       const selectedLabel = (await selected.first().getAttribute('aria-label') ?? await selected.first().innerText())
         .replace(/\s+/g, ' ')

@@ -44,12 +44,12 @@ async function createHostedOrbit(page: Page): Promise<{
 }> {
   await createWorkspace(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true })
   await expect(orbit).toBeVisible()
-  await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ }).click()
   await closeVisiblePanels(page)
   await page.getByRole('button', { name: 'Fit map', exact: true }).click()
   return {
@@ -79,7 +79,7 @@ async function createFreeOrbitWithPassenger(page: Page): Promise<{
   await expect(passenger).toBeVisible()
   const ring = orbit.locator('.orbit-ring')
   await expect(ring).toHaveAttribute('ry', '112')
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
@@ -304,7 +304,7 @@ async function cameraOnlyRightPanAndSecondTouch(
 test('Escape restores an Orbit ring drag before its late mouse release', async ({ page }) => {
   await createWorkspace(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
 
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
@@ -312,7 +312,7 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
   const ring = orbit.locator('.orbit-ring')
   const orbitTarget = orbit.locator('.orbit-hit-target')
   await expect(orbit).toBeVisible()
-  await hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ }).click()
   await closeVisiblePanels(page)
   await page.getByRole('button', { name: 'Fit map', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')

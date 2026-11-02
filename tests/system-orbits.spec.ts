@@ -169,7 +169,7 @@ test('dragging an Orbit ring scales both axes and the system caption stays conci
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   const map = page.getByRole('group', { name: 'Vesper star system map' })
   await dragHtmlElementToWorldPoint(
     page,
@@ -278,11 +278,11 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect.poll(async () =>
     Math.abs(Number(await ring.getAttribute('cy')) - dropPoint.y),
   ).toBeLessThan(1)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }))
     .toBeVisible()
 
   await quitSystemAdd(page)
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await setWorkspaceMapMode(page, 'Move')
   const centerHandle = orbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
@@ -323,14 +323,14 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Binary A')
   await saveMapObject(page)
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center/ }).click()
   await addCatalogueObject(page, 'star', {
     target: { kind: 'orbit', label: 'Orbit 1 around unoccupied center', angleDegrees: 180 },
   })
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Binary B')
   await saveMapObject(page)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 2 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 2 objects/ }))
     .toBeVisible()
   const binaryATransform = await map.getByRole('button', { name: /Binary A/ }).getAttribute('transform')
   const binaryBTransform = await map.getByRole('button', { name: /Binary B/ }).getAttribute('transform')
@@ -383,7 +383,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
     .toBeCloseTo(firstAngle, 2)
   const angleBeforeResize = await ellipticalOrbitAngle(map, orbitLabel, 'Binary A')
   const secondAngleBeforeResize = await ellipticalOrbitAngle(map, orbitLabel, 'Binary B')
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center/ }).click()
   const horizontalHandle = orbit.locator('.orbit-axis-handle--horizontal')
   const verticalHandle = orbit.locator('.orbit-axis-handle--vertical')
   await expect(horizontalHandle).toBeVisible()
@@ -814,7 +814,7 @@ test('the Warden can edit, save, export, and import an elliptical Orbit around a
   await expect(restoredRing).toHaveAttribute('rx', String(resizedHorizontalRadius))
   await expect(restoredRing).toHaveAttribute('ry', String(resizedVerticalRadius))
   await expect.poll(() => orbitRotationDegrees(restoredRing)).toBeCloseTo(finalRotation, 4)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 3 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 3 objects/ }))
     .toBeVisible()
   await expect.poll(() => ellipticalOrbitAngle(restoredMap, orbitLabel, 'Binary A'))
     .toBeCloseTo(angleBeforeResize, 2)
@@ -891,7 +891,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   await clickNormalizedSystemPoint(page, map, { x: 0.24, y: 0.31 })
   await quitSystemAdd(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  const orbitItem = hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ })
+  const orbitItem = hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ })
   await orbitItem.click()
   const orbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })
   const ring = orbit.locator('.orbit-ring')
@@ -998,7 +998,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
 
   const hierarchy = await openWorkspaceHierarchy(page)
   const map = page.getByRole('group', { name: 'Vesper star system map' })
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await addCatalogueObject(page, 'planet', {
     target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
@@ -1007,7 +1007,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
 
-  await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
   await addCatalogueObject(page, 'moon', {
     target: { kind: 'orbit', label: 'Orbit 1 around Iria' },
@@ -1016,9 +1016,9 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   await page.getByLabel('Name', { exact: true }).fill('Nix')
   await saveMapObject(page)
 
-  await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
-  await expect(hierarchy.getByRole('button', { name: /Orbit 2 around Iria, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 2 around Iria, 0 objects/ }))
     .toBeVisible()
 
   const hostedOrbitLabel = 'Orbit 1 around Iria'
@@ -1033,15 +1033,15 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
     vertical: Number(await hostedRing.getAttribute('ry')),
   }
   const angleBeforeDetach = await ellipticalOrbitAngle(map, hostedOrbitLabel, 'Nix')
-  await hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 1 object/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 1 object/ }).click()
   await page.getByRole('button', { name: 'Detach Orbit', exact: true }).click()
 
   const detachedOrbitLabel = 'Orbit 1 around unoccupied center'
   const detachedOrbit = map.getByRole('group', { name: detachedOrbitLabel })
   const detachedRing = detachedOrbit.locator('.orbit-ring')
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 1 object/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 1 object/ }))
     .toBeVisible()
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()
   await expect(page.getByRole('button', { name: 'Detach Orbit', exact: true })).toHaveCount(0)
   await expect(detachedRing).toHaveAttribute('rx', String(originalRadii.horizontal))
@@ -1103,7 +1103,7 @@ test('the Warden can detach a hosted Orbit and move its unoccupied center', asyn
   await expect.poll(async () =>
     Math.abs(Number(await restoredRing.getAttribute('cy')) - persistedCenter.y),
   ).toBeLessThan(0.01)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Iria, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()
   await expect.poll(() => ellipticalOrbitAngle(restoredMap, detachedOrbitLabel, 'Nix'))
     .toBeCloseTo(angleBeforeDetach, 2)
@@ -1116,7 +1116,7 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   await addCatalogueObject(page, 'planet', {
     target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
@@ -1124,7 +1124,7 @@ test('an object drag keeps its hosted Orbit with it before release', async ({ pa
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
-  await hierarchy.getByRole('button', { name: /Select PL-01, Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Iria' } })
   await addCatalogueObject(page, 'moon', {
     target: { kind: 'orbit', label: 'Orbit 1 around Iria' },
@@ -1172,7 +1172,7 @@ test('dragging Add Orbit onto a map object hosts it there', async ({ page }) => 
     (window as DragPreviewWindow).__nativeDragTypes?.slice(-1)[0],
   )
   expect(orbitDragTypes).toContain('application/x-ttrpg-cluster-control-map-orbit')
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star, 0 objects/ }))
     .toBeVisible()
   const ring = map.getByRole('group', { name: 'Orbit 1 around Primary Star' }).locator('.orbit-ring')
   await expect.poll(async () =>
@@ -1217,7 +1217,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await setWorkspaceMapMode(page, 'Move')
   const centerHandle = unoccupiedOrbit.locator('.orbit-center-handle')
   await expect(centerHandle).toBeVisible()
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
@@ -1253,7 +1253,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   await inspectorToggle.click()
   await expect(inspectorPanel).toBeHidden()
   await expect(radiusNotice).toBeVisible()
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 0 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star, 0 objects/ }))
     .toBeVisible()
 
   await inspectorToggle.click()
@@ -1269,7 +1269,7 @@ test('dropping an existing unoccupied Orbit center onto an object raises too-sma
   const smallOrbitId = await smallOrbit.getAttribute('data-orbit-id')
   await expect(smallOrbit).toBeVisible()
   await quitSystemAdd(page)
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('16')
@@ -1438,7 +1438,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
     .toHaveText(starPreviewText)
 
   await quitSystemAdd(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
   await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
   const addPlanet = await selectCatalogueObjectButton(page, 'planet')
   const planetMark = (await addPlanet.locator('.object-mark').textContent())?.trim() ?? ''
@@ -1454,7 +1454,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   await expect(mapObjects).toHaveCount(objectsBeforePlanetDrop + 1)
   await expect(mapObjects.nth(objectsBeforePlanetDrop).locator('.system-object-glyph'))
     .toHaveText(planetPreviewText)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 1 object/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star, 1 object/ }))
     .toBeVisible()
 
   await quitSystemAdd(page)
@@ -1465,7 +1465,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
     target: { kind: 'orbit', label: 'Orbit 1 around Primary Star', angleDegrees: 45 },
     noSelection: true,
   })
-  const systemPlanet = hierarchy.getByRole('button', { name: /Select PL-02, New planet 2/ })
+  const systemPlanet = hierarchy.getByRole('treeitem', { name: /Select PL-02, New planet 2/ })
   await expect(systemPlanet).toBeVisible()
   await expect(systemPlanet.locator('.object-mark')).toHaveText('◉')
   await setWorkspaceMapMode(page, 'Move')
@@ -1474,7 +1474,7 @@ test('object palette drag previews match placed marks and preserve map, Orbit, a
   const secondPlanetDropPoint = { x: 592, y: 280 }
   await ensureMapDragPointsReachable(page, map, secondPlanetTarget, secondPlanetDropPoint)
   await dragToWorldPoint(page, map, secondPlanetTarget, secondPlanetDropPoint)
-  await expect(hierarchy.getByRole('button', { name: /Orbit 1 around Primary Star, 2 objects/ }))
+  await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star, 2 objects/ }))
     .toBeVisible()
 
   const addHazard = await selectCatalogueObjectButton(page, 'hazard')

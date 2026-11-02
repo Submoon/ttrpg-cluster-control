@@ -29,9 +29,9 @@ test('same-kind object switches keep Inspector labels attached to the selected c
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
 
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Primary Star')
-  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select .*Iria/ }).click()
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Iria')
 })
 
@@ -67,7 +67,7 @@ test('native and custom single-select options can store the literal unset token'
 
   await page.reload()
   await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: /Select .*Iria/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Select .*Iria/ }).click()
   expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('__not_recorded__')
   expect(await readInspectorSelection(page.getByLabel('Signal designation', { exact: true }))).toBe('__not_recorded__')
 
@@ -86,7 +86,7 @@ test('an object inspector keeps its draft across Hide and offers persistent Appl
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   const footerActions = inspector.locator('.entity-inspector-footer-actions')
@@ -121,7 +121,7 @@ test('an object inspector keeps its draft across Hide and offers persistent Appl
   await expect(inspector.getByLabel('Name')).toHaveValue('Primary Star, edited')
   await expect(apply).toBeEnabled()
   await apply.click()
-  await expect(hierarchy.getByRole('button', { name: 'Select A, Primary Star, edited', exact: true })).toBeVisible()
+  await expect(hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star, edited', exact: true })).toBeVisible()
 })
 
 test('an Orbit Inspector applies rotation and numeric geometry without position fields', async ({ page }) => {
@@ -141,7 +141,7 @@ test('an Orbit Inspector applies rotation and numeric geometry without position 
   await quitSystemAdd(page)
   await setWorkspaceMapMode(page, 'Select')
 
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   const inspector = page.locator('.entity-inspector[aria-label="Orbit inspector"]')
   const footerActions = inspector.locator('.entity-inspector-footer-actions')
   await expect(footerActions.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
@@ -214,7 +214,7 @@ test('the Orbit Inspector footer stays visible and hittable after its body scrol
   await expect(map.getByRole('group', { name: 'Orbit 1 around unoccupied center' })).toBeVisible()
   await quitSystemAdd(page)
   await setWorkspaceMapMode(page, 'Select')
-  await hierarchy.getByRole('button', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ }).click()
   await page.getByRole('button', { name: 'Edit Orbit' }).click()
   await page.getByRole('spinbutton', { name: 'Rotation', exact: true }).fill('13')
 
