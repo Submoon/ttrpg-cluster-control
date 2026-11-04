@@ -75,12 +75,26 @@
         @click="openSystem(system)"
         @keydown="event => openSystemFromKeyboard(event, system)"
       >
-        <circle :cx="system.position.x" :cy="system.position.y" r="18" />
-        <text
-          v-if="system.disclosure !== 'unknown'"
-          :x="system.position.x + labelOffset.x"
-          :y="system.position.y + labelOffset.y"
-        >{{ system.label }}</text>
+        <g class="player-cluster-map-marker-geometry" aria-hidden="true">
+          <circle :cx="system.position.x" :cy="system.position.y" r="18" />
+          <text
+            v-if="system.disclosure !== 'unknown'"
+            :x="system.position.x + labelOffset.x"
+            :y="system.position.y + labelOffset.y"
+          >{{ system.label }}</text>
+        </g>
+        <rect
+          v-if="system.disclosure === 'revealed' && markerHitBoundsFor(system.id)"
+          class="player-cluster-map-marker-hit-target"
+          :x="markerHitBoundsFor(system.id)?.x"
+          :y="markerHitBoundsFor(system.id)?.y"
+          :width="markerHitBoundsFor(system.id)?.width"
+          :height="markerHitBoundsFor(system.id)?.height"
+          fill="transparent"
+          stroke="none"
+          pointer-events="all"
+          aria-hidden="true"
+        />
       </g>
     </svg>
     <ul v-if="props.document.systems.length" class="sr-only" aria-label="Visible marker labels">
@@ -102,6 +116,14 @@ const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
 const geometry = computed(() => playerClusterGeometry(props.document))
 const routeGeometries = computed(() => geometry.value.routes)
+interface MarkerHitBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const markerHitBounds = ref<ReadonlyMap<string, MarkerHitBounds>>(new Map())
 const contentBounds = computed(() => ({
   left: geometry.value.bounds.minX,
   top: geometry.value.bounds.minY,
@@ -146,9 +168,16 @@ const {
 
 let resizeObserver: ResizeObserver | null = null
 
-watch(() => props.document, resetViewport, { flush: 'post' })
+watch(() => props.document, () => {
+  resetViewport()
+  measureMarkerHitBounds()
+}, { flush: 'post' })
+watch(() => props.active, active => {
+  if (active) measureMarkerHitBounds()
+}, { flush: 'post' })
 onMounted(() => {
   measureViewport()
+  measureMarkerHitBounds()
   if (typeof ResizeObserver !== 'undefined' && mapElement.value) {
     resizeObserver = new ResizeObserver(measureViewport)
     resizeObserver.observe(mapElement.value)
@@ -157,6 +186,38 @@ onMounted(() => {
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const labelOffset = { x: 28, y: 7 }
+
+function markerHitBoundsFor(systemId: string): MarkerHitBounds | undefined {
+  return markerHitBounds.value.get(systemId)
+}
+
+/** Measures only public marker artwork; the hit rectangle never participates in map fitting/export. */
+function measureMarkerHitBounds(): void {
+  const svg = mapElement.value
+  if (!svg || svg.getClientRects().length === 0) return
+
+  const systemsById = new Map(props.document.systems.map(system => [system.id, system]))
+  const measured = new Map<string, MarkerHitBounds>()
+  for (const marker of svg.querySelectorAll<SVGGElement>('.player-cluster-map-marker[data-player-system-id]')) {
+    const systemId = marker.dataset.playerSystemId
+    const system = systemId ? systemsById.get(systemId) : undefined
+    if (!system || system.disclosure !== 'revealed') continue
+
+    const visibleGeometry = marker.querySelector<SVGGElement>('.player-cluster-map-marker-geometry')
+    if (!visibleGeometry) continue
+
+    const bounds = visibleGeometry.getBBox()
+    if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
+      || bounds.width <= 0 || bounds.height <= 0) continue
+    measured.set(system.id, {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    })
+  }
+  markerHitBounds.value = measured
+}
 
 function measureViewport(): void {
   const svg = mapElement.value
