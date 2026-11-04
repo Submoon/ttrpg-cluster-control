@@ -68,7 +68,11 @@
               maxlength="80"
             />
           </UFormField>
-          <UFormField label="How players see this object" :error="fieldError('publication')">
+          <UFormField
+            label="How players see this object"
+            description="The parent system must be Revealed before players can open its map."
+            :error="fieldError('publication')"
+          >
             <USelect
               :id="controlId('publication')"
               :model-value="objectDraft.publication"

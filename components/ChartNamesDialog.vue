@@ -56,7 +56,12 @@
             <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
           </template>
         </UFormField>
-        <UFormField label="How players see this system" :error="publicationError || undefined" class="grid gap-1.5">
+        <UFormField
+          label="How players see this system"
+          description="Only Revealed systems can be opened by players. Publishing an object does not reveal its parent system."
+          :error="publicationError || undefined"
+          class="grid gap-1.5"
+        >
           <USelect
             id="chart-dialog-publication"
             v-model="publication"

@@ -1,6 +1,6 @@
 ---
 title: Full-page player reader presentation
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -22,7 +22,7 @@ Fit only the live camera to public bounds and measured viewport size, with a max
 
 ## System opening clarification
 
-The approved rule remains that only a Revealed system includes an internal public map and can open; a Known type child alone does not open its parent. The user has been asked through the integrated mechanism whether to keep this rule with clearer guidance or also allow anonymous Known type systems to open. No disclosure rule changes before that answer. UI work proceeds independently.
+The user confirmed through the integrated mechanism on 2026-11-04: keep opening limited to Revealed systems and make this requirement clearer. A Known type child alone does not open its parent. The system publication dialog and Warden chart summary explain the parent gate and independent object settings; the object publication control also identifies its parent prerequisite. No disclosure behavior changes.
 
 ## Verification
 
@@ -58,6 +58,16 @@ Production evidence is supplied by exact-candidate CI rather than another local 
 
 ### Delivery and limits
 
-The player workspace is implemented on PR #39, with no source-format, disclosure-policy or GM-data change. The required system-level Revealed gate is retained. The integrated question about anonymous Known type system exploration has not received an answer; it is a separate pending product choice, not implicitly approved by this presentation change. Existing Known type snapshots still omit their internal maps. With the current rule, mark the parent system Revealed and generate a new snapshot to consult its published objects.
+The player workspace is implemented on PR #39, with no source-format, disclosure-policy or GM-data change. The user reaffirmed the system-level Revealed gate; anonymous Known type system exploration is not requested. Existing Known type snapshots still omit their internal maps. Mark the parent system Revealed and generate a new snapshot to consult its published objects.
 
 Review corrections have no remaining code findings; focused runtime evidence is recorded above. Full CI status remains a publication check to follow on the PR. The PR stays a draft, and no merge or source-issue closure is performed. The pre-existing `.codex/environments/` is untouched.
+
+### Confirmed opening guidance
+
+The copy-only clarification starts from `0335b1193f8a7e724f30aecce7b43087c5972dd8`; refreshed origin/main remains `47c0418a835da285e9edb88e8f8dffc19c3a2bba`, 24 ahead and zero behind. Help text appears beside both publication controls and in the Warden chart summary. The existing player hierarchy already explains that a Known type system's internal map is not shared. No model, projection, migration or navigation command changes are needed. Relevant existing browser journeys, lint and types qualify the wording and compact layout; no new test is added for static text.
+
+## Resolution
+
+The full-page read-only presentation and requested publication guidance are implemented. The user reaffirmed the existing opening rule; no product-choice question remains pending. The clarification passed affected lint, full-source incremental types, Markdown links, and two existing publication browser journeys covering system and object modes on desktop/compact views (**2/2**, 34.4 seconds, zero retries). Evidence: `player-gate-guidance-ui.log`, owned `local-test-2026-11-04T13-34-24-366Z-34584/playwright-run-1`.
+
+Presentation qualification remains the 21/21 browser matrix, pure checks, targeted prose replay and production evidence recorded above. Complete CI remains the PR's publication gate; local closure does not merge the draft or close GitHub #9.
