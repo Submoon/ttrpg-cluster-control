@@ -169,6 +169,9 @@ test('the standalone player workspace fills desktop view while preserving read-o
   await expect(page.locator('html')).toHaveClass(/\bdark\b/)
   const clusterDark = await clusterScene.evaluate(element => getComputedStyle(element).backgroundColor)
   expect(clusterDark).not.toBe(clusterLight)
+  const darkScreenshot = testInfo.outputPath('player-workspace-desktop-dark.png')
+  await page.screenshot({ path: darkScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-desktop-dark', { path: darkScreenshot, contentType: 'image/png' })
   await theme.getByRole('button', { name: /switch to light mode/i }).click()
   await expect(page.locator('html')).toHaveClass(/\blight\b/)
 
@@ -261,7 +264,7 @@ test('the standalone player workspace fills desktop view while preserving read-o
   const delivery = await measureMouseDrag(page, dragStart, {
     x: dragStart.x + 24,
     y: dragStart.y + 18,
-  })
+  }, { eventFamily: 'pointer' })
   const deliveredDelta = coordinates.fromClient(delivery.up)
   const startingDelta = coordinates.fromClient(delivery.down)
   const expectedLeft = viewBeforePan.left - (deliveredDelta.x - startingDelta.x)
@@ -305,9 +308,9 @@ test('compact player panels switch exclusively, preserve map focus, and scroll l
   await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
   await hierarchyToggle.click()
-  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
   const clusterHierarchyPanel = page.getByRole('dialog', { name: 'Player hierarchy', exact: true })
   await expect(clusterHierarchyPanel).toBeVisible()
+  await expect(clusterHierarchyPanel.getByRole('button', { name: 'Hierarchy', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await clusterHierarchyPanel.getByRole('button', {
     name: `${systemName} Open shared system map`,
     exact: true,
@@ -344,10 +347,10 @@ test('compact player panels switch exclusively, preserve map focus, and scroll l
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
 
   await hierarchyToggle.click()
-  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
   const hierarchyPanel = page.getByRole('dialog', { name: 'Player hierarchy', exact: true })
   const detailsPanel = page.getByRole('dialog', { name: 'Player details', exact: true })
   await expect(hierarchyPanel).toBeVisible()
+  await expect(hierarchyPanel.getByRole('button', { name: 'Hierarchy', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(detailsPanel).toBeHidden()
   const hierarchy = hierarchyPanel.getByRole('region', { name: 'Visible system hierarchy', exact: true })
   await expect(hierarchy).toBeVisible()
@@ -358,7 +361,7 @@ test('compact player panels switch exclusively, preserve map focus, and scroll l
   await hierarchyPanel.getByRole('button', { name: 'Inspect', exact: true }).click()
   await expect(hierarchyPanel).toBeHidden()
   await expect(detailsPanel).toBeVisible()
-  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(detailsPanel.getByRole('button', { name: 'Hierarchy', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'true')
   const details = detailsPanel.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toContainText(publicPlayerText)

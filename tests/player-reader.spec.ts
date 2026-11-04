@@ -206,10 +206,14 @@ test('the player reader keeps file selection disabled until its client is ready'
   try {
     await page.goto('/player', { waitUntil: 'commit' })
     const playerFileInput = page.getByLabel('Open player JSON', { exact: true })
-    await expect(playerFileInput).toBeVisible()
+    const openPlayerButton = page.getByRole('button', { name: 'Open player JSON', exact: true })
+    await expect(openPlayerButton).toBeVisible()
+    await expect(openPlayerButton).toBeDisabled()
+    await expect(playerFileInput).toBeHidden()
     await expect(playerFileInput).toBeDisabled()
 
     scriptGate.release()
+    await expect(openPlayerButton).toBeEnabled({ timeout: 30_000 })
     await expect(playerFileInput).toBeEnabled({ timeout: 30_000 })
 
     const workspace = createLocalWorkspace('Private readiness workspace', 'Readiness Vesper')

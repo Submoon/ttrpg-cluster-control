@@ -385,6 +385,7 @@ function closeActivePanel(): void {
   display: block;
   min-width: 0;
   min-height: 0;
+  border: 0;
 }
 
 .player-workspace-map-region > :deep(.player-cluster-map .player-cluster-map-scene) {

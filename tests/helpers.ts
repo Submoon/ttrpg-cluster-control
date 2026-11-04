@@ -265,11 +265,12 @@ type MouseDragProbeWindow = Window & {
   }
 }
 
-/** Drives a six-step native mouse drag and returns the captured window-level input points. */
+/** Drives native mouse input; use pointer events when a surface suppresses compatibility mouse events. */
 export async function measureMouseDrag(
   page: import('@playwright/test').Page,
   start: ScreenPoint,
   end: ScreenPoint,
+  options: { eventFamily?: 'mouse' | 'pointer' } = {},
 ): Promise<MouseDragDelivery> {
   const requestedStart = { x: Math.round(start.x), y: Math.round(start.y) }
   const requestedEnd = { x: Math.round(end.x), y: Math.round(end.y) }
@@ -283,13 +284,15 @@ export async function measureMouseDrag(
 
   try {
     observerMayBeInstalled = true
-    await page.evaluate((id) => {
+    await page.evaluate(({ id, eventFamily }) => {
       const probeWindow = window as MouseDragProbeWindow
       if (probeWindow.__testMouseDragProbe) {
         throw new Error('A native mouse drag probe is already active.')
       }
 
       const events: Array<{ type: 'down' | 'up'; x: number; y: number }> = []
+      const downEvent = eventFamily === 'pointer' ? 'pointerdown' : 'mousedown'
+      const upEvent = eventFamily === 'pointer' ? 'pointerup' : 'mouseup'
       const recordDown = (event: MouseEvent) => {
         events.push({ type: 'down', x: event.clientX, y: event.clientY })
       }
@@ -297,13 +300,13 @@ export async function measureMouseDrag(
         events.push({ type: 'up', x: event.clientX, y: event.clientY })
       }
       const cleanup = () => {
-        window.removeEventListener('mousedown', recordDown, true)
-        window.removeEventListener('mouseup', recordUp, true)
+        window.removeEventListener(downEvent, recordDown, true)
+        window.removeEventListener(upEvent, recordUp, true)
       }
       probeWindow.__testMouseDragProbe = { id, events, cleanup }
-      window.addEventListener('mousedown', recordDown, true)
-      window.addEventListener('mouseup', recordUp, true)
-    }, probeId)
+      window.addEventListener(downEvent, recordDown, true)
+      window.addEventListener(upEvent, recordUp, true)
+    }, { id: probeId, eventFamily: options.eventFamily ?? 'mouse' })
 
     await page.mouse.move(requestedStart.x, requestedStart.y)
     mouseMayBeDown = true
