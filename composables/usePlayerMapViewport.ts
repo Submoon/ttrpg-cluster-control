@@ -1,12 +1,6 @@
 /** Owns temporary camera state and mounted-map input for a read-only player map. */
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-
-export interface PlayerMapSceneBounds {
-  left: number
-  top: number
-  width: number
-  height: number
-}
+import type { PlayerMapSceneBounds } from '../utils/player-map-fit'
 
 interface PanGesture {
   pointerId: number

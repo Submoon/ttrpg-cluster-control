@@ -68,6 +68,7 @@
         :key="system.id"
         class="player-cluster-map-marker"
         :class="`player-cluster-map-marker--${system.disclosure}`"
+        :data-player-system-id="system.id"
         :role="system.disclosure === 'revealed' ? 'button' : 'group'"
         :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} system preview` : system.label"
         :tabindex="system.disclosure === 'revealed' ? 0 : undefined"
@@ -94,21 +95,22 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/workspace'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerClusterGeometry } from '../utils/player-cluster-geometry'
+import { fitPlayerMapToViewport } from '../utils/player-map-fit'
 
 const props = withDefaults(defineProps<{ document: PlayerClusterDocument; active?: boolean }>(), { active: true })
 const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
 const geometry = computed(() => playerClusterGeometry(props.document))
 const routeGeometries = computed(() => geometry.value.routes)
-const bounds = computed(() => geometry.value.bounds)
-const fittedBounds = computed(() => ({
-  left: bounds.value.minX,
-  top: bounds.value.minY,
-  width: bounds.value.width,
-  height: bounds.value.height,
+const contentBounds = computed(() => ({
+  left: geometry.value.bounds.minX,
+  top: geometry.value.bounds.minY,
+  width: geometry.value.bounds.width,
+  height: geometry.value.bounds.height,
 }))
 const mapElement = ref<SVGSVGElement | null>(null)
 const viewportSize = ref({ width: 960, height: 560 })
+const fittedBounds = computed(() => fitPlayerMapToViewport(contentBounds.value, viewportSize.value))
 const maximumZoom = computed(() => {
   const scale = Math.min(
     viewportSize.value.width / fittedBounds.value.width,

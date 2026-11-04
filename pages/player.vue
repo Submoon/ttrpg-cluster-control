@@ -1,57 +1,62 @@
 <template>
-  <main class="player-reader min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-    <div class="mx-auto grid w-full max-w-7xl gap-5">
-      <template v-if="readerMode === 'file'">
-        <header class="grid gap-1">
-          <span class="section-kicker">PLAYER VIEW</span>
-          <h1 class="m-0 text-3xl">Open a player map</h1>
-          <p class="inspector-intro m-0">Choose a player JSON file to view its shared Jump Cluster.</p>
-        </header>
+  <main class="player-reader" :class="{ 'player-reader--workspace map-workspace-shell': playerDocument }">
+    <input
+      ref="fileInput"
+      class="player-reader-file-input--hidden"
+      type="file"
+      accept="application/json,.json"
+      aria-label="Open player JSON"
+      :disabled="!isClientReady"
+      @change="openPlayerFile"
+    >
 
-        <section
-          class="player-reader-file grid gap-2"
-          aria-label="Open a player map file"
-          :aria-busy="!isClientReady"
-        >
-          <label class="grid w-fit cursor-pointer gap-2 font-semibold">
-            <span>Open player JSON</span>
-            <input
-              class="player-reader-file-input"
-              type="file"
-              accept="application/json,.json"
-              aria-label="Open player JSON"
-              :disabled="!isClientReady"
-              @change="openPlayerFile"
-            >
-          </label>
-          <p class="inspector-intro m-0">
-            Player maps are kept only in this tab. After a reload, open the JSON file again.
-          </p>
-          <p v-if="isLoading" role="status" class="m-0">Opening player JSON…</p>
-          <p v-if="errorMessage" role="alert" class="player-reader-error m-0">{{ errorMessage }}</p>
-        </section>
-      </template>
-
-      <section v-else class="player-reader-link grid gap-2" aria-label="Open a player link" :aria-busy="isLoading">
-        <span class="section-kicker">PLAYER LINK</span>
-        <h1 class="m-0 text-3xl">Open a shared player map</h1>
-        <p class="inspector-intro m-0">
-          This link contains an immutable player snapshot. Anyone with it can read and copy the shared data.
-        </p>
-        <p v-if="isLoading" role="status" class="m-0">Opening player link…</p>
-        <p v-if="errorMessage" role="alert" class="player-reader-error m-0">{{ errorMessage }}</p>
-        <a class="player-reader-file-link" :href="playerJsonHref">Open player JSON instead</a>
-      </section>
-
+    <template v-if="playerDocument">
       <PlayerDocumentView
-        v-if="playerDocument"
         :document="playerDocument"
         :active="true"
-        :heading-level="'h2'"
+        :workspace-presentation="true"
         aria-label="Player document"
-        description="Read-only view of the information shared in this document."
-      />
-    </div>
+      >
+        <template #workspace-actions>
+          <div class="player-reader-actions">
+            <UButton color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
+              Open player JSON
+            </UButton>
+            <a v-if="readerMode === 'link'" class="player-reader-file-link" :href="playerJsonHref">Open player JSON instead</a>
+          </div>
+        </template>
+      </PlayerDocumentView>
+    </template>
+
+    <template v-else>
+      <WorkspaceHeader
+        :workspace="null"
+        :public-title="readerMode === 'link' ? 'Open a shared player map' : 'Open a player map'"
+        :public-eyebrow="readerMode === 'link' ? 'PLAYER LINK' : 'PLAYER VIEW'"
+      >
+        <template #player-actions>
+          <div class="player-reader-actions">
+            <UButton color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
+              Open player JSON
+            </UButton>
+            <a v-if="readerMode === 'link'" class="player-reader-file-link" :href="playerJsonHref">Open player JSON instead</a>
+          </div>
+        </template>
+      </WorkspaceHeader>
+
+      <div class="player-reader-open-content">
+        <section v-if="readerMode === 'file'" class="player-reader-file" aria-label="Open a player map file" :aria-busy="!isClientReady">
+          <h2>Choose a player JSON file</h2>
+          <p>Player maps are kept only in this tab. After a reload, open the JSON file again.</p>
+          <p v-if="isLoading" role="status">Opening player JSON…</p>
+        </section>
+        <section v-else class="player-reader-link" aria-label="Open a player link" :aria-busy="isLoading">
+          <p>This link contains an immutable player snapshot. Anyone with it can read and copy the shared data.</p>
+          <p v-if="isLoading" role="status">Opening player link…</p>
+        </section>
+        <p v-if="errorMessage" role="alert" class="player-reader-error">{{ errorMessage }}</p>
+      </div>
+    </template>
   </main>
 </template>
 
@@ -62,6 +67,7 @@ import { PlayerDocumentError, parsePlayerJson } from '../domain/workspace'
 import type { PlayerClusterDocument } from '../domain/workspace'
 import { MAX_PLAYER_SHARE_URL_BYTES, decodePlayerShareFragment, PlayerShareLinkError } from '../utils/player-share-link'
 import PlayerDocumentView from '../components/PlayerDocumentView.vue'
+import WorkspaceHeader from '../components/WorkspaceHeader.vue'
 
 defineOptions({ name: 'PlayerMapReaderPage' })
 
@@ -70,6 +76,7 @@ const playerDocument = ref<PlayerClusterDocument | null>(null)
 const errorMessage = ref<string | null>(null)
 const isLoading = ref(false)
 const isClientReady = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 const readerMode = ref<'file' | 'link'>('file')
 const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
@@ -108,6 +115,10 @@ function isWithinShareUrlLimit(url: string): boolean {
     if (byteLength > MAX_PLAYER_SHARE_URL_BYTES) return false
   }
   return true
+}
+
+function requestFileOpen(): void {
+  fileInput.value?.click()
 }
 
 function refreshFromLocation(): void {
@@ -184,18 +195,70 @@ async function openPlayerFile(event: Event): Promise<void> {
 
 <style scoped>
 .player-reader {
-  background: var(--page-bg);
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  min-height: 100vh;
+  padding: .5rem;
+  background: var(--app-bg);
   color: var(--text-primary);
 }
 
-.player-reader-file-input {
-  max-width: min(100%, 28rem);
-  border: 1px solid var(--line-soft);
-  border-radius: .375rem;
-  background: var(--panel-bg);
+.player-reader--workspace {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   padding: .5rem;
-  color: var(--text-primary);
+}
+
+.player-reader-open-content {
+  display: grid;
+  width: min(100% - 2rem, 52rem);
+  gap: .75rem;
+  margin: clamp(2rem, 8vh, 6rem) auto;
+  border: 1px solid var(--line-soft);
+  border-radius: .35rem;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  background: var(--panel-bg);
+  box-shadow: 0 .7rem 2.2rem color-mix(in srgb, var(--map-bg) 18%, transparent);
+}
+
+.player-reader-file h2 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1.4rem;
   font-weight: 400;
+}
+
+.player-reader-file p,
+.player-reader-link p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
+.player-reader-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+}
+
+.player-reader-file-input--hidden {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .player-reader-file-link {
@@ -207,6 +270,7 @@ async function openPlayerFile(event: Event): Promise<void> {
 }
 
 .player-reader-error {
-  color: var(--danger, #b42318);
+  margin: 0;
+  color: var(--error);
 }
 </style>

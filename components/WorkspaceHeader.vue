@@ -18,10 +18,15 @@
         <span class="workspace-header-eyebrow">Current Jump Cluster</span>
         <h1>{{ workspace.cluster.name }}</h1>
       </section>
+      <section v-else-if="props.publicTitle" class="workspace-header-cluster workspace-header-public" aria-label="Player map">
+        <span class="workspace-header-eyebrow">{{ props.publicEyebrow }}</span>
+        <h1>{{ props.publicTitle }}</h1>
+      </section>
     </template>
 
     <template #right>
       <div class="workspace-header-utilities">
+        <slot name="player-actions" />
         <div class="workspace-header-theme" role="group" aria-label="Theme">
           <ColorScheme>
             <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
@@ -43,10 +48,13 @@ const props = withDefaults(defineProps<{
   activeView?: 'cluster' | 'system'
   selectedSystem?: StarSystem | null
   compactModalOpen?: boolean
+  publicTitle?: string
+  publicEyebrow?: string
 }>(), {
   activeView: 'cluster',
   selectedSystem: null,
   compactModalOpen: false,
+  publicEyebrow: 'PLAYER VIEW',
 })
 
 const workspace = computed(() => props.workspace)
@@ -66,7 +74,7 @@ const colorMode = useColorMode()
   border: 1px solid var(--line-soft);
   border-radius: 0.35rem;
   padding: 0.55rem clamp(0.75rem, 1.8vw, 1.5rem);
-  background: var(--panel);
+  background: var(--panel-bg);
   color: var(--text-primary);
 }
 
@@ -136,6 +144,11 @@ const colorMode = useColorMode()
   white-space: nowrap;
 }
 
+.workspace-header-public h1 {
+  max-width: min(44vw, 38rem);
+  font-size: clamp(1rem, 1.45vw, 1.25rem);
+}
+
 .workspace-header-utilities {
   flex: 0 0 auto;
   justify-content: flex-end;
@@ -188,6 +201,8 @@ const colorMode = useColorMode()
   .workspace-header-cluster h1 {
     max-width: min(76vw, 30rem);
   }
+
+  .workspace-header-public h1 { max-width: min(66vw, 30rem); }
 
   .workspace-header-utilities {
     flex: 0 1 auto;

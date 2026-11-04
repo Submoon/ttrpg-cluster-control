@@ -1,6 +1,6 @@
 <template>
-  <section class="player-system-map" aria-label="Player-visible system map">
-    <div class="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_14rem]">
+  <section class="player-system-map" :class="{ 'player-system-map--workspace': props.workspacePresentation }" aria-label="Player-visible system map">
+    <div class="player-system-map-content grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_14rem]" :class="{ 'player-system-map-content--workspace': props.workspacePresentation }">
       <div class="grid min-w-0 content-start gap-2">
         <div class="player-system-map-navigation" role="group" aria-label="Player system map navigation">
           <UButton
@@ -123,76 +123,18 @@
         </svg>
       </div>
 
-      <aside class="grid min-w-0 content-start gap-3">
-        <section aria-label="Visible system hierarchy" class="grid content-start gap-2">
-          <h3 class="m-0 text-sm font-semibold">Visible objects</h3>
-          <ul v-if="props.document.objects.length" class="m-0 grid list-none gap-1 p-0">
-            <li v-for="entry in hierarchyEntries" :key="entry.object.id">
-              <button
-                class="player-system-hierarchy-item"
-                type="button"
-                :aria-pressed="props.selectedObjectId === entry.object.id"
-                @click="emit('inspect-object', entry.object.id)"
-              >
-                <span>{{ entry.object.label }}</span>
-                <span v-if="entry.object.disclosure !== 'unknown'" class="player-system-hierarchy-type">
-                  {{ catalogueSubtypeLabel(entry.object) }}
-                </span>
-                <span v-if="entry.path" class="player-system-hierarchy-path">
-                  {{ entry.path }}
-                </span>
-              </button>
-            </li>
-          </ul>
-          <p v-else class="empty-copy m-0">No map objects are visible to players.</p>
-        </section>
-
-        <section v-if="selectedObject" class="player-system-object-details" aria-label="Player object details">
-          <span class="section-kicker">PLAYER-VISIBLE OBJECT</span>
-          <h3 class="mb-1 mt-2 text-base">{{ selectedObject.label }}</h3>
-          <p v-if="selectedObject.disclosure !== 'unknown'" class="inspector-intro m-0">
-            {{ catalogueSubtypeLabel(selectedObject) }}
-          </p>
-          <p v-if="selectedObject.disclosure === 'revealed' && selectedObject.playerText" class="inspector-intro m-0 whitespace-pre-wrap">
-            {{ selectedObject.playerText }}
-          </p>
-          <dl
-            v-if="selectedObject.disclosure === 'revealed' && selectedObject.fields.length"
-            class="m-0 grid gap-2"
-            aria-label="Player-visible Fields"
-          >
-            <div v-for="(field, index) in selectedObject.fields" :key="`${field.name}:${field.type}:${index}`">
-              <dt class="font-semibold">{{ field.name }}</dt>
-              <dd class="m-0">{{ field.type }}: {{ field.value }}</dd>
-            </div>
-          </dl>
-          <section
-            v-if="selectedStation"
-            class="player-system-station-association"
-            aria-label="Physical Station association"
-          >
-            <strong>Physical Station</strong>
-            <UButton
-              class="player-system-station-link"
-              color="neutral"
-              variant="link"
-              size="sm"
-              :aria-label="`Inspect ${selectedStation.label}`"
-              @click="emit('inspect-object', selectedStation.id)"
-            >
-              {{ selectedStation.label }}
-            </UButton>
-          </section>
-        </section>
-
-        <section v-if="props.document.orbits.length" aria-label="Visible Orbit layout" class="grid content-start gap-2">
-          <h3 class="m-0 text-sm font-semibold">Orbit layout</h3>
-          <ul class="m-0 grid list-none gap-1 p-0">
-            <li v-for="orbit in props.document.orbits" :key="orbit.id" class="player-system-orbit-label">
-              {{ orbit.hostId === null ? 'Orbit around unoccupied center' : `Orbit around ${hostLabel(orbit.hostId)}` }}
-            </li>
-          </ul>
-        </section>
+      <aside v-if="!props.workspacePresentation" class="grid min-w-0 content-start gap-3">
+        <PlayerSystemHierarchy
+          :document="props.document"
+          :selected-object-id="props.selectedObjectId ?? null"
+          @inspect-object="emit('inspect-object', $event)"
+        />
+        <PlayerObjectInspector
+          :document="props.document"
+          :object="selectedObject"
+          :workspace-presentation="false"
+          @inspect-object="emit('inspect-object', $event)"
+        />
       </aside>
     </div>
   </section>
@@ -200,37 +142,30 @@
 
 <script setup lang="ts">
 /** Renders only the allowlisted public system document; it never receives source entities or editor state. */
-import { computed, ref, watch } from 'vue'
-import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/workspace'
-import { catalogueSubtypeLabel } from '../utils/catalogue-labels'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { PlayerSystemDocument } from '../domain/workspace'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerSystemGeometry } from '../utils/player-system-geometry'
+import { fitPlayerMapToViewport } from '../utils/player-map-fit'
+import PlayerSystemHierarchy from './PlayerSystemHierarchy.vue'
+import PlayerObjectInspector from './PlayerObjectInspector.vue'
 
 const props = defineProps<{
   document: PlayerSystemDocument
   label: string
   selectedObjectId?: string | null
   active?: boolean
+  workspacePresentation?: boolean
 }>()
 
 const emit = defineEmits<{ 'inspect-object': [publicObjectId: string] }>()
 
 const selectedObject = computed(() => props.document.objects.find(object => object.id === props.selectedObjectId) ?? null)
 const unoccupiedOrbits = computed(() => props.document.orbits.filter(orbit => orbit.hostId === null))
-const objectsById = computed(() => new Map(props.document.objects.map(object => [object.id, object])))
-const orbitsById = computed(() => new Map(props.document.orbits.map(orbit => [orbit.id, orbit])))
-const hierarchyEntries = computed(() => props.document.objects.map(object => ({
-  object,
-  path: hierarchyPath(object),
-})))
-const selectedStation = computed(() => {
-  const object = selectedObject.value
-  if (object?.disclosure !== 'revealed' || object.family !== 'JumpPoint' || !object.stationId) return null
-  const station = objectsById.value.get(object.stationId)
-  return station?.disclosure === 'revealed' ? station : null
-})
 const mapElement = ref<SVGSVGElement | null>(null)
-const fittedBounds = computed(() => playerSystemGeometry(props.document).bounds)
+const contentBounds = computed(() => playerSystemGeometry(props.document).bounds)
+const viewportSize = ref({ width: 960, height: 560 })
+const fittedBounds = computed(() => fitPlayerMapToViewport(contentBounds.value, viewportSize.value))
 const viewport = usePlayerMapViewport({
   element: mapElement,
   fittedBounds,
@@ -261,63 +196,31 @@ watch(() => props.document, () => {
   resetViewport()
 }, { flush: 'post' })
 
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  measureViewport()
+  if (typeof ResizeObserver !== 'undefined' && mapElement.value) {
+    resizeObserver = new ResizeObserver(measureViewport)
+    resizeObserver.observe(mapElement.value)
+  }
+})
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
+
+function measureViewport(): void {
+  const svg = mapElement.value
+  if (!svg) return
+  const bounds = svg.getBoundingClientRect()
+  if (bounds.width <= 0 || bounds.height <= 0) return
+  viewportSize.value = {
+    width: svg.clientWidth || bounds.width,
+    height: svg.clientHeight || bounds.height,
+  }
+}
+
 function isObjectMarkerTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.player-system-object-marker') !== null
-}
-
-function hostLabel(publicHostId: string): string {
-  return summarizeHostLabel(objectsById.value.get(publicHostId)?.label ?? 'Unknown presence')
-}
-
-const maximumHostLinks = 8
-const maximumHostLabelLength = 80
-
-/** Caps summaries without reading beyond the fixed prefix or splitting a surrogate pair. */
-function summarizeHostLabel(label: string): string {
-  if (label.length <= maximumHostLabelLength) return label
-
-  const prefixLength = maximumHostLabelLength - 1
-  let prefix = label.slice(0, prefixLength)
-  const lastCodeUnit = prefix.charCodeAt(prefix.length - 1)
-  const nextCodeUnit = label.charCodeAt(prefix.length)
-  const endsWithHighSurrogate = lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF
-  const nextIsLowSurrogate = nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF
-  if (endsWithHighSurrogate && nextIsLowSurrogate) prefix = prefix.slice(0, -1)
-  return `${prefix}…`
-}
-
-/** Follows only remapped DTO placement and host references, so private source labels cannot enter the hierarchy. */
-function hierarchyPath(object: PlayerObjectMarker): string {
-  const path: string[] = []
-  const visitedOrbitIds = new Set<string>()
-  let placement = object.placement
-  let hostLinks = 0
-
-  while (placement.kind === 'orbit') {
-    const orbit = orbitsById.value.get(placement.orbitId)
-    if (!orbit || visitedOrbitIds.has(orbit.id)) break
-    visitedOrbitIds.add(orbit.id)
-    if (orbit.hostId === null) {
-      path.push('Orbit around unoccupied center')
-      break
-    }
-
-    if (hostLinks >= maximumHostLinks) {
-      path.push('…')
-      break
-    }
-
-    const host = objectsById.value.get(orbit.hostId)
-    if (!host) {
-      path.push('Orbit around Unknown presence')
-      break
-    }
-    path.push(`Orbit around ${summarizeHostLabel(host.label)}`)
-    hostLinks += 1
-    placement = host.placement
-  }
-
-  return path.join(' → ')
 }
 
 function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void {
@@ -330,6 +233,18 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
 <style scoped>
 .player-system-map {
   min-width: 0;
+}
+
+.player-system-map-content--workspace {
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.player-system-map--workspace,
+.player-system-map--workspace .player-system-map-content--workspace {
+  height: 100%;
+  min-height: 0;
 }
 
 .player-system-object-details {
@@ -356,6 +271,12 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.player-system-map-content--workspace .player-system-map-scene {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
 }
 
 .player-system-map-scene:focus-visible {

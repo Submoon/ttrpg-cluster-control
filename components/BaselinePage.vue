@@ -1321,5 +1321,3 @@ async function retryLatestSave(): Promise<void> {
   }
 }
 </script>
-
-<style src="../assets/css/map-workspace.css"></style>
