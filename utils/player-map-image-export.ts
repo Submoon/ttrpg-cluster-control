@@ -3,6 +3,7 @@ import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerSystemDocument, PlayerSystemMarker } from '../domain/player-projection'
 import { playerClusterGeometry } from './player-cluster-geometry'
 import { rasterizeMapSvg, type MapImageFormat, type MapImagePalette } from './map-image-export'
+import { playerObjectPresentation } from './player-object-presentation'
 import { playerSystemGeometry } from './player-system-geometry'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
@@ -242,6 +243,7 @@ function createSystemImage(
       fill: 'none',
       stroke: paint.lineSoft,
       'stroke-width': 2,
+      'stroke-dasharray': '3 6',
     })
   }
 
@@ -262,6 +264,7 @@ function createSystemImage(
 }
 
 function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, paint: PlayerMapPaint): void {
+  const presentation = playerObjectPresentation(object)
   const marker = appendSvg(parent, 'g', {
     class: object.disclosure === 'unknown'
       ? 'player-system-object-marker'
@@ -280,8 +283,21 @@ function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, pain
     stroke,
     'stroke-width': 3,
   })
+  if (presentation.glyph !== null) {
+    appendText(marker, presentation.glyph, {
+      class: 'player-system-object-glyph',
+      x: 0,
+      y: 5,
+      fill: paint.textPrimary,
+      'font-family': 'Georgia, serif',
+      'font-size': 14,
+      'text-anchor': 'middle',
+      'aria-hidden': true,
+    })
+  }
   if (object.disclosure !== 'unknown') {
-    appendText(marker, object.label, {
+    appendText(marker, presentation.label, {
+      class: 'player-system-object-label',
       x: 16,
       y: 6,
       fill: paint.textPrimary,

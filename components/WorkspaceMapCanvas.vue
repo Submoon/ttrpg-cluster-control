@@ -114,6 +114,7 @@ import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
+import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
 
@@ -221,6 +222,7 @@ let longPressTimer: ReturnType<typeof setTimeout> | undefined
 let publicationMenuLease: PublicationMenuLease | null = null
 let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
 let touchPanStarted = false
+let touchReleaseGuard: ReturnType<typeof createOwnedTouchReleaseGuard> | null = null
 
 function holdClickSuppression(): void {
   suppressNextClick = true
@@ -297,25 +299,26 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
     && !!target.closest('.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')
 }
 
-function inspectLongPress(target: EventTarget | null): void {
-  if (!(target instanceof Element)) return
+function longPressInspection(target: EventTarget | null): (() => void) | null {
+  if (!(target instanceof Element)) return null
   const systemId = target.closest<SVGGElement>('.cluster-system-node')?.getAttribute('data-system-id')
   if (systemId) {
-    emit('select-cluster-system', systemId)
-    return
+    return () => emit('select-cluster-system', systemId)
   }
   const routeId = target.closest<SVGGElement>('.cluster-route')?.getAttribute('data-route-id')
   if (routeId) {
-    emit('select-route', routeId)
-    return
+    return () => emit('select-route', routeId)
   }
   const objectId = target.closest<SVGGElement>('.system-object')?.getAttribute('data-object-id')
   if (objectId) {
-    emit('select-object', objectId)
-    return
+    return () => emit('select-object', objectId)
   }
   const orbitId = target.closest<SVGGElement>('.orbit-mark, .orbit-hit-target, .orbit-edit-control')?.getAttribute('data-orbit-id')
-  if (orbitId) emit('select-orbit', orbitId)
+  return orbitId ? () => emit('select-orbit', orbitId) : null
+}
+
+function inspectLongPress(target: EventTarget | null): void {
+  longPressInspection(target)?.()
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
@@ -591,17 +594,28 @@ function onTouchStartCapture(event: TouchEvent): void {
     return
   }
   if (props.mode !== 'navigate' && props.mode !== 'move') return
+  const touchId = touch.identifier
   longPressTimer = setTimeout(() => {
-    if (!touchStart) return
-    const target = touchStart.target
+    const contact = touchStart
+    if (!contact || contact.id !== touchId) return
+    const inspection = longPressInspection(contact.target)
+    const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
     if (props.activeView === 'cluster') emit('cancel-cluster-preview')
     if (props.activeView === 'system') {
       emit('cancel-object-placement-preview')
       emit('cancel-orbit-placement-preview')
     }
     cancelMapGesture()
+    if (inspection) {
+      touchReleaseGuard?.arm({
+        touchId,
+        pointerId: touchPointerId,
+        x: contact.x,
+        y: contact.y,
+      })
+    }
     holdClickSuppression()
-    inspectLongPress(target)
+    inspection?.()
     touchStart = null
   }, 560)
 }
@@ -805,6 +819,7 @@ function isVisibleObstruction(element: Element): boolean {
 }
 
 onMounted(async () => {
+  touchReleaseGuard = createOwnedTouchReleaseGuard(document)
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerUp, true)
   window.addEventListener('pointercancel', onWindowPointerUp, true)
@@ -831,6 +846,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   publicationMenuLease?.close()
   publicationMenuLease = null
+  touchReleaseGuard?.dispose()
+  touchReleaseGuard = null
   mapDisposed = true
   settleMapReadiness(false)
   cancelCanvasGesture()

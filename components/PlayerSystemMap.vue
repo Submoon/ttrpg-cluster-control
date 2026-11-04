@@ -1,8 +1,8 @@
 <template>
   <section class="player-system-map" :class="{ 'player-system-map--workspace': props.workspacePresentation }" aria-label="Player-visible system map">
-    <div class="player-system-map-content grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_14rem]" :class="{ 'player-system-map-content--workspace': props.workspacePresentation }">
+    <div class="player-system-map-content grid min-w-0 gap-3" :class="{ 'player-system-map-content--workspace': props.workspacePresentation }">
       <div class="grid min-w-0 content-start gap-2">
-        <div class="player-system-map-navigation" role="group" aria-label="Player system map navigation">
+        <div class="player-system-map-navigation" role="group" aria-label="Player system map navigation" data-player-map-obstruction>
           <UButton
             color="neutral"
             variant="outline"
@@ -88,18 +88,41 @@
             <ellipse
               v-for="orbit in props.document.orbits"
               :key="orbit.id"
+              :class="{ 'player-system-orbit--selected': props.selectedOrbitId === orbit.id }"
               :cx="orbit.center.x"
               :cy="orbit.center.y"
               :rx="orbit.radii.horizontal"
               :ry="orbit.radii.vertical"
               :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+              stroke-dasharray="3 6"
+            />
+          </g>
+          <g class="player-system-orbit-interactions">
+            <ellipse
+              v-for="orbit in props.document.orbits"
+              :key="`hit-${orbit.id}`"
+              class="player-system-orbit-hit-target"
+              :aria-label="`Inspect ${playerOrbitLabel(orbit)}`"
+              :aria-pressed="props.selectedOrbitId === orbit.id"
+              :cx="orbit.center.x"
+              :cy="orbit.center.y"
+              :rx="orbit.radii.horizontal"
+              :ry="orbit.radii.vertical"
+              :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+              role="button"
+              tabindex="0"
+              @click.stop="emit('inspect-orbit', orbit.id)"
+              @keydown="event => inspectOrbitFromKeyboard(event, orbit.id)"
             />
           </g>
           <g
             v-for="object in props.document.objects"
             :key="object.id"
             class="player-system-object-marker"
-            :class="object.disclosure === 'unknown' ? undefined : `player-system-object-marker--${object.disclosure}`"
+            :class="[
+              object.disclosure === 'unknown' ? undefined : `player-system-object-marker--${object.disclosure}`,
+              { 'player-system-object-marker--selected': props.selectedObjectId === object.id },
+            ]"
             :transform="`translate(${object.position.x} ${object.position.y})`"
             role="button"
             :aria-label="`Inspect ${object.label}`"
@@ -109,7 +132,17 @@
             @keydown="event => inspectFromKeyboard(event, object.id)"
           >
             <circle r="10" />
-            <text v-if="object.disclosure !== 'unknown'" x="16" y="6">{{ object.label }}</text>
+            <text
+              v-if="objectPresentations.get(object.id)?.glyph"
+              class="player-system-object-glyph"
+              x="0"
+              y="5"
+              text-anchor="middle"
+              aria-hidden="true"
+            >{{ objectPresentations.get(object.id)?.glyph }}</text>
+            <text v-if="object.disclosure !== 'unknown'" class="player-system-object-label" x="16" y="6">
+              {{ objectPresentations.get(object.id)?.label }}
+            </text>
           </g>
           <circle
             v-for="orbit in unoccupiedOrbits"
@@ -123,19 +156,6 @@
         </svg>
       </div>
 
-      <aside v-if="!props.workspacePresentation" class="grid min-w-0 content-start gap-3">
-        <PlayerSystemHierarchy
-          :document="props.document"
-          :selected-object-id="props.selectedObjectId ?? null"
-          @inspect-object="emit('inspect-object', $event)"
-        />
-        <PlayerObjectInspector
-          :document="props.document"
-          :object="selectedObject"
-          :workspace-presentation="false"
-          @inspect-object="emit('inspect-object', $event)"
-        />
-      </aside>
     </div>
   </section>
 </template>
@@ -143,34 +163,45 @@
 <script setup lang="ts">
 /** Renders only the allowlisted public system document; it never receives source entities or editor state. */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { PlayerSystemDocument } from '../domain/workspace'
+import type { PlayerSystemDocument, PlayerOrbit } from '../domain/workspace'
+import type { PlayerInspectionTarget, PlayerUsableRectReader } from '../utils/player-inspection'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerSystemGeometry } from '../utils/player-system-geometry'
+import { playerObjectPresentation } from '../utils/player-object-presentation'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
-import PlayerSystemHierarchy from './PlayerSystemHierarchy.vue'
-import PlayerObjectInspector from './PlayerObjectInspector.vue'
 
 const props = defineProps<{
   document: PlayerSystemDocument
   label: string
   selectedObjectId?: string | null
+  selectedOrbitId?: string | null
   active?: boolean
   workspacePresentation?: boolean
+  getUsableClientRect?: PlayerUsableRectReader
 }>()
 
-const emit = defineEmits<{ 'inspect-object': [publicObjectId: string] }>()
+const emit = defineEmits<{
+  'inspect-object': [publicObjectId: string]
+  'inspect-orbit': [publicOrbitId: string]
+}>()
 
-const selectedObject = computed(() => props.document.objects.find(object => object.id === props.selectedObjectId) ?? null)
 const unoccupiedOrbits = computed(() => props.document.orbits.filter(orbit => orbit.hostId === null))
+const objectPresentations = computed(() => new Map(props.document.objects.map(object => [
+  object.id,
+  playerObjectPresentation(object),
+])))
 const mapElement = ref<SVGSVGElement | null>(null)
 const contentBounds = computed(() => playerSystemGeometry(props.document).bounds)
 const viewportSize = ref({ width: 960, height: 560 })
+const usableRectReader = computed(() => props.getUsableClientRect)
 const fittedBounds = computed(() => fitPlayerMapToViewport(contentBounds.value, viewportSize.value))
 const viewport = usePlayerMapViewport({
   element: mapElement,
   fittedBounds,
+  viewportSize,
   active: computed(() => props.active !== false),
   maximumZoom: computed(() => 4),
+  getUsableClientRect: usableRectReader,
   isInteractiveTarget: isObjectMarkerTarget,
 })
 const {
@@ -184,6 +215,7 @@ const {
   panGesture,
   panView,
   resetViewport,
+  revealPoint,
   startPan,
   finishPan,
   cancelPan,
@@ -220,8 +252,34 @@ function measureViewport(): void {
 }
 
 function isObjectMarkerTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('.player-system-object-marker') !== null
+  return target instanceof Element
+    && target.closest('.player-system-object-marker, .player-system-orbit-hit-target') !== null
 }
+
+function playerOrbitLabel(orbit: PlayerOrbit): string {
+  if (orbit.hostId === null) return 'Orbit around unoccupied center'
+  const host = props.document.objects.find(object => object.id === orbit.hostId)
+  return host ? `Orbit around ${playerObjectPresentation(host).label}` : 'Orbit'
+}
+
+function inspectOrbitFromKeyboard(event: KeyboardEvent, publicOrbitId: string): void {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  emit('inspect-orbit', publicOrbitId)
+}
+
+/** Reveals a current public target without changing selection or focus. */
+function revealTarget(target: PlayerInspectionTarget, expectedDocument: PlayerSystemDocument): boolean {
+  if (props.document !== expectedDocument) return false
+  if (target.kind === 'object') {
+    const object = props.document.objects.find(candidate => candidate.id === target.id)
+    return object ? revealPoint(object.position) : false
+  }
+  const orbit = props.document.orbits.find(candidate => candidate.id === target.id)
+  return orbit ? revealPoint(orbit.center) : false
+}
+
+defineExpose({ revealTarget })
 
 function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void {
   if (event.key !== 'Enter' && event.key !== ' ') return
@@ -294,6 +352,24 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   stroke-width: 2;
 }
 
+.player-system-orbits ellipse.player-system-orbit--selected {
+  stroke: var(--map-selected, var(--accent));
+  stroke-width: 2.4;
+}
+
+.player-system-orbit-hit-target {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.player-system-orbit-hit-target:focus-visible {
+  stroke: var(--focus, var(--accent-hover));
+  stroke-opacity: .45;
+}
+
 .player-system-object-marker {
   cursor: pointer;
 }
@@ -314,9 +390,19 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   stroke: var(--text-primary);
 }
 
+.player-system-object-marker--selected circle {
+  stroke: var(--map-selected, var(--accent));
+  stroke-width: 5;
+}
+
 .player-system-object-marker text {
   fill: var(--text-primary);
   font: 16px Georgia, serif;
+}
+
+.player-system-object-glyph {
+  font-size: 14px;
+  pointer-events: none;
 }
 
 .player-system-object-marker:focus-visible circle {

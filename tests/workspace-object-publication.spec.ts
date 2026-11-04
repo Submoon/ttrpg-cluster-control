@@ -231,6 +231,7 @@ async function openSystemPlayerPreview(
 ): Promise<{
   preview: import('@playwright/test').Locator
   trigger: import('@playwright/test').Locator
+  playerView: import('@playwright/test').Locator
   systemPreview: import('@playwright/test').Locator
 }> {
   const details = await openChartDetails(page)
@@ -238,10 +239,12 @@ async function openSystemPlayerPreview(
   await trigger.click()
   const preview = page.getByRole('dialog', { name: 'Player view preview' })
   await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   return {
     preview,
     trigger,
-    systemPreview: preview.getByRole('region', { name: 'Player-visible system map' }),
+    playerView,
+    systemPreview: playerView.getByRole('region', { name: 'Player-visible system map' }),
   }
 }
 
@@ -290,14 +293,15 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await expect(preview).toBeVisible()
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
 
-  const systemPreview = preview.getByRole('region', { name: 'Player-visible system map' })
+  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
+  const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
   await expect(preview).toContainText(systemName)
   await expect(systemPreview).toContainText('Pilgrim World')
-  await expect(systemPreview).not.toContainText('Private Source Notes')
+  await expect(playerView).not.toContainText('Private Source Notes')
   await expect(preview).not.toContainText(clusterName)
   await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' }).click()
-  await expect(systemPreview.getByRole('region', { name: 'Player object details' })).toContainText('Pilgrim World')
-  const accessibleSystemPreview = await systemPreview.ariaSnapshot()
+  await expect(playerView.getByRole('region', { name: 'Player object details' })).toContainText('Pilgrim World')
+  const accessibleSystemPreview = await playerView.ariaSnapshot()
   expect(accessibleSystemPreview).toContain('Inspect Pilgrim World')
   expect(accessibleSystemPreview).not.toContain('Private Source Notes')
 
@@ -350,22 +354,43 @@ test('a Revealed system previews only public objects and the anonymous required 
 
   async function openPublishedSystemPreview(): Promise<{
     preview: import('@playwright/test').Locator
+    playerView: import('@playwright/test').Locator
     systemPreview: import('@playwright/test').Locator
   }> {
     const details = await openChartDetails(page)
     await details.getByRole('button', { name: 'Preview player view' }).click()
     const preview = page.getByRole('dialog', { name: 'Player view preview' })
     await preview.getByRole('button', { name: 'Open Published Chain system preview' }).click()
-    return { preview, systemPreview: preview.getByRole('region', { name: 'Player-visible system map' }) }
+    const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
+    return {
+      preview,
+      playerView,
+      systemPreview: playerView.getByRole('region', { name: 'Player-visible system map' }),
+    }
   }
 
   const desktop = await openPublishedSystemPreview()
-  const hierarchy = desktop.systemPreview.getByRole('region', { name: 'Visible system hierarchy' })
-  await expect(desktop.systemPreview).toContainText('Pilgrim World')
-  const unknownHierarchyRows = hierarchy.getByRole('button', { name: /^Unknown presence(?:\s|$)/ })
+  const hierarchy = desktop.playerView.getByRole('region', { name: 'Visible system hierarchy' })
+  const tree = hierarchy.getByRole('tree', { name: 'Player object and Orbit hierarchy', exact: true })
+  const unknownHierarchyRows = tree.getByRole('treeitem', { name: /^Unknown presence(?:,|$)/ })
+  await expect(unknownHierarchyRows).toHaveCount(1)
+  await unknownHierarchyRows.nth(0).press('ArrowRight')
+  const unknownOrbits = tree.getByRole('treeitem', { name: 'Orbit around Unknown presence', exact: true })
+  await expect(unknownOrbits).toHaveCount(1)
+  await unknownOrbits.nth(0).press('ArrowRight')
+  await expect(unknownHierarchyRows).toHaveCount(2)
+  await unknownHierarchyRows.nth(1).press('ArrowRight')
+  await expect(unknownOrbits).toHaveCount(2)
+  await unknownOrbits.nth(1).press('ArrowRight')
   await expect(unknownHierarchyRows).toHaveCount(3)
-  const publicObject = hierarchy.getByRole('button', { name: /Pilgrim World/ })
-  await expect(publicObject).toContainText(/Orbit around Unknown presence.*Orbit around Unknown presence.*Orbit around Unknown presence/)
+  await unknownHierarchyRows.nth(2).press('ArrowRight')
+  await expect(unknownOrbits).toHaveCount(3)
+  await unknownOrbits.nth(2).press('ArrowRight')
+  await expect(desktop.systemPreview).toContainText('Pilgrim World')
+  await expect(unknownHierarchyRows).toHaveCount(3)
+  const publicObject = tree.getByRole('treeitem', { name: /^Pilgrim World,/ })
+  await expect(publicObject).toHaveAttribute('aria-level', '7')
+  await expect(publicObject.locator('.player-system-hierarchy-path')).toHaveText('Orbit around Unknown presence')
   for (let index = 0; index < 3; index += 1) {
     const unknownRowSnapshot = await unknownHierarchyRows.nth(index).ariaSnapshot()
     expect(unknownRowSnapshot).not.toMatch(/\b(?:star|planet|moon)\b/i)
@@ -397,8 +422,8 @@ test('a Revealed system previews only public objects and the anonymous required 
 
   await page.setViewportSize({ width: 390, height: 844 })
   const compact = await openPublishedSystemPreview()
-  await expect(compact.systemPreview.getByRole('region', { name: 'Visible system hierarchy' }))
-    .toContainText('Pilgrim World')
+  await expect(compact.playerView.getByRole('tree', { name: 'Player object and Orbit hierarchy', exact: true }))
+    .toBeVisible()
   const compactScreenshot = testInfo.outputPath('ticket02-host-chain-preview-compact.png')
   await page.screenshot({ path: compactScreenshot, animations: 'disabled' })
   await testInfo.attach('ticket02-host-chain-preview-compact', {
@@ -432,8 +457,9 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   await details.getByRole('button', { name: 'Preview player view' }).click()
   const preview = page.getByRole('dialog', { name: 'Player view preview' })
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
-  const systemPreview = preview.getByRole('region', { name: 'Player-visible system map' })
-  const markerLabel = systemPreview.locator('.player-system-object-marker--revealed text')
+  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
+  const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
+  const markerLabel = systemPreview.locator('.player-system-object-marker--revealed .player-system-object-label')
   await expect(markerLabel).toBeVisible()
   const labelBounds = await markerLabel.evaluate((element) => {
     if (!(element instanceof SVGGraphicsElement) || !element.ownerSVGElement) {
@@ -467,8 +493,8 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   expect(labelBounds.top).toBeGreaterThanOrEqual(labelBounds.viewTop)
   expect(labelBounds.bottom).toBeLessThanOrEqual(labelBounds.viewBottom)
 
-  const hierarchy = systemPreview.getByRole('region', { name: 'Visible system hierarchy' })
-  const longObjectRow = hierarchy.getByRole('button', { name: new RegExp(longObjectName) })
+  const hierarchy = playerView.getByRole('region', { name: 'Visible system hierarchy' })
+  const longObjectRow = hierarchy.getByRole('treeitem', { name: new RegExp(longObjectName) })
   await expect(longObjectRow).toBeVisible()
   const hierarchyMetrics = await longObjectRow.evaluate(element => ({
     clientWidth: element.clientWidth,
@@ -571,16 +597,16 @@ test('each object publication mode renders only its permitted player marker', as
 
   for (const mode of modes) {
     await setPrivatePlanetPublication(page, fixture, mode)
-    const { preview, trigger, systemPreview } = await openSystemPlayerPreview(page, fixture.systemName)
+    const { preview, trigger, playerView, systemPreview } = await openSystemPlayerPreview(page, fixture.systemName)
     const markers = systemPreview.locator('.player-system-object-marker')
-    const hierarchy = systemPreview.getByRole('region', { name: 'Visible system hierarchy' })
+    const hierarchy = playerView.getByRole('region', { name: 'Visible system hierarchy' })
 
     if (mode === 'Hidden') {
       hiddenMarkerCount = await markers.count()
       await expect(markers).toHaveCount(1)
       await expect(markers).toHaveAttribute('aria-label', 'Inspect Star')
       await expect(hierarchy).toContainText('Star')
-      await expect(systemPreview).not.toContainText(fixture.objectName)
+      await expect(playerView).not.toContainText(fixture.objectName)
     } else if (mode === 'Unknown presence') {
       if (hiddenMarkerCount === undefined) throw new Error('The Hidden mode must establish the baseline marker count.')
       await expect(markers).toHaveCount(hiddenMarkerCount + 1)
@@ -589,20 +615,20 @@ test('each object publication mode renders only its permitted player marker', as
       await expect(unknownMarkers).toHaveAttribute('aria-label', 'Inspect Unknown presence')
       const unknownMarkup = await unknownMarkers.evaluate(element => element.outerHTML)
       expect(unknownMarkup).not.toMatch(/\b(?:planet|star|moon|family|subtype|glyph|halo)\b/i)
-      await expect(systemPreview).not.toContainText(fixture.objectName)
+      await expect(playerView).not.toContainText(fixture.objectName)
     } else if (mode === 'Known type') {
       if (hiddenMarkerCount === undefined) throw new Error('The Hidden mode must establish the baseline marker count.')
       await expect(markers).toHaveCount(hiddenMarkerCount + 1)
       await expect(systemPreview.locator('.player-system-object-marker--known-type').filter({ hasText: 'Planet' }))
         .toHaveCount(1)
-      await expect(systemPreview).not.toContainText(fixture.objectName)
+      await expect(playerView).not.toContainText(fixture.objectName)
     } else {
       if (hiddenMarkerCount === undefined) throw new Error('The Hidden mode must establish the baseline marker count.')
       await expect(markers).toHaveCount(hiddenMarkerCount + 1)
       await expect(systemPreview.locator('.player-system-object-marker--revealed').filter({ hasText: fixture.objectName }))
         .toHaveCount(1)
       await systemPreview.getByRole('button', { name: `Inspect ${fixture.objectName}`, exact: true }).click()
-      await expect(systemPreview.getByRole('region', { name: 'Player object details' })).toContainText(fixture.objectName)
+      await expect(playerView.getByRole('region', { name: 'Player object details' })).toContainText(fixture.objectName)
     }
 
     const previewDom = await preview.evaluate(element => element.outerHTML)

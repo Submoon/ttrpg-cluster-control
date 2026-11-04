@@ -11,7 +11,7 @@ parent: ../spec.md
 
 ## Source issue
 
-[Align player maps with the Warden map interface — GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40), created and fetched on 2026-11-04. This local ticket records the requested follow-up scope; GitHub remains authoritative for global completion.
+[Align player maps with the Warden map interface — GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40), created and fetched on 2026-11-04. This local ticket records the clarified current-effort implementation scope; GitHub remains authoritative for global completion.
 
 ## Request
 
@@ -45,4 +45,4 @@ Player consultation remains read-only and consumes only the sanitized player doc
 
 ## Blocked by
 
-The underlying player-view implementation is already available on `codex/player-view-ticket-01`. Its current quick-publication controls are being qualified before overlapping presentation changes begin. No dependency on a future multiple-selection tool is introduced.
+The underlying player-view implementation and quick-publication controls are available on `codex/player-view-ticket-01`. No dependency on a future multiple-selection tool is introduced. Implementation and verification evidence are recorded in the [ticket 08 implementation record](../ticket-08-implementation.md); final qualification remains a merge gate.

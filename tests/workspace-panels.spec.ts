@@ -168,6 +168,8 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
     await expect(closeInspector).toBeFocused()
 
+    // Keep the original contact held beyond the old click-suppression window.
+    await page.waitForTimeout(1_000)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await expect.poll(async () => page.evaluate(() => {
       const active = document.activeElement
@@ -184,6 +186,28 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     }), { message: 'Touch release must leave focus inside the active inspector panel.' })
       .toMatchObject({ insidePanel: true })
     await expect(closeInspector).toBeFocused()
+
+    await closeInspector.click()
+    await expect(inspector).toBeHidden()
+    const nextBounds = await system.boundingBox()
+    if (!nextBounds) throw new Error('The fresh long-press target has no visible bounds.')
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: nextBounds.x + nextBounds.width / 2, y: nextBounds.y + nextBounds.height / 2 }],
+    })
+    await expect(closeInspector).toBeFocused()
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+    await expect(closeInspector).toBeFocused()
+
+    // A deliberate new mouse action must still open the preview after cancellation.
+    const previewTrigger = inspector.getByRole('button', { name: 'Preview player view', exact: true })
+    await previewTrigger.click()
+    const preview = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Player view preview', exact: true }),
+    })
+    await expect(preview).toBeVisible()
+    await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
+    await expect(previewTrigger).toBeFocused()
   } finally {
     await cdp.detach()
   }

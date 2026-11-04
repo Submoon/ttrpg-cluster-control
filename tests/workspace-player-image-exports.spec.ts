@@ -199,6 +199,8 @@ async function inspectPlayerImageSvg(
     const unknownMarkerSelector = '.player-system-object-marker:not(.player-system-object-marker--known-type):not(.player-system-object-marker--revealed)'
     const unknownMarker = svg.querySelector<SVGGElement>(unknownMarkerSelector)
     const revealedMarker = svg.querySelector<SVGGElement>('.player-system-object-marker--revealed')
+    const objectMarkers = [...svg.querySelectorAll<SVGGElement>('.player-system-object-marker')]
+    const orbitEllipses = [...svg.querySelectorAll<SVGEllipseElement>('.player-system-orbits ellipse')]
     return {
       rootLabel: svg.getAttribute('aria-label'),
       text: svg.textContent ?? '',
@@ -209,9 +211,13 @@ async function inspectPlayerImageSvg(
       ids: attributes.filter(attribute => attribute.name === 'id').map(attribute => attribute.value),
       markerLabels: [...svg.querySelectorAll<SVGGElement>('.player-system-object-marker')]
         .map(marker => marker.getAttribute('aria-label')),
+      markerGlyphs: objectMarkers.map(marker =>
+        marker.querySelector('text.player-system-object-glyph')?.textContent?.trim() ?? null,
+      ),
       unknownMarkerCount: svg.querySelectorAll(unknownMarkerSelector).length,
       revealedMarkerCount: svg.querySelectorAll('.player-system-object-marker--revealed').length,
       orbitCount: svg.querySelectorAll('.player-system-orbits ellipse').length,
+      orbitDashPatterns: orbitEllipses.map(ellipse => ellipse.getAttribute('stroke-dasharray')),
       markerTransforms: [...svg.querySelectorAll<SVGGElement>('.player-system-object-marker')]
         .map(marker => ({
           label: marker.getAttribute('aria-label'),
@@ -630,6 +636,8 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   expect(active.unknownMarkerCount).toBe(2)
   expect(active.revealedMarkerCount).toBe(1)
   expect(active.orbitCount).toBe(2)
+  expect(active.markerGlyphs).toEqual([null, null, '☾'])
+  expect(active.orbitDashPatterns).toEqual(['3 6', '3 6'])
   const activeBackgroundFill = requireSvgColor(active.backgroundFill, 'background')
   expect(activeBackgroundFill).toBe('#0c1719')
   expect(active.textFills.length).toBeGreaterThan(0)
@@ -688,6 +696,8 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   expect(printed.unknownMarkerCount).toBe(2)
   expect(printed.revealedMarkerCount).toBe(1)
   expect(printed.orbitCount).toBe(2)
+  expect(printed.markerGlyphs).toEqual(active.markerGlyphs)
+  expect(printed.orbitDashPatterns).toEqual(active.orbitDashPatterns)
   const printedBackgroundFill = requireSvgColor(printed.backgroundFill, 'print background')
   expect(printedBackgroundFill).toBe('#f5f4ee')
   expect(printed.textFills.length).toBeGreaterThan(0)

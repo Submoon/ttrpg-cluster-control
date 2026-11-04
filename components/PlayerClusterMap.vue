@@ -3,7 +3,7 @@
     <p v-if="props.document.systems.length === 0" class="player-cluster-map-empty" role="status">
       No star systems are visible to players.
     </p>
-    <div v-if="props.document.systems.length" class="player-cluster-map-navigation" role="group" aria-label="Player cluster map navigation">
+    <div v-if="props.document.systems.length" class="player-cluster-map-navigation" role="group" aria-label="Player cluster map navigation" data-player-map-obstruction>
       <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-left" aria-label="Pan left" :disabled="!canPan" @click="panView(-1, 0)" />
       <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-up" aria-label="Pan up" :disabled="!canPan" @click="panView(0, -1)" />
       <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-down" aria-label="Pan down" :disabled="!canPan" @click="panView(0, 1)" />
@@ -107,11 +107,16 @@
 /** Draws only an allowlisted player projection; this component never accepts a Warden workspace. */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/workspace'
+import type { PlayerUsableRectReader } from '../utils/player-inspection'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerClusterGeometry } from '../utils/player-cluster-geometry'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
 
-const props = withDefaults(defineProps<{ document: PlayerClusterDocument; active?: boolean }>(), { active: true })
+const props = withDefaults(defineProps<{
+  document: PlayerClusterDocument
+  active?: boolean
+  getUsableClientRect?: PlayerUsableRectReader
+}>(), { active: true })
 const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
 const geometry = computed(() => playerClusterGeometry(props.document))
@@ -132,6 +137,7 @@ const contentBounds = computed(() => ({
 }))
 const mapElement = ref<SVGSVGElement | null>(null)
 const viewportSize = ref({ width: 960, height: 560 })
+const usableRectReader = computed(() => props.getUsableClientRect)
 const fittedBounds = computed(() => fitPlayerMapToViewport(contentBounds.value, viewportSize.value))
 const maximumZoom = computed(() => {
   const scale = Math.min(
@@ -143,8 +149,10 @@ const maximumZoom = computed(() => {
 const viewport = usePlayerMapViewport({
   element: mapElement,
   fittedBounds,
+  viewportSize,
   active: computed(() => props.active),
   maximumZoom,
+  getUsableClientRect: usableRectReader,
   isInteractiveTarget: isSystemMarkerTarget,
 })
 const {

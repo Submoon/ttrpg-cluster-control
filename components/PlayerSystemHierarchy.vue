@@ -4,106 +4,304 @@
       <span class="section-kicker">PUBLIC NAVIGATION</span><h2>Visible objects</h2>
     </div>
     <h3 v-else class="m-0 text-sm font-semibold">Visible objects</h3>
-    <ul v-if="props.document.objects.length" class="player-public-list m-0 grid list-none gap-1 p-0">
-      <li v-for="entry in entries" :key="entry.object.id">
-        <button
-          class="player-system-hierarchy-item"
-          type="button"
-          :aria-pressed="props.selectedObjectId === entry.object.id"
-          @click="emit('inspect-object', entry.object.id)"
-        >
-          <span>{{ entry.object.label }}</span>
-          <span v-if="entry.object.disclosure !== 'unknown'" class="player-system-hierarchy-type">
-            {{ catalogueSubtypeLabel(entry.object) }}
-          </span>
-          <span v-if="entry.path" class="player-system-hierarchy-path">{{ entry.path }}</span>
-        </button>
-      </li>
-    </ul>
-    <p v-else class="empty-copy">No map objects are visible to players.</p>
+    <p v-if="!treeItems.length" class="empty-copy">No map objects are visible to players.</p>
+    <div v-else ref="treeContainer" class="player-system-hierarchy-tree">
+      <!-- @vue-generic {PlayerTreeItem[]} -->
+      <UTree
+        :items="treeItems"
+        :model-value="selectedTreeItem"
+        :expanded="expandedKeys"
+        :get-key="getTreeItemKey"
+        label-key="label"
+        :nested="false"
+        aria-label="Player object and Orbit hierarchy"
+        :ui="{ link: 'player-system-hierarchy-item' }"
+        @keydown.capture="stopComposingTreeKeys"
+        @update:expanded="updateExpandedKeys"
+        @select="selectHierarchyItem"
+        @toggle="preventClickToggle"
+      >
+        <template #item-wrapper="{ item, level, expanded, selected, handleToggle, ui }">
+          <div
+            :class="ui.link({
+              class: [
+                'player-system-hierarchy-row grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent px-2 py-1 text-left',
+                item.kind === 'orbit' ? 'player-system-hierarchy-row--orbit' : 'player-system-hierarchy-row--object',
+                { active: selected },
+              ],
+              selected,
+            })"
+            :aria-label="item.ariaLabel"
+            :data-player-hierarchy-key="item.key"
+            :data-player-hierarchy-level="level"
+            :style="{ paddingInlineStart: `${Math.min(level - 1, maximumIndentLevels) * indentStep}rem` }"
+            @compositionstart="isComposing = true"
+            @compositionend="isComposing = false"
+          >
+            <template v-if="item.kind === 'object'">
+              <span class="player-system-hierarchy-title col-start-1 row-start-1 flex min-w-0 items-start gap-1 [overflow-wrap:anywhere]">
+                <span v-if="objectPresentation(item)?.glyph" class="player-system-hierarchy-glyph shrink-0" aria-hidden="true">
+                  {{ objectPresentation(item)?.glyph }}
+                </span>
+                <span class="player-system-hierarchy-label min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+              </span>
+              <small v-if="objectPresentation(item)?.typeLabel" class="player-system-hierarchy-type col-start-1 row-start-2 mt-[0.12rem] block min-w-0 [overflow-wrap:anywhere]">
+                {{ objectPresentation(item)?.typeLabel }}
+              </small>
+              <small v-if="item.parentContext" class="player-system-hierarchy-path col-start-1 row-start-3 mt-[0.1rem] block min-w-0 [overflow-wrap:anywhere]">
+                {{ item.parentContext }}
+              </small>
+            </template>
+            <template v-else>
+              <span class="player-system-hierarchy-title col-start-1 row-span-2 flex min-w-0 items-start gap-1 [overflow-wrap:anywhere]">
+                <span class="player-system-hierarchy-orbit-mark shrink-0" aria-hidden="true">○</span>
+                <span class="player-system-hierarchy-label min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+              </span>
+            </template>
+            <UButton
+              v-if="item.children?.length"
+              class="player-system-hierarchy-toggle col-start-2 row-span-3 min-h-[2rem] min-w-[2rem] shrink-0 justify-center self-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+              :aria-expanded="expanded"
+              @click.stop="toggleAndRestoreFocus($event, item, handleToggle)"
+            >
+              <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+            </UButton>
+          </div>
+        </template>
+      </UTree>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/workspace'
-import { catalogueSubtypeLabel } from '../utils/catalogue-labels'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import type { PlayerSystemDocument } from '../domain/player-projection'
+import { playerObjectPresentation } from '../utils/player-object-presentation'
+import { buildPlayerSystemHierarchy, summarizePlayerContextLabel } from '../utils/player-system-hierarchy'
+import type { PlayerHierarchyNode } from '../utils/player-system-hierarchy'
+import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
 
-const props = defineProps<{
+interface PlayerTreeItemBase {
+  key: string
+  label: string
+  textValue: string
+  ariaLabel: string
+  parentContext?: string
+  children?: PlayerTreeItem[]
+  [key: string]: unknown
+}
+
+type PlayerTreeItem = PlayerTreeItemBase & (
+  | { kind: 'object'; object: NonNullable<Extract<PlayerHierarchyNode, { kind: 'object' }>['object']> }
+  | { kind: 'orbit'; orbit: NonNullable<Extract<PlayerHierarchyNode, { kind: 'orbit' }>['orbit']> }
+)
+
+const props = withDefaults(defineProps<{
   document: PlayerSystemDocument
   selectedObjectId: string | null
+  selectedOrbitId?: string | null
   workspacePresentation?: boolean
+}>(), {
+  selectedOrbitId: null,
+  workspacePresentation: false,
+})
+const emit = defineEmits<{
+  'inspect-object': [publicObjectId: string]
+  'inspect-orbit': [publicOrbitId: string]
 }>()
-const emit = defineEmits<{ 'inspect-object': [publicObjectId: string] }>()
-const objectsById = computed(() => new Map(props.document.objects.map(object => [object.id, object])))
-const orbitsById = computed(() => new Map(props.document.orbits.map(orbit => [orbit.id, orbit])))
-const entries = computed(() => props.document.objects.map(object => ({ object, path: hierarchyPath(object) })))
 
-const maximumHostLinks = 8
-const maximumHostLabelLength = 80
+const maximumIndentLevels = 4
+const indentStep = 0.65
+const treeContainer = ref<HTMLElement | null>(null)
+const expandedKeys = ref<string[]>([])
+const isComposing = ref(false)
+const focusRequestNonce = ref(0)
+const hierarchy = computed(() => buildPlayerSystemHierarchy(props.document))
+const treeItems = computed(() => prepareTreeItems(hierarchy.value))
+const treeItemByKey = computed(() => indexTreeItems(treeItems.value))
+const ancestorKeysByKey = computed(() => indexAncestorKeys(treeItems.value))
+const selectedKey = computed(() => props.selectedObjectId
+  ? `object:${props.selectedObjectId}`
+  : props.selectedOrbitId ? `orbit:${props.selectedOrbitId}` : null)
+const selectedTreeItem = computed(() => selectedKey.value
+  ? treeItemByKey.value.get(selectedKey.value)
+  : undefined)
 
-function summarizeHostLabel(label: string): string {
-  if (label.length <= maximumHostLabelLength) return label
-  const prefixLength = maximumHostLabelLength - 1
-  let prefix = label.slice(0, prefixLength)
-  const lastCodeUnit = prefix.charCodeAt(prefix.length - 1)
-  const nextCodeUnit = label.charCodeAt(prefix.length)
-  if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF && nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF) {
-    prefix = prefix.slice(0, -1)
+watch(() => props.document, () => {
+  focusRequestNonce.value += 1
+  expandedKeys.value = []
+  expandSelectedAncestors()
+}, { flush: 'sync' })
+
+watch(selectedKey, () => {
+  focusRequestNonce.value += 1
+  expandSelectedAncestors()
+}, { flush: 'sync', immediate: true })
+
+function prepareTreeItems(nodes: PlayerHierarchyNode[]): PlayerTreeItem[] {
+  const roots: PlayerTreeItem[] = []
+  const pending = nodes.slice().reverse().map(node => ({ node, siblings: roots }))
+  while (pending.length) {
+    const entry = pending.pop()!
+    const node = entry.node
+    const context = node.kind === 'object' && node.object.placement.kind === 'orbit'
+      ? objectParentContext(node.object.placement.orbitId, props.document)
+      : undefined
+    const base = {
+      key: node.key,
+      label: node.label,
+      textValue: node.label,
+      ariaLabel: playerTreeAccessibleLabel(node, props.document),
+      ...(context === undefined ? {} : { parentContext: context }),
+    }
+    const item: PlayerTreeItem = node.kind === 'object'
+      ? {
+          ...base,
+          kind: 'object',
+          object: node.object,
+          ...(node.children?.length ? { children: [] } : {}),
+        }
+      : {
+          ...base,
+          kind: 'orbit',
+          orbit: node.orbit,
+          ...(node.children?.length ? { children: [] } : {}),
+        }
+    entry.siblings.push(item)
+    if (node.children?.length && item.children) {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        pending.push({ node: node.children[index]!, siblings: item.children })
+      }
+    }
   }
-  return `${prefix}…`
+  return roots
 }
 
-/** Follows only remapped public placement and host references. */
-function hierarchyPath(object: PlayerObjectMarker): string {
-  const path: string[] = []
-  const visitedOrbitIds = new Set<string>()
-  let placement = object.placement
-  let hostLinks = 0
-  while (placement.kind === 'orbit') {
-    const orbit = orbitsById.value.get(placement.orbitId)
-    if (!orbit || visitedOrbitIds.has(orbit.id)) break
-    visitedOrbitIds.add(orbit.id)
-    if (orbit.hostId === null) {
-      path.push('Orbit around unoccupied center')
-      break
-    }
-    if (hostLinks >= maximumHostLinks) {
-      path.push('…')
-      break
-    }
-    const host = objectsById.value.get(orbit.hostId)
-    if (!host) {
-      path.push('Orbit around Unknown presence')
-      break
-    }
-    path.push(`Orbit around ${summarizeHostLabel(host.label)}`)
-    hostLinks += 1
-    placement = host.placement
-  }
-  return path.join(' → ')
+function objectParentContext(orbitId: string, document: PlayerSystemDocument): string {
+  const orbit = document.orbits.find(candidate => candidate.id === orbitId)
+  if (!orbit) return 'Orbit around an unknown public host'
+  if (orbit.hostId === null) return 'Orbit around unoccupied center'
+  const host = document.objects.find(candidate => candidate.id === orbit.hostId)
+  return `Orbit around ${summarizePlayerContextLabel(host
+    ? playerObjectPresentation(host).label
+    : 'Unknown presence')}`
 }
+
+function playerTreeAccessibleLabel(node: PlayerHierarchyNode, document: PlayerSystemDocument): string {
+  if (node.kind === 'orbit') return node.label
+  const presentation = playerObjectPresentation(node.object)
+  const parent = node.object.placement.kind === 'orbit'
+    ? objectParentContext(node.object.placement.orbitId, document)
+    : undefined
+  return [presentation.label, presentation.typeLabel, parent].filter(Boolean).join(', ')
+}
+
+function objectPresentation(item: PlayerTreeItem) {
+  return item.kind === 'object' ? playerObjectPresentation(item.object) : null
+}
+
+function indexTreeItems(items: PlayerTreeItem[]): Map<string, PlayerTreeItem> {
+  const result = new Map<string, PlayerTreeItem>()
+  const pending = items.slice()
+  while (pending.length) {
+    const item = pending.pop()!
+    result.set(item.key, item)
+    if (item.children) pending.push(...item.children)
+  }
+  return result
+}
+
+function indexAncestorKeys(items: PlayerTreeItem[]): Map<string, string[]> {
+  const result = new Map<string, string[]>()
+  const pending = items.map(item => ({ item, ancestors: [] as string[] }))
+  while (pending.length) {
+    const entry = pending.pop()!
+    result.set(entry.item.key, entry.ancestors)
+    if (!entry.item.children) continue
+    const ancestors = [...entry.ancestors, entry.item.key]
+    for (const child of entry.item.children) pending.push({ item: child, ancestors })
+  }
+  return result
+}
+
+function getTreeItemKey(item: PlayerTreeItem): string {
+  return item.key
+}
+
+function expandSelectedAncestors(): void {
+  const key = selectedKey.value
+  if (!key) return
+  const ancestors = ancestorKeysByKey.value.get(key)
+  if (!ancestors?.length) return
+  expandedKeys.value = [...new Set([...expandedKeys.value, ...ancestors])]
+}
+
+function updateExpandedKeys(keys: string[]): void {
+  focusRequestNonce.value += 1
+  expandedKeys.value = keys
+}
+
+function stopComposingTreeKeys(event: KeyboardEvent): void {
+  if (isComposing.value || event.isComposing) event.stopPropagation()
+}
+
+function selectHierarchyItem(_event: TreeItemSelectEvent<PlayerTreeItem>, item: PlayerTreeItem): void {
+  _event.preventDefault()
+  focusRequestNonce.value += 1
+  if (item.kind === 'object') emit('inspect-object', item.object.id)
+  else emit('inspect-orbit', item.orbit.id)
+}
+
+function preventClickToggle(event: TreeItemToggleEvent<PlayerTreeItem>): void {
+  if (event.detail.originalEvent.type === 'click') event.preventDefault()
+}
+
+function toggleAndRestoreFocus(event: MouseEvent, item: PlayerTreeItem, handleToggle: () => void): void {
+  const document = props.document
+  handleToggle()
+  const nonce = ++focusRequestNonce.value
+  void nextTick(() => {
+    if (props.document !== document || focusRequestNonce.value !== nonce) return
+    const element = treeContainer.value?.querySelector<HTMLElement>(
+      `[data-player-hierarchy-key="${CSS.escape(item.key)}"]`,
+    )
+    const treeItem = element?.closest<HTMLElement>('[role="treeitem"]') ?? element
+    if (!treeItem || !isVisibleTreeRow(treeItem)) return
+    treeItem.focus()
+  })
+  event.preventDefault()
+}
+
+function isVisibleTreeRow(element: HTMLElement): boolean {
+  return element.isConnected
+    && element.getClientRects().length > 0
+    && getComputedStyle(element).visibility !== 'hidden'
+    && !element.closest('[inert], [aria-hidden="true"]')
+}
+
+onBeforeUnmount(() => {
+  focusRequestNonce.value += 1
+})
 </script>
 
 <style scoped>
 .player-public-hierarchy { display: grid; min-width: 0; gap: .5rem; }
 .player-public-panel-heading { display: grid; gap: .2rem; }
 .player-public-panel-heading h2 { margin: 0; font: 500 1rem Georgia, serif; }
-.player-system-hierarchy-item {
-  display: grid;
-  width: 100%;
-  min-width: 0;
-  gap: .1rem;
-  border: 1px solid var(--line-soft);
-  background: transparent;
-  padding: .45rem .55rem;
-  color: var(--text-primary);
-  text-align: left;
-  white-space: normal;
-}
-.player-system-hierarchy-item > span { min-width: 0; overflow-wrap: anywhere; }
-.player-system-hierarchy-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.player-system-hierarchy-tree { min-width: 0; }
+.player-system-hierarchy-row { width: 100%; min-height: 2.55rem; overflow-wrap: anywhere; }
+.player-system-hierarchy-row--orbit { color: var(--text-secondary); }
+.player-system-hierarchy-row.active { border-color: var(--accent); background: var(--accent-soft); }
+.player-system-hierarchy-label { min-width: 0; }
+.player-system-hierarchy-glyph { color: var(--text-muted); }
+.player-system-hierarchy-orbit-mark { color: var(--map-muted); }
 .player-system-hierarchy-type,
-.player-system-hierarchy-path { color: var(--text-muted); font-size: .72rem; }
-.player-system-hierarchy-path { font-size: .68rem; line-height: 1.35; }
+.player-system-hierarchy-path { color: var(--text-muted); font-size: .72rem; line-height: 1.35; }
+.player-system-hierarchy-path { font-size: .68rem; }
+.player-system-hierarchy-toggle { grid-column: 2; }
 </style>

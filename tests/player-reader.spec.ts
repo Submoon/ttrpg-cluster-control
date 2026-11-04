@@ -85,7 +85,7 @@ async function uploadPlayerJson(
   })
 }
 
-test('a downloaded player JSON opens in the standalone reader for Revealed inspection', async ({ browser, page }, testInfo) => {
+test('a downloaded player JSON opens in the standalone reader for Revealed inspection', async ({ browser, page, previewCookies }, testInfo) => {
   test.setTimeout(60_000)
   const privateClusterName = 'PRIVATE Reach'
   const privateNotes = 'GM ONLY: a concealed passage runs below the garden.'
@@ -138,8 +138,7 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
 
   const recipientContext = await browser.newContext({ baseURL: new URL(page.url()).origin })
   try {
-    const sourceCookies = await page.context().cookies()
-    if (sourceCookies.length) await recipientContext.addCookies(sourceCookies)
+    if (previewCookies.length) await recipientContext.addCookies(previewCookies)
     const recipientPage = await recipientContext.newPage()
     await recipientPage.goto('/player')
     const playerFileInput = recipientPage.getByLabel('Open player JSON', { exact: true })
@@ -170,7 +169,8 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
     const compactBackButton = recipientPage.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
     const compactFitButton = systemMap.getByRole('button', { name: 'Fit player map', exact: true })
     await expect(compactBackButton).toBeVisible()
-    if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+    await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
+    await inspectToggle.click()
     const compactDetailsPanel = recipientPage.getByRole('dialog', { name: 'Player details', exact: true })
     await expect(compactDetailsPanel).toBeVisible()
     await expect(publicDetails).toContainText(publicPlayerText)
@@ -398,7 +398,7 @@ test('a delayed older File.text result cannot replace a newer player selection',
     .getByRole('button', { name: /Open Latest File Vesper/ })).toBeVisible()
 })
 
-test('the player reader bounds deep hierarchy breadcrumbs and Orbit summaries', async ({ page }) => {
+test('the player reader exposes nested hierarchy levels and bounded public parent context', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   const suffix = '-TAIL-MUST-NOT-REPEAT'
   const prefix = 'Custom Other '
@@ -493,38 +493,98 @@ test('the player reader bounds deep hierarchy breadcrumbs and Orbit summaries', 
   if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
   if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const hierarchy = page.getByRole('region', { name: 'Visible system hierarchy', exact: true })
-  const childRows = hierarchy.getByRole('button', { name: /^Child \d+ / })
-  await expect(childRows).toHaveCount(20)
+  const tree = hierarchy.getByRole('tree', { name: 'Player object and Orbit hierarchy', exact: true })
+  const longHost = tree.getByRole('treeitem', { name: /^Custom Other / })
+  await expect(longHost).toHaveAttribute('aria-level', '1')
+  expect(await longHost.textContent()).toContain(longSubtype)
+  await longHost.press('ArrowRight')
+  await expect(longHost).toHaveAttribute('aria-expanded', 'true')
 
-  const childPaths = await childRows.locator('.player-system-hierarchy-path').allTextContents()
-  expect(childPaths).toHaveLength(20)
-  for (const path of childPaths) {
+  const hostOrbits = tree.getByRole('treeitem', { name: /^Orbit around Custom Other / })
+  await expect(hostOrbits).toHaveCount(20)
+  for (let index = 0; index < 20; index += 1) {
+    const orbit = hostOrbits.nth(index)
+    await expect(orbit).toHaveAttribute('aria-level', '2')
+    await orbit.press('ArrowRight')
+    await expect(orbit).toHaveAttribute('aria-expanded', 'true')
+  }
+
+  const childRows = tree.getByRole('treeitem', { name: /^Child \d+,/ })
+  await expect(childRows).toHaveCount(20)
+  for (let index = 0; index < 20; index += 1) {
+    const child = childRows.nth(index)
+    await expect(child).toHaveAttribute('aria-level', '3')
+    const path = (await child.locator('.player-system-hierarchy-path').textContent())?.trim() ?? ''
     expect(path).toMatch(/^Orbit around /)
     const pathSegment = path.slice('Orbit around '.length)
     expect(pathSegment.length).toBeLessThanOrEqual(80)
     expect(pathSegment).not.toContain(suffix)
   }
 
-  const deepestPath = (await hierarchy.getByRole('button', { name: /^Deep leaf / })
-    .locator('.player-system-hierarchy-path').textContent()) ?? ''
-  const chainSegments = deepestPath.split(' → ')
-  expect(chainSegments).toHaveLength(9)
-  expect(chainSegments.slice(0, 8)).toEqual(
-    Array.from({ length: 8 }, (_, index) => `Orbit around Link ${10 - index}`),
-  )
-  expect(chainSegments[8]).toMatch(/…|\.\.\.|more|additional/i)
-
-  const orbitSummaries = await page.getByRole('region', { name: 'Visible Orbit layout', exact: true })
-    .locator('li').allTextContents()
-  expect(orbitSummaries).toHaveLength(30)
-  for (const summary of orbitSummaries.slice(0, 20)) {
-    expect(summary).toMatch(/^Orbit around /)
-    const summarySegment = summary.slice('Orbit around '.length)
-    expect(summarySegment.length).toBeLessThanOrEqual(80)
-    expect(summarySegment).not.toContain(suffix)
+  for (let link = 1; link <= 10; link += 1) {
+    const object = tree.getByRole('treeitem', { name: new RegExp(`^Link ${link},`) })
+    await expect(object).toHaveAttribute('aria-level', String(link * 2 - 1))
+    await object.press('ArrowRight')
+    await expect(object).toHaveAttribute('aria-expanded', 'true')
+    const orbit = tree.getByRole('treeitem', { name: `Orbit around Link ${link}`, exact: true })
+    await expect(orbit).toHaveAttribute('aria-level', String(link * 2))
+    await orbit.press('ArrowRight')
+    await expect(orbit).toHaveAttribute('aria-expanded', 'true')
   }
 
-  await hierarchy.getByRole('button').first().click()
+  const deepLeaf = tree.getByRole('treeitem', { name: /^Deep leaf,/ })
+  await expect(deepLeaf).toHaveAttribute('aria-level', '21')
+  const deepContext = (await deepLeaf.locator('.player-system-hierarchy-path').textContent())?.trim() ?? ''
+  expect(deepContext).toBe('Orbit around Link 10')
+  expect(deepContext).not.toContain('Link 9')
+  expect(deepContext).not.toContain('→')
+
+  const hierarchyPanel = page.locator('#workspace-hierarchy-panel')
+  const resizeHandle = hierarchyPanel.getByRole('separator', { name: 'Resize player hierarchy panel', exact: true })
+  const minimumWidth = await resizeHandle.getAttribute('aria-valuemin')
+  await resizeHandle.focus()
+  await page.keyboard.press('Home')
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', minimumWidth ?? '220')
+  const deepBranch = tree.getByRole('treeitem', { name: /^Link 10,/ })
+  await deepBranch.click()
+  await expect(deepBranch).toHaveAttribute('aria-expanded', 'true')
+  for (const row of [deepBranch, deepLeaf]) {
+    const metrics = await row.evaluate(element => {
+      const title = element.querySelector('.player-system-hierarchy-title')
+      const glyph = element.querySelector('.player-system-hierarchy-glyph')
+      const glyphSpace = glyph && title
+        ? glyph.getBoundingClientRect().width + (Number.parseFloat(getComputedStyle(title).columnGap) || 0)
+        : 0
+      return {
+        width: element.clientWidth,
+        contentWidth: element.scrollWidth,
+        // Measure available name space, rather than the ink width of a short name.
+        labelWidth: (title?.getBoundingClientRect().width ?? 0) - glyphSpace,
+      }
+    })
+    expect(metrics.contentWidth).toBeLessThanOrEqual(metrics.width)
+    expect(metrics.labelWidth).toBeGreaterThanOrEqual(80)
+  }
+  await deepLeaf.scrollIntoViewIfNeeded()
+  const minimumScreenshot = testInfo.outputPath('player-deep-hierarchy-minimum-width.png')
+  await page.screenshot({ path: minimumScreenshot, animations: 'disabled' })
+  await testInfo.attach('player-deep-hierarchy-minimum-width', { path: minimumScreenshot, contentType: 'image/png' })
+
+  await hostOrbits.first().click()
+  const orbitDetails = page.getByRole('region', { name: 'Player Orbit details', exact: true })
+  await expect(orbitDetails).toContainText(longSubtype)
+  await expect(orbitDetails.getByRole('region', { name: 'Public objects in this Orbit', exact: true }))
+    .toContainText('Child 1')
+
+  await longHost.click()
+  await expect(longHost).toHaveAttribute('aria-expanded', 'true')
   const details = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toContainText(longSubtype)
+  const documentWidth = await page.evaluate(() => ({
+    document: window.document.documentElement.scrollWidth,
+    viewport: window.document.documentElement.clientWidth,
+  }))
+  expect(documentWidth.document).toBeLessThanOrEqual(documentWidth.viewport)
+  const publicDom = await page.locator('body').evaluate(body => body.innerHTML)
+  expect(publicDom).not.toContain('PRIVATE')
 })

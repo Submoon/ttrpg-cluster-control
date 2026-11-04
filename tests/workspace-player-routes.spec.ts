@@ -477,8 +477,9 @@ test('player inspection shows a Jump Point Station only when both objects are Re
   await chartDetails.getByRole('button', { name: 'Preview player view', exact: true }).click()
   const preview = page.getByRole('dialog', { name: 'Player view preview' })
   await preview.getByRole('button', { name: 'Open Station Association System system preview', exact: true }).click()
-  const systemPreview = preview.getByRole('region', { name: 'Player-visible system map' })
-  const publicDetails = systemPreview.getByRole('region', { name: 'Player object details' })
+  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
+  const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
+  const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
 
   await systemPreview.getByRole('button', { name: 'Inspect Dawn Gateway', exact: true }).click()
   await expect(publicDetails).toContainText('Common Gate Station', { timeout: 5_000 })

@@ -102,9 +102,6 @@ async function downloadMapJson(page: Page, buttonName: string): Promise<string> 
 
 async function inspectPlayerObject(page: Page, systemMap: Locator, objectName: string): Promise<Locator> {
   await systemMap.getByRole('button', { name: `Inspect ${objectName}`, exact: true }).click()
-  const playerNavigation = page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
-  const inspectToggle = playerNavigation.getByRole('button', { name: 'Inspect', exact: true })
-  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const details = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toBeVisible()
   return details

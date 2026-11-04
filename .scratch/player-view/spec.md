@@ -227,6 +227,8 @@ At specification publication, origin fetch showed HEAD/main/origin/main at the r
 
 On 2026-11-04 the user requested [Align player maps with the Warden map interface](tickets/08-player-map-interface-consistency.md), initially referenced in [GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40). The user clarified that local ticket 08 belongs to this current effort and blocks merge of PR #39 until implemented and verified. It covers icons, dashed Orbits, useful inspection, nested Hierarchy and consistent Back placement while retaining revelation colors, without changing the established disclosure rules.
 
+The [ticket 08 implementation record](ticket-08-implementation.md) tracks the current branch's source changes, desktop/compact captures, public artifact checks, native touch correction and independent reviews. Exact-candidate cumulative qualification remains required before closing that ticket.
+
 ## Original seven-ticket resolution
 
 All seven approved slices are implemented and committed locally on `codex/player-view-ticket-01`. The common allowlisted player document serves preview, JSON, immutable compressed URLs and SVG/PNG; the base route retains the saved GM workspace. Ticket 06 completed verification on 2026-11-04 against integrated baseline `62e5e55d293573019979df1e59013855ac9317a0` (origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`).
