@@ -180,6 +180,16 @@ test('long unbroken player prose stays inside the compact reader viewport', asyn
     viewport: document.documentElement.clientWidth,
   }))
   expect(width.document).toBeLessThanOrEqual(width.viewport)
+  await page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
+    .getByRole('button', { name: 'Inspect', exact: true }).click()
+  const details = page.getByRole('region', { name: 'Player object details', exact: true })
+  await expect(details).toBeVisible()
+  await expect(details).toContainText(playerText)
+  const inspectionWidth = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }))
+  expect(inspectionWidth.document).toBeLessThanOrEqual(inspectionWidth.viewport)
 })
 
 test('a generated player link opens the exported public snapshot in a fresh reader context', async ({ browser, page }, testInfo) => {
