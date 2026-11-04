@@ -1,8 +1,8 @@
 <template>
-  <section class="player-public-hierarchy" aria-label="Visible star systems">
+  <section class="player-public-hierarchy" aria-label="Visible cluster locations">
     <div class="player-public-panel-heading">
       <span class="section-kicker">PUBLIC NAVIGATION</span>
-      <h2>Star systems</h2>
+      <h2>Map locations</h2>
     </div>
     <ul v-if="props.document.systems.length" class="player-public-list">
       <li v-for="system in props.document.systems" :key="system.id">
@@ -18,11 +18,11 @@
         </button>
         <div v-else class="player-public-list-item player-public-list-item--static">
           <span>{{ system.label }}</span>
-          <span class="player-public-list-note">{{ system.disclosure === 'known-type' ? 'Star system' : 'Unknown presence' }}</span>
+          <span class="player-public-list-note">{{ system.disclosure === 'known-type' ? 'Star system · internal map not shared' : 'No further information shared' }}</span>
         </div>
       </li>
     </ul>
-    <p v-else class="empty-copy">No star systems are visible to players.</p>
+    <p v-else class="empty-copy">No locations are visible to players.</p>
   </section>
 </template>
 

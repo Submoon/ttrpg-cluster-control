@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { parsePlayerJson } from '../domain/player-codec'
 import { createPlayerShareUrl, decodePlayerShareFragment } from '../utils/player-share-link'
@@ -100,6 +100,23 @@ async function downloadMapJson(page: Page, buttonName: string): Promise<string> 
   }
 }
 
+async function inspectPlayerObject(page: Page, systemMap: Locator, objectName: string): Promise<Locator> {
+  await systemMap.getByRole('button', { name: `Inspect ${objectName}`, exact: true }).click()
+  const playerNavigation = page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
+  const inspectToggle = playerNavigation.getByRole('button', { name: 'Inspect', exact: true })
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const details = page.getByRole('region', { name: 'Player object details', exact: true })
+  await expect(details).toBeVisible()
+  return details
+}
+
+async function closeCompactPlayerDetails(page: Page): Promise<void> {
+  const detailsPanel = page.getByRole('dialog', { name: 'Player details', exact: true })
+  if (!await detailsPanel.isVisible()) return
+  await detailsPanel.getByRole('button', { name: 'Return to map', exact: true }).click()
+  await expect(detailsPanel).toBeHidden()
+}
+
 async function expectPlayerObject(
   page: Page,
   title: string,
@@ -111,8 +128,9 @@ async function expectPlayerObject(
   const clusterMap = page.getByRole('region', { name: 'Player-visible Jump Cluster map' })
   await clusterMap.getByRole('button', { name: new RegExp(`Open ${systemName}`) }).click()
   const systemMap = page.getByRole('region', { name: 'Player-visible system map' })
-  await systemMap.getByRole('button', { name: `Inspect ${objectName}`, exact: true }).click()
-  await expect(systemMap.getByRole('region', { name: 'Player object details' })).toContainText(playerText)
+  const details = await inspectPlayerObject(page, systemMap, objectName)
+  await expect(details).toContainText(playerText)
+  await closeCompactPlayerDetails(page)
 }
 
 function highEntropyPlayerText(length: number): string {
@@ -352,12 +370,11 @@ test('a generated player link opens the exported public snapshot in a fresh read
       const clusterMap = recipientPage.getByRole('region', { name: 'Player-visible Jump Cluster map' })
       await clusterMap.getByRole('button', { name: new RegExp(`Open ${publicSystemName}`) }).click()
       const systemMap = recipientPage.getByRole('region', { name: 'Player-visible system map' })
-      await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true }).click()
-
-      const publicDetails = systemMap.getByRole('region', { name: 'Player object details' })
+      const publicDetails = await inspectPlayerObject(recipientPage, systemMap, publicObjectName)
       await expect(publicDetails).toContainText(publicPlayerText)
       await expect(recipientPage.locator('body')).not.toContainText(privateClusterName)
       await expect(recipientPage.locator('body')).not.toContainText(privateNotes)
+      await closeCompactPlayerDetails(recipientPage)
     })
 
     await test.step('check requests and diagnostics contain no fragment payload or map data', async () => {

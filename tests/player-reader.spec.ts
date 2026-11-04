@@ -151,9 +151,13 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
     const clusterMap = recipientPage.getByRole('region', { name: 'Player-visible Jump Cluster map' })
     await clusterMap.getByRole('button', { name: new RegExp(`Open ${publicSystemName}`) }).click()
     const systemMap = recipientPage.getByRole('region', { name: 'Player-visible system map' })
+    const playerNavigation = recipientPage.getByRole('toolbar', { name: 'Player map navigation', exact: true })
+    const inspectToggle = playerNavigation.getByRole('button', { name: 'Inspect', exact: true })
+    if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
     await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true }).click()
 
-    const publicDetails = systemMap.getByRole('region', { name: 'Player object details' })
+    const publicDetails = recipientPage.getByRole('region', { name: 'Player object details', exact: true })
+    await expect(publicDetails).toBeVisible()
     await expect(publicDetails).toContainText(publicPlayerText)
     await expect(recipientPage.locator('body')).not.toContainText(privateClusterName)
     await expect(recipientPage.locator('body')).not.toContainText(privateNotes)
@@ -166,6 +170,13 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
     const compactBackButton = recipientPage.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
     const compactFitButton = systemMap.getByRole('button', { name: 'Fit player map', exact: true })
     await expect(compactBackButton).toBeVisible()
+    if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+    const compactDetailsPanel = recipientPage.getByRole('dialog', { name: 'Player details', exact: true })
+    await expect(compactDetailsPanel).toBeVisible()
+    await expect(publicDetails).toContainText(publicPlayerText)
+    await compactDetailsPanel.getByRole('button', { name: 'Return to map', exact: true }).click()
+    await expect(compactDetailsPanel).toBeHidden()
+    await expect(inspectToggle).toBeFocused()
     await compactFitButton.scrollIntoViewIfNeeded()
     await expect(compactFitButton).toBeVisible()
     const compactWidth = await recipientPage.evaluate(() => ({
@@ -472,8 +483,12 @@ test('the player reader bounds deep hierarchy breadcrumbs and Orbit summaries', 
 
   const clusterMap = page.getByRole('region', { name: 'Player-visible Jump Cluster map' })
   await clusterMap.getByRole('button', { name: /Open Breadcrumb System/ }).click()
-  const systemMap = page.getByRole('region', { name: 'Player-visible system map' })
-  const hierarchy = systemMap.getByRole('region', { name: 'Visible system hierarchy' })
+  const playerNavigation = page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
+  const hierarchyToggle = playerNavigation.getByRole('button', { name: 'Hierarchy', exact: true })
+  const inspectToggle = playerNavigation.getByRole('button', { name: 'Inspect', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
+  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
+  const hierarchy = page.getByRole('region', { name: 'Visible system hierarchy', exact: true })
   const childRows = hierarchy.getByRole('button', { name: /^Child \d+ / })
   await expect(childRows).toHaveCount(20)
 
@@ -495,7 +510,7 @@ test('the player reader bounds deep hierarchy breadcrumbs and Orbit summaries', 
   )
   expect(chainSegments[8]).toMatch(/…|\.\.\.|more|additional/i)
 
-  const orbitSummaries = await systemMap.getByRole('region', { name: 'Visible Orbit layout' })
+  const orbitSummaries = await page.getByRole('region', { name: 'Visible Orbit layout', exact: true })
     .locator('li').allTextContents()
   expect(orbitSummaries).toHaveLength(30)
   for (const summary of orbitSummaries.slice(0, 20)) {
@@ -506,6 +521,6 @@ test('the player reader bounds deep hierarchy breadcrumbs and Orbit summaries', 
   }
 
   await hierarchy.getByRole('button').first().click()
-  const details = systemMap.getByRole('region', { name: 'Player object details' })
+  const details = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toContainText(longSubtype)
 })

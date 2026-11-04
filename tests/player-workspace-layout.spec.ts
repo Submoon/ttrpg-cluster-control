@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import type { TestInfo } from '@playwright/test'
 import { serializePlayerJson } from '../domain/workspace'
 import type { PlayerClusterDocument } from '../domain/workspace'
 import { measureMouseDrag, snapshotSvgCoordinates } from './helpers'
@@ -24,7 +25,7 @@ function createPlayerDocument(): PlayerClusterDocument {
       map: {
         objects: [
           {
-            id: 'known-star',
+            id: 'object-1',
             position: { x: 480, y: 280 },
             placement: { kind: 'system' },
             disclosure: 'known-type',
@@ -33,7 +34,7 @@ function createPlayerDocument(): PlayerClusterDocument {
             label: knownStarLabel,
           },
           {
-            id: 'revealed-world',
+            id: 'object-2',
             position: { x: 720, y: 400 },
             placement: { kind: 'system' },
             disclosure: 'revealed',
@@ -60,7 +61,7 @@ async function openPlayerDocument(page: import('@playwright/test').Page): Promis
     mimeType: 'application/json',
     buffer: Buffer.from(serializePlayerJson(createPlayerDocument()), 'utf8'),
   })
-  const workspaceHeader = page.getByRole('banner')
+  const workspaceHeader = page.locator('header.workspace-header')
   await expect(workspaceHeader).toBeVisible()
   await expect(workspaceHeader.getByRole('heading', { name: playerTitle, exact: true })).toBeVisible()
 }
@@ -83,12 +84,35 @@ async function openRevealedSystem(page: import('@playwright/test').Page) {
 async function expectSceneToFillViewport(
   page: import('@playwright/test').Page,
   scene: import('@playwright/test').Locator,
+  testInfo: TestInfo,
 ): Promise<void> {
   const bounds = await scene.boundingBox()
   if (!bounds) throw new Error('The visible player map scene has no rendered bounds.')
+  const headerBounds = await page.locator('header.workspace-header').boundingBox()
+  if (!headerBounds) throw new Error('The public Workspace header has no rendered bounds.')
+  const mapBoard = page.locator('[data-map-board]')
+  const boardBounds = await mapBoard.boundingBox()
+  if (!boardBounds) throw new Error('The public map board has no rendered bounds.')
+  const boardClientWidth = await mapBoard.evaluate(element => element.clientWidth)
   const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
-  expect(bounds.width).toBeGreaterThanOrEqual(viewport.width - 16)
+  await testInfo.attach('player-map-scene-viewport-bounds', {
+    body: Buffer.from(JSON.stringify({
+      label: await scene.getAttribute('aria-label'),
+      bounds,
+      headerBounds,
+      boardBounds,
+      boardClientWidth,
+      viewport,
+    }, null, 2)),
+    contentType: 'application/json',
+  })
+  expect(Math.abs(bounds.width - boardClientWidth)).toBeLessThanOrEqual(1)
   expect(bounds.height).toBeGreaterThanOrEqual(viewport.height * 0.65)
+  expect(bounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height - 1)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height + 1)
+  expect(boardBounds.width).toBeGreaterThanOrEqual(viewport.width - 20)
+  expect(boardBounds.x).toBeLessThanOrEqual(10)
+  expect(viewport.width - (boardBounds.x + boardBounds.width)).toBeLessThanOrEqual(10)
 }
 
 function readViewBox(value: string | null): { left: number; top: number; width: number; height: number } {
@@ -109,6 +133,12 @@ test('the standalone player workspace fills desktop view while preserving read-o
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ colorScheme: 'light' })
   await openPlayerDocument(page)
+  const desktopClusterScreenshot = testInfo.outputPath('player-workspace-desktop-cluster.png')
+  await page.screenshot({ path: desktopClusterScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-desktop-cluster', {
+    path: desktopClusterScreenshot,
+    contentType: 'image/png',
+  })
   await expectNoMutationControls(page)
 
   const playerNavigation = page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
@@ -121,7 +151,7 @@ test('the standalone player workspace fills desktop view while preserving read-o
 
   const clusterScene = page.locator('svg.player-cluster-map-scene')
   await expect(clusterScene).toBeVisible()
-  await expectSceneToFillViewport(page, clusterScene)
+  await expectSceneToFillViewport(page, clusterScene, testInfo)
   const clusterOpener = page.getByRole('button', {
     name: `Open ${systemName} system preview`,
     exact: true,
@@ -143,7 +173,13 @@ test('the standalone player workspace fills desktop view while preserving read-o
   await expect(page.locator('html')).toHaveClass(/\blight\b/)
 
   const { backButton, systemMap, systemScene } = await openRevealedSystem(page)
-  await expectSceneToFillViewport(page, systemScene)
+  const desktopSystemScreenshot = testInfo.outputPath('player-workspace-desktop-system.png')
+  await page.screenshot({ path: desktopSystemScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-desktop-system', {
+    path: desktopSystemScreenshot,
+    contentType: 'image/png',
+  })
+  await expectSceneToFillViewport(page, systemScene, testInfo)
   await expectNoMutationControls(page)
   const systemNavigation = page.getByRole('group', { name: 'Player system map navigation', exact: true })
 
@@ -198,12 +234,12 @@ test('the standalone player workspace fills desktop view while preserving read-o
   if (!sceneBounds) throw new Error('The player system scene has no bounds for native pan input.')
   const dragStart = await systemScene.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
-    const candidates = [
-      { x: bounds.left + bounds.width * 0.2, y: bounds.top + bounds.height * 0.2 },
-      { x: bounds.left + bounds.width * 0.8, y: bounds.top + bounds.height * 0.2 },
-      { x: bounds.left + bounds.width * 0.2, y: bounds.top + bounds.height * 0.8 },
-      { x: bounds.left + bounds.width * 0.8, y: bounds.top + bounds.height * 0.8 },
-    ]
+    const candidates = [0.35, 0.5, 0.65].flatMap(xFraction =>
+      [0.25, 0.5, 0.75].map(yFraction => ({
+        x: bounds.left + bounds.width * xFraction,
+        y: bounds.top + bounds.height * yFraction,
+      })),
+    )
     const markers = Array.from(element.querySelectorAll('.player-system-object-marker'))
       .map(marker => marker.getBoundingClientRect())
     const point = candidates.find(candidate => {
@@ -252,10 +288,16 @@ test('the standalone player workspace fills desktop view while preserving read-o
 test('compact player panels switch exclusively, preserve map focus, and scroll long public prose without overflow', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 650 })
   await openPlayerDocument(page)
+  const compactClusterScreenshot = testInfo.outputPath('player-workspace-compact-cluster.png')
+  await page.screenshot({ path: compactClusterScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-compact-cluster', {
+    path: compactClusterScreenshot,
+    contentType: 'image/png',
+  })
 
   const clusterScene = page.locator('svg.player-cluster-map-scene')
   await expect(clusterScene).toBeVisible()
-  await expectSceneToFillViewport(page, clusterScene)
+  await expectSceneToFillViewport(page, clusterScene, testInfo)
 
   const navigation = page.getByRole('toolbar', { name: 'Player map navigation', exact: true })
   const hierarchyToggle = navigation.getByRole('button', { name: 'Hierarchy', exact: true })
@@ -270,6 +312,12 @@ test('compact player panels switch exclusively, preserve map focus, and scroll l
     name: `${systemName} Open shared system map`,
     exact: true,
   }).click()
+  const compactHierarchySystemScreenshot = testInfo.outputPath('player-workspace-compact-hierarchy-system.png')
+  await page.screenshot({ path: compactHierarchySystemScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-compact-hierarchy-system', {
+    path: compactHierarchySystemScreenshot,
+    contentType: 'image/png',
+  })
 
   const backButton = page.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
   await expect(clusterHierarchyPanel).toBeHidden()
@@ -284,7 +332,13 @@ test('compact player panels switch exclusively, preserve map focus, and scroll l
 
   const reopenedSystem = await openRevealedSystem(page)
   const systemScene = reopenedSystem.systemScene
-  await expectSceneToFillViewport(page, systemScene)
+  const compactSystemScreenshot = testInfo.outputPath('player-workspace-compact-system.png')
+  await page.screenshot({ path: compactSystemScreenshot, fullPage: true })
+  await testInfo.attach('player-workspace-compact-system', {
+    path: compactSystemScreenshot,
+    contentType: 'image/png',
+  })
+  await expectSceneToFillViewport(page, systemScene, testInfo)
 
   await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')

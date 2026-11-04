@@ -1,6 +1,8 @@
 <template>
   <main class="player-reader" :class="{ 'player-reader--workspace map-workspace-shell': playerDocument }">
     <input
+      v-if="readerMode === 'file'"
+      hidden
       ref="fileInput"
       class="player-reader-file-input--hidden"
       type="file"
@@ -19,7 +21,7 @@
       >
         <template #workspace-actions>
           <div class="player-reader-actions">
-            <UButton color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
+            <UButton v-if="readerMode === 'file'" color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
               Open player JSON
             </UButton>
             <a v-if="readerMode === 'link'" class="player-reader-file-link" :href="playerJsonHref">Open player JSON instead</a>
@@ -36,7 +38,7 @@
       >
         <template #player-actions>
           <div class="player-reader-actions">
-            <UButton color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
+            <UButton v-if="readerMode === 'file'" color="neutral" variant="outline" size="sm" :disabled="!isClientReady" @click="requestFileOpen">
               Open player JSON
             </UButton>
             <a v-if="readerMode === 'link'" class="player-reader-file-link" :href="playerJsonHref">Open player JSON instead</a>

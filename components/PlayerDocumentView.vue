@@ -417,6 +417,40 @@ function closeActivePanel(): void {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.player-workspace-map-region :deep(.player-cluster-map-scene),
+.player-workspace-map-region :deep(.player-system-map-scene) {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  border: 0;
+}
+
+.player-workspace-map-region :deep(.player-cluster-map-navigation),
+.player-workspace-map-region :deep(.player-system-map-navigation) {
+  position: absolute;
+  z-index: 2;
+  bottom: 1rem;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  max-width: min(242px, calc(100% - 2rem));
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: .25rem;
+  overflow-x: auto;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-soft);
+  border-radius: .35rem;
+  padding: .3rem;
+  background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
+  box-shadow: 0 .35rem 1.2rem color-mix(in srgb, var(--map-bg) 45%, transparent);
+  backdrop-filter: blur(12px);
+}
+
 .player-workspace-toolbar {
   display: flex;
   min-width: 0;
