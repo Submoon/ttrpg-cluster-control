@@ -66,8 +66,10 @@
             id="chart-dialog-publication"
             v-model="publication"
             :items="publicationItems"
+            class="w-full"
+            :ui="{ content: 'min-w-[12rem] max-w-[calc(100vw-2rem)]', itemLabel: 'block whitespace-normal break-words' }"
           />
-          <template #hint>
+          <template #help>
             <span v-if="publication === 'unknown'">Players see a neutral presence marker with no system name or type.</span>
             <span v-else-if="publication === 'known-type'">Players see that a star system is here, without its name.</span>
             <span v-else-if="publication === 'revealed'">Players see this system's name.</span>

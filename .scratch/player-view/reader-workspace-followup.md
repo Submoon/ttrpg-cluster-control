@@ -71,3 +71,9 @@ The copy-only clarification starts from `0335b1193f8a7e724f30aecce7b43087c5972dd
 The full-page read-only presentation and requested publication guidance are implemented. The user reaffirmed the existing opening rule; no product-choice question remains pending. The clarification passed affected lint, full-source incremental types, Markdown links, and two existing publication browser journeys covering system and object modes on desktop/compact views (**2/2**, 34.4 seconds, zero retries). Evidence: `player-gate-guidance-ui.log`, owned `local-test-2026-11-04T13-34-24-366Z-34584/playwright-run-1`.
 
 Presentation qualification remains the 21/21 browser matrix, pure checks, targeted prose replay and production evidence recorded above. Complete CI remains the PR's publication gate; local closure does not merge the draft or close GitHub #9.
+
+### Publication dropdown readability
+
+Starting from `d4b97a693ba573f96ddb0d0da28e71c0374fbdab`, refreshed origin/main remains `47c0418a835da285e9edb88e8f8dffc19c3a2bba` (25 ahead, zero behind). A new desktop/compact regression measures actual text clipping, reproducing the truncated Unknown presence option before the fix (`publication-readability-red.log`). Both system and object controls now use their available width, permit wrapping in the popup and place the selected-mode explanation below the control rather than beside the heading.
+
+Desktop passed in `publication-readability-green.log`. Its compact case reached the menu successfully but exposed a test setup error: the compact Inspector was still open before using Add. Closing it through its normal public control fixed the setup; the affected compact case passed in `publication-readability-compact.log`, owned `local-test-2026-11-04T14-07-10-612Z-42808`. Source lint and full-source incremental types passed; screenshots retain the complete labels. No publication semantics changed.

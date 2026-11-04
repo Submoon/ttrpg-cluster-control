@@ -77,9 +77,11 @@
               :id="controlId('publication')"
               :model-value="objectDraft.publication"
               :items="publicationItems"
+              class="w-full"
+              :ui="{ content: 'min-w-[12rem] max-w-[calc(100vw-2rem)]', itemLabel: 'block whitespace-normal break-words' }"
               @update:model-value="updatePublication"
             />
-            <template #hint>{{ publicationSummary }}</template>
+            <template #help>{{ publicationSummary }}</template>
           </UFormField>
           <UFormField label="Location key" :error="fieldError('locationKey')">
             <UInput
