@@ -1,6 +1,6 @@
 ---
 title: 'Share compressed player links with a JSON fallback'
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -18,7 +18,7 @@ triage_labels:
 
 **What to build:** the Warden generates a directly openable player URL carrying a compressed copy of the sanitized snapshot. Recipients open it in the established reader; when a reliable URL cannot contain the snapshot, the Warden can use the player JSON instead.
 
-**Status:** in-progress and assigned to the coordinator under the user's explicit `implement` instruction on 2026-11-02. The JSON reader prerequisite is complete. Implementation uses subagents with disjoint ownership.
+**Status:** closed on 2026-11-04 under the user's explicit `implement` instruction. The JSON reader prerequisite is complete. Implementation used subagents with disjoint ownership and independent reviews.
 
 ## Blocked by
 
@@ -26,14 +26,14 @@ triage_labels:
 
 ## Acceptance criteria
 
-- [ ] The sharing UI generates/copies a versioned URL whose fragment carries a compressed, URL-safe encoding of the same player document used by JSON and preview. It never embeds full GM data or references a server-stored map.
-- [ ] A fresh recipient context opens the URL directly into the existing read-only reader with the same permitted cluster, geometry, labels, prose/Fields and navigation as the JSON. No account, GM workspace or map database/cache is required; the hosted application is still required.
-- [ ] Updating publication and generating another link produces the new snapshot. Previously distributed links retain their own content; no live-update, revocation or stable mutable share service is introduced. Anyone receiving a link can read/copy its player data; compression is not a confidentiality mechanism.
-- [ ] Establish and document a practical complete-URL size budget using representative small/large snapshots and supported browser/share-path evidence. Account for the actual host/path/version prefix, not payload length alone. Above the budget, explain the limit and offer the existing JSON fallback without truncating data or silently adding a shortening backend.
-- [ ] Bound encoded/compressed/decompressed size and decode/graph work before rendering. Corrupted encodings, decompression failures, truncated links, unsupported versions, invalid documents and empty snapshots fail clearly and cannot load the local GM workspace as fallback.
-- [ ] Payload decoding is client-side; no map payload is added to an HTTP query, application telemetry/error report or server-side hydration path. Display only safe error context. Browser history or copies of the shared URL are not misrepresented as erased or inaccessible.
-- [ ] Two distinct player links can coexist with each other and a GM base-site tab without data/selection/history contamination. Reload and switching documents restore the correct snapshot and release obsolete resources. The base site still opens its saved GM workspace.
-- [ ] Generation observes existing file-action preflight/applied-state rules, preserves source data/history, and handles failed link copying without generating a different or partial document.
+- [x] The sharing UI generates/copies a versioned URL whose fragment carries a compressed, URL-safe encoding of the same player document used by JSON and preview. It never embeds full GM data or references a server-stored map.
+- [x] A fresh recipient context opens the URL directly into the existing read-only reader with the same permitted cluster, geometry, labels, prose/Fields and navigation as the JSON. No account, GM workspace or map database/cache is required; the hosted application is still required.
+- [x] Updating publication and generating another link produces the new snapshot. Previously distributed links retain their own content; no live-update, revocation or stable mutable share service is introduced. Anyone receiving a link can read/copy its player data; compression is not a confidentiality mechanism.
+- [x] Establish and document a practical complete-URL size budget using representative small/large snapshots and supported browser/share-path evidence. Account for the actual host/path/version prefix, not payload length alone. Above the budget, explain the limit and offer the existing JSON fallback without truncating data or silently adding a shortening backend.
+- [x] Bound encoded/compressed/decompressed size and decode/graph work before rendering. Corrupted encodings, decompression failures, truncated links, unsupported versions, invalid documents and empty snapshots fail clearly and cannot load the local GM workspace as fallback.
+- [x] Payload decoding is client-side; no map payload is added to an HTTP query, application telemetry/error report or server-side hydration path. Display only safe error context. Browser history or copies of the shared URL are not misrepresented as erased or inaccessible.
+- [x] Two distinct player links can coexist with each other and a GM base-site tab without data/selection/history contamination. Reload and switching documents restore the correct snapshot and release obsolete resources. The base site still opens its saved GM workspace.
+- [x] Generation observes existing file-action preflight/applied-state rules, preserves source data/history, and handles failed link copying without generating a different or partial document.
 
 ## Verification and completion
 
@@ -48,3 +48,11 @@ This is a transport extension of the established player document/reader, not a n
 > *This was generated by AI during triage.*
 
 Implementation started on 2026-11-02. Starting feature HEAD is `686b42c07f407682e12d3d5e3182cad186644b5f`; refreshed origin/main is `47c0418a835da285e9edb88e8f8dffc19c3a2bba` (twelve ahead/twenty-six behind before integration). The clean separate main checkout was safely fast-forwarded, preserving its untracked environment directory. The coordinator is resolving integration with the incoming global Search and owned-verification changes before pinning the actual implementation/review baseline. GitHub #9 remains open, unchanged and without comments. See the [ticket 06 implementation record](../ticket-06-implementation.md).
+
+## Resolution
+
+Completed locally on `codex/player-view-ticket-01` on 2026-11-04. Actual implementation/review baseline is `62e5e55d293573019979df1e59013855ac9317a0`, integrating fetched origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`. Latest fetch and source-issue refresh confirm the same upstream baseline and unchanged open GitHub #9.
+
+Versioned gzip/base64url fragments carry only the validated player document. The complete URL has an 8,192 UTF-8 byte budget, with bounded decoding, immutable snapshots, clipboard recovery, isolated reader tabs and the existing JSON fallback. A compiled Chromium native clipboard/navigation/reload probe passed at 8,191 bytes; this qualifies that path, not every messaging service.
+
+Lint, full-source types, production build and artifact/privacy checks passed. The one cumulative suite returned 654/670; all 16 initial failures subsequently passed affected replays. The final nine-case image/responsive matrix passed 9/9. Eight initial timing failures passed unchanged; their cause remains unproven. Independent Standards and Spec reviews have zero outstanding findings; complementary sensitive review closed both corrected P2s. See the [implementation and verification record](../ticket-06-implementation.md) for exact results and limitations. No push, PR, deployment, remote issue closure or feature merge into main occurred.

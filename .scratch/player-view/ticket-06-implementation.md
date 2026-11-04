@@ -1,6 +1,6 @@
 ---
 title: Ticket 06 implementation and verification
-status: in-progress
+status: closed
 parent: spec.md
 ---
 
@@ -98,3 +98,28 @@ The remaining eight cases expired at their existing 30/60-second limits, includi
 Only the 16 failures were replayed with original assertions and deadlines after the narrow compatibility repairs: **14 passed / 2 failed** in 3.4m (`player-view-06-failures-replay.log`, owned `local-test-2026-11-02T16-38-27-709Z-18808/playwright-run-1/results.json`). All eight previously unexplained timeouts passed unchanged, including initial loading and campaign fixture setup; this does not establish why the full run expired. The repaired four object-publication cases, publication history and Search guard passed with exact accessible names and business assertions retained. Full-source incremental types and affected lint passed before replay.
 
 Native measurements (`player-view-06-menu-hit-geometry.json`) establish current scroll-position errors in the two remaining tests. At 844x390, the printing checkbox occupies y478–494 while the scrollport is y184–375 with scrollTop zero. At 390x500, SVG occupies y109–137 while its scrollport starts at y252 with scrollTop191. The controls are outside the currently visible menu portion in opposite directions. The helper now focuses each ordinary control before measuring, retains enabled/visible/focus/center-hit assertions and additionally requires complete viewport intersection. This exercises the menu's native focus scrolling instead of assuming every control is simultaneously visible. Failure-only geometry and screenshots remain useful for future regressions. No production change, forced click, weaker intersection ratio or increased timeout was introduced. Affected image/compact replay and independent delta review remain pending.
+
+
+### Final affected replay and closure
+
+Frozen candidate `091c55d594c4f5333f355736d581e3f20c8dc44f` passed **9/9** affected cases in 1.4m: all six cluster/system SVG/PNG palette variants and all three responsive/focus cases. Evidence: `player-view-06-menu-focus-green.log` and `local-test-2026-11-02T16-44-46-088Z-71164/playwright-run-1/results.json`. This closes both remaining image failures with ordinary focus scrolling, unchanged deadlines and strict complete-intersection/center-hit checks. No production code changed after the successful d107a1e2 build. Full-source incremental types passed again after browsers were idle (`player-view-06-closure-types.log`).
+
+Final accounting remains **one complete run: 654 passed / 16 failed**, followed by affected replays covering all 16 successfully (14 in the first replay, the remaining two within the final nine-case matrix). The eight timing failures passed unchanged and remain unexplained. No second full suite, retries, increased timeouts, forced clicks or weakened assertions were used to obtain closure.
+
+## Standards
+
+Independent Standards review of `62e5e55d293573019979df1e59013855ac9317a0...HEAD` covered source boundaries and all twelve skill smell heuristics, followed by the compact-prose and test-only deltas through `091c55d5`. **Zero outstanding findings; no worst outstanding issue.** Final delta review accepted the exact accessible-role/label corrections and focus-before-hit checks with the additional full-intersection assertion. The final 9/9 runtime evidence closes the pending affected qualification.
+
+## Spec
+
+Independent Spec review used the approved ticket and parent specification against the same fixed baseline, including the latest test deltas through `091c55d5`. **Zero outstanding findings; no worst outstanding issue.** The final 9/9 evidence closes its remaining runtime qualification. URL/JSON parity, actual artifact exclusion, compiled client/server boundaries, immutable A/B snapshots, same-origin GM preservation, errors/bounds and clipboard/JSON fallback were exercised. The cumulative failure history remains explicit rather than represented as a clean full-suite pass.
+
+Complementary sensitive review found no outstanding code findings; both earlier P2 cancellation defects have verified corrections and reviewer closure. Subsequent changes are CSS containment or test/documentation-only and do not change the reviewed transport/privacy boundary.
+
+## Resolution
+
+Ticket 06 and all seven local implementation tickets are closed on 2026-11-04. Application commits are `50f46a91` (owned readiness correction), `d19953f6` (link transport/interface), and `d107a1e2` (compact prose); `b090ed85` and `091c55d5` preserve integrated test corrections and evidence. Final full-source types passed; full lint, affected lint, production build and native compiled checks passed as recorded above. Markdown references are checked after this closure update.
+
+Final upstream fetch still resolves origin/main to `47c0418a835da285e9edb88e8f8dffc19c3a2bba` (feature 18 ahead/zero behind before the documentation closure commit). GitHub #9 was refreshed with all comments: unchanged open issue, same labels/body/update timestamp, zero comments. The owned test server has exited and ports 3167/3168 have no listeners. Only the pre-existing untracked `.codex/environments/` remains unrelated and untouched. All work stays on `codex/player-view-ticket-01`; no push, PR, deployment, remote issue mutation or feature merge into main occurred.
+
+Limits: native sharing evidence covers installed Chromium 156.0.8078.4 and Node 24.18.1, not every browser or messaging path. The 8,192-byte URL budget is an application policy with JSON fallback. Framework development diagnostics may include malformed raw fragments before page admission; compiled admission produced no console events. Anyone holding a player link can copy its intentionally published data, and old snapshots cannot be remotely updated or revoked.

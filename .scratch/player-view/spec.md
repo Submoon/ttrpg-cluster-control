@@ -1,6 +1,6 @@
 ---
 title: Player view and secret-free sharing
-status: in-progress
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -14,7 +14,7 @@ ticket_count: 7
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. Tickets 01–05 and 07 are closed, including simultaneous implementation of 05 and 07 under the user's authorization on 2026-11-02. Ticket 06 is in progress under the user's explicit `implement` authorization on 2026-11-02. The source GitHub issue remains open; no remote write, push, PR or feature merge into main is authorized by this specification.
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. All seven local tickets are closed, including simultaneous implementation of 05 and 07 under the user's authorization and ticket 06 under the explicit `implement` instruction. Ticket 06 verification and local closure completed on 2026-11-04. The source GitHub issue remains open; no remote write, push, PR or feature merge into main is authorized by this specification.
 
 ## Source issue
 
@@ -189,7 +189,7 @@ The common projection seam and verification approach were already confirmed in t
 
 ### Approved Implementation Tickets
 
-The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. Tickets 01–05 and 07 are closed under the user's separate implementation instructions. System/object publication, player text, Field policies/masks, shared routes and safe Station associations are implemented in the common allowlisted preview and independent player JSON reader, with player SVG/PNG exports, strict source migration and complete private backups. Ticket 06 is in progress under the user's explicit `implement` authorization on 2026-11-02. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
+The user approved these seven end-to-end slices and their exact blocking edges through the integrated `to-tickets` question on 2026-10-29. They were published as separate open/unclaimed local tickets triaged `enhancement` / `ready-for-agent`. All seven tickets are closed under the user's separate implementation instructions. System/object publication, player text, Field policies/masks, shared routes and safe Station associations are implemented in the common allowlisted preview and independent player JSON reader, with player SVG/PNG exports, strict source migration and complete private backups. Ticket 06 adds immutable compressed links with bounded client-side admission and JSON fallback; its verification and local closure completed on 2026-11-04. Ticket frontmatter records current lifecycle. References below are local, not GitHub issue numbers.
 
 | Ticket | End-to-end slice | Blocked by |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ The user approved these seven end-to-end slices and their exact blocking edges t
 | 06 | [Share compressed player links with a JSON fallback](tickets/06-compressed-player-links.md) | 05 |
 | 07 | [Export player-safe SVG and PNG maps](tickets/07-player-svg-png-exports.md) | 04 |
 
-At publication the initial executable frontier was ticket 01 only. Tickets 01–05 and 07 are now closed. Ticket 06 is the remaining implementation, assigned to the coordinator under the user's explicit instruction; its blocker 05 is resolved. No later implementation is started automatically. Image work did not wait for JSON/URL transport: the common object/relationship scene was its prerequisite; public prose/Fields are not drawn as map imagery, so 03 was not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules. The [tickets 03/04 implementation record](tickets-03-04-implementation.md) preserves its original checks/base; the [tickets 05/07 implementation record](tickets-05-07-implementation.md) records integration with refreshed main, final checks and review closure.
+At publication the initial executable frontier was ticket 01 only. All seven tickets are now closed; no implementation ticket remains on the executable frontier. Image work did not wait for JSON/URL transport: the common object/relationship scene was its prerequisite; public prose/Fields are not drawn as map imagery, so 03 was not an artificial image dependency. Coordinate overlapping shared-contract edits under the existing specialist ownership rules. The [tickets 03/04 implementation record](tickets-03-04-implementation.md) preserves its original checks/base; the [tickets 05/07 implementation record](tickets-05-07-implementation.md) records integration with refreshed main, final checks and review closure. The [ticket 06 implementation record](ticket-06-implementation.md) records the final upstream integration, bounded link transport, compiled native sharing evidence, cumulative suite and affected replays.
 
 No standalone prefactor or horizontal schema/test ticket is needed: the focused projection/persistence boundaries are introduced through the first demoable preview slice. Tickets 01–04 expose only the Warden-side preview; player JSON waits for both content and relationship projection, and image sharing waits for the complete relationship scene. Each slice owns relevant privacy/compatibility checks. Run the integrated full suite once on the stable completed candidate, followed by required Sensitive reviews; do not defer individual ticket verification to an unspecified final cleanup ticket.
 
@@ -211,7 +211,7 @@ Ticket-publication verification: seven files, 57 unchecked acceptance criteria, 
 
 - **Deliberate structural disclosure:** exact route destination positions and recursive unknown centers reveal existence/geometry. They are accepted exceptions to a blanket Hidden-means-no-presence rule; implementations and tests must not erase them or silently reveal more.
 - **Format/migration risk:** current codecs export full objects and field settings, tolerate some unknown properties and use same-name Field merging. Privacy metadata must survive full operations without broadening publication. Player documents have different contracts from editable full maps.
-- **Link size:** current evidence is one small existing full-map fixture (3,751 UTF-8 bytes; 812 gzip bytes; 1,083 Base64url characters before URL prefix). This is not a large-map or transport guarantee. Establish a bounded sharing budget and exercise fallback before claiming link support for representative campaigns.
+- **Link size:** the implemented policy caps the complete URL at 8,192 UTF-8 bytes, including actual origin/base path/version prefix. Representative distinct prose exceeds this limit and retains complete JSON fallback. Compiled Chromium native clipboard, second-tab navigation and reload passed at 8,191 bytes; this is not a guarantee for every messaging service. See the ticket 06 evidence for exact fixtures and limits.
 - **Session/persistence risk:** the current editor has a singleton `current`/`last-valid` slot and full history snapshots. Player consultation must not hydrate/import itself through those owners or expose their recovery paths. This does not erase the GM's private data or make a borrowed GM browser safe.
 - **UI filters:** [#8](https://github.com/Submoon/ttrpg-cluster-control/issues/8) controls presentation, not secrecy. Player export must use publication rules independently of ordinary map filters.
 - **Future surfaces:** [#11 annotations](https://github.com/Submoon/ttrpg-cluster-control/issues/11) and [#22 note links](https://github.com/Submoon/ttrpg-cluster-control/issues/22) must enter the allowlisted projection deliberately if later supported. They are not blockers. Parent [#3](https://github.com/Submoon/ttrpg-cluster-control/issues/3) is closed.
@@ -222,3 +222,9 @@ Ticket-publication verification: seven files, 57 unchecked acceptance criteria, 
 Approved by the user on 2026-10-29: scope and verification plan validated. This covers the consolidated publication rules, a common projection for preview/link/JSON/images, ordinary save and Undo/Redo for publication edits, actual-artifact privacy checks, source preservation, empty-share refusal and isolated invalid-input handling. No product-choice questions remain open. Exact schema/version numbers, URL budget/codec and detailed implementation interfaces remain technical design work within this scope.
 
 At specification publication, origin fetch showed HEAD/main/origin/main at the recorded baseline; GitHub #9 had the same body, labels, state and no comments; all 11 checked local planning/test reference paths existed. That planning-only phase ran no application tests/build and changed no product source or GitHub state. Actual implementation/check evidence is recorded separately for [ticket 01](ticket-01-implementation.md) and [ticket 02](ticket-02-implementation.md).
+
+## Resolution
+
+All seven approved slices are implemented and committed locally on `codex/player-view-ticket-01`. The common allowlisted player document serves preview, JSON, immutable compressed URLs and SVG/PNG; the base route retains the saved GM workspace. Ticket 06 completed verification on 2026-11-04 against integrated baseline `62e5e55d293573019979df1e59013855ac9317a0` (origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`).
+
+The single cumulative run passed 654/670; all 16 initial failures passed subsequent affected replays, including the final 9/9 image/responsive matrix. Eight timing failures passed unchanged without an established cause; this is not a clean full-suite pass. Lint, types, build, actual artifact/privacy checks and independent review closure are recorded in the [ticket 06 implementation record](ticket-06-implementation.md). GitHub #9 remains open and unchanged; no remote publication or feature merge into main occurred.
