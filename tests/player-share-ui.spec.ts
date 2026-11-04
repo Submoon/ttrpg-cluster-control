@@ -192,7 +192,7 @@ test('long unbroken player prose stays inside the compact reader viewport', asyn
   expect(inspectionWidth.document).toBeLessThanOrEqual(inspectionWidth.viewport)
 })
 
-test('a generated player link opens the exported public snapshot in a fresh reader context', async ({ browser, page }, testInfo) => {
+test('a generated player link opens the exported public snapshot in a fresh reader context', async ({ browser, page, previewCookies }, testInfo) => {
   test.setTimeout(90_000)
 
   const privateClusterName = 'PRIVATE LANTERN REACH'
@@ -344,6 +344,7 @@ test('a generated player link opens the exported public snapshot in a fresh read
   const recipientContext = await test.step('create an isolated recipient context', async () =>
     browser.newContext({ baseURL: new URL(page.url()).origin }))
   try {
+    if (previewCookies.length) await recipientContext.addCookies(previewCookies)
     const recipientPage = await test.step('open a fresh recipient tab', async () => recipientContext.newPage())
     const receivedHttpUrls: string[] = []
     const consoleMessages: Array<{ type: string; text: string }> = []
@@ -359,6 +360,7 @@ test('a generated player link opens the exported public snapshot in a fresh read
     const response = await test.step('navigate a fresh recipient to the fragment URL', async () => {
       const response = await recipientPage.goto(playerUrl)
       if (!response) throw new Error('The player link navigation did not receive an HTTP response.')
+      expect(response.status()).toBe(200)
       return response
     })
 

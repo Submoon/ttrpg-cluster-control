@@ -223,7 +223,11 @@ Approved by the user on 2026-10-29: scope and verification plan validated. This 
 
 At specification publication, origin fetch showed HEAD/main/origin/main at the recorded baseline; GitHub #9 had the same body, labels, state and no comments; all 11 checked local planning/test reference paths existed. That planning-only phase ran no application tests/build and changed no product source or GitHub state. Actual implementation/check evidence is recorded separately for [ticket 01](ticket-01-implementation.md) and [ticket 02](ticket-02-implementation.md).
 
-## Resolution
+## Follow-up requests
+
+On 2026-11-04 the user requested [Align player maps with the Warden map interface](tickets/08-player-map-interface-consistency.md), tracked separately in [GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40). This open follow-up covers icons, dashed Orbits, useful inspection, nested Hierarchy and consistent Back placement while retaining revelation colors. It is future work beyond the seven completed slices and does not change their disclosure rules.
+
+## Original seven-ticket resolution
 
 All seven approved slices are implemented and committed locally on `codex/player-view-ticket-01`. The common allowlisted player document serves preview, JSON, immutable compressed URLs and SVG/PNG; the base route retains the saved GM workspace. Ticket 06 completed verification on 2026-11-04 against integrated baseline `62e5e55d293573019979df1e59013855ac9317a0` (origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`).
 
