@@ -108,6 +108,8 @@ import type {
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
@@ -139,6 +141,7 @@ const props = defineProps<{
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
 }>()
+const commands = useEditorCommands()
 
 const emit = defineEmits<{
   'navigate-system': [id: string]
@@ -215,6 +218,7 @@ let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
+let publicationMenuLease: PublicationMenuLease | null = null
 let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
 let touchPanStarted = false
 
@@ -315,6 +319,8 @@ function inspectLongPress(target: EventTarget | null): void {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
     && event.button === 2
     && (event.buttons & 1) !== 0
@@ -368,6 +374,8 @@ function onPointerDownCapture(event: PointerEvent): void {
 
 /** Takes over a held left-button gesture when the browser reports right-button chord only as mousedown. */
 function onMouseDownCapture(event: MouseEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   if (event.button !== 2 || (event.buttons & 1) === 0 || activeMousePointerId === null) return
   // Browsers that emit a second pointerdown already entered the ordinary right-pan path.
   if (activePointerPan?.button === 2) return
@@ -386,6 +394,11 @@ function onMouseDownCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
+    && event.target instanceof SVGElement) {
+    const bounds = event.target.getBoundingClientRect()
+    if (showPublicationMenu(event, { x: bounds.left, y: bounds.bottom })) return
+  }
   if (props.moveTargeting && props.mode === 'move' && event.target instanceof SVGElement) {
     const step = event.shiftKey ? 10 : 1
     const nudges: Record<string, Point> = {
@@ -486,9 +499,57 @@ function onContextMenuCapture(event: MouseEvent): void {
   if ((activePointerPan?.button === 2 && activePointerPan.moved) || suppressNextContextMenu) {
     event.preventDefault()
     event.stopPropagation()
+    event.stopImmediatePropagation()
     suppressNextContextMenu = false
     if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
+    return
   }
+  showPublicationMenu(event, { x: event.clientX, y: event.clientY })
+}
+
+function publicationTargetAt(target: EventTarget | null): { target: PublicationTarget; mark: SVGElement } | null {
+  if (props.mode !== 'select' || props.moveTargeting || props.clusterChooserOpen
+    || props.clusterMoveTargeting
+    || (props.activeView === 'cluster' && props.clusterAddType != null)
+    || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
+    return null
+  }
+  if (!(target instanceof Element)) return null
+
+  if (props.activeView === 'cluster') {
+    const mark = target.closest<SVGGElement>('.cluster-system-node[data-system-id]')
+    const systemId = mark?.getAttribute('data-system-id')
+    return systemId && mark
+      ? { target: { kind: 'system', id: systemId, systemId }, mark }
+      : null
+  }
+
+  const mark = target.closest<SVGGElement>('.system-object[data-object-id]')
+  const objectId = mark?.getAttribute('data-object-id')
+  const systemId = props.system?.id
+  return objectId && systemId && mark
+    ? { target: { kind: 'object', id: objectId, systemId }, mark }
+    : null
+}
+
+function showPublicationMenu(
+  event: MouseEvent | KeyboardEvent,
+  point: { x: number; y: number },
+): boolean {
+  const candidate = publicationTargetAt(event.target)
+  if (!candidate) return false
+  const lease = commands.publication.openMenu({
+    target: candidate.target,
+    clientPoint: point,
+    opener: candidate.mark,
+    source: 'map',
+  })
+  if (!lease) return false
+  publicationMenuLease = lease
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  return true
 }
 
 function onClickCapture(event: MouseEvent): void {
@@ -501,6 +562,8 @@ function onClickCapture(event: MouseEvent): void {
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   if (event.touches.length !== 1) {
     clearLongPress()
     touchStart = null
@@ -766,6 +829,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   mapDisposed = true
   settleMapReadiness(false)
   cancelCanvasGesture()
@@ -779,7 +844,11 @@ onBeforeUnmount(() => {
   document.removeEventListener('freeze', onDocumentFreeze)
 })
 
-watch(() => props.mode, () => cancelCanvasGesture(true), { flush: 'sync' })
+watch(() => props.mode, () => {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
+  cancelCanvasGesture(true)
+}, { flush: 'sync' })
 watch(() => props.creationType, () => {
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
@@ -794,6 +863,8 @@ watch(
     () => props.selectedOrbitId,
   ],
   () => {
+    publicationMenuLease?.close()
+    publicationMenuLease = null
     emit('cancel-object-placement-preview')
     emit('cancel-orbit-placement-preview')
   },

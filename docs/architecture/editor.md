@@ -76,6 +76,7 @@ The store does not enforce action-only mutation, session ownership, or domain in
 | Continuous Orbit previews, group boundaries and browser listener lifetime | [continuous Orbit adjustments](../../composables/editor-workflows/continuous-orbit-adjustments.ts) |
 | Guarded navigation and remembered visits | [useEditorNavigation](../../composables/editor-workflows/useEditorNavigation.ts) |
 | Draft-resolution sequencing | [useEditorTransitions](../../composables/editor-workflows/useEditorTransitions.ts) |
+| Guarded publication-only changes and transient menu ownership | [publication workflows](../../composables/editor-workflows/usePublicationWorkflows.ts), [publication menu](../../composables/usePublicationMenu.ts) |
 | Chart-detail draft lifetime (names and player publication) | [useChartNamesSession](../../composables/editor-workflows/useChartNamesSession.ts) |
 | Allowlisted committed player marker document | [player projection](../../domain/player-projection.ts) |
 | DTO-only Warden preview presentation | [player preview dialog](../../components/PlayerViewPreviewDialog.vue), [player cluster renderer](../../components/PlayerClusterMap.vue), [player system renderer](../../components/PlayerSystemMap.vue) |

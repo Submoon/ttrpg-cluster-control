@@ -62,6 +62,7 @@ import {
 } from '../utils/map-zoom'
 import { revealSvgPoint, revealSvgTarget, svgCirclePaintedBounds } from '../utils/reveal-svg-target'
 import type { MapHistoryTarget } from '../composables/editor-workflows/types'
+import { appendPublicationBadge, describeMapPublication } from '../utils/gm-publication-badges'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -642,6 +643,10 @@ function render(): void {
 
   const content = svg.append('g').attr('class', 'cluster-map-content')
   const items = content.append('g').attr('class', 'cluster-map-items')
+  const publicationDecorations = content.append('g')
+    .attr('class', 'gm-publication-decorations')
+    .attr('aria-hidden', 'true')
+    .attr('pointer-events', 'none')
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
     .join('g')
@@ -876,6 +881,33 @@ function render(): void {
         ? `Select ${system.name} system`
         : `Open ${system.name} system map`)
 
+  systemMarks.each(function (system) {
+    describeMapPublication(this, `system-${system.id}`, system.publication)
+  })
+
+  const systemPublicationMarks = publicationDecorations.selectAll<SVGGElement, StarSystem>('g.cluster-system-publication')
+    .data(props.cluster.systems)
+    .join('g')
+    .attr('class', 'cluster-system-publication')
+    .attr('data-system-id', system => system.id)
+    .attr('transform', system => {
+      const position = clusterSystemPosition(props.systemPositions, system.id)
+      return `translate(${position.x} ${position.y})`
+    })
+
+  systemPublicationMarks.each(function (system) {
+    appendPublicationBadge(this, {
+      identity: `system-${system.id}`,
+      mode: system.publication,
+      position: { x: 63, y: -26 },
+    })
+  })
+
+  function positionSystemPublicationBadge(systemId: string, position: Point): void {
+    systemPublicationMarks.filter(system => system.id === systemId)
+      .attr('transform', `translate(${position.x} ${position.y})`)
+  }
+
   systemMarks.append('rect')
     .attr('class', 'cluster-system-card')
     .attr('x', -78)
@@ -958,6 +990,7 @@ function render(): void {
           movedSystems.delete(this)
           liveSystemPositions.delete(system.id)
           select(this).classed('is-dragging', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+          positionSystemPublicationBadge(system.id, committedPosition)
           refreshLiveRouteGeometry?.()
         },
         mouseGesture,
@@ -969,6 +1002,7 @@ function render(): void {
       if (cancelledSystemGestures.has(this)) return
       if (event.dx || event.dy) movedSystems.add(this)
       select(this).attr('transform', `translate(${event.x} ${event.y})`)
+      positionSystemPublicationBadge(system.id, { x: event.x, y: event.y })
       liveSystemPositions.set(system.id, { x: event.x, y: event.y })
       updateRouteGeometry()
     })
@@ -1000,10 +1034,12 @@ function render(): void {
       }
       liveSystemPositions.set(systemId, scenePosition)
       mark.classed('is-move-preview', true).attr('transform', `translate(${scenePosition.x} ${scenePosition.y})`)
+      positionSystemPublicationBadge(systemId, scenePosition)
     } else {
       liveSystemPositions.delete(systemId)
       const committedPosition = clusterSystemPosition(props.systemPositions, systemId)
       mark.classed('is-move-preview', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+      positionSystemPublicationBadge(systemId, committedPosition)
     }
     updateRouteGeometry()
   }
@@ -1292,6 +1328,32 @@ defineExpose({
 
 .cluster-system-seal {
   fill: var(--map-installation);
+}
+
+.gm-publication-decorations {
+  pointer-events: none;
+}
+
+.gm-publication-badge {
+  color: var(--map-text);
+  pointer-events: none;
+}
+
+.gm-publication-badge-backing,
+.gm-publication-lock-backing {
+  fill: var(--map-bg);
+  stroke: var(--map-label-border);
+  stroke-width: 1.25;
+}
+
+.gm-publication-badge-icon,
+.gm-publication-lock-icon {
+  color: var(--map-text);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .cluster-system-name {

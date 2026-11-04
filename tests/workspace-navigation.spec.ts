@@ -161,7 +161,7 @@ test('Navigate and Select drags pan a system node without opening or selecting i
   }
 })
 
-test('right-click keeps the native context menu while right-drag pans in every mode', async ({ page }) => {
+test('right-click opens publication controls on Select marks while right-drag still pans in every mode', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
@@ -203,7 +203,16 @@ test('right-click keeps the native context menu while right-drag pans in every m
     await expect.poll(() => page.evaluate(() => {
       const testWindow = window as typeof window & { __contextMenuProbe?: { prevented: boolean | null } }
       return testWindow.__contextMenuProbe!.prevented
-    })).toBe(false)
+    })).toBe(mode === 'Select')
+    if (mode === 'Select') {
+      const publicationMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+      await expect(publicationMenu).toBeVisible()
+      for (const modeLabel of ['Hidden', 'Unknown presence', 'Known type', 'Revealed']) {
+        await expect(publicationMenu.getByRole('menuitemcheckbox', { name: modeLabel, exact: true })).toBeVisible()
+      }
+      await page.keyboard.press('Escape')
+      await expect(publicationMenu).toHaveCount(0)
+    }
 
     const originalViewport = await scene.getAttribute('transform')
     await page.mouse.move(startX, startY)

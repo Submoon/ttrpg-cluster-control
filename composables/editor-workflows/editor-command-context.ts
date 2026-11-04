@@ -1,6 +1,8 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { JumpRoute } from '../../domain/workspace'
 import type { MapInteractionMode } from './types'
+import type { PublicationMenuLease, PublicationMenuRequest, PublicationRequest } from './publication-types'
+import type { WorkspaceMutationResult } from './workspace-mutations'
 
 export interface EditorCommandContext {
   navigation: {
@@ -19,6 +21,10 @@ export interface EditorCommandContext {
   }
   map: {
     changeMode(mode: MapInteractionMode): void
+  }
+  publication: {
+    set(request: PublicationRequest): Promise<WorkspaceMutationResult>
+    openMenu(request: PublicationMenuRequest): PublicationMenuLease | null
   }
 }
 

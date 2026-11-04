@@ -926,6 +926,32 @@ defineExpose({
   pointer-events: none;
 }
 
+.gm-publication-decorations {
+  pointer-events: none;
+}
+
+.gm-publication-badge {
+  color: var(--map-text);
+  pointer-events: none;
+}
+
+.gm-publication-badge-backing,
+.gm-publication-lock-backing {
+  fill: var(--map-bg);
+  stroke: var(--map-grid-line);
+  stroke-width: 1.25;
+}
+
+.gm-publication-badge-icon,
+.gm-publication-lock-icon {
+  color: var(--map-text);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
 .map-empty {
   fill: var(--map-muted);
   font: 16px Georgia, serif;

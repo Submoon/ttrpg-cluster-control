@@ -52,6 +52,7 @@
     v-else-if="props.inspectedSystem && !props.session"
     mode="system"
     :workspace="props.workspace"
+    :publication-busy="props.publicationBusy"
     :selected-system="props.inspectedSystem"
     :allow-open-system="true"
     :has-chart-name-draft="props.hasChartNameDraft"
@@ -236,6 +237,7 @@ const props = defineProps<{
   hasChartNameDraft: boolean
   saving: boolean
   editorError: string
+  publicationBusy?: boolean
   session: RouteInspectorSession | null
 }>()
 

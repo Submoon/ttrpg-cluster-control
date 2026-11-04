@@ -131,3 +131,71 @@ test('canceling Orbit capacity consent preserves the Inspector draft and applied
   expect(harness.publications).toBe(0)
   harness.dispose()
 })
+
+test('quick publication completes the pending Orbit adjustment once before its update @pure', async () => {
+  const harness = createHarness()
+  try {
+    const originalWorkspace = createWorkspaceSnapshot(harness.workspace.value!)
+    expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
+
+    const result = await harness.workflows.publication.set({
+      targets: [{ kind: 'object', id: harness.starId, systemId: harness.systemId }],
+      mode: 'revealed',
+    })
+
+    expect(result.status).toBe('applied')
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.publication)
+      .toBe('revealed')
+    expect(harness.workspace.value?.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(113)
+    expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
+    expect(harness.history.getStatus()).toMatchObject({
+      undoDepth: 2,
+      redoDepth: 0,
+      totalActions: 2,
+      hasPendingGroup: false,
+    })
+    expect(harness.history.getEntries()[1]?.action).toMatchObject({
+      kind: 'update',
+      target: { kind: 'object', id: harness.starId, systemId: harness.systemId },
+    })
+    expect(harness.publications).toBe(2)
+
+    await harness.history.undo()
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.publication)
+      .toBe('known-type')
+    expect(harness.workspace.value?.layout.orbitRadii[harness.orbitId]?.horizontal).toBe(113)
+    await harness.history.undo()
+    expect(harness.workspace.value).toEqual(originalWorkspace)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('canceling Orbit capacity during quick publication leaves it unapplied @pure', async () => {
+  const harness = createHarness({ maxBytes: 0, allowCapacity: false })
+  try {
+    const originalWorkspace = harness.workspace.value
+    expect(await harness.updateOrbit()).toEqual({ status: 'preview' })
+
+    const result = await harness.workflows.publication.set({
+      targets: [{ kind: 'object', id: harness.starId, systemId: harness.systemId }],
+      mode: 'revealed',
+    })
+
+    expect(result).toMatchObject({ status: 'rejected', reason: 'cancelled' })
+    expect(harness.capacityQuestions).toBe(1)
+    expect(harness.workspace.value).toBe(originalWorkspace)
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === harness.starId)?.publication)
+      .toBe('known-type')
+    expect(harness.workflows.adjustments.orbitAdjustmentPreview.value).toBeNull()
+    expect(harness.history.getStatus()).toMatchObject({
+      totalActions: 0,
+      hasPendingGroup: false,
+      undoDepth: 0,
+      redoDepth: 0,
+    })
+    expect(harness.publications).toBe(0)
+  } finally {
+    harness.dispose()
+  }
+})

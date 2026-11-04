@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || publicationMenuRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -403,6 +403,7 @@
             <MapInspector
               :mode="activeView"
               :workspace="workspace"
+              :publication-busy="publicationBusy"
               :selected-system="selectedSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
@@ -455,6 +456,13 @@
             />
           </template>
         </MapEditorLayout>
+        <PublicationContextMenu
+          :request="publicationMenuRequest"
+          :current-mode="publicationMenuMode"
+          :busy="publicationBusy"
+          @select="selectPublicationMenuMode"
+          @dismiss="publicationControls.closeMenu()"
+        />
       </section>
     </main>
 
@@ -520,6 +528,7 @@ import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -554,6 +563,7 @@ const runtimeConfig = useRuntimeConfig()
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
 let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = () => undefined
+let publicationFocusRestoreAllowed: (request: PublicationMenuRequest) => boolean = () => false
 const historyOpen = ref(false)
 const playerPreviewOpen = ref(false)
 const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
@@ -745,8 +755,27 @@ const workflows = useEditorWorkflows({
   mutations,
   initializeWorkspace: commit,
   waitForSearchPresentation,
+  canRestorePublicationFocus: request => publicationFocusRestoreAllowed(request),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search } = workflows
+const publicationControls = workflows.publication
+const publicationMenuRequest = publicationControls.menuRequest
+const publicationBusy = publicationControls.busy
+const publicationMenuMode = computed(() => {
+  const request = publicationMenuRequest.value
+  if (!workspace.value || !request) return null
+  if (request.target.kind === 'system') {
+    return workspace.value.cluster.systems.find(system => system.id === request.target.id)?.publication ?? null
+  }
+  return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
+    ?.objects.find(object => object.id === request.target.id)?.publication ?? null
+})
+function selectPublicationMenuMode(mode: import('../domain/workspace').PublicationMode): void {
+  const request = publicationMenuRequest.value
+  publicationControls.closeMenu()
+  if (!request) return
+  void publicationControls.set({ targets: [request.target], mode })
+}
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
@@ -860,6 +889,10 @@ provideEditorCommands({
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },
   map: { changeMode: changeMapMode },
+  publication: {
+    set: publicationControls.set,
+    openMenu: publicationControls.openMenu,
+  },
 })
 
 const fieldDefinitionInspectorConflict = computed(() => {
@@ -1203,6 +1236,24 @@ const {
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
+
+publicationFocusRestoreAllowed = request => !(
+  historyOpen.value
+  || chartNamesDialogOpen.value
+  || playerPreviewOpen.value
+  || fieldDefinitionDialogOpen.value
+  || headerFilesOpen.value
+  || recoveryDetailsOpen.value
+  || historyCapacityRequest.value !== null
+  || searchOpen.value
+  || deletionReview.value !== null
+  || creationChooserOpen.value
+  || (compactPanelOpen.value && request.source === 'map')
+  || editingGestureActive.value
+  || importReview.value.open
+  || importReview.value.suspended
+  || importReview.value.confirming
+)
 
 const searchShortcutAvailable = computed(() => workspace.value !== null
   && !historyOpen.value

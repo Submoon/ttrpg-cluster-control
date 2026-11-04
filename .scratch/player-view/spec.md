@@ -225,7 +225,7 @@ At specification publication, origin fetch showed HEAD/main/origin/main at the r
 
 ## Follow-up requests
 
-On 2026-11-04 the user requested [Align player maps with the Warden map interface](tickets/08-player-map-interface-consistency.md), tracked separately in [GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40). This open follow-up covers icons, dashed Orbits, useful inspection, nested Hierarchy and consistent Back placement while retaining revelation colors. It is future work beyond the seven completed slices and does not change their disclosure rules.
+On 2026-11-04 the user requested [Align player maps with the Warden map interface](tickets/08-player-map-interface-consistency.md), initially referenced in [GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40). The user clarified that local ticket 08 belongs to this current effort and blocks merge of PR #39 until implemented and verified. It covers icons, dashed Orbits, useful inspection, nested Hierarchy and consistent Back placement while retaining revelation colors, without changing the established disclosure rules.
 
 ## Original seven-ticket resolution
 

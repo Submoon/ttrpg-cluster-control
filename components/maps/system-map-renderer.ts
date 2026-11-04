@@ -27,6 +27,7 @@ import type {
 } from '../../composables/editor-workflows/types'
 import { catalogueMarks, objectMark } from '../../utils/catalogue-marks'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
+import { appendPublicationBadge, describeMapPublication } from '../../utils/gm-publication-badges'
 import {
   getSvgViewportRect,
   MAP_ZOOM_MAX_SCALE,
@@ -955,6 +956,10 @@ export function renderSystemMap({
     })
 
   const items = content.append('g').attr('class', 'system-map-items')
+  const publicationDecorations = content.append('g')
+    .attr('class', 'gm-publication-decorations')
+    .attr('aria-hidden', 'true')
+    .attr('pointer-events', 'none')
   const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
@@ -967,6 +972,29 @@ export function renderSystemMap({
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', object => `Select ${catalogueObjectLabel(object)}`)
+
+  objectMarks.each(function (object) {
+    describeMapPublication(this, `object-${system.id}-${object.id}`, object.publication, system.publication)
+  })
+
+  const objectPublicationMarks = publicationDecorations.selectAll<SVGGElement, SystemObject>('g.system-object-publication')
+    .data(system.objects)
+    .join('g')
+    .attr('class', 'system-object-publication')
+    .attr('data-object-id', object => object.id)
+    .attr('transform', object => {
+      const point = requiredPosition(positions, object.id)
+      return `translate(${point.x} ${point.y})`
+    })
+
+  objectPublicationMarks.each(function (object) {
+    appendPublicationBadge(this, {
+      identity: `object-${system.id}-${object.id}`,
+      mode: object.publication,
+      parentPublication: system.publication,
+      position: { x: 24, y: -18 },
+    })
+  })
 
   objectMarks.each(function (object) {
     const mark = select(this)
@@ -1130,6 +1158,10 @@ export function renderSystemMap({
   function updateLiveGeometry(): void {
     const positions = currentPositions()
     objectMarks.attr('transform', object => {
+      const point = requiredPosition(positions, object.id)
+      return `translate(${point.x} ${point.y})`
+    })
+    objectPublicationMarks.attr('transform', object => {
       const point = requiredPosition(positions, object.id)
       return `translate(${point.x} ${point.y})`
     })

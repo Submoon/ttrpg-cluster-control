@@ -58,6 +58,12 @@
           </div>
           <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
+        <PublicationModeControl
+          :model-value="selectedObject.publication"
+          :parent-publication="selectedSystem?.publication"
+          :disabled="props.saving || props.publicationBusy"
+          @select="setObjectPublication"
+        />
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
           <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
             <UInput
@@ -368,6 +374,7 @@ import type { EntityInspectorSession, ObjectDraft, ObjectInspectorFocusRequest }
 import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-draft-values'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
+import { useEditorCommands } from '../../composables/editor-workflows/editor-command-context'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 
 const props = defineProps<{
@@ -386,6 +393,7 @@ const props = defineProps<{
   saveMessage: string
   saveError: string | null
   exportError: string
+  publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -402,6 +410,7 @@ const emit = defineEmits<{
   'retry-save': []
   'export-current-json': []
 }>()
+const commands = useEditorCommands()
 
 const selectedObject = computed(() => props.selectedObject)
 const selectedSystem = computed(() => props.selectedSystem)
@@ -511,6 +520,16 @@ function updatePublication(value: string | number): void {
   if (!objectSession.value) return
   const publication = String(value)
   if (isPublicationMode(publication)) objectDraft.value.publication = publication
+}
+
+function setObjectPublication(mode: PublicationMode): void {
+  const object = selectedObject.value
+  const system = selectedSystem.value
+  if (!object || !system) return
+  void commands.publication.set({
+    targets: [{ kind: 'object', id: object.id, systemId: system.id }],
+    mode,
+  })
 }
 
 function isPlayerFieldMasked(fieldId: string): boolean {

@@ -36,6 +36,13 @@
           <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ publicationLabel }}</dd>
         </template>
       </dl>
+      <PublicationModeControl
+        v-if="props.selectedSystem"
+        class="mt-3"
+        :model-value="props.selectedSystem.publication"
+        :disabled="props.saving || props.publicationBusy"
+        @select="setSystemPublication"
+      />
       <p v-if="props.selectedSystem" class="inspector-intro mt-3 mb-0">
         Players can open this system only when its visibility is Revealed. Each object inside still follows its own publication setting.
       </p>
@@ -120,6 +127,7 @@ import {
   type PublicationMode,
   type StarSystem,
 } from '../../domain/workspace'
+import { useEditorCommands } from '../../composables/editor-workflows/editor-command-context'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
@@ -129,6 +137,7 @@ const props = defineProps<{
   editorError?: string
   saving: boolean
   allowOpenSystem?: boolean
+  publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -137,6 +146,7 @@ const emit = defineEmits<{
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()
+const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
 const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
@@ -148,6 +158,15 @@ const publicationLabels: Record<PublicationMode, string> = {
   revealed: 'Revealed: system name visible',
 }
 const publicationLabel = computed(() => props.selectedSystem ? publicationLabels[props.selectedSystem.publication] : '')
+
+function setSystemPublication(mode: PublicationMode): void {
+  const system = props.selectedSystem
+  if (!system) return
+  void commands.publication.set({
+    targets: [{ kind: 'system', id: system.id, systemId: system.id }],
+    mode,
+  })
+}
 </script>
 
 <style scoped>

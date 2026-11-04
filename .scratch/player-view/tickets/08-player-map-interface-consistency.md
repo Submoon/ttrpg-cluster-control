@@ -1,6 +1,7 @@
 ---
 title: Align player maps with the Warden map interface
-status: open
+status: in-progress
+assignee: coordinator
 label: wayfinder:implementation
 type: implementation
 parent: ../spec.md
@@ -14,7 +15,11 @@ parent: ../spec.md
 
 ## Request
 
-The user requested this follow-up on 2026-11-04 after testing PR #39. The standalone player map fills the viewport, but its rendering, navigation and consultation still differ enough from the Warden map to impair usability. This ticket is future work; it does not replace the approved quick-publication controls currently in progress.
+The user requested this correction on 2026-11-04 after testing PR #39. The standalone player map fills the viewport, but its rendering, navigation and consultation still differ enough from the Warden map to impair usability. The user clarified that this is an implementation ticket in the current player-view effort and must be resolved within PR #39 before merge. It is not deferred follow-up work. Finish qualification of the approved quick-publication controls, then integrate this correction on the same branch.
+
+## Merge gate
+
+PR [#39](https://github.com/Submoon/ttrpg-cluster-control/pull/39) must not be merged until this ticket's acceptance criteria and relevant checks are satisfied. The existing source/player disclosure contracts remain unchanged. GitHub #40 is a reference to the initial request; this local ticket records the clarified current-effort implementation plan.
 
 ## Scope
 
@@ -40,4 +45,4 @@ Player consultation remains read-only and consumes only the sanitized player doc
 
 ## Blocked by
 
-The underlying player-view implementation in PR [#39](https://github.com/Submoon/ttrpg-cluster-control/pull/39) must be available on the implementation branch. No dependency on a future multiple-selection tool is introduced.
+The underlying player-view implementation is already available on `codex/player-view-ticket-01`. Its current quick-publication controls are being qualified before overlapping presentation changes begin. No dependency on a future multiple-selection tool is introduced.

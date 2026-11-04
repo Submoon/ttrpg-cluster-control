@@ -17,6 +17,7 @@
     >
       <JumpRouteInspector
         :workspace="props.workspace"
+        :publication-busy="props.publicationBusy"
         :selected-system="props.selectedSystem"
         :selected-object="props.selectedObject"
         :selected-orbit="props.selectedOrbit"
@@ -46,6 +47,7 @@
         <MapObjectInspector
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
+          :publication-busy="props.publicationBusy"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :focus-request="props.objectFocusRequest"
@@ -110,6 +112,7 @@
           mode="system"
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
+          :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
           @edit-chart-names="emit('edit-chart-names', $event)"
@@ -165,6 +168,7 @@ const props = defineProps<{
   saveMessage: string
   saveError: string | null
   exportError: string
+  publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
