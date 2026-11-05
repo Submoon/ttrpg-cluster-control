@@ -499,8 +499,8 @@ function isDisabledObstructionRelease(event: PointerEvent): boolean {
 }
 
 function onContextMenuCapture(event: MouseEvent): void {
+  event.preventDefault()
   if ((activePointerPan?.button === 2 && activePointerPan.moved) || suppressNextContextMenu) {
-    event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
     suppressNextContextMenu = false
