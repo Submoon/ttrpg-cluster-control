@@ -5,6 +5,14 @@ import { playerClusterGeometry } from './player-cluster-geometry'
 import { rasterizeMapSvg, type MapImageFormat, type MapImagePalette } from './map-image-export'
 import { playerObjectPresentation } from './player-object-presentation'
 import { playerSystemGeometry } from './player-system-geometry'
+import type { PlayerRouteGeometry } from './player-cluster-geometry'
+import {
+  CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_PRESENTATION_CLASSES,
+  CLUSTER_SYSTEM_SEAL,
+  PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
+  PLAYER_SYSTEM_CARD_DISCLOSURE_COPY,
+} from './cluster-system-presentation'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
 const scenePadding = 24
@@ -13,6 +21,9 @@ const titleFontSize = 20
 
 interface PlayerMapPaint {
   mapBackground: string
+  mapCard: string
+  mapLabelBorder: string
+  mapInstallation: string
   panelBackground: string
   line: string
   lineSoft: string
@@ -38,6 +49,9 @@ export interface PlayerMapImageRequest {
 
 const lightPrintPaint: PlayerMapPaint = {
   mapBackground: '#f5f4ee',
+  mapCard: '#fffefa',
+  mapLabelBorder: '#718077',
+  mapInstallation: '#2e674b',
   panelBackground: '#fffefa',
   line: '#796e5d',
   lineSoft: '#ded8ca',
@@ -49,6 +63,9 @@ const lightPrintPaint: PlayerMapPaint = {
 
 const darkFallbackPaint: PlayerMapPaint = {
   mapBackground: '#0c1719',
+  mapCard: '#142225',
+  mapLabelBorder: '#607477',
+  mapInstallation: '#81b19a',
   panelBackground: '#121c1e',
   line: '#65787a',
   lineSoft: '#293a3d',
@@ -100,6 +117,9 @@ function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
 
   return {
     mapBackground: read('--map-bg', fallback.mapBackground),
+    mapCard: read('--map-card', fallback.mapCard),
+    mapLabelBorder: read('--map-label-border', fallback.mapLabelBorder),
+    mapInstallation: read('--map-installation', fallback.mapInstallation),
     panelBackground: read('--panel-bg', fallback.panelBackground),
     line: read('--line', fallback.line),
     lineSoft: read('--line-soft', fallback.lineSoft),
@@ -130,64 +150,83 @@ function createClusterImage(
 
   const routesGroup = appendSvg(svg, 'g', { 'aria-label': 'Player-visible Jump Routes', role: 'group' })
   for (const route of geometry.routes) {
-    const routeGroup = appendSvg(routesGroup, 'g', {
-      class: 'player-cluster-route',
-      role: 'group',
-      'aria-label': route.accessibleLabel,
-    })
-    appendSvg(routeGroup, 'path', {
-      class: 'player-cluster-route-path',
-      d: route.path,
-      fill: 'none',
-      stroke: paint.textSecondary,
-      'stroke-width': 3,
-      'aria-hidden': true,
-    })
-
-    const badge = appendSvg(routeGroup, 'g', { class: 'player-cluster-route-level' })
-    appendSvg(badge, 'rect', {
-      x: route.labelX - route.labelWidth / 2,
-      y: route.labelY - 15,
-      width: route.labelWidth,
-      height: 20,
-      rx: 2,
-      fill: paint.panelBackground,
-      stroke: paint.line,
-      'stroke-width': 1,
-    })
-    appendText(badge, route.label, {
-      x: route.labelX,
-      y: route.labelY,
-      fill: paint.textPrimary,
-      'font-family': 'system-ui, sans-serif',
-      'font-size': 12,
-      'text-anchor': 'middle',
-    })
-
-    if (route.destination) {
-      appendSvg(routeGroup, 'circle', {
-        class: 'player-cluster-route-unknown-destination',
-        cx: route.destination.position.x,
-        cy: route.destination.position.y,
-        r: 8,
-        fill: paint.mapBackground,
-        stroke: paint.textMuted,
-        'stroke-width': 3,
-      })
-      appendText(routeGroup, route.destination.label, {
-        class: 'player-cluster-route-unknown-label',
-        x: route.destination.position.x + 16,
-        y: route.destination.position.y + 5,
-        fill: paint.textSecondary,
-        'font-family': 'system-ui, sans-serif',
-        'font-size': 14,
-      })
-    }
+    if (route.foreground) continue
+    appendClusterRoute(routesGroup, route, paint)
   }
 
   const systemsGroup = appendSvg(svg, 'g', { 'aria-label': 'Player-visible Star Systems', role: 'group' })
   for (const system of documentScene.systems) appendClusterSystem(systemsGroup, system, paint)
+
+  const foregroundRoutes = geometry.routes.filter(route => route.foreground)
+  if (foregroundRoutes.length) {
+    const foregroundGroup = appendSvg(svg, 'g', {
+      class: 'player-cluster-routes-foreground',
+      'aria-label': 'Player-visible Jump Routes',
+      role: 'group',
+      'pointer-events': 'none',
+    })
+    for (const route of foregroundRoutes) appendClusterRoute(foregroundGroup, route, paint)
+  }
   return finishSvg(svg, bounds)
+}
+
+function appendClusterRoute(parent: SVGElement, route: PlayerRouteGeometry, paint: PlayerMapPaint): void {
+  const routeGroup = appendSvg(parent, 'g', {
+    class: route.foreground
+      ? 'player-cluster-route player-cluster-route--foreground'
+      : 'player-cluster-route',
+    ...(route.foreground ? { 'pointer-events': 'none' } : {}),
+    role: 'group',
+    'aria-label': route.accessibleLabel,
+  })
+  appendSvg(routeGroup, 'path', {
+    class: 'player-cluster-route-path',
+    d: route.path,
+    fill: 'none',
+    stroke: paint.textSecondary,
+    'stroke-width': 3,
+    'aria-hidden': true,
+  })
+
+  const badge = appendSvg(routeGroup, 'g', { class: 'player-cluster-route-level' })
+  appendSvg(badge, 'rect', {
+    x: route.labelX - route.labelWidth / 2,
+    y: route.labelY - 15,
+    width: route.labelWidth,
+    height: 20,
+    rx: 2,
+    fill: paint.panelBackground,
+    stroke: paint.line,
+    'stroke-width': 1,
+  })
+  appendText(badge, route.label, {
+    x: route.labelX,
+    y: route.labelY,
+    fill: paint.textPrimary,
+    'font-family': 'system-ui, sans-serif',
+    'font-size': 12,
+    'text-anchor': 'middle',
+  })
+
+  if (route.destination) {
+    appendSvg(routeGroup, 'circle', {
+      class: 'player-cluster-route-unknown-destination',
+      cx: route.destination.position.x,
+      cy: route.destination.position.y,
+      r: 8,
+      fill: paint.mapBackground,
+      stroke: paint.textMuted,
+      'stroke-width': 3,
+    })
+    appendText(routeGroup, route.destination.label, {
+      class: 'player-cluster-route-unknown-label',
+      x: route.destination.position.x + 16,
+      y: route.destination.position.y + 5,
+      fill: paint.textSecondary,
+      'font-family': 'system-ui, sans-serif',
+      'font-size': 14,
+    })
+  }
 }
 
 function appendClusterSystem(parent: SVGElement, system: PlayerSystemMarker, paint: PlayerMapPaint): void {
@@ -196,27 +235,60 @@ function appendClusterSystem(parent: SVGElement, system: PlayerSystemMarker, pai
     role: 'group',
     'aria-label': system.label,
   })
-  const fill = system.disclosure === 'unknown'
-    ? paint.mapBackground
-    : system.disclosure === 'known-type' ? paint.textSecondary : paint.accent
-  const stroke = system.disclosure === 'unknown' ? paint.textMuted : paint.textPrimary
-  appendSvg(marker, 'circle', {
-    cx: system.position.x,
-    cy: system.position.y,
-    r: 18,
-    fill,
-    stroke,
-    'stroke-width': 3,
+  const geometry = appendSvg(marker, 'g', {
+    class: 'player-cluster-map-marker-geometry',
+    transform: `translate(${system.position.x} ${system.position.y})`,
+    'aria-hidden': true,
   })
-  if (system.disclosure !== 'unknown') {
-    appendText(marker, system.label, {
-      x: system.position.x + 28,
-      y: system.position.y + 7,
-      fill: paint.textPrimary,
-      'font-family': 'Georgia, serif',
-      'font-size': 20,
+  if (system.disclosure === 'unknown') {
+    appendSvg(geometry, 'circle', {
+      class: 'player-cluster-map-marker-unknown',
+      r: PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
+      fill: paint.mapBackground,
+      stroke: paint.textMuted,
+      'stroke-width': 3,
     })
+    return
   }
+
+  const knownType = system.disclosure === 'known-type'
+  const cardStroke = knownType ? paint.mapLabelBorder : paint.mapInstallation
+  appendSvg(geometry, 'rect', {
+    class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.card,
+    x: CLUSTER_SYSTEM_CARD.x,
+    y: CLUSTER_SYSTEM_CARD.y,
+    width: CLUSTER_SYSTEM_CARD.width,
+    height: CLUSTER_SYSTEM_CARD.height,
+    rx: CLUSTER_SYSTEM_CARD.cornerRadius,
+    fill: paint.mapCard,
+    stroke: cardStroke,
+    'stroke-width': 1.5,
+  })
+  appendSvg(geometry, 'circle', {
+    class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal,
+    cx: CLUSTER_SYSTEM_SEAL.x,
+    cy: CLUSTER_SYSTEM_SEAL.y,
+    r: CLUSTER_SYSTEM_SEAL.radius,
+    fill: knownType ? paint.textSecondary : paint.mapInstallation,
+  })
+  appendText(geometry, system.label, {
+    class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.name,
+    x: 4,
+    y: -6,
+    fill: knownType ? paint.textSecondary : paint.textPrimary,
+    'font-family': 'Georgia, serif',
+    'font-size': 14,
+    'text-anchor': 'middle',
+  })
+  appendText(geometry, PLAYER_SYSTEM_CARD_DISCLOSURE_COPY[system.disclosure], {
+    class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta,
+    x: 0,
+    y: 17,
+    fill: paint.textMuted,
+    'font-family': 'Consolas, monospace',
+    'font-size': 9,
+    'text-anchor': 'middle',
+  })
 }
 
 function createSystemImage(

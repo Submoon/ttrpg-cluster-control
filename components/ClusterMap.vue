@@ -70,6 +70,11 @@ import {
   describeRouteSharing,
   routeSharingStatus,
 } from '../utils/gm-publication-badges'
+import {
+  CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_PRESENTATION_CLASSES,
+  CLUSTER_SYSTEM_SEAL,
+} from '../utils/cluster-system-presentation'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -971,24 +976,24 @@ function render(): void {
   }
 
   systemMarks.append('rect')
-    .attr('class', 'cluster-system-card')
-    .attr('x', -78)
-    .attr('y', -38)
-    .attr('width', 156)
-    .attr('height', 76)
-    .attr('rx', 4)
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.card)
+    .attr('x', CLUSTER_SYSTEM_CARD.x)
+    .attr('y', CLUSTER_SYSTEM_CARD.y)
+    .attr('width', CLUSTER_SYSTEM_CARD.width)
+    .attr('height', CLUSTER_SYSTEM_CARD.height)
+    .attr('rx', CLUSTER_SYSTEM_CARD.cornerRadius)
   systemMarks.append('circle')
-    .attr('class', 'cluster-system-seal')
-    .attr('cx', -57)
-    .attr('cy', -17)
-    .attr('r', 4)
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal)
+    .attr('cx', CLUSTER_SYSTEM_SEAL.x)
+    .attr('cy', CLUSTER_SYSTEM_SEAL.y)
+    .attr('r', CLUSTER_SYSTEM_SEAL.radius)
   systemMarks.append('text')
-    .attr('class', 'cluster-system-name')
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.name)
     .attr('x', 4)
     .attr('y', -6)
     .text(system => system.name)
   systemMarks.append('text')
-    .attr('class', 'cluster-system-meta')
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta)
     .attr('x', 0)
     .attr('y', 17)
     .text(system => {

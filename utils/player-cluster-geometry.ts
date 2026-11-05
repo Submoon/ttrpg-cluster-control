@@ -1,7 +1,13 @@
 /** Public map geometry derived only from the allowlisted player Cluster document. */
 import type { PlayerClusterDocument, PlayerRoute, PlayerSystemMarker, Point } from '../domain/workspace'
+import {
+  CLUSTER_SYSTEM_CARD,
+  PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
+  clusterSystemCardBounds,
+  playerClusterSystemMarkerVisibleBounds,
+  playerClusterSystemMarkerEdgePoint,
+} from './cluster-system-presentation'
 
-const SYSTEM_MARKER_RADIUS = 18
 const UNKNOWN_DESTINATION_RADIUS = 8
 const ROUTE_BEND = 28
 const ROUTE_LABEL_HEIGHT = 15
@@ -18,6 +24,7 @@ interface SceneRect {
 
 export interface PlayerRouteGeometry {
   id: string
+  foreground: boolean
   path: string
   label: string
   accessibleLabel: string
@@ -68,20 +75,17 @@ function rectanglesOverlap(left: SceneRect, right: SceneRect, gap: number): bool
 function labelObstacles(systems: readonly PlayerSystemMarker[], routes: readonly PlayerRoute[]): SceneRect[] {
   const obstacles: SceneRect[] = []
   for (const system of systems) {
+    const marker = playerClusterSystemMarkerVisibleBounds(
+      system.position,
+      system.disclosure !== 'unknown',
+      system.label,
+    )
     obstacles.push({
-      left: system.position.x - SYSTEM_MARKER_RADIUS,
-      top: system.position.y - SYSTEM_MARKER_RADIUS,
-      right: system.position.x + SYSTEM_MARKER_RADIUS,
-      bottom: system.position.y + SYSTEM_MARKER_RADIUS,
+      left: marker.left,
+      top: marker.top,
+      right: marker.right,
+      bottom: marker.bottom,
     })
-    if (system.disclosure !== 'unknown') {
-      obstacles.push({
-        left: system.position.x + 28,
-        top: system.position.y - 15,
-        right: system.position.x + 28 + system.label.length * 14,
-        bottom: system.position.y + 11,
-      })
-    }
   }
   for (const route of routes) {
     if (route.destination.kind !== 'unknown') continue
@@ -100,6 +104,41 @@ function labelObstacles(systems: readonly PlayerSystemMarker[], routes: readonly
     })
   }
   return obstacles
+}
+
+function systemMarkersOverlap(first: PlayerSystemMarker, second: PlayerSystemMarker): boolean {
+  const firstIsCard = first.disclosure !== 'unknown'
+  const secondIsCard = second.disclosure !== 'unknown'
+  if (firstIsCard && secondIsCard) {
+    const a = clusterSystemCardBounds(first.position)
+    const b = clusterSystemCardBounds(second.position)
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+  }
+
+  if (!firstIsCard && !secondIsCard) {
+    return Math.hypot(first.position.x - second.position.x, first.position.y - second.position.y)
+      < PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS * 2
+  }
+
+  const circle = firstIsCard ? second : first
+  const card = firstIsCard ? first : second
+  const bounds = clusterSystemCardBounds(card.position)
+  const closestX = Math.max(bounds.left, Math.min(bounds.right, circle.position.x))
+  const closestY = Math.max(bounds.top, Math.min(bounds.bottom, circle.position.y))
+  return Math.hypot(circle.position.x - closestX, circle.position.y - closestY)
+    < PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
+}
+
+function unresolvedDestinationCoveredByCard(
+  position: Point,
+  systems: readonly PlayerSystemMarker[],
+): boolean {
+  return systems.some((system) => {
+    if (system.disclosure === 'unknown') return false
+    const bounds = clusterSystemCardBounds(system.position)
+    return position.x >= bounds.left && position.x <= bounds.right
+      && position.y >= bounds.top && position.y <= bounds.bottom
+  })
 }
 
 function placeRouteLabel(
@@ -156,6 +195,7 @@ function routeGeometry(
   route: PlayerRoute,
   index: number,
   systemsById: ReadonlyMap<string, PlayerSystemMarker>,
+  systems: readonly PlayerSystemMarker[],
   obstacles: SceneRect[],
 ): PlayerRouteGeometry {
   const origin = systemsById.get(route.fromSystemId)
@@ -173,26 +213,35 @@ function routeGeometry(
   const dx = destinationPosition.x - origin.position.x
   const dy = destinationPosition.y - origin.position.y
   const distance = Math.hypot(dx, dy)
+  const foreground = route.destination.kind === 'unknown'
+    ? unresolvedDestinationCoveredByCard(route.destination.position, systems)
+    : distance >= 1 && systemMarkersOverlap(origin, destinationSystem!)
 
   let path: string
   let labelX: number
   let labelY: number
   if (distance < 1) {
-    path = `M ${origin.position.x - SYSTEM_MARKER_RADIUS} ${origin.position.y} Q ${origin.position.x} ${origin.position.y - 82 - (index % 2) * 14} ${origin.position.x + SYSTEM_MARKER_RADIUS} ${origin.position.y}`
+    const originUsesCard = origin.disclosure !== 'unknown'
+    const halfWidth = originUsesCard ? 46 : PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
+    const edgeY = originUsesCard ? origin.position.y + CLUSTER_SYSTEM_CARD.y : origin.position.y
+    path = `M ${origin.position.x - halfWidth} ${edgeY} Q ${origin.position.x} ${origin.position.y - 82 - (index % 2) * 14} ${origin.position.x + halfWidth} ${edgeY}`
     labelX = origin.position.x
     labelY = origin.position.y - 46 - (index % 2) * 7
   } else {
     const ux = dx / distance
     const uy = dy / distance
-    const destinationRadius = route.destination.kind === 'system' ? SYSTEM_MARKER_RADIUS : 0
-    const start = {
-      x: origin.position.x + ux * SYSTEM_MARKER_RADIUS,
-      y: origin.position.y + uy * SYSTEM_MARKER_RADIUS,
-    }
-    const end = {
-      x: destinationPosition.x - ux * destinationRadius,
-      y: destinationPosition.y - uy * destinationRadius,
-    }
+    const start = playerClusterSystemMarkerEdgePoint(
+      origin.position,
+      destinationPosition,
+      origin.disclosure !== 'unknown',
+    )
+    const end = destinationSystem
+      ? playerClusterSystemMarkerEdgePoint(
+          destinationSystem.position,
+          origin.position,
+          destinationSystem.disclosure !== 'unknown',
+        )
+      : destinationPosition
     const bend = index % 2 === 0 ? ROUTE_BEND : -ROUTE_BEND
     const control = {
       x: (start.x + end.x) / 2 - uy * bend,
@@ -223,6 +272,7 @@ function routeGeometry(
 
   return {
     id: route.id,
+    foreground,
     path,
     label,
     accessibleLabel,
@@ -246,20 +296,28 @@ export function playerClusterGeometry(document: PlayerClusterDocument): PlayerCl
   const systemsById = new Map(document.systems.map(system => [system.id, system]))
 
   for (const system of document.systems) {
-    const right = system.disclosure === 'unknown'
-      ? system.position.x + SYSTEM_MARKER_RADIUS
-      : system.position.x + 28 + system.label.length * 24
+    const marker = playerClusterSystemMarkerVisibleBounds(
+      system.position,
+      system.disclosure !== 'unknown',
+      system.label,
+    )
     includeRect(
       bounds,
-      system.position.x,
-      system.position.y,
-      right,
-      system.position.y + SYSTEM_MARKER_RADIUS,
+      marker.left,
+      marker.top,
+      marker.right,
+      marker.bottom,
     )
   }
 
   const obstacles = labelObstacles(document.systems, document.routes)
-  const routes = document.routes.map((route, index) => routeGeometry(route, index, systemsById, obstacles))
+  const routes = document.routes.map((route, index) => routeGeometry(
+    route,
+    index,
+    systemsById,
+    document.systems,
+    obstacles,
+  ))
   for (const route of routes) {
     const routeCoordinates = Array.from(route.path.matchAll(/[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?/gi), match => Number(match[0]))
     if (routeCoordinates.length < 4 || routeCoordinates.length % 2 !== 0

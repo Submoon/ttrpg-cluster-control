@@ -1,6 +1,91 @@
 import { expect, test } from './fixtures'
 import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
 import { createPlayerShareUrl } from '../utils/player-share-link'
+import { serializePlayerJson } from '../domain/workspace'
+
+test('public cluster artwork keeps Unknown neutral and discloses card labels without source counts', async ({ page }) => {
+  const { document: playerDocument } = createPlayerInterfaceFixture()
+  playerDocument.systems.push(
+    {
+      id: 'system-2',
+      position: { x: -700, y: 0 },
+      disclosure: 'unknown',
+      label: 'Unknown presence',
+    },
+    {
+      id: 'system-3',
+      position: { x: 1300, y: 0 },
+      disclosure: 'known-type',
+      type: 'star-system',
+      label: 'Star system',
+    },
+  )
+
+  await page.goto('/player')
+  const playerFileInput = page.getByLabel('Open player JSON', { exact: true })
+  await expect(playerFileInput).toBeEnabled()
+  await playerFileInput.setInputFiles({
+    name: 'cluster-presentation.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(serializePlayerJson(playerDocument), 'utf8'),
+  })
+
+  const cluster = page.getByRole('region', { name: 'Player-visible Jump Cluster map', exact: true })
+  const unknown = cluster.locator('.player-cluster-map-marker--unknown')
+  const known = cluster.locator('.player-cluster-map-marker--known-type')
+  const revealed = cluster.locator('.player-cluster-map-marker--revealed')
+  const unknownCircle = unknown.locator('.player-cluster-map-marker-unknown')
+  const knownCard = known.locator('.cluster-system-card')
+  await expect(unknownCircle).toHaveAttribute('r', '18')
+  await expect(unknown.locator('.cluster-system-card, .cluster-system-name')).toHaveCount(0)
+  await expect(knownCard).toHaveAttribute('width', '156')
+  await expect(knownCard).toHaveAttribute('height', '76')
+  await expect(known.locator('.cluster-system-name')).toHaveText('Star system')
+  await expect(known.locator('.cluster-system-meta')).toHaveText('MAP NOT SHARED')
+  await expect(revealed.locator('.cluster-system-name')).toHaveText('Public System')
+  await expect(revealed.locator('.cluster-system-meta')).toHaveText('MAP SHARED')
+
+  const colors = await page.evaluate(() => {
+    const resolve = (token: string) => {
+      const probe = document.createElement('span')
+      probe.style.color = `var(${token})`
+      document.body.append(probe)
+      const value = getComputedStyle(probe).color
+      probe.remove()
+      return value
+    }
+    return {
+      unknown: resolve('--text-muted'),
+      known: resolve('--map-label-border'),
+      revealed: resolve('--map-installation'),
+      actualUnknown: getComputedStyle(document.querySelector('.player-cluster-map-marker-unknown')!).stroke,
+      actualKnown: getComputedStyle(document.querySelector('.player-cluster-map-marker--known-type .cluster-system-card')!).stroke,
+      actualRevealed: getComputedStyle(document.querySelector('.player-cluster-map-marker--revealed .cluster-system-card')!).stroke,
+    }
+  })
+  expect(colors.actualUnknown).toBe(colors.unknown)
+  expect(colors.actualKnown).toBe(colors.known)
+  expect(colors.actualRevealed).toBe(colors.revealed)
+  expect(new Set([colors.actualUnknown, colors.actualKnown, colors.actualRevealed]).size).toBe(3)
+
+  const hierarchy = page.getByRole('region', { name: 'Visible cluster locations', exact: true })
+  const unknownRow = hierarchy.locator('.player-public-list-item--unknown')
+  const knownRow = hierarchy.locator('.player-public-list-item--known-type')
+  const revealedRow = hierarchy.locator('.player-public-list-item--revealed')
+  await expect(unknownRow).toHaveAttribute('aria-disabled', 'true')
+  await expect(knownRow).toHaveAttribute('aria-disabled', 'true')
+  await expect(unknownRow).not.toHaveAttribute('type', 'button')
+  await expect(knownRow).not.toHaveAttribute('type', 'button')
+  await expect(unknownRow).toHaveCSS('cursor', 'auto')
+  await revealedRow.hover()
+  const hoverColors = await page.evaluate(() => ({
+    border: getComputedStyle(document.querySelector('.player-public-list-item--revealed')!).borderTopColor,
+    background: getComputedStyle(document.querySelector('.player-public-list-item--revealed')!).backgroundColor,
+  }))
+  expect(hoverColors.border).not.toBe('rgba(0, 0, 0, 0)')
+  expect(hoverColors.background).not.toBe('rgba(0, 0, 0, 0)')
+  await expect(revealedRow).toHaveCSS('cursor', 'pointer')
+})
 
 async function openRevealedSystem(page: import('@playwright/test').Page) {
   const systemOpener = page.getByRole('button', { name: 'Open Public System system preview', exact: true })
@@ -110,7 +195,12 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
       probe.remove()
       return value
     }
-    return { accent: resolve('--accent'), neutral: resolve('--text-secondary'), background: resolve('--map-bg') }
+    return {
+      accent: resolve('--accent'),
+      neutral: resolve('--text-secondary'),
+      background: resolve('--map-bg'),
+      selection: resolve('--map-selected'),
+    }
   })
   const publicStarMarker = systemMap.getByRole('button', { name: 'Inspect Public Star', exact: true })
   await expect(publicStarMarker.locator('.player-system-object-marker-art')).toHaveCount(0)
@@ -133,7 +223,12 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   const markerBounds = await harborMarker.locator('.player-system-object-glyph').boundingBox()
   await expect(harborMarker.locator('.player-system-object-hit-target')).toHaveAttribute('r', '10')
   await expect(harborMarker.locator('.player-system-object-marker-art')).toHaveCount(0)
-  await expect(harborMarker.locator('.player-system-object-selection-outline')).toHaveCSS('opacity', '1')
+  await expect(harborMarker.locator('.player-system-object-glyph')).toHaveCSS('fill', mapPalette.selection)
+  await expect(harborMarker.locator('.player-system-object-focus-outline')).toHaveCSS('opacity', '0')
+  await page.keyboard.press('Tab')
+  await harborMarker.focus()
+  await expect(harborMarker).toHaveCSS('outline-style', 'none')
+  await expect(harborMarker.locator('.player-system-object-focus-outline')).toHaveCSS('opacity', '1')
   await expect(playerNavigation).toHaveAttribute('data-player-map-obstruction', '')
   if (!toolbarBounds || !sceneBounds || !markerBounds) {
     throw new Error('The selected public marker, player toolbar, or system map has no rendered bounds.')
@@ -187,9 +282,9 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   await expect(details).not.toContainText('PRIVATE_SOURCE_OUTPOST_NAME')
   const knownBaseMarker = systemMap.getByRole('button', { name: 'Inspect Base', exact: true })
   await expect(knownBaseMarker.locator('.player-system-object-marker-art')).toHaveCount(0)
-  await expect(knownBaseMarker.locator('.player-system-object-glyph')).toBeVisible()
-  expect(await knownBaseMarker.locator('.player-system-object-glyph').evaluate(glyph => getComputedStyle(glyph).fill))
-    .toBe(mapPalette.neutral)
+  const knownBaseGlyph = knownBaseMarker.locator('.player-system-object-glyph')
+  await expect(knownBaseGlyph).toBeVisible()
+  await expect(knownBaseGlyph).toHaveCSS('fill', mapPalette.selection)
 
   await hierarchy.getByRole('button', { name: 'Collapse Unknown presence', exact: true }).click()
   await expect(moon).toBeHidden()
@@ -197,6 +292,7 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   await expect(hiddenHost).toHaveAttribute('aria-expanded', 'true')
   await expect(moon).toBeVisible()
   await expect(details).toContainText('Its horizon glows softly at night.')
+  await expect(knownBaseGlyph).toHaveCSS('fill', mapPalette.neutral)
 
   await page.setViewportSize({ width: 390, height: 844 })
   const hierarchyToggle = playerNavigation.getByRole('button', { name: 'Hierarchy', exact: true })
@@ -247,7 +343,7 @@ test('player map native left and right drags pan marks and Orbits without activa
   const clusterFit = clusterNavigation.getByRole('button', { name: 'Fit player map', exact: true })
   const clusterZoomIn = clusterNavigation.getByRole('button', { name: 'Zoom in', exact: true })
   const systemOpener = clusterMap.getByRole('button', { name: 'Open Public System system preview', exact: true })
-  const systemMarker = systemOpener.locator('.player-cluster-map-marker-geometry circle')
+  const systemMarker = systemOpener.locator('.player-cluster-map-marker-geometry .cluster-system-card')
 
   async function dragAndCheckPan(
     scene: import('@playwright/test').Locator,

@@ -15,7 +15,7 @@
       :entity-inspector-active="false"
       :compact-modal-open="compactModalOpen"
       :compact-panel="compactPanel"
-      :overlay-open="false"
+      :overlay-open="searchOpen || filesOpen"
       :is-compact-viewport="isCompactViewport"
       @close-panel="closePanel"
     >
@@ -72,22 +72,36 @@
             </div>
           </div>
           <div class="player-workspace-actions">
-            <UButton
-              color="neutral"
-              variant="outline"
-              size="sm"
-              aria-controls="workspace-hierarchy-panel"
-              :aria-expanded="isPanelOpen('hierarchy')"
-              @click="togglePanel('hierarchy')"
-            >Hierarchy</UButton>
-            <UButton
-              color="neutral"
-              variant="outline"
-              size="sm"
-              aria-controls="workspace-inspector-panel"
-              :aria-expanded="isPanelOpen('inspector')"
-              @click="togglePanel('inspector')"
-            >Inspect</UButton>
+            <PlayerMapTools
+              ref="mapTools"
+              v-model:search-open="searchOpen"
+              v-model:search-query="searchQuery"
+              v-model:files-open="filesOpen"
+              :search-results="searchResults"
+              :reveal-search-target="revealSearchTarget"
+              :can-open-search-shortcut="canOpenSearchShortcut"
+              :get-shortcut-owning-dialog="getShortcutOwningDialog"
+              :file-scope="mapFileScope"
+              :export-error="playerExportError"
+              @export-image="downloadPlayerImage"
+            >
+              <UButton
+                color="neutral"
+                variant="outline"
+                size="sm"
+                aria-controls="workspace-hierarchy-panel"
+                :aria-expanded="isPanelOpen('hierarchy')"
+                @click="togglePanel('hierarchy')"
+              >Hierarchy</UButton>
+              <UButton
+                color="neutral"
+                variant="outline"
+                size="sm"
+                aria-controls="workspace-inspector-panel"
+                :aria-expanded="isPanelOpen('inspector')"
+                @click="togglePanel('inspector')"
+              >Inspect</UButton>
+            </PlayerMapTools>
           </div>
         </UDashboardToolbar>
       </template>
@@ -180,20 +194,35 @@
           </div>
         </div>
         <div class="player-workspace-actions">
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="sm"
-            :aria-expanded="isPanelOpen('hierarchy')"
-            @click="togglePanel('hierarchy')"
-          >Hierarchy</UButton>
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="sm"
-            :aria-expanded="isPanelOpen('inspector')"
-            @click="togglePanel('inspector')"
-          >Inspect</UButton>
+          <PlayerMapTools
+            ref="mapTools"
+            v-model:search-open="searchOpen"
+            v-model:search-query="searchQuery"
+            v-model:files-open="filesOpen"
+            :search-results="searchResults"
+            :reveal-search-target="revealSearchTarget"
+            :can-open-search-shortcut="canOpenSearchShortcut"
+            :get-shortcut-owning-dialog="getShortcutOwningDialog"
+            :file-scope="mapFileScope"
+            :export-error="playerExportError"
+            embedded
+            @export-image="downloadPlayerImage"
+          >
+            <UButton
+              color="neutral"
+              variant="outline"
+              size="sm"
+              :aria-expanded="isPanelOpen('hierarchy')"
+              @click="togglePanel('hierarchy')"
+            >Hierarchy</UButton>
+            <UButton
+              color="neutral"
+              variant="outline"
+              size="sm"
+              :aria-expanded="isPanelOpen('inspector')"
+              @click="togglePanel('inspector')"
+            >Inspect</UButton>
+          </PlayerMapTools>
         </div>
       </UDashboardToolbar>
 
@@ -276,10 +305,13 @@
 <script setup lang="ts">
 /** Shared read-only player navigation over an allowlisted Cluster document. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { usePlayerFileExports } from '../composables/usePlayerFileExports'
+import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument, PlayerSystemMarker } from '../domain/workspace'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
 import type { PlayerInspectionTarget, PlayerUsableRectReader } from '../utils/player-inspection'
+import { searchPlayerDocument, type PlayerSearchTarget } from '../utils/player-search'
 import PlayerClusterMap from './PlayerClusterMap.vue'
 import PlayerSystemMap from './PlayerSystemMap.vue'
 import PlayerClusterHierarchy from './PlayerClusterHierarchy.vue'
@@ -287,6 +319,7 @@ import PlayerSystemHierarchy from './PlayerSystemHierarchy.vue'
 import PlayerObjectInspector from './PlayerObjectInspector.vue'
 import PlayerOrbitInspector from './PlayerOrbitInspector.vue'
 import MapEditorLayout from './MapEditorLayout.vue'
+import PlayerMapTools from './PlayerMapTools.vue'
 import WorkspaceHeader from './WorkspaceHeader.vue'
 
 const props = withDefaults(defineProps<{
@@ -319,6 +352,10 @@ interface PendingReveal {
 }
 
 const rootElement = ref<HTMLElement | null>(null)
+const mapTools = ref<InstanceType<typeof PlayerMapTools> | null>(null)
+const searchOpen = ref(false)
+const searchQuery = ref('')
+const filesOpen = ref(false)
 const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
 const clusterMarkerOpener = ref<FocusTarget | null>(null)
@@ -336,6 +373,11 @@ const isActive = computed(() => props.active)
 const selectedSystem = computed<RevealedSystem | null>(() =>
   props.document.systems.find(isSelectedRevealedSystem) ?? null,
 )
+const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
+const mapFileScope = computed(() => selectedSystem.value
+  ? `star system ${selectedSystem.value.label}`
+  : `Jump Cluster ${props.document.title}`)
+const { playerExportError, downloadPlayerImage } = usePlayerFileExports({ prepare: preparePlayerImage })
 const selectedObjectId = computed(() => selectedTarget.value?.kind === 'object' ? selectedTarget.value.id : null)
 const selectedOrbitId = computed(() => selectedTarget.value?.kind === 'orbit' ? selectedTarget.value.id : null)
 const selectedObject = computed<PlayerObjectMarker | null>(() => selectedObjectId.value
@@ -370,6 +412,8 @@ let compactMedia: MediaQueryList | null = null
 let layoutResizeObserver: ResizeObserver | null = null
 let layoutMutationObserver: MutationObserver | null = null
 let requestNonce = 0
+let searchOpening = 0
+let mapVisit = 0
 let lastRevealAttempt = ''
 let isDisposed = false
 
@@ -390,15 +434,26 @@ onBeforeUnmount(() => {
 
 watch(() => props.active, (active) => {
   mapReaderEpoch.value += 1
-  if (!active) resetNavigation()
+  if (!active) resetDocumentView()
 }, { flush: 'sync' })
 watch(() => props.document, () => {
   mapReaderEpoch.value += 1
-  resetNavigation()
+  resetDocumentView()
+}, { flush: 'sync' })
+watch([() => props.document, () => props.active, selectedSystemId], () => {
+  mapVisit += 1
+  filesOpen.value = false
+  playerExportError.value = ''
+}, { flush: 'sync' })
+watch(searchOpen, open => {
+  if (!open) return
+  searchOpening += 1
+  filesOpen.value = false
 }, { flush: 'sync' })
 watch(() => compactModalOpen.value, () => {
   mapReaderEpoch.value += 1
-  if (!compactModalOpen.value) void retryPendingReveal()
+  if (compactModalOpen.value) filesOpen.value = false
+  else void retryPendingReveal()
 }, { flush: 'post' })
 watch(() => [hierarchyVisible.value, inspectorVisible.value] as const, () => {
   mapReaderEpoch.value += 1
@@ -469,7 +524,9 @@ function focusBackButton(request: number, sourceDocument: PlayerClusterDocument,
   if (button && isVisible(button)) button.focus()
 }
 
-function resetNavigation(): void {
+function resetDocumentView(): void {
+  searchOpen.value = false
+  searchQuery.value = ''
   invalidatePendingReveal()
   selectedSystemId.value = null
   selectedTarget.value = null
@@ -478,13 +535,91 @@ function resetNavigation(): void {
   cachedSystem.value = null
 }
 
-async function openSystem(publicSystemId: string): Promise<void> {
+function getShortcutOwningDialog(): HTMLElement | null {
+  return rootElement.value?.closest<HTMLElement>('.player-view-preview-content[role="dialog"]') ?? null
+}
+
+function canOpenSearchShortcut(): boolean {
+  const root = rootElement.value
+  return isActive.value && !compactModalOpen.value
+    && (searchOpen.value || (root !== null && isVisible(root)))
+}
+
+async function revealSearchTarget(target: PlayerSearchTarget): Promise<
+  { status: 'revealed' } | { status: 'rejected'; reason: 'stale' | 'unavailable' }
+> {
+  const source = props.document
+  const opening = searchOpening
+  const tools = mapTools.value
+  let navigationRequest = requestNonce
+  const ownsSearch = () => !isDisposed && isActive.value && props.document === source
+    && searchOpening === opening && mapTools.value === tools && navigationRequest === requestNonce
+  const stale = { status: 'rejected', reason: 'stale' } as const
+  const unavailable = { status: 'rejected', reason: 'unavailable' } as const
+  if (!tools || !searchOpen.value || target.document !== source || !ownsSearch()) return stale
+
+  const destination = target.kind === 'cluster' ? null : source.systems.find(system => system.id === target.systemId)
+  if (target.kind !== 'cluster' && destination?.disclosure !== 'revealed') return unavailable
+  if (target.kind === 'object' && destination?.disclosure === 'revealed'
+    && !destination.map.objects.some(object => object.id === target.objectId)) return unavailable
+
+  searchOpen.value = false
+  await nextTick()
+  await tools.whenSearchClosingFocusSettled()
+  if (!ownsSearch() || searchOpen.value) return stale
+
+  if (target.kind === 'cluster') {
+    const navigation = backToCluster()
+    navigationRequest = requestNonce
+    await navigation
+    if (!ownsSearch() || searchOpen.value || selectedSystem.value) return stale
+    focusCurrentMap('.player-cluster-map-scene')
+  } else {
+    if (selectedSystem.value !== destination) {
+      const navigation = openSystem(target.systemId, 'search')
+      navigationRequest = requestNonce
+      await navigation
+      if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
+    }
+    if (target.kind === 'object') {
+      focusCurrentMap('.player-system-map-scene')
+      inspectObject(target.objectId)
+    } else if (selectedSystem.value) {
+      focusBackButton(navigationRequest, source, selectedSystem.value)
+    }
+  }
+  return { status: 'revealed' }
+}
+
+function focusCurrentMap(selector: string): void {
+  const root = rootElement.value
+  const map = root?.querySelector<SVGElement>(selector)
+  const target = map && isVisible(map) ? map : root?.querySelector<HTMLElement>('.workspace-map-search')
+  if (target && isVisible(target)) target.focus({ preventScroll: true })
+}
+
+async function preparePlayerImage() {
+  if (isDisposed || !isActive.value) return null
+  const source = props.document
+  const visit = mapVisit
+  const system = selectedSystem.value
+  const scene: CurrentPlayerMapScene = system
+    ? { kind: 'star-system', document: system.map, label: system.label }
+    : { kind: 'jump-cluster', document: source }
+  return {
+    document: source,
+    scene,
+    isCurrent: () => !isDisposed && isActive.value && props.document === source && mapVisit === visit,
+  }
+}
+
+async function openSystem(publicSystemId: string, origin: 'map' | 'search' = 'map'): Promise<void> {
   const sourceDocument = props.document
   const system = sourceDocument.systems.find(candidate => candidate.id === publicSystemId)
   if (!system || system.disclosure !== 'revealed') return
   const request = ++requestNonce
   pendingReveal.value = null
-  clusterMarkerOpener.value = focusableElement(document.activeElement)
+  clusterMarkerOpener.value = origin === 'map' ? focusableElement(document.activeElement) : null
   clusterMarkerSystemId.value = system.id
   cachedSystem.value = system
   selectedSystemId.value = system.id

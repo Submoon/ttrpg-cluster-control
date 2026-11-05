@@ -117,178 +117,149 @@
         </UButton>
       </div>
 
-      <UPopover
+      <MapFilesPopover
         v-model:open="headerMapActionsOpen"
-        :modal="false"
-        :ui="{ content: 'data-[state=closed]:pointer-events-none' }"
-        :content="{ side: 'bottom', align: 'end', sideOffset: 8, collisionPadding: 12 }"
+        :scope="mapFileScope"
+        panel-id="workspace-header-map-files-panel"
       >
-        <UButton
-          class="workspace-control workspace-map-files-toggle"
-          color="neutral"
-          :variant="headerMapActionsOpen ? 'soft' : 'outline'"
-          size="sm"
-          aria-label="Map files"
-          aria-controls="workspace-header-map-files-panel"
-          :aria-expanded="headerMapActionsOpen"
-          :title="`Map file actions for ${mapFileScope}`"
-        >
-          <span>Map files</span>
-          <UIcon
-            :name="headerMapActionsOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-            aria-hidden="true"
-          />
-        </UButton>
-
-        <template #content>
-          <div
-            id="workspace-header-map-files-panel"
-            class="workspace-map-files-content"
-            role="group"
-            :aria-label="`Map file actions for ${mapFileScope}`"
-            :data-map-obstruction="headerMapActionsOpen ? '' : undefined"
+        <div class="workspace-map-files-exports">
+          <UButton
+            v-if="activeView === 'cluster'"
+            class="workspace-control workspace-map-file-button"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Export Jump Cluster JSON"
+            title="Export Jump Cluster JSON"
+            :disabled="!workspace"
+            @click="exportClusterJson"
           >
-            <p class="workspace-map-files-heading">{{ mapFileScope }}</p>
-            <div class="workspace-map-files-exports">
-              <UButton
-                v-if="activeView === 'cluster'"
-                class="workspace-control workspace-map-file-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                aria-label="Export Jump Cluster JSON"
-                title="Export Jump Cluster JSON"
-                :disabled="!workspace"
-                @click="exportClusterJson"
-              >
-                Export JSON
-              </UButton>
-              <UButton
-                v-else
-                class="workspace-control workspace-map-file-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                aria-label="Export star system JSON"
-                title="Export star system JSON"
-                :disabled="!selectedSystem"
-                @click="exportSystemJson"
-              >
-                Export JSON
-              </UButton>
-              <UButton
-                class="workspace-control workspace-map-file-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                :aria-label="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
-                :title="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
-                :disabled="!activeMap"
-                @click="exportMapImage('png')"
-              >
-                PNG
-              </UButton>
-              <UButton
-                class="workspace-control workspace-map-file-button"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                :aria-label="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
-                :title="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
-                :disabled="!activeMap"
-                @click="exportMapImage('svg')"
-              >
-                SVG
-              </UButton>
-            </div>
+            Export JSON
+          </UButton>
+          <UButton
+            v-else
+            class="workspace-control workspace-map-file-button"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Export star system JSON"
+            title="Export star system JSON"
+            :disabled="!selectedSystem"
+            @click="exportSystemJson"
+          >
+            Export JSON
+          </UButton>
+          <UButton
+            class="workspace-control workspace-map-file-button"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
+            :title="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
+            :disabled="!activeMap"
+            @click="exportMapImage('png')"
+          >
+            PNG
+          </UButton>
+          <UButton
+            class="workspace-control workspace-map-file-button"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
+            :title="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
+            :disabled="!activeMap"
+            @click="exportMapImage('svg')"
+          >
+            SVG
+          </UButton>
+        </div>
 
-            <section class="workspace-player-exports" aria-label="Player exports">
-              <p class="workspace-map-files-heading">Player exports</p>
-              <div class="workspace-player-export-actions">
-                <UButton
-                  class="workspace-control workspace-map-file-button"
-                  color="primary"
-                  variant="soft"
-                  size="sm"
-                  aria-label="Export player JSON"
-                  title="Export the complete public Jump Cluster JSON"
-                  :disabled="!workspace"
-                  @click="emit('export-player-json')"
-                >
-                  Export player JSON
-                </UButton>
-                <UButton
-                  class="workspace-control workspace-map-file-button"
-                  color="primary"
-                  variant="soft"
-                  size="sm"
-                  aria-label="Export player SVG"
-                  title="Export the current public map as SVG"
-                  :disabled="!activeMap"
-                  @click="exportPlayerImage('svg')"
-                >
-                  Export player SVG
-                </UButton>
-                <UButton
-                  class="workspace-control workspace-map-file-button"
-                  color="primary"
-                  variant="soft"
-                  size="sm"
-                  aria-label="Export player PNG"
-                  title="Export the current public map as PNG"
-                  :disabled="!activeMap"
-                  @click="exportPlayerImage('png')"
-                >
-                  Export player PNG
-                </UButton>
-              </div>
-              <PlayerShareControls
-                :url="props.generatedPlayerUrl"
-                :busy="props.playerLinkBusy"
-                :status="props.playerLinkStatus"
-                @generate="emit('generate-player-link')"
-                @copy="emit('copy-player-link')"
-              />
-              <a class="workspace-player-reader-link" href="/player" target="_blank" rel="noopener">Open player JSON</a>
-              <p v-if="props.playerExportError" class="workspace-map-export-error" role="alert">
-                {{ props.playerExportError }}
-              </p>
-            </section>
-
-            <UCheckbox
-              v-model="printLightForPrinting"
-              class="workspace-map-print-light"
-              label="Light for printing"
-            />
-
+        <section class="workspace-player-exports" aria-label="Player exports">
+          <p class="workspace-map-files-heading">Player exports</p>
+          <div class="workspace-player-export-actions">
             <UButton
-              class="workspace-control workspace-map-import-button"
-              color="neutral"
-              variant="outline"
+              class="workspace-control workspace-map-file-button"
+              color="primary"
+              variant="soft"
               size="sm"
-              aria-label="Import JSON copy"
-              title="Import JSON copy"
-              @click="openJsonImportPicker"
+              aria-label="Export player JSON"
+              title="Export the complete public Jump Cluster JSON"
+              :disabled="!workspace"
+              @click="emit('export-player-json')"
             >
-              Import JSON copy
+              Export player JSON
             </UButton>
-            <input
-              ref="importFileInput"
-              class="workspace-map-import-input"
-              type="file"
-              accept="application/json,.json"
-              aria-label="Import map JSON"
-              data-testid="map-json-import-input"
-              @change="emit('import-file', $event)"
+            <UButton
+              class="workspace-control workspace-map-file-button"
+              color="primary"
+              variant="soft"
+              size="sm"
+              aria-label="Export player SVG"
+              title="Export the current public map as SVG"
+              :disabled="!activeMap"
+              @click="exportPlayerImage('svg')"
             >
-
-            <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
-            <p class="workspace-map-files-note">
-              Import JSON creates a separate copy in the current Jump Cluster: {{ workspace.cluster.name }}.
-            </p>
+              Export player SVG
+            </UButton>
+            <UButton
+              class="workspace-control workspace-map-file-button"
+              color="primary"
+              variant="soft"
+              size="sm"
+              aria-label="Export player PNG"
+              title="Export the current public map as PNG"
+              :disabled="!activeMap"
+              @click="exportPlayerImage('png')"
+            >
+              Export player PNG
+            </UButton>
           </div>
-        </template>
-      </UPopover>
+          <PlayerShareControls
+            :url="props.generatedPlayerUrl"
+            :busy="props.playerLinkBusy"
+            :status="props.playerLinkStatus"
+            @generate="emit('generate-player-link')"
+            @copy="emit('copy-player-link')"
+          />
+          <a class="workspace-player-reader-link" href="/player" target="_blank" rel="noopener">Open player JSON</a>
+          <p v-if="props.playerExportError" class="workspace-map-export-error" role="alert">
+            {{ props.playerExportError }}
+          </p>
+        </section>
+
+        <UCheckbox
+          v-model="printLightForPrinting"
+          class="workspace-map-print-light"
+          label="Light for printing"
+        />
+
+        <UButton
+          class="workspace-control workspace-map-import-button"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          aria-label="Import JSON copy"
+          title="Import JSON copy"
+          @click="openJsonImportPicker"
+        >
+          Import JSON copy
+        </UButton>
+        <input
+          ref="importFileInput"
+          class="workspace-map-import-input"
+          type="file"
+          accept="application/json,.json"
+          aria-label="Import map JSON"
+          data-testid="map-json-import-input"
+          @change="emit('import-file', $event)"
+        >
+
+        <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
+        <p class="workspace-map-files-note">
+          Import JSON creates a separate copy in the current Jump Cluster: {{ workspace.cluster.name }}.
+        </p>
+      </MapFilesPopover>
     </template>
   </UDashboardToolbar>
 </template>
@@ -299,6 +270,7 @@ import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
+import MapFilesPopover from './MapFilesPopover.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
 import PlayerShareControls from './PlayerShareControls.vue'
 
@@ -355,7 +327,7 @@ const emit = defineEmits<{
 const headerMapActionsOpen = ref(false)
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
-const workspaceSearch = ref<InstanceType<typeof WorkspaceSearch> | null>(null)
+const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -521,28 +493,6 @@ defineExpose({ whenSearchClosingFocusSettled })
 
 .workspace-map-back {
   flex: 0 0 auto;
-}
-
-.workspace-map-files-content {
-  position: relative;
-  z-index: 60;
-  display: grid;
-  width: min(22rem, calc(100vw - 1.5rem));
-  max-height: min(70vh, 32rem, max(0px, var(--reka-popover-content-available-height, 70vh)));
-  gap: 0.65rem;
-  overflow: auto;
-  scroll-padding-block: 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 0.35rem;
-  padding: 0.8rem;
-  background: var(--panel-raised);
-  color: var(--text-primary);
-  box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 35%);
-}
-
-/* The teleported positioning layer remains hit-testable while the panel exits. */
-:global([data-reka-popper-content-wrapper]:has(> [data-slot="content"][data-state="closed"] > #workspace-header-map-files-panel)) {
-  pointer-events: none;
 }
 
 .workspace-map-files-exports {

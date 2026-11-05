@@ -121,7 +121,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   expect(Number(await unknownDestination.getAttribute('cy'))).toBe(hiddenPosition.y)
 
   const routeLabelBounds = await publicRoute.locator('.player-cluster-route-level rect').boundingBox()
-  const revealedSystemLabelBounds = await playerMap.locator('.player-cluster-map-marker--revealed text').boundingBox()
+  const revealedSystemLabelBounds = await playerMap.locator('.player-cluster-map-marker--revealed .cluster-system-name').boundingBox()
   if (!routeLabelBounds || !revealedSystemLabelBounds) {
     throw new Error('The public route badge and revealed system label must have rendered bounds.')
   }

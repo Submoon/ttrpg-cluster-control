@@ -10,12 +10,12 @@ import { createPlayerShareUrl, PlayerShareLinkError } from '../utils/player-shar
 interface PreparedPlayerExport {
   document: PlayerClusterDocument
   scene: CurrentPlayerMapScene | null
-  /** Rechecks the applied editor context captured after preflight. */
+  /** Rechecks the caller's captured document and map context after asynchronous work. */
   isCurrent: () => boolean
 }
 
 interface PlayerFileExportsOptions {
-  /** Resolves preflight and one applied public projection for the requested operation. */
+  /** Prepares one public document and the current scene after any caller-owned preflight. */
   prepare: () => Promise<PreparedPlayerExport | null>
 }
 

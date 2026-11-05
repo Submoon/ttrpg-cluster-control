@@ -30,43 +30,19 @@
       @lostpointercapture.self.stop="cancelPan"
       @wheel.stop.prevent="handleWheel"
     >
-      <g
-        v-for="route in routeGeometries"
-        :key="route.id"
-        class="player-cluster-route"
-        role="group"
-        :aria-label="route.accessibleLabel"
-      >
-        <path class="player-cluster-route-path" :d="route.path" />
-        <g class="player-cluster-route-level">
-          <rect
-            :x="route.labelX - route.labelWidth / 2"
-            :y="route.labelY - 15"
-            :width="route.labelWidth"
-            height="20"
-            rx="2"
-          />
-          <text :x="route.labelX" :y="route.labelY" text-anchor="middle">{{ route.label }}</text>
-        </g>
-        <template v-if="route.destination">
-          <circle
-            class="player-cluster-route-unknown-destination"
-            :cx="route.destination.position.x"
-            :cy="route.destination.position.y"
-            r="8"
-          />
-          <text
-            class="player-cluster-route-unknown-label"
-            :x="route.destination.position.x + 16"
-            :y="route.destination.position.y + 5"
-          >{{ route.destination.label }}</text>
-        </template>
+      <g>
+        <PlayerClusterRouteMark
+          v-for="route in backgroundRouteGeometries"
+          :key="route.id"
+          :route="route"
+        />
       </g>
       <g
         v-for="system in props.document.systems"
         :key="system.id"
         class="player-cluster-map-marker"
         :class="`player-cluster-map-marker--${system.disclosure}`"
+        :transform="`translate(${system.position.x} ${system.position.y})`"
         :data-player-system-id="system.id"
         :role="system.disclosure === 'revealed' ? 'button' : 'group'"
         :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} system preview` : system.label"
@@ -74,25 +50,60 @@
         @click="openSystem($event, system)"
         @keydown="event => openSystemFromKeyboard(event, system)"
       >
-        <g class="player-cluster-map-marker-geometry" aria-hidden="true">
-          <circle :cx="system.position.x" :cy="system.position.y" r="18" />
-          <text
-            v-if="system.disclosure !== 'unknown'"
-            :x="system.position.x + labelOffset.x"
-            :y="system.position.y + labelOffset.y"
-          >{{ system.label }}</text>
+        <g
+          class="player-cluster-map-marker-geometry"
+          aria-hidden="true"
+        >
+          <circle
+            v-if="system.disclosure === 'unknown'"
+            class="player-cluster-map-marker-unknown"
+            r="18"
+          />
+          <template v-else>
+            <rect
+              :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.card"
+              :x="CLUSTER_SYSTEM_CARD.x"
+              :y="CLUSTER_SYSTEM_CARD.y"
+              :width="CLUSTER_SYSTEM_CARD.width"
+              :height="CLUSTER_SYSTEM_CARD.height"
+              :rx="CLUSTER_SYSTEM_CARD.cornerRadius"
+            />
+            <circle
+              :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal"
+              :cx="CLUSTER_SYSTEM_SEAL.x"
+              :cy="CLUSTER_SYSTEM_SEAL.y"
+              :r="CLUSTER_SYSTEM_SEAL.radius"
+            />
+            <text
+              :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.name"
+              x="4"
+              y="-6"
+            >{{ system.label }}</text>
+            <text
+              :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta"
+              x="0"
+              y="17"
+            >{{ PLAYER_SYSTEM_CARD_DISCLOSURE_COPY[system.disclosure] }}</text>
+          </template>
         </g>
         <rect
-          v-if="system.disclosure === 'revealed' && markerHitBoundsFor(system.id)"
+          v-if="system.disclosure === 'revealed'"
           class="player-cluster-map-marker-hit-target"
-          :x="markerHitBoundsFor(system.id)?.x"
-          :y="markerHitBoundsFor(system.id)?.y"
-          :width="markerHitBoundsFor(system.id)?.width"
-          :height="markerHitBoundsFor(system.id)?.height"
+          :x="CLUSTER_SYSTEM_CARD.x"
+          :y="CLUSTER_SYSTEM_CARD.y"
+          :width="CLUSTER_SYSTEM_CARD.width"
+          :height="CLUSTER_SYSTEM_CARD.height"
           fill="transparent"
           stroke="none"
           pointer-events="all"
           aria-hidden="true"
+        />
+      </g>
+      <g v-if="foregroundRouteGeometries.length" class="player-cluster-routes-foreground" pointer-events="none">
+        <PlayerClusterRouteMark
+          v-for="route in foregroundRouteGeometries"
+          :key="route.id"
+          :route="route"
         />
       </g>
     </svg>
@@ -110,6 +121,13 @@ import type { PlayerUsableRectReader } from '../utils/player-inspection'
 import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerClusterGeometry } from '../utils/player-cluster-geometry'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
+import PlayerClusterRouteMark from './maps/PlayerClusterRouteMark.vue'
+import {
+  CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_PRESENTATION_CLASSES,
+  CLUSTER_SYSTEM_SEAL,
+  PLAYER_SYSTEM_CARD_DISCLOSURE_COPY,
+} from '../utils/cluster-system-presentation'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
@@ -119,15 +137,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
 
 const geometry = computed(() => playerClusterGeometry(props.document))
-const routeGeometries = computed(() => geometry.value.routes)
-interface MarkerHitBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-const markerHitBounds = ref<ReadonlyMap<string, MarkerHitBounds>>(new Map())
+const backgroundRouteGeometries = computed(() => geometry.value.routes.filter(route => !route.foreground))
+const foregroundRouteGeometries = computed(() => geometry.value.routes.filter(route => route.foreground))
 const contentBounds = computed(() => ({
   left: geometry.value.bounds.minX,
   top: geometry.value.bounds.minY,
@@ -176,14 +187,9 @@ let resizeObserver: ResizeObserver | null = null
 
 watch(() => props.document, () => {
   resetViewport()
-  measureMarkerHitBounds()
-}, { flush: 'post' })
-watch(() => props.active, active => {
-  if (active) measureMarkerHitBounds()
 }, { flush: 'post' })
 onMounted(() => {
   measureViewport()
-  measureMarkerHitBounds()
   if (typeof ResizeObserver !== 'undefined' && mapElement.value) {
     resizeObserver = new ResizeObserver(measureViewport)
     resizeObserver.observe(mapElement.value)
@@ -191,42 +197,8 @@ onMounted(() => {
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
-const labelOffset = { x: 28, y: 7 }
-
 function isClusterMarkerTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.player-cluster-map-marker') !== null
-}
-
-function markerHitBoundsFor(systemId: string): MarkerHitBounds | undefined {
-  return markerHitBounds.value.get(systemId)
-}
-
-/** Measures only public marker artwork; the hit rectangle never participates in map fitting/export. */
-function measureMarkerHitBounds(): void {
-  const svg = mapElement.value
-  if (!svg || svg.getClientRects().length === 0) return
-
-  const systemsById = new Map(props.document.systems.map(system => [system.id, system]))
-  const measured = new Map<string, MarkerHitBounds>()
-  for (const marker of svg.querySelectorAll<SVGGElement>('.player-cluster-map-marker[data-player-system-id]')) {
-    const systemId = marker.dataset.playerSystemId
-    const system = systemId ? systemsById.get(systemId) : undefined
-    if (!system || system.disclosure !== 'revealed') continue
-
-    const visibleGeometry = marker.querySelector<SVGGElement>('.player-cluster-map-marker-geometry')
-    if (!visibleGeometry) continue
-
-    const bounds = visibleGeometry.getBBox()
-    if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
-      || bounds.width <= 0 || bounds.height <= 0) continue
-    measured.set(system.id, {
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-    })
-  }
-  markerHitBounds.value = measured
 }
 
 function measureViewport(): void {
@@ -294,49 +266,60 @@ function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker
   gap: .25rem;
 }
 
-.player-cluster-map-marker circle { stroke-width: 3; }
+.player-cluster-map-marker .cluster-system-card {
+  stroke-width: 1.5;
+  transition: stroke 100ms ease, stroke-width 100ms ease;
+}
+.player-cluster-map-marker--unknown .player-cluster-map-marker-unknown {
+  fill: var(--map-bg);
+  stroke: var(--text-muted);
+  stroke-width: 3;
+}
 .player-cluster-map-marker[role="button"] { cursor: pointer; }
-.player-cluster-map-marker[role="button"]:focus-visible circle {
-  stroke: var(--focus, var(--accent-hover));
-  stroke-width: 5;
+.player-cluster-map-marker--known-type .cluster-system-card {
+  stroke: var(--map-label-border);
 }
-.player-cluster-map-marker text {
-  fill: var(--text-primary);
-  font: 20px Georgia, serif;
+.player-cluster-map-marker--revealed .cluster-system-card {
+  stroke: var(--map-installation);
 }
-.player-cluster-route-path {
-  fill: none;
-  stroke: var(--text-secondary);
-  stroke-width: 3;
-}
-.player-cluster-route-level rect {
-  fill: var(--panel-bg);
-  stroke: var(--line);
-  stroke-width: 1;
-}
-.player-cluster-route-level text {
-  fill: var(--text-primary);
-  font: 12px system-ui, sans-serif;
-}
-.player-cluster-route-unknown-destination {
-  fill: var(--map-bg);
-  stroke: var(--text-muted);
-  stroke-width: 3;
-}
-.player-cluster-route-unknown-label {
+.player-cluster-map-marker--known-type .cluster-system-seal { fill: var(--text-secondary); }
+.player-cluster-map-marker--revealed .cluster-system-seal { fill: var(--map-installation); }
+.player-cluster-map-marker--known-type .cluster-system-name {
   fill: var(--text-secondary);
-  font: 14px system-ui, sans-serif;
 }
-.player-cluster-map-marker--unknown circle {
-  fill: var(--map-bg);
-  stroke: var(--text-muted);
+.player-cluster-map-marker--revealed .cluster-system-name {
+  fill: var(--text-primary);
 }
-.player-cluster-map-marker--known-type circle {
-  fill: var(--text-secondary);
-  stroke: var(--text-primary);
+.player-cluster-map-marker .cluster-system-meta {
+  fill: var(--map-muted);
 }
-.player-cluster-map-marker--revealed circle {
-  fill: var(--accent, #a9d6b2);
-  stroke: var(--text-primary);
+.player-cluster-map-marker[role="button"]:hover .cluster-system-card,
+.player-cluster-map-marker[role="button"]:focus-visible .cluster-system-card {
+  stroke: var(--map-selected);
+  stroke-width: 2.5;
+}
+.player-cluster-map-marker[role="button"]:focus-visible {
+  outline: none;
+}
+.player-cluster-map-marker[role="button"]:focus-visible .cluster-system-card {
+  filter: drop-shadow(0 0 2px var(--focus));
+}
+.player-cluster-map-marker .cluster-system-seal {
+  stroke: none;
+}
+.player-cluster-map-marker .cluster-system-name,
+.player-cluster-map-marker .cluster-system-meta {
+  text-anchor: middle;
+  pointer-events: none;
+}
+.player-cluster-map-marker--known-type .cluster-system-card,
+.player-cluster-map-marker--revealed .cluster-system-card { fill: var(--map-card); }
+.player-cluster-map-marker--known-type .cluster-system-meta,
+.player-cluster-map-marker--revealed .cluster-system-meta {
+  font: 9px Consolas, monospace;
+}
+.player-cluster-map-marker--known-type .cluster-system-name,
+.player-cluster-map-marker--revealed .cluster-system-name {
+  font: 14px Georgia, serif;
 }
 </style>

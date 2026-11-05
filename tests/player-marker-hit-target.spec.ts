@@ -18,7 +18,7 @@ const playerDocument: PlayerClusterDocument = {
   routes: [],
 }
 
-test('the gap between a Revealed system circle and label opens its public map', async ({ page }) => {
+test('blank space inside a Revealed system card opens its public map', async ({ page }) => {
   await page.goto('/player')
   const playerFileInput = page.getByLabel('Open player JSON', { exact: true })
   await expect(playerFileInput).toBeEnabled()
@@ -34,13 +34,17 @@ test('the gap between a Revealed system circle and label opens its public map', 
   const marker = clusterMap.getByRole('button', { name: 'Open Far Exit Origin system preview', exact: true })
   await expect(marker).toBeVisible()
 
-  // The circle ends at x+18 and its label begins at x+28, so x+23 is a real painted-area gap.
+  // The card hit envelope includes whitespace around the public name and disclosure caption.
   const coordinates = await snapshotSvgCoordinates(clusterMap)
-  const gap = coordinates.toClient({
-    x: playerDocument.systems[0]!.position.x + 23,
-    y: playerDocument.systems[0]!.position.y,
+  const formerLocalHitPosition = coordinates.toClient({ x: 60, y: 24 })
+  await page.mouse.click(formerLocalHitPosition.x, formerLocalHitPosition.y)
+  await expect(page.getByRole('region', { name: 'Player-visible system map', exact: true })).toHaveCount(0)
+
+  const blankCardSpace = coordinates.toClient({
+    x: playerDocument.systems[0]!.position.x + 60,
+    y: playerDocument.systems[0]!.position.y - 24,
   })
-  await page.mouse.click(gap.x, gap.y)
+  await page.mouse.click(blankCardSpace.x, blankCardSpace.y)
 
   await expect(page.getByRole('region', { name: 'Player-visible system map', exact: true })).toBeVisible()
 })

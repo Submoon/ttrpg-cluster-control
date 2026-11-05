@@ -22,8 +22,8 @@
 
     <UModal
       v-model:open="open"
-      title="Search workspace"
-      description="Find the Jump Cluster or any star system by name, or any object in the workspace by name or Location key."
+      :title="dialogTitle"
+      :description="dialogDescription"
       :dismissible="true"
       :content="{ onOpenAutoFocus: focusSearchOnOpen, onCloseAutoFocus: focusAfterSearchClose }"
       :ui="{
@@ -42,7 +42,7 @@
             {{ props.results.length }} {{ props.results.length === 1 ? 'match' : 'matches' }}
           </p>
 
-          <!-- @vue-generic {WorkspaceSearchPaletteGroup, WorkspaceSearchPaletteItem} -->
+          <!-- @vue-generic {WorkspaceSearchPaletteGroup<TTarget>, WorkspaceSearchPaletteItem<TTarget>} -->
           <UCommandPalette
             v-model:search-term="query"
             class="workspace-search-palette"
@@ -79,7 +79,7 @@
                   :name="item.result.leadingMark.value"
                   class="workspace-search-result-icon"
                 />
-                <span v-else>{{ item.result.leadingMark.value }}</span>
+                <span v-else-if="item.result.leadingMark.kind === 'glyph'">{{ item.result.leadingMark.value }}</span>
               </span>
               <span class="workspace-search-result-content">
                 <span class="workspace-search-result-name">{{ item.result.name }}</span>
@@ -107,8 +107,8 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+<script setup lang="ts" generic="TTarget = SearchTarget">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import type { CommandPaletteGroup, CommandPaletteItem } from '@nuxt/ui/components/CommandPalette.vue'
 import { useKbd } from '@nuxt/ui/composables/useKbd'
 import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
@@ -118,23 +118,39 @@ type RevealOutcome =
   | { status: 'revealed' }
   | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
 
-type WorkspaceSearchPaletteItem = CommandPaletteItem & {
+type WorkspaceSearchPaletteItem<T = SearchTarget> = CommandPaletteItem & {
   key: string
   label: string
   description: string
-  result: SearchResult
+  result: SearchResult<T>
 }
-type WorkspaceSearchPaletteGroup = CommandPaletteGroup<WorkspaceSearchPaletteItem>
+type WorkspaceSearchPaletteGroup<T = SearchTarget> = CommandPaletteGroup<WorkspaceSearchPaletteItem<T>>
 
 const props = defineProps<{
-  results: readonly SearchResult[]
-  reveal: (target: SearchTarget) => Promise<RevealOutcome>
+  results: readonly SearchResult<TTarget>[]
+  reveal: (target: TTarget) => Promise<RevealOutcome>
   canOpenSearchShortcut: () => boolean
+  title?: string
+  description?: string
+  /** Optional namespace for SSR-stable per-instance combobox and listbox IDs. */
+  idPrefix?: string
+  /** Exact dialog allowed to own this palette's shortcut and rejected-result focus. */
+  getShortcutOwningDialog?: () => HTMLElement | null
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
 const query = defineModel<string>('query', { required: true })
 const { macOS } = useKbd()
+const dialogTitle = computed(() => props.title ?? 'Search workspace')
+const dialogDescription = computed(() => props.description
+  ?? 'Find the Jump Cluster or any star system by name, or any object in the workspace by name or Location key.')
+const componentId = useId()
+const inputId = computed(() => props.idPrefix === undefined
+  ? 'workspace-search-input'
+  : `${props.idPrefix}-${componentId}-input`)
+const resultsId = computed(() => props.idPrefix === undefined
+  ? 'workspace-search-results'
+  : `${props.idPrefix}-${componentId}-results`)
 const searchShortcutKey = computed(() => macOS.value ? 'Meta+K' : 'Control+K')
 const closeFocus = useDialogCloseFocusBarrier(open)
 const searchOpener = ref<HTMLElement | null>(null)
@@ -146,19 +162,19 @@ let selectionGeneration = 0
 let shortcutCompositionActive = false
 let listeningForSearchShortcut = false
 
-const paletteInputProps = {
-  id: 'workspace-search-input',
+const paletteInputProps = computed(() => ({
+  id: inputId.value,
   type: 'search',
   role: 'combobox',
-  'aria-label': 'Search workspace',
-  'aria-controls': 'workspace-search-results',
+  'aria-label': dialogTitle.value,
+  'aria-controls': resultsId.value,
   'aria-expanded': 'true',
   'aria-haspopup': 'listbox',
   autocomplete: 'off',
-}
+}))
 
-const paletteGroups = computed<WorkspaceSearchPaletteGroup[]>(() => [{
-  id: 'workspace-search-results',
+const paletteGroups = computed<WorkspaceSearchPaletteGroup<TTarget>[]>(() => [{
+  id: resultsId.value,
   ignoreFilter: true,
   items: props.results.map(result => ({
     key: result.key,
@@ -198,9 +214,14 @@ function isVisibleDialog(dialog: HTMLElement): boolean {
     && bounds.height > 0
 }
 
-function anotherVisibleDialogOwnsShortcut(): boolean {
+function ownDialogElement(): HTMLElement | null {
+  return searchBody.value?.closest<HTMLElement>('.workspace-search-dialog-content') ?? null
+}
+
+function anotherVisibleDialogOwnsShortcut(allowedDialog: HTMLElement | null): boolean {
+  const ownDialog = ownDialogElement()
   return [...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')]
-    .some(dialog => !dialog.classList.contains('workspace-search-dialog-content') && isVisibleDialog(dialog))
+    .some(dialog => dialog !== ownDialog && dialog !== allowedDialog && isVisibleDialog(dialog))
 }
 
 function handleSearchShortcut(event: KeyboardEvent): void {
@@ -211,7 +232,7 @@ function handleSearchShortcut(event: KeyboardEvent): void {
     || event.keyCode === 229
     || shortcutCompositionActive
     || !props.canOpenSearchShortcut()
-    || anotherVisibleDialogOwnsShortcut()) return
+    || anotherVisibleDialogOwnsShortcut(props.getShortcutOwningDialog?.() ?? null)) return
 
   event.preventDefault()
   if (!open.value) {
@@ -257,13 +278,12 @@ function focusableElement(element: Element | null): HTMLElement | null {
 }
 
 function focusSearchInput(): void {
-  // Nuxt UI exposes no content ref or content-id prop, so associate the combobox with its actual listbox here.
   const listbox = searchBody.value?.querySelector<HTMLElement>('[role="listbox"]')
   if (listbox) {
-    listbox.id = 'workspace-search-results'
+    listbox.id = resultsId.value
     listbox.setAttribute('aria-label', 'Search results')
   }
-  searchBody.value?.querySelector<HTMLInputElement>('#workspace-search-input')?.focus()
+  searchBody.value?.querySelector<HTMLInputElement>('[role="combobox"]')?.focus()
 }
 
 function focusSearchOnOpen(event: Event): void {
@@ -297,7 +317,7 @@ function focusAfterSearchClose(event: Event): void {
 }
 
 function isSearchInput(target: EventTarget | null): target is HTMLInputElement {
-  return target instanceof HTMLInputElement && target.id === 'workspace-search-input'
+  return target instanceof HTMLInputElement && target.id === inputId.value
 }
 
 function handlePaletteKeydown(event: KeyboardEvent): void {
@@ -369,16 +389,18 @@ function handleCompositionEnd(): void {
   isComposing.value = false
 }
 
-function anotherModalOwnsFocus(): boolean {
+function anotherModalOwnsFocus(allowedDialog: HTMLElement | null): boolean {
+  const ownDialog = ownDialogElement()
   const activeElement = document.activeElement
   return [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')]
-    .some(dialog => !dialog.classList.contains('workspace-search-dialog-content')
+    .some(dialog => dialog !== ownDialog
+      && dialog !== allowedDialog
       && dialog.getAttribute('data-state') !== 'closed'
       && activeElement instanceof Node
       && dialog.contains(activeElement))
 }
 
-function selectResult(event: Event, result: SearchResult): void {
+function selectResult(event: Event, result: SearchResult<TTarget>): void {
   event.preventDefault()
   focusSearchInput()
   returnToOpener = false
@@ -386,13 +408,15 @@ function selectResult(event: Event, result: SearchResult): void {
   void activateResult(result, selection)
 }
 
-async function activateResult(result: SearchResult, selection: number): Promise<void> {
+async function activateResult(result: SearchResult<TTarget>, selection: number): Promise<void> {
   const outcome = await props.reveal(result.target)
   if (outcome.status === 'revealed' || selection !== selectionGeneration || !open.value) return
 
   returnToOpener = true
   await nextTick()
-  if (selection === selectionGeneration && open.value && !anotherModalOwnsFocus()) focusSearchInput()
+  if (selection === selectionGeneration
+    && open.value
+    && !anotherModalOwnsFocus(props.getShortcutOwningDialog?.() ?? null)) focusSearchInput()
 }
 
 defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })

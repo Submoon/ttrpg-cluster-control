@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from './fixtures'
+import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
 import type { PlayerClusterDocument } from '../domain/player-projection'
 import { parsePlayerJson } from '../domain/player-codec'
 import {
@@ -166,6 +167,55 @@ async function restoreNativePngCallbackGate(page: import('@playwright/test').Pag
     delete trackedWindow.__playerExportPngGate
   })
 }
+
+test('reader Map files discards an old PNG when returning to the same public system', async ({ page }) => {
+  const { json } = createPlayerInterfaceFixture()
+  await captureMapExportBlobs(page)
+  await page.goto('/player')
+  const fileInput = page.getByLabel('Open player JSON', { exact: true })
+  await expect(fileInput).toBeEnabled()
+  await fileInput.setInputFiles({ name: 'interface.json', mimeType: 'application/json', buffer: Buffer.from(json) })
+  const openSystem = page.getByRole('button', { name: 'Open Public System system preview', exact: true })
+  const back = page.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
+  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
+  const exportPng = page.getByRole('button', { name: 'Export star system Public System PNG', exact: true })
+  await openSystem.click()
+  await installNativePngCallbackGate(page)
+
+  try {
+    await mapFiles.click()
+    await exportPng.click()
+    await waitForNativePngCallbackGate(page)
+    await mapFiles.click()
+    await expect(mapFiles).toHaveAttribute('aria-expanded', 'false')
+    await back.click()
+    await openSystem.click()
+    await releaseNativePngCallback(page)
+    expect(await page.evaluate(() => (window as DownloadWindow).__mapExportBlobs
+      ?.some(blob => blob.type === 'image/png'))).toBe(false)
+
+    await mapFiles.click()
+    await page.getByRole('checkbox', { name: /^Light for printing$/i }).check()
+    const pendingDownload = page.waitForEvent('download')
+    await exportPng.click()
+    const download = await pendingDownload
+    expect(download.suggestedFilename()).toBe('Public System-player-star-system.png')
+    const path = await download.path()
+    if (!path) throw new Error('The player PNG download has no file.')
+    const png = await readFile(path)
+    expect(Array.from(png.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+    const sourceSvg = await page.evaluate(async () => {
+      const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
+      return blobs.filter(blob => blob.type.startsWith('image/svg+xml')).at(-1)?.text()
+    })
+    expect(sourceSvg).toContain('Public System')
+    expect(sourceSvg).toContain('Harbor World')
+    expect(sourceSvg).toContain('#f5f4ee')
+    expect(sourceSvg).not.toContain('PRIVATE_SOURCE_')
+  } finally {
+    if (!page.isClosed()) await restoreNativePngCallbackGate(page)
+  }
+})
 
 test('player JSON stays on applied data during a resumable chart draft and held system drag', async ({ page }) => {
   test.setTimeout(60_000)

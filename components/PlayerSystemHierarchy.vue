@@ -26,7 +26,9 @@
             :class="ui.link({
               class: [
                 'player-system-hierarchy-row grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent px-2 py-1 text-left',
-                item.kind === 'orbit' ? 'player-system-hierarchy-row--orbit' : 'player-system-hierarchy-row--object',
+                item.kind === 'orbit'
+                  ? 'player-system-hierarchy-row--orbit'
+                  : `player-system-hierarchy-row--${item.object.disclosure}`,
                 { active: selected },
               ],
               selected,
@@ -313,11 +315,34 @@ onBeforeUnmount(() => {
 .player-public-panel-heading { display: grid; gap: .2rem; }
 .player-public-panel-heading h2 { margin: 0; font: 500 1rem Georgia, serif; }
 .player-system-hierarchy-tree { min-width: 0; }
-.player-system-hierarchy-row { width: 100%; min-height: 2.55rem; overflow-wrap: anywhere; }
+.player-system-hierarchy-row {
+  width: 100%;
+  min-height: 2.55rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.player-system-hierarchy-row:hover {
+  border-color: var(--line);
+  background: var(--panel-raised);
+}
+:deep(.player-system-hierarchy-item:focus-visible) .player-system-hierarchy-row {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
 .player-system-hierarchy-row--orbit { color: var(--text-secondary); }
-.player-system-hierarchy-row.active { border-color: var(--accent); background: var(--accent-soft); }
+.player-system-hierarchy-row.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
 .player-system-hierarchy-label { min-width: 0; }
-.player-system-hierarchy-glyph { color: var(--text-muted); }
+.player-system-hierarchy-row--unknown .player-system-hierarchy-glyph,
+.player-system-hierarchy-row--unknown .player-system-hierarchy-type { color: var(--text-muted); }
+.player-system-hierarchy-row--known-type .player-system-hierarchy-glyph,
+.player-system-hierarchy-row--known-type .player-system-hierarchy-type { color: var(--text-secondary); }
+.player-system-hierarchy-row--revealed .player-system-hierarchy-glyph,
+.player-system-hierarchy-row--revealed .player-system-hierarchy-type { color: var(--map-installation); }
 .player-system-hierarchy-orbit-mark { color: var(--map-muted); }
 .player-system-hierarchy-type,
 .player-system-hierarchy-path { color: var(--text-muted); font-size: .72rem; line-height: 1.35; }

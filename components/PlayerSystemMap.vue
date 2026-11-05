@@ -140,11 +140,12 @@
             />
             <circle v-if="object.disclosure === 'unknown'" class="player-system-object-marker-art" r="10" />
             <rect
-              class="player-system-object-selection-outline"
-              x="-15"
-              y="-15"
-              width="30"
-              height="30"
+              class="player-system-object-focus-outline"
+              x="-14"
+              y="-14"
+              width="28"
+              height="28"
+              rx="14"
               aria-hidden="true"
             />
             <text
@@ -396,6 +397,10 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
   cursor: pointer;
 }
 
+.player-system-object-marker:focus {
+  outline: none;
+}
+
 .player-system-object-hit-target {
   pointer-events: all;
 }
@@ -406,16 +411,26 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
   stroke-width: 3;
 }
 
-.player-system-object-selection-outline {
+.player-system-object-focus-outline {
   fill: none;
-  stroke: var(--map-selected, var(--accent));
-  stroke-width: 1.5;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 2 3;
   opacity: 0;
   pointer-events: none;
 }
 
-.player-system-object-marker--selected .player-system-object-selection-outline,
-.player-system-object-marker:focus-visible .player-system-object-selection-outline {
+.player-system-object-marker--selected .player-system-object-glyph,
+.player-system-object-marker:focus-visible .player-system-object-glyph {
+  fill: var(--map-selected);
+}
+
+.player-system-object-marker--selected .player-system-object-marker-art {
+  stroke: var(--map-selected);
+  stroke-width: 3.5;
+}
+
+.player-system-object-marker:focus-visible .player-system-object-focus-outline {
   opacity: 1;
 }
 
@@ -434,9 +449,9 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
   fill: var(--accent);
 }
 
-.player-system-object-marker:focus-visible .player-system-object-selection-outline {
-  stroke: var(--focus, var(--accent-hover));
-  stroke-width: 2;
+.player-system-object-marker--revealed.player-system-object-marker--selected .player-system-object-glyph,
+.player-system-object-marker--revealed:focus-visible .player-system-object-glyph {
+  fill: var(--map-selected);
 }
 
 .player-system-unoccupied-center {

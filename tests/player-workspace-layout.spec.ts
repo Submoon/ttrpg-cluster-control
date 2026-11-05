@@ -52,14 +52,17 @@ function createPlayerDocument(): PlayerClusterDocument {
   }
 }
 
-async function openPlayerDocument(page: import('@playwright/test').Page): Promise<void> {
+async function openPlayerDocument(
+  page: import('@playwright/test').Page,
+  document = createPlayerDocument(),
+): Promise<void> {
   await page.goto('/player')
   const fileInput = page.getByLabel('Open player JSON', { exact: true })
   await expect(fileInput).toBeEnabled()
   await fileInput.setInputFiles({
     name: 'starlight-reach.json',
     mimeType: 'application/json',
-    buffer: Buffer.from(serializePlayerJson(createPlayerDocument()), 'utf8'),
+    buffer: Buffer.from(serializePlayerJson(document), 'utf8'),
   })
   const workspaceHeader = page.locator('header.workspace-header')
   await expect(workspaceHeader).toBeVisible()
@@ -125,9 +128,74 @@ function readViewBox(value: string | null): { left: number; top: number; width: 
 }
 
 async function expectNoMutationControls(page: import('@playwright/test').Page): Promise<void> {
-  await expect(page.getByRole('button', { name: /\b(Add|Create|Edit|Delete|Remove|Save|Apply)\b/i }))
+  await expect(page.getByRole('button', { name: /\b(Add|Create|Edit|Delete|Remove|Save|Apply|Undo|Redo)\b/i }))
     .toHaveCount(0)
 }
+
+test('player Search navigates between public systems and opens compact Inspect', async ({ page }) => {
+  const document = createPlayerDocument()
+  document.systems.push({
+    id: 'system-2',
+    position: { x: 740, y: 400 },
+    disclosure: 'revealed',
+    type: 'star-system',
+    label: 'Crossing System',
+    map: {
+      orbits: [],
+      objects: [{
+        id: 'object-1',
+        position: { x: 720, y: 400 },
+        placement: { kind: 'system' },
+        disclosure: 'revealed',
+        family: 'Installation',
+        subtype: 'station',
+        label: 'Crossing Relay',
+        playerText: 'A shared station.',
+        fields: [],
+      }],
+    },
+  })
+  await openPlayerDocument(page, document)
+  await openRevealedSystem(page)
+  const search = page.getByRole('button', { name: 'Search', exact: true })
+  await search.focus()
+  await page.keyboard.press('ControlOrMeta+k')
+  const dialog = page.getByRole('dialog', { name: 'Search player map', exact: true })
+  const query = dialog.getByRole('combobox')
+  await expect(query).toBeFocused()
+  await query.fill('Crossing Relay')
+  await dialog.getByRole('option', { name: /Crossing Relay/ }).click()
+  await expect(dialog).toBeHidden()
+  const details = page.getByRole('region', { name: 'Player object details', exact: true })
+  await expect(details).toContainText('Crossing Relay')
+  await expect(page.locator('.player-system-map-scene')).toBeFocused()
+
+  await page.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Open Crossing System system preview', exact: true })).toBeFocused()
+  await search.click()
+  await query.press('Escape')
+  await expect(search).toBeFocused()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await search.click()
+  await query.fill('Sanctuary')
+  await dialog.getByRole('option', { name: /Sanctuary/ }).click()
+  const compactDetails = page.getByRole('dialog', { name: 'Player details', exact: true })
+  await expect(compactDetails).toContainText('Sanctuary')
+  await compactDetails.getByRole('button', { name: 'Return to map', exact: true }).click()
+  await expect(compactDetails).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Inspect Sanctuary', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  const compactScene = page.locator('.player-system-map-scene')
+  await expect(compactScene).toBeFocused()
+
+  await page.keyboard.press('ControlOrMeta+k')
+  await query.fill('Star')
+  await dialog.getByRole('option', { name: /^Star/ }).filter({ hasText: 'Vesper' }).click()
+  await expect(compactDetails).toContainText('Star')
+  await compactDetails.getByRole('button', { name: 'Return to map', exact: true }).press('Enter')
+  await expect(compactDetails).toBeHidden()
+  await expect(compactScene).toBeFocused()
+})
 
 test('the standalone player workspace fills desktop view while preserving read-only map navigation', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 })

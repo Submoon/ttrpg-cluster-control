@@ -399,6 +399,10 @@ test('player SVG exports only the published cluster scene and preserves the comp
           .map(element => element.getAttribute('aria-label') ?? ''),
       ],
       textNodes: [...svg.querySelectorAll('text')].map(element => (element.textContent ?? '').trim()),
+      systemCards: [...svg.querySelectorAll('rect.cluster-system-card')].map(card => ({
+        width: card.getAttribute('width'),
+        height: card.getAttribute('height'),
+      })),
       attributeValues: attributes.map(attribute => attribute.value),
       metadataAttributeNames: attributes.map(attribute => attribute.name)
         .filter(name => /(?:location.?key|source|(?:system|object|route|field).?id)/i.test(name)),
@@ -410,6 +414,8 @@ test('player SVG exports only the published cluster scene and preserves the comp
   expect(inspection.text).toContain('Jump Level 8')
   expect(inspection.text).toContain('Unknown destination')
   expect(inspection.accessibleLabels.join('\n')).toContain('Player Jump Cluster')
+  expect(inspection.systemCards).toContainEqual({ width: '156', height: '76' })
+  expect(inspection.text).not.toMatch(/\d+ STARS? \/ \d+ OBJECTS/)
 
   const sourceIds = [
     sourceBefore.cluster?.id,

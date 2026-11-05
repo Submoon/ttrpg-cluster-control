@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster, updateChartDetails } from '../domain/workspace'
 import {
@@ -74,6 +75,53 @@ test('a Warden can publish a player title and open its cluster preview', async (
   await expect(preview).not.toContainText('Map objects')
   await expect(preview).not.toContainText('Jump Routes')
   await expect(preview).not.toContainText('Fields')
+
+  await preview.getByRole('button', { name: 'Search', exact: true }).focus()
+  await page.keyboard.press('ControlOrMeta+k')
+  const search = page.getByRole('dialog', { name: 'Search player map', exact: true })
+  const query = search.getByRole('combobox')
+  await expect(query).toBeFocused()
+  await expect(page.getByRole('dialog', { name: 'Search workspace', exact: true })).toHaveCount(0)
+  await query.fill('Private')
+  await expect(search.getByRole('option')).toHaveCount(0)
+  await expect(search.getByRole('status').filter({ hasText: 'No matches' })).toBeVisible()
+  await query.fill('Pilgrim Reach')
+  await search.getByRole('option', { name: /Pilgrim Reach/ }).click()
+  await expect(search).toBeHidden()
+  await expect(preview.locator('.player-cluster-map-scene')).toBeFocused()
+
+  const files = preview.getByRole('button', { name: 'Map files', exact: true })
+  await files.click()
+  const pendingDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export Jump Cluster Pilgrim Reach SVG', exact: true }).click()
+  const download = await pendingDownload
+  expect(download.suggestedFilename()).toBe('Pilgrim Reach-player-jump-cluster.svg')
+  const path = await download.path()
+  if (!path) throw new Error('The player preview SVG download has no file.')
+  const svg = await readFile(path, 'utf8')
+  expect(svg).toContain('Pilgrim Reach')
+  expect(svg).not.toContain('Private')
+  const exitStyle = await page.addStyleTag({ content: `
+    .player-view-preview-content [data-slot="content"][data-state="closed"]:has(> .workspace-map-files-content) {
+      animation-play-state: paused !important;
+    }
+  ` })
+  await page.keyboard.press('Escape')
+  await expect(files).toHaveAttribute('aria-expanded', 'false')
+  await expect(preview).toBeVisible()
+  const closingFiles = preview.locator('[data-slot="content"][data-state="closed"]:has(> .workspace-map-files-content)')
+  await expect(closingFiles).toHaveCSS('pointer-events', 'none')
+  await expect(closingFiles.locator('..')).toHaveCSS('pointer-events', 'none')
+  expect(await closingFiles.evaluate(element => {
+    const bounds = element.getBoundingClientRect()
+    const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+    return element.contains(hit)
+  })).toBe(false)
+  await exitStyle.evaluate(element => {
+    element.parentNode?.removeChild(element)
+  })
+  await expect(closingFiles).toHaveCount(0)
+
   const previewTrigger = details.getByRole('button', { name: 'Preview player view' })
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
@@ -399,19 +447,26 @@ test('80-character revealed public labels fit within the rendered SVG viewBox', 
 
   await details.getByRole('button', { name: 'Preview player view' }).click()
   const preview = page.getByRole('dialog', { name: 'Player view preview' })
-  const label = preview.locator('.player-cluster-map-marker--revealed text')
+  const label = preview.locator('.player-cluster-map-marker--revealed .cluster-system-name')
   await expect(label).toBeVisible()
   const bounds = await label.evaluate((element) => {
     if (!(element instanceof SVGGraphicsElement) || !element.ownerSVGElement) {
       throw new Error('The revealed public label must belong to a rendered SVG scene.')
     }
     const box = element.getBBox()
-    const viewBox = element.ownerSVGElement.viewBox.baseVal
+    const svg = element.ownerSVGElement
+    const markerToScreen = element.getScreenCTM()
+    const mapToScreen = svg.getScreenCTM()
+    if (!markerToScreen || !mapToScreen) throw new Error('The public label has no rendered map transform.')
+    const markerToMap = mapToScreen.inverse().multiply(markerToScreen)
+    const topLeft = new DOMPoint(box.x, box.y).matrixTransform(markerToMap)
+    const bottomRight = new DOMPoint(box.x + box.width, box.y + box.height).matrixTransform(markerToMap)
+    const viewBox = svg.viewBox.baseVal
     return {
-      left: box.x,
-      right: box.x + box.width,
-      top: box.y,
-      bottom: box.y + box.height,
+      left: topLeft.x,
+      right: bottomRight.x,
+      top: topLeft.y,
+      bottom: bottomRight.y,
       viewLeft: viewBox.x,
       viewRight: viewBox.x + viewBox.width,
       viewTop: viewBox.y,
