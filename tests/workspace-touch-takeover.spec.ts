@@ -3,7 +3,7 @@ import { waitForWorkspaceSaved, downloadJson, setWorkspaceMapMode, workspaceZoom
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
-type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
+type DownloadWindow = Window & { __mapExportBlobs?: Blob[]; __moveTouchTrace?: unknown[] }
 
 async function createWorkspace(
   page: Page,
@@ -25,6 +25,44 @@ async function installDownloadRecorder(page: Page): Promise<void> {
     URL.createObjectURL = (object) => {
       if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
       return createObjectUrl(object)
+    }
+
+    const trace: unknown[] = downloadWindow.__moveTouchTrace = []
+    const ids = new WeakMap<Element, number>()
+    let nextId = 0
+    function id(element: Element | null) {
+      if (!element) return null
+      if (!ids.has(element)) ids.set(element, ++nextId)
+      return ids.get(element)
+    }
+    function describe(element: Element | null) {
+      return element ? `${element.localName}.${element.getAttribute('class') ?? ''}` : null
+    }
+    for (const type of ['pointerdown', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+      window.addEventListener(type, (event) => {
+        if (!event.isTrusted || trace.length >= 28) return
+        if (event instanceof PointerEvent && event.pointerType !== 'touch') return
+        const point = event instanceof TouchEvent ? event.changedTouches[0] : event as PointerEvent
+        if (!point) return
+        const target = event.target instanceof Element ? event.target : null
+        const snapshot = (phase: string) => {
+          const scene = document.querySelector('.system-map-content')
+          const star = scene?.querySelector<SVGGElement>('.system-object') ?? null
+          const targetStar = target?.closest('.system-object') ?? null
+          return {
+            phase, type, at: Math.round(performance.now()), x: point.clientX, y: point.clientY,
+            target: describe(target), hit: describe(document.elementFromPoint(point.clientX, point.clientY)),
+            connected: target?.isConnected, targetStar: id(targetStar), scene: id(scene), star: id(star),
+            transform: star?.getAttribute('transform'), viewport: scene?.getAttribute('transform'),
+            dragging: star?.classList.contains('is-dragging'), prevented: event.defaultPrevented,
+            mode: document.querySelector('[aria-label="Map interaction mode"] [aria-pressed="true"]')?.textContent?.trim(),
+            touchPoints: navigator.maxTouchPoints,
+            inlineTouchAction: star?.style.touchAction,
+          }
+        }
+        trace.push(snapshot('capture'))
+        requestAnimationFrame(() => trace.push(snapshot('frame')))
+      }, { capture: true, passive: true })
     }
   })
 }
@@ -90,7 +128,7 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
   })
 }
 
-test('a second touch cancels a Move preview before pinch and pan change only the view', async ({ page }) => {
+test('a second touch cancels a Move preview before pinch and pan change only the view', { tag: '@preview-smoke' }, async ({ page }) => {
   await installDownloadRecorder(page)
   const cdp = await enableTouch(page)
   await createWorkspace(page, { width: 390, height: 844 })
@@ -116,7 +154,15 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     const firstMove = { ...origin, x: origin.x + 24, y: origin.y + 18 }
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
-    await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
+    try {
+      await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
+    } catch (error) {
+      console.info('Initial Move touch transport:', JSON.stringify({
+        origin, firstMove, viewportBefore,
+        events: await page.evaluate(() => (window as DownloadWindow).__moveTouchTrace),
+      }))
+      throw error
+    }
 
     const mapCenterX = bounds.x + bounds.width / 2
     const secondStart = {
