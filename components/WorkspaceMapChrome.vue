@@ -120,6 +120,7 @@
       <UPopover
         v-model:open="headerMapActionsOpen"
         :modal="false"
+        :ui="{ content: 'data-[state=closed]:pointer-events-none' }"
         :content="{ side: 'bottom', align: 'end', sideOffset: 8, collisionPadding: 12 }"
       >
         <UButton
@@ -537,6 +538,11 @@ defineExpose({ whenSearchClosingFocusSettled })
   background: var(--panel-raised);
   color: var(--text-primary);
   box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 35%);
+}
+
+/* The teleported positioning layer remains hit-testable while the panel exits. */
+:global([data-reka-popper-content-wrapper]:has(> [data-slot="content"][data-state="closed"] > #workspace-header-map-files-panel)) {
+  pointer-events: none;
 }
 
 .workspace-map-files-exports {
