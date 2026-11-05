@@ -15,7 +15,7 @@ import {
   restoreWorkspaceWriteFailureGate,
   returnToClusterMap,
   saveMapObject,
-  selectInspectorOption,
+  selectDraftPublication,
   setHeaderMapActionsOpen,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -44,7 +44,7 @@ async function createReadyPlayerSystem(
   await editMapObject(page)
   const objectInspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   await objectInspector.getByLabel('Name', { exact: true }).fill(`${names.system} Public World`)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -52,7 +52,7 @@ async function createReadyPlayerSystem(
   await chartDetails.getByRole('button', { name: 'Edit chart details', exact: true }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await chartEdit.getByLabel('Player-facing title', { exact: true }).fill(names.title)
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)

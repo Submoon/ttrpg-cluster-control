@@ -403,6 +403,15 @@ test('player SVG exports only the published cluster scene and preserves the comp
         width: card.getAttribute('width'),
         height: card.getAttribute('height'),
       })),
+      clusterRoutes: [...svg.querySelectorAll('g.player-cluster-route')].map(route => ({
+        label: route.querySelector('.cluster-route-label')?.textContent?.trim() ?? '',
+        accessibleLabel: route.getAttribute('aria-label') ?? '',
+        unresolved: route.classList.contains('is-unresolved'),
+        dashArray: route.querySelector('.cluster-route-line')?.getAttribute('stroke-dasharray') ?? 'none',
+        badgeHeight: route.querySelector('.cluster-route-label-bg')?.getAttribute('height') ?? '',
+        badgeRadius: route.querySelector('.cluster-route-label-bg')?.getAttribute('rx') ?? '',
+      })),
+      cardSubtitleCount: svg.querySelectorAll('.cluster-system-meta').length,
       attributeValues: attributes.map(attribute => attribute.value),
       metadataAttributeNames: attributes.map(attribute => attribute.name)
         .filter(name => /(?:location.?key|source|(?:system|object|route|field).?id)/i.test(name)),
@@ -411,8 +420,18 @@ test('player SVG exports only the published cluster scene and preserves the comp
   }, image.text)
 
   expect(inspection.text).toContain('PUBLIC_VESPER')
-  expect(inspection.text).toContain('Jump Level 8')
+  expect(inspection.text).toContain('Jump-8')
   expect(inspection.text).toContain('Unknown destination')
+  expect(inspection.clusterRoutes).toContainEqual(expect.objectContaining({
+    label: 'Jump-8',
+    accessibleLabel: 'Jump Level 8 to Unknown destination',
+    unresolved: true,
+    dashArray: '8 7',
+    badgeHeight: '21',
+    badgeRadius: '10',
+  }))
+  expect(inspection.cardSubtitleCount).toBe(0)
+  expect(inspection.text).not.toMatch(/MAP SHARED|STAR SYSTEM/)
   expect(inspection.accessibleLabels.join('\n')).toContain('Player Jump Cluster')
   expect(inspection.systemCards).toContainEqual({ width: '156', height: '76' })
   expect(inspection.text).not.toMatch(/\d+ STARS? \/ \d+ OBJECTS/)
@@ -538,7 +557,18 @@ test('player PNG rasterizes the public cluster scene within bounds without chang
       .map(attribute => ({ name: attribute.name, value: attribute.value })))
     return {
       text: svg.textContent ?? '',
+      accessibleLabels: [...svg.querySelectorAll('[aria-label]')]
+        .map(element => element.getAttribute('aria-label') ?? ''),
       textNodes: [...svg.querySelectorAll('text')].map(element => (element.textContent ?? '').trim()),
+      clusterRoutes: [...svg.querySelectorAll('g.player-cluster-route')].map(route => ({
+        label: route.querySelector('.cluster-route-label')?.textContent?.trim() ?? '',
+        accessibleLabel: route.getAttribute('aria-label') ?? '',
+        unresolved: route.classList.contains('is-unresolved'),
+        dashArray: route.querySelector('.cluster-route-line')?.getAttribute('stroke-dasharray') ?? 'none',
+        badgeHeight: route.querySelector('.cluster-route-label-bg')?.getAttribute('height') ?? '',
+        badgeRadius: route.querySelector('.cluster-route-label-bg')?.getAttribute('rx') ?? '',
+      })),
+      cardSubtitleCount: svg.querySelectorAll('.cluster-system-meta').length,
       attributeValues: attributes.map(attribute => attribute.value),
       metadataAttributeNames: attributes.map(attribute => attribute.name)
         .filter(name => /(?:location.?key|source|(?:system|object|route|field).?id)/i.test(name)),
@@ -546,8 +576,19 @@ test('player PNG rasterizes the public cluster scene within bounds without chang
     }
   }, png.sourceSvgText)
   expect(inspection.text).toContain('PUBLIC_VESPER')
-  expect(inspection.text).toContain('Jump Level 8')
+  expect(inspection.text).toContain('Jump-8')
   expect(inspection.text).toContain('Unknown destination')
+  expect(inspection.clusterRoutes).toContainEqual(expect.objectContaining({
+    label: 'Jump-8',
+    accessibleLabel: 'Jump Level 8 to Unknown destination',
+    unresolved: true,
+    dashArray: '8 7',
+    badgeHeight: '21',
+    badgeRadius: '10',
+  }))
+  expect(inspection.accessibleLabels).toContain('Jump Level 8 to Unknown destination')
+  expect(inspection.cardSubtitleCount).toBe(0)
+  expect(inspection.text).not.toMatch(/MAP SHARED|STAR SYSTEM/)
 
   const sourceIds = [
     sourceBefore.cluster?.id,

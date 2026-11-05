@@ -1,0 +1,40 @@
+.cluster-route-line {
+  fill: none;
+  stroke: var(--map-route);
+  stroke-width: 2.4;
+}
+
+.cluster-route.is-unresolved .cluster-route-line {
+  stroke: var(--map-unresolved);
+  stroke-dasharray: 8 7;
+}
+
+.cluster-route-label-bg {
+  fill: var(--map-label-bg);
+  stroke: var(--map-label-border);
+  pointer-events: auto;
+}
+
+.cluster-route-label,
+.cluster-exit-label {
+  fill: var(--map-text);
+  font-family: Consolas, monospace;
+}
+
+.cluster-route-label {
+  text-anchor: middle;
+  pointer-events: auto;
+}
+
+.cluster-exit-mark {
+  cursor: grab;
+  fill: var(--map-card);
+  pointer-events: all;
+  stroke: var(--map-unresolved);
+  stroke-width: 2;
+}
+
+.cluster-exit-label {
+  fill: var(--map-unresolved);
+  pointer-events: none;
+}

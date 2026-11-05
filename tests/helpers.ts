@@ -1,5 +1,15 @@
-import { expect } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
 import type { PublicationMode } from '../domain/workspace'
+
+export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
+
+/** Selects a mode on the explicit Inspector or chart-details draft control. */
+export async function selectDraftPublication(scope: Locator, label: PublicationModeLabel): Promise<void> {
+  const button = scope.getByRole('group', { name: 'Draft visibility', exact: true })
+    .getByRole('button', { name: `Set visibility to ${label}`, exact: true })
+  await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+}
 
 /** Waits for the workspace writer's durable acknowledgement without a visible success notice. */
 export async function waitForWorkspaceSaved(page: import('@playwright/test').Page): Promise<void> {

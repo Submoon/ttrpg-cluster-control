@@ -40,6 +40,7 @@
         v-if="props.selectedSystem"
         class="mt-3"
         :model-value="props.selectedSystem.publication"
+        presentation-context="system"
         :disabled="props.saving || props.publicationBusy"
         @select="setSystemPublication"
       />

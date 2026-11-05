@@ -7,12 +7,16 @@ import { playerObjectPresentation } from './player-object-presentation'
 import { playerSystemGeometry } from './player-system-geometry'
 import type { PlayerRouteGeometry } from './player-cluster-geometry'
 import {
+  CLUSTER_SYSTEM_CARD_NAME_POSITION,
   CLUSTER_SYSTEM_CARD,
   CLUSTER_SYSTEM_PRESENTATION_CLASSES,
   CLUSTER_SYSTEM_SEAL,
   PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
-  PLAYER_SYSTEM_CARD_DISCLOSURE_COPY,
 } from './cluster-system-presentation'
+import {
+  CLUSTER_ROUTE_PAINT_VARIABLES,
+  CLUSTER_ROUTE_PRESENTATION,
+} from './cluster-route-presentation'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
 const scenePadding = 24
@@ -31,6 +35,10 @@ interface PlayerMapPaint {
   textSecondary: string
   textMuted: string
   accent: string
+  mapRoute: string
+  mapUnresolved: string
+  mapLabelBackground: string
+  mapText: string
 }
 
 interface SceneBounds {
@@ -59,6 +67,10 @@ const lightPrintPaint: PlayerMapPaint = {
   textSecondary: '#45504a',
   textMuted: '#59645d',
   accent: '#9c4a16',
+  mapRoute: '#315e48',
+  mapUnresolved: '#9a3d11',
+  mapLabelBackground: '#fffefa',
+  mapText: '#26302c',
 }
 
 const darkFallbackPaint: PlayerMapPaint = {
@@ -73,6 +85,10 @@ const darkFallbackPaint: PlayerMapPaint = {
   textSecondary: '#c0cbc4',
   textMuted: '#9caaa2',
   accent: '#efa16f',
+  mapRoute: '#86ad96',
+  mapUnresolved: '#f09b73',
+  mapLabelBackground: '#182629',
+  mapText: '#e8eee7',
 }
 
 /** Serializes a safe public SVG scene and optionally rasterizes that same SVG within the GM PNG budget. */
@@ -117,8 +133,8 @@ function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
 
   return {
     mapBackground: read('--map-bg', fallback.mapBackground),
-    mapCard: read('--map-card', fallback.mapCard),
-    mapLabelBorder: read('--map-label-border', fallback.mapLabelBorder),
+    mapCard: read(CLUSTER_ROUTE_PAINT_VARIABLES.endpointFill, fallback.mapCard),
+    mapLabelBorder: read(CLUSTER_ROUTE_PAINT_VARIABLES.labelBorder, fallback.mapLabelBorder),
     mapInstallation: read('--map-installation', fallback.mapInstallation),
     panelBackground: read('--panel-bg', fallback.panelBackground),
     line: read('--line', fallback.line),
@@ -127,6 +143,10 @@ function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
     textSecondary: read('--text-secondary', fallback.textSecondary),
     textMuted: read('--text-muted', fallback.textMuted),
     accent: read('--accent', fallback.accent),
+    mapRoute: read(CLUSTER_ROUTE_PAINT_VARIABLES.route, fallback.mapRoute),
+    mapUnresolved: read(CLUSTER_ROUTE_PAINT_VARIABLES.unresolved, fallback.mapUnresolved),
+    mapLabelBackground: read(CLUSTER_ROUTE_PAINT_VARIABLES.labelBackground, fallback.mapLabelBackground),
+    mapText: read(CLUSTER_ROUTE_PAINT_VARIABLES.text, fallback.mapText),
   }
 }
 
@@ -171,60 +191,63 @@ function createClusterImage(
 }
 
 function appendClusterRoute(parent: SVGElement, route: PlayerRouteGeometry, paint: PlayerMapPaint): void {
+  const unresolved = Boolean(route.destination)
   const routeGroup = appendSvg(parent, 'g', {
-    class: route.foreground
-      ? 'player-cluster-route player-cluster-route--foreground'
-      : 'player-cluster-route',
+    class: `cluster-route player-cluster-route${unresolved ? ' is-unresolved' : ''}${route.foreground ? ' player-cluster-route--foreground' : ''}`,
     ...(route.foreground ? { 'pointer-events': 'none' } : {}),
     role: 'group',
     'aria-label': route.accessibleLabel,
   })
   appendSvg(routeGroup, 'path', {
-    class: 'player-cluster-route-path',
+    class: 'cluster-route-line player-cluster-route-path',
     d: route.path,
     fill: 'none',
-    stroke: paint.textSecondary,
-    'stroke-width': 3,
+    stroke: unresolved ? paint.mapUnresolved : paint.mapRoute,
+    'stroke-width': CLUSTER_ROUTE_PRESENTATION.line.width,
+    ...(unresolved ? { 'stroke-dasharray': CLUSTER_ROUTE_PRESENTATION.line.unresolvedDashArray } : {}),
     'aria-hidden': true,
   })
 
-  const badge = appendSvg(routeGroup, 'g', { class: 'player-cluster-route-level' })
+  const badge = appendSvg(routeGroup, 'g', { class: 'cluster-route-level player-cluster-route-level' })
   appendSvg(badge, 'rect', {
+    class: 'cluster-route-label-bg',
     x: route.labelX - route.labelWidth / 2,
-    y: route.labelY - 15,
+    y: route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset,
     width: route.labelWidth,
-    height: 20,
-    rx: 2,
-    fill: paint.panelBackground,
-    stroke: paint.line,
+    height: CLUSTER_ROUTE_PRESENTATION.badge.height,
+    rx: CLUSTER_ROUTE_PRESENTATION.badge.cornerRadius,
+    fill: paint.mapLabelBackground,
+    stroke: paint.mapLabelBorder,
     'stroke-width': 1,
   })
   appendText(badge, route.label, {
+    class: 'cluster-route-label',
     x: route.labelX,
-    y: route.labelY,
-    fill: paint.textPrimary,
-    'font-family': 'system-ui, sans-serif',
-    'font-size': 12,
+    y: route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset,
+    fill: paint.mapText,
+    'font-family': 'Consolas, monospace',
+    'font-size': CLUSTER_ROUTE_PRESENTATION.labelFontSize,
     'text-anchor': 'middle',
   })
 
   if (route.destination) {
     appendSvg(routeGroup, 'circle', {
-      class: 'player-cluster-route-unknown-destination',
+      class: 'cluster-exit-mark player-cluster-route-unknown-destination',
       cx: route.destination.position.x,
       cy: route.destination.position.y,
-      r: 8,
-      fill: paint.mapBackground,
-      stroke: paint.textMuted,
-      'stroke-width': 3,
+      r: CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+      fill: paint.mapCard,
+      stroke: paint.mapUnresolved,
+      'stroke-width': CLUSTER_ROUTE_PRESENTATION.endpoint.strokeWidth,
     })
     appendText(routeGroup, route.destination.label, {
-      class: 'player-cluster-route-unknown-label',
-      x: route.destination.position.x + 16,
-      y: route.destination.position.y + 5,
-      fill: paint.textSecondary,
-      'font-family': 'system-ui, sans-serif',
-      'font-size': 14,
+      class: 'cluster-exit-label player-cluster-route-unknown-label',
+      x: route.destination.labelX,
+      y: route.destination.labelY,
+      fill: paint.mapUnresolved,
+      'font-family': 'Consolas, monospace',
+      'font-size': CLUSTER_ROUTE_PRESENTATION.labelFontSize,
+      'text-anchor': 'end',
     })
   }
 }
@@ -273,20 +296,11 @@ function appendClusterSystem(parent: SVGElement, system: PlayerSystemMarker, pai
   })
   appendText(geometry, system.label, {
     class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.name,
-    x: 4,
-    y: -6,
+    x: CLUSTER_SYSTEM_CARD_NAME_POSITION.x,
+    y: CLUSTER_SYSTEM_CARD_NAME_POSITION.y,
     fill: knownType ? paint.textSecondary : paint.textPrimary,
     'font-family': 'Georgia, serif',
     'font-size': 14,
-    'text-anchor': 'middle',
-  })
-  appendText(geometry, PLAYER_SYSTEM_CARD_DISCLOSURE_COPY[system.disclosure], {
-    class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta,
-    x: 0,
-    y: 17,
-    fill: paint.textMuted,
-    'font-family': 'Consolas, monospace',
-    'font-size': 9,
     'text-anchor': 'middle',
   })
 }

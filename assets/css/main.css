@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+@import "./map-route-presentation.css";
 
 @source not "../../docs/";
 @source not "../../.scratch/";

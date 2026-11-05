@@ -56,29 +56,31 @@
             <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
           </template>
         </UFormField>
-        <UFormField
-          label="How players see this system"
-          description="Only Revealed systems can be opened by players. Publishing an object does not reveal its parent system."
-          :error="publicationError || undefined"
-          class="grid gap-1.5"
-        >
-          <USelect
-            id="chart-dialog-publication"
-            v-model="publication"
-            :items="publicationItems"
-            class="w-full"
-            :ui="{ content: 'min-w-[12rem] max-w-[calc(100vw-2rem)]', itemLabel: 'block whitespace-normal break-words' }"
+        <section class="grid min-w-0 gap-2" aria-labelledby="chart-dialog-publication-heading">
+          <h3 id="chart-dialog-publication-heading" class="m-0 text-sm font-medium">
+            How players see this system
+          </h3>
+          <PublicationModeControl
+            :model-value="publication"
+            :draft="true"
+            presentation-context="system"
+            focus-target-id="chart-dialog-publication"
+            :described-by="publicationDescribedBy"
+            :invalid="Boolean(publicationError)"
+            @select="publication = $event"
           />
-          <template #help>
-            <span v-if="publication === 'unknown'">Players see a neutral presence marker with no system name or type.</span>
-            <span v-else-if="publication === 'known-type'">Players see that a star system is here, without its name.</span>
-            <span v-else-if="publication === 'revealed'">Players see this system's name.</span>
-            <span v-else>Players do not see this system.</span>
-          </template>
-          <template #error="{ error }">
-            <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
-          </template>
-        </UFormField>
+          <p id="chart-dialog-publication-guidance" class="m-0 text-sm text-[var(--text-muted)]">
+            Only Revealed systems can be opened by players. Publishing an object does not reveal its parent system.
+          </p>
+          <p
+            v-if="publicationError"
+            id="chart-dialog-publication-error"
+            class="feedback m-0 error-text"
+            role="alert"
+          >
+            {{ publicationError }}
+          </p>
+        </section>
         <UAlert
           v-if="props.formError && !clusterError && !systemError && !playerTitleError && !publicationError"
           color="error"
@@ -139,12 +141,9 @@ const clusterError = computed(() => props.formError.startsWith('Jump Cluster nam
 const systemError = computed(() => props.formError.startsWith('Star system name') ? props.formError : '')
 const playerTitleError = computed(() => props.formError.startsWith('Player-facing title') ? props.formError : '')
 const publicationError = computed(() => props.formError.startsWith('Choose a supported publication mode') ? props.formError : '')
-const publicationItems: Array<{ label: string; value: PublicationMode }> = [
-  { label: 'Hidden', value: 'hidden' },
-  { label: 'Unknown presence', value: 'unknown' },
-  { label: 'Known type', value: 'known-type' },
-  { label: 'Revealed', value: 'revealed' },
-]
+const publicationDescribedBy = computed(() => publicationError.value
+  ? 'chart-dialog-publication-guidance chart-dialog-publication-error'
+  : 'chart-dialog-publication-guidance')
 
 const emit = defineEmits<{
   apply: []

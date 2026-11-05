@@ -28,7 +28,7 @@ import {
   saveMapObject,
   setHeaderMapActionsOpen,
   setJsonFile,
-  selectInspectorOption,
+  selectDraftPublication,
 } from './helpers'
 
 function createNestedHostChainImport(): { json: string; privateMarkers: string[]; sourceIds: string[] } {
@@ -171,7 +171,7 @@ async function createPrivatePlanet(page: import('@playwright/test').Page): Promi
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -198,7 +198,7 @@ async function setPrivatePlanetPublication(
   publication: PublicationModeLabel,
 ): Promise<void> {
   const inspector = await selectPrivatePlanet(page, fixture)
-  await selectInspectorOption(inspector.getByLabel('How players see this object'), publication)
+  await selectDraftPublication(inspector, publication)
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 }
@@ -210,7 +210,7 @@ async function setSourceSystemPublication(
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), publication)
+  await selectDraftPublication(chartEdit, publication)
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -272,9 +272,9 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await editMapObject(page)
   await objectInspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
   await objectInspector.getByLabel('GM notes', { exact: true }).fill('Private Source Notes')
-  const objectPublication = objectInspector.getByLabel('How players see this object')
+  const objectPublication = objectInspector.getByRole('group', { name: 'Draft visibility', exact: true })
   await expect(objectPublication).toBeVisible({ timeout: 5_000 })
-  await selectInspectorOption(objectPublication, 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -282,7 +282,7 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   const systemDetails = await openChartDetails(page)
   await systemDetails.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -445,7 +445,7 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
   await objectInspector.getByLabel('Name', { exact: true }).fill(longObjectName)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -453,7 +453,7 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart details' }).click()
   const edit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(edit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(edit, 'Revealed')
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
 
@@ -515,7 +515,7 @@ test('player system pan and zoom stay local to the preview and do not add histor
   await addCatalogueObject(page, 'planet')
   const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -523,7 +523,7 @@ test('player system pan and zoom stay local to the preview and do not add histor
   const details = await openChartDetails(page)
   await details.getByRole('button', { name: 'Edit chart details' }).click()
   const edit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(edit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(edit, 'Revealed')
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
 
@@ -709,10 +709,9 @@ test('object publication changes survive Undo, Redo, reload, and a retried durab
 
   await openSourceSystemFromCluster(page, fixture.systemName)
   const inspector = await selectPrivatePlanet(page, fixture)
-  const publication = inspector.getByLabel('How players see this object')
   await installWorkspaceWriteFailureGate(page)
   try {
-    await selectInspectorOption(publication, 'Unknown presence')
+    await selectDraftPublication(inspector, 'Unknown presence')
     await saveMapObject(page)
     const feedback = activeWorkspaceFeedback(page)
     await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')

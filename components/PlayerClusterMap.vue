@@ -76,14 +76,9 @@
             />
             <text
               :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.name"
-              x="4"
-              y="-6"
+              :x="CLUSTER_SYSTEM_CARD_NAME_POSITION.x"
+              :y="CLUSTER_SYSTEM_CARD_NAME_POSITION.y"
             >{{ system.label }}</text>
-            <text
-              :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta"
-              x="0"
-              y="17"
-            >{{ PLAYER_SYSTEM_CARD_DISCLOSURE_COPY[system.disclosure] }}</text>
           </template>
         </g>
         <rect
@@ -122,11 +117,12 @@ import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerClusterGeometry } from '../utils/player-cluster-geometry'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
 import PlayerClusterRouteMark from './maps/PlayerClusterRouteMark.vue'
+import { CLUSTER_ROUTE_PRESENTATION } from '../utils/cluster-route-presentation'
 import {
   CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_CARD_NAME_POSITION,
   CLUSTER_SYSTEM_PRESENTATION_CLASSES,
   CLUSTER_SYSTEM_SEAL,
-  PLAYER_SYSTEM_CARD_DISCLOSURE_COPY,
 } from '../utils/cluster-system-presentation'
 
 const props = withDefaults(defineProps<{
@@ -154,7 +150,9 @@ const maximumZoom = computed(() => {
     viewportSize.value.width / fittedBounds.value.width,
     viewportSize.value.height / fittedBounds.value.height,
   )
-  return Number.isFinite(scale) && scale > 0 ? Math.max(4, 13 / (14 * scale)) : 4
+  return Number.isFinite(scale) && scale > 0
+    ? Math.max(4, 13 / (CLUSTER_ROUTE_PRESENTATION.labelFontSize * scale))
+    : 4
 })
 const viewport = usePlayerMapViewport({
   element: mapElement,
@@ -290,9 +288,6 @@ function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker
 .player-cluster-map-marker--revealed .cluster-system-name {
   fill: var(--text-primary);
 }
-.player-cluster-map-marker .cluster-system-meta {
-  fill: var(--map-muted);
-}
 .player-cluster-map-marker[role="button"]:hover .cluster-system-card,
 .player-cluster-map-marker[role="button"]:focus-visible .cluster-system-card {
   stroke: var(--map-selected);
@@ -307,17 +302,12 @@ function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker
 .player-cluster-map-marker .cluster-system-seal {
   stroke: none;
 }
-.player-cluster-map-marker .cluster-system-name,
-.player-cluster-map-marker .cluster-system-meta {
+.player-cluster-map-marker .cluster-system-name {
   text-anchor: middle;
   pointer-events: none;
 }
 .player-cluster-map-marker--known-type .cluster-system-card,
 .player-cluster-map-marker--revealed .cluster-system-card { fill: var(--map-card); }
-.player-cluster-map-marker--known-type .cluster-system-meta,
-.player-cluster-map-marker--revealed .cluster-system-meta {
-  font: 9px Consolas, monospace;
-}
 .player-cluster-map-marker--known-type .cluster-system-name,
 .player-cluster-map-marker--revealed .cluster-system-name {
   font: 14px Georgia, serif;

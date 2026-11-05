@@ -1,6 +1,14 @@
 /** Public map geometry derived only from the allowlisted player Cluster document. */
 import type { PlayerClusterDocument, PlayerRoute, PlayerSystemMarker, Point } from '../domain/workspace'
 import {
+  CLUSTER_ROUTE_PRESENTATION,
+  type ClusterEndpointCaptionGeometry,
+  clusterEndpointCaptionGeometry,
+  clusterRouteCurve,
+  clusterRoutePresentationLabel,
+  clusterRoutePresentationLabelWidth,
+} from './cluster-route-presentation'
+import {
   CLUSTER_SYSTEM_CARD,
   PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
   clusterSystemCardBounds,
@@ -8,10 +16,8 @@ import {
   playerClusterSystemMarkerEdgePoint,
 } from './cluster-system-presentation'
 
-const UNKNOWN_DESTINATION_RADIUS = 8
-const ROUTE_BEND = 28
-const ROUTE_LABEL_HEIGHT = 15
-const LABEL_CHARACTER_ADVANCE = 9
+const UNKNOWN_DESTINATION_RADIUS = CLUSTER_ROUTE_PRESENTATION.endpoint.radius
+const ROUTE_LABEL_HEIGHT = CLUSTER_ROUTE_PRESENTATION.badge.height
 const LABEL_COLLISION_GAP = 20
 const MAX_ROUTE_LABEL_RINGS = 8
 
@@ -20,6 +26,7 @@ interface SceneRect {
   top: number
   right: number
   bottom: number
+  gap?: number
 }
 
 export interface PlayerRouteGeometry {
@@ -31,7 +38,13 @@ export interface PlayerRouteGeometry {
   labelX: number
   labelY: number
   labelWidth: number
-  destination?: { position: Point; label: 'Unknown destination' }
+  destination?: {
+    position: Point
+    label: 'Unknown destination'
+    labelX: number
+    labelY: number
+    labelWidth: number
+  }
 }
 
 export interface PlayerClusterGeometry {
@@ -61,9 +74,9 @@ function includeRect(bounds: MutableBounds, left: number, top: number, right: nu
 function routeLabelRect(x: number, y: number, width: number): SceneRect {
   return {
     left: x - width / 2,
-    top: y - ROUTE_LABEL_HEIGHT,
+    top: y + CLUSTER_ROUTE_PRESENTATION.badge.topOffset,
     right: x + width / 2,
-    bottom: y + 5,
+    bottom: y + CLUSTER_ROUTE_PRESENTATION.badge.topOffset + ROUTE_LABEL_HEIGHT,
   }
 }
 
@@ -74,6 +87,7 @@ function rectanglesOverlap(left: SceneRect, right: SceneRect, gap: number): bool
 
 function labelObstacles(systems: readonly PlayerSystemMarker[], routes: readonly PlayerRoute[]): SceneRect[] {
   const obstacles: SceneRect[] = []
+  const systemsById = new Map(systems.map(system => [system.id, system]))
   for (const system of systems) {
     const marker = playerClusterSystemMarkerVisibleBounds(
       system.position,
@@ -90,17 +104,26 @@ function labelObstacles(systems: readonly PlayerSystemMarker[], routes: readonly
   for (const route of routes) {
     if (route.destination.kind !== 'unknown') continue
     const position = route.destination.position
+    const origin = systemsById.get(route.fromSystemId)
+    if (!origin) throw new Error('A player route references a missing public origin marker.')
+    const caption = unresolvedDestinationCaptionGeometry(
+      route.destination.label,
+      position,
+      origin.position,
+      systems,
+    )
     obstacles.push({
       left: position.x - UNKNOWN_DESTINATION_RADIUS,
       top: position.y - UNKNOWN_DESTINATION_RADIUS,
       right: position.x + UNKNOWN_DESTINATION_RADIUS,
       bottom: position.y + UNKNOWN_DESTINATION_RADIUS,
+      gap: 0,
     })
     obstacles.push({
-      left: position.x + 16,
-      top: position.y - 10,
-      right: position.x + 16 + route.destination.label.length * LABEL_CHARACTER_ADVANCE,
-      bottom: position.y + 7,
+      left: caption.left,
+      top: caption.top,
+      right: caption.right,
+      bottom: caption.bottom,
     })
   }
   return obstacles
@@ -132,13 +155,42 @@ function systemMarkersOverlap(first: PlayerSystemMarker, second: PlayerSystemMar
 function unresolvedDestinationCoveredByCard(
   position: Point,
   systems: readonly PlayerSystemMarker[],
+  caption?: ClusterEndpointCaptionGeometry,
 ): boolean {
   return systems.some((system) => {
     if (system.disclosure === 'unknown') return false
     const bounds = clusterSystemCardBounds(system.position)
-    return position.x >= bounds.left && position.x <= bounds.right
+    const destinationCovered = position.x >= bounds.left && position.x <= bounds.right
       && position.y >= bounds.top && position.y <= bounds.bottom
+    const captionCovered = caption !== undefined
+      && rectanglesOverlap(caption, bounds, 0)
+    return destinationCovered || captionCovered
   })
+}
+
+/** Keeps an unresolved caption on the Warden side when clear, then tries the mirrored vertical side. */
+function unresolvedDestinationCaptionGeometry(
+  label: string,
+  position: Point,
+  source: Point,
+  systems: readonly PlayerSystemMarker[],
+): ClusterEndpointCaptionGeometry {
+  const preferred = clusterEndpointCaptionGeometry(label, position, source)
+  const captionCovered = (caption: ClusterEndpointCaptionGeometry) =>
+    systems.some((system) => {
+      if (system.disclosure === 'unknown') return false
+      return rectanglesOverlap(caption, clusterSystemCardBounds(system.position), 0)
+    })
+  if (!captionCovered(preferred)) return preferred
+
+  const mirroredY = position.y - (preferred.y - position.y)
+  const mirrored: ClusterEndpointCaptionGeometry = {
+    ...preferred,
+    y: mirroredY,
+    top: mirroredY + CLUSTER_ROUTE_PRESENTATION.endpoint.captionTopOffset,
+    bottom: mirroredY + CLUSTER_ROUTE_PRESENTATION.endpoint.captionBottomOffset,
+  }
+  return captionCovered(mirrored) ? preferred : mirrored
 }
 
 function placeRouteLabel(
@@ -173,7 +225,7 @@ function placeRouteLabel(
       const x = preferredX + tangent.x * candidate.along + normal.x * candidate.normal
       const y = preferredY + tangent.y * candidate.along + normal.y * candidate.normal
       const rect = routeLabelRect(x, y, width)
-      if (obstacles.some(obstacle => rectanglesOverlap(rect, obstacle, LABEL_COLLISION_GAP))) continue
+      if (obstacles.some(obstacle => rectanglesOverlap(rect, obstacle, obstacle.gap ?? LABEL_COLLISION_GAP))) continue
       obstacles.push(rect)
       return { x, y }
     }
@@ -210,11 +262,19 @@ function routeGeometry(
   const destinationPosition = route.destination.kind === 'system'
     ? destinationSystem!.position
     : route.destination.position
+  const destinationCaption = route.destination.kind === 'unknown'
+    ? unresolvedDestinationCaptionGeometry(
+        route.destination.label,
+        route.destination.position,
+        origin.position,
+        systems,
+      )
+    : undefined
   const dx = destinationPosition.x - origin.position.x
   const dy = destinationPosition.y - origin.position.y
   const distance = Math.hypot(dx, dy)
   const foreground = route.destination.kind === 'unknown'
-    ? unresolvedDestinationCoveredByCard(route.destination.position, systems)
+    ? unresolvedDestinationCoveredByCard(route.destination.position, systems, destinationCaption)
     : distance >= 1 && systemMarkersOverlap(origin, destinationSystem!)
 
   let path: string
@@ -228,8 +288,6 @@ function routeGeometry(
     labelX = origin.position.x
     labelY = origin.position.y - 46 - (index % 2) * 7
   } else {
-    const ux = dx / distance
-    const uy = dy / distance
     const start = playerClusterSystemMarkerEdgePoint(
       origin.position,
       destinationPosition,
@@ -242,24 +300,31 @@ function routeGeometry(
           destinationSystem.disclosure !== 'unknown',
         )
       : destinationPosition
-    const bend = index % 2 === 0 ? ROUTE_BEND : -ROUTE_BEND
-    const control = {
-      x: (start.x + end.x) / 2 - uy * bend,
-      y: (start.y + end.y) / 2 + ux * bend,
-    }
-    path = `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`
-    labelX = (start.x + 2 * control.x + end.x) / 4
-    labelY = (start.y + 2 * control.y + end.y) / 4 - 8
+    const bend = route.destination.kind === 'unknown'
+      ? CLUSTER_ROUTE_PRESENTATION.curve.unresolvedBend
+      : (index % 2 === 0
+          ? CLUSTER_ROUTE_PRESENTATION.curve.resolvedBend
+          : -CLUSTER_ROUTE_PRESENTATION.curve.resolvedBend)
+    const curve = clusterRouteCurve(start, end, bend, { x: dx, y: dy })
+    path = curve.path
+    labelX = curve.labelX
+    labelY = curve.labelY
   }
 
-  const label = `Jump Level ${route.jumpLevel}`
+  const label = clusterRoutePresentationLabel(route.jumpLevel)
+  const accessibleLevel = `Jump Level ${route.jumpLevel}`
   const destinationLabel = route.destination.kind === 'unknown'
     ? route.destination.label
     : destinationSystem!.label
   const accessibleLabel = route.destination.kind === 'unknown'
-    ? `${label} to ${destinationLabel}`
-    : `${label} from ${origin.label} to ${destinationLabel}`
-  const labelWidth = Math.max(92, label.length * LABEL_CHARACTER_ADVANCE + 18)
+    ? `${accessibleLevel} to ${destinationLabel}`
+    : `${accessibleLevel} from ${origin.label} to ${destinationLabel}`
+  const labelWidth = clusterRoutePresentationLabelWidth(route.jumpLevel)
+  if (route.destination.kind === 'unknown') {
+    labelX = route.destination.position.x
+      + CLUSTER_ROUTE_PRESENTATION.endpoint.badgeGap + labelWidth / 2
+    labelY = route.destination.position.y + CLUSTER_ROUTE_PRESENTATION.curve.labelOffsetY
+  }
   const positionedLabel = placeRouteLabel(
     index,
     origin.position,
@@ -280,7 +345,15 @@ function routeGeometry(
     labelY: positionedLabel.y,
     labelWidth,
     ...(route.destination.kind === 'unknown'
-      ? { destination: { position: { ...route.destination.position }, label: route.destination.label } }
+      ? {
+          destination: {
+            position: { ...route.destination.position },
+            label: route.destination.label,
+            labelX: destinationCaption!.x,
+            labelY: destinationCaption!.y,
+            labelWidth: destinationCaption!.width,
+          },
+        }
       : {}),
   }
 }
@@ -330,19 +403,20 @@ export function playerClusterGeometry(document: PlayerClusterDocument): PlayerCl
     includeRect(
       bounds,
       route.labelX - route.labelWidth / 2,
-      route.labelY - ROUTE_LABEL_HEIGHT,
+      route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset,
       route.labelX + route.labelWidth / 2,
-      route.labelY + 4,
+      route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset + ROUTE_LABEL_HEIGHT,
     )
     if (route.destination) {
       const position = route.destination.position
       includeRect(
         bounds,
-        position.x - UNKNOWN_DESTINATION_RADIUS,
-        position.y - UNKNOWN_DESTINATION_RADIUS,
-        position.x + UNKNOWN_DESTINATION_RADIUS + 16
-          + route.destination.label.length * LABEL_CHARACTER_ADVANCE,
-        position.y + UNKNOWN_DESTINATION_RADIUS + 5,
+        Math.min(position.x - UNKNOWN_DESTINATION_RADIUS, route.destination.labelX - route.destination.labelWidth),
+        Math.min(position.y - UNKNOWN_DESTINATION_RADIUS, route.destination.labelY
+          + CLUSTER_ROUTE_PRESENTATION.endpoint.captionTopOffset),
+        Math.max(position.x + UNKNOWN_DESTINATION_RADIUS, route.destination.labelX),
+        Math.max(position.y + UNKNOWN_DESTINATION_RADIUS, route.destination.labelY
+          + CLUSTER_ROUTE_PRESENTATION.endpoint.captionBottomOffset),
       )
     }
   }

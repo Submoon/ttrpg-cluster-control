@@ -3,6 +3,12 @@
  */
 import { jumpPointsInCluster } from '../domain/workspace-cluster'
 import type { JumpCluster, JumpPointReference, JumpRoute, Point } from '../domain/workspace'
+import {
+  CLUSTER_ROUTE_PRESENTATION,
+  clusterEndpointCaptionGeometry,
+  clusterRouteCurve,
+  clusterRoutePresentationLabelWidth,
+} from './cluster-route-presentation'
 
 /** SVG path and label geometry for one logical Cluster route. */
 export interface ClusterRouteGeometry {
@@ -31,7 +37,6 @@ export const CLUSTER_SCENE_COORDINATE_LIMIT = 2 ** 24 - 4096
 const CLUSTER_SCENE_ANCHOR_PADDING = 256
 /** PNG export padding around rendered feature bounds. */
 const CLUSTER_SCENE_FEATURE_PADDING = 24
-const CLUSTER_EXIT_LABEL_CHARACTER_ADVANCE = 7
 const AUTOMATIC_EXIT_ROWS = [0, 64, -64, 128, -128] as const
 
 /** Returns endpoint-caption bounds using the rendered monospace text length. */
@@ -41,26 +46,12 @@ export function clusterUnresolvedExitLabelGeometry(
   sourcePoint: Point,
 ): ClusterUnresolvedExitLabelGeometry {
   const text = `Unknown: ${unresolvedExit}`
-  const width = text.length * CLUSTER_EXIT_LABEL_CHARACTER_ADVANCE
-  const x = exitPoint.x - 10
-  const y = exitPoint.y + (exitPoint.y >= sourcePoint.y ? 54 : -54)
-  return {
-    text,
-    x,
-    y,
-    width,
-    left: x - width,
-    right: x,
-    top: y - 10,
-    bottom: y + 2,
-    anchor: 'end',
-  }
+  return clusterEndpointCaptionGeometry(text, exitPoint, sourcePoint)
 }
 
 /** Returns the shared minimum-width SVG badge size for one Jump Route label. */
 export function clusterRouteLabelWidth(route: JumpRoute): number {
-  const text = `Jump-${route.jumpLevel}`
-  return Math.max(78, text.length * 7 + 18)
+  return clusterRoutePresentationLabelWidth(route.jumpLevel)
 }
 
 function automaticExitPosition(start: Point, ordinal: number): Point {
@@ -326,22 +317,30 @@ export function clusterRouteGeometry(
   const y1 = start.y + uy * 40
   const x2 = to ? end.x - ux * 84 : end.x
   const y2 = to ? end.y - uy * 40 : end.y
-  const bend = to ? (index % 2 === 0 ? 32 : -32) : 18
-  const controlX = (x1 + x2) / 2 - uy * bend
-  const controlY = (y1 + y2) / 2 + ux * bend
+  const bend = to
+    ? (index % 2 === 0
+        ? CLUSTER_ROUTE_PRESENTATION.curve.resolvedBend
+        : -CLUSTER_ROUTE_PRESENTATION.curve.resolvedBend)
+    : CLUSTER_ROUTE_PRESENTATION.curve.unresolvedBend
+  const curve = clusterRouteCurve(
+    { x: x1, y: y1 },
+    { x: x2, y: y2 },
+    bend,
+    { x: dx, y: dy },
+  )
 
   const routeLabelWidth = clusterRouteLabelWidth(route)
   const routeLabelX = to
-    ? (x1 + 2 * controlX + x2) / 4
-    : exitPoint!.x + 14 + routeLabelWidth / 2
+    ? curve.labelX
+    : exitPoint!.x + CLUSTER_ROUTE_PRESENTATION.endpoint.badgeGap + routeLabelWidth / 2
   const routeLabelY = to
-    ? (y1 + 2 * controlY + y2) / 4 - 8
-    : exitPoint!.y - 8
+    ? curve.labelY
+    : exitPoint!.y + CLUSTER_ROUTE_PRESENTATION.curve.labelOffsetY
   const exitLabel = exitPoint && route.toPointId === null
     ? clusterUnresolvedExitLabelGeometry(route.unresolvedExit, exitPoint, start)
     : undefined
   return {
-    path: `M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}`,
+    path: curve.path,
     labelX: routeLabelX,
     labelY: routeLabelY,
     exitPoint,

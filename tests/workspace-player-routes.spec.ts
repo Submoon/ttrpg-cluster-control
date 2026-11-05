@@ -20,7 +20,7 @@ import {
   openWorkspaceHierarchy,
   resolveImportReview,
   returnToClusterMap,
-  selectInspectorOption,
+  selectDraftPublication,
   setHeaderMapActionsOpen,
   setJsonFile,
   setWorkspaceMapMode,
@@ -53,7 +53,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   const systemDetails = await openChartDetails(page)
   await systemDetails.getByRole('button', { name: 'Edit chart details', exact: true }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -111,16 +111,24 @@ test('a shared route to a Hidden system previews a generic destination at its ex
   const preview = page.getByRole('dialog', { name: 'Player view preview' })
   const playerMap = preview.locator('svg.player-cluster-map-scene')
   await expect(playerMap).toBeVisible()
-  await expect(playerMap).toContainText('Jump Level 1')
+  await expect(playerMap).toContainText('Jump-1')
   await expect(playerMap).toContainText('Unknown destination')
+  await expect(playerMap).not.toContainText(/MAP SHARED|STAR SYSTEM/)
+  await expect(playerMap.locator('.cluster-system-meta')).toHaveCount(0)
 
   const publicRoute = playerMap.getByRole('group', { name: /Jump Level 1.*Unknown destination/ })
+  const publicRouteLine = publicRoute.locator('.cluster-route-line')
+  const routeDashArray = await publicRouteLine.evaluate(element => getComputedStyle(element).strokeDasharray)
+  expect(routeDashArray).not.toBe('none')
+  const routeBadge = publicRoute.locator('.cluster-route-label-bg')
+  await expect(routeBadge).toHaveAttribute('rx', '10')
+  await expect(routeBadge).toHaveAttribute('height', '21')
   const unknownDestination = publicRoute.locator('circle').last()
   await expect(unknownDestination).toBeVisible()
   expect(Number(await unknownDestination.getAttribute('cx'))).toBe(hiddenPosition.x)
   expect(Number(await unknownDestination.getAttribute('cy'))).toBe(hiddenPosition.y)
 
-  const routeLabelBounds = await publicRoute.locator('.player-cluster-route-level rect').boundingBox()
+  const routeLabelBounds = await routeBadge.boundingBox()
   const revealedSystemLabelBounds = await playerMap.locator('.player-cluster-map-marker--revealed .cluster-system-name').boundingBox()
   if (!routeLabelBounds || !revealedSystemLabelBounds) {
     throw new Error('The public route badge and revealed system label must have rendered bounds.')

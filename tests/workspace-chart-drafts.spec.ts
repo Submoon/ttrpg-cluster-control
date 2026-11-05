@@ -911,7 +911,16 @@ test('chart-name dialog buttons show the semantic keyboard focus outline', async
   await page.keyboard.press('Tab')
   await expect(dialog.getByLabel('Player-facing title')).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(dialog.getByLabel('How players see this system')).toBeFocused()
+  const visibility = dialog.getByRole('group', { name: 'Draft visibility', exact: true })
+  const hidden = visibility.getByRole('button', { name: 'Set visibility to Hidden', exact: true })
+  await expect(hidden).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(hidden).toHaveAttribute('aria-pressed', 'true')
+  for (const label of ['Unknown presence', 'Known type', 'Revealed'] as const) {
+    await page.keyboard.press('Tab')
+    await expect(visibility.getByRole('button', { name: `Set visibility to ${label}`, exact: true }))
+      .toBeFocused()
+  }
   await page.keyboard.press('Tab')
   await expect(dialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
 

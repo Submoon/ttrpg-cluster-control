@@ -46,16 +46,21 @@ export function publicationPresentation(mode: PublicationMode): PublicationPrese
 export function publicationStatus(
   mode: PublicationMode,
   parentPublication?: PublicationMode,
+  visibilityContext: 'configured' | 'draft' = 'configured',
+  presentationContext: 'object' | 'system' = 'object',
 ): { description: string; parentBlocked: boolean } {
   const detail: Record<PublicationMode, string> = {
-    hidden: 'Players do not see this location. Required orbital hosts may appear as Unknown in the player view.',
+    hidden: presentationContext === 'system'
+      ? 'Players do not see this system.'
+      : 'Players do not see this location. Required orbital hosts may appear as Unknown in the player view.',
     unknown: 'Players see an unknown presence without its name or type.',
     'known-type': 'Players see its type without its name.',
     revealed: 'Players see its name and type.',
   }
   const parentBlocked = mode !== 'hidden' && parentPublication !== undefined && parentPublication !== 'revealed'
+  const prefix = visibilityContext === 'draft' ? 'Draft visibility' : 'Configured visibility'
   return {
-    description: `Configured visibility: ${publicationPresentation(mode).label}. ${detail[mode]}${parentBlocked
+    description: `${prefix}: ${publicationPresentation(mode).label}. ${detail[mode]}${parentBlocked
       ? ' System map unavailable to players until this system is Revealed.'
       : ''}`,
     parentBlocked,

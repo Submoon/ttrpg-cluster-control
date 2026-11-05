@@ -31,6 +31,10 @@ test('Inspector visibility buttons update committed system and object settings w
 
   for (const mode of ['Hidden', 'Unknown presence', 'Revealed', 'Known type'] as const) {
     await setVisibility(systemControls, mode)
+    if (mode === 'Hidden') {
+      await expect(systemControls).toContainText('Players do not see this system.')
+      await expect(systemControls).not.toContainText('orbital hosts')
+    }
   }
   await expect(systemControls).toContainText('Configured visibility: Known type')
 
@@ -43,6 +47,8 @@ test('Inspector visibility buttons update committed system and object settings w
 
   const objectControls = page.getByRole('region', { name: 'Configured visibility', exact: true })
   await expect(objectControls).toBeVisible()
+  await setVisibility(objectControls, 'Hidden')
+  await expect(objectControls).toContainText('Required orbital hosts may appear as Unknown in the player view.')
   await setVisibility(objectControls, 'Revealed')
   await expect(objectControls).toContainText('Configured visibility: Revealed')
   await expect(objectControls).toContainText('System map unavailable to players until this system is Revealed.')
@@ -110,38 +116,49 @@ test('compact Inspector keeps all four visibility controls comfortably tappable'
   await testInfo.attach('quick-publication-compact', { path: screenshot, contentType: 'image/png' })
 })
 
-test('quick visibility resolves real object drafts and survives a reload without revealing its parent', async ({ page }) => {
+test('Hierarchy visibility resolves real object drafts and survives a reload without revealing its parent', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
-  const controls = page.getByRole('region', { name: 'Configured visibility', exact: true })
+  const primaryStar = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true })
+  await primaryStar.click()
+  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const name = page.getByLabel('Name', { exact: true })
   const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
 
+  async function invokeHierarchyVisibility(mode: typeof modes[number]): Promise<void> {
+    await primaryStar.click({ button: 'right' })
+    const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitemcheckbox', { name: mode, exact: true }).click()
+  }
+
   await editMapObject(page)
   await name.fill('Unapplied star name')
-  await controls.getByRole('button', { name: 'Set visibility to Revealed', exact: true }).click()
+  await invokeHierarchyVisibility('Revealed')
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(name).toHaveValue('Unapplied star name')
-  await expect(controls.getByRole('button', { name: 'Set visibility to Known type', exact: true }))
+  await expect(inspector.getByRole('group', { name: 'Draft visibility', exact: true })
+    .getByRole('button', { name: 'Set visibility to Known type', exact: true }))
     .toHaveAttribute('aria-pressed', 'true')
 
-  await controls.getByRole('button', { name: 'Set visibility to Revealed', exact: true }).click()
+  await invokeHierarchyVisibility('Revealed')
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
   await expect(guard).toBeHidden()
-  await expect(name).toHaveValue('Primary Star')
-  await expect(controls.getByRole('button', { name: 'Set visibility to Revealed', exact: true }))
+  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Primary Star')
+  await expect(inspector.getByRole('group', { name: 'Configured visibility', exact: true })
+    .getByRole('button', { name: 'Set visibility to Revealed', exact: true }))
     .toHaveAttribute('aria-pressed', 'true')
 
   await editMapObject(page)
   await name.fill('Published setting, private star name')
-  await controls.getByRole('button', { name: 'Set visibility to Hidden', exact: true }).click()
+  await invokeHierarchyVisibility('Hidden')
   await guard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(name).toHaveValue('Published setting, private star name')
-  await expect(controls.getByRole('button', { name: 'Set visibility to Hidden', exact: true }))
+  await expect(inspector.getByRole('group', { name: 'Configured visibility', exact: true })
+    .getByRole('button', { name: 'Set visibility to Hidden', exact: true }))
     .toHaveAttribute('aria-pressed', 'true')
   await waitForWorkspaceSaved(page)
 
@@ -155,7 +172,8 @@ test('quick visibility resolves real object drafts and survives a reload without
   await reopenedHierarchy.getByRole('treeitem', {
     name: 'Select A, Published setting, private star name', exact: true,
   }).click()
-  await expect(page.getByRole('region', { name: 'Configured visibility', exact: true })
+  await expect(page.getByRole('complementary', { name: 'Object inspector', exact: true })
+    .getByRole('group', { name: 'Configured visibility', exact: true })
     .getByRole('button', { name: 'Set visibility to Hidden', exact: true }))
     .toHaveAttribute('aria-pressed', 'true')
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(before)

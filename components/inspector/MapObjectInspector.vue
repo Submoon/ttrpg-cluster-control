@@ -59,11 +59,17 @@
           <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
         <PublicationModeControl
-          :model-value="selectedObject.publication"
+          :model-value="objectSession ? objectDraft.publication : selectedObject.publication"
           :parent-publication="selectedSystem?.publication"
+          :draft="Boolean(objectSession)"
+          :focus-target-id="controlId('publication')"
           :disabled="props.saving || props.publicationBusy"
           @select="setObjectPublication"
         />
+        <p v-if="fieldError('publication')" class="feedback m-0 error-text" role="alert">
+          {{ fieldError('publication') }}
+        </p>
+        <p class="inspector-intro m-0 text-sm">The parent system must be Revealed before players can open its map.</p>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
           <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
             <UInput
@@ -73,21 +79,6 @@
               autocomplete="off"
               maxlength="80"
             />
-          </UFormField>
-          <UFormField
-            label="How players see this object"
-            description="The parent system must be Revealed before players can open its map."
-            :error="fieldError('publication')"
-          >
-            <USelect
-              :id="controlId('publication')"
-              :model-value="objectDraft.publication"
-              :items="publicationItems"
-              class="w-full"
-              :ui="{ content: 'min-w-[12rem] max-w-[calc(100vw-2rem)]', itemLabel: 'block whitespace-normal break-words' }"
-              @update:model-value="updatePublication"
-            />
-            <template #help>{{ publicationSummary }}</template>
           </UFormField>
           <UFormField label="Location key" :error="fieldError('locationKey')">
             <UInput
@@ -362,7 +353,6 @@ import { computed, nextTick, watch } from 'vue'
 import {
   canPlaceObjectInOrbit,
   isCustomFieldApplicableToObject,
-  isPublicationMode,
   nativePlayerFieldIds,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -445,21 +435,6 @@ const placeableOrbits = computed(() => {
 const hasAtmosphere = computed(() => selectedObject.value?.family === 'CelestialBody'
   && (selectedObject.value.subtype === 'planet' || selectedObject.value.subtype === 'moon'))
 const hasNativeFields = computed(() => hasAtmosphere.value || selectedObject.value?.family === 'Installation')
-const publicationItems: Array<{ label: string; value: PublicationMode }> = [
-  { label: 'Hidden', value: 'hidden' },
-  { label: 'Unknown presence', value: 'unknown' },
-  { label: 'Known type', value: 'known-type' },
-  { label: 'Revealed', value: 'revealed' },
-]
-const publicationSummary = computed(() => {
-  switch (objectDraft.value.publication) {
-    case 'hidden': return 'Players do not see this object unless it must appear as an anonymous host.'
-    case 'unknown': return 'Players see a neutral presence without the name or type.'
-    case 'known-type': return `Players see ${catalogueSubtypeLabel(selectedObject.value!)} without the name.`
-    case 'revealed': return 'Players see the object name and catalogue type.'
-    default: return 'Choose a supported publication mode.'
-  }
-})
 type StoredSelectOption = { label: string; storedValue: string }
 const placementItems = computed(() => [
   { label: 'System-level position', value: 'system' },
@@ -516,13 +491,11 @@ function updatePlacement(value: string | number): void {
   emit('update-object-placement', session.id, String(value))
 }
 
-function updatePublication(value: string | number): void {
-  if (!objectSession.value) return
-  const publication = String(value)
-  if (isPublicationMode(publication)) objectDraft.value.publication = publication
-}
-
 function setObjectPublication(mode: PublicationMode): void {
+  if (objectSession.value) {
+    objectDraft.value.publication = mode
+    return
+  }
   const object = selectedObject.value
   const system = selectedSystem.value
   if (!object || !system) return

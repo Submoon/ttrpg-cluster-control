@@ -9,6 +9,7 @@ import {
   openChartDetails,
   openFieldDefinitionDialog,
   saveMapObject,
+  selectDraftPublication,
   selectInspectorOption,
 } from './helpers'
 
@@ -28,7 +29,7 @@ test('a Warden can edit Player text separately from GM notes and preview only th
   await expect(playerText).toBeVisible({ timeout: 5_000 })
   await playerText.fill(playerTextValue)
   await objectInspector.getByLabel('GM notes', { exact: true }).fill(gmNotesValue)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -36,7 +37,7 @@ test('a Warden can edit Player text separately from GM notes and preview only th
   const chartDetails = await openChartDetails(page)
   await chartDetails.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
 
@@ -76,7 +77,7 @@ test('shared native and custom Fields preview permitted values and respect an ob
   const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
   await objectInspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
 
   await addCustomFieldThroughDialog(page, 'Faction', 'single-select', 'Merchants\nCult')
@@ -115,7 +116,7 @@ test('shared native and custom Fields preview permitted values and respect an ob
   const chartDetails = await openChartDetails(page)
   await chartDetails.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
 

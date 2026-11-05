@@ -168,3 +168,14 @@ Continue draft PR #39 from `ea96eeeeb20e0e1ed78c67bfff7bbb331d86b64d`. The refre
 The card hit target stays within the artwork even when a public name extends past the card. Overlapping imported cards and covered unresolved destinations use a foreground route layer with the same exact geometry in the live map and SVG. Compact Search restores focus to the map after Inspect closes. The shared popover releases both hit-test layers during its close animation, including inside the Warden preview.
 
 Independent integrated and disclosure reviews closed their findings. The complementary review used the standard reviewer profile because the deeper profile was at capacity. The focused selection qualified 67 distinct pure cases across the original run and its geometry replay, and 17 Chromium cases across the original matrix and affected replays. The reader PNG replay confirms that a native raster callback cannot download after returning to the same public system, followed by a fresh print PNG. Desktop and compact captures were inspected.
+
+## Cluster route presentation and a single visibility control
+
+Continue draft PR #39 from `12024d687ef7f5194f8ea2484108ea45cb7345d6`, 39 commits ahead of the refreshed `origin/main` at `47c0418a835da285e9edb88e8f8dffc19c3a2bba` with no divergent base commits.
+
+- Share Warden Jump Route artwork and presentation rules with the public live map and images. Retain generic public captions and exact unresolved positions. Public system cards show the allowed title and disclosure color, with no secondary status caption.
+- Use the four visibility icons for both consultation and editing. Outside an Inspector draft, the icons invoke the existing guarded command. In a draft, they change its pending value for Apply or Discard. Map and Hierarchy context menus retain their guarded commands.
+
+Public unresolved captions use the Warden placement when clear, mirror vertically when a card covers that placement, and use foreground paint when both positions are occupied. In the last case, a caption can overlap a system title. Public zoom uses the shared font metric so far destinations remain readable.
+
+Independent review closed its blocking findings. The focused checks qualified 33 distinct pure cases and 14 Chromium cases. The two chart cases passed on replay after making the button-size assertion wait for the modal opening animation. Desktop and compact route and visibility captures were inspected.

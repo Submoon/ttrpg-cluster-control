@@ -18,7 +18,7 @@ import {
   openChartDetails,
   returnToClusterMap,
   saveMapObject,
-  selectInspectorOption,
+  selectDraftPublication,
   setHeaderMapActionsOpen,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -104,7 +104,7 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
   await objectInspector.getByLabel('Name', { exact: true }).fill(publicObjectName)
   await objectInspector.getByLabel('Player text', { exact: true }).fill(publicPlayerText)
   await objectInspector.getByLabel('GM notes', { exact: true }).fill(privateNotes)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -112,7 +112,7 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
   await chartDetails.getByRole('button', { name: 'Edit chart details' }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartEdit.getByLabel('Player-facing title').fill('Pilgrim Reach')
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)

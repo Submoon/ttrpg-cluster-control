@@ -73,7 +73,10 @@ test('public cluster cards share Warden dimensions while Unknown markers retain 
   }
   const geometry = playerClusterGeometry(document)
 
-  expect(geometry.routes[0]?.path).toBe('M 18 0 Q 120 28 222 0')
+  expect(geometry.routes[0]?.path).toBe('M 18 0 Q 120 32 222 0')
+  expect(geometry.routes[0]?.label).toBe('Jump-1')
+  expect(geometry.routes[0]?.labelWidth).toBe(78)
+  expect(geometry.routes[0]?.accessibleLabel).toBe('Jump Level 1 from Unknown presence to Aster')
   expect(geometry.bounds.minX).toBeLessThan(-18)
   expect(geometry.bounds.minY).toBeLessThan(-38)
   expect(geometry.bounds.minX + geometry.bounds.width).toBeGreaterThan(378)
@@ -121,6 +124,51 @@ test('only routes occluded by overlapping endpoints or a covered Unknown destina
   expect(overlapping.routes[0]?.foreground).toBe(true)
   expect(ordinary.routes[0]?.foreground).toBe(false)
   expect(coveredExit.routes[0]?.foreground).toBe(true)
+  expect(coveredExit.routes[0]?.label).toBe('Jump-1')
+  expect(coveredExit.routes[0]?.accessibleLabel).toBe('Jump Level 1 to Unknown destination')
+  expect(coveredExit.routes[0]?.destination).toMatchObject({
+    position: { x: 240, y: 0 },
+    label: 'Unknown destination',
+  })
+})
+
+test('unresolved destination captions mirror around a covering card or paint in foreground when both sides are covered @pure', { tag: '@pure' }, () => {
+  const system = (id: string, x: number, y: number): PlayerClusterDocument['systems'][number] => ({
+    id,
+    position: { x, y },
+    disclosure: 'revealed',
+    type: 'star-system',
+    label: id,
+    map: { objects: [], orbits: [] },
+  })
+  const document = (cards: PlayerClusterDocument['systems']): PlayerClusterDocument => ({
+    format: 'ttrpg-cluster-control-player',
+    version: 1,
+    title: 'Caption Reach',
+    systems: [system('system-1', 0, 0), ...cards],
+    routes: [{
+      id: 'route-exit',
+      jumpLevel: 1,
+      fromSystemId: 'system-1',
+      destination: { kind: 'unknown', position: { x: 300, y: 0 }, label: 'Unknown destination' },
+    }],
+  })
+
+  const mirroredCaption = playerClusterGeometry(document([system('system-2', 220, 54)])).routes[0]
+  expect(mirroredCaption?.destination).toMatchObject({
+    position: { x: 300, y: 0 },
+    label: 'Unknown destination',
+    labelX: 290,
+    labelY: -54,
+  })
+  expect(mirroredCaption?.foreground).toBe(false)
+
+  const foregroundCaption = playerClusterGeometry(document([
+    system('system-2', 220, 54),
+    system('system-3', 220, -54),
+  ])).routes[0]
+  expect(foregroundCaption?.destination).toMatchObject({ label: 'Unknown destination', labelY: 54 })
+  expect(foregroundCaption?.foreground).toBe(true)
 })
 
 test('player route labels use a finite deterministic fallback and extend exported bounds @pure', { tag: '@pure' }, () => {

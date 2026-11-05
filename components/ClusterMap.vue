@@ -72,9 +72,11 @@ import {
 } from '../utils/gm-publication-badges'
 import {
   CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_CARD_NAME_POSITION,
   CLUSTER_SYSTEM_PRESENTATION_CLASSES,
   CLUSTER_SYSTEM_SEAL,
 } from '../utils/cluster-system-presentation'
+import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel } from '../utils/cluster-route-presentation'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -256,10 +258,10 @@ function prepareExportClone(clone: SVGSVGElement): void {
     mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
     const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
     labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
-    labelBackground?.setAttribute('y', String(geometry.labelY - 12))
+    labelBackground?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset))
     const routeLabel = mark.querySelector<SVGTextElement>('.cluster-route-label')
     routeLabel?.setAttribute('x', String(geometry.labelX))
-    routeLabel?.setAttribute('y', String(geometry.labelY + 2))
+    routeLabel?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
     if (geometry.exitPoint && geometry.exitLabel && route.toPointId === null) {
@@ -697,6 +699,7 @@ function render(): void {
     .join('g')
     .attr('data-route-id', route => route.id)
     .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
+    .attr('font-size', CLUSTER_ROUTE_PRESENTATION.labelFontSize)
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
@@ -713,7 +716,7 @@ function render(): void {
       routeTargetOverrides(),
     )
     const mark = select(this)
-    const label = `Jump-${route.jumpLevel}`
+    const label = clusterRoutePresentationLabel(route.jumpLevel)
     const labelWidth = clusterRouteLabelWidth(route)
     const sharingStatus = routeSharingStatus(props.cluster, route, jumpPoints)
     describeRouteSharing(this, `route-${route.id}`, sharingStatus)
@@ -739,10 +742,10 @@ function render(): void {
     mark.append('rect')
       .attr('class', 'cluster-route-label-bg')
       .attr('x', geometry.labelX - labelWidth / 2)
-      .attr('y', geometry.labelY - 12)
+      .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset)
       .attr('width', labelWidth)
-      .attr('height', 21)
-      .attr('rx', 10)
+      .attr('height', CLUSTER_ROUTE_PRESENTATION.badge.height)
+      .attr('rx', CLUSTER_ROUTE_PRESENTATION.badge.cornerRadius)
 
     if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
       const exitLabel = geometry.exitLabel
@@ -760,7 +763,7 @@ function render(): void {
       mark.insert('text', '.cluster-exit-mark')
         .attr('class', 'cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
         .text(label)
       const exitGestureTargets = [exitHitTarget, exitMarker]
       for (const target of exitGestureTargets) {
@@ -856,7 +859,7 @@ function render(): void {
       mark.append('text')
         .attr('class', 'cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
         .text(label)
     }
   })
@@ -877,10 +880,10 @@ function render(): void {
       mark.select('.cluster-route-line').attr('d', geometry.path)
       mark.select('.cluster-route-label-bg')
         .attr('x', geometry.labelX - labelWidth / 2)
-        .attr('y', geometry.labelY - 12)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset)
       mark.select('.cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
       routePublicationBadges.get(route.id)?.setAttribute(
         'transform',
         `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`,
@@ -989,8 +992,8 @@ function render(): void {
     .attr('r', CLUSTER_SYSTEM_SEAL.radius)
   systemMarks.append('text')
     .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.name)
-    .attr('x', 4)
-    .attr('y', -6)
+    .attr('x', CLUSTER_SYSTEM_CARD_NAME_POSITION.x)
+    .attr('y', CLUSTER_SYSTEM_CARD_NAME_POSITION.y)
     .text(system => system.name)
   systemMarks.append('text')
     .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta)
@@ -1299,17 +1302,6 @@ defineExpose({
   pointer-events: all;
 }
 
-.cluster-route-line {
-  fill: none;
-  stroke: var(--map-route);
-  stroke-width: 2.4;
-}
-
-.cluster-route.is-unresolved .cluster-route-line {
-  stroke: var(--map-unresolved);
-  stroke-dasharray: 8 7;
-}
-
 .cluster-route.is-selected .cluster-route-line,
 .cluster-route:focus .cluster-route-line {
   stroke: var(--map-selected);
@@ -1319,31 +1311,6 @@ defineExpose({
 .cluster-route:focus,
 .cluster-system-node:focus {
   outline: none;
-}
-
-.cluster-route-label-bg {
-  fill: var(--map-label-bg);
-  stroke: var(--map-label-border);
-  pointer-events: auto;
-}
-
-.cluster-route-label,
-.cluster-exit-label {
-  fill: var(--map-text);
-  font: 10px Consolas, monospace;
-}
-
-.cluster-route-label {
-  text-anchor: middle;
-  pointer-events: auto;
-}
-
-.cluster-exit-mark {
-  cursor: grab;
-  fill: var(--map-card);
-  pointer-events: all;
-  stroke: var(--map-unresolved);
-  stroke-width: 2;
 }
 
 .cluster-exit-hit-target {
@@ -1358,11 +1325,6 @@ defineExpose({
 .cluster-exit-mark.is-dragging,
 .cluster-exit-hit-target.is-dragging {
   cursor: grabbing;
-}
-
-.cluster-exit-label {
-  fill: var(--map-unresolved);
-  pointer-events: none;
 }
 
 .cluster-system-node {

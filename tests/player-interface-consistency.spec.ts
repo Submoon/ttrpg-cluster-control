@@ -41,9 +41,12 @@ test('public cluster artwork keeps Unknown neutral and discloses card labels wit
   await expect(knownCard).toHaveAttribute('width', '156')
   await expect(knownCard).toHaveAttribute('height', '76')
   await expect(known.locator('.cluster-system-name')).toHaveText('Star system')
-  await expect(known.locator('.cluster-system-meta')).toHaveText('MAP NOT SHARED')
   await expect(revealed.locator('.cluster-system-name')).toHaveText('Public System')
-  await expect(revealed.locator('.cluster-system-meta')).toHaveText('MAP SHARED')
+  await expect(known.locator('.cluster-system-meta')).toHaveCount(0)
+  await expect(revealed.locator('.cluster-system-meta')).toHaveCount(0)
+  await expect(cluster).not.toContainText(/MAP SHARED|MAP NOT SHARED|STAR SYSTEM/)
+  await expect(known.locator('.cluster-system-name')).toHaveAttribute('x', '4')
+  await expect(known.locator('.cluster-system-name')).toHaveAttribute('y', '-6')
 
   const colors = await page.evaluate(() => {
     const resolve = (token: string) => {

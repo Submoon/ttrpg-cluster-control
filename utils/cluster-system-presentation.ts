@@ -13,6 +13,9 @@ export const CLUSTER_SYSTEM_SEAL = Object.freeze({
   radius: 4,
 })
 
+/** Shared adjusted center used for a one-line Star System title beside the presentation seal. */
+export const CLUSTER_SYSTEM_CARD_NAME_POSITION = Object.freeze({ x: 4, y: -6 })
+
 /** Unknown systems keep the neutral marker and footprint used before card publication. */
 export const PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS = 18
 
@@ -21,12 +24,6 @@ export const CLUSTER_SYSTEM_PRESENTATION_CLASSES = Object.freeze({
   seal: 'cluster-system-seal',
   name: 'cluster-system-name',
   meta: 'cluster-system-meta',
-})
-
-export const PLAYER_SYSTEM_CARD_DISCLOSURE_COPY = Object.freeze({
-  unknown: 'IDENTITY UNKNOWN',
-  'known-type': 'MAP NOT SHARED',
-  revealed: 'MAP SHARED',
 })
 
 export const PLAYER_CLUSTER_HIERARCHY_DISCLOSURE_COPY = Object.freeze({

@@ -17,7 +17,7 @@ import {
   readWorkspaceWriteFailureCount,
   restoreWorkspaceWriteFailureGate,
   returnToClusterMap,
-  selectInspectorOption,
+  selectDraftPublication,
   saveMapObject,
   setWorkspaceMapMode,
   setHeaderMapActionsOpen,
@@ -29,7 +29,7 @@ async function choosePublication(
   dialog: import('@playwright/test').Locator,
   label: 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed',
 ): Promise<void> {
-  await selectInspectorOption(dialog.getByLabel('How players see this system'), label)
+  await selectDraftPublication(dialog, label)
 }
 
 test('a Warden can publish a player title and open its cluster preview', async ({ page }) => {
@@ -238,14 +238,16 @@ test('publication-only chart details stay resumable, honor Stay and Discard, and
 
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
   await expect(edit.getByLabel('Player-facing title')).toHaveValue('Uncommitted Reach')
-  await expect(edit.getByLabel('How players see this system')).toContainText('Hidden')
+  await expect(edit.getByRole('button', { name: 'Set visibility to Hidden', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
   await edit.getByRole('button', { name: 'Close', exact: true }).click()
 
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
   await expect(edit.getByRole('button', { name: 'Stay here' })).toBeVisible()
   await edit.getByRole('button', { name: 'Stay here' }).click()
   await expect(edit.getByLabel('Player-facing title')).toHaveValue('Uncommitted Reach')
-  await expect(edit.getByLabel('How players see this system')).toContainText('Hidden')
+  await expect(edit.getByRole('button', { name: 'Set visibility to Hidden', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
   await edit.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(edit).toBeHidden()
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })

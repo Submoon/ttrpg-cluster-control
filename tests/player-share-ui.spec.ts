@@ -11,7 +11,7 @@ import {
   openWorkspaceHierarchy,
   returnToClusterMap,
   saveMapObject,
-  selectInspectorOption,
+  selectDraftPublication,
   setHeaderMapActionsOpen,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -34,7 +34,7 @@ async function createShareMap(page: Page, options: ShareMapOptions): Promise<voi
   await objectInspector.getByLabel('Name', { exact: true }).fill(options.object)
   await objectInspector.getByLabel('Player text', { exact: true }).fill(options.playerText)
   await objectInspector.getByLabel('GM notes', { exact: true }).fill(options.notes ?? 'PRIVATE GM NOTES')
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
   await setPlayerTitle(page, options.title)
@@ -47,7 +47,7 @@ async function setPlayerTitle(page: Page, title: string): Promise<void> {
   await editButton.click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await chartEdit.getByLabel('Player-facing title', { exact: true }).fill(title)
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -210,7 +210,7 @@ test('a generated player link opens the exported public snapshot in a fresh read
   await objectInspector.getByLabel('Name', { exact: true }).fill(publicObjectName)
   await objectInspector.getByLabel('Player text', { exact: true }).fill(publicPlayerText)
   await objectInspector.getByLabel('GM notes', { exact: true }).fill(privateNotes)
-  await selectInspectorOption(objectInspector.getByLabel('How players see this object'), 'Revealed')
+  await selectDraftPublication(objectInspector, 'Revealed')
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -218,7 +218,7 @@ test('a generated player link opens the exported public snapshot in a fresh read
   await chartDetails.getByRole('button', { name: 'Edit chart details', exact: true }).click()
   const chartEdit = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await chartEdit.getByLabel('Player-facing title', { exact: true }).fill(playerTitle)
-  await selectInspectorOption(chartEdit.getByLabel('How players see this system'), 'Revealed')
+  await selectDraftPublication(chartEdit, 'Revealed')
   await chartEdit.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
