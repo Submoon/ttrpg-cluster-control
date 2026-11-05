@@ -4,18 +4,31 @@
       <span class="section-kicker">PLAYER-VISIBLE OBJECT</span>
       <h2 v-if="props.workspacePresentation">{{ presentation.label }}</h2>
       <h3 v-else class="mb-1 mt-2 text-base">{{ presentation.label }}</h3>
-      <p v-if="presentation.typeLabel" class="inspector-intro m-0">
-        {{ presentation.typeLabel }}
-      </p>
-      <p v-if="props.object.disclosure === 'revealed' && props.object.playerText" class="inspector-intro m-0 whitespace-pre-wrap">
-        {{ props.object.playerText }}
-      </p>
-      <dl v-if="props.object.disclosure === 'revealed' && props.object.fields.length" class="player-object-fields m-0 grid gap-2" aria-label="Player-visible Fields">
-        <div v-for="(field, index) in props.object.fields" :key="`${field.name}:${field.type}:${index}`">
-          <dt class="font-semibold">{{ field.name }}</dt>
-          <dd class="m-0">{{ field.value }}</dd>
+      <dl v-if="props.object.disclosure === 'revealed'" class="player-object-identity m-0">
+        <div>
+          <dt class="font-semibold">Name</dt>
+          <dd class="m-0">{{ presentation.label }}</dd>
         </div>
       </dl>
+      <dl v-if="presentation.typeLabel" class="player-object-type m-0">
+        <div>
+          <dt class="font-semibold">Type</dt>
+          <dd class="m-0">{{ presentation.typeLabel }}</dd>
+        </div>
+      </dl>
+      <section v-if="playerText.trim()" class="player-object-player-text" aria-label="Player text">
+        <h4>Player text</h4>
+        <p class="inspector-intro m-0 whitespace-pre-wrap">{{ playerText }}</p>
+      </section>
+      <section v-if="props.object.disclosure === 'revealed' && props.object.fields.length" class="player-object-field-details" aria-label="Published Fields">
+        <h4>Fields</h4>
+        <dl class="player-object-fields m-0 grid gap-2">
+          <div v-for="(field, index) in props.object.fields" :key="`${field.name}:${field.type}:${index}`">
+            <dt class="font-semibold">{{ field.name }}</dt>
+            <dd class="m-0">{{ field.value }}</dd>
+          </div>
+        </dl>
+      </section>
       <p v-if="hasNoPublishedDetails" class="player-inspector-empty-detail empty-copy">
         {{ props.object.disclosure === 'unknown' ? 'No further details are shared.' : 'No additional text or Fields were shared.' }}
       </p>
@@ -90,6 +103,10 @@ const hasNoPublishedDetails = computed(() => {
   return Boolean(object && (object.disclosure !== 'revealed'
     || (!object.playerText.trim() && object.fields.length === 0)))
 })
+const playerText = computed(() => {
+  const object = props.object
+  return object?.disclosure === 'revealed' ? object.playerText : ''
+})
 const placementOrbit = computed<PlayerOrbit | null>(() => {
   const placement = props.object?.placement
   if (placement?.kind !== 'orbit') return null
@@ -119,6 +136,12 @@ function orbitLabel(orbit: PlayerOrbit): string {
 .player-object-inspector { display: grid; min-width: 0; gap: .75rem; }
 .player-system-object-details { display: grid; min-width: 0; gap: .4rem; overflow-wrap: anywhere; }
 .player-system-object-details h2 { margin: 0; font: 500 1rem Georgia, serif; }
+.player-object-identity,
+.player-object-type,
+.player-object-field-details,
+.player-object-player-text { min-width: 0; }
+.player-object-field-details h4,
+.player-object-player-text h4 { margin: 0 0 .25rem; font-size: .8rem; font-weight: 700; }
 .player-inspector-empty-detail { margin: 0; }
 .player-object-relationship,
 .player-system-station-association { display: grid; justify-items: start; gap: .125rem; }

@@ -69,7 +69,7 @@
         <svg
           ref="mapElement"
           class="player-system-map-scene"
-          :class="{ 'player-system-map-scene--panning': panGesture !== null }"
+          :class="{ 'player-system-map-scene--panning': panGesture?.dragging }"
           role="group"
           :aria-label="`${props.label} player system map`"
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
@@ -77,11 +77,10 @@
           preserveAspectRatio="xMidYMid meet"
           tabindex="0"
           @keydown="handleMapKeydown"
+          @click.capture="suppressDraggedClick"
+          @contextmenu.prevent.stop
           @pointerdown.stop="startPan"
-          @pointermove.stop="movePan"
-          @pointerup.stop="finishPan"
-          @pointercancel.stop="cancelPan"
-          @lostpointercapture.stop="cancelPan"
+          @lostpointercapture.self.stop="cancelPan"
           @wheel.stop.prevent="handleWheel"
         >
           <g class="player-system-orbits" aria-hidden="true">
@@ -111,7 +110,7 @@
               :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
               role="button"
               tabindex="0"
-              @click.stop="emit('inspect-orbit', orbit.id)"
+              @click.stop="inspectOrbitFromClick($event, orbit.id)"
               @keydown="event => inspectOrbitFromKeyboard(event, orbit.id)"
             />
           </g>
@@ -128,15 +127,31 @@
             :aria-label="`Inspect ${object.label}`"
             :aria-pressed="props.selectedObjectId === object.id"
             tabindex="0"
-            @click="emit('inspect-object', object.id)"
+            @click="inspectObjectFromClick($event, object.id)"
             @keydown="event => inspectFromKeyboard(event, object.id)"
           >
-            <circle r="10" />
+            <circle
+              class="player-system-object-hit-target"
+              r="10"
+              fill="transparent"
+              stroke="none"
+              pointer-events="all"
+              aria-hidden="true"
+            />
+            <circle v-if="object.disclosure === 'unknown'" class="player-system-object-marker-art" r="10" />
+            <rect
+              class="player-system-object-selection-outline"
+              x="-15"
+              y="-15"
+              width="30"
+              height="30"
+              aria-hidden="true"
+            />
             <text
               v-if="objectPresentations.get(object.id)?.glyph"
               class="player-system-object-glyph"
               x="0"
-              y="5"
+              y="8"
               text-anchor="middle"
               aria-hidden="true"
             >{{ objectPresentations.get(object.id)?.glyph }}</text>
@@ -202,7 +217,7 @@ const viewport = usePlayerMapViewport({
   active: computed(() => props.active !== false),
   maximumZoom: computed(() => 4),
   getUsableClientRect: usableRectReader,
-  isInteractiveTarget: isObjectMarkerTarget,
+  isInteractiveTarget: isSystemMapInteractiveTarget,
 })
 const {
   canPan,
@@ -211,14 +226,13 @@ const {
   fitPlayerMap,
   handleMapKeydown,
   handleWheel,
-  movePan,
   panGesture,
   panView,
   resetViewport,
   revealPoint,
   startPan,
-  finishPan,
   cancelPan,
+  suppressDraggedClick,
   viewBox,
   zoomIn,
   zoomOut,
@@ -240,6 +254,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
+function isSystemMapInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof Element
+    && target.closest('.player-system-object-marker, .player-system-orbit-hit-target') !== null
+}
+
 function measureViewport(): void {
   const svg = mapElement.value
   if (!svg) return
@@ -249,11 +268,6 @@ function measureViewport(): void {
     width: svg.clientWidth || bounds.width,
     height: svg.clientHeight || bounds.height,
   }
-}
-
-function isObjectMarkerTarget(target: EventTarget | null): boolean {
-  return target instanceof Element
-    && target.closest('.player-system-object-marker, .player-system-orbit-hit-target') !== null
 }
 
 function playerOrbitLabel(orbit: PlayerOrbit): string {
@@ -266,6 +280,10 @@ function inspectOrbitFromKeyboard(event: KeyboardEvent, publicOrbitId: string): 
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   emit('inspect-orbit', publicOrbitId)
+}
+
+function inspectOrbitFromClick(event: MouseEvent, publicOrbitId: string): void {
+  if (event.button === 0) emit('inspect-orbit', publicOrbitId)
 }
 
 /** Reveals a current public target without changing selection or focus. */
@@ -285,6 +303,10 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   emit('inspect-object', publicObjectId)
+}
+
+function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void {
+  if (event.button === 0) emit('inspect-object', publicObjectId)
 }
 </script>
 
@@ -374,40 +396,47 @@ function inspectFromKeyboard(event: KeyboardEvent, publicObjectId: string): void
   cursor: pointer;
 }
 
-.player-system-object-marker circle {
+.player-system-object-hit-target {
+  pointer-events: all;
+}
+
+.player-system-object-marker-art {
   fill: var(--map-bg);
   stroke: var(--text-muted);
   stroke-width: 3;
 }
 
-.player-system-object-marker--known-type circle {
-  fill: var(--text-secondary);
-  stroke: var(--text-primary);
-}
-
-.player-system-object-marker--revealed circle {
-  fill: var(--accent, #a9d6b2);
-  stroke: var(--text-primary);
-}
-
-.player-system-object-marker--selected circle {
+.player-system-object-selection-outline {
+  fill: none;
   stroke: var(--map-selected, var(--accent));
-  stroke-width: 5;
+  stroke-width: 1.5;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.player-system-object-marker text {
+.player-system-object-marker--selected .player-system-object-selection-outline,
+.player-system-object-marker:focus-visible .player-system-object-selection-outline {
+  opacity: 1;
+}
+
+.player-system-object-label {
   fill: var(--text-primary);
   font: 16px Georgia, serif;
 }
 
 .player-system-object-glyph {
-  font-size: 14px;
-  pointer-events: none;
+  fill: var(--text-secondary);
+  font: 20px Consolas, monospace;
+  pointer-events: visiblePainted;
 }
 
-.player-system-object-marker:focus-visible circle {
+.player-system-object-marker--revealed .player-system-object-glyph {
+  fill: var(--accent);
+}
+
+.player-system-object-marker:focus-visible .player-system-object-selection-outline {
   stroke: var(--focus, var(--accent-hover));
-  stroke-width: 5;
+  stroke-width: 2;
 }
 
 .player-system-unoccupied-center {

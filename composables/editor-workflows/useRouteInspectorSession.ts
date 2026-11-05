@@ -84,6 +84,7 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
 /** Keeps route form values alive above the Inspector and validates before applying or finishing once. */
 export function useRouteInspectorSession({ workspace, mutations }: RouteInspectorSessionOptions) {
   const session = ref<RouteInspectorSession | null>(null)
+  const sessionGeneration = ref(0)
   let sequence = 0
   const hasModifiedRouteSession = computed(() => {
     const active = session.value
@@ -109,6 +110,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     if (routeId && !route) return null
     const draft = route ? routeDraft(route) : blankDraft()
     const id = ++sequence
+    sessionGeneration.value += 1
     session.value = createSession(id, current.cluster.id, routeId, draft)
     return id
   }
@@ -359,6 +361,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
 
   return {
     routeSession: session,
+    sessionGeneration,
     hasModifiedRouteSession,
     hasPendingHistoryChoice,
     beginRouteSession,

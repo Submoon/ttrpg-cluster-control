@@ -116,6 +116,7 @@ const emit = defineEmits<{
 }>()
 
 const maximumIndentLevels = 4
+const maximumDefaultExpandedDepth = 128
 const indentStep = 0.65
 const treeContainer = ref<HTMLElement | null>(null)
 const expandedKeys = ref<string[]>([])
@@ -124,7 +125,8 @@ const focusRequestNonce = ref(0)
 const hierarchy = computed(() => buildPlayerSystemHierarchy(props.document))
 const treeItems = computed(() => prepareTreeItems(hierarchy.value))
 const treeItemByKey = computed(() => indexTreeItems(treeItems.value))
-const ancestorKeysByKey = computed(() => indexAncestorKeys(treeItems.value))
+const initialExpandedKeys = computed(() => collectInitialExpandedKeys(treeItems.value))
+const parentKeyByKey = computed(() => indexParentKeys(treeItems.value))
 const selectedKey = computed(() => props.selectedObjectId
   ? `object:${props.selectedObjectId}`
   : props.selectedOrbitId ? `orbit:${props.selectedOrbitId}` : null)
@@ -134,9 +136,9 @@ const selectedTreeItem = computed(() => selectedKey.value
 
 watch(() => props.document, () => {
   focusRequestNonce.value += 1
-  expandedKeys.value = []
+  expandedKeys.value = initialExpandedKeys.value
   expandSelectedAncestors()
-}, { flush: 'sync' })
+}, { flush: 'sync', immediate: true })
 
 watch(selectedKey, () => {
   focusRequestNonce.value += 1
@@ -216,15 +218,27 @@ function indexTreeItems(items: PlayerTreeItem[]): Map<string, PlayerTreeItem> {
   return result
 }
 
-function indexAncestorKeys(items: PlayerTreeItem[]): Map<string, string[]> {
-  const result = new Map<string, string[]>()
-  const pending = items.map(item => ({ item, ancestors: [] as string[] }))
+/** Ordinary documents open fully; deeper paths stay available on demand to avoid Reka recursion overflow. */
+function collectInitialExpandedKeys(items: PlayerTreeItem[]): string[] {
+  const result: string[] = []
+  const pending = items.map(item => ({ item, depth: 1 }))
   while (pending.length) {
     const entry = pending.pop()!
-    result.set(entry.item.key, entry.ancestors)
+    if (!entry.item.children?.length || entry.depth >= maximumDefaultExpandedDepth) continue
+    result.push(entry.item.key)
+    for (const child of entry.item.children) pending.push({ item: child, depth: entry.depth + 1 })
+  }
+  return result
+}
+
+function indexParentKeys(items: PlayerTreeItem[]): Map<string, string | null> {
+  const result = new Map<string, string | null>()
+  const pending = items.map(item => ({ item, parentKey: null as string | null }))
+  while (pending.length) {
+    const entry = pending.pop()!
+    result.set(entry.item.key, entry.parentKey)
     if (!entry.item.children) continue
-    const ancestors = [...entry.ancestors, entry.item.key]
-    for (const child of entry.item.children) pending.push({ item: child, ancestors })
+    for (const child of entry.item.children) pending.push({ item: child, parentKey: entry.item.key })
   }
   return result
 }
@@ -236,8 +250,13 @@ function getTreeItemKey(item: PlayerTreeItem): string {
 function expandSelectedAncestors(): void {
   const key = selectedKey.value
   if (!key) return
-  const ancestors = ancestorKeysByKey.value.get(key)
-  if (!ancestors?.length) return
+  const ancestors: string[] = []
+  let parentKey = parentKeyByKey.value.get(key) ?? null
+  while (parentKey !== null) {
+    ancestors.push(parentKey)
+    parentKey = parentKeyByKey.value.get(parentKey) ?? null
+  }
+  if (!ancestors.length) return
   expandedKeys.value = [...new Set([...expandedKeys.value, ...ancestors])]
 }
 

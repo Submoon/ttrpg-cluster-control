@@ -21,6 +21,61 @@
         <p class="inspector-intro mb-[1em]">
           Routes reference logical Jump Points. A Station is a separate physical location.
         </p>
+        <p v-if="props.editorError" class="route-sharing-error" role="alert" aria-live="assertive">
+          {{ props.editorError }}
+        </p>
+        <section
+          v-if="selectedRouteSharingStatus"
+          class="route-sharing-control route-sharing-control--configured"
+          aria-label="Configured visibility"
+        >
+          <div class="route-sharing-control-heading">
+            <span class="section-kicker">CONFIGURED VISIBILITY</span>
+            <div role="group" aria-label="Jump Route visibility" class="route-sharing-buttons">
+              <UTooltip text="Keep this Jump Route private from players.">
+                <UButton
+                  aria-label="Set Jump Route visibility to Private"
+                  :aria-pressed="!selectedRoute.playerShared"
+                  :disabled="props.saving || props.publicationBusy"
+                  :color="selectedRoute.playerShared ? 'neutral' : 'primary'"
+                  :variant="selectedRoute.playerShared ? 'ghost' : 'soft'"
+                  class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
+                  size="sm"
+                  type="button"
+                  @click="emit('set-route-sharing', selectedRoute.id, false)"
+                >
+                  <UIcon name="i-lucide-eye-off" class="size-4" aria-hidden="true" />
+                  <span>Private</span>
+                </UButton>
+              </UTooltip>
+              <UTooltip text="Include this Jump Route in player publication when an endpoint system is visible.">
+                <UButton
+                  aria-label="Set Jump Route visibility to Shared"
+                  :aria-pressed="selectedRoute.playerShared"
+                  :disabled="props.saving || props.publicationBusy"
+                  :color="selectedRoute.playerShared ? 'primary' : 'neutral'"
+                  :variant="selectedRoute.playerShared ? 'soft' : 'ghost'"
+                  class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
+                  size="sm"
+                  type="button"
+                  @click="emit('set-route-sharing', selectedRoute.id, true)"
+                >
+                  <UIcon name="i-lucide-eye" class="size-4" aria-hidden="true" />
+                  <span>Shared</span>
+                </UButton>
+              </UTooltip>
+            </div>
+          </div>
+          <p class="inspector-intro m-0" role="status" aria-live="polite">
+            Configured visibility: {{ selectedRouteSharingStatus.visibilityLabel }}.
+          </p>
+          <p v-if="selectedRouteSharingStatus.noVisibleEndpointMessage" class="route-sharing-blocked" role="status">
+            {{ selectedRouteSharingStatus.noVisibleEndpointMessage }}
+          </p>
+          <p v-else-if="selectedRoute.playerShared" class="inspector-intro m-0">
+            Hidden systems are anonymized in the player view; logical Jump Point names remain private.
+          </p>
+        </section>
         <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
           <span>Endpoints</span>
           <strong class="text-right">{{ props.selectedRouteSummary }}</strong>
@@ -225,6 +280,7 @@ import {
 } from '../../domain/workspace'
 import type { RouteDraftField, RouteInspectorSession } from '../../composables/editor-workflows/useRouteInspectorSession'
 import ChartDetailsPanel from './ChartDetailsPanel.vue'
+import { routeSharingStatus } from '../../utils/gm-publication-badges'
 
 const props = defineProps<{
   workspace: LocalWorkspace
@@ -248,6 +304,7 @@ const emit = defineEmits<{
   'delete-system': [systemId: string]
   'show-chart-details': []
   'request-route-edit': [routeId: string]
+  'set-route-sharing': [routeId: string, playerShared: boolean]
   'delete-route': []
   'clear-error': []
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
@@ -257,6 +314,9 @@ const emit = defineEmits<{
 }>()
 
 const selectedRoute = computed(() => props.selectedRoute)
+const selectedRouteSharingStatus = computed(() => selectedRoute.value
+  ? routeSharingStatus(props.workspace.cluster, selectedRoute.value)
+  : null)
 const chartDetailsActive = computed(() => !props.selectedObject && !props.selectedOrbit && !selectedRoute.value && !props.session)
 const pickFromMap = '__route-pick-from-map__'
 const pickToMap = '__route-pick-to-map__'
@@ -436,6 +496,47 @@ function updateToPoint(value: unknown): void {
   margin-top: 1rem;
   border-top: 1px solid var(--line-soft);
   padding-top: 0.75rem;
+}
+
+.route-sharing-control--configured {
+  margin-block: 1rem;
+  border-block: 1px solid var(--line-soft);
+  padding-block: .8rem;
+}
+
+.route-sharing-control-heading {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  margin-bottom: .45rem;
+}
+
+.route-sharing-buttons {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .25rem;
+  border: 1px solid var(--line-soft);
+  border-radius: .45rem;
+  background: var(--panel-soft);
+  padding: .2rem;
+}
+
+.route-sharing-blocked,
+.route-sharing-error {
+  margin: .45rem 0 0;
+  border-left: 2px solid var(--warning-border, var(--line));
+  padding: .35rem .55rem;
+  color: var(--text-primary);
+  font-size: .78rem;
+}
+
+.route-sharing-error {
+  border-left-color: var(--error-border);
+  background: var(--error-bg);
 }
 
 .jump-route-details-footer {

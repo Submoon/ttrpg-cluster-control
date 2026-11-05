@@ -3,6 +3,7 @@ import {
   isPublicationMode,
   replaceWorkspaceSystem,
   updateChartDetails,
+  updateJumpRoute,
   updateSystemObject,
   type LocalWorkspace,
   type PublicationMode,
@@ -10,6 +11,7 @@ import {
 import type { useEditorUiStore } from '../../stores/editor-ui'
 import type { PublicationRequest, PublicationTarget } from './publication-types'
 import type { useEditorTransitions } from './useEditorTransitions'
+import type { RouteInspectorSession } from './useRouteInspectorSession'
 import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
 
 type PublicationUiStore = ReturnType<typeof useEditorUiStore>
@@ -19,6 +21,11 @@ export interface PublicationWorkflowOptions {
   store: PublicationUiStore
   mutations: WorkspaceMutationExecutor
   transitions: ReturnType<typeof useEditorTransitions>
+  routeSharing?: {
+    session: Readonly<Ref<RouteInspectorSession | null>>
+    sessionGeneration: Readonly<Ref<number>>
+    beforeWorkspaceOperation(): Promise<boolean>
+  }
   setError(message: string): void
 }
 
@@ -36,9 +43,15 @@ function publicationTargetExists(workspace: LocalWorkspace, target: PublicationT
     && system.objects.some(object => object.id === target.id))
 }
 
-/** Publishes one captured system/object mode through the existing transition, history and writer owners. */
+function routeTargetExists(workspace: LocalWorkspace, routeId: string): boolean {
+  return workspace.cluster.routes.some(route => route.id === routeId)
+}
+
+/** Publishes guarded visibility changes through the existing transition, history and writer owners. */
 export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
-  const { workspace, store, mutations, transitions, setError } = options
+  const {
+    workspace, store, mutations, transitions, routeSharing, setError,
+  } = options
   let requestSequence = 0
   const busy = ref(false)
 
@@ -148,5 +161,109 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
     }
   }
 
-  return { set, busy }
+  /** Changes only the committed sharing flag, preserving the latest route details and layout. */
+  async function setRouteSharing(routeId: string, playerShared: boolean): Promise<WorkspaceMutationResult> {
+    if (busy.value) return rejection('busy', 'Finish the current visibility change before starting another one.')
+    if (!routeSharing) {
+      return rejection('unavailable', 'Jump Route sharing is unavailable in this editor context.')
+    }
+    if (typeof routeId !== 'string' || !routeId || typeof playerShared !== 'boolean') {
+      const invalid = rejection('invalid', 'Choose an existing Jump Route and a valid sharing setting.')
+      setError(invalid.message)
+      return invalid
+    }
+
+    const current = workspace.value
+    if (!current || store.activeView !== 'cluster' || store.selectedRouteId !== routeId
+      || routeSharing.session.value !== null) {
+      return rejection('stale', 'That Jump Route is no longer available in its Inspect context.')
+    }
+    const route = current.cluster.routes.find(candidate => candidate.id === routeId)
+    if (!route) return rejection('stale', 'That Jump Route is no longer available.')
+    if (route.playerShared === playerShared) return { status: 'unchanged' }
+
+    const capturedWorkspaceId = current.id
+    const capturedClusterId = current.cluster.id
+    const capturedContext = contextSignature()
+    const capturedRouteSessionGeneration = routeSharing.sessionGeneration.value
+    const sequence = ++requestSequence
+    busy.value = true
+    const isCurrent = (): boolean => {
+      const latest = workspace.value
+      return sequence === requestSequence
+        && latest?.id === capturedWorkspaceId
+        && latest.cluster.id === capturedClusterId
+        && store.activeView === 'cluster'
+        && store.selectedRouteId === routeId
+        && routeSharing.session.value === null
+        && routeSharing.sessionGeneration.value === capturedRouteSessionGeneration
+        && contextSignature() === capturedContext
+        && !!latest && routeTargetExists(latest, routeId)
+    }
+
+    try {
+      if (!await routeSharing.beforeWorkspaceOperation() || !isCurrent()) {
+        return rejection('cancelled', 'Jump Route sharing was not changed because the workspace action was cancelled or became outdated.')
+      }
+      if (!await transitions.resolveTransition() || !isCurrent()) {
+        return rejection('cancelled', 'Jump Route sharing was not changed because the pending editor decision was cancelled or became outdated.')
+      }
+
+      const latest = workspace.value
+      const latestRoute = latest?.cluster.routes.find(candidate => candidate.id === routeId)
+      if (!latest || latest.id !== capturedWorkspaceId || latest.cluster.id !== capturedClusterId || !latestRoute) {
+        return rejection('stale', 'That Jump Route is no longer available.')
+      }
+      if (latestRoute.playerShared === playerShared) {
+        if (isCurrent()) setError('')
+        return { status: 'unchanged' }
+      }
+
+      const label = playerShared ? 'Shared with players' : 'Private'
+      const result = await mutations.execute({
+        action: {
+          kind: 'update',
+          label: `Set Jump Route visibility to ${label}`,
+          target: { kind: 'route', id: routeId },
+          parent: { kind: 'cluster', id: capturedClusterId },
+        },
+        prepare: currentWorkspace => {
+          const committedRoute = currentWorkspace.cluster.routes.find(candidate => candidate.id === routeId)
+          if (!committedRoute) throw new Error('The selected Jump Route no longer exists.')
+          if (committedRoute.playerShared === playerShared) return currentWorkspace
+
+          const updatedRoute = updateJumpRoute(
+            currentWorkspace.cluster,
+            committedRoute.id,
+            committedRoute.jumpLevel,
+            committedRoute.fromPointId,
+            committedRoute.toPointId,
+            committedRoute.unresolvedExit,
+            playerShared,
+          )
+          return {
+            ...currentWorkspace,
+            cluster: {
+              ...currentWorkspace.cluster,
+              routes: currentWorkspace.cluster.routes.map(candidate =>
+                candidate.id === routeId ? updatedRoute : candidate),
+            },
+          }
+        },
+        isCurrent,
+      })
+
+      if (result.status === 'rejected') {
+        if (isCurrent()) setError(result.message)
+        return result
+      }
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      if (isCurrent()) setError('')
+      return result
+    } finally {
+      if (sequence === requestSequence) busy.value = false
+    }
+  }
+
+  return { set, setRouteSharing, busy }
 }

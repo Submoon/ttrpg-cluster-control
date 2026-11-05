@@ -457,6 +457,13 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   }
   const leafOrbitId = addOrbit(30, 'object-31')
   addRevealedPlanet('object-32', 'Deep leaf', { kind: 'orbit', orbitId: leafOrbitId, angle: 0 }, 32)
+  let previousObjectId = 'object-32'
+  for (let extension = 1; extension <= 55; extension += 1) {
+    const orbitId = addOrbit(30 + extension, previousObjectId)
+    const objectId = `object-${32 + extension}`
+    addRevealedPlanet(objectId, `Extension ${extension}`, { kind: 'orbit', orbitId, angle: 0 }, 32 + extension)
+    previousObjectId = objectId
+  }
 
   const document: PlayerClusterDocument = {
     format: 'ttrpg-cluster-control-player',
@@ -497,7 +504,6 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   const longHost = tree.getByRole('treeitem', { name: /^Custom Other / })
   await expect(longHost).toHaveAttribute('aria-level', '1')
   expect(await longHost.textContent()).toContain(longSubtype)
-  await longHost.press('ArrowRight')
   await expect(longHost).toHaveAttribute('aria-expanded', 'true')
 
   const hostOrbits = tree.getByRole('treeitem', { name: /^Orbit around Custom Other / })
@@ -505,7 +511,6 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   for (let index = 0; index < 20; index += 1) {
     const orbit = hostOrbits.nth(index)
     await expect(orbit).toHaveAttribute('aria-level', '2')
-    await orbit.press('ArrowRight')
     await expect(orbit).toHaveAttribute('aria-expanded', 'true')
   }
 
@@ -524,11 +529,9 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   for (let link = 1; link <= 10; link += 1) {
     const object = tree.getByRole('treeitem', { name: new RegExp(`^Link ${link},`) })
     await expect(object).toHaveAttribute('aria-level', String(link * 2 - 1))
-    await object.press('ArrowRight')
     await expect(object).toHaveAttribute('aria-expanded', 'true')
     const orbit = tree.getByRole('treeitem', { name: `Orbit around Link ${link}`, exact: true })
     await expect(orbit).toHaveAttribute('aria-level', String(link * 2))
-    await orbit.press('ArrowRight')
     await expect(orbit).toHaveAttribute('aria-expanded', 'true')
   }
 
@@ -538,6 +541,15 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   expect(deepContext).toBe('Orbit around Link 10')
   expect(deepContext).not.toContain('Link 9')
   expect(deepContext).not.toContain('→')
+
+  const lastInitiallyExpandedOrbit = tree.getByRole('treeitem', { name: 'Orbit around Extension 53', exact: true })
+  await expect(lastInitiallyExpandedOrbit).toHaveAttribute('aria-level', '128')
+  await expect(lastInitiallyExpandedOrbit).toHaveAttribute('aria-expanded', 'false')
+  const beyondDefaultDepth = tree.getByRole('treeitem', { name: /^Extension 54,/ })
+  await expect(beyondDefaultDepth).toHaveCount(0)
+  await tree.getByRole('button', { name: 'Expand Orbit around Extension 53', exact: true }).click()
+  await expect(beyondDefaultDepth).toHaveAttribute('aria-level', '129')
+  await expect(beyondDefaultDepth).toHaveAttribute('aria-expanded', 'false')
 
   const hierarchyPanel = page.locator('#workspace-hierarchy-panel')
   const resizeHandle = hierarchyPanel.getByRole('separator', { name: 'Resize player hierarchy panel', exact: true })

@@ -105,7 +105,7 @@ function campaignWithNestedPublicSystem(): ExportedMap {
     throw new Error('The nested system fixture is missing its public object host chain.')
   }
 
-  rootHost.publication = 'hidden'
+  rootHost.publication = 'known-type'
   rootHost.name = 'PRIVATE_ROOT_HOST_NAME'
   rootHost.locationKey = 'PRIVATE_ROOT_HOST_KEY'
   rootHost.description = 'PRIVATE_ROOT_HOST_GM_NOTES'
@@ -198,6 +198,7 @@ async function inspectPlayerImageSvg(
       .map(attribute => ({ name: attribute.name, value: attribute.value })))
     const unknownMarkerSelector = '.player-system-object-marker:not(.player-system-object-marker--known-type):not(.player-system-object-marker--revealed)'
     const unknownMarker = svg.querySelector<SVGGElement>(unknownMarkerSelector)
+    const knownMarker = svg.querySelector<SVGGElement>('.player-system-object-marker--known-type')
     const revealedMarker = svg.querySelector<SVGGElement>('.player-system-object-marker--revealed')
     const objectMarkers = [...svg.querySelectorAll<SVGGElement>('.player-system-object-marker')]
     const orbitEllipses = [...svg.querySelectorAll<SVGEllipseElement>('.player-system-orbits ellipse')]
@@ -214,6 +215,9 @@ async function inspectPlayerImageSvg(
       markerGlyphs: objectMarkers.map(marker =>
         marker.querySelector('text.player-system-object-glyph')?.textContent?.trim() ?? null,
       ),
+      markerCircleCounts: objectMarkers.map(marker => marker.querySelectorAll('circle').length),
+      markerHitTargetCount: svg.querySelectorAll('.player-system-object-hit-target').length,
+      knownMarkerCount: svg.querySelectorAll('.player-system-object-marker--known-type').length,
       unknownMarkerCount: svg.querySelectorAll(unknownMarkerSelector).length,
       revealedMarkerCount: svg.querySelectorAll('.player-system-object-marker--revealed').length,
       orbitCount: svg.querySelectorAll('.player-system-orbits ellipse').length,
@@ -236,7 +240,8 @@ async function inspectPlayerImageSvg(
         .map(element => element.getAttribute('fill'))
         .filter((value): value is string => value !== null),
       unknownStroke: unknownMarker?.querySelector('circle')?.getAttribute('stroke') ?? null,
-      revealedFill: revealedMarker?.querySelector('circle')?.getAttribute('fill') ?? null,
+      knownGlyphFill: knownMarker?.querySelector('text.player-system-object-glyph')?.getAttribute('fill') ?? null,
+      revealedGlyphFill: revealedMarker?.querySelector('text.player-system-object-glyph')?.getAttribute('fill') ?? null,
     }
   }, content)
 }
@@ -632,17 +637,23 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   expect(active.rootLabel).toBe('PUBLIC_SYSTEM_NAME player system map')
   expect(active.textNodes).toContain('PUBLIC_SYSTEM_NAME')
   expect(active.textNodes).toContain('PUBLIC_NIX')
-  expect(active.markerLabels).toEqual(['Unknown presence', 'Unknown presence', 'PUBLIC_NIX'])
-  expect(active.unknownMarkerCount).toBe(2)
+  expect(active.markerLabels).toEqual(['Star', 'Unknown presence', 'PUBLIC_NIX'])
+  expect(active.markerCircleCounts).toEqual([0, 1, 0])
+  expect(active.knownMarkerCount).toBe(1)
+  expect(active.unknownMarkerCount).toBe(1)
   expect(active.revealedMarkerCount).toBe(1)
   expect(active.orbitCount).toBe(2)
-  expect(active.markerGlyphs).toEqual([null, null, '☾'])
+  expect(active.markerGlyphs).toEqual(['✦', null, '☾'])
   expect(active.orbitDashPatterns).toEqual(['3 6', '3 6'])
+  expect(active.markerHitTargetCount).toBe(0)
   const activeBackgroundFill = requireSvgColor(active.backgroundFill, 'background')
   expect(activeBackgroundFill).toBe('#0c1719')
   expect(active.textFills.length).toBeGreaterThan(0)
   for (const fill of active.textFills) expect(contrastRatio(fill, activeBackgroundFill)).toBeGreaterThanOrEqual(4.5)
-  const activeRevealedFill = requireSvgColor(active.revealedFill, 'revealed marker fill')
+  const activeKnownGlyphFill = requireSvgColor(active.knownGlyphFill, 'known-type glyph fill')
+  expect(activeKnownGlyphFill).toBe('#c0cbc4')
+  expect(contrastRatio(activeKnownGlyphFill, activeBackgroundFill)).toBeGreaterThanOrEqual(3)
+  const activeRevealedFill = requireSvgColor(active.revealedGlyphFill, 'revealed glyph fill')
   expect(activeRevealedFill).toBe('#efa16f')
   expect(contrastRatio(activeRevealedFill, activeBackgroundFill)).toBeGreaterThanOrEqual(3)
   const activeUnknownStroke = requireSvgColor(active.unknownStroke, 'unknown marker stroke')
@@ -693,16 +704,22 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   expect(printed.rootLabel).toBe(active.rootLabel)
   expect(printed.textNodes).toEqual(active.textNodes)
   expect(printed.markerLabels).toEqual(active.markerLabels)
-  expect(printed.unknownMarkerCount).toBe(2)
+  expect(printed.markerCircleCounts).toEqual(active.markerCircleCounts)
+  expect(printed.knownMarkerCount).toBe(1)
+  expect(printed.unknownMarkerCount).toBe(1)
   expect(printed.revealedMarkerCount).toBe(1)
   expect(printed.orbitCount).toBe(2)
   expect(printed.markerGlyphs).toEqual(active.markerGlyphs)
+  expect(printed.markerHitTargetCount).toBe(0)
   expect(printed.orbitDashPatterns).toEqual(active.orbitDashPatterns)
   const printedBackgroundFill = requireSvgColor(printed.backgroundFill, 'print background')
   expect(printedBackgroundFill).toBe('#f5f4ee')
   expect(printed.textFills.length).toBeGreaterThan(0)
   for (const fill of printed.textFills) expect(contrastRatio(fill, printedBackgroundFill)).toBeGreaterThanOrEqual(4.5)
-  const printedRevealedFill = requireSvgColor(printed.revealedFill, 'print revealed marker fill')
+  const printedKnownGlyphFill = requireSvgColor(printed.knownGlyphFill, 'print known-type glyph fill')
+  expect(printedKnownGlyphFill).toBe('#45504a')
+  expect(contrastRatio(printedKnownGlyphFill, printedBackgroundFill)).toBeGreaterThanOrEqual(3)
+  const printedRevealedFill = requireSvgColor(printed.revealedGlyphFill, 'print revealed glyph fill')
   expect(printedRevealedFill).toBe('#9c4a16')
   expect(contrastRatio(printedRevealedFill, printedBackgroundFill)).toBeGreaterThanOrEqual(3)
   const printedUnknownStroke = requireSvgColor(printed.unknownStroke, 'print unknown marker stroke')

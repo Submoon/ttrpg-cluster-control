@@ -34,6 +34,7 @@
         @delete-system="emit('delete-system', $event)"
         @show-chart-details="emit('show-chart-details')"
         @request-route-edit="emit('request-route-edit', $event)"
+        @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
         @choose-route-point="(sessionId, pointId) => emit('choose-route-point', sessionId, pointId)"
         @apply-route-session="emit('apply-route-session', $event)"
@@ -192,6 +193,7 @@ const emit = defineEmits<{
   'detach-orbit': []
   'delete-orbit': []
   'request-route-edit': [routeId: string]
+  'set-route-sharing': [routeId: string, playerShared: boolean]
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]

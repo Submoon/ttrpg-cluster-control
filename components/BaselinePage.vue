@@ -443,6 +443,7 @@
               @detach-orbit="detachSelectedOrbit"
               @delete-orbit="deleteSelectedOrbit"
               @request-route-edit="beginRouteEdit"
+              @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
@@ -761,6 +762,7 @@ const { navigation, inspector, charts, fields, cluster, placement, mapControls, 
 const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
 const publicationBusy = publicationControls.busy
+const setRouteSharing = publicationControls.setRouteSharing
 const publicationMenuMode = computed(() => {
   const request = publicationMenuRequest.value
   if (!workspace.value || !request) return null

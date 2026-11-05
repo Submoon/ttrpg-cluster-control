@@ -16,7 +16,7 @@
       v-if="props.document.systems.length"
       ref="mapElement"
       class="player-cluster-map-scene"
-      :class="{ 'player-cluster-map-scene--panning': panGesture !== null }"
+      :class="{ 'player-cluster-map-scene--panning': panGesture?.dragging }"
       role="group"
       :aria-label="`${props.document.title} player map`"
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
@@ -24,11 +24,10 @@
       preserveAspectRatio="xMidYMid meet"
       tabindex="0"
       @keydown="handleMapKeydown"
+      @click.capture="suppressDraggedClick"
+      @contextmenu.prevent.stop
       @pointerdown.stop="startPan"
-      @pointermove.stop="movePan"
-      @pointerup.stop="finishPan"
-      @pointercancel.stop="cancelPan"
-      @lostpointercapture.stop="cancelPan"
+      @lostpointercapture.self.stop="cancelPan"
       @wheel.stop.prevent="handleWheel"
     >
       <g
@@ -72,7 +71,7 @@
         :role="system.disclosure === 'revealed' ? 'button' : 'group'"
         :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} system preview` : system.label"
         :tabindex="system.disclosure === 'revealed' ? 0 : undefined"
-        @click="openSystem(system)"
+        @click="openSystem($event, system)"
         @keydown="event => openSystemFromKeyboard(event, system)"
       >
         <g class="player-cluster-map-marker-geometry" aria-hidden="true">
@@ -153,7 +152,7 @@ const viewport = usePlayerMapViewport({
   active: computed(() => props.active),
   maximumZoom,
   getUsableClientRect: usableRectReader,
-  isInteractiveTarget: isSystemMarkerTarget,
+  isInteractiveTarget: isClusterMarkerTarget,
 })
 const {
   canPan,
@@ -162,13 +161,12 @@ const {
   fitPlayerMap,
   handleMapKeydown,
   handleWheel,
-  movePan,
   panGesture,
   panView,
   resetViewport,
   startPan,
-  finishPan,
   cancelPan,
+  suppressDraggedClick,
   viewBox,
   zoomIn,
   zoomOut,
@@ -194,6 +192,10 @@ onMounted(() => {
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const labelOffset = { x: 28, y: 7 }
+
+function isClusterMarkerTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.player-cluster-map-marker') !== null
+}
 
 function markerHitBoundsFor(systemId: string): MarkerHitBounds | undefined {
   return markerHitBounds.value.get(systemId)
@@ -238,12 +240,8 @@ function measureViewport(): void {
   }
 }
 
-function isSystemMarkerTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('.player-cluster-map-marker') !== null
-}
-
-function openSystem(system: PlayerSystemMarker): void {
-  if (system.disclosure === 'revealed') emit('open-system', system.id)
+function openSystem(event: MouseEvent, system: PlayerSystemMarker): void {
+  if (event.button === 0 && system.disclosure === 'revealed') emit('open-system', system.id)
 }
 
 function openSystemFromKeyboard(event: KeyboardEvent, system: PlayerSystemMarker): void {

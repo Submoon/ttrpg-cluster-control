@@ -273,24 +273,22 @@ function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, pain
     'aria-label': object.label,
     transform: `translate(${object.position.x} ${object.position.y})`,
   })
-  const fill = object.disclosure === 'unknown'
-    ? paint.mapBackground
-    : object.disclosure === 'known-type' ? paint.textSecondary : paint.accent
-  const stroke = object.disclosure === 'unknown' ? paint.textMuted : paint.textPrimary
-  appendSvg(marker, 'circle', {
-    r: 10,
-    fill,
-    stroke,
-    'stroke-width': 3,
-  })
-  if (presentation.glyph !== null) {
+  if (object.disclosure === 'unknown') {
+    appendSvg(marker, 'circle', {
+      class: 'player-system-object-marker-art',
+      r: 10,
+      fill: paint.mapBackground,
+      stroke: paint.textMuted,
+      'stroke-width': 3,
+    })
+  } else if (presentation.glyph !== null) {
     appendText(marker, presentation.glyph, {
       class: 'player-system-object-glyph',
       x: 0,
-      y: 5,
-      fill: paint.textPrimary,
-      'font-family': 'Georgia, serif',
-      'font-size': 14,
+      y: 8,
+      fill: object.disclosure === 'revealed' ? paint.accent : paint.textSecondary,
+      'font-family': 'Consolas, monospace',
+      'font-size': 20,
       'text-anchor': 'middle',
       'aria-hidden': true,
     })

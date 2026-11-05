@@ -63,7 +63,13 @@ import {
 } from '../utils/map-zoom'
 import { revealSvgPoint, revealSvgTarget, svgCirclePaintedBounds } from '../utils/reveal-svg-target'
 import type { MapHistoryTarget } from '../composables/editor-workflows/types'
-import { appendPublicationBadge, describeMapPublication } from '../utils/gm-publication-badges'
+import {
+  appendPublicationBadge,
+  appendRouteSharingBadge,
+  describeMapPublication,
+  describeRouteSharing,
+  routeSharingStatus,
+} from '../utils/gm-publication-badges'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -690,6 +696,7 @@ function render(): void {
     .attr('tabindex', 0)
     .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
 
+  const routePublicationBadges = new Map<string, SVGGElement>()
   routeMarks.each(function (route) {
     const geometry = clusterRouteGeometry(
       route,
@@ -703,6 +710,23 @@ function render(): void {
     const mark = select(this)
     const label = `Jump-${route.jumpLevel}`
     const labelWidth = clusterRouteLabelWidth(route)
+    const sharingStatus = routeSharingStatus(props.cluster, route, jumpPoints)
+    describeRouteSharing(this, `route-${route.id}`, sharingStatus)
+
+    const badgeGroup = publicationDecorations.append('g')
+      .attr('class', 'cluster-route-publication')
+      .attr('data-route-id', route.id)
+      .attr('transform', `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`)
+      .node()
+    if (badgeGroup) {
+      appendRouteSharingBadge(badgeGroup, {
+        identity: `route-${route.id}`,
+        playerShared: route.playerShared,
+        hasVisibleEndpoint: sharingStatus.hasVisibleEndpoint,
+        position: { x: 0, y: 0 },
+      })
+      routePublicationBadges.set(route.id, badgeGroup)
+    }
 
     mark.append('path')
       .attr('class', 'cluster-route-line')
@@ -852,6 +876,10 @@ function render(): void {
       mark.select('.cluster-route-label')
         .attr('x', geometry.labelX)
         .attr('y', geometry.labelY + 2)
+      routePublicationBadges.get(route.id)?.setAttribute(
+        'transform',
+        `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`,
+      )
 
       if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
         const exitLabel = geometry.exitLabel

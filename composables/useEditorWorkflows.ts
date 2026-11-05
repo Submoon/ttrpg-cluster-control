@@ -137,6 +137,11 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     store,
     mutations,
     transitions,
+    routeSharing: {
+      session: route.routeSession,
+      sessionGeneration: route.sessionGeneration,
+      beforeWorkspaceOperation,
+    },
     setError: message => { editorError.value = message },
   })
   const publicationMenu = usePublicationMenu({
@@ -397,6 +402,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   return {
     publication: {
       set: publicationCommands.set,
+      setRouteSharing: publicationCommands.setRouteSharing,
       busy: publicationCommands.busy,
       menuRequest: publicationMenu.request,
       openMenu: publicationMenu.openMenu,

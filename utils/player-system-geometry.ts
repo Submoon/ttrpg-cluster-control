@@ -1,7 +1,10 @@
 /** Conservative public Star System bounds shared by the preview and image renderer. */
 import type { PlayerSystemDocument } from '../domain/player-projection'
 
-const OBJECT_MARKER_RADIUS = 10
+const UNKNOWN_MARKER_RADIUS = 10
+const OBJECT_GLYPH_HALF_WIDTH = 12
+const OBJECT_GLYPH_TOP = 16
+const OBJECT_GLYPH_BOTTOM = 10
 const UNOCCUPIED_CENTER_RADIUS = 3
 const OBJECT_LABEL_OFFSET = 16
 const OBJECT_LABEL_CHARACTER_ADVANCE = 18
@@ -41,18 +44,26 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new Error('A public Star System has invalid rendered geometry.')
     }
-    includeRect(
-      bounds,
-      x - OBJECT_MARKER_RADIUS,
-      y - OBJECT_MARKER_RADIUS,
-      x + OBJECT_MARKER_RADIUS,
-      y + OBJECT_MARKER_RADIUS,
-    )
-    if (object.disclosure !== 'unknown') {
+    if (object.disclosure === 'unknown') {
+      includeRect(
+        bounds,
+        x - UNKNOWN_MARKER_RADIUS,
+        y - UNKNOWN_MARKER_RADIUS,
+        x + UNKNOWN_MARKER_RADIUS,
+        y + UNKNOWN_MARKER_RADIUS,
+      )
+    } else {
+      includeRect(
+        bounds,
+        x - OBJECT_GLYPH_HALF_WIDTH,
+        y - OBJECT_GLYPH_TOP,
+        x + OBJECT_GLYPH_HALF_WIDTH,
+        y + OBJECT_GLYPH_BOTTOM,
+      )
       includeRect(
         bounds,
         x + OBJECT_LABEL_OFFSET,
-        y - OBJECT_MARKER_RADIUS,
+        y - UNKNOWN_MARKER_RADIUS,
         x + OBJECT_LABEL_OFFSET + object.label.length * OBJECT_LABEL_CHARACTER_ADVANCE,
         y + 12,
       )

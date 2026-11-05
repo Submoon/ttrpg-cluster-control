@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { computed, createRenderer, ref, type Ref } from 'vue'
-import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { createJumpRoute, createLocalWorkspace, createSystemObject, type LocalWorkspace } from '../domain/workspace'
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { EntityInspectorSession } from '../composables/editor-workflows/types'
-import type { RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
+import { useRouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import { useChartNamesSession } from '../composables/editor-workflows/useChartNamesSession'
 import { useEditorTransitions } from '../composables/editor-workflows/useEditorTransitions'
 import { usePublicationWorkflows } from '../composables/editor-workflows/usePublicationWorkflows'
@@ -58,6 +58,8 @@ function addSecondSystem(workspace: LocalWorkspace): void {
 function createHarness(options: {
   secondSystem?: boolean
   parentHidden?: boolean
+  includeRoute?: boolean
+  beforeWorkspaceOperation?: () => Promise<boolean>
   historyLimits?: Partial<WorkspaceHistoryLimits>
   confirmCapacity?: (signal: AbortSignal) => Promise<boolean>
 } = {}) {
@@ -68,6 +70,15 @@ function createHarness(options: {
   const object = first?.objects[0]
   if (!first || !object) throw new Error('The test workspace must contain a map object.')
   if (options.parentHidden) first.publication = 'hidden'
+  const route = options.includeRoute
+    ? (() => {
+        const point = createSystemObject(first, 'jump-point')
+        first.objects.push(point)
+        const created = createJumpRoute(initial.cluster, 1, point.id, null, 'Uncharted exit')
+        initial.cluster.routes.push(created)
+        return created
+      })()
+    : null
 
   const workspace = ref<LocalWorkspace | null>(initial)
   let revision = 0
@@ -86,6 +97,7 @@ function createHarness(options: {
   let mounted: {
     store: ReturnType<typeof useEditorUiStore>
     chart: ReturnType<typeof useChartNamesSession>
+    route: ReturnType<typeof useRouteInspectorSession>
     transitions: ReturnType<typeof useEditorTransitions>
     publication: ReturnType<typeof usePublicationWorkflows>
   } | undefined
@@ -102,6 +114,7 @@ function createHarness(options: {
         mutations: history,
         selectedSystem,
       })
+      const routeSession = useRouteInspectorSession({ workspace, mutations: history })
       const transitions = useEditorTransitions({
         chart: {
           session: chart.session,
@@ -117,10 +130,10 @@ function createHarness(options: {
           discard: () => undefined,
         },
         route: {
-          session: ref<RouteInspectorSession | null>(null),
-          hasModified: ref(false),
-          apply: async () => true,
-          discard: () => undefined,
+          session: routeSession.routeSession,
+          hasModified: routeSession.hasModifiedRouteSession,
+          apply: routeSession.applyRouteSession,
+          discard: routeSession.discardRouteSession,
         },
         clearEditorError: () => undefined,
       })
@@ -129,9 +142,14 @@ function createHarness(options: {
         store,
         mutations: history,
         transitions,
+        routeSharing: {
+          session: routeSession.routeSession,
+          sessionGeneration: routeSession.sessionGeneration,
+          beforeWorkspaceOperation: options.beforeWorkspaceOperation ?? (async () => true),
+        },
         setError: () => undefined,
       })
-      mounted = { store, chart, transitions, publication }
+      mounted = { store, chart, route: routeSession, transitions, publication }
       return () => null
     },
   })
@@ -144,7 +162,7 @@ function createHarness(options: {
     history.dispose()
   }
 
-  return { workspace, history, ...active, dispose }
+  return { workspace, history, routeId: route?.id ?? null, ...active, dispose }
 }
 
 function objectTarget(harness: ReturnType<typeof createHarness>): PublicationTarget {
@@ -336,6 +354,43 @@ test('capacity consent cannot publish after the editor context changes @pure', a
     expect(harness.history.getEntries()).toHaveLength(0)
   } finally {
     resolveCapacity?.(false)
+    harness.dispose()
+  }
+})
+
+test('route sharing does not overwrite a route draft opened during preflight @pure', async () => {
+  let markPreflightStarted: (() => void) | undefined
+  let resolvePreflight: ((accepted: boolean) => void) | undefined
+  const preflightStarted = new Promise<void>(resolve => { markPreflightStarted = resolve })
+  const preflight = new Promise<boolean>(resolve => { resolvePreflight = resolve })
+  const harness = createHarness({
+    includeRoute: true,
+    beforeWorkspaceOperation: async () => {
+      markPreflightStarted?.()
+      return preflight
+    },
+  })
+  try {
+    const routeId = harness.routeId
+    if (!routeId) throw new Error('The workflow test needs a committed Jump Route.')
+    harness.store.activeView = 'cluster'
+    harness.store.selectedRouteId = routeId
+    const routeBefore = harness.workspace.value!.cluster.routes.find(route => route.id === routeId)
+    if (!routeBefore) throw new Error('The workflow test lost its committed Jump Route.')
+
+    const pending = harness.publication.setRouteSharing(routeId, true)
+    await preflightStarted
+    const sessionId = harness.route.beginRouteSession(routeId)
+    if (sessionId === null) throw new Error('The route Inspector draft must begin during preflight.')
+    harness.route.updateRouteInput(sessionId, 'jumpLevel', '9')
+    resolvePreflight?.(true)
+
+    expect(await pending).toMatchObject({ status: 'rejected', reason: 'cancelled' })
+    expect(harness.workspace.value?.cluster.routes.find(route => route.id === routeId)).toEqual(routeBefore)
+    expect(harness.history.getEntries()).toHaveLength(0)
+    expect(harness.route.routeSession.value?.draft.jumpLevel).toBe('9')
+  } finally {
+    resolvePreflight?.(false)
     harness.dispose()
   }
 })

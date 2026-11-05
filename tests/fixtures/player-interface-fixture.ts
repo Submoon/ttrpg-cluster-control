@@ -5,10 +5,12 @@ import {
   projectPlayerCluster,
   serializePlayerJson,
 } from '../../domain/workspace'
-import type { PlayerClusterDocument, SystemObject } from '../../domain/workspace'
+import type { PlayerClusterDocument, Point, SystemObject } from '../../domain/workspace'
 
 /** Builds the shared public input for player interface regression scenarios. */
-export function createPlayerInterfaceFixture(): { document: PlayerClusterDocument; json: string } {
+export function createPlayerInterfaceFixture(
+  unoccupiedOrbitCenter: Point = { x: 0.8, y: 0.72 },
+): { document: PlayerClusterDocument; json: string } {
   const workspace = createLocalWorkspace('PRIVATE_SOURCE_CLUSTER_NAME', 'PRIVATE_SOURCE_SYSTEM_NAME')
   const system = workspace.cluster.systems[0]!
   const star: SystemObject = {
@@ -109,7 +111,7 @@ export function createPlayerInterfaceFixture(): { document: PlayerClusterDocumen
   system.orbits = [
     { id: 'source-host-orbit', hostId: hiddenHost.id, order: 1 },
     { id: 'source-harbor-orbit', hostId: harborWorld.id, order: 1 },
-    { id: 'source-unoccupied-orbit', hostId: null, center: { x: 0.8, y: 0.72 }, order: 1 },
+    { id: 'source-unoccupied-orbit', hostId: null, center: unoccupiedOrbitCenter, order: 1 },
   ]
   workspace.cluster.name = 'PRIVATE_SOURCE_CLUSTER_NAME'
   workspace.cluster.playerTitle = 'Interface Reach'

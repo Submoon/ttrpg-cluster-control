@@ -3,11 +3,16 @@ import {
   captureMapExportBlobs,
   createSingleSystemWorkspace,
   downloadJson,
+  downloadImage,
   editMapObject,
   openChartDetails,
   openWorkspaceHierarchy,
+  returnToClusterMap,
+  selectInspectorOption,
+  setWorkspaceMapMode,
   waitForWorkspaceSaved,
 } from './helpers'
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
 const modes = ['Hidden', 'Unknown presence', 'Known type', 'Revealed'] as const
 
@@ -200,4 +205,160 @@ test('visibility buttons fit the minimum Inspector width for systems and objects
   const screenshot = testInfo.outputPath('quick-publication-minimum-inspector.png')
   await panel.screenshot({ path: screenshot })
   await testInfo.attach('quick-publication-minimum-inspector', { path: screenshot, contentType: 'image/png' })
+})
+
+async function revealHarrow(page: import('@playwright/test').Page): Promise<void> {
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
+    .getByRole('button', { name: 'Open Harrow system map', exact: true }).click()
+  const systemDetails = await openChartDetails(page)
+  const systemVisibility = systemDetails.getByRole('region', { name: 'Configured visibility', exact: true })
+  await systemVisibility.getByRole('button', { name: 'Set visibility to Revealed', exact: true }).click()
+  await expect(systemVisibility.getByRole('button', { name: 'Set visibility to Revealed', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await waitForWorkspaceSaved(page)
+  await returnToClusterMap(page)
+}
+
+test('route Inspect sharing is a committed setting with a status badge, history, and image preservation', async ({ page }, testInfo) => {
+  await importCampaignWorkspace(page)
+  await setWorkspaceMapMode(page, 'Select')
+
+  const source = await downloadJson(page, 'Export Jump Cluster JSON')
+  const initialRoute = source.cluster?.routes[0]
+  if (!source.cluster || !initialRoute) throw new Error('The imported campaign must contain its Jump Route.')
+  expect(initialRoute.playerShared).toBe(false)
+  const originSystem = source.cluster.systems.find(system =>
+    system.objects.some(object => object.id === initialRoute.fromPointId),
+  )
+  const destinationSystem = source.cluster.systems.find(system =>
+    system.objects.some(object => object.id === initialRoute.toPointId),
+  )
+  if (!originSystem || !destinationSystem || !initialRoute.toPointId) {
+    throw new Error('The imported route must resolve to both endpoint systems.')
+  }
+  expect(originSystem.publication).toBe('hidden')
+  expect(destinationSystem.publication).toBe('hidden')
+
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  const routeMark = clusterMap.locator(`.cluster-route[data-route-id="${initialRoute.id}"]`)
+  await routeMark.click()
+  const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  const visibility = routeInspector.getByRole('region', { name: 'Configured visibility', exact: true })
+  await expect(visibility).toBeVisible()
+  const privateButton = visibility.getByRole('button', { name: 'Set Jump Route visibility to Private', exact: true })
+  const sharedButton = visibility.getByRole('button', { name: 'Set Jump Route visibility to Shared', exact: true })
+  await expect(privateButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(sharedButton).toHaveAttribute('aria-pressed', 'false')
+  await expect(routeMark).toHaveAttribute('aria-describedby', /^gm-publication-description-/)
+  await expect(clusterMap.locator('desc.gm-publication-description').filter({ hasText: 'Configured visibility: Private' })).toHaveCount(1)
+
+  const clusterBeforePublication = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  if (!clusterBeforePublication.text) throw new Error('The cluster SVG export must contain text.')
+  expect(clusterBeforePublication.text).not.toContain('gm-publication')
+  expect(clusterBeforePublication.text).not.toContain('Configured visibility:')
+
+  await sharedButton.click()
+  await expect(visibility).toContainText('Configured visibility: Shared with players.')
+  await expect(visibility).toContainText(
+    'This shared route has no visible endpoint because both endpoint systems are Hidden.',
+  )
+  const routeBadge = clusterMap.locator(`.gm-publication-decorations [data-route-id="${initialRoute.id}"] .gm-publication-badge`)
+  await expect(routeBadge).toHaveAttribute('data-route-sharing', 'shared')
+  await expect(routeBadge.locator('.gm-publication-lock-icon')).toHaveCount(1)
+  await expect(clusterMap.locator('.cluster-map-items .gm-publication-badge')).toHaveCount(0)
+  const screenshot = testInfo.outputPath('route-sharing-inspect-desktop.png')
+  await page.screenshot({ path: screenshot, fullPage: true, animations: 'disabled' })
+  await testInfo.attach('route-sharing-inspect-desktop', { path: screenshot, contentType: 'image/png' })
+
+  await waitForWorkspaceSaved(page)
+  const shared = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(shared.cluster?.routes.find(route => route.id === initialRoute.id))
+    .toEqual({ ...initialRoute, playerShared: true })
+  expect(shared.layout).toEqual(source.layout)
+  const clusterAfterPublication = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  if (!clusterAfterPublication.text) throw new Error('The cluster SVG export must contain text.')
+  expect(clusterAfterPublication.text).not.toContain('gm-publication')
+  expect(clusterAfterPublication.text).not.toContain('Configured visibility:')
+  expect(/viewBox="([^"]+)"/.exec(clusterAfterPublication.text)?.[1])
+    .toBe(/viewBox="([^"]+)"/.exec(clusterBeforePublication.text)?.[1])
+
+  const history = page.getByRole('group', { name: 'Edit history' })
+  await history.getByRole('button', { name: /^Undo(?:\b|:)/ }).click()
+  await waitForWorkspaceSaved(page)
+  const undone = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(undone.cluster?.routes.find(route => route.id === initialRoute.id)).toEqual(initialRoute)
+  expect(undone.layout).toEqual(source.layout)
+  await history.getByRole('button', { name: /^Redo(?:\b|:)/ }).click()
+  await waitForWorkspaceSaved(page)
+  expect((await downloadJson(page, 'Export Jump Cluster JSON')).cluster?.routes.find(route => route.id === initialRoute.id))
+    .toEqual({ ...initialRoute, playerShared: true })
+
+  await page.reload()
+  await returnToClusterMap(page)
+  const reloaded = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(reloaded.cluster?.routes.find(route => route.id === initialRoute.id))
+    .toEqual({ ...initialRoute, playerShared: true })
+  await setWorkspaceMapMode(page, 'Select')
+  const reloadedMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  await reloadedMap.locator(`.cluster-route[data-route-id="${initialRoute.id}"]`).click()
+  const reloadedInspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  await expect(reloadedInspector.getByRole('button', { name: 'Set Jump Route visibility to Shared', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(reloadedInspector).toContainText(
+    'This shared route has no visible endpoint because both endpoint systems are Hidden.',
+  )
+  const reloadedBadge = reloadedMap.locator(`.gm-publication-decorations [data-route-id="${initialRoute.id}"] .gm-publication-badge`)
+  await expect(reloadedBadge.locator('.gm-publication-lock-icon')).toHaveCount(1)
+})
+
+test('an unresolved shared route with a Hidden origin stays out of the player map and shows its blocked setting', async ({ page }) => {
+  await importCampaignWorkspace(page)
+  await revealHarrow(page)
+  await setWorkspaceMapMode(page, 'Select')
+
+  const source = await downloadJson(page, 'Export Jump Cluster JSON')
+  const route = source.cluster?.routes[0]
+  if (!route) throw new Error('The imported campaign must contain its Jump Route.')
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  await clusterMap.locator(`.cluster-route[data-route-id="${route.id}"]`).click()
+  const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
+  const sharedButton = routeInspector.getByRole('button', { name: 'Set Jump Route visibility to Shared', exact: true })
+  await sharedButton.click()
+  await waitForWorkspaceSaved(page)
+  await expect(routeInspector).not.toContainText('no visible endpoint')
+
+  await routeInspector.getByRole('button', { name: 'Edit Jump Route', exact: true }).click()
+  await expect(routeInspector.getByRole('region', { name: 'Configured visibility', exact: true })).toHaveCount(0)
+  await selectInspectorOption(routeInspector.getByLabel('Route destination'), 'Unresolved external exit')
+  await routeInspector.getByLabel('Unknown destination label').fill('Private external exit name')
+  await expect(routeInspector.getByRole('checkbox', { name: /^share with players$/i })).toBeChecked()
+  await routeInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
+  await waitForWorkspaceSaved(page)
+
+  await expect(routeInspector).toContainText(
+    'This shared route has no visible endpoint because its origin system is Hidden.',
+  )
+  const badge = clusterMap.locator(`.gm-publication-decorations [data-route-id="${route.id}"] .gm-publication-badge`)
+  await expect(badge).toHaveAttribute('data-route-sharing', 'shared')
+  await expect(badge.locator('.gm-publication-lock-icon')).toHaveCount(1)
+  await expect(clusterMap.locator(`.cluster-route[data-route-id="${route.id}"] desc.gm-publication-description`))
+    .toContainText('Configured visibility: Shared with players.')
+  await expect(clusterMap.locator(`.cluster-route[data-route-id="${route.id}"] desc.gm-publication-description`))
+    .toContainText('origin system is Hidden')
+
+  const blockedImage = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  if (!blockedImage.text) throw new Error('The cluster SVG export must contain text.')
+  expect(blockedImage.text).not.toContain('gm-publication')
+  expect(blockedImage.text).not.toContain('Configured visibility:')
+
+  await routeInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await page.getByRole('region', { name: 'Jump Cluster details', exact: true })
+    .getByRole('button', { name: 'Preview player view', exact: true }).click()
+  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const playerMap = preview.locator('svg.player-cluster-map-scene')
+  await expect(playerMap.locator('.player-cluster-map-marker--revealed')).toHaveCount(1)
+  await expect(playerMap.locator('.player-cluster-route')).toHaveCount(0)
+  const previewMarkup = await preview.evaluate(element => element.outerHTML)
+  expect(previewMarkup).not.toContain('Private external exit name')
 })

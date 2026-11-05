@@ -11,11 +11,20 @@ import {
 
 interface PanGesture {
   pointerId: number
+  button: number
+  startClientX: number
+  startClientY: number
   startX: number
   startY: number
   startBounds: PlayerMapSceneBounds
   startedAtFit: boolean
   screenToScene: DOMMatrix
+  dragging: boolean
+}
+
+interface OwnedDraggedClick {
+  pointerId: number
+  expiresAt: number
 }
 
 interface PlayerMapViewportOptions {
@@ -44,7 +53,10 @@ interface ViewportGeometry {
 export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
   const viewportBounds = ref<PlayerMapSceneBounds | null>(null)
   const panGesture = ref<PanGesture | null>(null)
+  const ownedDraggedClick = ref<OwnedDraggedClick | null>(null)
   const zoomStep = 1.2
+  const panThreshold = 4
+  let windowPointerListenersActive = false
   const currentBounds = computed(() => viewportBounds.value ?? options.fittedBounds.value)
   const zoomLevel = computed(() => options.fittedBounds.value.width / currentBounds.value.width)
   const canZoomIn = computed(() => options.active.value
@@ -195,6 +207,7 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
   }
 
   function handleMapKeydown(event: KeyboardEvent): void {
+    ownedDraggedClick.value = null
     if (!options.active.value) return
     switch (event.key) {
       case 'ArrowLeft': panView(-1, 0); break
@@ -220,8 +233,11 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
   }
 
   function startPan(event: PointerEvent): void {
-    if (!options.active.value || event.button !== 0 || !event.isPrimary
-      || !canPan.value || options.isInteractiveTarget(event.target)) return
+    // A new physical press owns the next activation opportunity, so an old
+    // drag can never swallow a later click after a missing compatibility click.
+    ownedDraggedClick.value = null
+    if (!options.active.value || (event.button !== 0 && event.button !== 2) || !event.isPrimary) return
+    if (event.pointerType === 'touch' && options.isInteractiveTarget(event.target)) return
     const svg = options.element.value
     const screenMatrix = svg?.getScreenCTM()
     if (!svg || !screenMatrix) return
@@ -230,19 +246,40 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
     const start = new DOMPoint(event.clientX, event.clientY).matrixTransform(screenToScene)
     panGesture.value = {
       pointerId: event.pointerId,
+      button: event.button,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
       startX: start.x,
       startY: start.y,
       startBounds: { ...currentBounds.value },
       startedAtFit: viewportBounds.value === null,
       screenToScene,
+      dragging: false,
     }
-    svg.setPointerCapture(event.pointerId)
-    event.preventDefault()
+    addWindowPointerListeners()
   }
 
   function movePan(event: PointerEvent): void {
     const gesture = panGesture.value
     if (!options.active.value || !gesture || gesture.pointerId !== event.pointerId) return
+    const buttonMask = gesture.button === 0 ? 1 : 2
+    if (event.buttons !== buttonMask) {
+      cancelOwnedPan(true)
+      return
+    }
+    if (!gesture.dragging) {
+      const distance = Math.hypot(event.clientX - gesture.startClientX, event.clientY - gesture.startClientY)
+      if (distance < panThreshold) return
+
+      gesture.dragging = true
+      try {
+        options.element.value?.setPointerCapture(event.pointerId)
+      } catch {
+        // The window-owned movement path still completes this gesture if capture is unavailable.
+      }
+      if (event.cancelable) event.preventDefault()
+    }
+
     const current = new DOMPoint(event.clientX, event.clientY).matrixTransform(gesture.screenToScene)
     const clamped = clampViewport({
       left: gesture.startBounds.left - (current.x - gesture.startX),
@@ -271,9 +308,17 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
   }
 
   function finishPan(event: PointerEvent): void {
-    if (panGesture.value?.pointerId !== event.pointerId) return
+    const gesture = panGesture.value
+    if (gesture?.pointerId !== event.pointerId) return
     panGesture.value = null
+    removeWindowPointerListeners()
     releasePanCapture(event.pointerId)
+    if (gesture.dragging && gesture.button === 0) {
+      ownedDraggedClick.value = {
+        pointerId: gesture.pointerId,
+        expiresAt: Date.now() + 100,
+      }
+    }
   }
 
   function cancelPan(event: PointerEvent): void {
@@ -282,11 +327,46 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
   }
 
   function cancelOwnedPan(restoreStart: boolean): void {
+    ownedDraggedClick.value = null
     const gesture = panGesture.value
-    if (!gesture) return
-    if (restoreStart) viewportBounds.value = gesture.startedAtFit ? null : gesture.startBounds
+    if (gesture && restoreStart) viewportBounds.value = gesture.startedAtFit ? null : gesture.startBounds
     panGesture.value = null
-    releasePanCapture(gesture.pointerId)
+    removeWindowPointerListeners()
+    if (gesture?.dragging) releasePanCapture(gesture.pointerId)
+  }
+
+  function addWindowPointerListeners(): void {
+    if (typeof window === 'undefined' || windowPointerListenersActive) return
+    window.addEventListener('pointermove', movePan, true)
+    window.addEventListener('pointerup', finishPan, true)
+    window.addEventListener('pointercancel', cancelPan, true)
+    windowPointerListenersActive = true
+  }
+
+  function removeWindowPointerListeners(): void {
+    if (typeof window === 'undefined' || !windowPointerListenersActive) return
+    window.removeEventListener('pointermove', movePan, true)
+    window.removeEventListener('pointerup', finishPan, true)
+    window.removeEventListener('pointercancel', cancelPan, true)
+    windowPointerListenersActive = false
+  }
+
+  function suppressDraggedClick(event: MouseEvent): void {
+    if (event.detail === 0 || event.button !== 0) return
+    const owned = ownedDraggedClick.value
+    if (!owned) return
+    const pointerId = typeof (event as PointerEvent).pointerId === 'number'
+      ? (event as PointerEvent).pointerId
+      : undefined
+    const isOwnedPointerClick = pointerId === owned.pointerId
+    const isBoundedCompatibilityClick = pointerId === undefined
+      && event.isTrusted
+      && Date.now() <= owned.expiresAt
+    if (!isOwnedPointerClick && !isBoundedCompatibilityClick) return
+
+    ownedDraggedClick.value = null
+    event.preventDefault()
+    event.stopImmediatePropagation()
   }
 
   function releasePanCapture(pointerId: number): void {
@@ -312,7 +392,6 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
     fitPlayerMap,
     handleMapKeydown,
     handleWheel,
-    movePan,
     panGesture,
     panView,
     revealPoint,
@@ -320,8 +399,8 @@ export function usePlayerMapViewport(options: PlayerMapViewportOptions) {
     zoomIn,
     zoomOut,
     startPan,
-    finishPan,
     cancelPan,
+    suppressDraggedClick,
     viewBox,
   }
 }
