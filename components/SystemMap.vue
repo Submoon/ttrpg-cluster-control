@@ -77,6 +77,7 @@ import {
   type SystemMapEventHandlers,
   type SystemMapRenderer,
 } from './maps/system-map-renderer'
+import { isSingleTouchPanEligible } from './maps/map-touch-navigation'
 import {
   measureSystemObjectBranchBounds,
   resolveSystemObjectBranch,
@@ -150,6 +151,7 @@ const mapGeometry = computed<SystemMapGeometry>(() => ({
 let mapRenderer: SystemMapRenderer | undefined
 type SystemTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
+  | { mode: 'pending-pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number]; startClient: [number, number] }
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: SystemTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
@@ -304,11 +306,31 @@ function beginTouchPinch(touches: TouchList): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (!props.touchNavigation || event.touches.length < 2) return
+  if (!props.touchNavigation) return
+  if (event.touches.length === 1) {
+    const element = svgElement.value
+    const touch = event.touches[0]!
+    if (!element || ((props.moveEnabled ?? false) && event.ctrlKey)
+      || !isSingleTouchPanEligible(event.target, props.moveEnabled ?? false, 'system')) {
+      touchGesture = null
+      return
+    }
+    select(element).interrupt()
+    touchGesture = {
+      mode: 'pending-pan',
+      transform: zoomTransform(element),
+      start: touchPoint(touch, element),
+      startClient: [touch.clientX, touch.clientY],
+    }
+    return
+  }
+  if (event.touches.length < 2) return
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
   cancelCreationPreview(true)
   cancelActiveGesture()
+  const element = svgElement.value
+  if (element) select(element).interrupt()
   beginTouchPinch(event.touches)
   event.preventDefault()
   event.stopPropagation()
@@ -318,6 +340,18 @@ function moveTouchNavigation(event: TouchEvent): void {
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
   if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  if (touchGesture.mode === 'pending-pan') {
+    const touch = event.touches[0]
+    if (!touch || Math.hypot(
+      touch.clientX - touchGesture.startClient[0],
+      touch.clientY - touchGesture.startClient[1],
+    ) <= 9) return
+    touchGesture = {
+      mode: 'pan',
+      transform: touchGesture.transform,
+      start: touchGesture.start,
+    }
+  }
   event.preventDefault()
   event.stopImmediatePropagation()
   if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
@@ -608,6 +642,7 @@ function render(preserveNavigation = false): void {
       : null,
     orbitCenterMovePreviews,
     moveEnabled: props.moveEnabled,
+    touchNavigation: props.touchNavigation,
     orbitRotationWheelEvents,
     handlers,
     setZoomLevel: (value) => {

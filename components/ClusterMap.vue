@@ -32,6 +32,7 @@
  */
 import { drag, pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import { captureD3MouseGesture, type D3MouseGestureDisposer } from './maps/d3-mouse-gesture'
+import { isMapZoomMark, isSingleTouchPanEligible } from './maps/map-touch-navigation'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -110,6 +111,7 @@ const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 type ClusterTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
+  | { mode: 'pending-pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number]; startClient: [number, number] }
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
@@ -455,8 +457,28 @@ function beginTouchPinch(touches: TouchList): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (!props.touchNavigation || event.touches.length < 2) return
+  if (!props.touchNavigation) return
+  if (event.touches.length === 1) {
+    const element = svgElement.value
+    const touch = event.touches[0]!
+    if (!element || (props.moveEnabled && event.ctrlKey)
+      || !isSingleTouchPanEligible(event.target, props.moveEnabled, 'cluster')) {
+      touchGesture = null
+      return
+    }
+    select(element).interrupt()
+    touchGesture = {
+      mode: 'pending-pan',
+      transform: zoomTransform(element),
+      start: touchPoint(touch, element),
+      startClient: [touch.clientX, touch.clientY],
+    }
+    return
+  }
+  if (event.touches.length < 2) return
   cancelActiveGesture()
+  const element = svgElement.value
+  if (element) select(element).interrupt()
   beginTouchPinch(event.touches)
   event.preventDefault()
   event.stopPropagation()
@@ -465,6 +487,18 @@ function startTouchNavigation(event: TouchEvent): void {
 function moveTouchNavigation(event: TouchEvent): void {
   const element = svgElement.value
   if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  if (touchGesture.mode === 'pending-pan') {
+    const touch = event.touches[0]
+    if (!touch || Math.hypot(
+      touch.clientX - touchGesture.startClient[0],
+      touch.clientY - touchGesture.startClient[1],
+    ) <= 9) return
+    touchGesture = {
+      mode: 'pan',
+      transform: touchGesture.transform,
+      start: touchGesture.start,
+    }
+  }
   event.preventDefault()
   event.stopImmediatePropagation()
 
@@ -1064,8 +1098,7 @@ function render(): void {
     .clickDistance(6)
     .filter((event) => {
       const target = event.target
-      const isMapMark = target instanceof Element
-        && target.closest('.cluster-system-node, .cluster-route')
+      const isMapMark = isMapZoomMark(target, 'cluster')
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
@@ -1083,6 +1116,7 @@ function render(): void {
         k: event.transform.k,
       })
     })
+  if (props.touchNavigation) zoomBehavior.touchable(() => false)
   svg.call(zoomBehavior)
   svg.on('click.cluster-target', (event: MouseEvent) => {
     if (event.detail === 0 || event.defaultPrevented

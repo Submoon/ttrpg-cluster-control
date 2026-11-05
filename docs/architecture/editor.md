@@ -16,6 +16,8 @@ Disabled native buttons can swallow the compatibility `mouseup` that D3 expects.
 
 An Inspect touch hold owns its release beyond the canvas DOM: opening a compact Inspector can retarget the same contact onto a panel control. The mounted canvas correlates the original touch/pointer and consumes only its terminal release and ensuing touch-generated compatibility activation, allowing transport cleanup. New physical input clears that ownership immediately, and its fallback begins after release rather than during the hold. The owner disposes its document listeners and timer; ordinary taps, mouse input and keyboard activation remain outside this suppression.
 
+The mounted Warden maps own touch panning and pinch in the same gesture path. A single contact becomes a pan after the canvas movement threshold, leaving taps and holds available for inspection or navigation. In Move, touches on editable marks keep the existing D3 drag path. Managed maps disable D3's native touch zoom listeners so a hold that redraws the scene cannot leave a zoom gesture bound to detached SVG content.
+
 Domain calculations accept data and return results. Placement, relationship, and validation rules must not depend on Vue components, Pinia, browser APIs, or IndexedDB. Keep each complete operation together when it has to coordinate a draft guard, asynchronous confirmation, context checks, and a final state change.
 
 ## Dependencies and operation flow

@@ -733,6 +733,10 @@ test('Object Add suppresses long-press inspection and second-contact takeover pr
     await dispatchTouch(cdp, 'touchStart', [firstTouch])
     await page.waitForTimeout(650)
     const inspectorStayedClosed = await inspector.isHidden()
+    const movedTouch = { ...firstTouch, x: firstTouch.x + 24, y: firstTouch.y + 18 }
+    await dispatchTouch(cdp, 'touchMove', [movedTouch])
+    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewBefore)
+    const viewAfterPan = await scene.getAttribute('transform')
     const memoryWhileHeld = await downloadJson(page, 'Export star system JSON')
     const recordsWhileHeld = await readWorkspaceRecords(page)
     expect(inspectorStayedClosed).toBe(true)
@@ -741,13 +745,13 @@ test('Object Add suppresses long-press inspection and second-contact takeover pr
 
     const [, secondPoint] = await visibleMapBackgroundPair(map)
     const secondTouch = { id: 2, x: secondPoint.x, y: secondPoint.y }
-    await dispatchTouch(cdp, 'touchStart', [firstTouch, secondTouch])
+    await dispatchTouch(cdp, 'touchStart', [movedTouch, secondTouch])
     await dispatchTouch(cdp, 'touchMove', [
-      { ...firstTouch, x: firstTouch.x - 10, y: firstTouch.y + 12 },
+      { ...movedTouch, x: movedTouch.x - 10, y: movedTouch.y + 12 },
       { ...secondTouch, x: secondTouch.x + 10, y: secondTouch.y + 12 },
     ])
     await dispatchTouch(cdp, 'touchEnd', [])
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewBefore)
+    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewAfterPan)
     await expectAddMode(page, /Planet/)
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)

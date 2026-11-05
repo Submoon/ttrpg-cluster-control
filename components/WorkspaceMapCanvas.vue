@@ -588,8 +588,8 @@ function onTouchStartCapture(event: TouchEvent): void {
     longPressTimer = setTimeout(() => {
       if (touchStart?.id !== touchId) return
       longPressTimer = undefined
+      // Consume placement on release while leaving this contact available to pan.
       consumedAddTouchId = touchId
-      cancelMapGesture()
     }, 560)
     return
   }
@@ -599,14 +599,14 @@ function onTouchStartCapture(event: TouchEvent): void {
     const contact = touchStart
     if (!contact || contact.id !== touchId) return
     const inspection = longPressInspection(contact.target)
-    const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
     if (props.activeView === 'cluster') emit('cancel-cluster-preview')
     if (props.activeView === 'system') {
       emit('cancel-object-placement-preview')
       emit('cancel-orbit-placement-preview')
     }
-    cancelMapGesture()
     if (inspection) {
+      const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
+      cancelMapGesture()
       touchReleaseGuard?.arm({
         touchId,
         pointerId: touchPointerId,
