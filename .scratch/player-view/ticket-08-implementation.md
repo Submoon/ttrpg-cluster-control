@@ -1,6 +1,6 @@
 ---
 title: Player and Warden interface consistency implementation
-status: in-progress
+status: closed
 parent: tickets/08-player-map-interface-consistency.md
 ---
 
@@ -132,4 +132,10 @@ The initial Move journey passed three local production replays and the targeted 
 
 Pausing the real exit animation on the previous production build gives a deterministic RED (`ticket08-prod-files-exit-red.log`). The teleported popover remains mounted in `data-state="closed"` with computed `pointer-events: auto`. Disabling only the inner content still left the native preview failing (`ticket08-map-files-exit-green.log`, owned run `local-test-2026-11-05T09-57-38-597Z-40988`). Reka's positioned wrapper is an independent hit target. The correction opts both layers out of pointer hits for the closed Map files popover. The maintained test keeps that state through the first native Move preview, then resumes the animation and verifies rollback on pinch, view-only pan, and full JSON/IndexedDB equality. Temporary native tracing and the extra smoke tag are removed.
 
-The frozen corrected replay passed 3/3 (`ticket08-map-files-wrapper-qualified.log`, owned run `local-test-2026-11-05T10-00-44-169Z-7332`). It verifies the desktop menu remains interactive when open, the compact star moves while both closed layers are still mounted, and Navigate/Move holds and fresh taps still work. Independent review closed the wrapper finding. Final exact-head CI is the remaining merge gate.
+The frozen corrected replay passed 3/3 (`ticket08-map-files-wrapper-qualified.log`, owned run `local-test-2026-11-05T10-00-44-169Z-7332`). It verifies the desktop menu remains interactive when open, the compact star moves while both closed layers are still mounted, and Navigate/Move holds and fresh taps still work. Independent review closed the wrapper finding.
+
+## Full qualification and closure
+
+The test cleanup uses the typed `Node` removal API. Types and affected lint passed, and the native Move regression passed again on that exact test source (`ticket08-map-files-final-typed.log`, owned run `local-test-2026-11-05T10-07-40-668Z-30412`).
+
+[Full CI for `d7814bffeae9445dc20cca604cff9340823be9b6`](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/42008021498) completed successfully against base `47c0418a835da285e9edb88e8f8dffc19c3a2bba` on 2026-11-05. Production build, lint, typecheck and Markdown links passed. Checks/storage passed 330/330, and the two browser shards passed 188/188 and 182/182. The two smoke cases passed on the [immutable Preview](https://ttrpg-cluster-control-a9bi0jz0m-submoon.vercel.app), which also hosted both browser shards. The required quality job passed and published the full qualification witness. All independent reviews closed. Ticket 08 is complete in the existing draft [PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39).

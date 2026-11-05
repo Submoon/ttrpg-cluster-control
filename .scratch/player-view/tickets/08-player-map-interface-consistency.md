@@ -1,6 +1,6 @@
 ---
 title: Align player maps with the Warden map interface
-status: in-progress
+status: closed
 assignee: coordinator
 label: wayfinder:implementation
 type: implementation
@@ -45,4 +45,8 @@ Player consultation remains read-only and consumes only the sanitized player doc
 
 ## Blocked by
 
-The underlying player-view implementation and quick-publication controls are available on `codex/player-view-ticket-01`. No dependency on a future multiple-selection tool is introduced. Implementation and verification evidence are recorded in the [ticket 08 implementation record](../ticket-08-implementation.md); final qualification remains a merge gate.
+The underlying player-view implementation and quick-publication controls are available on `codex/player-view-ticket-01`. No dependency on a future multiple-selection tool is introduced.
+
+## Resolution
+
+Closed on 2026-11-05 in [PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39). The player map and Warden preview share catalogue symbols, dashed Orbits, nested public Hierarchy, useful read-only Inspect, and the left-side Back action. Revelation colors distinguish the published states. The [implementation record](../ticket-08-implementation.md) records the scoped touch and Map files fixes and the review closure. [Full CI for `d7814bff`](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/42008021498) passed all 700 scenarios and the two immutable Preview smoke cases.

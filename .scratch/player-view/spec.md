@@ -9,12 +9,12 @@ scope_reviewed_on: 2026-10-29
 spec_published_on: 2026-10-29
 ticket_breakdown_review: approved
 tickets_published_on: 2026-10-29
-ticket_count: 7
+ticket_count: 8
 ---
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. All seven local tickets are closed, including simultaneous implementation of 05 and 07 under the user's authorization and ticket 06 under the explicit `implement` instruction. Ticket 06 verification and local closure completed on 2026-11-04. The source GitHub issue remains open; no remote write, push, PR or feature merge into main is authorized by this specification.
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. The original seven tickets closed by 2026-11-04. The user added the interface consistency ticket to the same effort before merge. All eight local tickets are closed in [draft PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39).
 
 ## Source issue
 
@@ -227,10 +227,10 @@ At specification publication, origin fetch showed HEAD/main/origin/main at the r
 
 On 2026-11-04 the user requested [Align player maps with the Warden map interface](tickets/08-player-map-interface-consistency.md), initially referenced in [GitHub #40](https://github.com/Submoon/ttrpg-cluster-control/issues/40). The user clarified that local ticket 08 belongs to this current effort and blocks merge of PR #39 until implemented and verified. It covers icons, dashed Orbits, useful inspection, nested Hierarchy and consistent Back placement while retaining revelation colors, without changing the established disclosure rules.
 
-The [ticket 08 implementation record](ticket-08-implementation.md) tracks the current branch's source changes, desktop/compact captures, public artifact checks, native touch correction and independent reviews. Exact-candidate cumulative qualification remains required before closing that ticket.
+The [ticket 08 implementation record](ticket-08-implementation.md) records the current branch's source changes, desktop and compact captures, public artifact checks, native touch corrections and independent reviews. The [full qualification](https://github.com/Submoon/ttrpg-cluster-control/actions/runs/42008021498) passed on 2026-11-05 and the ticket is closed.
 
 ## Original seven-ticket resolution
 
 All seven approved slices are implemented and committed locally on `codex/player-view-ticket-01`. The common allowlisted player document serves preview, JSON, immutable compressed URLs and SVG/PNG; the base route retains the saved GM workspace. Ticket 06 completed verification on 2026-11-04 against integrated baseline `62e5e55d293573019979df1e59013855ac9317a0` (origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`).
 
-The single cumulative run passed 654/670; all 16 initial failures passed subsequent affected replays, including the final 9/9 image/responsive matrix. Eight timing failures passed unchanged without an established cause; this is not a clean full-suite pass. Lint, types, build, actual artifact/privacy checks and independent review closure are recorded in the [ticket 06 implementation record](ticket-06-implementation.md). GitHub #9 remains open and unchanged; no remote publication or feature merge into main occurred.
+The single cumulative run passed 654/670; all 16 initial failures passed subsequent affected replays, including the final 9/9 image/responsive matrix. Eight timing failures passed unchanged without an established cause; this is not a clean full-suite pass. Lint, types, build, actual artifact/privacy checks and independent review closure are recorded in the [ticket 06 implementation record](ticket-06-implementation.md). This local closure predates branch publication and PR #39.
