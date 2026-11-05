@@ -127,7 +127,9 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
-    await exitStyle.evaluate(element => element.remove())
+    await exitStyle.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
 
     const mapCenterX = bounds.x + bounds.width / 2
     const secondStart = {
