@@ -371,7 +371,7 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
 
 .player-system-orbits ellipse {
   fill: none;
-  stroke: var(--line-soft);
+  stroke: var(--map-orbit);
   stroke-width: 2;
 }
 
