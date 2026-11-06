@@ -130,11 +130,12 @@
       <span class="tree-count whitespace-nowrap">{{ hierarchyRows.length }} records</span>
     </div>
     <p v-if="hierarchyRows.length === 0" class="empty-copy my-[0.65rem]">No objects charted yet.</p>
-    <!-- @vue-generic {HierarchyTreeItem[]} -->
+    <!-- @vue-generic {HierarchyTreeItem[], true} -->
     <UTree
       v-else
       :items="hierarchyItems"
-      :model-value="selectedHierarchyItem"
+      :model-value="selectedHierarchyItems"
+      multiple
       :expanded="expandedHierarchyKeys"
       :get-key="getHierarchyItemKey"
       label-key="label"
@@ -306,11 +307,19 @@ const maximumHierarchyLevel = computed(() => hierarchyRows.value.reduce(
 ))
 const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
+  const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
+  if (lastSelectedObjectId) return `object:${lastSelectedObjectId}`
   if (store.selectedObjectId) return `object:${store.selectedObjectId}`
   if (store.selectedOrbitId) return `orbit:${store.selectedOrbitId}`
   return ''
 })
 const selectedHierarchyItem = computed(() => flatHierarchyItems.value.find(item => item.key === selectedHierarchyKey.value))
+const selectedHierarchyItems = computed(() => {
+  const selectedKeys = new Set(store.selectedObjectIds.length
+    ? store.selectedObjectIds.map(id => `object:${id}`)
+    : selectedHierarchyKey.value ? [selectedHierarchyKey.value] : [])
+  return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
+})
 const selectedHierarchyPath = computed(() => selectedHierarchyItem.value?.ancestorKeys.join('\u001f') ?? '')
 const hierarchyIdentity = computed(() => JSON.stringify([
   props.workspace.cluster.id,
@@ -415,7 +424,14 @@ function updateExpandedHierarchyKeys(keys: string[]): void {
 
 function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
   event.preventDefault()
-  if (item.kind === 'object') void commands.navigation.selectObject(item.row.object.id)
+  if (item.kind === 'object') {
+    const sourceEvent = event.detail.originalEvent
+    if (sourceEvent instanceof MouseEvent && sourceEvent.shiftKey && store.mapMode === 'select') {
+      void commands.navigation.toggleObjectSelection(item.row.object.id)
+    } else {
+      void commands.navigation.selectObject(item.row.object.id)
+    }
+  }
   else void commands.navigation.selectOrbit(item.row.orbit.id)
 }
 

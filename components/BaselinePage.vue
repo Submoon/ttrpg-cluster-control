@@ -259,6 +259,7 @@
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
+                    :selected-object-ids="selectedObjectIds"
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
@@ -307,6 +308,7 @@
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
+                    :selected-object-ids="selectedObjectIds"
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
@@ -408,6 +410,7 @@
               :selected-system="selectedSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
+              :selected-object-count="selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
               :selected-orbit="selectedOrbit"
@@ -789,10 +792,10 @@ async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): 
 revealHistoryContext = navigation.revealHistoryContext
 
 const {
-  activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedOrbitId,
+  activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedObjectIds, selectedOrbitId,
   selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
   inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
-  selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
+  selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
 const {
   clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
@@ -883,6 +886,8 @@ provideEditorCommands({
   navigation: {
     selectSystem,
     selectObject,
+    replaceObjectSelection,
+    toggleObjectSelection,
     selectOrbit,
     selectRoute,
     showClusterMap,

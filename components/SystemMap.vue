@@ -70,6 +70,7 @@ import {
 import { revealSvgPoint, revealSvgTarget } from '../utils/reveal-svg-target'
 import {
   getDetachedOrbitCenter as findDetachedOrbitCenter,
+  objectPositions,
   type SystemMapGeometry,
 } from '../utils/system-map-geometry'
 import {
@@ -96,6 +97,7 @@ const props = withDefaults(defineProps<{
   creationChooserOpen?: boolean
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   selectedObjectId: string | null
+  selectedObjectIds?: readonly string[]
   selectedOrbitId: string | null
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -111,12 +113,13 @@ const props = withDefaults(defineProps<{
   orbitAdjustmentPreview: null,
   moveEnabled: true,
   moveTargeting: false,
+  selectedObjectIds: () => [],
   touchNavigation: false,
   showZoomControls: true,
 })
 
 const emit = defineEmits<{
-  'select-object': [id: string]
+  'select-object': [id: string, shiftKey?: boolean]
   'select-orbit': [id: string]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'object-move-blocked': [id: string]
@@ -163,7 +166,7 @@ const orbitCenterMovePreviews = new Map<string, Point>()
 
 const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
-  selectObject: id => { if (!props.creationType) emit('select-object', id) },
+  selectObject: (id, shiftKey) => { if (!props.creationType) emit('select-object', id, shiftKey) },
   selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
   orbitAdjustment: input => emit('orbit-adjustment', input),
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
@@ -630,6 +633,7 @@ function render(preserveNavigation = false): void {
     system: props.system,
     geometry: mapGeometry.value,
     selectedObjectId: props.selectedObjectId,
+    selectedObjectIds: props.selectedObjectIds ?? [],
     selectedOrbitId: props.selectedOrbitId,
     creationType: props.creationType,
     creationPreview: props.creationPreview,
@@ -669,6 +673,22 @@ function getCreationCandidates(point: Point, type: SystemCreationType): SystemCr
   return mapRenderer?.getCreationCandidates(point, type) ?? []
 }
 
+/** Resolves a rectangle against rendered object anchor points in client coordinates. */
+function getObjectIdsWithinClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>): string[] {
+  const element = svgElement.value
+  const content = element?.querySelector<SVGGElement>('.system-map-content')
+  const matrix = content?.getScreenCTM()
+  if (!matrix) return []
+  const positions = objectPositions(props.system, mapGeometry.value)
+  return props.system.objects.filter(object => {
+    const position = positions.get(object.id)
+    if (!position) return false
+    const anchor = new DOMPoint(position.x, position.y).matrixTransform(matrix)
+    return anchor.x >= rect.left && anchor.x <= rect.right
+      && anchor.y >= rect.top && anchor.y <= rect.bottom
+  }).map(object => object.id)
+}
+
 onMounted(() => {
   render()
   document.addEventListener('keydown', cancelActiveMapGestureOnEscape, true)
@@ -691,6 +711,7 @@ watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })
 watch(() => props.selectedObjectId, () => render())
+watch(() => props.selectedObjectIds, () => render())
 watch(() => props.selectedOrbitId, () => render())
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
@@ -705,6 +726,7 @@ defineExpose({
   exportImage,
   getDetachedOrbitCenter,
   getCreationCandidates,
+  getObjectIdsWithinClientRect,
   getViewport,
   getMinimumZoomScale,
   setViewport,

@@ -56,6 +56,7 @@ export function useEditorNavigation(options: {
   const selectedSystemId = computed(() => store.selectedSystemId)
   const clusterSelectedSystemId = computed(() => store.clusterSelectedSystemId)
   const selectedObjectId = computed(() => store.selectedObjectId)
+  const selectedObjectIds = computed(() => store.selectedObjectIds)
   const selectedOrbitId = computed(() => store.selectedOrbitId)
   const selectedRouteId = computed(() => store.selectedRouteId)
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -101,6 +102,7 @@ export function useEditorNavigation(options: {
   }
 
   watch([
+    () => store.workspaceId,
     () => workspace.value?.id,
     () => workspace.value?.cluster.id,
     () => store.activeView,
@@ -109,6 +111,7 @@ export function useEditorNavigation(options: {
     () => store.clusterSelectedSystemId,
     () => store.inspectedClusterSystemId,
     () => store.selectedObjectId,
+    () => store.selectedObjectIds,
     () => store.selectedOrbitId,
     () => store.selectedRouteId,
     () => store.searchOpen,
@@ -125,7 +128,17 @@ export function useEditorNavigation(options: {
   }, { flush: 'sync' })
 
   function setSelection(patch: Partial<EditorUiSelection>): void {
-    store.setSelection({
+    const changesObjectContext = ['activeView', 'selectedSystemId', 'selectedObjectId', 'selectedOrbitId', 'selectedRouteId']
+      .some(key => Object.hasOwn(patch, key))
+    const providesObjectIds = Object.hasOwn(patch, 'selectedObjectIds')
+    const requestedObjectIds = patch.selectedObjectIds ?? store.selectedObjectIds
+    const nextObjectIds = changesObjectContext && !providesObjectIds && requestedObjectIds.length
+      ? []
+      : requestedObjectIds
+    const objectIdsUnchanged = nextObjectIds.length === store.selectedObjectIds.length
+      && nextObjectIds.every((id, index) => id === store.selectedObjectIds[index])
+    const stableObjectIds = objectIdsUnchanged ? store.selectedObjectIds : nextObjectIds
+    const next: EditorUiSelection = {
       activeView: store.activeView,
       selectedSystemId: store.selectedSystemId,
       clusterSelectedSystemId: store.clusterSelectedSystemId,
@@ -134,15 +147,20 @@ export function useEditorNavigation(options: {
       selectedOrbitId: store.selectedOrbitId,
       selectedRouteId: store.selectedRouteId,
       ...patch,
-    })
+      selectedObjectIds: stableObjectIds,
+    }
+    store.setSelection(next)
   }
 
   function navigationContextStamp(): string {
     return JSON.stringify([
+      store.workspaceId,
+      workspace.value?.id ?? null,
       workspace.value?.cluster.id ?? null,
       store.activeView,
       store.selectedSystemId,
       store.selectedObjectId,
+      store.selectedObjectIds,
       store.selectedOrbitId,
       store.selectedRouteId,
       store.clusterSelectedSystemId,
@@ -166,6 +184,7 @@ export function useEditorNavigation(options: {
     const next: Partial<EditorUiSelection> = {
       selectedRouteId: null,
       selectedObjectId: null,
+      selectedObjectIds: [],
       selectedOrbitId: null,
       clusterSelectedSystemId: null,
       inspectedClusterSystemId: null,
@@ -213,7 +232,7 @@ export function useEditorNavigation(options: {
     if (!currentWorkspace.cluster.systems.some(system => system.id === store.selectedSystemId)) {
       next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
     }
-    if (!currentWorkspace.cluster.routes.some(item => item.id === store.selectedRouteId)) next.selectedRouteId = null
+    if (store.selectedRouteId && !currentWorkspace.cluster.routes.some(item => item.id === store.selectedRouteId)) next.selectedRouteId = null
     if (!currentWorkspace.cluster.systems.some(system => system.id === store.clusterSelectedSystemId)) next.clusterSelectedSystemId = null
     if (!currentWorkspace.cluster.systems.some(system => system.id === store.inspectedClusterSystemId)) next.inspectedClusterSystemId = null
     if (Object.keys(next).length) setSelection(next)
@@ -222,12 +241,22 @@ export function useEditorNavigation(options: {
 
   watch(selectedSystem, currentSystem => {
     if (!currentSystem) {
-      if (store.selectedObjectId || store.selectedOrbitId) setSelection({ selectedObjectId: null, selectedOrbitId: null })
+      if (store.selectedObjectId || store.selectedObjectIds.length || store.selectedOrbitId) {
+        setSelection({ selectedObjectId: null, selectedObjectIds: [], selectedOrbitId: null })
+      }
       return
     }
     const next: Partial<EditorUiSelection> = {}
-    if (!currentSystem.objects.some(object => object.id === store.selectedObjectId)) next.selectedObjectId = null
-    if (!currentSystem.orbits.some(orbit => orbit.id === store.selectedOrbitId)) next.selectedOrbitId = null
+    if (store.selectedObjectId && !currentSystem.objects.some(object => object.id === store.selectedObjectId)) next.selectedObjectId = null
+    const survivingObjectIds = store.selectedObjectIds.filter(id => currentSystem.objects.some(object => object.id === id))
+    if (survivingObjectIds.length !== store.selectedObjectIds.length) next.selectedObjectIds = survivingObjectIds
+    if (survivingObjectIds.length === 1) {
+      next.selectedObjectId = survivingObjectIds[0]!
+      next.selectedObjectIds = []
+    } else if (survivingObjectIds.length === 0 && store.selectedObjectIds.length) {
+      next.selectedObjectId = null
+    }
+    if (store.selectedOrbitId && !currentSystem.orbits.some(orbit => orbit.id === store.selectedOrbitId)) next.selectedOrbitId = null
     if (Object.keys(next).length) setSelection(next)
   })
 
@@ -340,6 +369,7 @@ export function useEditorNavigation(options: {
         clusterSelectedSystemId: store.clusterSelectedSystemId,
         inspectedClusterSystemId: store.inspectedClusterSystemId,
         selectedObjectId: store.selectedObjectId,
+        selectedObjectIds: [...store.selectedObjectIds],
         selectedOrbitId: store.selectedOrbitId,
         selectedRouteId: store.selectedRouteId,
       },
@@ -359,12 +389,14 @@ export function useEditorNavigation(options: {
       return selection.activeView === 'cluster'
         && selection.clusterSelectedSystemId === target.systemId
         && selection.selectedObjectId === null
+        && selection.selectedObjectIds.length === 0
         && selection.selectedOrbitId === null
         && selection.selectedRouteId === null
     }
     return selection.activeView === 'system'
       && selection.selectedSystemId === target.systemId
       && selection.selectedObjectId === target.objectId
+      && selection.selectedObjectIds.length === 0
       && selection.selectedOrbitId === null
       && selection.selectedRouteId === null
       && selection.clusterSelectedSystemId === null
@@ -410,6 +442,7 @@ export function useEditorNavigation(options: {
     }
     if (target.kind === 'object') {
       next.selection.selectedObjectId = null
+      next.selection.selectedObjectIds = next.selection.selectedObjectIds.filter(id => id !== target.objectId)
       if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)) {
         next.selection.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
         next.selection.selectedOrbitId = null
@@ -452,9 +485,17 @@ export function useEditorNavigation(options: {
       next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
       next.activeView = 'cluster'
       next.selectedObjectId = null
+      next.selectedObjectIds = []
       next.selectedOrbitId = null
     } else {
       if (!selectedSystem.objects.some(object => object.id === next.selectedObjectId)) next.selectedObjectId = null
+      next.selectedObjectIds = next.selectedObjectIds.filter(id => selectedSystem.objects.some(object => object.id === id))
+      if (next.selectedObjectIds.length === 1) {
+        next.selectedObjectId = next.selectedObjectIds[0]!
+        next.selectedObjectIds = []
+      } else if (next.selectedObjectIds.length === 0 && selection.selectedObjectIds.length) {
+        next.selectedObjectId = null
+      }
       if (!selectedSystem.orbits.some(orbit => orbit.id === next.selectedOrbitId)) next.selectedOrbitId = null
     }
     if (!currentWorkspace.cluster.systems.some(system => system.id === next.clusterSelectedSystemId)) {
@@ -544,6 +585,7 @@ export function useEditorNavigation(options: {
         clusterSelectedSystemId: store.clusterSelectedSystemId,
         inspectedClusterSystemId: store.inspectedClusterSystemId,
         selectedObjectId: store.selectedObjectId,
+        selectedObjectIds: [...store.selectedObjectIds],
         selectedOrbitId: store.selectedOrbitId,
         selectedRouteId: store.selectedRouteId,
       }
@@ -738,6 +780,60 @@ export function useEditorNavigation(options: {
     }
   }
 
+  function currentObjectSelection(): string[] {
+    return store.selectedObjectIds.length
+      ? [...store.selectedObjectIds]
+      : store.selectedObjectId ? [store.selectedObjectId] : []
+  }
+
+  /** Replaces the transient object selection through the same draft and context guard as map navigation. */
+  async function replaceObjectSelection(objectIds: readonly string[]): Promise<void> {
+    invalidatePendingSearchReveal()
+    const entryMode = store.mapMode
+    if (objectIds.length > 0 && entryMode !== 'select') return
+    const currentWorkspace = workspace.value
+    const clusterId = currentWorkspace?.cluster.id
+    const systemId = store.selectedSystemId
+    if (!clusterId || store.activeView !== 'system' || !systemId) return
+    const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!entrySystem) return
+    const availableIds = new Set(entrySystem.objects.map(object => object.id))
+    const nextIds = [...new Set(objectIds)].filter(id => availableIds.has(id))
+    const currentIds = currentObjectSelection()
+    if (currentIds.length === nextIds.length && currentIds.every((id, index) => id === nextIds[index])) return
+    if (nextIds.length === 0 && currentIds.length === 0) return
+
+    const startingStamp = navigationContextStamp()
+    const startingSessionId = chart.session.value?.id ?? null
+    const returningToDraft = nextIds.length === 1 && entity.isEntityDraftTarget('object', nextIds[0]!)
+    if (!await transitions.resolveTransition({ leaveEntitySession: !returningToDraft })) return
+    const latestWorkspace = workspace.value
+    if (!latestWorkspace || !acceptNavigationTransition(startingStamp, startingSessionId)
+      || latestWorkspace.cluster.id !== clusterId || store.selectedSystemId !== systemId
+      || store.activeView !== 'system' || store.mapMode !== entryMode) return
+    const latestSystem = latestWorkspace.cluster.systems.find(system => system.id === systemId)
+    if (!latestSystem || nextIds.some(id => !latestSystem.objects.some(object => object.id === id))) return
+
+    setSelection({
+      selectedObjectId: nextIds.length === 1 ? nextIds[0]! : null,
+      selectedObjectIds: nextIds.length > 1 ? nextIds : [],
+      selectedOrbitId: null,
+      selectedRouteId: null,
+    })
+    storeCurrentSelection()
+    editorError.value = ''
+  }
+
+  /** Adds or removes one object from the shared map and Hierarchy selection. */
+  async function toggleObjectSelection(objectId: string): Promise<void> {
+    if (store.mapMode !== 'select') return
+    const currentIds = currentObjectSelection()
+    const nextIds = currentIds.includes(objectId)
+      ? currentIds.filter(id => id !== objectId)
+      : [...currentIds, objectId]
+    await replaceObjectSelection(nextIds)
+  }
+
   async function selectObject(
     objectId: string,
     openInspector = true,
@@ -877,6 +973,12 @@ export function useEditorNavigation(options: {
     if (store.clusterSelectedSystemId && removedSystems.has(store.clusterSelectedSystemId)) next.clusterSelectedSystemId = null
     if (store.inspectedClusterSystemId && removedSystems.has(store.inspectedClusterSystemId)) next.inspectedClusterSystemId = null
     if (store.selectedObjectId && removedObjects.has(store.selectedObjectId)) next.selectedObjectId = null
+    const survivingObjectIds = store.selectedObjectIds.filter(id => !removedObjects.has(id))
+    if (survivingObjectIds.length !== store.selectedObjectIds.length) {
+      next.selectedObjectIds = survivingObjectIds.length > 1 ? survivingObjectIds : []
+      if (survivingObjectIds.length === 1) next.selectedObjectId = survivingObjectIds[0]!
+      else if (survivingObjectIds.length === 0) next.selectedObjectId = null
+    }
     if (store.selectedOrbitId && removedOrbits.has(store.selectedOrbitId)) next.selectedOrbitId = null
     if (store.selectedRouteId && removedRoutes.has(store.selectedRouteId)) next.selectedRouteId = null
     if (Object.keys(next).length) setSelection(next)
@@ -1005,6 +1107,7 @@ export function useEditorNavigation(options: {
     selectedSystemId,
     clusterSelectedSystemId,
     selectedObjectId,
+    selectedObjectIds,
     selectedOrbitId,
     selectedRouteId,
     selectedSystem,
@@ -1020,6 +1123,8 @@ export function useEditorNavigation(options: {
     selectSystem,
     selectClusterSystem,
     selectObject,
+    replaceObjectSelection,
+    toggleObjectSelection,
     selectOrbit,
     selectRoute,
     resumeEntitySession,
