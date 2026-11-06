@@ -1038,7 +1038,7 @@ export async function addClusterSystem(
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap).toBeVisible()
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const createdAction = clusterMap.locator(domainIdentitySelector('data-system-id', systemId))
+  const createdAction = systemMarks.and(clusterMap.locator(domainIdentitySelector('data-system-id', systemId)))
   await expect(createdAction).toBeVisible()
   await expect(createdAction).toHaveAttribute('role', 'button')
   await expect(createdAction).toHaveAccessibleName(/^Open .+ system map$/)
