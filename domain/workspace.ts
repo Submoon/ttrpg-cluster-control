@@ -5,6 +5,7 @@ export {
   catalogueTypes,
   customFieldApplicabilityTargetKey,
   defaultObjectFieldSettings,
+  nativePlayerFieldIds,
 } from './workspace-model'
 export type {
   Point,
@@ -12,6 +13,7 @@ export type {
   ObjectFamily,
   CustomFieldType,
   CustomFieldValue,
+  NativePlayerFieldId,
   CustomFieldApplicabilityTarget,
   CustomFieldDefinition,
   ObjectFieldSettings,
@@ -21,6 +23,8 @@ export type {
   Orbit,
   JumpRoute,
   StarSystem,
+  PublicationMode,
+  ChartDetailsChanges,
   JumpCluster,
   JumpPointReference,
   LocalWorkspace,
@@ -44,6 +48,7 @@ export {
   isCustomFieldValueCompatible,
   updateCustomFieldType,
   removeCustomFieldDefinition,
+  updateFieldPlayerSharing,
 } from './workspace-fields'
 export {
   initialSystemPlacement,
@@ -58,6 +63,7 @@ export {
   createJumpRoute,
   updateJumpRoute,
   renameLocalWorkspace,
+  updateChartDetails,
 } from './workspace-cluster'
 export { planMapEntityDeletion } from './workspace-deletion'
 export { moveUnresolvedExitTarget } from './workspace-exit-placement'
@@ -73,5 +79,23 @@ export {
 } from './workspace-orbits'
 export { captureEffectiveObjectAngles, defaultObjectOrbitAngle, updateWorkspaceObject } from './workspace-placement'
 export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
+export { isPublicationMode } from './workspace-validation'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
+export { projectPlayerCluster } from './player-projection'
+export {
+  PlayerDocumentError,
+  parsePlayerJson,
+  restorePlayerDocument,
+  serializePlayerJson,
+} from './player-codec'
+export type { PlayerDocumentErrorCode } from './player-codec'
+export type {
+  PlayerSystemMarker,
+  PlayerClusterDocument,
+  PlayerSystemDocument,
+  PlayerObjectMarker,
+  PlayerFieldValue,
+  PlayerOrbit,
+  PlayerRoute,
+} from './player-projection'

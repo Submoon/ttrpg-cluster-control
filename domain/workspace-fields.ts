@@ -9,6 +9,7 @@ import type {
   CustomFieldValue,
   SystemObject,
 } from './workspace-model'
+import { nativePlayerFieldIds } from './workspace-model'
 import { isCustomFieldApplicability, validFieldOptions, validName } from './workspace-validation'
 
 /**
@@ -71,6 +72,7 @@ export function updateNativeFieldOptions(
  * @param name Unique field name, compared case-insensitively.
  * @param type Value type for the new definition.
  * @param options Allowed values when type is single-select.
+ * @param playerShared Whether assigned values from the field may appear in the player projection.
  * @returns Workspace with the new definition and no object values assigned.
  * @throws If the name or single-select options are invalid or the name already exists.
  */
@@ -79,6 +81,7 @@ export function addCustomFieldDefinition(
   name: string,
   type: CustomFieldType,
   options: string[] = [],
+  playerShared = false,
 ): LocalWorkspace {
   const fieldName = validName(name, 'Custom field name')
   if (workspace.objectFieldSettings.customFields.some(field => field.name.toLowerCase() === fieldName.toLowerCase())) {
@@ -89,16 +92,64 @@ export function addCustomFieldDefinition(
     ? {
         id: crypto.randomUUID(),
         name: fieldName,
+        playerShared,
         type,
         options: validFieldOptions(options, `${fieldName} option`),
       }
-    : { id: crypto.randomUUID(), name: fieldName, type }
+    : { id: crypto.randomUUID(), name: fieldName, playerShared, type }
 
   return {
     ...workspace,
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: [...workspace.objectFieldSettings.customFields, definition],
+    },
+  }
+}
+
+/**
+ * Changes the shared player-publication setting for one native or custom Field.
+ * This does not change applicability, stored assignments, or object masks.
+ * @param workspace Current immutable workspace.
+ * @param fieldId Native Field ID or custom definition ID.
+ * @param playerShared Whether assigned values may be projected on Revealed objects.
+ * @returns Workspace with only the selected Field policy changed.
+ * @throws If the policy value is invalid or a custom definition no longer exists.
+ */
+export function updateFieldPlayerSharing(
+  workspace: LocalWorkspace,
+  fieldId: string,
+  playerShared: boolean,
+): LocalWorkspace {
+  if (typeof playerShared !== 'boolean') {
+    throw new Error('Choose whether this Field is shared with players.')
+  }
+
+  if (fieldId === nativePlayerFieldIds.atmosphere || fieldId === nativePlayerFieldIds.portClass) {
+    const key = fieldId === nativePlayerFieldIds.atmosphere ? 'atmosphere' : 'portClass'
+    return {
+      ...workspace,
+      objectFieldSettings: {
+        ...workspace.objectFieldSettings,
+        nativePlayerSharing: {
+          ...workspace.objectFieldSettings.nativePlayerSharing,
+          [key]: playerShared,
+        },
+      },
+    }
+  }
+
+  if (!workspace.objectFieldSettings.customFields.some(field => field.id === fieldId)) {
+    throw new Error('The selected custom field no longer exists.')
+  }
+
+  return {
+    ...workspace,
+    objectFieldSettings: {
+      ...workspace.objectFieldSettings,
+      customFields: workspace.objectFieldSettings.customFields.map(field =>
+        field.id === fieldId ? { ...field, playerShared } : field,
+      ),
     },
   }
 }
@@ -329,6 +380,7 @@ export function updateCustomFieldType(
     ? {
         id: definition.id,
         name: definition.name,
+        playerShared: definition.playerShared,
         ...(definition.applicability === undefined ? {} : { applicability: definition.applicability }),
         type,
         options: normalizedOptions,
@@ -336,6 +388,7 @@ export function updateCustomFieldType(
     : {
         id: definition.id,
         name: definition.name,
+        playerShared: definition.playerShared,
         ...(definition.applicability === undefined ? {} : { applicability: definition.applicability }),
         type,
       }
@@ -372,10 +425,18 @@ export function removeCustomFieldDefinition(workspace: LocalWorkspace, fieldId: 
       systems: workspace.cluster.systems.map(system => ({
         ...system,
         objects: system.objects.map(object => {
-          if (!object.customFieldValues || !(fieldId in object.customFieldValues)) return object
-          const customFieldValues = { ...object.customFieldValues }
-          delete customFieldValues[fieldId]
-          return { ...object, customFieldValues }
+          const customFieldValues = object.customFieldValues
+          const hasValue = customFieldValues !== undefined && fieldId in customFieldValues
+          const playerFieldMasks = object.playerFieldMasks.filter(maskedFieldId => maskedFieldId !== fieldId)
+          if (!hasValue && playerFieldMasks.length === object.playerFieldMasks.length) return object
+
+          const updated: SystemObject = { ...object, playerFieldMasks }
+          if (customFieldValues !== undefined && hasValue) {
+            const updatedValues = { ...customFieldValues }
+            delete updatedValues[fieldId]
+            updated.customFieldValues = updatedValues
+          }
+          return updated
         }),
       })),
     },

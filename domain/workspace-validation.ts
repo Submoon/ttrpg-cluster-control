@@ -12,6 +12,7 @@ import {
   type ObjectFieldSettings,
   type Orbit,
   type Point,
+  type PublicationMode,
   type SystemObject,
 } from './workspace-model'
 
@@ -100,6 +101,7 @@ function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition
     || !value.name.trim()
     || value.name !== value.name.trim()
     || value.name.length > maxNameLength
+    || typeof value.playerShared !== 'boolean'
   ) {
     return false
   }
@@ -155,6 +157,9 @@ export function isObjectFieldSettings(value: unknown): value is ObjectFieldSetti
     !isRecord(value)
     || !isFieldOptionList(value.atmosphereOptions)
     || !isFieldOptionList(value.portClassOptions)
+    || !isRecord(value.nativePlayerSharing)
+    || typeof value.nativePlayerSharing.atmosphere !== 'boolean'
+    || typeof value.nativePlayerSharing.portClass !== 'boolean'
     || !isArrayOf(value.customFields, isCustomFieldDefinition)
   ) {
     return false
@@ -162,7 +167,10 @@ export function isObjectFieldSettings(value: unknown): value is ObjectFieldSetti
 
   const ids = new Set(value.customFields.map(field => field.id))
   const names = new Set(value.customFields.map(field => field.name.toLowerCase()))
-  return ids.size === value.customFields.length && names.size === value.customFields.length
+  return ids.size === value.customFields.length
+    && names.size === value.customFields.length
+    && !ids.has('native:atmosphere')
+    && !ids.has('native:port-class')
 }
 
 /**
@@ -181,6 +189,14 @@ export function isPoint(value: unknown): value is Point {
 /** Narrows a record whose every value is a finite scene point. */
 export function isPointRecord(value: unknown): value is Record<string, Point> {
   return isRecord(value) && Object.values(value).every(isPoint)
+}
+
+/** Narrows unknown saved or edited data to one supported publication mode. */
+export function isPublicationMode(value: unknown): value is PublicationMode {
+  return value === 'hidden'
+    || value === 'unknown'
+    || value === 'known-type'
+    || value === 'revealed'
 }
 
 function isObjectFamily(value: unknown): value is ObjectFamily {
@@ -204,6 +220,7 @@ export function isSystemObject(value: unknown): value is SystemObject {
     !isRecord(value)
     || typeof value.id !== 'string'
     || !value.id
+    || !isPublicationMode(value.publication)
     || !isObjectFamily(value.family)
     || typeof value.subtype !== 'string'
     || !value.subtype.trim()
@@ -215,6 +232,9 @@ export function isSystemObject(value: unknown): value is SystemObject {
     || value.name !== value.name.trim()
     || value.name.length > maxNameLength
     || typeof value.description !== 'string'
+    || typeof value.playerText !== 'string'
+    || !isArrayOf(value.playerFieldMasks, (mask): mask is string => typeof mask === 'string' && mask.length > 0)
+    || new Set(value.playerFieldMasks).size !== value.playerFieldMasks.length
     || !isRecord(value.placement)
   ) {
     return false
@@ -301,6 +321,7 @@ export function isJumpRoute(value: unknown): value is JumpRoute {
     || !isJumpLevel(value.jumpLevel)
     || typeof value.fromPointId !== 'string'
     || !value.fromPointId
+    || typeof value.playerShared !== 'boolean'
   ) {
     return false
   }
@@ -333,6 +354,23 @@ export function isJumpLevel(value: unknown): value is number {
  * @returns The first validation message, or null when every saved value remains valid.
  */
 export function objectFieldValidationError(object: SystemObject, settings: ObjectFieldSettings): string | null {
+  if (typeof object.playerText !== 'string') {
+    return 'Player-facing text must be text.'
+  }
+  if (!Array.isArray(object.playerFieldMasks)
+    || object.playerFieldMasks.some(mask => typeof mask !== 'string' || mask.length === 0)
+    || new Set(object.playerFieldMasks).size !== object.playerFieldMasks.length) {
+    return 'Choose valid player Field masks.'
+  }
+  const validMaskIds = new Set([
+    'native:atmosphere',
+    'native:port-class',
+    ...settings.customFields.map(field => field.id),
+  ])
+  if (object.playerFieldMasks.some(mask => !validMaskIds.has(mask))) {
+    return 'Choose valid player Field masks.'
+  }
+
   if (object.atmosphere !== undefined) {
     if (
       object.family !== 'CelestialBody'

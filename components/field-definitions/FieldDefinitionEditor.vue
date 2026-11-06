@@ -18,6 +18,10 @@
           <dt>Applicability</dt>
           <dd>{{ fieldApplicabilitySummary(props.definition) }}</dd>
         </div>
+        <div>
+          <dt>Player sharing</dt>
+          <dd>{{ props.definition.playerShared ? 'Shared with players' : 'Private' }}</dd>
+        </div>
       </dl>
       <div v-if="props.definition.type === 'single-select'" class="field-definition-saved-choices">
         <h4>Saved choices</h4>
@@ -28,6 +32,13 @@
     </section>
 
     <template v-else>
+      <UCheckbox
+        :model-value="props.draft?.playerShared ?? props.definition.playerShared"
+        label="Share with players"
+        :disabled="props.saving || props.changePending"
+        @update:model-value="updatePlayerSharing"
+      />
+
       <UFormField v-if="props.definition.kind === 'custom'" label="Custom field name">
         <UInput
           id="field-definition-name"
@@ -166,6 +177,10 @@ const applicabilityTargets = computed(() => props.draft?.applicability ?? [])
 
 function updateName(value: unknown): void {
   emit('patch-definition', { name: String(value ?? '') })
+}
+
+function updatePlayerSharing(value: boolean | 'indeterminate'): void {
+  emit('patch-definition', { playerShared: value === true })
 }
 
 function updateOptions(value: unknown): void {

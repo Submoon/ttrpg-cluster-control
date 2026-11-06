@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || searchOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || publicationMenuRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -110,6 +110,10 @@
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
+              :player-export-error="playerExportError"
+              :generated-player-url="generatedPlayerUrl"
+              :player-link-busy="playerLinkBusy"
+              :player-link-status="playerLinkStatus"
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
@@ -125,6 +129,11 @@
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
+              @export-player-json="downloadPlayerJson"
+              @export-player-image="downloadPlayerImage"
+              @preview-player-view="openPlayerPreview"
+              @generate-player-link="generatePlayerLink"
+              @copy-player-link="copyPlayerLink"
               @import-file="importJsonFile"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
@@ -395,6 +404,7 @@
             <MapInspector
               :mode="activeView"
               :workspace="workspace"
+              :publication-busy="publicationBusy"
               :selected-system="selectedSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
@@ -433,6 +443,7 @@
               @detach-orbit="detachSelectedOrbit"
               @delete-orbit="deleteSelectedOrbit"
               @request-route-edit="beginRouteEdit"
+              @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
@@ -446,6 +457,13 @@
             />
           </template>
         </MapEditorLayout>
+        <PublicationContextMenu
+          :request="publicationMenuRequest"
+          :current-mode="publicationMenuMode"
+          :busy="publicationBusy"
+          @select="selectPublicationMenuMode"
+          @dismiss="publicationControls.closeMenu()"
+        />
       </section>
     </main>
 
@@ -481,10 +499,20 @@
       :form-error="formError"
       :target-system-name="chartDraftSystemName"
       @update:open="setChartNamesDialogOpen"
+      v-model:player-title="playerTitle"
+      v-model:publication="publication"
       @apply="submitNames"
       @discard="cancelChartNamesEdit"
       @resolve-transition="resolveTransitionChoice"
     />
+
+    <PlayerViewPreviewDialog
+      v-if="workspace && playerClusterDocument"
+      :open="playerPreviewOpen"
+      :document="playerClusterDocument"
+      @update:open="playerPreviewOpen = $event"
+    />
+
 
     <WorkspaceHistoryCapacityDialog :request="historyCapacityRequest" @resolve="resolveHistoryCapacity" />
 
@@ -496,13 +524,16 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { catalogueTypes, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
+import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
@@ -510,6 +541,7 @@ import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
+import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 
 const {
@@ -527,11 +559,15 @@ const {
   retrySaveLatest,
   restoreBackup,
 } = useLocalWorkspace()
+const runtimeConfig = useRuntimeConfig()
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
 let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = () => undefined
+let publicationFocusRestoreAllowed: (request: PublicationMenuRequest) => boolean = () => false
 const historyOpen = ref(false)
+const playerPreviewOpen = ref(false)
+const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
 const history = useWorkspaceHistory({
   workspace,
   appliedRevision,
@@ -720,8 +756,28 @@ const workflows = useEditorWorkflows({
   mutations,
   initializeWorkspace: commit,
   waitForSearchPresentation,
+  canRestorePublicationFocus: request => publicationFocusRestoreAllowed(request),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search } = workflows
+const publicationControls = workflows.publication
+const publicationMenuRequest = publicationControls.menuRequest
+const publicationBusy = publicationControls.busy
+const setRouteSharing = publicationControls.setRouteSharing
+const publicationMenuMode = computed(() => {
+  const request = publicationMenuRequest.value
+  if (!workspace.value || !request) return null
+  if (request.target.kind === 'system') {
+    return workspace.value.cluster.systems.find(system => system.id === request.target.id)?.publication ?? null
+  }
+  return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
+    ?.objects.find(object => object.id === request.target.id)?.publication ?? null
+})
+function selectPublicationMenuMode(mode: import('../domain/workspace').PublicationMode): void {
+  const request = publicationMenuRequest.value
+  publicationControls.closeMenu()
+  if (!request) return
+  void publicationControls.set({ targets: [request.target], mode })
+}
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
@@ -739,7 +795,7 @@ const {
   selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
 } = navigation
 const {
-  clusterName, systemName, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
+  clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
   transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
   cancelNamesEdit: cancelChartNamesEdit, setDialogOpen: setChartNamesDialogOpen,
   resolveTransition, resolveTransitionChoice, beginNamesEdit: beginChartNamesEdit,
@@ -835,6 +891,10 @@ provideEditorCommands({
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },
   map: { changeMode: changeMapMode },
+  publication: {
+    set: publicationControls.set,
+    openMenu: publicationControls.openMenu,
+  },
 })
 
 const fieldDefinitionInspectorConflict = computed(() => {
@@ -1054,6 +1114,81 @@ async function handleAddEscape(event: KeyboardEvent): Promise<void> {
 
 let importReviewActions: ReturnType<typeof useWorkspaceFiles> | null = null
 
+async function preparePlayerExport() {
+  const initialWorkspace = workspace.value
+  const requestedView = activeView.value
+  const requestedSystemId = requestedView === 'system' ? selectedSystemId.value : null
+  const requestedRenderer = requestedView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+  const workspaceId = initialWorkspace?.id
+  const clusterId = initialWorkspace?.cluster.id
+  if (!initialWorkspace || !requestedRenderer || (requestedView === 'system' && !requestedSystemId)) return null
+
+  const contextIsCurrent = (): boolean => {
+    const currentWorkspace = workspace.value
+    return currentWorkspace !== null
+      && currentWorkspace.id === workspaceId
+      && currentWorkspace.cluster.id === clusterId
+      && activeView.value === requestedView
+      && (requestedView !== 'system' || selectedSystemId.value === requestedSystemId)
+      && (requestedView === 'cluster' ? clusterMapRef.value : systemMapRef.value) === requestedRenderer
+  }
+
+  try {
+    if (!await beforeWorkspaceOperation()) return null
+  } catch (error) {
+    // A preflight rejection belongs to its captured request only; never publish it for a newer map.
+    if (!contextIsCurrent()) return null
+    throw error
+  }
+  if (!contextIsCurrent()) return null
+
+  const capturedAppliedRevision = appliedRevision.value
+  const appliedWorkspace = workspace.value
+  if (!appliedWorkspace) return null
+  const document = projectPlayerCluster(appliedWorkspace)
+  let scene: CurrentPlayerMapScene | null = null
+
+  if (requestedView === 'cluster') {
+    scene = { kind: 'jump-cluster', document }
+  } else {
+    const publicSystemIndex = appliedWorkspace.cluster.systems
+      .filter(system => system.publication !== 'hidden')
+      .findIndex(system => system.id === requestedSystemId)
+    const marker = publicSystemIndex >= 0 ? document.systems[publicSystemIndex] : undefined
+    if (marker?.disclosure === 'revealed' && marker.map) {
+      scene = { kind: 'star-system', document: marker.map, label: marker.label }
+    }
+  }
+
+  const isCurrent = (): boolean => contextIsCurrent()
+    && appliedRevision.value === capturedAppliedRevision
+
+  return { document, scene, isCurrent }
+}
+
+const playerFileExports = usePlayerFileExports({ prepare: preparePlayerExport })
+const {
+  playerExportError,
+  generatedPlayerUrl,
+  playerLinkBusy,
+  playerLinkStatus,
+  downloadPlayerJson,
+  downloadPlayerImage,
+} = playerFileExports
+
+function generatePlayerLink(): void {
+  const baseUrl = new URL(runtimeConfig.app.baseURL, window.location.origin)
+  if (!baseUrl.pathname.endsWith('/')) baseUrl.pathname += '/'
+  baseUrl.search = ''
+  baseUrl.hash = ''
+  const readerUrl = new URL('player', baseUrl).toString()
+  void playerFileExports.generatePlayerLink(readerUrl)
+}
+
+function copyPlayerLink(): void {
+  void playerFileExports.copyPlayerLink()
+}
+
 async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promise<boolean> {
   const hasConflictingEntityDraft = existingFieldIds.some(fieldId =>
     isEntityCommandBlocked({ kind: 'definition-mutation', fieldId }),
@@ -1104,9 +1239,28 @@ const {
   resumeImportReview,
 } = workspaceFiles
 
-const searchShortcutAvailable = computed(() => workspace.value !== null
+publicationFocusRestoreAllowed = request => !(
+  historyOpen.value
+  || chartNamesDialogOpen.value
+  || playerPreviewOpen.value
+  || fieldDefinitionDialogOpen.value
+  || headerFilesOpen.value
+  || recoveryDetailsOpen.value
+  || historyCapacityRequest.value !== null
+  || searchOpen.value
+  || deletionReview.value !== null
+  || creationChooserOpen.value
+  || (compactPanelOpen.value && request.source === 'map')
+  || editingGestureActive.value
+  || importReview.value.open
+  || importReview.value.suspended
+  || importReview.value.confirming
+)
+
+const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !historyOpen.value
   && !chartNamesDialogOpen.value
+  && !playerPreviewOpen.value
   && !fieldDefinitionDialogOpen.value
   && !headerFilesOpen.value
   && !recoveryDetailsOpen.value
@@ -1119,10 +1273,16 @@ const searchShortcutAvailable = computed(() => workspace.value !== null
   && !compactPanelOpen.value
   && !editingGestureActive.value)
 
+function openPlayerPreview(focusMapFiles: () => void): void {
+  if (!workspaceOverlayAvailable.value || searchOpen.value || publicationMenuRequest.value) return
+  focusMapFiles()
+  playerPreviewOpen.value = true
+}
+
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
-  if (chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
+  if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
   }
@@ -1136,7 +1296,7 @@ endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 useWorkspaceHistoryShortcuts({
   status: historyStatus,
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
@@ -1147,7 +1307,7 @@ useWorkspaceHistoryShortcuts({
 
 const mapToolShortcuts = useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
@@ -1162,7 +1322,7 @@ const mapToolShortcuts = useMapToolShortcuts({
 })
 
 function canOpenSearchShortcut(): boolean {
-  return searchShortcutAvailable.value && !mapToolShortcuts.isMapInputActive()
+  return workspaceOverlayAvailable.value && !mapToolShortcuts.isMapInputActive()
 }
 
 function openMapAddChooserFromKeyboard(): void {
@@ -1220,5 +1380,3 @@ async function retryLatestSave(): Promise<void> {
   }
 }
 </script>
-
-<style src="../assets/css/map-workspace.css"></style>

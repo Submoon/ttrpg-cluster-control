@@ -197,7 +197,7 @@ for (const viewport of smokeViewports) {
     if (await clusterChartDetailsButton.getAttribute('aria-pressed') !== 'true') await clusterChartDetailsButton.click()
     const clusterDetails = page.getByRole('region', { name: 'Jump Cluster details', exact: true })
     const clusterActions = clusterDetails.locator('.chart-details-actions')
-    const clusterEdit = clusterActions.getByRole('button', { name: 'Edit chart names', exact: true })
+    const clusterEdit = clusterActions.getByRole('button', { name: 'Edit chart details', exact: true })
     await expectFooterActionToFit(
       clusterDetails,
       clusterEdit,
@@ -212,7 +212,7 @@ for (const viewport of smokeViewports) {
     await ensureInspectorOpen(page, inspector)
     const selectedSystemDetails = page.getByRole('region', { name: 'Star System details', exact: true })
     const systemActions = selectedSystemDetails.locator('.chart-details-actions')
-    const systemEdit = systemActions.getByRole('button', { name: 'Edit chart names', exact: true })
+    const systemEdit = systemActions.getByRole('button', { name: 'Edit chart details', exact: true })
     const openSystem = systemActions.getByRole('button', { name: 'Open system', exact: true })
     await expectFooterActionToFit(
       selectedSystemDetails,

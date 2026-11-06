@@ -4,14 +4,14 @@
 import type { JumpClusterExport, LocalWorkspace, StarSystemExport } from './workspace-model'
 
 /**
- * Projects the complete Cluster and durable workspace layout into the version 1 JSON export shape.
+ * Projects the complete Cluster and durable workspace layout into the version 4 JSON export shape.
  * @param workspace Workspace to export.
  * @returns Cluster data, shared field definitions, and saved map layout; no transient renderer state.
  */
 export function exportJumpCluster(workspace: LocalWorkspace): JumpClusterExport {
   return {
     format: 'ttrpg-cluster-control-map',
-    version: 1,
+    version: 4,
     type: 'cluster',
     cluster: workspace.cluster,
     objectFieldSettings: workspace.objectFieldSettings,
@@ -27,7 +27,7 @@ export function exportJumpCluster(workspace: LocalWorkspace): JumpClusterExport 
  * Shared field settings are retained; Cluster routes and systemPositions are intentionally omitted.
  * @param workspace Workspace containing the system and shared field definitions.
  * @param systemId System to export.
- * @returns Standalone system export with only that system's Orbit/object layout.
+ * @returns Version 4 standalone system export with its publication and sharing settings and saved layout.
  * @throws If systemId no longer identifies a system in the workspace.
  */
 export function exportStarSystem(workspace: LocalWorkspace, systemId: string): StarSystemExport {
@@ -43,7 +43,7 @@ export function exportStarSystem(workspace: LocalWorkspace, systemId: string): S
   // A standalone system carries only its own Orbit/object layout, never Cluster routes or system positions.
   return {
     format: 'ttrpg-cluster-control-map',
-    version: 1,
+    version: 4,
     type: 'system',
     system,
     objectFieldSettings: workspace.objectFieldSettings,

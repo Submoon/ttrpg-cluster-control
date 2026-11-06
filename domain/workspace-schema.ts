@@ -1,7 +1,7 @@
 /**
  * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
  */
-import { defaultObjectFieldSettings } from './workspace-model'
+import { defaultObjectFieldSettings, nativePlayerFieldIds } from './workspace-model'
 import type { JumpCluster, LocalWorkspace, ObjectFieldSettings, Point, StarSystem } from './workspace-model'
 import {
   isArrayOf,
@@ -10,6 +10,7 @@ import {
   isOrbit,
   isPoint,
   isPointRecord,
+  isPublicationMode,
   isRecord,
   isSystemObject,
   maxNameLength,
@@ -100,6 +101,7 @@ export function isStarSystem(value: unknown): value is StarSystem {
   }
 
   const name = value.name
+  const publication = value.publication
   const objects = value.objects
   const orbits = value.orbits
   if (
@@ -107,13 +109,14 @@ export function isStarSystem(value: unknown): value is StarSystem {
     || !name.trim()
     || name !== name.trim()
     || name.length > maxNameLength
+    || !isPublicationMode(publication)
     || !isArrayOf(objects, isSystemObject)
     || !isArrayOf(orbits, isOrbit)
   ) {
     return false
   }
 
-  return isSystemStructureValid({ id: value.id, name, objects, orbits })
+  return isSystemStructureValid({ id: value.id, name, publication, objects, orbits })
 }
 
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
@@ -135,14 +138,25 @@ type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout
  * @param value Unknown persisted or imported workspace candidate.
  * @returns False if structure, entity IDs/references, layout values, or saved field values are invalid.
  */
-function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
-  if (!isRecord(value) || typeof value.id !== 'string' || !value.id || !isRecord(value.cluster)) {
+function isStoredLocalWorkspace(
+  value: unknown,
+  allowLegacyLayout = false,
+): value is StoredLocalWorkspace {
+  if (
+    !isRecord(value)
+    || value.version !== 4
+    || typeof value.id !== 'string'
+    || !value.id
+    || (!allowLegacyLayout && value.objectFieldSettings === undefined)
+    || !isRecord(value.cluster)
+  ) {
     return false
   }
 
   const cluster = value.cluster
   const clusterId = cluster.id
   const clusterName = cluster.name
+  const playerTitle = cluster.playerTitle
   const systems = cluster.systems
   const routes = cluster.routes
   const layout = value.layout
@@ -155,10 +169,20 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
     || !clusterName.trim()
     || clusterName !== clusterName.trim()
     || clusterName.length > maxNameLength
+    || typeof playerTitle !== 'string'
+    || !playerTitle.trim()
+    || playerTitle !== playerTitle.trim()
+    || playerTitle.length > maxNameLength
     || !isArrayOf(systems, isStarSystem)
     || systems.length === 0
     || !isArrayOf(routes, isJumpRoute)
     || !isRecord(layout)
+    || (!allowLegacyLayout && (
+      !isCurrentOrbitRadii(layout.orbitRadii)
+      || layout.orbitEllipseRadii !== undefined
+      || !isCurrentOrbitRotations(layout.orbitRotations)
+      || !isRecord(layout.objectAngles)
+    ))
     || !isPointRecord(systemPositionsValue)
     || (unresolvedExitPositionsValue !== undefined && !isPointRecord(unresolvedExitPositionsValue))
     || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
@@ -224,7 +248,13 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
 
   const positions = systemPositionsValue
   const unresolvedExitPositions = unresolvedExitPositionsValue ?? {}
-  const validatedCluster: JumpCluster = { id: clusterId, name: clusterName, systems, routes }
+  const validatedCluster: JumpCluster = {
+    id: clusterId,
+    name: clusterName,
+    playerTitle,
+    systems,
+    routes,
+  }
   const jumpPoints = new Map(jumpPointsInCluster(validatedCluster).map(reference => [reference.point.id, reference]))
   const orbitRadii = normalizeOrbitRadii(
     layout.orbitRadii ?? {},
@@ -278,6 +308,23 @@ function isStoredLocalWorkspace(value: unknown): value is StoredLocalWorkspace {
       isPoint(positions[system.id])
       && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
     )
+}
+
+function isCurrentOrbitRadii(value: unknown): boolean {
+  return isRecord(value)
+    && Object.values(value).every(radii => isRecord(radii)
+      && typeof radii.horizontal === 'number'
+      && Number.isFinite(radii.horizontal)
+      && typeof radii.vertical === 'number'
+      && Number.isFinite(radii.vertical))
+}
+
+function isCurrentOrbitRotations(value: unknown): boolean {
+  return isRecord(value)
+    && Object.values(value).every(rotation => typeof rotation === 'number'
+      && Number.isFinite(rotation)
+      && rotation >= 0
+      && rotation < 360)
 }
 
 /**
@@ -343,6 +390,185 @@ export function withDefaultJumpLevels(value: unknown): unknown {
   }
 }
 
+type LegacyCustomFieldIdContext = 'local-workspace' | 'cluster-export' | 'system-export'
+
+/**
+ * Remaps pre-v4 custom definition IDs that alias native Field IDs, preserving their assignment keys.
+ * Candidate IDs avoid the authoritative payload's entity IDs, definitions, and assignment keys.
+ * Invalid or duplicate original definition IDs are left untouched so strict validation rejects them.
+ */
+export function remapLegacyReservedCustomFieldIds(
+  value: unknown,
+  context: LegacyCustomFieldIdContext,
+): unknown {
+  if (!isRecord(value) || !isRecord(value.objectFieldSettings)) return value
+  const settings = value.objectFieldSettings
+  type LegacyCustomFieldRecord = Record<string, unknown> & { id: string }
+  const hasValidFieldId = (field: unknown): field is LegacyCustomFieldRecord =>
+    isRecord(field) && typeof field.id === 'string' && field.id.length > 0
+  const isLegacyCustomFieldArray = (fields: unknown): fields is LegacyCustomFieldRecord[] =>
+    Array.isArray(fields) && fields.every(hasValidFieldId)
+  if (!isLegacyCustomFieldArray(settings.customFields)) {
+    return value
+  }
+  const fields = settings.customFields
+  const definitionIds = fields.map(field => field.id)
+  if (new Set(definitionIds).size !== definitionIds.length) return value
+
+  const reservedNativeIds = new Set<string>(Object.values(nativePlayerFieldIds))
+  if (!definitionIds.some(id => reservedNativeIds.has(id))) {
+    return value
+  }
+
+  const cluster = isRecord(value.cluster) ? value.cluster : undefined
+  const system = isRecord(value.system) ? value.system : undefined
+  if (context !== 'system-export' && !cluster) return value
+  if (context === 'system-export' && !system) return value
+
+  const conflictIds = new Set<string>()
+  const usedIds = new Set<string>(definitionIds)
+  const reserveEntityIds = (record: Record<string, unknown>): void => {
+    if (typeof record.id === 'string' && record.id.length > 0) {
+      usedIds.add(record.id)
+      if (context !== 'system-export') conflictIds.add(record.id)
+    }
+  }
+  const reserveSystemIds = (system: unknown): void => {
+    if (!isRecord(system)) return
+    reserveEntityIds(system)
+    if (Array.isArray(system.objects)) {
+      for (const object of system.objects) if (isRecord(object)) reserveEntityIds(object)
+    }
+    if (Array.isArray(system.orbits)) {
+      for (const orbit of system.orbits) if (isRecord(orbit)) reserveEntityIds(orbit)
+    }
+  }
+
+  const sourceSystems: unknown[] = []
+  if (context === 'system-export') {
+    sourceSystems.push(system)
+  } else if (cluster) {
+    if (context === 'local-workspace') reserveEntityIds(value)
+    reserveEntityIds(cluster)
+    if (Array.isArray(cluster.systems)) {
+      sourceSystems.push(...cluster.systems)
+    }
+    if (Array.isArray(cluster.routes)) {
+      for (const route of cluster.routes) if (isRecord(route)) reserveEntityIds(route)
+    }
+  }
+  for (const sourceSystem of sourceSystems) reserveSystemIds(sourceSystem)
+
+  if (definitionIds.some(id => reservedNativeIds.has(id) && conflictIds.has(id))) {
+    return value
+  }
+
+  for (const system of sourceSystems) {
+    if (!isRecord(system) || !Array.isArray(system.objects)) continue
+    for (const object of system.objects) {
+      if (!isRecord(object) || !isRecord(object.customFieldValues)) continue
+      for (const fieldId of Object.keys(object.customFieldValues)) usedIds.add(fieldId)
+    }
+  }
+
+  const fieldIds = new Map<string, string>()
+  let suffix = 1
+  for (const fieldId of definitionIds) {
+    if (!reservedNativeIds.has(fieldId)) continue
+    let replacementId = `legacy-custom-field-${suffix++}`
+    while (usedIds.has(replacementId)) replacementId = `legacy-custom-field-${suffix++}`
+    usedIds.add(replacementId)
+    fieldIds.set(fieldId, replacementId)
+  }
+
+  const remapSystem = (system: unknown): unknown => {
+    if (!isRecord(system) || !Array.isArray(system.objects)) return system
+    return {
+      ...system,
+      objects: system.objects.map(object => {
+        if (!isRecord(object) || !isRecord(object.customFieldValues)) return object
+        return {
+          ...object,
+          customFieldValues: Object.fromEntries(Object.entries(object.customFieldValues).map(([fieldId, fieldValue]) => [
+            fieldIds.get(fieldId) ?? fieldId,
+            fieldValue,
+          ])),
+        }
+      }),
+    }
+  }
+
+  const objectFieldSettings = {
+    ...settings,
+    customFields: fields.map(field => {
+      const id = fieldIds.get(field.id)
+      return id === undefined ? field : { ...field, id }
+    }),
+  }
+  if (context === 'system-export') {
+    return {
+      ...value,
+      objectFieldSettings,
+      system: remapSystem(system),
+    }
+  }
+  if (!cluster) return value
+
+  return {
+    ...value,
+    objectFieldSettings,
+    cluster: {
+      ...cluster,
+      ...(Array.isArray(cluster.systems)
+        ? { systems: cluster.systems.map(remapSystem) }
+        : {}),
+    },
+  }
+}
+
+/**
+ * Converts supported pre-v4 source records to their explicit private player-sharing defaults.
+ * These fields did not exist in earlier formats, so their values are always initialized safely.
+ */
+function withLegacyPlayerSharingDefaults(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.cluster)) return value
+
+  const cluster = value.cluster
+  const settings = value.objectFieldSettings
+  const migrated = {
+    ...value,
+    version: 4,
+    cluster: {
+      ...cluster,
+      systems: Array.isArray(cluster.systems)
+        ? cluster.systems.map(system => isRecord(system)
+          ? {
+              ...system,
+              objects: Array.isArray(system.objects)
+                ? system.objects.map(object => isRecord(object)
+                  ? { ...object, playerText: '', playerFieldMasks: [] }
+                  : object)
+                : system.objects,
+            }
+          : system)
+        : cluster.systems,
+      routes: Array.isArray(cluster.routes)
+        ? cluster.routes.map(route => isRecord(route) ? { ...route, playerShared: false } : route)
+        : cluster.routes,
+    },
+    ...(isRecord(settings) ? {
+      objectFieldSettings: {
+        ...settings,
+        nativePlayerSharing: { atmosphere: false, portClass: false },
+        customFields: Array.isArray(settings.customFields)
+          ? settings.customFields.map(field => isRecord(field) ? { ...field, playerShared: false } : field)
+          : settings.customFields,
+      },
+    } : {}),
+  }
+  return remapLegacyReservedCustomFieldIds(migrated, 'local-workspace')
+}
+
 /**
  * Restores a persisted candidate by applying supported legacy shims, validation, and normalized layout defaults.
  * Malformed or unsupported data is rejected rather than partially repaired.
@@ -350,8 +576,67 @@ export function withDefaultJumpLevels(value: unknown): unknown {
  * @returns Current workspace shape, or null when validation or layout normalization fails.
  */
 export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
-  const restored = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(value))
-  if (!isStoredLocalWorkspace(restored)) {
+  if (!isRecord(value)) return null
+
+  const version = value.version
+  const isUnversionedLegacy = version === undefined
+  const isVersionTwo = version === 2
+  const isVersionThree = version === 3
+  let currentValue: unknown = value
+  if (isUnversionedLegacy) {
+    const cluster = value.cluster
+    if (!isRecord(cluster) || !Array.isArray(cluster.systems)) return null
+    currentValue = {
+      ...value,
+      version: 4,
+      cluster: {
+        ...cluster,
+        playerTitle: 'Player Jump Cluster',
+        systems: cluster.systems.map(system => isRecord(system)
+          ? {
+              ...system,
+              publication: 'hidden',
+              objects: Array.isArray(system.objects)
+                ? system.objects.map(object => isRecord(object)
+                  ? { ...object, publication: 'hidden' }
+                  : object)
+                : system.objects,
+            }
+          : system),
+      },
+    }
+  } else if (isVersionTwo) {
+    const cluster = value.cluster
+    if (!isRecord(cluster) || !Array.isArray(cluster.systems)) return null
+    currentValue = {
+      ...value,
+      version: 4,
+      cluster: {
+        ...cluster,
+        systems: cluster.systems.map(system => isRecord(system)
+          ? {
+              ...system,
+              objects: Array.isArray(system.objects)
+                ? system.objects.map(object => isRecord(object)
+                  ? { ...object, publication: 'hidden' }
+                  : object)
+                : system.objects,
+            }
+          : system),
+      },
+    }
+  } else if (!isVersionThree && version !== 4) {
+    return null
+  }
+
+  if (isUnversionedLegacy || isVersionTwo || isVersionThree) {
+    currentValue = withLegacyPlayerSharingDefaults(currentValue)
+  }
+
+  const restored = isUnversionedLegacy
+    ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
+    : currentValue
+  if (!isStoredLocalWorkspace(restored, isUnversionedLegacy)) {
     return null
   }
 

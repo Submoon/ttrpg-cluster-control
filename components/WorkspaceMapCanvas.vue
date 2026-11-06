@@ -108,10 +108,13 @@ import type {
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
+import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
 
@@ -139,6 +142,7 @@ const props = defineProps<{
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
 }>()
+const commands = useEditorCommands()
 
 const emit = defineEmits<{
   'navigate-system': [id: string]
@@ -215,8 +219,10 @@ let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
+let publicationMenuLease: PublicationMenuLease | null = null
 let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
 let touchPanStarted = false
+let touchReleaseGuard: ReturnType<typeof createOwnedTouchReleaseGuard> | null = null
 
 function holdClickSuppression(): void {
   suppressNextClick = true
@@ -293,28 +299,31 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
     && !!target.closest('.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')
 }
 
-function inspectLongPress(target: EventTarget | null): void {
-  if (!(target instanceof Element)) return
+function longPressInspection(target: EventTarget | null): (() => void) | null {
+  if (!(target instanceof Element)) return null
   const systemId = target.closest<SVGGElement>('.cluster-system-node')?.getAttribute('data-system-id')
   if (systemId) {
-    emit('select-cluster-system', systemId)
-    return
+    return () => emit('select-cluster-system', systemId)
   }
   const routeId = target.closest<SVGGElement>('.cluster-route')?.getAttribute('data-route-id')
   if (routeId) {
-    emit('select-route', routeId)
-    return
+    return () => emit('select-route', routeId)
   }
   const objectId = target.closest<SVGGElement>('.system-object')?.getAttribute('data-object-id')
   if (objectId) {
-    emit('select-object', objectId)
-    return
+    return () => emit('select-object', objectId)
   }
   const orbitId = target.closest<SVGGElement>('.orbit-mark, .orbit-hit-target, .orbit-edit-control')?.getAttribute('data-orbit-id')
-  if (orbitId) emit('select-orbit', orbitId)
+  return orbitId ? () => emit('select-orbit', orbitId) : null
+}
+
+function inspectLongPress(target: EventTarget | null): void {
+  longPressInspection(target)?.()
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
     && event.button === 2
     && (event.buttons & 1) !== 0
@@ -368,6 +377,8 @@ function onPointerDownCapture(event: PointerEvent): void {
 
 /** Takes over a held left-button gesture when the browser reports right-button chord only as mousedown. */
 function onMouseDownCapture(event: MouseEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   if (event.button !== 2 || (event.buttons & 1) === 0 || activeMousePointerId === null) return
   // Browsers that emit a second pointerdown already entered the ordinary right-pan path.
   if (activePointerPan?.button === 2) return
@@ -386,6 +397,11 @@ function onMouseDownCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
+    && event.target instanceof SVGElement) {
+    const bounds = event.target.getBoundingClientRect()
+    if (showPublicationMenu(event, { x: bounds.left, y: bounds.bottom })) return
+  }
   if (props.moveTargeting && props.mode === 'move' && event.target instanceof SVGElement) {
     const step = event.shiftKey ? 10 : 1
     const nudges: Record<string, Point> = {
@@ -483,12 +499,60 @@ function isDisabledObstructionRelease(event: PointerEvent): boolean {
 }
 
 function onContextMenuCapture(event: MouseEvent): void {
+  event.preventDefault()
   if ((activePointerPan?.button === 2 && activePointerPan.moved) || suppressNextContextMenu) {
-    event.preventDefault()
     event.stopPropagation()
+    event.stopImmediatePropagation()
     suppressNextContextMenu = false
     if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
+    return
   }
+  showPublicationMenu(event, { x: event.clientX, y: event.clientY })
+}
+
+function publicationTargetAt(target: EventTarget | null): { target: PublicationTarget; mark: SVGElement } | null {
+  if (props.mode !== 'select' || props.moveTargeting || props.clusterChooserOpen
+    || props.clusterMoveTargeting
+    || (props.activeView === 'cluster' && props.clusterAddType != null)
+    || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
+    return null
+  }
+  if (!(target instanceof Element)) return null
+
+  if (props.activeView === 'cluster') {
+    const mark = target.closest<SVGGElement>('.cluster-system-node[data-system-id]')
+    const systemId = mark?.getAttribute('data-system-id')
+    return systemId && mark
+      ? { target: { kind: 'system', id: systemId, systemId }, mark }
+      : null
+  }
+
+  const mark = target.closest<SVGGElement>('.system-object[data-object-id]')
+  const objectId = mark?.getAttribute('data-object-id')
+  const systemId = props.system?.id
+  return objectId && systemId && mark
+    ? { target: { kind: 'object', id: objectId, systemId }, mark }
+    : null
+}
+
+function showPublicationMenu(
+  event: MouseEvent | KeyboardEvent,
+  point: { x: number; y: number },
+): boolean {
+  const candidate = publicationTargetAt(event.target)
+  if (!candidate) return false
+  const lease = commands.publication.openMenu({
+    target: candidate.target,
+    clientPoint: point,
+    opener: candidate.mark,
+    source: 'map',
+  })
+  if (!lease) return false
+  publicationMenuLease = lease
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  return true
 }
 
 function onClickCapture(event: MouseEvent): void {
@@ -501,6 +565,8 @@ function onClickCapture(event: MouseEvent): void {
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
   if (event.touches.length !== 1) {
     clearLongPress()
     touchStart = null
@@ -522,23 +588,34 @@ function onTouchStartCapture(event: TouchEvent): void {
     longPressTimer = setTimeout(() => {
       if (touchStart?.id !== touchId) return
       longPressTimer = undefined
+      // Consume placement on release while leaving this contact available to pan.
       consumedAddTouchId = touchId
-      cancelMapGesture()
     }, 560)
     return
   }
   if (props.mode !== 'navigate' && props.mode !== 'move') return
+  const touchId = touch.identifier
   longPressTimer = setTimeout(() => {
-    if (!touchStart) return
-    const target = touchStart.target
+    const contact = touchStart
+    if (!contact || contact.id !== touchId) return
+    const inspection = longPressInspection(contact.target)
     if (props.activeView === 'cluster') emit('cancel-cluster-preview')
     if (props.activeView === 'system') {
       emit('cancel-object-placement-preview')
       emit('cancel-orbit-placement-preview')
     }
-    cancelMapGesture()
+    if (inspection) {
+      const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
+      cancelMapGesture()
+      touchReleaseGuard?.arm({
+        touchId,
+        pointerId: touchPointerId,
+        x: contact.x,
+        y: contact.y,
+      })
+    }
     holdClickSuppression()
-    inspectLongPress(target)
+    inspection?.()
     touchStart = null
   }, 560)
 }
@@ -742,6 +819,7 @@ function isVisibleObstruction(element: Element): boolean {
 }
 
 onMounted(async () => {
+  touchReleaseGuard = createOwnedTouchReleaseGuard(document)
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerUp, true)
   window.addEventListener('pointercancel', onWindowPointerUp, true)
@@ -766,6 +844,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
+  touchReleaseGuard?.dispose()
+  touchReleaseGuard = null
   mapDisposed = true
   settleMapReadiness(false)
   cancelCanvasGesture()
@@ -779,7 +861,11 @@ onBeforeUnmount(() => {
   document.removeEventListener('freeze', onDocumentFreeze)
 })
 
-watch(() => props.mode, () => cancelCanvasGesture(true), { flush: 'sync' })
+watch(() => props.mode, () => {
+  publicationMenuLease?.close()
+  publicationMenuLease = null
+  cancelCanvasGesture(true)
+}, { flush: 'sync' })
 watch(() => props.creationType, () => {
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
@@ -794,6 +880,8 @@ watch(
     () => props.selectedOrbitId,
   ],
   () => {
+    publicationMenuLease?.close()
+    publicationMenuLease = null
     emit('cancel-object-placement-preview')
     emit('cancel-orbit-placement-preview')
   },

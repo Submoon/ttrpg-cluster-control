@@ -145,7 +145,7 @@ test('Stay keeps a dirty object draft and does not publish or select a new objec
   await beginObjectAdd(page, 'planet')
   await addObjectAt(page, 'planet', { x: 0.25, y: 0.25 })
 
-  const guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toBeHidden()

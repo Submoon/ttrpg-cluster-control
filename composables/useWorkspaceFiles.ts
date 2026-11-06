@@ -12,6 +12,7 @@ import {
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { downloadBlob, exportFileName } from '../utils/browser-download'
 import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
 type MapKind = 'jump-cluster' | 'star-system'
@@ -140,25 +141,6 @@ export function useWorkspaceFiles({
   }
 
   /**
-   * Triggers a browser download and revokes its object URL after the click has been dispatched.
-   * @param filename Suggested download name.
-   * @param blob File contents and media type.
-   */
-  function downloadFile(filename: string, blob: Blob): void {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    try {
-      link.href = url
-      link.download = filename
-      document.body.append(link)
-      link.click()
-    } finally {
-      link.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 0)
-    }
-  }
-
-  /**
    * Serializes a value as indented JSON and starts its browser download.
    * @param filename Suggested download name.
    * @param value JSON-serializable payload.
@@ -169,23 +151,7 @@ export function useWorkspaceFiles({
     if (json === undefined) {
       throw new Error('Could not serialize the map as JSON.')
     }
-    downloadFile(filename, new Blob([json], { type: 'application/json' }))
-  }
-
-  /**
-   * Builds a download name with filesystem-reserved characters replaced.
-   * @param name Map name supplied by workspace data.
-   * @param kind Map format suffix distinguishing cluster from system files.
-   * @param extension File extension without a leading dot.
-   * @returns Sanitized filename ending in the map kind and extension.
-   */
-  function exportFileName(
-    name: string,
-    kind: MapKind,
-    extension = 'json',
-  ): string {
-    const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim() // eslint-disable-line no-control-regex -- Replace C0 controls because they cannot appear in downloaded filenames.
-    return `${safeName || 'map'}-${kind}.${extension}`
+    downloadBlob(filename, new Blob([json], { type: 'application/json' }))
   }
 
   /**
@@ -249,7 +215,7 @@ export function useWorkspaceFiles({
     if (!current?.map || current.map !== map || current.name !== name) return
 
     try {
-      downloadFile(exportFileName(current.name, kind, format), await current.map.exportImage(format, palette))
+      downloadBlob(exportFileName(current.name, kind, format), await current.map.exportImage(format, palette))
       exportError.value = ''
     } catch (error) {
       exportError.value = errorText(error)

@@ -57,12 +57,15 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
   const system = initial.cluster.systems[0]
   if (!system) throw new Error('The initial workspace has no star system.')
   const jumpPoint: SystemObject = {
+    publication: 'known-type',
     id: 'history-integration-jump-point',
     family: 'JumpPoint',
     subtype: 'jump-point',
     locationKey: 'J',
     name: 'Far Gate',
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'system', x: 0.78, y: 0.5 },
   }
   const routeId = 'history-integration-unresolved-route'
@@ -79,6 +82,7 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
           toPointId: null,
           unresolvedExit: 'Beyond the known Cluster',
           jumpLevel: 1,
+          playerShared: false,
         }],
       },
     }),

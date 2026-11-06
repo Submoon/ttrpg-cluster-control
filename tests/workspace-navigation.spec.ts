@@ -161,23 +161,32 @@ test('Navigate and Select drags pan a system node without opening or selecting i
   }
 })
 
-test('right-click keeps the native context menu while right-drag pans in every mode', async ({ page }) => {
+test('right-click opens publication controls on Select marks while right-drag still pans in every mode', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   if (await inspectorToggle.getAttribute('aria-expanded') === 'true') await inspectorToggle.click()
 
+  type ContextMenuProbe = { count: number; prevented: boolean | null; target: string | null }
   await page.evaluate(() => {
-    const testWindow = window as typeof window & {
-      __contextMenuProbe?: { count: number; prevented: boolean | null }
-    }
-    testWindow.__contextMenuProbe = { count: 0, prevented: null }
+    const testWindow = window as typeof window & { __contextMenuProbe: ContextMenuProbe }
+    testWindow.__contextMenuProbe = { count: 0, prevented: null, target: null }
     window.addEventListener('contextmenu', (event) => {
       const probe = testWindow.__contextMenuProbe!
       probe.count += 1
+      probe.prevented = null
+      probe.target = event.target instanceof Element ? event.target.getAttribute('class') : null
       setTimeout(() => { probe.prevented = event.defaultPrevented }, 0)
     }, true)
   })
+
+  const readContextMenu = () => page.evaluate(() =>
+    (window as typeof window & { __contextMenuProbe: ContextMenuProbe }).__contextMenuProbe)
+  const checkRightClick = async (click: () => Promise<void>, prevented: boolean) => {
+    const { count } = await readContextMenu()
+    await click()
+    await expect.poll(readContextMenu).toMatchObject({ count: count + 1, prevented })
+  }
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
   const scene = page.locator('.cluster-map-svg .cluster-map-content')
@@ -191,19 +200,16 @@ test('right-click keeps the native context menu while right-drag pans in every m
     expect(bounds).not.toBeNull()
     const startX = bounds!.x + bounds!.width / 2
     const startY = bounds!.y + bounds!.height / 2
-    const contextCount = await page.evaluate(() => {
-      const testWindow = window as typeof window & { __contextMenuProbe?: { count: number } }
-      return testWindow.__contextMenuProbe!.count
-    })
-    await page.mouse.click(startX, startY, { button: 'right' })
-    await expect.poll(() => page.evaluate(() => {
-      const testWindow = window as typeof window & { __contextMenuProbe?: { count: number } }
-      return testWindow.__contextMenuProbe!.count
-    })).toBe(contextCount + 1)
-    await expect.poll(() => page.evaluate(() => {
-      const testWindow = window as typeof window & { __contextMenuProbe?: { prevented: boolean | null } }
-      return testWindow.__contextMenuProbe!.prevented
-    })).toBe(false)
+    await checkRightClick(() => page.mouse.click(startX, startY, { button: 'right' }), true)
+    if (mode === 'Select') {
+      const publicationMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+      await expect(publicationMenu).toBeVisible()
+      for (const modeLabel of ['Hidden', 'Unknown presence', 'Known type', 'Revealed']) {
+        await expect(publicationMenu.getByRole('menuitemcheckbox', { name: modeLabel, exact: true })).toBeVisible()
+      }
+      await page.keyboard.press('Escape')
+      await expect(publicationMenu).toHaveCount(0)
+    }
 
     const originalViewport = await scene.getAttribute('transform')
     await page.mouse.move(startX, startY)
@@ -222,6 +228,33 @@ test('right-click keeps the native context menu while right-drag pans in every m
   await expect(clusterMap.locator('.cluster-system-node.is-selected')).toHaveCount(1)
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
   await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
+
+  const modeControl = page.getByRole('group', { name: 'Map interaction mode' })
+  await modeControl.getByRole('button', { name: 'Navigate' }).click()
+  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
+  await clickDockAction(page, 'Add orbit', {
+    target: { kind: 'center', x: 0.25, y: 0.25 },
+    noSelection: true,
+  })
+  await page.getByRole('button', { name: 'Fit map' }).click()
+
+  const publicationMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  await checkRightClick(() => systemMap.click({ position: { x: 24, y: 24 }, button: 'right' }), true)
+  expect((await readContextMenu()).target).toContain('system-map-svg')
+  await expect(publicationMenu).toHaveCount(0)
+
+  const orbit = systemMap.locator('.orbit-hit-target')
+  const orbitBounds = await orbit.boundingBox()
+  expect(orbitBounds).not.toBeNull()
+  await checkRightClick(() => orbit.click({
+    position: { x: orbitBounds!.width * 0.85, y: orbitBounds!.height * 0.15 },
+    button: 'right',
+  }), true)
+  expect((await readContextMenu()).target).toContain('orbit-hit-target')
+  await expect(publicationMenu).toHaveCount(0)
+
+  await checkRightClick(() => inspectorToggle.click({ button: 'right' }), false)
 })
 
 test('A to B to A restores each system camera and the selected map object', async ({ page }) => {
@@ -346,13 +379,13 @@ test('Select can rename system B from its inspector while keeping system A activ
   await clusterMap.getByRole('button', { name: 'Select New System 2 system' }).click()
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
-  await expect(dialog).toContainText('Rename the current Jump Cluster and New System 2.')
+  const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
+  await expect(dialog).toContainText('Edit chart details and player visibility for New System 2.')
   await expect(dialog.getByLabel('Star system')).toHaveValue('New System 2')
   await dialog.getByLabel('Star system').fill('Renamed B')
-  await dialog.getByRole('button', { name: 'Apply names' }).click()
+  await dialog.getByRole('button', { name: 'Apply details' }).click()
 
   await expect(clusterMap).toBeVisible()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)

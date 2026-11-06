@@ -18,11 +18,19 @@ import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreation
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
 import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExitPlacement'
 import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
+import { usePublicationWorkflows } from './editor-workflows/usePublicationWorkflows'
 import { searchWorkspace } from '../utils/workspace-search'
+import { usePublicationMenu } from './usePublicationMenu'
+import type { PublicationMenuRequest } from './editor-workflows/publication-types'
 import type { SearchResult } from '../utils/workspace-search'
 
+type PublicationFocusWorkflowOptions = EditorWorkflowOptions & {
+  /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
+  canRestorePublicationFocus?: (request: PublicationMenuRequest) => boolean
+}
+
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
-export function useEditorWorkflows(options: EditorWorkflowOptions) {
+export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
@@ -123,6 +131,23 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     },
     clearEditorError: () => { editorError.value = '' },
     beforeWorkspaceOperation,
+  })
+  const publicationCommands = usePublicationWorkflows({
+    workspace,
+    store,
+    mutations,
+    transitions,
+    routeSharing: {
+      session: route.routeSession,
+      sessionGeneration: route.sessionGeneration,
+      beforeWorkspaceOperation,
+    },
+    setError: message => { editorError.value = message },
+  })
+  const publicationMenu = usePublicationMenu({
+    workspace,
+    store,
+    canRestoreFocus: options.canRestorePublicationFocus,
   })
   const mapControls = useEditorMapControls(workspace, store, {
     orbitPlacementPreview: entity.orbitPlacementPreview,
@@ -325,7 +350,7 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   const historyGuards = computed(() => {
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
-    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-name draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
     if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
     if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
@@ -375,6 +400,14 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
   }
 
   return {
+    publication: {
+      set: publicationCommands.set,
+      setRouteSharing: publicationCommands.setRouteSharing,
+      busy: publicationCommands.busy,
+      menuRequest: publicationMenu.request,
+      openMenu: publicationMenu.openMenu,
+      closeMenu: publicationMenu.close,
+    },
     search: {
       open: searchOpen,
       query: searchQuery,
@@ -413,6 +446,8 @@ export function useEditorWorkflows(options: EditorWorkflowOptions) {
     charts: {
       clusterName: charts.clusterName,
       systemName: charts.systemName,
+      playerTitle: charts.playerTitle,
+      publication: charts.publication,
       draftSystemName: charts.draftSystemName,
       dialogOpen: transitions.chartNamesDialogOpen,
       transitionGuard: transitions.transitionGuard,

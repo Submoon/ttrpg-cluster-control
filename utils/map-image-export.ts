@@ -46,6 +46,11 @@ const styleProperties = [
 
 /** Removes visible interaction state and edit-only targets from the export copy. */
 function cleanExportClone(clone: SVGSVGElement): void {
+  clone.querySelectorAll('.gm-publication-decorations, .gm-publication-admin').forEach(node => node.remove())
+  clone.querySelectorAll<SVGElement>('[data-gm-publication-described]').forEach(mark => {
+    mark.removeAttribute('aria-describedby')
+    mark.removeAttribute('data-gm-publication-described')
+  })
   clone.querySelectorAll(
     '.system-creation-preview, .orbit-edit-control, .object-hit-target, .orbit-hit-target, .cluster-exit-hit-target',
   ).forEach(node => node.remove())
@@ -276,7 +281,7 @@ function createExportSvg(
  * @returns Encoded PNG blob.
  * @throws If image decoding, Canvas creation, drawing, or PNG encoding fails.
  */
-async function rasterizeSvg(svg: Blob, width: number, height: number): Promise<Blob> {
+export async function rasterizeMapSvg(svg: Blob, width: number, height: number): Promise<Blob> {
   const rasterDimensions = boundedPngDimensions(width, height)
   const source = new DOMParser().parseFromString(await svg.text(), 'image/svg+xml').documentElement
   if (source.localName !== 'svg' || source.querySelector('parsererror')) {
@@ -329,5 +334,5 @@ export async function exportMapImage(
   prepareClone?: PrepareMapExportClone,
 ): Promise<Blob> {
   const { blob, width, height } = createExportSvg(source, title, palette, prepareClone)
-  return format === 'svg' ? blob : rasterizeSvg(blob, width, height)
+  return format === 'svg' ? blob : rasterizeMapSvg(blob, width, height)
 }

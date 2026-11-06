@@ -31,6 +31,11 @@ export type ObjectFamily = typeof catalogueTypes[number]['family']
 
 export type CustomFieldType = 'text' | 'number' | 'boolean' | 'single-select'
 export type CustomFieldValue = string | number | boolean
+export const nativePlayerFieldIds = {
+  atmosphere: 'native:atmosphere',
+  portClass: 'native:port-class',
+} as const
+export type NativePlayerFieldId = typeof nativePlayerFieldIds[keyof typeof nativePlayerFieldIds]
 
 export type CustomFieldApplicabilityTarget =
   | { kind: 'category'; family: ObjectFamily }
@@ -39,6 +44,7 @@ export type CustomFieldApplicabilityTarget =
 export type CustomFieldDefinition = {
   id: string
   name: string
+  playerShared: boolean
   /** Undefined applies to every object; an empty scope applies to none. */
   applicability?: CustomFieldApplicabilityTarget[]
 } & (
@@ -59,6 +65,10 @@ export function customFieldApplicabilityTargetKey(target: CustomFieldApplicabili
 export interface ObjectFieldSettings {
   atmosphereOptions: string[]
   portClassOptions: string[]
+  nativePlayerSharing: {
+    atmosphere: boolean
+    portClass: boolean
+  }
   customFields: CustomFieldDefinition[]
 }
 
@@ -76,11 +86,14 @@ export type ObjectPlacement =
  */
 export interface SystemObject {
   id: string
+  publication: PublicationMode
   family: ObjectFamily
   subtype: string
   locationKey: string
   name: string
   description: string
+  playerText: string
+  playerFieldMasks: string[]
   placement: ObjectPlacement
   atmosphere?: string
   portClass?: string
@@ -113,6 +126,7 @@ export type JumpRoute = {
   name?: string
   jumpLevel: number
   fromPointId: string
+  playerShared: boolean
 } & (
   | { toPointId: string; unresolvedExit?: never }
   | { toPointId: null; unresolvedExit: string }
@@ -121,13 +135,27 @@ export type JumpRoute = {
 export interface StarSystem {
   id: string
   name: string
+  publication: PublicationMode
   objects: SystemObject[]
   orbits: Orbit[]
+}
+
+/** Controls the name and type information available in the Warden's player-facing preview. */
+export type PublicationMode = 'hidden' | 'unknown' | 'known-type' | 'revealed'
+
+/** Validated values that update private and player-facing chart labels plus one system's publication. */
+export interface ChartDetailsChanges {
+  clusterName: string
+  systemName: string
+  playerTitle: string
+  publication: PublicationMode
 }
 
 export interface JumpCluster {
   id: string
   name: string
+  /** Player-facing title, independent from the private Jump Cluster name. */
+  playerTitle: string
   systems: StarSystem[]
   routes: JumpRoute[]
 }
@@ -141,6 +169,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
+  version: 4
   id: string
   cluster: JumpCluster
   layout: {
@@ -171,7 +200,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 1
+  version: 4
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -180,7 +209,7 @@ export type JumpClusterExport = {
 
 export type StarSystemExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 1
+  version: 4
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
@@ -208,6 +237,9 @@ export interface PreparedJsonImport {
 
 /** Partial fields accepted by the object-edit command; omitted fields retain their current values. */
 export interface SystemObjectChanges {
+  publication?: PublicationMode
+  playerText?: string
+  playerFieldMasks?: string[]
   locationKey?: string
   name?: string
   description?: string
@@ -244,6 +276,7 @@ export function defaultObjectFieldSettings(): ObjectFieldSettings {
   return {
     atmosphereOptions: ['Breathable', 'Unbreathable', 'Vacuum'],
     portClassOptions: ['Class I', 'Class II', 'Class III'],
+    nativePlayerSharing: { atmosphere: false, portClass: false },
     customFields: [],
   }
 }

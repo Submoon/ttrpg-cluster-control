@@ -19,11 +19,12 @@ function unresolvedWorkspace() {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const point = {
     id: 'point-a',
+    publication: 'known-type',
     family: 'JumpPoint',
     subtype: 'jump-point',
     locationKey: 'JP1',
     name: 'North Gate',
-    description: '',
+    description: '', playerText: '', playerFieldMasks: [] as string[],
     placement: { kind: 'system', x: 0.5, y: 0.5 },
   } as const
   const route = {
@@ -31,7 +32,7 @@ function unresolvedWorkspace() {
     fromPointId: point.id,
     toPointId: null,
     unresolvedExit: 'Rim',
-    jumpLevel: 2,
+    playerShared: false, jumpLevel: 2,
   } as const
   return {
     point,
@@ -114,7 +115,7 @@ test('workspace validation rejects finite exit anchors whose shared scene bounds
 
   expect(restoreLocalWorkspace(oppositeFiniteExits)).toBeNull()
   expect(() => prepareJsonImport(createLocalWorkspace('Other Reach', 'Other system'), imported))
-    .toThrow('Choose a valid version 1 Jump Cluster or star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
 })
 
 test('workspace validation rejects finite coordinates outside the SVG renderer numeric range', { tag: '@pure' }, () => {

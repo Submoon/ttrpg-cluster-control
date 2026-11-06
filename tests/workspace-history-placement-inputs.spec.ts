@@ -98,11 +98,14 @@ function createObjectOrbitWorkspace(): { workspace: LocalWorkspace; objectId: st
   const objectId = 'test-orbit-object'
   const orbitObject = {
     id: objectId,
+    publication: 'known-type' as const,
     family: 'CelestialBody' as const,
     subtype: 'planet',
     locationKey: 'B',
     name: 'Test Planet',
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'orbit' as const, orbitId: orbit.id },
   }
   return {

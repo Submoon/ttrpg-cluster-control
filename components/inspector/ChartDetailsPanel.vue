@@ -22,14 +22,37 @@
 
     <p class="inspector-intro mb-0">
       {{ props.mode === 'cluster'
-        ? 'Choose a route to inspect its logical Jump Point endpoints, or edit the chart names.'
-        : 'Choose a map object or Orbit to inspect it, or edit the chart names.' }}
+        ? 'Choose a route to inspect its logical Jump Point endpoints, or review player-facing publication.'
+        : 'Choose a map object or Orbit to inspect it, or edit chart details.' }}
     </p>
+
+    <section class="chart-publication-summary mt-4" aria-label="Player publication settings">
+      <span class="section-kicker">PLAYER PUBLICATION</span>
+      <dl class="m-0 mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2">
+        <dt>Player-facing title</dt>
+        <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ props.workspace.cluster.playerTitle }}</dd>
+        <template v-if="props.selectedSystem">
+          <dt>System visibility</dt>
+          <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ publicationLabel }}</dd>
+        </template>
+      </dl>
+      <PublicationModeControl
+        v-if="props.selectedSystem"
+        class="mt-3"
+        :model-value="props.selectedSystem.publication"
+        presentation-context="system"
+        :disabled="props.saving || props.publicationBusy"
+        @select="setSystemPublication"
+      />
+      <p v-if="props.selectedSystem" class="inspector-intro mt-3 mb-0">
+        Players can open this system only when its visibility is Revealed. Each object inside still follows its own publication setting.
+      </p>
+    </section>
 
     <template #footer>
       <div class="chart-details-actions grid gap-2" :class="{ 'chart-details-actions--system': props.allowOpenSystem && props.mode === 'system' && props.selectedSystem }">
         <UButton block class="w-full min-w-0 justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
-          {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+          {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
         </UButton>
         <UButton
           v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
@@ -41,7 +64,7 @@
           Open system
         </UButton>
         <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-center text-sm" role="status">
-          Chart-name editing session
+          Chart details editing session
         </span>
       </div>
     </template>
@@ -93,14 +116,16 @@
 
 <script setup lang="ts">
 /**
- * Shared chart-name editor and summary for Cluster and system views.
+ * Shared chart-details editor and summary for Cluster and system views.
  */
 import { computed } from 'vue'
 import {
   jumpPointsInCluster,
   type LocalWorkspace,
+  type PublicationMode,
   type StarSystem,
 } from '../../domain/workspace'
+import { useEditorCommands } from '../../composables/editor-workflows/editor-command-context'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
@@ -110,6 +135,7 @@ const props = defineProps<{
   editorError?: string
   saving: boolean
   allowOpenSystem?: boolean
+  publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -117,10 +143,27 @@ const emit = defineEmits<{
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()
+const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
 const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
 const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
+const publicationLabels: Record<PublicationMode, string> = {
+  hidden: 'Hidden',
+  unknown: 'Unknown presence',
+  'known-type': 'Known type: Star system',
+  revealed: 'Revealed: system name visible',
+}
+const publicationLabel = computed(() => props.selectedSystem ? publicationLabels[props.selectedSystem.publication] : '')
+
+function setSystemPublication(mode: PublicationMode): void {
+  const system = props.selectedSystem
+  if (!system) return
+  void commands.publication.set({
+    targets: [{ kind: 'system', id: system.id, systemId: system.id }],
+    mode,
+  })
+}
 </script>
 
 <style scoped>

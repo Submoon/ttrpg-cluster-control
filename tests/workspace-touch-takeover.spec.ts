@@ -95,8 +95,18 @@ test('a second touch cancels a Move preview before pinch and pan change only the
   const cdp = await enableTouch(page)
   await createWorkspace(page, { width: 390, height: 844 })
 
+  // Keep the real leave animation mounted until the first map gesture has started.
+  const exitStyle = await page.addStyleTag({ content: `
+    [data-slot="content"][data-state="closed"]:has(> #workspace-header-map-files-panel) {
+      animation-play-state: paused !important;
+    }
+  ` })
   const recordsBefore = await readWorkspaceRecords(page)
   const jsonBefore = await downloadJson(page, 'Export star system JSON')
+  const closingFiles = page.locator('[data-slot="content"]:has(> #workspace-header-map-files-panel)')
+  await expect(closingFiles).toHaveAttribute('data-state', 'closed')
+  await expect(closingFiles).toHaveCSS('pointer-events', 'none')
+  await expect(closingFiles.locator('..')).toHaveCSS('pointer-events', 'none')
   await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
   await setWorkspaceMapMode(page, 'Move')
 
@@ -117,6 +127,9 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
+    await exitStyle.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
 
     const mapCenterX = bounds.x + bounds.width / 2
     const secondStart = {
@@ -180,6 +193,18 @@ test('Navigate and Move long presses inspect the same system, consume release, a
     await setWorkspaceMapMode(page, 'Navigate')
     const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
     const navigateTarget = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+    const scene = clusterMap.locator('.cluster-map-content')
+    const viewportBeforePan = await scene.getAttribute('transform')
+    const zoomBeforePan = await workspaceZoomOutput(page).textContent()
+    const panStart = await pointAtCenter(navigateTarget)
+    await dispatchTouch(cdp, 'touchStart', [panStart])
+    await dispatchTouch(cdp, 'touchMove', [{ ...panStart, x: panStart.x + 24, y: panStart.y + 18 }])
+    await dispatchTouch(cdp, 'touchEnd', [])
+    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewportBeforePan)
+    await expect(workspaceZoomOutput(page)).toHaveText(zoomBeforePan!)
+    await expect(systemMap).toHaveCount(0)
+    await expect(inspector).toBeHidden()
+
     const navigatePoint = await pointAtCenter(navigateTarget)
     await dispatchTouch(cdp, 'touchStart', [navigatePoint])
     await page.waitForTimeout(650)
@@ -222,6 +247,36 @@ test('Navigate and Move long presses inspect the same system, consume release, a
     await expect(inspector).toBeHidden()
     await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })
       .getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
+
+    const backgroundPoint = await moveClusterMap.evaluate((svg) => {
+      const { left, top, width, height } = svg.getBoundingClientRect()
+      for (let y = top + 24; y < top + height - 24; y += 24) {
+        for (let x = left + 24; x < left + width - 24; x += 24) {
+          const hit = document.elementFromPoint(x, y)
+          if (hit === svg || (hit && svg.contains(hit) && hit.matches('.cluster-map-background, .map-background, .map-grid'))) {
+            return { id: 1, x, y }
+          }
+        }
+      }
+      throw new Error('The cluster map has no unobstructed background point.')
+    })
+    const zoomBeforeDoubleTap = await workspaceZoomOutput(page).textContent()
+    for (let tap = 0; tap < 2; tap++) {
+      await dispatchTouch(cdp, 'touchStart', [backgroundPoint])
+      await dispatchTouch(cdp, 'touchEnd', [])
+    }
+    await expect(workspaceZoomOutput(page)).not.toHaveText(zoomBeforeDoubleTap!)
+    await expect(systemMap).toHaveCount(0)
+
+    const moveScene = moveClusterMap.locator('.cluster-map-content')
+    await dispatchTouch(cdp, 'touchStart', [backgroundPoint])
+    const viewportAtContact = await moveScene.getAttribute('transform')
+    await page.waitForTimeout(650)
+    await expect(moveScene).toHaveAttribute('transform', viewportAtContact!)
+    await dispatchTouch(cdp, 'touchMove', [{ ...backgroundPoint, x: backgroundPoint.x + 24, y: backgroundPoint.y + 18 }])
+    await dispatchTouch(cdp, 'touchEnd', [])
+    await expect.poll(() => moveScene.getAttribute('transform')).not.toBe(viewportAtContact)
+    await expect(inspector).toBeHidden()
   } finally {
     await cdp.detach()
   }

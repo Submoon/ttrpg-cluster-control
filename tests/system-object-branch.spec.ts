@@ -35,6 +35,9 @@ function object(
     locationKey: `KEY-${id}`,
     name: id,
     description: '',
+    publication: 'hidden',
+    playerText: '',
+    playerFieldMasks: [],
     placement,
     ...(jumpStationId ? { jumpStationId } : {}),
   }
@@ -52,6 +55,7 @@ test('an object branch follows hosted Orbits and excludes parents, siblings, Sta
   const nested = object('nested', 'moon', { kind: 'orbit', orbitId: 'target-ring' })
   const leaf = object('leaf', 'base', { kind: 'orbit', orbitId: 'nested-ring' })
   const system: StarSystem = {
+    publication: 'hidden',
     id: 'system',
     name: 'Branch System',
     objects: [parent, station, target, sibling, nested, leaf],
@@ -73,6 +77,7 @@ test('a malformed hosted cycle is visited once per object and Orbit @pure', () =
   const target = object('target', 'planet', { kind: 'orbit', orbitId: 'nested-ring' })
   const child = object('child', 'moon', { kind: 'orbit', orbitId: 'target-ring' })
   const system: StarSystem = {
+    publication: 'hidden',
     id: 'system',
     name: 'Branch System',
     objects: [target, child],
@@ -92,6 +97,7 @@ test('a branch includes multiple hosted Orbits and each deeper descendant @pure'
   const west = object('west', 'planet', { kind: 'orbit', orbitId: 'west-ring' })
   const westDeep = object('west-deep', 'moon', { kind: 'orbit', orbitId: 'west-deep-ring' })
   const system: StarSystem = {
+    publication: 'hidden',
     id: 'system',
     name: 'Branch System',
     objects: [target, east, eastDeep, west, westDeep],
@@ -113,6 +119,7 @@ test('branch bounds use the painted extents of a rotated Orbit ellipse and visib
   const target = object('target', 'planet', { kind: 'system', x: 0.5, y: 0.5 })
   const orbit = hostedOrbit('target-ring', target.id)
   const system: StarSystem = {
+    publication: 'hidden',
     id: 'system',
     name: 'Branch System',
     objects: [target],
@@ -142,6 +149,7 @@ test('branch bounds use exact diagonal ellipse extents @pure', () => {
   const target = object('target', 'planet', { kind: 'system', x: 0.5, y: 0.5 })
   const orbit = hostedOrbit('target-ring', target.id)
   const system: StarSystem = {
+    publication: 'hidden',
     id: 'system',
     name: 'Branch System',
     objects: [target],

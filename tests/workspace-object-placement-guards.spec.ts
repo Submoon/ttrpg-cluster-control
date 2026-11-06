@@ -295,9 +295,9 @@ test('an Orbit object metadata draft survives map moves, relationship transfers,
   }
 
   await editMapObject(page)
-  await inspector.getByLabel('Description', { exact: true }).fill('Applied after an Orbit move.')
+  await inspector.getByLabel('GM notes', { exact: true }).fill('Applied after an Orbit move.')
   const firstPointer = await previewAtOrbit('Orbit 1 around Primary Star', 125)
-  await expect(inspector.getByLabel('Description', { exact: true })).toHaveValue('Applied after an Orbit move.')
+  await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue('Applied after an Orbit move.')
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
   let exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.system?.objects.find(object => object.id === initialPlanetId)?.description)
@@ -311,7 +311,7 @@ test('an Orbit object metadata draft survives map moves, relationship transfers,
   expect(exported.layout.objectAngles[initialPlanetId]).toBe(orbitMovedAngle)
 
   await editMapObject(page)
-  await inspector.getByLabel('Description', { exact: true }).fill('Applied after an Orbit transfer.')
+  await inspector.getByLabel('GM notes', { exact: true }).fill('Applied after an Orbit transfer.')
   const transferPointer = await previewAtOrbit('Orbit 2 around Primary Star', -55)
   exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.system?.objects.find(object => object.id === initialPlanetId)?.placement)
@@ -320,7 +320,7 @@ test('an Orbit object metadata draft survives map moves, relationship transfers,
     .toBe('Applied after an Orbit move.')
   const transferAngle = exported.layout.objectAngles[initialPlanetId]
   expectAngleWithinPointerError(transferAngle, -55, transferPointer.clickError, transferPointer.minorRadius)
-  expect(inspector.getByLabel('Description', { exact: true })).toHaveValue('Applied after an Orbit transfer.')
+  expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue('Applied after an Orbit transfer.')
   await saveMapObject(page)
   exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.system?.objects.find(object => object.id === initialPlanetId)?.description)
@@ -328,7 +328,7 @@ test('an Orbit object metadata draft survives map moves, relationship transfers,
   expect(exported.layout.objectAngles[initialPlanetId]).toBe(transferAngle)
 
   await editMapObject(page)
-  await inspector.getByLabel('Description', { exact: true }).fill('Discarded after free placement.')
+  await inspector.getByLabel('GM notes', { exact: true }).fill('Discarded after free placement.')
   const freePoint = await previewAtFreePoint({ x: 0.22, y: 0.78 })
   exported = await downloadJson(page, 'Export star system JSON')
   const movedFree = exported.system?.objects.find(object => object.id === initialPlanetId)

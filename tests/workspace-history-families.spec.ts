@@ -160,9 +160,9 @@ function makeFieldWorkspace(): LocalWorkspace {
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const customFields = [
-    { id: 'notes', name: 'Campaign notes', type: 'text' as const },
-    { id: 'threat', name: 'Threat', type: 'number' as const },
-    { id: 'known', name: 'Known', type: 'boolean' as const },
+    { id: 'notes', name: 'Campaign notes', type: 'text' as const, playerShared: false },
+    { id: 'threat', name: 'Threat', type: 'number' as const, playerShared: false },
+    { id: 'known', name: 'Known', type: 'boolean' as const, playerShared: false },
   ]
   return createWorkspaceSnapshot({
     ...workspace,
@@ -350,7 +350,7 @@ test('cluster import keeps its remapped copy and shared options on one exact his
       ...source.objectFieldSettings,
       atmosphereOptions: [...source.objectFieldSettings.atmosphereOptions, 'Cryogenic'],
       customFields: [{
-        id: 'incoming-notes', name: 'Campaign notes', type: 'text' as const,
+        id: 'incoming-notes', name: 'Campaign notes', type: 'text' as const, playerShared: false,
         applicability: [{ kind: 'category' as const, family: 'Installation' as const }],
       }],
     },
@@ -455,7 +455,7 @@ test('standalone-system import can be undone and redone without adding its copie
 test('an import reopens consequence review when shared Fields change while draft resolution is awaited @pure', async () => {
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   initial.objectFieldSettings.customFields = [{
-    id: 'shared-notes', name: 'Campaign notes', type: 'text',
+    id: 'shared-notes', name: 'Campaign notes', type: 'text', playerShared: false,
     applicability: [{ kind: 'category', family: 'CelestialBody' }],
   }]
   const source = createLocalWorkspace('Far Reach', 'Iria')
@@ -474,7 +474,7 @@ test('an import reopens consequence review when shared Fields change while draft
     objectFieldSettings: {
       ...source.objectFieldSettings,
       customFields: [{
-        id: 'incoming-notes', name: 'Campaign notes', type: 'text' as const,
+        id: 'incoming-notes', name: 'Campaign notes', type: 'text' as const, playerShared: false,
         applicability: [{ kind: 'category' as const, family: 'Installation' as const }],
       }],
     },

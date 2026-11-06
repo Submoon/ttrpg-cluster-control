@@ -37,7 +37,7 @@ test('Move commits a free position independently of an unresolved metadata draft
   const committedBefore = await downloadJson(page, 'Export star system JSON')
   const committedObject = committedBefore.system!.objects.find(candidate => candidate.id === objectId)!
   await page.getByRole('button', { name: 'Edit map object' }).click()
-  await page.getByLabel('Description').fill('Unresolved map-object draft')
+  await page.getByLabel('GM notes').fill('Unresolved map-object draft')
   await inspectorToggle.click()
   await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
@@ -62,7 +62,7 @@ test('Move commits a free position independently of an unresolved metadata draft
   expect({ ...movedObject, placement: committedObject.placement }).toEqual(committedObject)
   await inspectorToggle.click()
   const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector.getByLabel('Description')).toHaveValue('Unresolved map-object draft')
+  await expect(inspector.getByLabel('GM notes')).toHaveValue('Unresolved map-object draft')
   await expect(inspector.getByRole('button', { name: 'Save map object' })).toBeVisible()
   await inspector.getByRole('button', { name: 'Cancel map object edits' }).click()
   const committedAfterDiscard = await downloadJson(page, 'Export star system JSON')

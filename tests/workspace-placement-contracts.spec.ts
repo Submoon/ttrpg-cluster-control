@@ -30,11 +30,14 @@ function createPlacementFixture(): PlacementFixture {
     orbitId: string,
   ): SystemObject => ({
     id,
+    publication: 'known-type',
     family: 'CelestialBody',
     subtype: 'planet',
     locationKey: id,
     name,
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement: { kind: 'orbit', orbitId },
   })
   const system: StarSystem = {

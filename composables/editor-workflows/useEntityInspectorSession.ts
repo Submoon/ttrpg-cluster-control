@@ -290,11 +290,14 @@ function captureObjectBaseline(
 ): ObjectEditBaseline {
   const settings = workspace.objectFieldSettings
   const nativeFieldOptions: ObjectEditBaseline['nativeFieldOptions'] = {}
+  const nativePlayerSharing: ObjectEditBaseline['nativePlayerSharing'] = {}
   if (object.family === 'CelestialBody' && (object.subtype === 'planet' || object.subtype === 'moon')) {
     nativeFieldOptions.atmosphereOptions = [...settings.atmosphereOptions]
+    nativePlayerSharing.atmosphere = settings.nativePlayerSharing.atmosphere
   }
   if (object.family === 'Installation') {
     nativeFieldOptions.portClassOptions = [...settings.portClassOptions]
+    nativePlayerSharing.portClass = settings.nativePlayerSharing.portClass
   }
 
   return {
@@ -308,6 +311,7 @@ function captureObjectBaseline(
     })),
     customFieldDefinitions: objectDefinitionBaseline(object, settings),
     nativeFieldOptions,
+    nativePlayerSharing,
   }
 }
 
@@ -609,6 +613,14 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
       if (session.initial.nativeFieldOptions.portClassOptions
         && !sameValue(session.initial.nativeFieldOptions.portClassOptions, currentWorkspace.objectFieldSettings.portClassOptions)) {
         return 'Port class options changed while this Inspector was open.'
+      }
+      if (session.initial.nativePlayerSharing.atmosphere !== undefined
+        && session.initial.nativePlayerSharing.atmosphere !== currentWorkspace.objectFieldSettings.nativePlayerSharing.atmosphere) {
+        return 'Atmosphere sharing changed while this Inspector was open.'
+      }
+      if (session.initial.nativePlayerSharing.portClass !== undefined
+        && session.initial.nativePlayerSharing.portClass !== currentWorkspace.objectFieldSettings.nativePlayerSharing.portClass) {
+        return 'Port class sharing changed while this Inspector was open.'
       }
       const stationId = session.draft.jumpStationId
       if (stationId) {
@@ -1297,6 +1309,8 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
       }
       return (command.fieldId === 'native:atmosphere' && !!session.initial.nativeFieldOptions.atmosphereOptions)
         || (command.fieldId === 'native:port-class' && !!session.initial.nativeFieldOptions.portClassOptions)
+        || (command.fieldId === 'native:atmosphere' && session.initial.nativePlayerSharing.atmosphere !== undefined)
+        || (command.fieldId === 'native:port-class' && session.initial.nativePlayerSharing.portClass !== undefined)
     }
 
     const ids = dependencyIds(session, draftDependencies)

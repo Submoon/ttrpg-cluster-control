@@ -28,6 +28,7 @@ const defaultHost = '127.0.0.1'
  * url: string,
  * fetchImpl?: typeof globalThis.fetch,
  * timeoutMs?: number,
+ * requestTimeoutMs?: number,
  * intervalMs?: number,
  * wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>,
  * now?: () => number,
@@ -80,6 +81,7 @@ export async function waitForHttpReady({
   url,
   fetchImpl = globalThis.fetch,
   timeoutMs = serverReadinessTimeoutMs,
+  requestTimeoutMs = 5_000,
   intervalMs = 500,
   wait = delay,
   now = Date.now,
@@ -91,7 +93,7 @@ export async function waitForHttpReady({
   while (now() < deadline) {
     if (signal?.aborted) throw signal.reason ?? new Error('Server readiness wait was cancelled.')
     if (!isAlive()) throw new Error('The development server exited before becoming ready.')
-    const requestTimeout = AbortSignal.timeout(Math.max(1, deadline - now()))
+    const requestTimeout = AbortSignal.timeout(Math.max(1, Math.min(requestTimeoutMs, deadline - now())))
     const requestSignal = signal ? AbortSignal.any([signal, requestTimeout]) : requestTimeout
     try {
       const response = await fetchImpl(url, { signal: requestSignal })
@@ -100,8 +102,7 @@ export async function waitForHttpReady({
       lastError = new Error(`HTTP ${response.status}`)
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error
-      if (requestTimeout.aborted) break
-      lastError = error
+      lastError = requestTimeout.aborted ? new Error('HTTP request timed out') : error
     }
     const remaining = deadline - now()
     if (remaining > 0) await wait(Math.min(intervalMs, remaining), signal)

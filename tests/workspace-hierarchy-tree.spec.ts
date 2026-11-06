@@ -38,7 +38,7 @@ campaignTest('selecting a parent Orbit tree item keeps a dirty nested object dra
   if (!selectedObjectId) throw new Error('The selected object has no stable map identity.')
 
   await primaryOrbit.click()
-  let guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  let guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
 
@@ -51,7 +51,7 @@ campaignTest('selecting a parent Orbit tree item keeps a dirty nested object dra
   await expect(mapContent).toHaveAttribute('transform', cameraBefore)
 
   await primaryOrbit.click()
-  guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Discard edits and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
 
@@ -106,7 +106,7 @@ campaignTest('the Orbit expander keeps native Tree arrow keys available without 
   await expect(primaryOrbit).toHaveAttribute('aria-selected', 'false')
   await expect(nameField).toHaveValue(draftName)
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
-  await expect(page.getByRole('dialog', { name: 'Edit chart names', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Edit chart details', exact: true })).toHaveCount(0)
 })
 
 campaignTest('tree keyboard expansion and shortcuts stay local through hierarchy hide and compact reflow', async ({ campaignWorkspacePage: page }, testInfo) => {

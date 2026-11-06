@@ -35,5 +35,5 @@ export default defineNuxtConfig({
     },
   },
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/map-workspace.css'],
 })

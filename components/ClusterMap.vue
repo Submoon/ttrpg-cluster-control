@@ -32,6 +32,7 @@
  */
 import { drag, pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import { captureD3MouseGesture, type D3MouseGestureDisposer } from './maps/d3-mouse-gesture'
+import { isMapZoomMark, isSingleTouchPanEligible } from './maps/map-touch-navigation'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -62,6 +63,20 @@ import {
 } from '../utils/map-zoom'
 import { revealSvgPoint, revealSvgTarget, svgCirclePaintedBounds } from '../utils/reveal-svg-target'
 import type { MapHistoryTarget } from '../composables/editor-workflows/types'
+import {
+  appendPublicationBadge,
+  appendRouteSharingBadge,
+  describeMapPublication,
+  describeRouteSharing,
+  routeSharingStatus,
+} from '../utils/gm-publication-badges'
+import {
+  CLUSTER_SYSTEM_CARD,
+  CLUSTER_SYSTEM_CARD_NAME_POSITION,
+  CLUSTER_SYSTEM_PRESENTATION_CLASSES,
+  CLUSTER_SYSTEM_SEAL,
+} from '../utils/cluster-system-presentation'
+import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel } from '../utils/cluster-route-presentation'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
@@ -109,6 +124,7 @@ const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 type ClusterTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
+  | { mode: 'pending-pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number]; startClient: [number, number] }
   | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
 let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
@@ -242,10 +258,10 @@ function prepareExportClone(clone: SVGSVGElement): void {
     mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
     const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
     labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
-    labelBackground?.setAttribute('y', String(geometry.labelY - 12))
+    labelBackground?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset))
     const routeLabel = mark.querySelector<SVGTextElement>('.cluster-route-label')
     routeLabel?.setAttribute('x', String(geometry.labelX))
-    routeLabel?.setAttribute('y', String(geometry.labelY + 2))
+    routeLabel?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
     if (geometry.exitPoint && geometry.exitLabel && route.toPointId === null) {
@@ -454,8 +470,28 @@ function beginTouchPinch(touches: TouchList): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (!props.touchNavigation || event.touches.length < 2) return
+  if (!props.touchNavigation) return
+  if (event.touches.length === 1) {
+    const element = svgElement.value
+    const touch = event.touches[0]!
+    if (!element || (props.moveEnabled && event.ctrlKey)
+      || !isSingleTouchPanEligible(event.target, props.moveEnabled, 'cluster')) {
+      touchGesture = null
+      return
+    }
+    select(element).interrupt()
+    touchGesture = {
+      mode: 'pending-pan',
+      transform: zoomTransform(element),
+      start: touchPoint(touch, element),
+      startClient: [touch.clientX, touch.clientY],
+    }
+    return
+  }
+  if (event.touches.length < 2) return
   cancelActiveGesture()
+  const element = svgElement.value
+  if (element) select(element).interrupt()
   beginTouchPinch(event.touches)
   event.preventDefault()
   event.stopPropagation()
@@ -464,6 +500,18 @@ function startTouchNavigation(event: TouchEvent): void {
 function moveTouchNavigation(event: TouchEvent): void {
   const element = svgElement.value
   if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
+  if (touchGesture.mode === 'pending-pan') {
+    const touch = event.touches[0]
+    if (!touch || Math.hypot(
+      touch.clientX - touchGesture.startClient[0],
+      touch.clientY - touchGesture.startClient[1],
+    ) <= 9) return
+    touchGesture = {
+      mode: 'pan',
+      transform: touchGesture.transform,
+      start: touchGesture.start,
+    }
+  }
   event.preventDefault()
   event.stopImmediatePropagation()
 
@@ -642,15 +690,21 @@ function render(): void {
 
   const content = svg.append('g').attr('class', 'cluster-map-content')
   const items = content.append('g').attr('class', 'cluster-map-items')
+  const publicationDecorations = content.append('g')
+    .attr('class', 'gm-publication-decorations')
+    .attr('aria-hidden', 'true')
+    .attr('pointer-events', 'none')
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
     .data(props.cluster.routes)
     .join('g')
     .attr('data-route-id', route => route.id)
     .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
+    .attr('font-size', CLUSTER_ROUTE_PRESENTATION.labelFontSize)
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
 
+  const routePublicationBadges = new Map<string, SVGGElement>()
   routeMarks.each(function (route) {
     const geometry = clusterRouteGeometry(
       route,
@@ -662,8 +716,25 @@ function render(): void {
       routeTargetOverrides(),
     )
     const mark = select(this)
-    const label = `Jump-${route.jumpLevel}`
+    const label = clusterRoutePresentationLabel(route.jumpLevel)
     const labelWidth = clusterRouteLabelWidth(route)
+    const sharingStatus = routeSharingStatus(props.cluster, route, jumpPoints)
+    describeRouteSharing(this, `route-${route.id}`, sharingStatus)
+
+    const badgeGroup = publicationDecorations.append('g')
+      .attr('class', 'cluster-route-publication')
+      .attr('data-route-id', route.id)
+      .attr('transform', `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`)
+      .node()
+    if (badgeGroup) {
+      appendRouteSharingBadge(badgeGroup, {
+        identity: `route-${route.id}`,
+        playerShared: route.playerShared,
+        hasVisibleEndpoint: sharingStatus.hasVisibleEndpoint,
+        position: { x: 0, y: 0 },
+      })
+      routePublicationBadges.set(route.id, badgeGroup)
+    }
 
     mark.append('path')
       .attr('class', 'cluster-route-line')
@@ -671,10 +742,10 @@ function render(): void {
     mark.append('rect')
       .attr('class', 'cluster-route-label-bg')
       .attr('x', geometry.labelX - labelWidth / 2)
-      .attr('y', geometry.labelY - 12)
+      .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset)
       .attr('width', labelWidth)
-      .attr('height', 21)
-      .attr('rx', 10)
+      .attr('height', CLUSTER_ROUTE_PRESENTATION.badge.height)
+      .attr('rx', CLUSTER_ROUTE_PRESENTATION.badge.cornerRadius)
 
     if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
       const exitLabel = geometry.exitLabel
@@ -692,7 +763,7 @@ function render(): void {
       mark.insert('text', '.cluster-exit-mark')
         .attr('class', 'cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
         .text(label)
       const exitGestureTargets = [exitHitTarget, exitMarker]
       for (const target of exitGestureTargets) {
@@ -788,7 +859,7 @@ function render(): void {
       mark.append('text')
         .attr('class', 'cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
         .text(label)
     }
   })
@@ -809,10 +880,14 @@ function render(): void {
       mark.select('.cluster-route-line').attr('d', geometry.path)
       mark.select('.cluster-route-label-bg')
         .attr('x', geometry.labelX - labelWidth / 2)
-        .attr('y', geometry.labelY - 12)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset)
       mark.select('.cluster-route-label')
         .attr('x', geometry.labelX)
-        .attr('y', geometry.labelY + 2)
+        .attr('y', geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset)
+      routePublicationBadges.get(route.id)?.setAttribute(
+        'transform',
+        `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`,
+      )
 
       if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
         const exitLabel = geometry.exitLabel
@@ -876,25 +951,52 @@ function render(): void {
         ? `Select ${system.name} system`
         : `Open ${system.name} system map`)
 
+  systemMarks.each(function (system) {
+    describeMapPublication(this, `system-${system.id}`, system.publication)
+  })
+
+  const systemPublicationMarks = publicationDecorations.selectAll<SVGGElement, StarSystem>('g.cluster-system-publication')
+    .data(props.cluster.systems)
+    .join('g')
+    .attr('class', 'cluster-system-publication')
+    .attr('data-system-id', system => system.id)
+    .attr('transform', system => {
+      const position = clusterSystemPosition(props.systemPositions, system.id)
+      return `translate(${position.x} ${position.y})`
+    })
+
+  systemPublicationMarks.each(function (system) {
+    appendPublicationBadge(this, {
+      identity: `system-${system.id}`,
+      mode: system.publication,
+      position: { x: 63, y: -26 },
+    })
+  })
+
+  function positionSystemPublicationBadge(systemId: string, position: Point): void {
+    systemPublicationMarks.filter(system => system.id === systemId)
+      .attr('transform', `translate(${position.x} ${position.y})`)
+  }
+
   systemMarks.append('rect')
-    .attr('class', 'cluster-system-card')
-    .attr('x', -78)
-    .attr('y', -38)
-    .attr('width', 156)
-    .attr('height', 76)
-    .attr('rx', 4)
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.card)
+    .attr('x', CLUSTER_SYSTEM_CARD.x)
+    .attr('y', CLUSTER_SYSTEM_CARD.y)
+    .attr('width', CLUSTER_SYSTEM_CARD.width)
+    .attr('height', CLUSTER_SYSTEM_CARD.height)
+    .attr('rx', CLUSTER_SYSTEM_CARD.cornerRadius)
   systemMarks.append('circle')
-    .attr('class', 'cluster-system-seal')
-    .attr('cx', -57)
-    .attr('cy', -17)
-    .attr('r', 4)
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal)
+    .attr('cx', CLUSTER_SYSTEM_SEAL.x)
+    .attr('cy', CLUSTER_SYSTEM_SEAL.y)
+    .attr('r', CLUSTER_SYSTEM_SEAL.radius)
   systemMarks.append('text')
-    .attr('class', 'cluster-system-name')
-    .attr('x', 4)
-    .attr('y', -6)
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.name)
+    .attr('x', CLUSTER_SYSTEM_CARD_NAME_POSITION.x)
+    .attr('y', CLUSTER_SYSTEM_CARD_NAME_POSITION.y)
     .text(system => system.name)
   systemMarks.append('text')
-    .attr('class', 'cluster-system-meta')
+    .attr('class', CLUSTER_SYSTEM_PRESENTATION_CLASSES.meta)
     .attr('x', 0)
     .attr('y', 17)
     .text(system => {
@@ -958,6 +1060,7 @@ function render(): void {
           movedSystems.delete(this)
           liveSystemPositions.delete(system.id)
           select(this).classed('is-dragging', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+          positionSystemPublicationBadge(system.id, committedPosition)
           refreshLiveRouteGeometry?.()
         },
         mouseGesture,
@@ -969,6 +1072,7 @@ function render(): void {
       if (cancelledSystemGestures.has(this)) return
       if (event.dx || event.dy) movedSystems.add(this)
       select(this).attr('transform', `translate(${event.x} ${event.y})`)
+      positionSystemPublicationBadge(system.id, { x: event.x, y: event.y })
       liveSystemPositions.set(system.id, { x: event.x, y: event.y })
       updateRouteGeometry()
     })
@@ -1000,10 +1104,12 @@ function render(): void {
       }
       liveSystemPositions.set(systemId, scenePosition)
       mark.classed('is-move-preview', true).attr('transform', `translate(${scenePosition.x} ${scenePosition.y})`)
+      positionSystemPublicationBadge(systemId, scenePosition)
     } else {
       liveSystemPositions.delete(systemId)
       const committedPosition = clusterSystemPosition(props.systemPositions, systemId)
       mark.classed('is-move-preview', false).attr('transform', `translate(${committedPosition.x} ${committedPosition.y})`)
+      positionSystemPublicationBadge(systemId, committedPosition)
     }
     updateRouteGeometry()
   }
@@ -1028,8 +1134,7 @@ function render(): void {
     .clickDistance(6)
     .filter((event) => {
       const target = event.target
-      const isMapMark = target instanceof Element
-        && target.closest('.cluster-system-node, .cluster-route')
+      const isMapMark = isMapZoomMark(target, 'cluster')
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
@@ -1047,6 +1152,7 @@ function render(): void {
         k: event.transform.k,
       })
     })
+  if (props.touchNavigation) zoomBehavior.touchable(() => false)
   svg.call(zoomBehavior)
   svg.on('click.cluster-target', (event: MouseEvent) => {
     if (event.detail === 0 || event.defaultPrevented
@@ -1196,17 +1302,6 @@ defineExpose({
   pointer-events: all;
 }
 
-.cluster-route-line {
-  fill: none;
-  stroke: var(--map-route);
-  stroke-width: 2.4;
-}
-
-.cluster-route.is-unresolved .cluster-route-line {
-  stroke: var(--map-unresolved);
-  stroke-dasharray: 8 7;
-}
-
 .cluster-route.is-selected .cluster-route-line,
 .cluster-route:focus .cluster-route-line {
   stroke: var(--map-selected);
@@ -1216,31 +1311,6 @@ defineExpose({
 .cluster-route:focus,
 .cluster-system-node:focus {
   outline: none;
-}
-
-.cluster-route-label-bg {
-  fill: var(--map-label-bg);
-  stroke: var(--map-label-border);
-  pointer-events: auto;
-}
-
-.cluster-route-label,
-.cluster-exit-label {
-  fill: var(--map-text);
-  font: 10px Consolas, monospace;
-}
-
-.cluster-route-label {
-  text-anchor: middle;
-  pointer-events: auto;
-}
-
-.cluster-exit-mark {
-  cursor: grab;
-  fill: var(--map-card);
-  pointer-events: all;
-  stroke: var(--map-unresolved);
-  stroke-width: 2;
 }
 
 .cluster-exit-hit-target {
@@ -1255,11 +1325,6 @@ defineExpose({
 .cluster-exit-mark.is-dragging,
 .cluster-exit-hit-target.is-dragging {
   cursor: grabbing;
-}
-
-.cluster-exit-label {
-  fill: var(--map-unresolved);
-  pointer-events: none;
 }
 
 .cluster-system-node {
@@ -1292,6 +1357,32 @@ defineExpose({
 
 .cluster-system-seal {
   fill: var(--map-installation);
+}
+
+.gm-publication-decorations {
+  pointer-events: none;
+}
+
+.gm-publication-badge {
+  color: var(--map-text);
+  pointer-events: none;
+}
+
+.gm-publication-badge-backing,
+.gm-publication-lock-backing {
+  fill: var(--map-bg);
+  stroke: var(--map-label-border);
+  stroke-width: 1.25;
+}
+
+.gm-publication-badge-icon,
+.gm-publication-lock-icon {
+  color: var(--map-text);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .cluster-system-name {

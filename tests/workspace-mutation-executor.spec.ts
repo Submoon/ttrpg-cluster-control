@@ -63,6 +63,7 @@ test('a structurally unchanged proposal leaves workspace and durability untouche
   })
   const request = renameClusterRequest(initial)
   request.prepare = workspace => ({
+    version: workspace.version,
     objectFieldSettings: workspace.objectFieldSettings,
     layout: workspace.layout,
     cluster: workspace.cluster,

@@ -9,9 +9,9 @@
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -21,17 +21,39 @@
         v-for="system in props.workspace.cluster.systems"
         :key="system.id"
         class="flex min-w-0 items-center gap-[0.25rem]"
+        @contextmenu="openSystemContextMenu($event, system)"
       >
         <button
           class="system-link flex min-h-[2.7rem] min-w-0 flex-1 cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
           type="button"
           :aria-label="`Open ${system.name} system map`"
           :aria-current="system.id === activeSystemId ? 'page' : undefined"
+          :aria-description="publicationStatus(system.publication).description"
+          @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
           @click="commands.navigation.selectSystem(system.id)"
         >
           <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
-          <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
+          <span class="min-w-0 [overflow-wrap:anywhere]">
+            <span class="flex min-w-0 items-center gap-1">
+              <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}</span>
+              <UTooltip :text="publicationStatus(system.publication).description">
+                <UIcon :name="publicationPresentation(system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+              </UTooltip>
+            </span>
+            <small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small>
+          </span>
         </button>
+        <UButton
+          class="quiet-button min-h-[2.5rem] w-[2.5rem] shrink-0 justify-center px-0"
+          color="neutral"
+          variant="ghost"
+          type="button"
+          :aria-label="`Change visibility for ${system.name}`"
+          :title="`Change visibility for ${system.name}`"
+          @click.stop="openSystemMenuFromButton($event, system)"
+        >
+          <UIcon name="i-lucide-eye" aria-hidden="true" />
+        </UButton>
         <button
           class="quiet-button min-h-[2.5rem] w-[2.5rem] shrink-0 justify-center px-0"
           type="button"
@@ -82,9 +104,9 @@
 
     <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
       <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart name draft' : 'Edit chart names' }}
+        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart-name editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -134,7 +156,7 @@
         <div
           :class="ui.link({
             class: [
-              'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-1 py-1 text-left',
+              'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-0.5 py-1 text-left',
               item.kind === 'object' ? 'object-row' : 'orbit-row',
               { active: selected },
             ],
@@ -144,12 +166,22 @@
           :aria-description="item.ariaDescription"
           :aria-current="selected ? 'true' : undefined"
           :data-hierarchy-level="level"
+          @contextmenu="openHierarchyMenu($event, item)"
+          @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
         >
           <template v-if="item.kind === 'object'">
             <span class="tree-copy col-start-1 row-start-1 block min-w-0 [overflow-wrap:anywhere]">
               <span class="tree-object-title flex min-w-0 items-start gap-1">
                 <span class="object-mark shrink-0" aria-hidden="true">{{ objectMark(item.row.object) }}</span>
-                <span class="tree-object-name min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.name }}</span>
+                <span class="tree-object-name flex min-w-0 items-center gap-1 [overflow-wrap:anywhere]">
+                  <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.name }}</span>
+                  <UTooltip :text="publicationStatus(item.row.object.publication, selectedSystem?.publication).description">
+                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                  <UTooltip v-if="publicationStatus(item.row.object.publication, selectedSystem?.publication).parentBlocked" :text="'System map unavailable to players until this system is Revealed.'">
+                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                </span>
               </span>
               <small class="tree-type-label mt-[0.18rem] block [overflow-wrap:anywhere]">
                 {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
@@ -171,20 +203,35 @@
               </small>
             </span>
           </template>
-          <UButton
-            v-if="item.children?.length"
-            class="tree-expand-control col-start-2 row-span-2 min-h-[2rem] min-w-[2rem] shrink-0 self-center justify-center px-0"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            :tabindex="-1"
-            :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-            :aria-expanded="expanded"
-            :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-            @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
-          >
-            <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
-          </UButton>
+          <div class="col-start-2 row-span-2 flex min-w-0 flex-col items-center gap-0.5 self-center">
+            <UButton
+              v-if="item.kind === 'object'"
+              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`Change visibility for ${item.row.object.name}`"
+              :title="`Change visibility for ${item.row.object.name}`"
+              @click.stop="openObjectMenuFromButton($event, item.row.object.id)"
+            >
+              <UIcon name="i-lucide-eye" aria-hidden="true" />
+            </UButton>
+            <UButton
+              v-if="item.children?.length"
+              class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+              :aria-expanded="expanded"
+              :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+              @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
+            >
+              <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+            </UButton>
+          </div>
         </div>
       </template>
     </UTree>
@@ -210,6 +257,8 @@ import {
 } from '../utils/map-hierarchy'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
+import type { PublicationTarget } from '../composables/editor-workflows/publication-types'
+import { publicationPresentation, publicationStatus } from '../utils/publication-presentation'
 import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
 
 interface HierarchyTreeItemBase {
@@ -301,6 +350,9 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
     const parentContext = row.kind === 'object'
       ? hierarchyParentContext(parent)
       : undefined
+    const publicationDescription = row.kind === 'object'
+      ? publicationStatus(row.object.publication, selectedSystem.value?.publication).description
+      : undefined
     const item: HierarchyTreeItem = row.kind === 'object'
       ? {
           kind: 'object',
@@ -309,7 +361,7 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
           label: row.object.name,
           textValue: row.object.name,
           ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
-          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}`,
+          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}`,
           parentContext,
           ancestorKeys,
         }
@@ -362,6 +414,85 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
   event.preventDefault()
   if (item.kind === 'object') void commands.navigation.selectObject(item.row.object.id)
   else void commands.navigation.selectOrbit(item.row.orbit.id)
+}
+
+function systemTarget(systemId: string): PublicationTarget {
+  return { kind: 'system', id: systemId, systemId }
+}
+
+function objectTarget(objectId: string): PublicationTarget | null {
+  const system = selectedSystem.value
+  return system ? { kind: 'object', id: objectId, systemId: system.id } : null
+}
+
+function openSystemMenu(event: MouseEvent, systemId: string, opener: HTMLElement): void {
+  event.preventDefault()
+  event.stopPropagation()
+  commands.publication.openMenu({
+    target: systemTarget(systemId),
+    clientPoint: { x: event.clientX, y: event.clientY },
+    opener,
+    source: 'hierarchy',
+  })
+}
+
+function openSystemContextMenu(event: MouseEvent, system: { id: string }): void {
+  if (!(event.target instanceof Element)) return
+  const opener = event.target.closest<HTMLElement>('.system-link')
+  if (opener) openSystemMenu(event, system.id, opener)
+}
+
+function openSystemContextMenuFromKeyboard(event: KeyboardEvent, system: { id: string }): void {
+  if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+  const opener = event.currentTarget
+  if (!(opener instanceof HTMLElement)) return
+  const bounds = opener.getBoundingClientRect()
+  event.preventDefault()
+  event.stopPropagation()
+  commands.publication.openMenu({
+    target: systemTarget(system.id),
+    clientPoint: { x: bounds.left, y: bounds.bottom },
+    opener,
+    source: 'hierarchy',
+  })
+}
+
+function openSystemMenuFromButton(event: MouseEvent, system: { id: string }): void {
+  const opener = event.currentTarget
+  if (!(opener instanceof HTMLElement)) return
+  openSystemMenu(event, system.id, opener)
+}
+
+function openObjectMenu(event: Event, objectId: string, opener: HTMLElement, point: { x: number; y: number }): void {
+  event.preventDefault()
+  event.stopPropagation()
+  const target = objectTarget(objectId)
+  if (!target) return
+  commands.publication.openMenu({ target, clientPoint: point, opener, source: 'hierarchy' })
+}
+
+function openHierarchyMenu(event: MouseEvent, item: HierarchyTreeItem): void {
+  if (item.kind !== 'object' || !(event.currentTarget instanceof HTMLElement)) return
+  const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
+  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY })
+}
+
+function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTreeItem): void {
+  if (item.kind !== 'object' || (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey))) return
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
+  const bounds = opener.getBoundingClientRect()
+  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom })
+}
+
+function openObjectMenuFromButton(event: MouseEvent, objectId: string): void {
+  const opener = event.currentTarget
+  if (!(opener instanceof HTMLElement)) return
+  const bounds = opener.getBoundingClientRect()
+  const point = event.detail === 0
+    ? { x: bounds.left, y: bounds.bottom }
+    : { x: event.clientX, y: event.clientY }
+  openObjectMenu(event, objectId, opener, point)
 }
 
 function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {

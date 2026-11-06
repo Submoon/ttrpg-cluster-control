@@ -3,6 +3,7 @@
  */
 import { drag, pointer, select, zoom, zoomTransform, type ZoomBehavior } from 'd3'
 import { captureD3MouseGesture, type D3MouseGestureDisposer } from './d3-mouse-gesture'
+import { isMapZoomMark } from './map-touch-navigation'
 import {
   catalogueTypes,
   minimumOrbitRadius,
@@ -27,6 +28,7 @@ import type {
 } from '../../composables/editor-workflows/types'
 import { catalogueMarks, objectMark } from '../../utils/catalogue-marks'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
+import { appendPublicationBadge, describeMapPublication } from '../../utils/gm-publication-badges'
 import {
   getSvgViewportRect,
   MAP_ZOOM_MAX_SCALE,
@@ -151,6 +153,8 @@ export interface SystemMapRendererOptions {
   orbitCenterMovePreviews: ReadonlyMap<string, Point>
   /** Enables object and Orbit drag editing; Navigation keeps marks available for selection and zoom. */
   moveEnabled: boolean
+  /** The wrapper owns touch navigation when true; native D3 zoom touch listeners stay disabled. */
+  touchNavigation?: boolean
   /** Event identities already captured for Orbit rotation so D3 zoom can ignore them. */
   orbitRotationWheelEvents: WeakSet<Event>
   /** Callbacks for selection and completed edits; gesture previews remain local to the renderer. */
@@ -220,6 +224,7 @@ export function renderSystemMap({
   orbitAdjustmentPreview,
   orbitCenterMovePreviews,
   moveEnabled,
+  touchNavigation = false,
   orbitRotationWheelEvents,
   handlers,
   setZoomLevel,
@@ -955,6 +960,10 @@ export function renderSystemMap({
     })
 
   const items = content.append('g').attr('class', 'system-map-items')
+  const publicationDecorations = content.append('g')
+    .attr('class', 'gm-publication-decorations')
+    .attr('aria-hidden', 'true')
+    .attr('pointer-events', 'none')
   const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
@@ -967,6 +976,29 @@ export function renderSystemMap({
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', object => `Select ${catalogueObjectLabel(object)}`)
+
+  objectMarks.each(function (object) {
+    describeMapPublication(this, `object-${system.id}-${object.id}`, object.publication, system.publication)
+  })
+
+  const objectPublicationMarks = publicationDecorations.selectAll<SVGGElement, SystemObject>('g.system-object-publication')
+    .data(system.objects)
+    .join('g')
+    .attr('class', 'system-object-publication')
+    .attr('data-object-id', object => object.id)
+    .attr('transform', object => {
+      const point = requiredPosition(positions, object.id)
+      return `translate(${point.x} ${point.y})`
+    })
+
+  objectPublicationMarks.each(function (object) {
+    appendPublicationBadge(this, {
+      identity: `object-${system.id}-${object.id}`,
+      mode: object.publication,
+      parentPublication: system.publication,
+      position: { x: 24, y: -18 },
+    })
+  })
 
   objectMarks.each(function (object) {
     const mark = select(this)
@@ -1130,6 +1162,10 @@ export function renderSystemMap({
   function updateLiveGeometry(): void {
     const positions = currentPositions()
     objectMarks.attr('transform', object => {
+      const point = requiredPosition(positions, object.id)
+      return `translate(${point.x} ${point.y})`
+    })
+    objectPublicationMarks.attr('transform', object => {
       const point = requiredPosition(positions, object.id)
       return `translate(${point.x} ${point.y})`
     })
@@ -1648,10 +1684,7 @@ export function renderSystemMap({
     .filter((event) => {
       if (orbitRotationWheelEvents.has(event as Event)) return false
       const target = event.target
-      const isMapMark = target instanceof Element
-        && target.closest(
-          '.system-object, .orbit-hit-target, .orbit-axis-handle, .orbit-rotation-handle, .orbit-center-handle',
-        )
+      const isMapMark = isMapZoomMark(target, 'system')
       const touchPinch = event.type.startsWith('touch')
         && 'touches' in event
         && event.touches.length > 1
@@ -1664,6 +1697,7 @@ export function renderSystemMap({
       setZoomLevel(Math.round(event.transform.k * 100))
       onViewportChange({ x: event.transform.x, y: event.transform.y, k: event.transform.k })
     })
+  if (touchNavigation) zoomBehavior.touchable(() => false)
   svg.call(zoomBehavior)
   content.attr('transform', currentTransform.toString())
   setZoomLevel(Math.round(currentTransform.k * 100))

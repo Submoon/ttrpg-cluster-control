@@ -17,8 +17,8 @@ test('draft projection includes current custom definitions and retained orphan v
   const settings = {
     ...workspace.objectFieldSettings,
     customFields: [
-      { id: 'known-field', name: 'Known value', type: 'number' as const },
-      { id: 'empty-field', name: 'Empty value', type: 'text' as const },
+      { id: 'known-field', name: 'Known value', type: 'number' as const, playerShared: false },
+      { id: 'empty-field', name: 'Empty value', type: 'text' as const, playerShared: false },
     ],
   }
 

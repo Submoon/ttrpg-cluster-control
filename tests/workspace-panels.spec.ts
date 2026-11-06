@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { waitForWorkspaceSaved, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -168,6 +168,8 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
     await expect(closeInspector).toBeFocused()
 
+    // Keep the original contact held beyond the old click-suppression window.
+    await page.waitForTimeout(1_000)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await expect.poll(async () => page.evaluate(() => {
       const active = document.activeElement
@@ -184,6 +186,25 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     }), { message: 'Touch release must leave focus inside the active inspector panel.' })
       .toMatchObject({ insidePanel: true })
     await expect(closeInspector).toBeFocused()
+
+    await closeInspector.click()
+    await expect(inspector).toBeHidden()
+    const nextBounds = await system.boundingBox()
+    if (!nextBounds) throw new Error('The fresh long-press target has no visible bounds.')
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: nextBounds.x + nextBounds.width / 2, y: nextBounds.y + nextBounds.height / 2 }],
+    })
+    await expect(closeInspector).toBeFocused()
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+    await expect(closeInspector).toBeFocused()
+
+    // A deliberate new mouse action must still open the preview after cancellation.
+    await closeInspector.click()
+    await expect(inspector).toBeHidden()
+    const preview = await openPlayerPreview(page)
+    await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
   } finally {
     await cdp.detach()
   }
@@ -199,11 +220,11 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartDialog.getByLabel('Jump Cluster').fill('')
   await chartDialog.getByLabel('Star system').fill('Draft Vesper')
-  await chartDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartDialog.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
   await page.keyboard.press('Escape')
   await expect(chartDialog).toBeHidden()
@@ -220,7 +241,7 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
   await hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: 'Resume chart name draft' }).click()
+    .getByRole('button', { name: 'Resume chart details draft' }).click()
   await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
   await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
@@ -235,7 +256,7 @@ test('desktop-to-compact reflow retains an invalid chart-name draft and the acti
   await hierarchyToggle.click()
   await expect(hierarchy).toBeVisible()
   await hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: 'Resume chart name draft' }).click()
+    .getByRole('button', { name: 'Resume chart details draft' }).click()
   await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
   await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
@@ -249,11 +270,11 @@ test('a nested chart dialog pauses the compact panel focus trap and returns focu
   await expectCompactPanel(page, 'hierarchy')
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const chartNamesControl = hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: /Edit chart names|Resume chart name draft/ })
-  const editNames = hierarchy.getByRole('button', { name: 'Edit chart names' })
+    .getByRole('button', { name: /Edit chart details|Resume chart details draft/ })
+  const editNames = hierarchy.getByRole('button', { name: 'Edit chart details' })
   await editNames.click()
 
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(chartDialog).toBeVisible()
   await expect(chartDialog.getByLabel('Jump Cluster')).toBeFocused()
   for (let index = 0; index < 7; index += 1) {
@@ -261,6 +282,7 @@ test('a nested chart dialog pauses the compact panel focus trap and returns focu
     expect(await chartDialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
   }
 
+  await expect(chartDialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(chartDialog).toBeHidden()
   await expect(hierarchy).toBeVisible()

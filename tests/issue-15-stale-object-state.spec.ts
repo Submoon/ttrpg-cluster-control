@@ -102,7 +102,7 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   const deliveredOriginalPoint = await addPlanetAt(page, originalPoint)
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
   await inspector.getByLabel('Name', { exact: true }).fill('Foo')
-  await inspector.getByLabel('Description', { exact: true }).fill('Old object draft')
+  await inspector.getByLabel('GM notes', { exact: true }).fill('Old object draft')
   await inspector.getByRole('button', { name: 'Apply changes Save map object', exact: true }).click()
 
   await beginPlanetAdd(page)
@@ -138,7 +138,7 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   const deliveredNewPoint = await addPlanetAt(page, newPoint)
 
   await expect(inspector.getByLabel('Name', { exact: true })).not.toHaveValue('Foo')
-  await expect(inspector.getByLabel('Description', { exact: true })).toHaveValue('')
+  await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue('')
   const recreatedExport = await downloadJson(page, 'Export star system JSON')
   const recreatedObject = recreatedExport.system?.objects.find(object => object.subtype === 'planet'
     && object.id !== survivingObject?.id)

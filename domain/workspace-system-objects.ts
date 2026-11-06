@@ -11,7 +11,7 @@ import type {
   SystemObjectChanges,
 } from './workspace-model'
 import { canPlaceObjectInOrbit } from './workspace-orbits'
-import { objectFieldValidationError, validName, validText } from './workspace-validation'
+import { isPublicationMode, objectFieldValidationError, validName, validText } from './workspace-validation'
 
 /**
  * Allocates the first unused prefixed numeric location key within one system.
@@ -80,11 +80,14 @@ export function createSystemObject(
 
   return {
     id: objectId,
+    publication: 'known-type',
     family: catalogueType.family,
     subtype,
     locationKey: nextLocationKey(system, catalogueType.keyPrefix),
     name,
     description: '',
+    playerText: '',
+    playerFieldMasks: [],
     placement,
   }
 }
@@ -108,6 +111,9 @@ export function updateSystemObject(
   const object = system.objects.find(candidate => candidate.id === objectId)
   if (!object) {
     throw new Error('The selected map object no longer exists.')
+  }
+  if (changes.publication !== undefined && !isPublicationMode(changes.publication)) {
+    throw new Error('Choose a valid object publication mode.')
   }
 
   const updated: SystemObject = {

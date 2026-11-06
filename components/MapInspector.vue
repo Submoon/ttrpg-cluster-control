@@ -17,6 +17,7 @@
     >
       <JumpRouteInspector
         :workspace="props.workspace"
+        :publication-busy="props.publicationBusy"
         :selected-system="props.selectedSystem"
         :selected-object="props.selectedObject"
         :selected-orbit="props.selectedOrbit"
@@ -32,6 +33,7 @@
         @delete-system="emit('delete-system', $event)"
         @show-chart-details="emit('show-chart-details')"
         @request-route-edit="emit('request-route-edit', $event)"
+        @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
         @choose-route-point="(sessionId, pointId) => emit('choose-route-point', sessionId, pointId)"
         @apply-route-session="emit('apply-route-session', $event)"
@@ -45,6 +47,7 @@
         <MapObjectInspector
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
+          :publication-busy="props.publicationBusy"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :focus-request="props.objectFocusRequest"
@@ -109,6 +112,7 @@
           mode="system"
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
+          :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
           @edit-chart-names="emit('edit-chart-names', $event)"
@@ -163,6 +167,7 @@ const props = defineProps<{
   saveMessage: string
   saveError: string | null
   exportError: string
+  publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -185,7 +190,8 @@ const emit = defineEmits<{
   'detach-orbit': []
   'delete-orbit': []
   'request-route-edit': [routeId: string]
-  'update-route-input': [sessionId: number, field: RouteDraftField, value: string]
+  'set-route-sharing': [routeId: string, playerShared: boolean]
+  'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]
   'discard-route-session': [sessionId: number]

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, openWorkspaceHierarchy } from './helpers'
+import { waitForWorkspaceSaved, openWorkspaceHierarchy, overwriteWorkspaceRecord } from './helpers'
 import { returnToClusterMap, jsonMapImportInput } from './helpers'
 import { setJsonFile } from './helpers'
 import { importReviewDialog, resolveImportReview } from './helpers'
@@ -48,32 +48,6 @@ async function readWorkspaceRecord(
 
 async function readCurrentWorkspace(page: import('@playwright/test').Page): Promise<unknown> {
   return readWorkspaceRecord(page, 'current')
-}
-
-async function overwriteWorkspaceRecord(
-  page: import('@playwright/test').Page,
-  key: WorkspaceRecordKey,
-  value: unknown,
-): Promise<void> {
-  await page.evaluate(async (stored) => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
-    })
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction('workspace', 'readwrite')
-        transaction.objectStore('workspace').put(stored.value, stored.key)
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
-        transaction.onabort = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
-      })
-    } finally {
-      database.close()
-    }
-  }, { key, value })
 }
 
 async function deleteWorkspaceRecord(
@@ -175,11 +149,11 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await waitForWorkspaceSaved(page)
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await page.getByRole('button', { name: 'Chart details' }).click()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
-  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
   await waitForWorkspaceSaved(page)
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })

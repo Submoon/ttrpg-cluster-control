@@ -590,8 +590,8 @@ test('compact Location-key search preserves a dirty same-object draft and return
 test('object search guards a hidden chart-name draft before revealing the result', async ({ page }) => {
   const { systemName } = await createSingleSystemWorkspace(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await hierarchy.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   const clusterDraft = 'Kestrel Reach draft'
   const systemDraft = 'Vesper draft'
   await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill(clusterDraft)
@@ -601,7 +601,7 @@ test('object search guards a hidden chart-name draft before revealing the result
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(hierarchy).toBeHidden()
 
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })
   await expect(resumeDraft).toBeVisible()
   const searchButton = page.getByRole('button', { name: 'Search', exact: true })
   const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true, includeHidden: true })
@@ -617,14 +617,14 @@ test('object search guards a hidden chart-name draft before revealing the result
   await expect(result).toBeVisible()
   await result.click()
 
-  const guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
   await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
 
   await expect(chartDialog).toBeVisible()
-  await expect(chartDialog.getByRole('button', { name: 'Apply names', exact: true })).toBeVisible()
+  await expect(chartDialog.getByRole('button', { name: 'Apply details', exact: true })).toBeVisible()
   await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
   await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
   await expect.poll(() => chartDialog.evaluate(dialog =>

@@ -19,6 +19,7 @@
       >
         <span>{{ field.name }}</span>
         <small>Native / {{ field.type }}</small>
+        <small>{{ field.playerShared ? 'Shared with players' : 'Private' }}</small>
       </button>
     </section>
     <section>
@@ -35,6 +36,7 @@
       >
         <span>{{ field.name }}</span>
         <small>Custom / {{ field.type }}</small>
+        <small>{{ field.playerShared ? 'Shared with players' : 'Private' }}</small>
         <small>{{ fieldApplicabilitySummary(field) }}</small>
       </button>
       <p v-if="!props.customFields.length" class="empty-copy">

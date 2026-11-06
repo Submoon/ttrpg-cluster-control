@@ -133,6 +133,11 @@
                 @update:model-value="patchCreate({ type: $event as CustomFieldType })"
               />
             </UFormField>
+            <UCheckbox
+              :model-value="props.session.createDraft?.playerShared ?? false"
+              label="Share with players"
+              @update:model-value="value => patchCreate({ playerShared: value === true })"
+            />
             <UFormField v-if="props.session.createDraft?.type === 'single-select'" label="New field choices">
               <UTextarea
                 id="new-custom-field-options"

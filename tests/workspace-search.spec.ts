@@ -233,8 +233,8 @@ test('Search shortcut yields to Fields, chart-name, and compact panel dialogs', 
   await expect(fieldsDialog).toBeHidden()
 
   const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await hierarchy.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(chartDialog).toBeVisible()
   await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach shortcut draft')
   await page.keyboard.press('Control+k')
@@ -441,7 +441,7 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   const clusterResult = searchDialog.getByRole('option', { name: /Kestrel Reach.*Jump Cluster.*Current workspace/i })
   await clusterResult.click()
 
-  let guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  let guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toHaveCount(0)
@@ -472,7 +472,7 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   })
 
   await clusterResult.click()
-  guard = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await expect(guard.getByRole('button', { name: 'Discard edits and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
 

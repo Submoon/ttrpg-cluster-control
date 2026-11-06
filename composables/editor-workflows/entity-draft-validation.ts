@@ -2,6 +2,8 @@
 import {
   canPlaceObjectInOrbit,
   initialSystemPlacement,
+  isPublicationMode,
+  nativePlayerFieldIds,
   updateWorkspaceObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -54,6 +56,12 @@ function isPhysicalStation(object: SystemObject): boolean {
   return object.family === 'Installation' && object.subtype === 'station'
 }
 
+function sameStringSet(first: readonly string[], second: readonly string[]): boolean {
+  if (first.length !== second.length) return false
+  const secondValues = new Set(second)
+  return first.every(value => secondValues.has(value))
+}
+
 /**
  * Parses a draft against the current workspace and applies a validated result through the shared placement operation.
  * Session ownership, dependency checks and stale-context handling remain with the editing controller.
@@ -83,6 +91,25 @@ export function validateObjectDraft(
   if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (name !== initial.name) changes.name = name
   if (draft.description !== initial.description) changes.description = draft.description
+  if (draft.playerText !== initial.playerText) changes.playerText = draft.playerText
+  const allowedPlayerMaskIds = new Set([
+    nativePlayerFieldIds.atmosphere,
+    nativePlayerFieldIds.portClass,
+    ...workspace.objectFieldSettings.customFields.map(field => field.id),
+  ])
+  const playerFieldMaskSet = new Set(draft.playerFieldMasks)
+  if (playerFieldMaskSet.size !== draft.playerFieldMasks.length) {
+    errors.playerFieldMasks = 'Choose each Field mask only once.'
+  } else if (draft.playerFieldMasks.some(fieldId => !allowedPlayerMaskIds.has(fieldId))) {
+    errors.playerFieldMasks = 'Choose a supported Field to hide from players.'
+  } else if (!sameStringSet(initial.playerFieldMasks, draft.playerFieldMasks)) {
+    changes.playerFieldMasks = [...draft.playerFieldMasks]
+  }
+  if (!isPublicationMode(draft.publication)) {
+    errors.publication = 'Choose a supported publication mode.'
+  } else if (draft.publication !== initial.publication) {
+    changes.publication = draft.publication
+  }
   if (subtype !== initial.subtype) changes.subtype = subtype
 
   if (draft.placement === 'system') {

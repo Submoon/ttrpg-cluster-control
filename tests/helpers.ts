@@ -1,4 +1,15 @@
-import { expect } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
+import type { PublicationMode } from '../domain/workspace'
+
+export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
+
+/** Selects a mode on the explicit Inspector or chart-details draft control. */
+export async function selectDraftPublication(scope: Locator, label: PublicationModeLabel): Promise<void> {
+  const button = scope.getByRole('group', { name: 'Draft visibility', exact: true })
+    .getByRole('button', { name: `Set visibility to ${label}`, exact: true })
+  await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+}
 
 /** Waits for the workspace writer's durable acknowledgement without a visible success notice. */
 export async function waitForWorkspaceSaved(page: import('@playwright/test').Page): Promise<void> {
@@ -27,6 +38,87 @@ export type WorldPoint = { x: number; y: number }
 
 export type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
 
+type WorkspaceWriteFailureGate = {
+  originalPut: typeof IDBObjectStore.prototype.put
+  abortCurrentWrites: number
+  currentWriteCount: number
+}
+
+type WorkspaceWriteFailureWindow = Window & { __workspaceWriteFailureGate?: WorkspaceWriteFailureGate }
+
+/** Injects a damaged record; recovery assertions remain on the public UI and complete exports. */
+export async function overwriteWorkspaceRecord(
+  page: import('@playwright/test').Page,
+  key: 'current' | 'last-valid',
+  value: unknown,
+): Promise<void> {
+  await page.evaluate(async (stored) => {
+    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
+    })
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('workspace', 'readwrite')
+        transaction.objectStore('workspace').put(stored.value, stored.key)
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
+        transaction.onabort = () => reject(transaction.error ?? new Error('Could not corrupt the workspace snapshot.'))
+      })
+    } finally {
+      database.close()
+    }
+  }, { key, value })
+}
+
+/** Aborts a bounded number of current-workspace writes to exercise durable-save recovery. */
+export async function installWorkspaceWriteFailureGate(
+  page: import('@playwright/test').Page,
+  abortCurrentWrites = 1,
+): Promise<void> {
+  await page.evaluate((abortCount) => {
+    const trackedWindow = window as WorkspaceWriteFailureWindow
+    const originalPut = IDBObjectStore.prototype.put
+    const gate: WorkspaceWriteFailureGate = { originalPut, abortCurrentWrites: abortCount, currentWriteCount: 0 }
+    trackedWindow.__workspaceWriteFailureGate = gate
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      const request = originalPut.call(this, value, key)
+      const isCurrentWorkspaceWrite = this.transaction.db.name === 'ttrpg-cluster-control'
+        && this.name === 'workspace'
+        && key === 'current'
+        && this.transaction.mode === 'readwrite'
+      if (isCurrentWorkspaceWrite) {
+        gate.currentWriteCount += 1
+        if (gate.abortCurrentWrites > 0) {
+          gate.abortCurrentWrites -= 1
+          this.transaction.abort()
+        }
+      }
+      return request
+    }
+  }, abortCurrentWrites)
+}
+
+export async function readWorkspaceWriteFailureCount(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const gate = (window as WorkspaceWriteFailureWindow).__workspaceWriteFailureGate
+    if (!gate) throw new Error('The workspace write-failure gate is not installed.')
+    return gate.currentWriteCount
+  })
+}
+
+export async function restoreWorkspaceWriteFailureGate(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const trackedWindow = window as WorkspaceWriteFailureWindow
+    const gate = trackedWindow.__workspaceWriteFailureGate
+    if (!gate) return
+    IDBObjectStore.prototype.put = gate.originalPut
+    delete trackedWindow.__workspaceWriteFailureGate
+  })
+}
+
 /** Captures real map export blobs so assertions can inspect their serialized contents. */
 export async function captureMapExportBlobs(page: import('@playwright/test').Page): Promise<void> {
   await page.addInitScript(() => {
@@ -42,11 +134,16 @@ export async function captureMapExportBlobs(page: import('@playwright/test').Pag
 
 export type ExportedObject = {
   id: string
+  /** Raw legacy exports omit publication; current complete exports include it. */
+  publication?: PublicationMode
   name: string
   family: string
   subtype: string
   locationKey: string
   description: string
+  /** Supported legacy files omit the v4 player content metadata. */
+  playerText?: string
+  playerFieldMasks?: string[]
   placement: { kind: 'system'; x: number; y: number } | { kind: 'orbit'; orbitId: string }
   atmosphere?: string
   portClass?: string
@@ -57,12 +154,14 @@ export type ExportedObject = {
 export type ExportedSystem = {
   id: string
   name: string
+  publication?: PublicationMode
   objects: ExportedObject[]
   orbits: Array<{ id: string; hostId: string | null; center?: WorldPoint; order: number }>
 }
 
 export type ExportedRoute = {
   id: string
+  playerShared?: boolean
   name?: string
   jumpLevel?: number
   fromPointId: string
@@ -78,15 +177,17 @@ export type ExportedMap = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { id: string; name: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
+  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
   system?: ExportedSystem
   objectFieldSettings: {
     atmosphereOptions: string[]
     portClassOptions: string[]
+    nativePlayerSharing?: { atmosphere: boolean; portClass: boolean }
     customFields: Array<{
       id: string
       name: string
       type: string
+      playerShared?: boolean
       options?: string[]
       applicability?: ExportedCustomFieldApplicabilityTarget[]
     }>
@@ -174,11 +275,12 @@ type MouseDragProbeWindow = Window & {
   }
 }
 
-/** Drives a six-step native mouse drag and returns the captured window-level input points. */
+/** Drives native mouse input; use pointer events when a surface suppresses compatibility mouse events. */
 export async function measureMouseDrag(
   page: import('@playwright/test').Page,
   start: ScreenPoint,
   end: ScreenPoint,
+  options: { eventFamily?: 'mouse' | 'pointer' } = {},
 ): Promise<MouseDragDelivery> {
   const requestedStart = { x: Math.round(start.x), y: Math.round(start.y) }
   const requestedEnd = { x: Math.round(end.x), y: Math.round(end.y) }
@@ -192,13 +294,15 @@ export async function measureMouseDrag(
 
   try {
     observerMayBeInstalled = true
-    await page.evaluate((id) => {
+    await page.evaluate(({ id, eventFamily }) => {
       const probeWindow = window as MouseDragProbeWindow
       if (probeWindow.__testMouseDragProbe) {
         throw new Error('A native mouse drag probe is already active.')
       }
 
       const events: Array<{ type: 'down' | 'up'; x: number; y: number }> = []
+      const downEvent = eventFamily === 'pointer' ? 'pointerdown' : 'mousedown'
+      const upEvent = eventFamily === 'pointer' ? 'pointerup' : 'mouseup'
       const recordDown = (event: MouseEvent) => {
         events.push({ type: 'down', x: event.clientX, y: event.clientY })
       }
@@ -206,13 +310,13 @@ export async function measureMouseDrag(
         events.push({ type: 'up', x: event.clientX, y: event.clientY })
       }
       const cleanup = () => {
-        window.removeEventListener('mousedown', recordDown, true)
-        window.removeEventListener('mouseup', recordUp, true)
+        window.removeEventListener(downEvent, recordDown, true)
+        window.removeEventListener(upEvent, recordUp, true)
       }
       probeWindow.__testMouseDragProbe = { id, events, cleanup }
-      window.addEventListener('mousedown', recordDown, true)
-      window.addEventListener('mouseup', recordUp, true)
-    }, probeId)
+      window.addEventListener(downEvent, recordDown, true)
+      window.addEventListener(upEvent, recordUp, true)
+    }, { id: probeId, eventFamily: options.eventFamily ?? 'mouse' })
 
     await page.mouse.move(requestedStart.x, requestedStart.y)
     mouseMayBeDown = true
@@ -580,6 +684,21 @@ export async function setHeaderMapActionsOpen(
   }
 }
 
+/** Opens the Warden's player preview through Map files on desktop or compact layouts. */
+export async function openPlayerPreview(page: import('@playwright/test').Page): Promise<Locator> {
+  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
+  if (!await mapFiles.isVisible()) {
+    const closePanel = page.getByRole('dialog').getByRole('button', { name: /^Close (inspector|hierarchy) panel$/ })
+    if (await closePanel.isVisible()) await closePanel.click()
+  }
+  await setHeaderMapActionsOpen(page, true)
+  await page.locator('#workspace-header-map-files-panel')
+    .getByRole('button', { name: 'Preview player view', exact: true }).click()
+  const preview = page.getByRole('dialog', { name: 'Player view preview', exact: true })
+  await expect(preview).toBeVisible()
+  return preview
+}
+
 /** Finds the shared Dock containing map interaction modes and Add. */
 export function workspaceNavigation(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   return page.getByRole('toolbar', { name: 'Workspace navigation' })
@@ -694,13 +813,16 @@ export async function openWorkspaceHierarchy(
 export async function openChartDetails(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
+  const detailsRegion = page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+  if (await detailsRegion.isVisible().catch(() => false)) return detailsRegion
+
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await expect(inspectToggle).toBeVisible()
   if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
   await expect(chartDetails).toBeVisible()
   if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
-  return page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+  return detailsRegion
 }
 
 /** Selects a map interaction mode through the shared Dock before a map gesture. */

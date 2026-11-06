@@ -220,10 +220,13 @@ test('restoring a workspace removes legacy object targets without deleting value
   const fieldId = 'legacy-field'
   const restored = restoreLocalWorkspace({
     ...workspace,
+    version: undefined,
     cluster: {
       ...workspace.cluster,
+      playerTitle: undefined,
       systems: workspace.cluster.systems.map(currentSystem => ({
         ...currentSystem,
+        publication: undefined,
         objects: currentSystem.objects.map(currentObject => currentObject.id === object.id
           ? { ...currentObject, customFieldValues: { [fieldId]: 'Still here.' } }
           : currentObject),
@@ -321,6 +324,7 @@ test('custom field category and subtype scopes are united on independent system 
 
   const legacySystemExport: unknown = {
     ...systemExport,
+    version: 1,
     objectFieldSettings: {
       ...systemExport.objectFieldSettings,
       customFields: systemExport.objectFieldSettings.customFields.map(field =>
@@ -629,7 +633,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const clusterExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(clusterExport).toMatchObject({
     format: 'ttrpg-cluster-control-map',
-    version: 1,
+    version: 4,
     type: 'cluster',
     layout: { version: 1 },
   })
@@ -728,7 +732,7 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
   const systemExport = await downloadJson(page, 'Export star system JSON')
   expect(systemExport).toMatchObject({
     format: 'ttrpg-cluster-control-map',
-    version: 1,
+    version: 4,
     type: 'system',
     layout: { version: 1 },
   })
@@ -752,11 +756,11 @@ test('the Warden can export a cluster and standalone system as versioned JSON', 
 
   const renamedSystemName = 'W'.repeat(80)
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await page.getByRole('button', { name: 'Chart details' }).click()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartNamesDialog.getByLabel('Star system').fill(renamedSystemName)
-  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
   await expect(page.getByRole('group', { name: `${renamedSystemName} star system map` })).toBeVisible()
   const renamedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
   const renamedSvgInfo = await inspectImageSvg(page, renamedSvg.text!)
@@ -1075,12 +1079,12 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
   const systemName = 'Vesper Prime'
   const hierarchy = await openWorkspaceHierarchy(page)
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await page.getByRole('button', { name: 'Chart details' }).click()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  let chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
+  let chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartNamesDialog.getByLabel('Jump Cluster').fill(clusterName)
   await chartNamesDialog.getByLabel('Star system').fill(systemName)
-  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
   await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
   await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
@@ -1110,11 +1114,11 @@ test('the Warden can construct, edit, and reload the local campaign', async ({ p
   await returnToClusterMap(page)
   await addClusterSystem(page, { open: true })
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
-  await page.getByRole('button', { name: 'Chart details' }).click()
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
+  chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartNamesDialog.getByLabel('Star system').fill('Harrow')
-  await chartNamesDialog.getByRole('button', { name: 'Apply names' }).click()
+  await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
   await addCatalogueObject(page, 'jump-point')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Harrow Arrival')

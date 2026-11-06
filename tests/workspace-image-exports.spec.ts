@@ -523,12 +523,12 @@ test('print-light image export preserves the live dark workspace and hidden char
   await expect(systemMap).toBeVisible()
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Edit chart names' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
+  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await chartDialog.getByLabel('Star system').fill('Unapplied Vesper')
   await page.keyboard.press('Escape')
   await expect(chartDialog).toBeHidden()
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' })
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' })
   await expect(resumeDraft).toBeVisible()
 
   const appliedBefore = await downloadJson(page, 'Export star system JSON')
@@ -622,14 +622,41 @@ async function expectMapFilesControlsUsable(
   for (const control of [printChoice, svgButton, pngButton]) {
     await expect(control).toBeVisible()
     await expect(control).toBeEnabled()
+    await control.focus()
+    await expect(control).toBeFocused()
+    await expect(control).toBeInViewport({ ratio: 1 })
     const receivesPointer = await control.evaluate(element => {
       const rect = element.getBoundingClientRect()
       const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
       return hit === element || element.contains(hit)
     })
+    if (!receivesPointer) {
+      const geometry = await control.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        const menu = element.closest('.workspace-map-files-content')
+        const menuRect = menu?.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return {
+          label: element.getAttribute('aria-label') ?? element.textContent,
+          control: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+          menu: menu && menuRect ? {
+            top: menuRect.top, bottom: menuRect.bottom,
+            scrollTop: menu.scrollTop, scrollHeight: menu.scrollHeight, clientHeight: menu.clientHeight,
+          } : null,
+          hit: hit ? { tag: hit.tagName, role: hit.getAttribute('role'), label: hit.getAttribute('aria-label') } : null,
+          viewport: { width: innerWidth, height: innerHeight },
+        }
+      })
+      await test.info().attach('map-files-pointer-geometry', {
+        body: Buffer.from(JSON.stringify(geometry, null, 2)),
+        contentType: 'application/json',
+      })
+      await test.info().attach('map-files-pointer-failure', {
+        body: await page.screenshot({ fullPage: false }),
+        contentType: 'image/png',
+      })
+    }
     expect(receivesPointer).toBe(true)
-    await control.focus()
-    await expect(control).toBeFocused()
   }
 }
 
@@ -648,10 +675,10 @@ for (const mapCase of mapCases) {
         if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
         await page.getByRole('button', { name: 'Chart details', exact: true }).click()
         const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-        await inspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-        const names = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+        await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+        const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
         await names.getByLabel('Star system', { exact: true }).fill(expectedTitle)
-        await names.getByRole('button', { name: 'Apply names', exact: true }).click()
+        await names.getByRole('button', { name: 'Apply details', exact: true }).click()
         map = page.getByRole('group', { name: `${expectedTitle} star system map`, exact: true })
         await expect(map).toBeVisible()
       }
@@ -1034,8 +1061,8 @@ test('failed saves preserve the latest applied image and separate PNG export err
   await expect(map).toBeVisible()
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-  await inspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const chartNames = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const chartNames = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   const expectedTitle = 'Vesper Prime Applied Despite Save Failure'
   await chartNames.getByLabel('Star system', { exact: true }).fill(expectedTitle)
 
@@ -1060,7 +1087,7 @@ test('failed saves preserve the latest applied image and separate PNG export err
   })
 
   try {
-    await chartNames.getByRole('button', { name: 'Apply names', exact: true }).click()
+    await chartNames.getByRole('button', { name: 'Apply details', exact: true }).click()
     await expect(chartNames).toBeHidden()
     const feedback = activeWorkspaceFeedback(page)
     await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')

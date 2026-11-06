@@ -180,7 +180,35 @@ for (const viewport of reviewViewports) {
     await expect(importReview).toBeHidden()
     await expect(importButton).toBeVisible()
     await expect(importButton).toBeFocused()
-    await expect(importButton).toBeInViewport({ ratio: 1 })
+    try {
+      await expect(importButton).toBeInViewport({ ratio: 1 })
+    } catch (error) {
+      const geometry = await importButton.evaluate(async (button) => {
+        const intersection = await new Promise<IntersectionObserverEntry>(resolve => {
+          const observer = new IntersectionObserver(([entry]) => {
+            if (entry) { observer.disconnect(); resolve(entry) }
+          })
+          observer.observe(button)
+        })
+        const ancestors = []
+        for (let parent = button.parentElement; parent; parent = parent.parentElement) {
+          const style = getComputedStyle(parent)
+          ancestors.push({
+            tag: parent.tagName, className: parent.className, rect: parent.getBoundingClientRect().toJSON(),
+            clientTop: parent.clientTop, clientLeft: parent.clientLeft, clientHeight: parent.clientHeight,
+            clientWidth: parent.clientWidth, scrollTop: parent.scrollTop, scrollHeight: parent.scrollHeight,
+            overflow: style.overflow, maxHeight: style.maxHeight, padding: style.padding, border: style.borderWidth,
+            availableHeight: style.getPropertyValue('--reka-popover-content-available-height'), transform: style.transform,
+          })
+        }
+        return { viewport: { width: innerWidth, height: innerHeight }, rect: button.getBoundingClientRect().toJSON(),
+          intersection: intersection.intersectionRect.toJSON(), root: intersection.rootBounds?.toJSON(), ancestors }
+      })
+      await test.info().attach('map-files-clipped-geometry', { body: JSON.stringify(geometry), contentType: 'application/json' })
+      await attachViewportScreenshot(page, 'map-files-clipped')
+      throw error
+    }
+    await attachViewportScreenshot(page, `map-files-return-focus-${viewport.width}x${viewport.height}-${viewport.theme}`)
     await setHeaderMapActionsOpen(page, false)
     const unchanged = await downloadJson(page, 'Export Jump Cluster JSON')
     expect(unchanged.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])

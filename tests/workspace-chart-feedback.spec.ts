@@ -60,20 +60,20 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
 test('a hidden clean chart-name session remains resumable without claiming unapplied changes', async ({ page }) => {
   await createWorkspace(page)
 
-  await page.getByRole('button', { name: 'Chart details' }).click()
+  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await inspector.getByRole('button', { name: 'Edit chart names' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
+  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(dialog).toBeVisible()
   await page.keyboard.press('Escape')
 
   const feedback = activeWorkspaceFeedback(page)
   await expect(dialog).toBeHidden()
-  await expect(feedback.getByRole('button', { name: 'Resume chart name draft' })).toBeVisible()
-  await expect(feedback.getByText('Chart names ready to resume')).toBeVisible()
-  await expect(feedback.getByText('Unapplied chart-name changes')).toHaveCount(0)
+  await expect(feedback.getByRole('button', { name: 'Resume chart details draft' })).toBeVisible()
+  await expect(feedback.getByText('Chart details ready to resume')).toBeVisible()
+  await expect(feedback.getByText('Unapplied chart details')).toHaveCount(0)
 
-  await feedback.getByRole('button', { name: 'Resume chart name draft' }).click()
+  await feedback.getByRole('button', { name: 'Resume chart details draft' }).click()
   await expect(dialog).toBeVisible()
   await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Kestrel Reach')
   await expect(dialog.getByLabel('Star system')).toHaveValue('Vesper')
@@ -173,7 +173,7 @@ test('routine save feedback takes no space on desktop or in compact recovery', a
 
       const inspector = page.getByRole('complementary', { name: 'Object inspector' })
       await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-      const chartNames = inspector.getByRole('button', { name: 'Edit chart names' })
+      const chartNames = inspector.getByRole('button', { name: 'Edit chart details' })
       await expect(chartNames).toBeVisible()
       expect(await chartNames.evaluate((element) => {
         const bounds = element.getBoundingClientRect()
@@ -182,8 +182,8 @@ test('routine save feedback takes no space on desktop or in compact recovery', a
       })).toBe(true)
 
       await chartNames.click()
-      const dialog = page.getByRole('dialog', { name: 'Edit chart names' })
-      const apply = dialog.getByRole('button', { name: 'Apply names' })
+      const dialog = page.getByRole('dialog', { name: 'Edit chart details' })
+      const apply = dialog.getByRole('button', { name: 'Apply details' })
       await expect(apply).toBeVisible()
       expect(await apply.evaluate((element) => {
         const bounds = element.getBoundingClientRect()
@@ -191,10 +191,10 @@ test('routine save feedback takes no space on desktop or in compact recovery', a
         return target === element || element.contains(target)
       })).toBe(true)
       await dialog.getByRole('button', { name: 'Close' }).click()
-      const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft' })
+      const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' })
       await expect(resumeDraft).toBeVisible()
       await resumeDraft.click()
-      await page.getByRole('dialog', { name: 'Edit chart names' }).getByRole('button', { name: 'Discard draft' }).click()
+      await page.getByRole('dialog', { name: 'Edit chart details' }).getByRole('button', { name: 'Discard draft' }).click()
       await expect(page.locator('.workspace-feedback')).toBeHidden()
     }
   }
@@ -226,12 +226,12 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const chartInspector = page.locator('#workspace-inspector-panel')
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await chartInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const appliedDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await chartInspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const appliedDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await appliedDialog.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
   await appliedDialog.getByLabel('Star system', { exact: true }).fill('Applied recovery star')
   await abortNextWorkspaceWrite(page, async () => {
-    await appliedDialog.getByRole('button', { name: 'Apply names', exact: true }).click()
+    await appliedDialog.getByRole('button', { name: 'Apply details', exact: true }).click()
     await expect(appliedDialog).toBeHidden()
   })
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Not saved.')
@@ -240,13 +240,13 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   const draftInspector = page.locator('#workspace-inspector-panel')
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await draftInspector.getByRole('button', { name: 'Edit chart names', exact: true }).click()
-  const draftDialog = page.getByRole('dialog', { name: 'Edit chart names', exact: true })
+  await draftInspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const draftDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await draftDialog.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')
   await draftDialog.getByLabel('Star system', { exact: true }).fill('Hidden unapplied draft star')
   await page.keyboard.press('Escape')
   await expect(draftDialog).toBeHidden()
-  await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart name draft', exact: true })).toBeVisible()
+  await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })).toBeVisible()
   await expect(systemMap).toHaveAttribute('transform', cameraBeforeFeedback!)
 
   const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
@@ -286,11 +286,11 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   expect(ordinaryHit).toBe(true)
 
   await planet.click()
-  const guard = page.getByRole('dialog', { name: 'Edit chart names' })
+  const guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: 'Edit chart names' })).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Edit chart details' })).toBeHidden()
 
   const recoveryDetailsTrigger = activeWorkspaceFeedback(page).getByRole('button', { name: 'Recovery details', exact: true })
   await recoveryDetailsTrigger.click()
