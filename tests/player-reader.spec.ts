@@ -502,12 +502,12 @@ test('the player reader exposes nested hierarchy levels and bounded public paren
   if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
   const hierarchy = page.getByRole('region', { name: 'Visible system hierarchy', exact: true })
   const tree = hierarchy.getByRole('tree', { name: 'Player object and Orbit hierarchy', exact: true })
-  const longHost = tree.getByRole('treeitem', { name: /^Custom Other / })
+  const longHost = tree.getByRole('treeitem', { name: /^Unknown Custom Other / })
   await expect(longHost).toHaveAttribute('aria-level', '1')
-  expect(await longHost.textContent()).toContain(longSubtype)
+  await expect(longHost).toContainText(`Unknown ${longSubtype}`)
   await expect(longHost).toHaveAttribute('aria-expanded', 'true')
 
-  const hostOrbits = tree.getByRole('treeitem', { name: /^Orbit around Custom Other / })
+  const hostOrbits = tree.getByRole('treeitem', { name: /^Orbit around Unknown Custom Other / })
   await expect(hostOrbits).toHaveCount(20)
   for (let index = 0; index < 20; index += 1) {
     const orbit = hostOrbits.nth(index)
