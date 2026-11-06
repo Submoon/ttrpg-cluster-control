@@ -47,9 +47,6 @@
       <p v-if="props.selectedSystem" class="inspector-intro mt-3 mb-0">
         Players can open this system only when its visibility is Revealed. Each object inside still follows its own publication setting.
       </p>
-      <UButton block class="mt-3 w-full justify-center" color="neutral" variant="outline" @click="emit('preview-player-view')">
-        Preview player view
-      </UButton>
     </section>
 
     <template #footer>
@@ -143,7 +140,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
-  'preview-player-view': []
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()

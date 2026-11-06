@@ -118,6 +118,7 @@
       </div>
 
       <MapFilesPopover
+        ref="mapFiles"
         v-model:open="headerMapActionsOpen"
         :scope="mapFileScope"
         panel-id="workspace-header-map-files-panel"
@@ -219,6 +220,7 @@
             :url="props.generatedPlayerUrl"
             :busy="props.playerLinkBusy"
             :status="props.playerLinkStatus"
+            @preview="openPlayerPreview"
             @generate="emit('generate-player-link')"
             @copy="emit('copy-player-link')"
           />
@@ -265,7 +267,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
@@ -312,6 +314,7 @@ const emit = defineEmits<{
   'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
+  'preview-player-view': [focusMapFiles: () => void]
   'generate-player-link': []
   'copy-player-link': []
   'import-file': [event: Event]
@@ -325,6 +328,7 @@ const emit = defineEmits<{
 }>()
 
 const headerMapActionsOpen = ref(false)
+const mapFiles = ref<InstanceType<typeof MapFilesPopover> | null>(null)
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
@@ -384,6 +388,17 @@ function exportPlayerImage(format: MapImageFormat): void {
   const palette: MapImagePalette = printLightForPrinting.value ? 'print-light' : 'active'
   printLightForPrinting.value = false
   emit('export-player-image', format, palette)
+}
+
+async function openPlayerPreview(): Promise<void> {
+  const files = mapFiles.value
+  const workspaceId = props.workspace?.id
+  if (!files || !workspaceId || !headerMapActionsOpen.value) return
+  headerMapActionsOpen.value = false
+  await nextTick()
+  await files.whenClosingFocusSettled()
+  if (mapFiles.value !== files || props.workspace?.id !== workspaceId || headerMapActionsOpen.value) return
+  emit('preview-player-view', files.focusTrigger)
 }
 
 function openJsonImportPicker(): void {

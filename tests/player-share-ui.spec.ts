@@ -101,7 +101,8 @@ async function downloadMapJson(page: Page, buttonName: string): Promise<string> 
 }
 
 async function inspectPlayerObject(page: Page, systemMap: Locator, objectName: string): Promise<Locator> {
-  await systemMap.getByRole('button', { name: `Inspect ${objectName}`, exact: true }).click()
+  await systemMap.getByRole('button', { name: `Inspect ${objectName}`, exact: true })
+    .locator('.player-system-object-hit-target').click()
   const details = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toBeVisible()
   return details

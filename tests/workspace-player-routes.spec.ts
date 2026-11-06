@@ -17,6 +17,7 @@ import {
   importReviewDialog,
   jsonMapImportInput,
   openChartDetails,
+  openPlayerPreview,
   openWorkspaceHierarchy,
   resolveImportReview,
   returnToClusterMap,
@@ -106,9 +107,7 @@ test('a shared route to a Hidden system previews a generic destination at its ex
     .toEqual({ ...beforeSharingRoute, playerShared: true })
   expect(reloadedSharing.layout).toEqual(beforeSharing.layout)
 
-  const chartDetails = await openChartDetails(page)
-  await chartDetails.getByRole('button', { name: 'Preview player view', exact: true }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   const playerMap = preview.locator('svg.player-cluster-map-scene')
   await expect(playerMap).toBeVisible()
   await expect(playerMap).toContainText('Jump-1')
@@ -242,9 +241,7 @@ test('far player routes stay inspectable with local camera controls without chan
   expect(sourceExitPosition).toEqual({ x: 12_000, y: 9_000 })
   if (!sourceExitPosition) throw new Error('The imported route must keep its saved far endpoint position.')
 
-  const chartDetails = await openChartDetails(page)
-  await chartDetails.getByRole('button', { name: 'Preview player view', exact: true }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   const fitButton = preview.getByRole('button', { name: 'Fit player map', exact: true })
   await expect(fitButton).toBeVisible({ timeout: 5_000 })
 
@@ -403,10 +400,7 @@ test('far player routes stay inspectable with local camera controls without chan
 
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
-  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
-  await expect(closeInspector).toBeVisible()
-  await closeInspector.click()
-  await returnToClusterMap(page)
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(after).toEqual(before)
 })
@@ -481,20 +475,20 @@ test('player inspection shows a Jump Point Station only when both objects are Re
   expect(importedPublicPoint.jumpStationId).toBe(importedPublicStation.id)
   expect(importedHiddenStationPoint.jumpStationId).toBe(importedHiddenStation.id)
 
-  const chartDetails = await openChartDetails(page)
-  await chartDetails.getByRole('button', { name: 'Preview player view', exact: true }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: 'Open Station Association System system preview', exact: true }).click()
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
   const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
 
-  await systemPreview.getByRole('button', { name: 'Inspect Dawn Gateway', exact: true }).click()
+  await systemPreview.getByRole('button', { name: 'Inspect Dawn Gateway', exact: true })
+    .locator('.player-system-object-hit-target').click()
   await expect(publicDetails).toContainText('Common Gate Station', { timeout: 5_000 })
   const publicDetailsAccessibility = await publicDetails.ariaSnapshot()
   expect(publicDetailsAccessibility).toContain('Common Gate Station')
 
-  await systemPreview.getByRole('button', { name: 'Inspect Silent Gateway', exact: true }).click()
+  await systemPreview.getByRole('button', { name: 'Inspect Silent Gateway', exact: true })
+    .locator('.player-system-object-hit-target').click()
   await expect(publicDetails).toContainText('Silent Gateway')
   await expect(publicDetails).not.toContainText('Private Anchorage')
   await expect(publicDetails).not.toContainText('Station')

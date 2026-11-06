@@ -114,7 +114,6 @@
     :editor-error="props.editorError"
     :saving="props.saving"
     @edit-chart-names="emit('edit-chart-names', $event)"
-    @preview-player-view="emit('preview-player-view')"
     @open-system="emit('open-system', $event)"
     @delete-system="emit('delete-system', $event)"
   />
@@ -263,7 +262,6 @@
     :editor-error="props.editorError"
     :saving="props.saving"
     @edit-chart-names="emit('edit-chart-names')"
-    @preview-player-view="emit('preview-player-view')"
   />
 </template>
 
@@ -299,7 +297,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'edit-chart-names': [targetSystemId?: string]
-  'preview-player-view': []
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
   'show-chart-details': []

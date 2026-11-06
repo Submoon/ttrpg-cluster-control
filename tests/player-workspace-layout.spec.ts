@@ -6,7 +6,7 @@ import { measureMouseDrag, snapshotSvgCoordinates } from './helpers'
 
 const playerTitle = 'Starlight Reach'
 const systemName = 'Vesper'
-const knownStarLabel = 'Star'
+const knownStarLabel = 'Unknown star'
 const revealedObjectName = 'Sanctuary'
 const publicTextTail = 'PUBLIC-END-MARKER'
 const publicPlayerText = `${'A quiet sanctuary rests beneath a violet sky. '.repeat(36)}${'A'.repeat(512)} ${publicTextTail}`
@@ -31,7 +31,7 @@ function createPlayerDocument(): PlayerClusterDocument {
             disclosure: 'known-type',
             family: 'CelestialBody',
             subtype: 'star',
-            label: knownStarLabel,
+            label: 'Star',
           },
           {
             id: 'object-2',
@@ -190,7 +190,7 @@ test('player Search navigates between public systems and opens compact Inspect',
 
   await page.keyboard.press('ControlOrMeta+k')
   await query.fill('Star')
-  await dialog.getByRole('option', { name: /^Star/ }).filter({ hasText: 'Vesper' }).click()
+  await dialog.getByRole('option', { name: /^Unknown star/ }).filter({ hasText: 'Vesper' }).click()
   await expect(compactDetails).toContainText('Star')
   await compactDetails.getByRole('button', { name: 'Return to map', exact: true }).press('Enter')
   await expect(compactDetails).toBeHidden()

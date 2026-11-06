@@ -7,6 +7,16 @@
 
     <UButton
       class="workspace-control workspace-map-file-button"
+      color="neutral"
+      variant="outline"
+      size="sm"
+      @click="emit('preview')"
+    >
+      Preview player view
+    </UButton>
+
+    <UButton
+      class="workspace-control workspace-map-file-button"
       color="primary"
       variant="soft"
       size="sm"
@@ -57,6 +67,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  preview: []
   generate: []
   copy: []
 }>()

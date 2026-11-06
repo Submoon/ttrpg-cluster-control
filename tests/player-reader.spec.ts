@@ -153,7 +153,8 @@ test('a downloaded player JSON opens in the standalone reader for Revealed inspe
     const playerNavigation = recipientPage.getByRole('toolbar', { name: 'Player map navigation', exact: true })
     const inspectToggle = playerNavigation.getByRole('button', { name: 'Inspect', exact: true })
     if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-    await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true }).click()
+    await systemMap.getByRole('button', { name: `Inspect ${publicObjectName}`, exact: true })
+      .locator('.player-system-object-hit-target').click()
 
     const publicDetails = recipientPage.getByRole('region', { name: 'Player object details', exact: true })
     await expect(publicDetails).toBeVisible()

@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
 import { parsePlayerJson } from '../domain/player-codec'
+import { playerObjectPresentation } from '../utils/player-object-presentation'
 import type { DownloadWindow, ExportedMap } from './helpers'
 import {
   captureMapExportBlobs,
@@ -314,6 +315,44 @@ async function capturePlayerImageDownload(
   return { image, download }
 }
 
+async function playerClusterCardPresentation(
+  page: import('@playwright/test').Page,
+  svgText: string,
+): Promise<Array<{
+  width: string | null
+  height: string | null
+  sealX: string | null
+  sealY: string | null
+  sealRadius: string | null
+  title: string | null
+  titleX: string | null
+  titleY: string | null
+  titleFontFamily: string | null
+  titleFontSize: string | null
+}>> {
+  return page.evaluate((content) => {
+    const parsed = new DOMParser().parseFromString(content, 'image/svg+xml')
+    if (parsed.querySelector('parsererror')) throw new Error('The player cluster SVG is invalid.')
+    return [...parsed.querySelectorAll('rect.cluster-system-card')].map((card) => {
+      const presentation = card.parentElement
+      const seal = presentation?.querySelector('.cluster-system-seal')
+      const title = presentation?.querySelector('.cluster-system-name')
+      return {
+        width: card.getAttribute('width'),
+        height: card.getAttribute('height'),
+        sealX: seal?.getAttribute('cx') ?? null,
+        sealY: seal?.getAttribute('cy') ?? null,
+        sealRadius: seal?.getAttribute('r') ?? null,
+        title: title?.textContent?.trim() ?? null,
+        titleX: title?.getAttribute('x') ?? null,
+        titleY: title?.getAttribute('y') ?? null,
+        titleFontFamily: title?.getAttribute('font-family') ?? null,
+        titleFontSize: title?.getAttribute('font-size') ?? null,
+      }
+    })
+  }, svgText)
+}
+
 async function downloadPlayerJsonDocument(
   page: import('@playwright/test').Page,
 ): Promise<{ fileName: string; text: string; document: PlayerClusterDocument }> {
@@ -372,6 +411,9 @@ test('player SVG exports only the published cluster scene and preserves the comp
     .toBe(true)
 
   await setHeaderMapActionsOpen(page, true)
+  const printChoice = page.getByRole('checkbox', { name: /^Light for printing$/i })
+  const printChoiceBefore = await printChoice.isChecked()
+  if (printChoiceBefore) await printChoice.uncheck()
   const playerSvgAction = page.getByRole('button', { name: 'Export player SVG', exact: true })
   await expect(playerSvgAction).toBeVisible()
 
@@ -433,7 +475,19 @@ test('player SVG exports only the published cluster scene and preserves the comp
   expect(inspection.cardSubtitleCount).toBe(0)
   expect(inspection.text).not.toMatch(/MAP SHARED|STAR SYSTEM/)
   expect(inspection.accessibleLabels.join('\n')).toContain('Player Jump Cluster')
-  expect(inspection.systemCards).toContainEqual({ width: '156', height: '76' })
+  expect(inspection.systemCards).toContainEqual({ width: '120', height: '44' })
+  expect(await playerClusterCardPresentation(page, image.text)).toContainEqual({
+    width: '120',
+    height: '44',
+    sealX: '-46',
+    sealY: '-14',
+    sealRadius: '3',
+    title: 'PUBLIC_VESPER',
+    titleX: '0',
+    titleY: '5',
+    titleFontFamily: 'Georgia, serif',
+    titleFontSize: '14',
+  })
   expect(inspection.text).not.toMatch(/\d+ STARS? \/ \d+ OBJECTS/)
 
   const sourceIds = [
@@ -481,6 +535,30 @@ test('player SVG exports only the published cluster scene and preserves the comp
   }
   expect(inspection.metadataAttributeNames).toEqual([])
   expect(inspection.ids).toEqual([])
+
+  await setHeaderMapActionsOpen(page, true)
+  await printChoice.check()
+  await setHeaderMapActionsOpen(page, false)
+  const { image: printSvg } = await capturePlayerImageDownload(page, 'Export player SVG', 'image/svg+xml')
+  expect(printSvg.text).toBeTruthy()
+  if (!printSvg.text) throw new Error('The print-light player SVG did not contain serialized content.')
+  expect(await playerClusterCardPresentation(page, printSvg.text)).toContainEqual(expect.objectContaining({
+    width: '120',
+    height: '44',
+    sealX: '-46',
+    sealY: '-14',
+    sealRadius: '3',
+    title: 'PUBLIC_VESPER',
+    titleX: '0',
+    titleY: '5',
+  }))
+  await setHeaderMapActionsOpen(page, true)
+  if (printChoiceBefore) {
+    await printChoice.check()
+  } else {
+    await printChoice.uncheck()
+  }
+  await setHeaderMapActionsOpen(page, false)
 
   const sourceAfter = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(sourceAfter).toEqual(sourceBefore)
@@ -557,6 +635,10 @@ test('player PNG rasterizes the public cluster scene within bounds without chang
       .map(attribute => ({ name: attribute.name, value: attribute.value })))
     return {
       text: svg.textContent ?? '',
+      systemCards: [...svg.querySelectorAll('rect.cluster-system-card')].map(card => ({
+        width: card.getAttribute('width'),
+        height: card.getAttribute('height'),
+      })),
       accessibleLabels: [...svg.querySelectorAll('[aria-label]')]
         .map(element => element.getAttribute('aria-label') ?? ''),
       textNodes: [...svg.querySelectorAll('text')].map(element => (element.textContent ?? '').trim()),
@@ -588,6 +670,17 @@ test('player PNG rasterizes the public cluster scene within bounds without chang
   }))
   expect(inspection.accessibleLabels).toContain('Jump Level 8 to Unknown destination')
   expect(inspection.cardSubtitleCount).toBe(0)
+  expect(inspection.systemCards).toContainEqual({ width: '120', height: '44' })
+  expect(await playerClusterCardPresentation(page, png.sourceSvgText)).toContainEqual(expect.objectContaining({
+    width: '120',
+    height: '44',
+    sealX: '-46',
+    sealY: '-14',
+    sealRadius: '3',
+    title: 'PUBLIC_VESPER',
+    titleX: '0',
+    titleY: '5',
+  }))
   expect(inspection.text).not.toMatch(/MAP SHARED|STAR SYSTEM/)
 
   const sourceIds = [
@@ -627,6 +720,29 @@ test('player PNG rasterizes the public cluster scene within bounds without chang
   }
   expect(inspection.metadataAttributeNames).toEqual([])
   expect(inspection.ids).toEqual([])
+
+  if (!printChoiceBefore) {
+    await setHeaderMapActionsOpen(page, true)
+    await printChoice.check()
+    await setHeaderMapActionsOpen(page, false)
+  }
+  const { image: printPng } = await capturePlayerImageDownload(page, 'Export player PNG', 'image/png')
+  if (!printPng.sourceSvgText) throw new Error('The print-light player PNG did not contain its source SVG.')
+  expect(await playerClusterCardPresentation(page, printPng.sourceSvgText)).toContainEqual(expect.objectContaining({
+    width: '120',
+    height: '44',
+    sealX: '-46',
+    sealY: '-14',
+    sealRadius: '3',
+    title: 'PUBLIC_VESPER',
+    titleX: '0',
+    titleY: '5',
+  }))
+  if (!printChoiceBefore) {
+    await setHeaderMapActionsOpen(page, true)
+    await printChoice.uncheck()
+    await setHeaderMapActionsOpen(page, false)
+  }
 
   const sourceAfter = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(sourceAfter).toEqual(sourceBefore)
@@ -684,7 +800,9 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   expect(active.rootLabel).toBe('PUBLIC_SYSTEM_NAME player system map')
   expect(active.textNodes).toContain('PUBLIC_SYSTEM_NAME')
   expect(active.textNodes).toContain('PUBLIC_NIX')
-  expect(active.markerLabels).toEqual(['Star', 'Unknown presence', 'PUBLIC_NIX'])
+  expect(active.textNodes).toContain('Unknown star')
+  expect(active.textNodes).toContain('Unknown presence')
+  expect(active.markerLabels).toEqual(['Unknown star', 'Unknown presence', 'PUBLIC_NIX'])
   expect(active.markerCircleCounts).toEqual([0, 1, 0])
   expect(active.knownMarkerCount).toBe(1)
   expect(active.unknownMarkerCount).toBe(1)
@@ -792,7 +910,7 @@ test('Revealed system images preserve anonymous host geometry in active and ligh
   if (!projectedSystem) throw new Error('The whole-cluster player JSON is missing its Revealed system map.')
 
   const expectedMarkerTransforms = projectedSystem.map.objects.map(object => ({
-    label: object.label,
+    label: playerObjectPresentation(object).label,
     transform: `translate(${object.position.x} ${object.position.y})`,
   }))
   const expectedOrbitEllipses = projectedSystem.map.orbits.map(orbit => ({

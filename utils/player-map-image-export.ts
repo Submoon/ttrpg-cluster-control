@@ -7,10 +7,10 @@ import { playerObjectPresentation } from './player-object-presentation'
 import { playerSystemGeometry } from './player-system-geometry'
 import type { PlayerRouteGeometry } from './player-cluster-geometry'
 import {
-  CLUSTER_SYSTEM_CARD_NAME_POSITION,
-  CLUSTER_SYSTEM_CARD,
+  PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION,
+  PLAYER_CLUSTER_SYSTEM_CARD,
   CLUSTER_SYSTEM_PRESENTATION_CLASSES,
-  CLUSTER_SYSTEM_SEAL,
+  PLAYER_CLUSTER_SYSTEM_SEAL,
   PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
 } from './cluster-system-presentation'
 import {
@@ -278,26 +278,26 @@ function appendClusterSystem(parent: SVGElement, system: PlayerSystemMarker, pai
   const cardStroke = knownType ? paint.mapLabelBorder : paint.mapInstallation
   appendSvg(geometry, 'rect', {
     class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.card,
-    x: CLUSTER_SYSTEM_CARD.x,
-    y: CLUSTER_SYSTEM_CARD.y,
-    width: CLUSTER_SYSTEM_CARD.width,
-    height: CLUSTER_SYSTEM_CARD.height,
-    rx: CLUSTER_SYSTEM_CARD.cornerRadius,
+    x: PLAYER_CLUSTER_SYSTEM_CARD.x,
+    y: PLAYER_CLUSTER_SYSTEM_CARD.y,
+    width: PLAYER_CLUSTER_SYSTEM_CARD.width,
+    height: PLAYER_CLUSTER_SYSTEM_CARD.height,
+    rx: PLAYER_CLUSTER_SYSTEM_CARD.cornerRadius,
     fill: paint.mapCard,
     stroke: cardStroke,
     'stroke-width': 1.5,
   })
   appendSvg(geometry, 'circle', {
     class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal,
-    cx: CLUSTER_SYSTEM_SEAL.x,
-    cy: CLUSTER_SYSTEM_SEAL.y,
-    r: CLUSTER_SYSTEM_SEAL.radius,
+    cx: PLAYER_CLUSTER_SYSTEM_SEAL.x,
+    cy: PLAYER_CLUSTER_SYSTEM_SEAL.y,
+    r: PLAYER_CLUSTER_SYSTEM_SEAL.radius,
     fill: knownType ? paint.textSecondary : paint.mapInstallation,
   })
   appendText(geometry, system.label, {
     class: CLUSTER_SYSTEM_PRESENTATION_CLASSES.name,
-    x: CLUSTER_SYSTEM_CARD_NAME_POSITION.x,
-    y: CLUSTER_SYSTEM_CARD_NAME_POSITION.y,
+    x: PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION.x,
+    y: PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION.y,
     fill: knownType ? paint.textSecondary : paint.textPrimary,
     'font-family': 'Georgia, serif',
     'font-size': 14,
@@ -356,7 +356,7 @@ function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, pain
       ? 'player-system-object-marker'
       : `player-system-object-marker player-system-object-marker--${object.disclosure}`,
     role: 'group',
-    'aria-label': object.label,
+    'aria-label': presentation.label,
     transform: `translate(${object.position.x} ${object.position.y})`,
   })
   if (object.disclosure === 'unknown') {
@@ -379,16 +379,14 @@ function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, pain
       'aria-hidden': true,
     })
   }
-  if (object.disclosure !== 'unknown') {
-    appendText(marker, presentation.label, {
-      class: 'player-system-object-label',
-      x: 16,
-      y: 6,
-      fill: paint.textPrimary,
-      'font-family': 'Georgia, serif',
-      'font-size': 16,
-    })
-  }
+  appendText(marker, presentation.label, {
+    class: 'player-system-object-label',
+    x: 16,
+    y: 6,
+    fill: paint.textPrimary,
+    'font-family': 'Georgia, serif',
+    'font-size': 16,
+  })
 }
 
 function withTitleBand(bounds: SceneBounds, title: string): SceneBounds {

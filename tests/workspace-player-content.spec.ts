@@ -8,6 +8,7 @@ import {
   editMapObject,
   openChartDetails,
   openFieldDefinitionDialog,
+  openPlayerPreview,
   saveMapObject,
   selectDraftPublication,
   selectInspectorOption,
@@ -41,12 +42,12 @@ test('a Warden can edit Player text separately from GM notes and preview only th
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
 
-  await chartDetails.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
-  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' }).click()
+  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' })
+    .locator('.player-system-object-hit-target').click()
 
   const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
   await expect(publicDetails).toContainText(playerTextValue)
@@ -120,12 +121,12 @@ test('shared native and custom Fields preview permitted values and respect an ob
   await chartEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(chartEdit).toBeHidden()
 
-  await chartDetails.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
-  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' }).click()
+  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' })
+    .locator('.player-system-object-hit-target').click()
 
   const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
   await expect(publicDetails).toContainText('Faction')

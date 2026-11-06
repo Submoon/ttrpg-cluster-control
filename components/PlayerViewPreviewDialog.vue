@@ -17,7 +17,6 @@
         :active="props.open"
         aria-label="Warden-side player preview"
         eyebrow="WARDEN-SIDE PREVIEW"
-        description="This preview shows committed publication settings. It is not a secure player session."
         :heading-level="'h2'"
       />
     </template>

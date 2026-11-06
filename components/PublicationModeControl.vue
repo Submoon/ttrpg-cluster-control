@@ -11,7 +11,12 @@
         :tabindex="props.focusTargetId ? -1 : undefined"
         class="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--line-soft)] bg-[var(--panel-soft)] p-1"
       >
-        <UTooltip v-for="mode in publicationModes" :key="mode" :text="controlTitle(mode)">
+        <UTooltip
+          v-for="mode in publicationModes"
+          :key="mode"
+          :text="controlTitle(mode)"
+          :ui="{ content: 'data-[state=closed]:animate-none!' }"
+        >
           <UButton
             :aria-label="`Set visibility to ${publicationPresentation(mode).label}`"
             :aria-pressed="props.modelValue === mode"

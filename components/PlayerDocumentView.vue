@@ -169,7 +169,6 @@
         <component :is="headingTag" class="mb-1 mt-2 break-words text-2xl">
           {{ props.document.title }}
         </component>
-        <p v-if="props.description" class="inspector-intro m-0">{{ props.description }}</p>
       </header>
 
       <UDashboardToolbar as="nav" class="player-embedded-toolbar" role="toolbar" aria-label="Player map navigation" data-player-map-obstruction>
@@ -327,7 +326,6 @@ const props = withDefaults(defineProps<{
   active?: boolean
   ariaLabel?: string
   eyebrow?: string
-  description?: string
   headingLevel?: 'h1' | 'h2'
   workspacePresentation?: boolean
 }>(), {

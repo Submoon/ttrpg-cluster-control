@@ -14,6 +14,7 @@ import {
   importReviewDialog,
   jsonMapImportInput,
   openChartDetails,
+  openPlayerPreview,
   readWorkspaceWriteFailureCount,
   restoreWorkspaceWriteFailureGate,
   returnToClusterMap,
@@ -59,12 +60,31 @@ test('a Warden can publish a player title and open its cluster preview', async (
   await expect(edit).toBeHidden()
   await expect(details.getByRole('region', { name: 'Player publication settings' })).toContainText('Pilgrim Reach')
 
-  await details.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  await expect(details.getByRole('button', { name: 'Preview player view' })).toHaveCount(0)
+  await setHeaderMapActionsOpen(page, true)
+  const shareActions = page.getByRole('region', { name: 'Player snapshot link' }).getByRole('button')
+  await expect(shareActions).toHaveText(['Preview player view', 'Generate player link'])
+
+  const closingSelector = '[data-slot="content"][data-state="closed"]:has(> #workspace-header-map-files-panel)'
+  const pausedExit = await page.addStyleTag({ content: `${closingSelector} { animation-play-state: paused !important; }` })
+  const closingPopover = page.locator(closingSelector)
+  await shareActions.first().click()
+  await expect(closingPopover).toHaveCount(1)
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  const history = page.getByRole('dialog', { name: 'History', exact: true })
+  await expect(history).toBeVisible()
+  await pausedExit.evaluate(element => { element.parentNode?.removeChild(element) })
+  await expect(closingPopover).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(history).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Player view preview' })).toHaveCount(0)
+
+  const preview = await openPlayerPreview(page)
   await expect(preview).toContainText('Pilgrim Reach')
   await expect(preview).not.toContainText('Private Reach')
   await expect(preview).not.toContainText('Private Vesper')
   await expect(preview).toContainText('Star system')
+  await expect(preview).not.toContainText('This preview shows committed publication settings. It is not a secure player session.')
   await expect(preview.getByRole('button', { name: 'Close player preview' })).toBeVisible()
   await expect(preview.getByRole('link')).toHaveCount(0)
   await expect(preview.getByRole('button', { name: /export|download/i })).toHaveCount(0)
@@ -122,10 +142,9 @@ test('a Warden can publish a player title and open its cluster preview', async (
   })
   await expect(closingFiles).toHaveCount(0)
 
-  const previewTrigger = details.getByRole('button', { name: 'Preview player view' })
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
-  await expect(previewTrigger).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
 })
 
 test('desktop and compact previews render only the label allowed by each publication mode', async ({ page }, testInfo) => {
@@ -161,9 +180,7 @@ test('desktop and compact previews render only the label allowed by each publica
           : 'Hidden'
     await expect(savedPublication).toContainText(expectedSummary)
 
-    const trigger = details.getByRole('button', { name: 'Preview player view' })
-    await trigger.click()
-    const preview = page.getByRole('dialog', { name: 'Player view preview' })
+    const preview = await openPlayerPreview(page)
     await expect(preview).toContainText('Player Jump Cluster')
     if (mode === 'hidden') {
       await expect(preview).toContainText('No star systems are visible to players.')
@@ -197,7 +214,7 @@ test('desktop and compact previews render only the label allowed by each publica
     }
     await page.keyboard.press('Escape')
     await expect(preview).toBeHidden()
-    await expect(trigger).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
   }
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -208,9 +225,7 @@ test('desktop and compact previews render only the label allowed by each publica
   await compactEdit.getByRole('button', { name: 'Apply details' }).click()
   await expect(compactEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
-  const compactTrigger = compactDetails.getByRole('button', { name: 'Preview player view' })
-  await compactTrigger.click()
-  const compactPreview = page.getByRole('dialog', { name: 'Player view preview' })
+  const compactPreview = await openPlayerPreview(page)
   await expect(compactPreview).toContainText('Player Jump Cluster')
   await expect(compactPreview.getByRole('list', { name: 'Visible marker labels' })).toHaveText('Unknown presence')
   const compactScreenshotPath = testInfo.outputPath('compact-player-preview-unknown.png')
@@ -221,7 +236,7 @@ test('desktop and compact previews render only the label allowed by each publica
   })
   await page.keyboard.press('Escape')
   await expect(compactPreview).toBeHidden()
-  await expect(compactTrigger).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
 })
 
 test('publication-only chart details stay resumable, honor Stay and Discard, and remain clean in history', async ({ page }) => {
@@ -319,14 +334,12 @@ test('editing an inspected system keeps its publication target when another syst
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
 
-  const previewTrigger = inspector.getByRole('button', { name: 'Preview player view' })
-  await previewTrigger.click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await expect(preview).toBeVisible()
   await expect(preview).toContainText('Player Jump Cluster')
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
-  await expect(previewTrigger).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
   await expect(inspector.getByRole('heading', { name: 'New System 2' })).toBeVisible()
 
   await inspector.getByRole('button', { name: 'Edit chart details' }).click()
@@ -360,9 +373,7 @@ test('a failed chart-details save retains the applied memory and Retry adds no h
     await expect(feedback.locator('.save-feedback')).toContainText('Not saved.')
     await expect(feedback.getByRole('button', { name: 'Retry save' })).toBeVisible()
 
-    const previewTrigger = details.getByRole('button', { name: 'Preview player view' })
-    await previewTrigger.click()
-    const preview = page.getByRole('dialog', { name: 'Player view preview' })
+    const preview = await openPlayerPreview(page)
     await expect(preview).toContainText('Saved After Retry')
     await page.keyboard.press('Escape')
     await expect(preview).toBeHidden()
@@ -447,8 +458,7 @@ test('80-character revealed public labels fit within the rendered SVG viewBox', 
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
 
-  await details.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   const label = preview.locator('.player-cluster-map-marker--revealed .cluster-system-name')
   await expect(label).toBeVisible()
   const bounds = await label.evaluate((element) => {

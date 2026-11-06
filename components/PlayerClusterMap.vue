@@ -62,32 +62,32 @@
           <template v-else>
             <rect
               :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.card"
-              :x="CLUSTER_SYSTEM_CARD.x"
-              :y="CLUSTER_SYSTEM_CARD.y"
-              :width="CLUSTER_SYSTEM_CARD.width"
-              :height="CLUSTER_SYSTEM_CARD.height"
-              :rx="CLUSTER_SYSTEM_CARD.cornerRadius"
+              :x="PLAYER_CLUSTER_SYSTEM_CARD.x"
+              :y="PLAYER_CLUSTER_SYSTEM_CARD.y"
+              :width="PLAYER_CLUSTER_SYSTEM_CARD.width"
+              :height="PLAYER_CLUSTER_SYSTEM_CARD.height"
+              :rx="PLAYER_CLUSTER_SYSTEM_CARD.cornerRadius"
             />
             <circle
               :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.seal"
-              :cx="CLUSTER_SYSTEM_SEAL.x"
-              :cy="CLUSTER_SYSTEM_SEAL.y"
-              :r="CLUSTER_SYSTEM_SEAL.radius"
+              :cx="PLAYER_CLUSTER_SYSTEM_SEAL.x"
+              :cy="PLAYER_CLUSTER_SYSTEM_SEAL.y"
+              :r="PLAYER_CLUSTER_SYSTEM_SEAL.radius"
             />
             <text
               :class="CLUSTER_SYSTEM_PRESENTATION_CLASSES.name"
-              :x="CLUSTER_SYSTEM_CARD_NAME_POSITION.x"
-              :y="CLUSTER_SYSTEM_CARD_NAME_POSITION.y"
+              :x="PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION.x"
+              :y="PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION.y"
             >{{ system.label }}</text>
           </template>
         </g>
         <rect
           v-if="system.disclosure === 'revealed'"
           class="player-cluster-map-marker-hit-target"
-          :x="CLUSTER_SYSTEM_CARD.x"
-          :y="CLUSTER_SYSTEM_CARD.y"
-          :width="CLUSTER_SYSTEM_CARD.width"
-          :height="CLUSTER_SYSTEM_CARD.height"
+          :x="PLAYER_CLUSTER_SYSTEM_CARD.x"
+          :y="PLAYER_CLUSTER_SYSTEM_CARD.y"
+          :width="PLAYER_CLUSTER_SYSTEM_CARD.width"
+          :height="PLAYER_CLUSTER_SYSTEM_CARD.height"
           fill="transparent"
           stroke="none"
           pointer-events="all"
@@ -119,10 +119,10 @@ import { fitPlayerMapToViewport } from '../utils/player-map-fit'
 import PlayerClusterRouteMark from './maps/PlayerClusterRouteMark.vue'
 import { CLUSTER_ROUTE_PRESENTATION } from '../utils/cluster-route-presentation'
 import {
-  CLUSTER_SYSTEM_CARD,
-  CLUSTER_SYSTEM_CARD_NAME_POSITION,
+  PLAYER_CLUSTER_SYSTEM_CARD,
+  PLAYER_CLUSTER_SYSTEM_CARD_NAME_POSITION,
   CLUSTER_SYSTEM_PRESENTATION_CLASSES,
-  CLUSTER_SYSTEM_SEAL,
+  PLAYER_CLUSTER_SYSTEM_SEAL,
 } from '../utils/cluster-system-presentation'
 
 const props = withDefaults(defineProps<{

@@ -4,6 +4,12 @@
       <span class="section-kicker">PLAYER-VISIBLE OBJECT</span>
       <h2 v-if="props.workspacePresentation">{{ presentation.label }}</h2>
       <h3 v-else class="mb-1 mt-2 text-base">{{ presentation.label }}</h3>
+      <dl class="player-object-disclosure m-0">
+        <div>
+          <dt class="font-semibold">Disclosure</dt>
+          <dd class="m-0">{{ presentation.disclosureLabel }}</dd>
+        </div>
+      </dl>
       <dl v-if="props.object.disclosure === 'revealed'" class="player-object-identity m-0">
         <div>
           <dt class="font-semibold">Name</dt>
@@ -97,7 +103,7 @@ const emit = defineEmits<{
 const objectsById = computed(() => new Map(props.document.objects.map(object => [object.id, object])))
 const presentation = computed(() => props.object
   ? playerObjectPresentation(props.object)
-  : { glyph: null, label: '', typeLabel: null })
+  : { glyph: null, label: '', typeLabel: null, disclosureLabel: 'Unknown presence' as const })
 const hasNoPublishedDetails = computed(() => {
   const object = props.object
   return Boolean(object && (object.disclosure !== 'revealed'

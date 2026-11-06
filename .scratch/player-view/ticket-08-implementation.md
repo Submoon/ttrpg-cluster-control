@@ -179,3 +179,11 @@ Continue draft PR #39 from `12024d687ef7f5194f8ea2484108ea45cb7345d6`, 39 commit
 Public unresolved captions use the Warden placement when clear, mirror vertically when a card covers that placement, and use foreground paint when both positions are occupied. In the last case, a caption can overlap a system title. Public zoom uses the shared font metric so far destinations remain readable.
 
 Independent review closed its blocking findings. The focused checks qualified 33 distinct pure cases and 14 Chromium cases. The two chart cases passed on replay after making the button-size assertion wait for the modal opening animation. Desktop and compact route and visibility captures were inspected.
+
+## Compact system cards and public disclosure labels
+
+Continue PR #39 from `42c0aca666e97387383fd0f0367e076c2055ef84`, 40 commits ahead of the refreshed `origin/main` at `47c0418a835da285e9edb88e8f8dffc19c3a2bba` with no divergent base commits.
+
+- Use a 120 by 44 unit card for public systems. Share its dimensions across map rendering, hit testing, route geometry and image export.
+- Derive object labels and Inspect visibility from the public disclosure arm. Known-type objects use an `Unknown <type>` display label. Anonymous objects display `Unknown presence`. The portable document keeps its existing shape.
+- Place Preview player view above Generate player link in the Warden Map files popover. Close that popover before opening the preview so focus can return to Map files afterward. Remove the redundant preview paragraph.

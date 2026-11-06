@@ -5,6 +5,9 @@ import { serializePlayerJson } from '../domain/workspace'
 
 test('public cluster artwork keeps Unknown neutral and discloses card labels without source counts', async ({ page }) => {
   const { document: playerDocument } = createPlayerInterfaceFixture()
+  const revealedSystem = playerDocument.systems.find(system => system.disclosure === 'revealed')
+  if (!revealedSystem) throw new Error('The public cluster fixture needs a Revealed system.')
+  revealedSystem.label = 'Ravenna Station'
   playerDocument.systems.push(
     {
       id: 'system-2',
@@ -38,15 +41,30 @@ test('public cluster artwork keeps Unknown neutral and discloses card labels wit
   const knownCard = known.locator('.cluster-system-card')
   await expect(unknownCircle).toHaveAttribute('r', '18')
   await expect(unknown.locator('.cluster-system-card, .cluster-system-name')).toHaveCount(0)
-  await expect(knownCard).toHaveAttribute('width', '156')
-  await expect(knownCard).toHaveAttribute('height', '76')
+  await expect(knownCard).toHaveAttribute('width', '120')
+  await expect(knownCard).toHaveAttribute('height', '44')
   await expect(known.locator('.cluster-system-name')).toHaveText('Star system')
-  await expect(revealed.locator('.cluster-system-name')).toHaveText('Public System')
+  await expect(revealed.locator('.cluster-system-name')).toHaveText('Ravenna Station')
   await expect(known.locator('.cluster-system-meta')).toHaveCount(0)
   await expect(revealed.locator('.cluster-system-meta')).toHaveCount(0)
   await expect(cluster).not.toContainText(/MAP SHARED|MAP NOT SHARED|STAR SYSTEM/)
-  await expect(known.locator('.cluster-system-name')).toHaveAttribute('x', '4')
-  await expect(known.locator('.cluster-system-name')).toHaveAttribute('y', '-6')
+  await expect(known.locator('.cluster-system-name')).toHaveAttribute('x', '0')
+  await expect(known.locator('.cluster-system-name')).toHaveAttribute('y', '5')
+  await expect(revealed.locator('.cluster-system-seal')).toHaveAttribute('cx', '-46')
+  await expect(revealed.locator('.cluster-system-seal')).toHaveAttribute('cy', '-14')
+  await expect(revealed.locator('.cluster-system-seal')).toHaveAttribute('r', '3')
+  const titleAndSealOverlap = await revealed.evaluate((marker) => {
+    const title = marker.querySelector<SVGTextElement>('.cluster-system-name')
+    const seal = marker.querySelector<SVGCircleElement>('.cluster-system-seal')
+    if (!title || !seal) throw new Error('A Revealed card needs both a title and seal.')
+    const titleBounds = title.getBBox()
+    const sealBounds = seal.getBBox()
+    return titleBounds.x < sealBounds.x + sealBounds.width
+      && titleBounds.x + titleBounds.width > sealBounds.x
+      && titleBounds.y < sealBounds.y + sealBounds.height
+      && titleBounds.y + titleBounds.height > sealBounds.y
+  })
+  expect(titleAndSealOverlap).toBe(false)
 
   const colors = await page.evaluate(() => {
     const resolve = (token: string) => {
@@ -169,6 +187,8 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   await expect(details.locator('dd').getByText('Harbor World', { exact: true })).toBeVisible()
   await expect(details.locator('dt').getByText('Type', { exact: true })).toBeVisible()
   await expect(details.locator('dd').filter({ hasText: 'Planet' })).toBeVisible()
+  await expect(details.locator('dt').getByText('Disclosure', { exact: true }).locator('..'))
+    .toContainText('Revealed')
   const playerText = details.getByRole('region', { name: 'Player text', exact: true })
   await expect(playerText).toContainText('A calm world with a sheltered landing basin.')
   const publishedFields = details.getByRole('region', { name: 'Published Fields', exact: true })
@@ -206,6 +226,7 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
     }
   })
   const publicStarMarker = systemMap.getByRole('button', { name: 'Inspect Public Star', exact: true })
+  await expect(publicStarMarker.locator('.player-system-object-label')).toHaveText('Public Star')
   await expect(publicStarMarker.locator('.player-system-object-marker-art')).toHaveCount(0)
   await expect(publicStarMarker.locator('.player-system-object-glyph')).toBeVisible()
   const publicStarGlyph = publicStarMarker.locator('.player-system-object-glyph')
@@ -218,6 +239,7 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   expect(liveGlyphTypography.fontFamily).toContain('Consolas')
   expect(liveGlyphTypography.fontSize).toBe('20px')
   const unknownMarker = systemMap.getByRole('button', { name: 'Inspect Unknown presence', exact: true }).first()
+  await expect(unknownMarker.locator('.player-system-object-label')).toHaveText('Unknown presence')
   await expect(unknownMarker.locator('.player-system-object-marker-art')).toHaveCount(1)
   await expect(unknownMarker.locator('.player-system-object-glyph')).toHaveCount(0)
   expect(await unknownMarker.locator('.player-system-object-marker-art').evaluate(mark => getComputedStyle(mark).fill))
@@ -273,17 +295,22 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
   await expect(details).not.toContainText('PRIVATE_SOURCE_HOST_NAME')
   await expect(details.locator('dt').getByText('Name', { exact: true })).toHaveCount(0)
   await expect(details.locator('dt').getByText('Type', { exact: true })).toHaveCount(0)
+  await expect(details.locator('dt').getByText('Disclosure', { exact: true }).locator('..'))
+    .toContainText('Unknown presence')
 
   const unoccupiedOrbit = hierarchy.getByRole('treeitem', { name: 'Orbit around unoccupied center', exact: true })
   await unoccupiedOrbit.press('ArrowRight')
   await expect(unoccupiedOrbit).toHaveAttribute('aria-expanded', 'true')
-  const knownBase = hierarchy.getByRole('treeitem', { name: /^Base,/ })
+  const knownBase = hierarchy.getByRole('treeitem', { name: /^Unknown base,/ })
   await knownBase.click()
+  await expect(details.locator('dt').getByText('Disclosure', { exact: true }).locator('..'))
+    .toContainText('Known type')
   await expect(details).toContainText('No additional text or Fields were shared.')
   await expect(details.locator('dt').getByText('Name', { exact: true })).toHaveCount(0)
   await expect(details.locator('dt').getByText('Type', { exact: true })).toBeVisible()
   await expect(details).not.toContainText('PRIVATE_SOURCE_OUTPOST_NAME')
-  const knownBaseMarker = systemMap.getByRole('button', { name: 'Inspect Base', exact: true })
+  const knownBaseMarker = systemMap.getByRole('button', { name: 'Inspect Unknown base', exact: true })
+  await expect(knownBaseMarker.locator('.player-system-object-label')).toHaveText('Unknown base')
   await expect(knownBaseMarker.locator('.player-system-object-marker-art')).toHaveCount(0)
   const knownBaseGlyph = knownBaseMarker.locator('.player-system-object-glyph')
   await expect(knownBaseGlyph).toBeVisible()
@@ -291,7 +318,8 @@ test('standalone player Hierarchy opens useful inspection and returns to the clu
 
   await hierarchy.getByRole('button', { name: 'Collapse Unknown presence', exact: true }).click()
   await expect(moon).toBeHidden()
-  await systemMap.getByRole('button', { name: 'Inspect Quiet Moon', exact: true }).click()
+  await systemMap.getByRole('button', { name: 'Inspect Quiet Moon', exact: true })
+    .locator('.player-system-object-hit-target').click()
   await expect(hiddenHost).toHaveAttribute('aria-expanded', 'true')
   await expect(moon).toBeVisible()
   await expect(details).toContainText('Its horizon glows softly at night.')
@@ -513,7 +541,8 @@ test('replacing a player link clears a covered selection even when public IDs ar
   await expect(page.getByRole('heading', { name: 'Interface Reach', exact: true })).toBeVisible()
   await openRevealedSystem(page)
   await page.getByRole('region', { name: 'Player-visible system map', exact: true })
-    .getByRole('button', { name: 'Inspect Public Star', exact: true }).click()
+    .getByRole('button', { name: 'Inspect Public Star', exact: true })
+    .locator('.player-system-object-hit-target').click()
   const inspector = page.getByRole('dialog', { name: 'Player details', exact: true })
   await expect(inspector.getByRole('heading', { name: 'Public Star', exact: true })).toBeVisible()
   await expect(page.getByRole('toolbar', { name: 'Player map navigation', exact: true })).toBeHidden()

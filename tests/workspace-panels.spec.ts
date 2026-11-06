@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { waitForWorkspaceSaved, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -200,14 +200,11 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     await expect(closeInspector).toBeFocused()
 
     // A deliberate new mouse action must still open the preview after cancellation.
-    const previewTrigger = inspector.getByRole('button', { name: 'Preview player view', exact: true })
-    await previewTrigger.click()
-    const preview = page.getByRole('dialog').filter({
-      has: page.getByRole('heading', { name: 'Player view preview', exact: true }),
-    })
-    await expect(preview).toBeVisible()
+    await closeInspector.click()
+    await expect(inspector).toBeHidden()
+    const preview = await openPlayerPreview(page)
     await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
-    await expect(previewTrigger).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
   } finally {
     await cdp.detach()
   }
@@ -285,6 +282,7 @@ test('a nested chart dialog pauses the compact panel focus trap and returns focu
     expect(await chartDialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
   }
 
+  await expect(chartDialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(chartDialog).toBeHidden()
   await expect(hierarchy).toBeVisible()

@@ -19,6 +19,7 @@ import {
   importReviewDialog,
   jsonMapImportInput,
   openChartDetails,
+  openPlayerPreview,
   openWorkspaceHierarchy,
   overwriteWorkspaceRecord,
   readWorkspaceWriteFailureCount,
@@ -230,19 +231,16 @@ async function openSystemPlayerPreview(
   systemName: string,
 ): Promise<{
   preview: import('@playwright/test').Locator
-  trigger: import('@playwright/test').Locator
+  mapFilesButton: import('@playwright/test').Locator
   playerView: import('@playwright/test').Locator
   systemPreview: import('@playwright/test').Locator
 }> {
-  const details = await openChartDetails(page)
-  const trigger = details.getByRole('button', { name: 'Preview player view', exact: true })
-  await trigger.click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   return {
     preview,
-    trigger,
+    mapFilesButton: page.getByRole('button', { name: 'Map files', exact: true }),
     playerView,
     systemPreview: playerView.getByRole('region', { name: 'Player-visible system map' }),
   }
@@ -287,10 +285,11 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await expect(chartEdit).toBeHidden()
   await waitForWorkspaceSaved(page)
 
-  const previewTrigger = systemDetails.getByRole('button', { name: 'Preview player view' })
-  await previewTrigger.click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
-  await expect(preview).toBeVisible()
+  const preview = await openPlayerPreview(page)
+  const mapFilesButton = page.getByRole('button', { name: 'Map files', exact: true })
+  await expect(preview).not.toContainText(
+    'This preview shows committed publication settings. It is not a secure player session.',
+  )
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
 
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
@@ -299,7 +298,8 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await expect(systemPreview).toContainText('Pilgrim World')
   await expect(playerView).not.toContainText('Private Source Notes')
   await expect(preview).not.toContainText(clusterName)
-  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' }).click()
+  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' })
+    .locator('.player-system-object-hit-target').click()
   await expect(playerView.getByRole('region', { name: 'Player object details' })).toContainText('Pilgrim World')
   const accessibleSystemPreview = await playerView.ariaSnapshot()
   expect(accessibleSystemPreview).toContain('Inspect Pilgrim World')
@@ -322,7 +322,7 @@ test('a Warden can publish an object and open its Revealed system preview', asyn
   await expect(preview).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
-  await expect(previewTrigger).toBeFocused()
+  await expect(mapFilesButton).toBeFocused()
 })
 
 test('a Revealed system previews only public objects and the anonymous required host chain', async ({ page }, testInfo) => {
@@ -357,9 +357,7 @@ test('a Revealed system previews only public objects and the anonymous required 
     playerView: import('@playwright/test').Locator
     systemPreview: import('@playwright/test').Locator
   }> {
-    const details = await openChartDetails(page)
-    await details.getByRole('button', { name: 'Preview player view' }).click()
-    const preview = page.getByRole('dialog', { name: 'Player view preview' })
+    const preview = await openPlayerPreview(page)
     await preview.getByRole('button', { name: 'Open Published Chain system preview' }).click()
     const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
     return {
@@ -457,8 +455,7 @@ test('80-character revealed object labels fit the map and wrap in the public hie
   await edit.getByRole('button', { name: 'Apply details' }).click()
   await expect(edit).toBeHidden()
 
-  await details.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
   const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
   const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
@@ -538,9 +535,7 @@ test('player system pan and zoom stay local to the preview and do not add histor
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await page.getByRole('navigation', { name: 'Star systems', exact: true })
     .getByRole('button', { name: `Open ${systemName} system map` }).click()
-  const previewDetails = await openChartDetails(page)
-  await previewDetails.getByRole('button', { name: 'Preview player view' }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
   const systemPreview = preview.getByRole('region', { name: 'Player-visible system map' })
   const map = systemPreview.locator('svg.player-system-map-scene')
@@ -600,14 +595,14 @@ test('each object publication mode renders only its permitted player marker', as
 
   for (const mode of modes) {
     await setPrivatePlanetPublication(page, fixture, mode)
-    const { preview, trigger, playerView, systemPreview } = await openSystemPlayerPreview(page, fixture.systemName)
+    const { preview, mapFilesButton, playerView, systemPreview } = await openSystemPlayerPreview(page, fixture.systemName)
     const markers = systemPreview.locator('.player-system-object-marker')
     const hierarchy = playerView.getByRole('region', { name: 'Visible system hierarchy' })
 
     if (mode === 'Hidden') {
       hiddenMarkerCount = await markers.count()
       await expect(markers).toHaveCount(1)
-      await expect(markers).toHaveAttribute('aria-label', 'Inspect Star')
+      await expect(markers).toHaveAttribute('aria-label', 'Inspect Unknown star')
       await expect(hierarchy).toContainText('Star')
       await expect(playerView).not.toContainText(fixture.objectName)
     } else if (mode === 'Unknown presence') {
@@ -630,7 +625,8 @@ test('each object publication mode renders only its permitted player marker', as
       await expect(markers).toHaveCount(hiddenMarkerCount + 1)
       await expect(systemPreview.locator('.player-system-object-marker--revealed').filter({ hasText: fixture.objectName }))
         .toHaveCount(1)
-      await systemPreview.getByRole('button', { name: `Inspect ${fixture.objectName}`, exact: true }).click()
+      await systemPreview.getByRole('button', { name: `Inspect ${fixture.objectName}`, exact: true })
+        .locator('.player-system-object-hit-target').click()
       await expect(playerView.getByRole('region', { name: 'Player object details' })).toContainText(fixture.objectName)
     }
 
@@ -647,7 +643,7 @@ test('each object publication mode renders only its permitted player marker', as
 
     await page.keyboard.press('Escape')
     await expect(preview).toBeHidden()
-    await expect(trigger).toBeFocused()
+    await expect(mapFilesButton).toBeFocused()
   }
 })
 
@@ -658,9 +654,7 @@ test('non-Revealed systems gate their child map and preserve the child publicati
 
   for (const mode of ['Hidden', 'Unknown presence', 'Known type'] as const) {
     await setSourceSystemPublication(page, mode)
-    const details = await openChartDetails(page)
-    await details.getByRole('button', { name: 'Preview player view', exact: true }).click()
-    const preview = page.getByRole('dialog', { name: 'Player view preview' })
+    const preview = await openPlayerPreview(page)
     const labels = preview.getByRole('list', { name: 'Visible marker labels' })
 
     if (mode === 'Hidden') {

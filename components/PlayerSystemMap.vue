@@ -124,7 +124,7 @@
             ]"
             :transform="`translate(${object.position.x} ${object.position.y})`"
             role="button"
-            :aria-label="`Inspect ${object.label}`"
+            :aria-label="`Inspect ${objectPresentations.get(object.id)?.label ?? object.label}`"
             :aria-pressed="props.selectedObjectId === object.id"
             tabindex="0"
             @click="inspectObjectFromClick($event, object.id)"
@@ -156,7 +156,7 @@
               text-anchor="middle"
               aria-hidden="true"
             >{{ objectPresentations.get(object.id)?.glyph }}</text>
-            <text v-if="object.disclosure !== 'unknown'" class="player-system-object-label" x="16" y="6">
+            <text class="player-system-object-label" x="16" y="6">
               {{ objectPresentations.get(object.id)?.label }}
             </text>
           </g>
@@ -437,6 +437,7 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
 .player-system-object-label {
   fill: var(--text-primary);
   font: 16px Georgia, serif;
+  pointer-events: none;
 }
 
 .player-system-object-glyph {

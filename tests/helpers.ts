@@ -684,6 +684,21 @@ export async function setHeaderMapActionsOpen(
   }
 }
 
+/** Opens the Warden's player preview through Map files on desktop or compact layouts. */
+export async function openPlayerPreview(page: import('@playwright/test').Page): Promise<Locator> {
+  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
+  if (!await mapFiles.isVisible()) {
+    const closePanel = page.getByRole('dialog').getByRole('button', { name: /^Close (inspector|hierarchy) panel$/ })
+    if (await closePanel.isVisible()) await closePanel.click()
+  }
+  await setHeaderMapActionsOpen(page, true)
+  await page.locator('#workspace-header-map-files-panel')
+    .getByRole('button', { name: 'Preview player view', exact: true }).click()
+  const preview = page.getByRole('dialog', { name: 'Player view preview', exact: true })
+  await expect(preview).toBeVisible()
+  return preview
+}
+
 /** Finds the shared Dock containing map interaction modes and Add. */
 export function workspaceNavigation(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   return page.getByRole('toolbar', { name: 'Workspace navigation' })

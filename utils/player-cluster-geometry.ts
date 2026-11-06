@@ -9,9 +9,9 @@ import {
   clusterRoutePresentationLabelWidth,
 } from './cluster-route-presentation'
 import {
-  CLUSTER_SYSTEM_CARD,
+  PLAYER_CLUSTER_SYSTEM_CARD,
   PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS,
-  clusterSystemCardBounds,
+  playerClusterSystemCardBounds,
   playerClusterSystemMarkerVisibleBounds,
   playerClusterSystemMarkerEdgePoint,
 } from './cluster-system-presentation'
@@ -85,6 +85,13 @@ function rectanglesOverlap(left: SceneRect, right: SceneRect, gap: number): bool
     && left.top < right.bottom + gap && left.bottom + gap > right.top
 }
 
+function circleIntersectsCard(center: Point, radius: number, cardCenter: Point): boolean {
+  const bounds = playerClusterSystemCardBounds(cardCenter)
+  const closestX = Math.max(bounds.left, Math.min(bounds.right, center.x))
+  const closestY = Math.max(bounds.top, Math.min(bounds.bottom, center.y))
+  return Math.hypot(center.x - closestX, center.y - closestY) < radius
+}
+
 function labelObstacles(systems: readonly PlayerSystemMarker[], routes: readonly PlayerRoute[]): SceneRect[] {
   const obstacles: SceneRect[] = []
   const systemsById = new Map(systems.map(system => [system.id, system]))
@@ -133,8 +140,8 @@ function systemMarkersOverlap(first: PlayerSystemMarker, second: PlayerSystemMar
   const firstIsCard = first.disclosure !== 'unknown'
   const secondIsCard = second.disclosure !== 'unknown'
   if (firstIsCard && secondIsCard) {
-    const a = clusterSystemCardBounds(first.position)
-    const b = clusterSystemCardBounds(second.position)
+    const a = playerClusterSystemCardBounds(first.position)
+    const b = playerClusterSystemCardBounds(second.position)
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
   }
 
@@ -145,11 +152,7 @@ function systemMarkersOverlap(first: PlayerSystemMarker, second: PlayerSystemMar
 
   const circle = firstIsCard ? second : first
   const card = firstIsCard ? first : second
-  const bounds = clusterSystemCardBounds(card.position)
-  const closestX = Math.max(bounds.left, Math.min(bounds.right, circle.position.x))
-  const closestY = Math.max(bounds.top, Math.min(bounds.bottom, circle.position.y))
-  return Math.hypot(circle.position.x - closestX, circle.position.y - closestY)
-    < PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
+  return circleIntersectsCard(circle.position, PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS, card.position)
 }
 
 function unresolvedDestinationCoveredByCard(
@@ -159,9 +162,8 @@ function unresolvedDestinationCoveredByCard(
 ): boolean {
   return systems.some((system) => {
     if (system.disclosure === 'unknown') return false
-    const bounds = clusterSystemCardBounds(system.position)
-    const destinationCovered = position.x >= bounds.left && position.x <= bounds.right
-      && position.y >= bounds.top && position.y <= bounds.bottom
+    const bounds = playerClusterSystemCardBounds(system.position)
+    const destinationCovered = circleIntersectsCard(position, UNKNOWN_DESTINATION_RADIUS, system.position)
     const captionCovered = caption !== undefined
       && rectanglesOverlap(caption, bounds, 0)
     return destinationCovered || captionCovered
@@ -179,7 +181,7 @@ function unresolvedDestinationCaptionGeometry(
   const captionCovered = (caption: ClusterEndpointCaptionGeometry) =>
     systems.some((system) => {
       if (system.disclosure === 'unknown') return false
-      return rectanglesOverlap(caption, clusterSystemCardBounds(system.position), 0)
+      return rectanglesOverlap(caption, playerClusterSystemCardBounds(system.position), 0)
     })
   if (!captionCovered(preferred)) return preferred
 
@@ -282,8 +284,12 @@ function routeGeometry(
   let labelY: number
   if (distance < 1) {
     const originUsesCard = origin.disclosure !== 'unknown'
-    const halfWidth = originUsesCard ? 46 : PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
-    const edgeY = originUsesCard ? origin.position.y + CLUSTER_SYSTEM_CARD.y : origin.position.y
+    const halfWidth = originUsesCard
+      ? PLAYER_CLUSTER_SYSTEM_CARD.width / 2 - 14
+      : PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
+    const edgeY = originUsesCard
+      ? origin.position.y + PLAYER_CLUSTER_SYSTEM_CARD.y
+      : origin.position.y
     path = `M ${origin.position.x - halfWidth} ${edgeY} Q ${origin.position.x} ${origin.position.y - 82 - (index % 2) * 14} ${origin.position.x + halfWidth} ${edgeY}`
     labelX = origin.position.x
     labelY = origin.position.y - 46 - (index % 2) * 7

@@ -131,6 +131,7 @@
               @export-map-image="downloadMapImage"
               @export-player-json="downloadPlayerJson"
               @export-player-image="downloadPlayerImage"
+              @preview-player-view="openPlayerPreview"
               @generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
               @import-file="importJsonFile"
@@ -425,7 +426,6 @@
               :save-error="saveError"
               :export-error="exportError"
               @edit-chart-names="beginChartNamesEdit"
-              @preview-player-view="playerPreviewOpen = true"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @show-chart-details="showChartDetails"
@@ -1257,7 +1257,7 @@ publicationFocusRestoreAllowed = request => !(
   || importReview.value.confirming
 )
 
-const searchShortcutAvailable = computed(() => workspace.value !== null
+const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !historyOpen.value
   && !chartNamesDialogOpen.value
   && !playerPreviewOpen.value
@@ -1272,6 +1272,12 @@ const searchShortcutAvailable = computed(() => workspace.value !== null
   && !importReview.value.confirming
   && !compactPanelOpen.value
   && !editingGestureActive.value)
+
+function openPlayerPreview(focusMapFiles: () => void): void {
+  if (!workspaceOverlayAvailable.value || searchOpen.value || publicationMenuRequest.value) return
+  focusMapFiles()
+  playerPreviewOpen.value = true
+}
 
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
@@ -1316,7 +1322,7 @@ const mapToolShortcuts = useMapToolShortcuts({
 })
 
 function canOpenSearchShortcut(): boolean {
-  return searchShortcutAvailable.value && !mapToolShortcuts.isMapInputActive()
+  return workspaceOverlayAvailable.value && !mapToolShortcuts.isMapInputActive()
 }
 
 function openMapAddChooserFromKeyboard(): void {

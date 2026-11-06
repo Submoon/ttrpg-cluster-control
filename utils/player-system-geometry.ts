@@ -1,5 +1,6 @@
 /** Conservative public Star System bounds shared by the preview and image renderer. */
 import type { PlayerSystemDocument } from '../domain/player-projection'
+import { playerObjectPresentation } from './player-object-presentation'
 
 const UNKNOWN_MARKER_RADIUS = 10
 const OBJECT_GLYPH_HALF_WIDTH = 12
@@ -44,6 +45,7 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new Error('A public Star System has invalid rendered geometry.')
     }
+    const label = playerObjectPresentation(object).label
     if (object.disclosure === 'unknown') {
       includeRect(
         bounds,
@@ -60,14 +62,14 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
         x + OBJECT_GLYPH_HALF_WIDTH,
         y + OBJECT_GLYPH_BOTTOM,
       )
-      includeRect(
-        bounds,
-        x + OBJECT_LABEL_OFFSET,
-        y - UNKNOWN_MARKER_RADIUS,
-        x + OBJECT_LABEL_OFFSET + object.label.length * OBJECT_LABEL_CHARACTER_ADVANCE,
-        y + 12,
-      )
     }
+    includeRect(
+      bounds,
+      x + OBJECT_LABEL_OFFSET,
+      y - UNKNOWN_MARKER_RADIUS,
+      x + OBJECT_LABEL_OFFSET + label.length * OBJECT_LABEL_CHARACTER_ADVANCE,
+      y + 12,
+    )
   }
 
   for (const orbit of document.orbits) {

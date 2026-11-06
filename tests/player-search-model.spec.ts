@@ -102,7 +102,7 @@ test('player search exposes generic public marker labels and only disclosed type
     leadingMark: { kind: 'none' },
     target: { kind: 'object', objectId: 'object-public-unknown' },
   })
-  expect(knownType.map(result => result.name)).toEqual(['Aurelia', 'Planet'])
+  expect(knownType.map(result => result.name)).toEqual(['Aurelia', 'Unknown planet'])
   expect(knownType.every(result => result.leadingMark.kind === 'glyph')).toBe(true)
   expect(knownType.every(result => result.typeLabel === 'Planet')).toBe(true)
 })

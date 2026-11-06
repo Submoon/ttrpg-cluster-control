@@ -6,6 +6,7 @@ import {
   downloadImage,
   editMapObject,
   openChartDetails,
+  openPlayerPreview,
   openWorkspaceHierarchy,
   returnToClusterMap,
   selectInspectorOption,
@@ -370,10 +371,7 @@ test('an unresolved shared route with a Hidden origin stays out of the player ma
   expect(blockedImage.text).not.toContain('gm-publication')
   expect(blockedImage.text).not.toContain('Configured visibility:')
 
-  await routeInspector.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await page.getByRole('region', { name: 'Jump Cluster details', exact: true })
-    .getByRole('button', { name: 'Preview player view', exact: true }).click()
-  const preview = page.getByRole('dialog', { name: 'Player view preview' })
+  const preview = await openPlayerPreview(page)
   const playerMap = preview.locator('svg.player-cluster-map-scene')
   await expect(playerMap.locator('.player-cluster-map-marker--revealed')).toHaveCount(1)
   await expect(playerMap.locator('.player-cluster-route')).toHaveCount(0)

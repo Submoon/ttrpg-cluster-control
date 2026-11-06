@@ -3,9 +3,10 @@
     v-model:open="open"
     :portal="props.portal"
     :modal="false"
-    :content="{ side: 'bottom', align: 'end', sideOffset: 8, collisionPadding: 12 }"
+    :content="{ side: 'bottom', align: 'end', sideOffset: 8, collisionPadding: 12, onCloseAutoFocus: closeFocus.settleClosingFocus }"
   >
     <UButton
+      ref="trigger"
       class="workspace-control workspace-map-files-toggle"
       color="neutral"
       :variant="open ? 'soft' : 'outline'"
@@ -35,7 +36,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, useId, useTemplateRef } from 'vue'
+import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
 
 const props = withDefaults(defineProps<{
   scope: string
@@ -43,9 +45,18 @@ const props = withDefaults(defineProps<{
   portal?: boolean
 }>(), { portal: true })
 const open = defineModel<boolean>('open', { required: true })
+const closeFocus = useDialogCloseFocusBarrier(open)
+const trigger = useTemplateRef('trigger')
 const generatedPanelId = useId()
 const panelId = computed(() => props.panelId ?? `map-files-${generatedPanelId}`)
 const scopeLabel = computed(() => `Map file actions for ${props.scope}`)
+
+function focusTrigger(): void {
+  const button = trigger.value?.$el
+  if (button instanceof HTMLElement) button.focus({ preventScroll: true })
+}
+
+defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled, focusTrigger })
 </script>
 
 <style scoped>
