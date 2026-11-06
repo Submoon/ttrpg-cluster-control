@@ -43,7 +43,10 @@
       />
     </div>
     <div v-else-if="props.selectedSystem" class="map-inspector-system-content">
-      <div v-if="props.selectedObject" class="map-inspector-entity-content">
+      <div v-if="props.selectedObjectCount > 1" class="map-inspector-details-content" role="status" aria-live="polite">
+        {{ props.selectedObjectCount }} objects selected
+      </div>
+      <div v-else-if="props.selectedObject" class="map-inspector-entity-content">
         <MapObjectInspector
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
@@ -150,6 +153,7 @@ const props = defineProps<{
   selectedSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
+  selectedObjectCount: number
   objectFocusRequest: ObjectInspectorFocusRequest | null
   inspectorVisible: boolean
   selectedOrbit?: Orbit

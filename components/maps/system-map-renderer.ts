@@ -87,7 +87,7 @@ export interface SystemMapEventHandlers {
   /** Publishes whether an uncommitted pointer preview is active on the map. */
   editingGestureChange(active: boolean): void
   /** Select an existing system object. */
-  selectObject(id: string): void
+  selectObject(id: string, shiftKey?: boolean): void
   /** Checks whether a pending entity command touches an active inspector draft. */
   isEntityCommandBlocked(command: EntityCommand): boolean
   /** Reports a blocked pending entity command before the map preview changes. */
@@ -136,6 +136,7 @@ export interface SystemMapRendererOptions {
   geometry: SystemMapGeometry
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
+  selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
   /** Persistent map Add type and its transient placement preview. */
   creationType: SystemCreationType | null
@@ -214,6 +215,7 @@ export function renderSystemMap({
   system,
   geometry,
   selectedObjectId,
+  selectedObjectIds,
   selectedOrbitId,
   creationType,
   creationPreview,
@@ -472,6 +474,7 @@ export function renderSystemMap({
   function prepareExportClone(clone: SVGSVGElement): void {
     const positions = appliedPositions()
     clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
+      mark.removeAttribute('aria-pressed')
       const objectId = mark.getAttribute('data-object-id')
       if (!objectId) return
       const point = requiredPosition(positions, objectId)
@@ -967,7 +970,8 @@ export function renderSystemMap({
   const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
-    .attr('class', object => `system-object${selectedObjectId === object.id ? ' is-selected' : ''}`)
+    .attr('class', object => `system-object${selectedObjectId === object.id || selectedObjectIds.includes(object.id) ? ' is-selected' : ''}`)
+    .attr('aria-pressed', object => selectedObjectId === object.id || selectedObjectIds.includes(object.id) ? 'true' : 'false')
     .attr('data-object-id', object => object.id)
     .attr('transform', object => {
       const point = requiredPosition(positions, object.id)
@@ -1229,7 +1233,7 @@ export function renderSystemMap({
         movedObjects.delete(event.currentTarget as SVGGElement)
         return
       }
-      handlers.selectObject(object.id)
+      handlers.selectObject(object.id, event.shiftKey)
     })
     .on('keydown', (event, object) => {
       if (event.key === 'Enter' || event.key === ' ') {

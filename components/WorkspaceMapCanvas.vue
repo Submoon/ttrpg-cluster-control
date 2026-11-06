@@ -12,6 +12,17 @@
     @touchend.capture="onTouchEndCapture"
     @touchcancel.capture="onTouchEndCapture"
   >
+    <div
+      v-if="selectionRectangle"
+      class="workspace-selection-rectangle"
+      aria-hidden="true"
+      :style="{
+        left: `${selectionRectangle.left}px`,
+        top: `${selectionRectangle.top}px`,
+        width: `${selectionRectangle.width}px`,
+        height: `${selectionRectangle.height}px`,
+      }"
+    />
     <ClusterMap
       v-if="props.activeView === 'cluster'"
       ref="clusterMapRef"
@@ -50,6 +61,7 @@
       :creation-chooser-open="props.creationChooserOpen ?? false"
       :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :selected-object-id="props.selectedObjectId"
+      :selected-object-ids="props.selectedObjectIds"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
@@ -126,6 +138,7 @@ const props = defineProps<{
   system: StarSystem | undefined
   selectedSystemId: string | null
   selectedObjectId: string | null
+  selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
   selectedRouteId: string | null
   mode: MapInteractionMode
@@ -229,6 +242,106 @@ let publicationMenuLease: PublicationMenuLease | null = null
 let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
 let touchPanStarted = false
 let touchReleaseGuard: ReturnType<typeof createOwnedTouchReleaseGuard> | null = null
+let selectionRectangleGesture: {
+  pointerId: number
+  svg: SVGSVGElement
+  mapKey: string
+  systemId: string | undefined
+  start: Point
+  current: Point
+  moved: boolean
+} | null = null
+const selectionRectangle = shallowRef<{ left: number; top: number; width: number; height: number } | null>(null)
+
+function canContinueSelectionRectangle(gesture: NonNullable<typeof selectionRectangleGesture>): boolean {
+  return gesture.svg.isConnected
+    && props.activeView === 'system'
+    && props.mode === 'select'
+    && !props.moveTargeting
+    && !props.creationType
+    && !props.creationChooserOpen
+    && props.mapKey === gesture.mapKey
+    && props.system?.id === gesture.systemId
+}
+
+function isSystemMapEmptySpace(target: EventTarget | null): { svg: SVGSVGElement; canvas: HTMLElement } | null {
+  if (props.activeView !== 'system' || props.mode !== 'select' || props.moveTargeting
+    || props.creationType || props.creationChooserOpen) return null
+  if (!(target instanceof Element) || !canvasRoot.value
+    || target.closest('.system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')) return null
+  const svg = target.closest<SVGSVGElement>('svg.system-map-svg')
+  return svg && canvasRoot.value.contains(svg) ? { svg, canvas: canvasRoot.value } : null
+}
+
+function beginSelectionRectangle(event: PointerEvent): boolean {
+  if (event.pointerType === 'touch' || event.button !== 0 || !event.isPrimary
+    || event.ctrlKey || event.metaKey || event.altKey) return false
+  const target = isSystemMapEmptySpace(event.target)
+  if (!target) return false
+  if (selectionRectangleGesture) finishSelectionRectangle(true)
+  selectionRectangleGesture = {
+    pointerId: event.pointerId,
+    svg: target.svg,
+    mapKey: props.mapKey,
+    systemId: props.system?.id,
+    start: { x: event.clientX, y: event.clientY },
+    current: { x: event.clientX, y: event.clientY },
+    moved: false,
+  }
+  activePointerPan = null
+  selectionRectangle.value = null
+  emit('editing-gesture-change', true)
+  return true
+}
+
+function updateSelectionRectangle(event: PointerEvent): void {
+  const gesture = selectionRectangleGesture
+  if (!gesture || gesture.pointerId !== event.pointerId) return
+  if (!canContinueSelectionRectangle(gesture)) {
+    finishSelectionRectangle(true)
+    return
+  }
+  const left = Math.min(gesture.start.x, event.clientX)
+  const top = Math.min(gesture.start.y, event.clientY)
+  const width = Math.abs(event.clientX - gesture.start.x)
+  const height = Math.abs(event.clientY - gesture.start.y)
+  gesture.current = { x: event.clientX, y: event.clientY }
+  if (!gesture.moved && Math.hypot(width, height) < 6) return
+  gesture.moved = true
+  const canvasBounds = canvasRoot.value?.getBoundingClientRect()
+  if (!canvasBounds) return
+  selectionRectangle.value = {
+    left: left - canvasBounds.left,
+    top: top - canvasBounds.top,
+    width,
+    height,
+  }
+}
+
+function clearSelectionRectangle(): void {
+  selectionRectangleGesture = null
+  selectionRectangle.value = null
+}
+
+function finishSelectionRectangle(cancelled: boolean): void {
+  const gesture = selectionRectangleGesture
+  if (!gesture) return
+  clearSelectionRectangle()
+  emit('editing-gesture-change', false)
+  holdClickSuppression()
+  if (cancelled) return
+  gesture.svg.focus({ preventScroll: true })
+  if (!gesture.moved) {
+    void commands.navigation.replaceObjectSelection([])
+    return
+  }
+  void commands.navigation.replaceObjectSelection(systemMapRef.value?.getObjectIdsWithinClientRect({
+    left: Math.min(gesture.start.x, gesture.current.x),
+    top: Math.min(gesture.start.y, gesture.current.y),
+    right: Math.max(gesture.start.x, gesture.current.x),
+    bottom: Math.max(gesture.start.y, gesture.current.y),
+  }) ?? [])
+}
 
 function holdClickSuppression(): void {
   suppressNextClick = true
@@ -265,6 +378,7 @@ function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = tru
   if (suppressRelease) {
     for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
   }
+  finishSelectionRectangle(true)
   emit('cancel-map-move')
   if (cancelClusterPreview && props.activeView === 'cluster') emit('cancel-cluster-preview')
   clearLongPress()
@@ -356,6 +470,12 @@ function onPointerDownCapture(event: PointerEvent): void {
   if (!isMouseButtonChord) consumedAddPointerId = null
   if (event.pointerType === 'mouse') activeMousePointerId = event.pointerId
   if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
+  // A right-button chord takes ownership as a pan and cancels the pending rectangle.
+  if (event.button === 2 && selectionRectangleGesture) finishSelectionRectangle(true)
+  if (beginSelectionRectangle(event)) {
+    event.stopImmediatePropagation()
+    return
+  }
   const entityPress = event.button === 0 && isMapEntityTarget(event.target)
   const addHold = hasMapAddIntent() && entityPress
   const inspectHold = !hasMapAddIntent()
@@ -402,6 +522,13 @@ function onPointerDownCapture(event: PointerEvent): void {
 function onMouseDownCapture(event: MouseEvent): void {
   publicationMenuLease?.close()
   publicationMenuLease = null
+  const rectangleGesture = selectionRectangleGesture
+  if (event.button === 0 && rectangleGesture && rectangleGesture.pointerId === activeMousePointerId
+    && event.target instanceof Node && rectangleGesture.svg.contains(event.target)) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   if (event.button !== 2 || (event.buttons & 1) === 0 || activeMousePointerId === null) return
   // Browsers that emit a second pointerdown already entered the ordinary right-pan path.
   if (activePointerPan?.button === 2) return
@@ -441,6 +568,25 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       return
     }
   }
+  if (event.key === 'Escape' && props.activeView === 'system' && props.mode === 'select') {
+    if (selectionRectangleGesture) {
+      event.preventDefault()
+      event.stopPropagation()
+      cancelCanvasGesture(true)
+      return
+    }
+    const focusedSystemMap = event.target instanceof Element
+      ? event.target.closest<SVGSVGElement>('svg.system-map-svg')
+      : null
+    if ((props.selectedObjectIds.length > 0 || props.selectedObjectId !== null)
+      && !activePointerPan && !touchStart && !touchPanStarted
+      && focusedSystemMap && canvasRoot.value?.contains(focusedSystemMap)) {
+      event.preventDefault()
+      event.stopPropagation()
+      void commands.navigation.replaceObjectSelection([])
+      return
+    }
+  }
   if (!(event.target instanceof SVGSVGElement)) return
   const deltas: Record<string, [number, number]> = {
     ArrowLeft: [-80, 0],
@@ -455,6 +601,14 @@ function onKeyDownCapture(event: KeyboardEvent): void {
   currentMap()?.panBy(delta[0], delta[1])
 }
 
+function onWindowKeyDownCapture(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !selectionRectangleGesture) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  cancelCanvasGesture(true)
+}
+
 /** Forwards a scene-space destination only while the active Move controller owns targeting. */
 function forwardMoveTarget(point: Point): void {
   if (props.moveTargeting && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
@@ -466,6 +620,14 @@ function onWindowPointerMove(event: PointerEvent): void {
     const addHold = pointerLongPress.addHold
     clearPointerLongPress()
     if (addHold) holdClickSuppression()
+  }
+  if (selectionRectangleGesture?.pointerId === event.pointerId) {
+    updateSelectionRectangle(event)
+    if (selectionRectangleGesture?.moved) {
+      event.preventDefault()
+      holdClickSuppression()
+    }
+    return
   }
   const pan = activePointerPan
   if (!pan || event.pointerId !== pan.id) return
@@ -504,6 +666,14 @@ function onWindowPointerUp(event: PointerEvent): void {
   if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
   const ownsActiveMousePointer = event.pointerType === 'mouse'
     && activeMousePointerId === event.pointerId
+  if (selectionRectangleGesture?.pointerId === event.pointerId) {
+    if (ownsActiveMousePointer) activeMousePointerId = null
+    const gesture = selectionRectangleGesture
+    updateSelectionRectangle(event)
+    finishSelectionRectangle(!canContinueSelectionRectangle(gesture)
+      || (!gesture.moved && !isSystemMapEmptySpace(event.target)))
+    return
+  }
   if (ownsActiveMousePointer && !activePointerPan && isDisabledObstructionRelease(event)) {
     activeMousePointerId = null
     cancelMapGesture()
@@ -587,12 +757,17 @@ function showPublicationMenu(
 }
 
 function onClickCapture(event: MouseEvent): void {
-  if (!suppressNextClick || event.detail === 0) return
-  event.preventDefault()
-  event.stopPropagation()
-  event.stopImmediatePropagation()
-  suppressNextClick = false
-  if (suppressClickTimer) clearTimeout(suppressClickTimer)
+  if (suppressNextClick && event.detail !== 0) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    suppressNextClick = false
+    if (suppressClickTimer) clearTimeout(suppressClickTimer)
+    return
+  }
+  if (event.detail > 0 && isSystemMapEmptySpace(event.target)) {
+    void commands.navigation.replaceObjectSelection([])
+  }
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
@@ -702,9 +877,11 @@ function handleRouteSelection(routeId: string): void {
   else if (props.mode === 'move') emit('move-select-route', routeId)
 }
 
-function handleObjectSelection(objectId: string): void {
-  if (props.mode === 'select') emit('select-object', objectId)
-  else if (props.mode === 'move') emit('move-select-object', objectId)
+function handleObjectSelection(objectId: string, shiftKey = false): void {
+  if (props.mode === 'select') {
+    if (shiftKey) void commands.navigation.toggleObjectSelection(objectId)
+    else emit('select-object', objectId)
+  } else if (props.mode === 'move') emit('move-select-object', objectId)
 }
 
 function handleOrbitSelection(orbitId: string): void {
@@ -851,6 +1028,7 @@ function isVisibleObstruction(element: Element): boolean {
 
 onMounted(async () => {
   touchReleaseGuard = createOwnedTouchReleaseGuard(document)
+  window.addEventListener('keydown', onWindowKeyDownCapture, true)
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerUp, true)
   window.addEventListener('pointercancel', onWindowPointerUp, true)
@@ -888,6 +1066,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onWindowPointerMove, true)
   window.removeEventListener('pointerup', onWindowPointerUp, true)
   window.removeEventListener('pointercancel', onWindowPointerUp, true)
+  window.removeEventListener('keydown', onWindowKeyDownCapture, true)
   window.removeEventListener('blur', onWindowBlur)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
   document.removeEventListener('freeze', onDocumentFreeze)
@@ -899,9 +1078,20 @@ watch(() => props.mode, () => {
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
 watch(() => props.creationType, () => {
+  if (selectionRectangleGesture) finishSelectionRectangle(true)
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
 }, { deep: true, flush: 'sync' })
+watch(
+  [
+    () => props.creationChooserOpen,
+    () => props.moveTargeting,
+  ],
+  () => {
+    if (selectionRectangleGesture) finishSelectionRectangle(true)
+  },
+  { flush: 'sync' },
+)
 watch(
   [
     () => props.activeView,
@@ -912,6 +1102,7 @@ watch(
     () => props.selectedOrbitId,
   ],
   () => {
+    if (selectionRectangleGesture) finishSelectionRectangle(true)
     publicationMenuLease?.close()
     publicationMenuLease = null
     emit('cancel-object-placement-preview')
@@ -965,6 +1156,7 @@ defineExpose({
 
 <style scoped>
 .workspace-map-canvas {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
@@ -977,6 +1169,14 @@ defineExpose({
 .workspace-map-canvas > :deep(.map-view) {
   min-height: 0;
   flex: 1 1 auto;
+}
+
+.workspace-selection-rectangle {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid var(--ui-primary);
+  background: color-mix(in srgb, var(--ui-primary) 14%, transparent);
+  pointer-events: none;
 }
 
 </style>

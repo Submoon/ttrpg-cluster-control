@@ -8,6 +8,8 @@ export interface EditorCommandContext {
   navigation: {
     selectSystem(systemId: string): Promise<void>
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
+    replaceObjectSelection(objectIds: readonly string[]): Promise<void>
+    toggleObjectSelection(objectId: string): Promise<void>
     selectOrbit(orbitId: string, openInspector?: boolean): Promise<void>
     selectRoute(routeId: string, openInspector?: boolean): Promise<void>
     showClusterMap(): Promise<void>
