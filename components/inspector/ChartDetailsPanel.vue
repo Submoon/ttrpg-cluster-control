@@ -78,19 +78,19 @@
     >
       <template v-if="props.mode === 'cluster'">
         <span>Star systems</span>
-        <strong>{{ props.workspace.cluster.systems.length }}</strong>
+        <strong data-testid="stat-star-systems">{{ props.workspace.cluster.systems.length }}</strong>
         <span>Jump Routes</span>
-        <strong>{{ props.workspace.cluster.routes.length }}</strong>
+        <strong data-testid="stat-jump-routes">{{ props.workspace.cluster.routes.length }}</strong>
         <span>Logical Jump Points</span>
-        <strong>{{ jumpPointCount }}</strong>
+        <strong data-testid="stat-logical-jump-points">{{ jumpPointCount }}</strong>
       </template>
       <template v-else-if="props.selectedSystem">
         <span>Map objects</span>
-        <strong>{{ props.selectedSystem.objects.length }}</strong>
+        <strong data-testid="stat-map-objects">{{ props.selectedSystem.objects.length }}</strong>
         <span>Stars</span>
-        <strong>{{ starCount }}</strong>
+        <strong data-testid="stat-stars">{{ starCount }}</strong>
         <span>Nested Orbits</span>
-        <strong>{{ props.selectedSystem.orbits.length }}</strong>
+        <strong data-testid="stat-nested-orbits">{{ props.selectedSystem.orbits.length }}</strong>
       </template>
     </div>
     <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">

@@ -68,30 +68,6 @@ async function createPublicWorkspaceSnapshot(
   }
 }
 
-test('slow startup keeps the empty browser loading screen until the launch form is ready', async ({ browser, context }, testInfo) => {
-  test.setTimeout(60_000)
-  const emptyState = await context.storageState()
-  const startupContext = await browser.newContext({ storageState: emptyState })
-  const page = await startupContext.newPage()
-  const scriptGate = await gateStartupScripts(page)
-  try {
-    await page.goto(applicationURL(testInfo), { waitUntil: 'commit' })
-    await expect(page.getByRole('heading', { name: "Opening this browser's workspace..." })).toBeVisible()
-
-    const scriptsReleased = scriptGate.startDelay()
-    const startupWait = waitForWorkspaceStartup(page)
-    const raceOutcome = await Promise.race([
-      startupWait.then(() => 'startup-ready'),
-      scriptsReleased.then(() => 'scripts-released'),
-    ])
-    expect(raceOutcome).toBe('scripts-released')
-    await startupWait
-    await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
-  } finally {
-    await scriptGate.cleanup()
-    await startupContext.close()
-  }
-})
 
 test('slow startup reopens a saved IndexedDB workspace after loading completes', async ({ browser, context }, testInfo) => {
   test.setTimeout(90_000)

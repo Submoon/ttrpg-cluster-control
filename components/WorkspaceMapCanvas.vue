@@ -198,6 +198,12 @@ const matchingOrbitAdjustmentPreview = computed(() => {
 })
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let activeMousePointerId: number | null = null
+type LivePointerSequence = {
+  pointerId: number
+  pointerType: string
+  cancelledRelease: boolean
+}
+const livePointerSequences = new Map<number, LivePointerSequence>()
 let pointerLongPress: {
   id: number
   x: number
@@ -256,6 +262,9 @@ function clearPointerLongPress(): void {
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
+  if (suppressRelease) {
+    for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
+  }
   emit('cancel-map-move')
   if (cancelClusterPreview && props.activeView === 'cluster') emit('cancel-cluster-preview')
   clearLongPress()
@@ -321,17 +330,31 @@ function inspectLongPress(target: EventTarget | null): void {
   longPressInspection(target)?.()
 }
 
+function beginLivePointerSequence(event: PointerEvent, isMouseButtonChord: boolean): void {
+  if (isMouseButtonChord) return
+  if (event.isPrimary) {
+    for (const [pointerId, sequence] of livePointerSequences) {
+      if (sequence.pointerType === event.pointerType) livePointerSequences.delete(pointerId)
+    }
+    // A new primary sequence owns any stale suppression left after its previous input ended.
+    if (!activePointerPan) clearStaleGestureSuppression()
+  }
+  livePointerSequences.set(event.pointerId, {
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    cancelledRelease: false,
+  })
+}
+
 function onPointerDownCapture(event: PointerEvent): void {
   publicationMenuLease?.close()
   publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
     && event.button === 2
     && (event.buttons & 1) !== 0
+  beginLivePointerSequence(event, isMouseButtonChord)
   if (!isMouseButtonChord) consumedAddPointerId = null
   if (event.pointerType === 'mouse') activeMousePointerId = event.pointerId
-  // A fresh pointer sequence is a separate user intent. Any synthetic click
-  // from the prior gesture has already had its chance to arrive.
-  if (!activePointerPan) clearStaleGestureSuppression()
   if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
   const entityPress = event.button === 0 && isMapEntityTarget(event.target)
   const addHold = hasMapAddIntent() && entityPress
@@ -468,7 +491,15 @@ function onWindowPointerUp(event: PointerEvent): void {
     }
     if (activeMousePointerId === event.pointerId) activeMousePointerId = null
     cancelCanvasGesture(true)
+    livePointerSequences.delete(event.pointerId)
     return
+  }
+  const sequence = livePointerSequences.get(event.pointerId)
+  if (sequence && event.buttons !== 0) return
+  if (sequence) {
+    // Keep pointerup available to D3 and the browser; only renew the click guard for its later click.
+    if (sequence.cancelledRelease) holdClickSuppression()
+    livePointerSequences.delete(event.pointerId)
   }
   if (pointerLongPress?.id === event.pointerId) clearPointerLongPress()
   const ownsActiveMousePointer = event.pointerType === 'mouse'
@@ -851,6 +882,7 @@ onBeforeUnmount(() => {
   mapDisposed = true
   settleMapReadiness(false)
   cancelCanvasGesture()
+  livePointerSequences.clear()
   if (suppressClickTimer) clearTimeout(suppressClickTimer)
   if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
   window.removeEventListener('pointermove', onWindowPointerMove, true)

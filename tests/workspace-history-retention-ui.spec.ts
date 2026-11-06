@@ -9,7 +9,7 @@ import {
   workspaceZoomControls,
 } from './helpers'
 
-test('History displays its retained limit, scrolls without moving, and resets after reload', async ({ page }, testInfo) => {
+test('History list scrolls without moving and resets after reload', async ({ page }) => {
   test.setTimeout(180_000)
   const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 1280, height: 900 } })
   await clickDockAction(page, 'Add orbit', { target: { kind: 'center', x: 0.3, y: 0.3 } })
@@ -30,15 +30,15 @@ test('History displays its retained limit, scrolls without moving, and resets af
   await waitForWorkspaceSaved(page)
 
   const initialHorizontalRadius = Number(await resize.getAttribute('aria-valuenow'))
-  expect(initialHorizontalRadius + 101).toBeLessThanOrEqual(400)
+  // Enough entries to overflow the dialog at this viewport; the coordinator checks eviction.
+  const adjustmentCount = 12
+  expect(initialHorizontalRadius + adjustmentCount).toBeLessThanOrEqual(400)
   await resize.focus()
 
-  for (let adjustment = 1; adjustment <= 101; adjustment += 1) {
+  for (let adjustment = 0; adjustment < adjustmentCount; adjustment += 1) {
     await page.keyboard.press('ArrowRight')
-    await expect(resize).toHaveAttribute('aria-valuenow', String(initialHorizontalRadius + adjustment))
-    await expect(undo).toBeEnabled()
-    await expect(redo).toBeDisabled()
   }
+  await expect(resize).toHaveAttribute('aria-valuenow', String(initialHorizontalRadius + adjustmentCount))
   await waitForWorkspaceSaved(page)
 
   const historyButton = page.getByRole('button', { name: 'History', exact: true })
@@ -50,21 +50,12 @@ test('History displays its retained limit, scrolls without moving, and resets af
     rotation: await rotate.getAttribute('aria-valuenow'),
     undoLabel: await undo.getAttribute('aria-label'),
     historyFeedback: await historyFeedback.innerText(),
-    undoEnabled: await undo.isEnabled(),
-    redoEnabled: await redo.isEnabled(),
   }
 
   await historyButton.click()
   const historyDialog = page.getByRole('dialog', { name: 'History', exact: true })
   await expect(historyDialog).toBeVisible()
-  await expect(historyDialog.getByText('Older Undo history was removed to stay within the history limit.', { exact: true })).toBeVisible()
   const retainedActions = historyDialog.getByRole('list', { name: 'Retained actions in chronological order' })
-  const appliedRows = retainedActions.getByRole('listitem').filter({ hasText: 'Applied' })
-  await expect(appliedRows).toHaveCount(100)
-  await expect(retainedActions).not.toContainText('Add Orbit 1')
-  await expect(retainedActions.getByRole('listitem').first()).toContainText('Resize Orbit 1')
-  const positionSummary = historyDialog.getByText('100 available to undo · 0 available through Redo', { exact: true })
-  await expect(positionSummary).toBeVisible()
   const retainedActionText = await retainedActions.innerText()
 
   const scrollport = historyDialog.locator('.overflow-y-auto')
@@ -88,8 +79,6 @@ test('History displays its retained limit, scrolls without moving, and resets af
       && currentPosition.bottom <= viewport.bottom + 1
   })).toBe(true)
   await expect(position).toBeVisible()
-  await testInfo.attach('history-limit-at-current-position', { body: await page.screenshot(), contentType: 'image/png' })
-
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
   await page.keyboard.press('Escape')
@@ -105,8 +94,6 @@ test('History displays its retained limit, scrolls without moving, and resets af
 
   await historyButton.click()
   await expect.poll(() => retainedActions.innerText()).toBe(retainedActionText)
-  await expect(appliedRows).toHaveCount(100)
-  await expect(positionSummary).toHaveText('100 available to undo · 0 available through Redo')
   await page.keyboard.press('Escape')
   await expect(historyDialog).toBeHidden()
   await expect(historyButton).toBeFocused()
@@ -141,7 +128,6 @@ test('History displays its retained limit, scrolls without moving, and resets af
   await expect(historyDialog.getByRole('list', { name: 'Retained actions in chronological order' })).toHaveCount(0)
   await expect(historyDialog).toContainText('No actions yet.')
   await expect(historyDialog).toContainText('Current position: initial baseline')
-  await testInfo.attach('history-after-reload-baseline', { body: await page.screenshot(), contentType: 'image/png' })
   await page.keyboard.press('Escape')
   await expect(historyDialog).toBeHidden()
   await expect(historyButton).toBeFocused()

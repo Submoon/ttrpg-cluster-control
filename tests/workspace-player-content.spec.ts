@@ -1,154 +1,87 @@
+import { readFile } from 'node:fs/promises'
+import { parsePlayerJson } from '../domain/workspace'
 import { expect, test } from './fixtures'
 import {
-  waitForWorkspaceSaved,
-  addCustomFieldThroughDialog,
   addCatalogueObject,
   createSingleSystemWorkspace,
-  editFieldDefinition,
   editMapObject,
   openChartDetails,
-  openFieldDefinitionDialog,
   openPlayerPreview,
+  openWorkspaceHierarchy,
   saveMapObject,
   selectDraftPublication,
-  selectInspectorOption,
+  setHeaderMapActionsOpen,
+  waitForWorkspaceSaved,
 } from './helpers'
 
-test('a Warden can edit Player text separately from GM notes and preview only the public text', async ({ page }, testInfo) => {
-  const playerTextValue = 'A quiet sanctuary rests beneath the violet sky, where hidden gardens bloom through the long winter.'
-  const gmNotesValue = 'GM ONLY: the sanctuary conceals a smuggler entrance.'
-  const { systemName } = await createSingleSystemWorkspace(page, {
-    clusterName: 'Private Reach',
-    systemName: 'Private Vesper',
-  })
+test('a Warden publishes committed Player text while keeping drafts and GM notes private', async ({ page }) => {
+  const publicText = 'A sheltered landing basin.'
+  const privateNotes = 'GM ONLY: smuggler entrance'
+  const unappliedText = 'UNAPPLIED: secret tunnel'
+  const { systemName } = await createSingleSystemWorkspace(page)
   await addCatalogueObject(page, 'planet')
 
-  const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
-  await objectInspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
-  const playerText = objectInspector.getByLabel('Player text', { exact: true })
-  await expect(playerText).toBeVisible({ timeout: 5_000 })
-  await playerText.fill(playerTextValue)
-  await objectInspector.getByLabel('GM notes', { exact: true }).fill(gmNotesValue)
-  await selectDraftPublication(objectInspector, 'Revealed')
+  await inspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
+  const playerText = inspector.getByLabel('Player text', { exact: true })
+  await playerText.fill(publicText)
+  await inspector.getByLabel('GM notes', { exact: true }).fill(privateNotes)
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  const chartDetails = await openChartDetails(page)
-  await chartDetails.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectDraftPublication(chartEdit, 'Revealed')
-  await chartEdit.getByRole('button', { name: 'Apply details' }).click()
-  await expect(chartEdit).toBeHidden()
+  const details = await openChartDetails(page)
+  await details.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const editDetails = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  await selectDraftPublication(editDetails, 'Revealed')
+  await editDetails.getByRole('button', { name: 'Apply details', exact: true }).click()
+  await expect(editDetails).toBeHidden()
 
-  const preview = await openPlayerPreview(page)
-  await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
-  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
-  const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
-  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' })
-    .locator('.player-system-object-hit-target').click()
-
-  const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
-  await expect(publicDetails).toContainText(playerTextValue)
-  await expect(preview).not.toContainText(gmNotesValue)
-  await page.screenshot({ path: testInfo.outputPath('player-prose-preview-desktop.png'), fullPage: true })
-
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect(publicDetails).toBeVisible()
-  await publicDetails.scrollIntoViewIfNeeded()
-  await expect(publicDetails).toBeInViewport()
-  await expect(publicDetails).toContainText(playerTextValue)
-  await expect(preview).not.toContainText(gmNotesValue)
-  await page.screenshot({ path: testInfo.outputPath('player-prose-preview-compact.png'), fullPage: true })
-
-  const closePreview = preview.getByRole('button', { name: 'Close player preview', exact: true })
-  await expect(closePreview).toBeInViewport()
-  await closePreview.click()
-  await expect(preview).toBeHidden()
-})
-
-test('shared native and custom Fields preview permitted values and respect an object mask', async ({ page }, testInfo) => {
-  const { systemName } = await createSingleSystemWorkspace(page, {
-    clusterName: 'Private Reach',
-    systemName: 'Private Vesper',
-  })
-  await addCatalogueObject(page, 'planet')
-
-  const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const planet = hierarchy.getByRole('treeitem', { name: /Select .*Pilgrim World/ })
+  await planet.click()
   await editMapObject(page)
-  await objectInspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
-  await selectDraftPublication(objectInspector, 'Revealed')
-  await saveMapObject(page)
-
-  await addCustomFieldThroughDialog(page, 'Faction', 'single-select', 'Merchants\nCult')
-
-  const atmosphereDialog = await openFieldDefinitionDialog(page)
-  await atmosphereDialog.getByRole('button', { name: /Atmosphere/ }).click()
-  await editFieldDefinition(atmosphereDialog)
-  const atmosphereSharing = atmosphereDialog.getByRole('checkbox', { name: /^Share with players$/i })
-  await expect(atmosphereSharing).toBeVisible({ timeout: 5_000 })
-  await atmosphereSharing.check()
-  await atmosphereDialog.getByRole('button', { name: 'Apply field changes' }).click()
-  await atmosphereDialog.getByRole('button', { name: 'Close field definitions' }).click()
-
-  const factionDialog = await openFieldDefinitionDialog(page)
-  await factionDialog.getByRole('button', { name: /Faction/ }).click()
-  await editFieldDefinition(factionDialog)
-  const factionSharing = factionDialog.getByRole('checkbox', { name: /^Share with players$/i })
-  await expect(factionSharing).toBeVisible({ timeout: 5_000 })
-  await factionSharing.check()
-  await factionDialog.getByRole('button', { name: 'Apply field changes' }).click()
-  await factionDialog.getByRole('button', { name: 'Close field definitions' }).click()
+  await playerText.fill(unappliedText)
+  const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  const publish = async () => {
+    await planet.click({ button: 'right' })
+    await menu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
+  }
+  await publish()
+  await editDetails.getByRole('button', { name: 'Stay here', exact: true }).click()
+  await expect(playerText).toHaveValue(unappliedText)
+  await expect(planet).toHaveAttribute('aria-description', /Configured visibility: Known type/)
+  await publish()
+  await editDetails.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
+  await expect(planet).toHaveAttribute('aria-description', /Configured visibility: Revealed/)
+  await waitForWorkspaceSaved(page)
 
   await editMapObject(page)
-  await selectInspectorOption(objectInspector.getByLabel('Atmosphere', { exact: true }), 'Breathable')
-  await selectInspectorOption(objectInspector.getByLabel('Faction', { exact: true }), 'Merchants')
-  const hideAtmosphere = objectInspector.getByRole('region', { name: 'Catalogue fields' })
-    .getByRole('checkbox', { name: /^Hide this value from players$/i })
-  await expect(hideAtmosphere).toBeVisible({ timeout: 5_000 })
-  const atmosphereValue = objectInspector.getByLabel('Atmosphere', { exact: true })
-  await expect(atmosphereValue).toHaveCount(1)
-  expect(await hideAtmosphere.getAttribute('id')).not.toBe(await atmosphereValue.getAttribute('id'))
-  await hideAtmosphere.check()
-  await saveMapObject(page)
-
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  const chartDetails = await openChartDetails(page)
-  await chartDetails.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartEdit = page.getByRole('dialog', { name: 'Edit chart details' })
-  await selectDraftPublication(chartEdit, 'Revealed')
-  await chartEdit.getByRole('button', { name: 'Apply details' }).click()
-  await expect(chartEdit).toBeHidden()
-
+  await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue(privateNotes)
+  await playerText.fill(unappliedText)
   const preview = await openPlayerPreview(page)
-  await preview.getByRole('button', { name: `Open ${systemName} system preview` }).click()
-  const playerView = preview.getByRole('region', { name: 'Warden-side player preview', exact: true })
-  const systemPreview = playerView.getByRole('region', { name: 'Player-visible system map' })
-  await systemPreview.getByRole('button', { name: 'Inspect Pilgrim World' })
+  await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  await preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
     .locator('.player-system-object-hit-target').click()
+  await expect(preview.getByRole('region', { name: 'Player object details' })).toContainText(publicText)
+  await expect(preview).not.toContainText(privateNotes)
+  await expect(preview).not.toContainText(unappliedText)
+  await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
-  const publicDetails = playerView.getByRole('region', { name: 'Player object details' })
-  await expect(publicDetails).toContainText('Faction')
-  await expect(publicDetails).toContainText('Merchants')
-  await expect(publicDetails).not.toContainText('Cult')
-  await expect(publicDetails).not.toContainText('Atmosphere')
-  await expect(publicDetails).not.toContainText('Breathable')
-  await expect(preview).not.toContainText('Cult')
-  await expect(preview).not.toContainText('Atmosphere')
-  await expect(preview).not.toContainText('Breathable')
-  const accessibleDetails = await publicDetails.ariaSnapshot()
-  expect(accessibleDetails).toContain('Faction')
-  expect(accessibleDetails).toContain('Merchants')
-  expect(accessibleDetails).not.toContain('Cult')
-  expect(accessibleDetails).not.toContain('Atmosphere')
-  expect(accessibleDetails).not.toContain('Breathable')
-  await publicDetails.scrollIntoViewIfNeeded()
-  await expect(publicDetails).toBeInViewport()
-  await page.screenshot({ path: testInfo.outputPath('field-public-details-desktop.png'), fullPage: true })
-
-  await page.setViewportSize({ width: 390, height: 844 })
-  await publicDetails.scrollIntoViewIfNeeded()
-  await expect(publicDetails).toBeInViewport()
-  await page.screenshot({ path: testInfo.outputPath('field-public-details-compact.png'), fullPage: true })
+  await setHeaderMapActionsOpen(page, true)
+  const pendingDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export player JSON', exact: true }).click()
+  const path = await (await pendingDownload).path()
+  if (!path) throw new Error('The player JSON download has no readable path.')
+  const json = await readFile(path, 'utf8')
+  const system = parsePlayerJson(json).systems.find(candidate => candidate.disclosure === 'revealed' && candidate.label === systemName)
+  expect(system?.disclosure === 'revealed' ? system.map.objects : []).toContainEqual(expect.objectContaining({
+    disclosure: 'revealed',
+    label: 'Pilgrim World',
+    playerText: publicText,
+  }))
+  expect(json).not.toContain(privateNotes)
+  expect(json).not.toContain(unappliedText)
+  await setHeaderMapActionsOpen(page, false)
+  await expect(playerText).toHaveValue(unappliedText)
 })

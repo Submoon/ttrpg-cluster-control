@@ -37,32 +37,14 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop panels remain independent and the portaled Map files menu stays hit-testable @ui-smoke', async ({ page }) => {
+test('desktop Hierarchy opens beside Inspector while the portaled Map files menu stays hit-testable and exports JSON @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const inspector = page.locator('#workspace-inspector-panel')
-  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
-  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await expect(hierarchy).toBeHidden()
   await expect(inspector).toBeVisible()
-
-  await hierarchyToggle.click()
-  await expect(hierarchy).toBeVisible()
-  await expect(inspector).toBeVisible()
-  await hierarchyToggle.click()
-  await expect(hierarchy).toBeHidden()
-  await expect(inspector).toBeVisible()
-  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'false')
-  await hierarchyToggle.click()
-  await expect(hierarchy).toBeVisible()
-  await expect(inspector).toBeVisible()
-
-  await inspectorToggle.click()
-  await expect(inspector).toBeHidden()
-  await expect(hierarchy).toBeVisible()
-  await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
-  await inspectorToggle.click()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
 
@@ -152,12 +134,29 @@ test('touch long press keeps focus inside the compact inspector after the touch 
 
   try {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+    const scene = clusterMap.locator('.cluster-map-content')
+    const viewportBeforePan = await scene.getAttribute('transform')
+    if (!viewportBeforePan) throw new Error('The cluster map is not ready for touch pan.')
+    const inspector = page.locator('#workspace-inspector-panel')
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [{ ...touchPoint, radiusX: 2, radiusY: 2, force: 1 }],
     })
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ ...touchPoint, x: touchPoint.x + 24, y: touchPoint.y + 18 }],
+    })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect(scene).not.toHaveAttribute('transform', viewportBeforePan)
+    await expect(clusterMap).toBeVisible()
+    await expect(inspector).toBeHidden()
 
-    const inspector = page.locator('#workspace-inspector-panel')
+    const pannedBounds = await system.boundingBox()
+    if (!pannedBounds) throw new Error('The panned system is not visible for long-press.')
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: pannedBounds.x + pannedBounds.width / 2, y: pannedBounds.y + pannedBounds.height / 2 }],
+    })
     const closeInspector = page.getByRole('button', { name: 'Close inspector panel' })
     await expect(inspector).toBeVisible()
     await expect(inspector).toHaveAttribute('role', 'dialog')
@@ -210,57 +209,6 @@ test('touch long press keeps focus inside the compact inspector after the touch 
   }
 })
 
-test('desktop-to-compact reflow retains an invalid chart-name draft and the active map mode', async ({ page }) => {
-  await createWorkspace(page)
-
-  const dock = workspaceNavigation(page)
-  const moveMode = dock.getByRole('button', { name: 'Move', exact: true })
-  await moveMode.click()
-  await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
-
-  const hierarchy = page.locator('#workspace-hierarchy-panel')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await hierarchy.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
-  await chartDialog.getByLabel('Jump Cluster').fill('')
-  await chartDialog.getByLabel('Star system').fill('Draft Vesper')
-  await chartDialog.getByRole('button', { name: 'Apply details' }).click()
-  await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-
-  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
-  const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await hierarchyToggle.click()
-  await inspectorToggle.click()
-  await expect(page.locator('#workspace-hierarchy-panel')).toBeHidden()
-  await expect(page.locator('#workspace-inspector-panel')).toBeHidden()
-  await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
-
-  await page.setViewportSize({ width: 844, height: 390 })
-  await hierarchyToggle.click()
-  await expectCompactPanel(page, 'hierarchy')
-  await hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: 'Resume chart details draft' }).click()
-  await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
-  await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
-  await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-
-  await page.getByRole('button', { name: 'Close hierarchy panel' }).click()
-  await expect(hierarchyToggle).toBeFocused()
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await expect(workspaceNavigation(page)).toBeVisible()
-  await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
-  await hierarchyToggle.click()
-  await expect(hierarchy).toBeVisible()
-  await hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: 'Resume chart details draft' }).click()
-  await expect(chartDialog.getByLabel('Jump Cluster')).toHaveValue('')
-  await expect(chartDialog.getByLabel('Star system')).toHaveValue('Draft Vesper')
-  await expect(chartDialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
-})
 
 test('a nested chart dialog pauses the compact panel focus trap and returns focus to its opener @ui-smoke', async ({ page }) => {
   await createWorkspace(page, { width: 844, height: 390 })

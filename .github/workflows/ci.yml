@@ -129,8 +129,13 @@ jobs:
           PLAYWRIGHT_SUITE: checks
         run: npm test -- --reporter=github,html
 
-      - name: Upload checks Playwright report
+      - name: Verify Playwright diagnostic artifacts were sanitized
+        id: diagnostics
         if: always()
+        run: node scripts/ci/playwright-artifacts.mjs
+
+      - name: Upload checks Playwright report
+        if: always() && steps.diagnostics.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: playwright-checks-${{ matrix.playwright_version }}
@@ -246,8 +251,13 @@ jobs:
           PLAYWRIGHT_SUITE: browser
         run: npm run test:preview-smoke -- --reporter=github,html
 
-      - name: Upload browser smoke report
+      - name: Verify Playwright diagnostic artifacts were sanitized
+        id: diagnostics
         if: always()
+        run: node scripts/ci/playwright-artifacts.mjs
+
+      - name: Upload browser smoke report
+        if: always() && steps.diagnostics.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: playwright-browser-smoke-${{ matrix.playwright_version }}
@@ -319,8 +329,13 @@ jobs:
           PLAYWRIGHT_SHARD: ${{ matrix.shard }}
         run: npm test -- --reporter=github,html --shard=${{ matrix.shard }}/2
 
-      - name: Upload browser shard report
+      - name: Verify Playwright diagnostic artifacts were sanitized
+        id: diagnostics
         if: always()
+        run: node scripts/ci/playwright-artifacts.mjs
+
+      - name: Upload browser shard report
+        if: always() && steps.diagnostics.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: playwright-browser-${{ matrix.playwright_version }}-shard-${{ matrix.shard }}

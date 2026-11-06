@@ -1,18 +1,30 @@
 import { expect, test } from './fixtures'
-import { exportJumpCluster } from '../domain/workspace'
-import { createHistoryMeasurementWorkspace } from './fixtures/history-workspace'
+import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
-  waitForWorkspaceSaved,
-  activeWorkspaceFeedback, createSingleSystemWorkspace, importReviewDialog, jsonMapImportInput, openChartDetails,
-  resolveImportReview, returnToClusterMap, setHeaderMapActionsOpen, setJsonFile,
+  activeWorkspaceFeedback, importReviewDialog, jsonMapImportInput, openChartDetails, resolveImportReview,
+  returnToClusterMap, setHeaderMapActionsOpen, setJsonFile, waitForWorkspaceSaved, waitForWorkspaceStartup,
 } from './helpers'
 
 test('an oversized edit requires explicit consent and cancellation preserves its data and history', async ({ page }) => {
   test.setTimeout(120_000)
-  await createSingleSystemWorkspace(page)
+  await page.goto('/')
+  await waitForWorkspaceStartup(page)
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
-  const incoming = exportJumpCluster(createHistoryMeasurementWorkspace(32, 120))
-  await setJsonFile(jsonMapImportInput(page), 'large-history-workspace.json', JSON.stringify(incoming))
+
+  const incoming = createLocalWorkspace('Measured Reach', 'Measured System')
+  const primary = incoming.cluster.systems[0]?.objects[0]
+  if (!primary) throw new Error('The oversized history fixture requires a primary star.')
+  // Import fits the real 32 MiB budget. Retaining both sides of a later edit does not.
+  const mebibyte = 1024 * 1024
+  primary.description = 'x'.repeat(17 * mebibyte)
+  const portableMap = JSON.stringify(exportJumpCluster(incoming))
+  const portableBytes = Buffer.byteLength(portableMap)
+  expect(portableBytes).toBeGreaterThan(16 * mebibyte)
+  expect(portableBytes).toBeLessThan(32 * mebibyte)
+  await setJsonFile(jsonMapImportInput(page), 'large-history-workspace.json', portableMap)
   await resolveImportReview(importReviewDialog(page), 'confirm')
   await setHeaderMapActionsOpen(page, false)
   await waitForWorkspaceSaved(page)

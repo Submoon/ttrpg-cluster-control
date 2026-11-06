@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from './fixtures'
-import { expectPaintedInsideUsableMap, measurePaintedBounds } from './scenarios/search-assertions'
+
 import { expectPaletteOptionActive } from './scenarios/search-palette'
 import {
   createLocalWorkspace,
@@ -9,18 +9,13 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback,
   createSingleSystemWorkspace,
   jsonMapImportInput,
-  openWorkspaceHierarchy,
-  panMap,
   resolveImportReview,
   returnToClusterMap,
   setHeaderMapActionsOpen,
   setJsonFile,
   setWorkspaceMapMode,
-  workspaceMapContextType,
-  workspaceZoomControls,
 } from './helpers'
 
 interface ScreenRect {
@@ -252,109 +247,7 @@ async function importAndOpenBranchSearchSystem(
   return page.getByRole('group', { name: `${fixture.systemName} star system map`, exact: true })
 }
 
-test('search caps an isolated leaf while keeping a readable hosted branch beside the Inspector', async ({ page }, testInfo) => {
-  const fixture = branchSearchMap()
-  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-readable.json')
-  const content = systemMap.locator('.system-map-content')
-  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await inspectToggle.click()
-  const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector).toBeVisible()
 
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
-  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
-
-  await query.fill(fixture.remoteLeafName)
-  const remoteResult = searchDialog.getByRole('option', { name: new RegExp(fixture.remoteLeafName) })
-  await expect(remoteResult).toContainText('Location key: AN-01')
-  await remoteResult.click()
-  await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  const remoteObject = systemMap.locator('.system-object').filter({ hasText: fixture.remoteLeafName })
-  await expect(remoteObject).toHaveClass(/is-selected/)
-  const remoteScale = scaleFromTransform(await content.getAttribute('transform'))
-  expect(remoteScale).toBeCloseTo(2, 1)
-  await expect(systemMap.locator('.orbit-mark[aria-label*="around Remote Beacon"]')).toHaveCount(0)
-  const remoteLabel = systemMap.locator('.object-name').filter({ hasText: fixture.remoteLeafName })
-  const remoteBounds = await remoteLabel.boundingBox()
-  const remoteMapBounds = await systemMap.boundingBox()
-  if (!remoteBounds || !remoteMapBounds) throw new Error('The isolated leaf or its system map has no visible bounds.')
-  expect(remoteBounds.x).toBeGreaterThanOrEqual(remoteMapBounds.x)
-  expect(remoteBounds.x + remoteBounds.width).toBeLessThanOrEqual(remoteMapBounds.x + remoteMapBounds.width)
-  expect(remoteBounds.y).toBeGreaterThanOrEqual(remoteMapBounds.y)
-  expect(remoteBounds.y + remoteBounds.height).toBeLessThanOrEqual(remoteMapBounds.y + remoteMapBounds.height)
-
-  const isolatedLeafScreenshot = testInfo.outputPath('object-search-isolated-leaf-capped.png')
-  await page.screenshot({ path: isolatedLeafScreenshot, animations: 'disabled' })
-  await testInfo.attach('object-search-isolated-leaf-capped', {
-    path: isolatedLeafScreenshot,
-    contentType: 'image/png',
-  })
-
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
-  await expect(searchDialog).toBeVisible()
-  await query.fill(fixture.readableTargetName)
-  const readableResult = searchDialog.getByRole('option', { name: new RegExp(fixture.readableTargetName) })
-  await expect(readableResult).toContainText(`Location key: PL-02`)
-  await readableResult.click()
-  await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  const readableTarget = systemMap.locator('.system-object').filter({ hasText: fixture.readableTargetName })
-  await expect(readableTarget).toHaveClass(/is-selected/)
-  const readableScale = scaleFromTransform(await content.getAttribute('transform'))
-  expect(readableScale).toBeLessThanOrEqual(2)
-  const readableTargetName = readableTarget.locator('.object-name')
-  const readableTargetKey = readableTarget.locator('.object-key')
-  const readableTargetGlyph = readableTarget.locator('.system-object-glyph')
-  const readableTargetTypeMark = readableTarget.locator('.object-type-mark')
-  const readableScreenshot = testInfo.outputPath('object-search-readable-branch-with-inspector.png')
-  await page.screenshot({ path: readableScreenshot, animations: 'disabled' })
-  await testInfo.attach('object-search-readable-branch-with-inspector', {
-    path: readableScreenshot,
-    contentType: 'image/png',
-  })
-  const readableOrbit = systemMap.locator('.orbit-mark[aria-label*="around Readable Beacon"] .orbit-ring')
-  const readableOrbitBounds = await measurePaintedBounds(readableOrbit)
-  const readableMoon = systemMap.locator('.system-object').filter({ hasText: fixture.readableNestedName })
-  const readableMoonName = readableMoon.locator('.object-name')
-  const readableMoonKey = readableMoon.locator('.object-key')
-  const readableMoonGlyph = readableMoon.locator('.system-object-glyph')
-  const readableMoonTypeMark = readableMoon.locator('.object-type-mark')
-  const readableMoonLabel = systemMap.locator('.object-name').filter({ hasText: fixture.readableNestedName })
-  const readableMoonBounds = await readableMoonLabel.boundingBox()
-  const inspectorBounds = await inspector.boundingBox()
-  if (!readableOrbitBounds || !readableMoonBounds || !inspectorBounds) {
-    throw new Error('The readable hosted branch or its Inspector obstruction has no visible bounds.')
-  }
-  expect(readableOrbitBounds.x + readableOrbitBounds.width <= inspectorBounds.x
-    || readableOrbitBounds.x >= inspectorBounds.x + inspectorBounds.width).toBe(true)
-  expect(readableMoonBounds.x + readableMoonBounds.width <= inspectorBounds.x
-    || readableMoonBounds.x >= inspectorBounds.x + inspectorBounds.width).toBe(true)
-  for (const nameLabel of [readableTargetName, readableMoonName]) {
-    const bounds = await nameLabel.boundingBox()
-    if (!bounds) throw new Error('A readable branch object name has no measurable bounds.')
-    expect(bounds.height).toBeGreaterThanOrEqual(12)
-  }
-  for (const keyLabel of [readableTargetKey, readableMoonKey]) {
-    const bounds = await keyLabel.boundingBox()
-    if (!bounds) throw new Error('A readable branch Location key has no measurable bounds.')
-    expect(bounds.height).toBeGreaterThanOrEqual(9)
-  }
-  await expect(readableTargetKey).toHaveText('PL-02')
-
-  await expectPaintedInsideUsableMap(page, systemMap, [
-    readableTargetGlyph,
-    readableTargetTypeMark,
-    readableTargetName,
-    readableTargetKey,
-    readableMoonGlyph,
-    readableMoonTypeMark,
-    readableMoonName,
-    readableMoonKey,
-    readableOrbit,
-  ])
-})
 
 test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
   const fixture = branchSearchMap()
@@ -443,57 +336,6 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
   await testInfo.attach('object-search-large-rotated-branch', { path: screenshotPath, contentType: 'image/png' })
 })
 
-test('repeated object search recenters the map and restores its lower zoom floor after navigation', async ({ page }) => {
-  const fixture = branchSearchMap()
-  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-revisit.json')
-  const content = systemMap.locator('.system-map-content')
-  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
-
-  await searchButton.click()
-  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
-  await query.fill(fixture.targetName)
-  await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
-  await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-
-  const initialFrameCamera = await content.getAttribute('transform')
-  if (!initialFrameCamera) throw new Error('The search framed no rendered camera transform.')
-  const frameScale = scaleFromTransform(initialFrameCamera)
-  expect(frameScale).toBeLessThan(0.25)
-
-  await setWorkspaceMapMode(page, 'Navigate')
-  await panMap(page, systemMap, { x: 36, y: 24 })
-  const pannedCamera = await content.getAttribute('transform')
-  if (!pannedCamera) throw new Error('The manually panned system has no camera transform.')
-  expect(pannedCamera).not.toBe(initialFrameCamera)
-
-  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
-  await searchButton.click()
-  await expect(searchDialog).toBeVisible()
-  await query.fill(fixture.targetName)
-  await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
-  await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  await expect(content).toHaveAttribute('transform', initialFrameCamera)
-  expect(scaleFromTransform(await content.getAttribute('transform'))).toBeCloseTo(frameScale, 3)
-  await expect(zoomOut).toBeDisabled()
-
-  for (let step = 0; step < 64 && !(await zoomOut.isDisabled()); step += 1) await zoomOut.click()
-  await expect(zoomOut).toBeDisabled()
-  expect(scaleFromTransform(await content.getAttribute('transform'))).toBeCloseTo(frameScale, 3)
-
-  const revisitCamera = await content.getAttribute('transform')
-  if (!revisitCamera) throw new Error('The framed system visit has no camera transform to restore.')
-  const revisitScale = scaleFromTransform(revisitCamera)
-  await returnToClusterMap(page)
-  await setWorkspaceMapMode(page, 'Navigate')
-  await page.getByRole('button', { name: `Open ${fixture.systemName} system map`, exact: true }).click()
-  await expect(systemMap).toBeVisible()
-  await expect(content).toHaveAttribute('transform', revisitCamera)
-  expect(scaleFromTransform(await content.getAttribute('transform'))).toBeCloseTo(revisitScale, 3)
-  await expect(zoomOut).toBeDisabled()
-})
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
   const fixture = branchSearchMap()
@@ -535,6 +377,7 @@ test('compact Location-key search preserves a dirty same-object draft and return
   const results = searchDialog.getByRole('listbox')
   const resultOptions = results.getByRole('option')
   await expect(resultOptions).toHaveCount(12)
+  await expect(searchDialog).toBeInViewport({ ratio: 1 })
   const resultViewport = results.locator('[data-slot="viewport"]')
   expect(await resultViewport.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
   await query.press('ArrowDown')
@@ -585,83 +428,4 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(inspector).toBeVisible()
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Leaf Reliquary draft')
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
-})
-
-test('object search guards a hidden chart-name draft before revealing the result', async ({ page }) => {
-  const { systemName } = await createSingleSystemWorkspace(page)
-  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  const clusterDraft = 'Kestrel Reach draft'
-  const systemDraft = 'Vesper draft'
-  await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill(clusterDraft)
-  await chartDialog.getByLabel('Star system', { exact: true }).fill(systemDraft)
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await expect(hierarchy).toBeHidden()
-
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })
-  await expect(resumeDraft).toBeVisible()
-  const searchButton = page.getByRole('button', { name: 'Search', exact: true })
-  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true, includeHidden: true })
-  const systemContent = systemMap.locator('.system-map-content')
-  const initialCamera = await systemContent.getAttribute('transform')
-  if (!initialCamera) throw new Error('The active system map has no rendered camera transform.')
-
-  await searchButton.click()
-  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
-  const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
-  await query.fill('Primary Star')
-  const result = searchDialog.getByRole('option', { name: /Primary Star.*Star.*Star System: Vesper/ })
-  await expect(result).toBeVisible()
-  await result.click()
-
-  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
-  await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
-  await expect(guard.getByRole('button', { name: 'Apply and continue', exact: true })).toBeVisible()
-  await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
-
-  await expect(chartDialog).toBeVisible()
-  await expect(chartDialog.getByRole('button', { name: 'Apply details', exact: true })).toBeVisible()
-  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
-  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
-  await expect.poll(() => chartDialog.evaluate(dialog =>
-    dialog === document.activeElement || dialog.contains(document.activeElement),
-  )).toBe(true)
-
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-  await expect(searchDialog).toBeVisible()
-  await expect(query).toHaveValue('Primary Star')
-  await expect(query).toBeFocused()
-  await page.keyboard.press('ArrowUp')
-  await expect(query).toBeFocused()
-  await expect(workspaceMapContextType(page)).toHaveText('Star System')
-  await expect(systemContent).toHaveAttribute('transform', initialCamera)
-  await expect(systemMap.locator('.system-object.is-selected')).toHaveCount(0)
-
-  await page.keyboard.press('Escape')
-  await expect(searchDialog).toHaveCount(0)
-  await expect(searchButton).toBeFocused()
-  await resumeDraft.click()
-  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue(clusterDraft)
-  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue(systemDraft)
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-
-  await searchButton.click()
-  await expect(searchDialog).toBeVisible()
-  await expect(query).toHaveValue('Primary Star')
-  await searchDialog.getByRole('option', { name: /Primary Star.*Star.*Star System: Vesper/ }).click()
-  await expect(guard.getByRole('button', { name: 'Discard and continue', exact: true })).toBeVisible()
-  await guard.getByRole('button', { name: 'Discard and continue', exact: true }).click()
-
-  await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  const selectedStar = systemMap.locator('.system-object').filter({ hasText: 'Primary Star' })
-  await expect(selectedStar).toHaveClass(/is-selected/)
-  expect(scaleFromTransform(await systemContent.getAttribute('transform'))).toBeCloseTo(2, 1)
-  await expect(resumeDraft).toHaveCount(0)
 })

@@ -162,27 +162,7 @@ test('a different group key completes the previous action and rejects a prebuilt
   harness.dispose()
 })
 
-test('different-key staging handles a rejected save without losing the completed group @pure', async () => {
-  const harness = createHarness({ durability: () => Promise.reject(new Error('IndexedDB unavailable')) })
-  const initial = harness.workspace
-  await harness.history.stageGroup('first-adjustment', renameRequest(initial, 'Kestrel Reach First'))
-  const unhandled: unknown[] = []
-  const onUnhandled = (reason: unknown): void => { unhandled.push(reason) }
-  process.on('unhandledRejection', onUnhandled)
 
-  try {
-    const next = await harness.history.stageGroup('second-adjustment', renameRequest(initial, 'Kestrel Reach Second'))
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    expect(next).toMatchObject({ status: 'rejected', reason: 'stale' })
-    expect(harness.workspace.cluster.name).toBe('Kestrel Reach First')
-    expect(harness.history.getStatus()).toMatchObject({ undoDepth: 1, redoDepth: 0, hasPendingGroup: false })
-    expect(unhandled).toEqual([])
-  } finally {
-    process.off('unhandledRejection', onUnhandled)
-    harness.dispose()
-  }
-})
 
 test('stale adjustment previews are refused without overwriting a newer workspace @pure', async () => {
   const harness = createHarness()

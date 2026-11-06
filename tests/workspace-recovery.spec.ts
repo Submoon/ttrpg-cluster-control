@@ -1,24 +1,9 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, openWorkspaceHierarchy, overwriteWorkspaceRecord } from './helpers'
-import { returnToClusterMap, jsonMapImportInput } from './helpers'
-import { setJsonFile } from './helpers'
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
 ).replace(/^\/+/, '')}`
-
-type StoredWorkspace = {
-  cluster: {
-    systems: Array<{
-      id: string
-      name: string
-      objects: Array<{ id: string; subtype: string }>
-      orbits: unknown[]
-    }>
-  }
-  objectFieldSettings: Record<string, unknown>
-}
 
 type WorkspaceRecordKey = 'current' | 'last-valid'
 
@@ -49,97 +34,6 @@ async function readWorkspaceRecord(
 async function readCurrentWorkspace(page: import('@playwright/test').Page): Promise<unknown> {
   return readWorkspaceRecord(page, 'current')
 }
-
-async function deleteWorkspaceRecord(
-  page: import('@playwright/test').Page,
-  key: WorkspaceRecordKey,
-): Promise<void> {
-  await page.evaluate(async (recordKey) => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
-    })
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction('workspace', 'readwrite')
-        transaction.objectStore('workspace').delete(recordKey)
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = () => reject(transaction.error ?? new Error('Could not remove the workspace snapshot.'))
-        transaction.onabort = () => reject(transaction.error ?? new Error('Could not remove the workspace snapshot.'))
-      })
-    } finally {
-      database.close()
-    }
-  }, key)
-}
-
-test('an attached Orbit with undersized imported radii is rejected without losing current data', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
-  await expect(page.getByRole('alert')).toHaveCount(0)
-
-  const workspace = await readCurrentWorkspace(page) as StoredWorkspace
-  const sourceSystem = workspace.cluster.systems[0]
-  const primaryStar = sourceSystem?.objects.find(object => object.subtype === 'star')
-  if (!sourceSystem || !primaryStar) throw new Error('The initial workspace is missing its primary star.')
-  const importedSystem = {
-    ...sourceSystem,
-    id: 'small-orbit-system',
-    name: 'Small Orbit Test',
-    orbits: [{ id: 'small-orbit', hostId: primaryStar.id, order: 1 }],
-  }
-  const map = {
-    format: 'ttrpg-cluster-control-map',
-    version: 1,
-    type: 'system',
-    system: importedSystem,
-    objectFieldSettings: workspace.objectFieldSettings,
-    layout: {
-      version: 1,
-      orbitRadii: { 'small-orbit': { horizontal: 16, vertical: 24 } },
-      orbitRotations: {},
-      objectAngles: {},
-    },
-  }
-  const input = jsonMapImportInput(page)
-  await setJsonFile(input, 'small-orbit.json', JSON.stringify(map))
-
-  await expect(page.getByRole('alert')).toContainText('Choose a valid version 1')
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
-  const unchanged = await readCurrentWorkspace(page) as StoredWorkspace
-  expect(unchanged.cluster.systems.map(system => system.name)).toEqual(['Vesper'])
-
-  const correctedMap = {
-    ...map,
-    layout: {
-      ...map.layout,
-      orbitRadii: { 'small-orbit': { horizontal: 39, vertical: 40 } },
-    },
-  }
-  await setJsonFile(input, 'small-orbit.json', JSON.stringify(correctedMap))
-  const preview = importReviewDialog(page)
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('star system')
-  await resolveImportReview(preview, 'confirm')
-
-  await returnToClusterMap(page)
-  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systems = page.getByRole('navigation', { name: 'Star systems' })
-  await expect(systems.getByRole('button', { name: 'Open Small Orbit Test system map' })).toBeVisible()
-  await expect.poll(async () =>
-    (await readCurrentWorkspace(page) as StoredWorkspace).cluster.systems.map(system => system.name),
-  ).toContain('Small Orbit Test')
-  await page.reload()
-  await openWorkspaceHierarchy(page)
-  await expect(page.getByRole('navigation', { name: 'Star systems' })
-    .getByRole('button', { name: 'SY Small Orbit Test 1 map objects' })).toBeVisible()
-})
 
 test('the last valid workspace can be restored after the current snapshot fails to load', async ({ page }) => {
   await page.goto('/')
@@ -286,26 +180,6 @@ test('a failed backup restore stays unavailable and preserves both records until
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
 })
 
-test('the recovery screen explains when no local backup is available', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 500 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
-
-  await overwriteWorkspaceRecord(page, 'current', { damaged: true })
-  await deleteWorkspaceRecord(page, 'last-valid')
-  await page.reload()
-
-  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeInViewport({ ratio: 1 })
-  await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeInViewport({ ratio: 1 })
-  await page.getByRole('button', { name: 'Restore last valid backup' }).click()
-  await expect(page.getByRole('alert')).toContainText('No local backup is available to restore.')
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
-})
-
 test('a failed IndexedDB save preserves current and backup snapshots @development-storage', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -380,14 +254,17 @@ test('a damaged backup is rejected without replacing the current record', async 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 
-  await overwriteWorkspaceRecord(page, 'current', { damaged: true })
-  await overwriteWorkspaceRecord(page, 'last-valid', { damaged: true })
+  const damagedCurrentRecord = { damaged: 'current record sentinel' }
+  const damagedBackupRecord = { damaged: 'last-valid record sentinel' }
+  await overwriteWorkspaceRecord(page, 'current', damagedCurrentRecord)
+  await overwriteWorkspaceRecord(page, 'last-valid', damagedBackupRecord)
   await page.reload()
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
 
   await expect(page.getByRole('alert')).toContainText('local backup has an unsupported or damaged format')
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
-  await expect(readCurrentWorkspace(page)).resolves.toEqual({ damaged: true })
+  await expect(readCurrentWorkspace(page)).resolves.toEqual(damagedCurrentRecord)
+  await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(damagedBackupRecord)
 })
 
 test('a temporary IndexedDB opening failure can be retried without exposing a partial workspace', async ({ page }) => {

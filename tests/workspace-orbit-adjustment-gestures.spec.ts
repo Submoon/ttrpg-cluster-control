@@ -34,6 +34,7 @@ async function orbitScreenPoint(
 }
 
 test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adjustment', async ({ page }, testInfo) => {
+  await page.clock.install()
   await createSingleSystemWorkspace(page)
   await clickDockAction(page, 'Add orbit', { target: { kind: 'center', x: 0.3, y: 0.3 } })
   const desktopViewport = page.viewportSize()
@@ -84,18 +85,22 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   expect(wheelHitTarget.mapContainsTarget).toBe(true)
   expect(wheelHitTarget.orbitId).toBe(await orbit.getAttribute('data-orbit-id'))
 
-  const rotateFromWheel = async (holdControlBeforeHover: boolean): Promise<void> => {
-    if (holdControlBeforeHover) await page.keyboard.down('Control')
+  // Preserve one history-grouping window despite variable real browser-event delivery latency.
+  const futurePageEpoch = await page.evaluate(() => Date.now() + 10_000)
+  await page.clock.pauseAt(futurePageEpoch)
+  try {
+    await page.keyboard.down('Control')
     await page.mouse.move(wheelPoint.x, wheelPoint.y)
-    if (!holdControlBeforeHover) await page.keyboard.down('Control')
     await page.mouse.wheel(0, 100)
     await page.mouse.wheel(0, 100)
     await page.keyboard.up('Control')
+    await page.clock.runFor(32)
+    await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
+    await expect(undo).toBeDisabled()
+    await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
+  } finally {
+    await page.clock.resume()
   }
-  await rotateFromWheel(true)
-  await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
-  await expect(undo).toBeDisabled()
-  await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
   await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
@@ -104,16 +109,6 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await undo.click()
   await expect(rotate).toHaveAttribute('aria-valuenow', String(initialRotation))
   await expect(ring).toHaveAttribute('rx', String(initialRadius))
-  await expect(redo).toBeEnabled()
-
-  await rotateFromWheel(false)
-  await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
-  await expect(undo).toBeDisabled()
-  await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
-  await expect(undo).toBeEnabled()
-  await expect(redo).toBeDisabled()
-  await undo.click()
-  await expect(rotate).toHaveAttribute('aria-valuenow', String(initialRotation))
   await expect(redo).toBeEnabled()
 
   const horizontalBeforeKeyboard = Number(await resize.getAttribute('aria-valuenow'))

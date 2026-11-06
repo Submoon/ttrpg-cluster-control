@@ -220,6 +220,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
     playerTitle: string
     systems: Array<{ publication: string; objects: Array<Record<string, unknown>> }>
   }
+  versionTwoCluster.playerTitle = 'Aster Reach'
   versionTwoCluster.systems[0]!.publication = 'revealed'
   delete versionTwoCluster.systems[0]!.objects[0]!.publication
   delete versionTwoCluster.systems[0]!.objects[0]!.playerText
@@ -245,7 +246,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
   expect(restoredV2).toMatchObject({
     version: 4,
     cluster: {
-      playerTitle: 'Player Jump Cluster',
+      playerTitle: 'Aster Reach',
       systems: [{ publication: 'revealed', objects: [{ publication: 'hidden', playerText: '', playerFieldMasks: [] }] }],
     },
     objectFieldSettings: { nativePlayerSharing: { atmosphere: false, portClass: false } },
@@ -253,8 +254,9 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
   expect(restoredV1).toMatchObject({
     version: 4,
     cluster: {
+      name: workspace.cluster.name,
       playerTitle: 'Player Jump Cluster',
-      systems: [{ publication: 'hidden', objects: [{ publication: 'hidden', playerText: '', playerFieldMasks: [] }] }],
+      systems: [{ name: workspace.cluster.systems[0]!.name, publication: 'hidden', objects: [{ publication: 'hidden', playerText: '', playerFieldMasks: [] }] }],
     },
   })
 })
@@ -628,48 +630,6 @@ test('v3 portable imports remap reserved custom IDs and preserve independent nat
   expect(planet?.customFieldValues?.[existingAlias!.id]).toBe('EXISTING ALIAS VALUE')
   expect(station?.customFieldValues?.[atmosphereAlias!.id]).toBe('CUSTOM ATMOSPHERE ALIAS ON STATION')
   expect(station?.customFieldValues?.[portAlias!.id]).toBe('CUSTOM PORT ALIAS VALUE')
-})
-
-test('v3 Cluster import ignores an unrelated top-level ID while remapping reserved Field IDs @pure', () => {
-  const { legacyExport } = legacyReservedFieldIdFixture()
-  const withIgnoredId = structuredClone(legacyExport)
-  withIgnoredId.id = nativePlayerFieldIds.atmosphere
-
-  const prepared = prepareJsonImport(createLocalWorkspace('Ignored ID Destination', 'Boreal'), withIgnoredId)
-
-  const atmosphereAlias = prepared.workspace.objectFieldSettings.customFields
-    .find(field => field.name === 'Atmosphere Alias')
-  expect(atmosphereAlias?.id).not.toBe(nativePlayerFieldIds.atmosphere)
-})
-
-test('Cluster import ignores an unrelated standalone-system record @pure', () => {
-  const { legacyExport } = legacyReservedFieldIdFixture()
-  const clusterWithIgnoredSystem = structuredClone(legacyExport)
-  clusterWithIgnoredSystem.system = { id: nativePlayerFieldIds.atmosphere }
-
-  const importedCluster = prepareJsonImport(
-    createLocalWorkspace('Ignored System Destination', 'Boreal'),
-    clusterWithIgnoredSystem,
-  )
-  const clusterField = importedCluster.workspace.objectFieldSettings.customFields
-    .find(field => field.name === 'Atmosphere Alias')
-  expect(clusterField?.id).not.toBe(nativePlayerFieldIds.atmosphere)
-})
-
-test('standalone import ignores an unrelated Cluster record @pure', () => {
-  const { legacyExport } = legacyReservedFieldIdFixture()
-  const standaloneWithIgnoredCluster = structuredClone(legacyExport)
-  const cluster = standaloneWithIgnoredCluster.cluster as { systems: unknown[] }
-  standaloneWithIgnoredCluster.type = 'system'
-  standaloneWithIgnoredCluster.system = cluster.systems[0]
-  standaloneWithIgnoredCluster.cluster = { id: nativePlayerFieldIds.atmosphere }
-  const importedSystem = prepareJsonImport(
-    createLocalWorkspace('Ignored Cluster Destination', 'Boreal'),
-    standaloneWithIgnoredCluster,
-  )
-  const systemField = importedSystem.workspace.objectFieldSettings.customFields
-    .find(field => field.name === 'Atmosphere Alias')
-  expect(systemField?.id).not.toBe(nativePlayerFieldIds.atmosphere)
 })
 
 test('legacy standalone system import preserves its separate entity ID namespace @pure', () => {

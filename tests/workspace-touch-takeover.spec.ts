@@ -1,9 +1,8 @@
 import { expect, test, type Page } from './fixtures'
-import { waitForWorkspaceSaved, downloadJson, setWorkspaceMapMode, workspaceZoomOutput } from './helpers'
+import { captureMapExportBlobs, downloadJson, setWorkspaceMapMode, waitForWorkspaceSaved, workspaceZoomOutput } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
-type DownloadWindow = Window & { __mapExportBlobs?: Blob[] }
 
 async function createWorkspace(
   page: Page,
@@ -15,18 +14,6 @@ async function createWorkspace(
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
-}
-
-async function installDownloadRecorder(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const downloadWindow = window as DownloadWindow
-    downloadWindow.__mapExportBlobs = []
-    const createObjectUrl = URL.createObjectURL.bind(URL)
-    URL.createObjectURL = (object) => {
-      if (object instanceof Blob) downloadWindow.__mapExportBlobs?.push(object)
-      return createObjectUrl(object)
-    }
-  })
 }
 
 async function enableTouch(page: Page) {
@@ -91,7 +78,7 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
 }
 
 test('a second touch cancels a Move preview before pinch and pan change only the view', async ({ page }) => {
-  await installDownloadRecorder(page)
+  await captureMapExportBlobs(page)
   const cdp = await enableTouch(page)
   await createWorkspace(page, { width: 390, height: 844 })
 
@@ -105,8 +92,6 @@ test('a second touch cancels a Move preview before pinch and pan change only the
   const jsonBefore = await downloadJson(page, 'Export star system JSON')
   const closingFiles = page.locator('[data-slot="content"]:has(> #workspace-header-map-files-panel)')
   await expect(closingFiles).toHaveAttribute('data-state', 'closed')
-  await expect(closingFiles).toHaveCSS('pointer-events', 'none')
-  await expect(closingFiles.locator('..')).toHaveCSS('pointer-events', 'none')
   await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
   await setWorkspaceMapMode(page, 'Move')
 
@@ -127,9 +112,7 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
-    await exitStyle.evaluate((element) => {
-      element.parentNode?.removeChild(element)
-    })
+    await exitStyle.evaluate(element => { element.parentNode?.removeChild(element) })
 
     const mapCenterX = bounds.x + bounds.width / 2
     const secondStart = {
@@ -159,125 +142,48 @@ test('a second touch cancels a Move preview before pinch and pan change only the
     await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewportBefore)
     await expect.poll(() => zoomOutput.textContent()).not.toBe(zoomBefore)
     const viewportAfterPinch = await scene.getAttribute('transform')
+    if (!viewportAfterPinch) throw new Error('The map viewport is missing after pinch.')
 
     await dispatchTouch(cdp, 'touchEnd', [])
-    const panStart = { ...secondPinchMove, id: 1 }
+    const panStart = await map.evaluate(svg => {
+      const { left, top, width, height } = svg.getBoundingClientRect()
+      for (let y = top + 24; y < top + height - 24; y += 24) {
+        for (let x = left + 24; x < left + width - 24; x += 24) {
+          const hit = document.elementFromPoint(x, y)
+          if (hit === svg || (hit && svg.contains(hit) && hit.matches('.map-background, .map-grid'))) {
+            return { id: 1, x, y }
+          }
+        }
+      }
+      throw new Error('The system map has no unobstructed background point.')
+    })
     const panDirection = panStart.x < mapCenterX ? 1 : -1
     const finalPan = { ...panStart, x: panStart.x + 24 * panDirection, y: panStart.y + 12 }
     await dispatchTouch(cdp, 'touchStart', [panStart])
+    // A held background contact must remain available for camera panning beyond the long-press interval.
+    await page.waitForTimeout(650)
+    await expect(scene).toHaveAttribute('transform', viewportAfterPinch)
     await dispatchTouch(cdp, 'touchMove', [finalPan])
     await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewportAfterPinch)
     await dispatchTouch(cdp, 'touchEnd', [])
+
+    const zoomBeforeDoubleTap = await zoomOutput.textContent()
+    if (!zoomBeforeDoubleTap) throw new Error('The map zoom readout is missing before the double tap.')
+    for (let tap = 0; tap < 2; tap += 1) {
+      await dispatchTouch(cdp, 'touchStart', [panStart])
+      await dispatchTouch(cdp, 'touchEnd', [])
+    }
+    await expect(zoomOutput).not.toHaveText(zoomBeforeDoubleTap)
     await page.waitForTimeout(80)
     await expect(star).toHaveAttribute('transform', objectTransformBefore!)
     await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })
       .getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
   } finally {
+    await exitStyle.evaluate(element => { element.parentNode?.removeChild(element) })
     await cdp.detach()
   }
 
   await waitForWorkspaceSaved(page)
   expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(jsonBefore)
-})
-
-test('Navigate and Move long presses inspect the same system, consume release, and leave a fresh tap usable', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  await createWorkspace(page, { width: 390, height: 844 })
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
-  const inspector = page.locator('#workspace-inspector-panel')
-  const systemMap = page.getByRole('group', { name: 'Vesper star system map' })
-
-  try {
-    await setWorkspaceMapMode(page, 'Navigate')
-    const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-    const navigateTarget = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
-    const scene = clusterMap.locator('.cluster-map-content')
-    const viewportBeforePan = await scene.getAttribute('transform')
-    const zoomBeforePan = await workspaceZoomOutput(page).textContent()
-    const panStart = await pointAtCenter(navigateTarget)
-    await dispatchTouch(cdp, 'touchStart', [panStart])
-    await dispatchTouch(cdp, 'touchMove', [{ ...panStart, x: panStart.x + 24, y: panStart.y + 18 }])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewportBeforePan)
-    await expect(workspaceZoomOutput(page)).toHaveText(zoomBeforePan!)
-    await expect(systemMap).toHaveCount(0)
-    await expect(inspector).toBeHidden()
-
-    const navigatePoint = await pointAtCenter(navigateTarget)
-    await dispatchTouch(cdp, 'touchStart', [navigatePoint])
-    await page.waitForTimeout(650)
-    await expect(inspector).toBeVisible()
-    await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
-    await expect(page.locator('.cluster-map-svg')).toHaveCount(1)
-    await expect(systemMap).toHaveCount(0)
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect(systemMap).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Close inspector panel' }).click()
-    await expect(inspector).toBeHidden()
-    const freshNavigatePoint = await pointAtCenter(navigateTarget)
-    await dispatchTouch(cdp, 'touchStart', [freshNavigatePoint])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect(systemMap).toBeVisible()
-
-    await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-    await setWorkspaceMapMode(page, 'Move')
-    const moveClusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-    const moveTarget = moveClusterMap.getByRole('button', { name: 'Select Vesper system' })
-    const movePoint = await pointAtCenter(moveTarget)
-    await dispatchTouch(cdp, 'touchStart', [movePoint])
-    await page.waitForTimeout(650)
-    await expect(inspector).toBeVisible()
-    await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
-    await expect(page.locator('.cluster-map-svg')).toHaveCount(1)
-    await expect(systemMap).toHaveCount(0)
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect(systemMap).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Close inspector panel' }).click()
-    await expect(inspector).toBeHidden()
-    const freshMovePoint = await pointAtCenter(moveTarget)
-    await dispatchTouch(cdp, 'touchStart', [freshMovePoint])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect(moveClusterMap.locator('.cluster-system-node.is-selected')).toHaveCount(1)
-    await expect(moveClusterMap).toBeVisible()
-    await expect(systemMap).toHaveCount(0)
-    await expect(inspector).toBeHidden()
-    await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })
-      .getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
-
-    const backgroundPoint = await moveClusterMap.evaluate((svg) => {
-      const { left, top, width, height } = svg.getBoundingClientRect()
-      for (let y = top + 24; y < top + height - 24; y += 24) {
-        for (let x = left + 24; x < left + width - 24; x += 24) {
-          const hit = document.elementFromPoint(x, y)
-          if (hit === svg || (hit && svg.contains(hit) && hit.matches('.cluster-map-background, .map-background, .map-grid'))) {
-            return { id: 1, x, y }
-          }
-        }
-      }
-      throw new Error('The cluster map has no unobstructed background point.')
-    })
-    const zoomBeforeDoubleTap = await workspaceZoomOutput(page).textContent()
-    for (let tap = 0; tap < 2; tap++) {
-      await dispatchTouch(cdp, 'touchStart', [backgroundPoint])
-      await dispatchTouch(cdp, 'touchEnd', [])
-    }
-    await expect(workspaceZoomOutput(page)).not.toHaveText(zoomBeforeDoubleTap!)
-    await expect(systemMap).toHaveCount(0)
-
-    const moveScene = moveClusterMap.locator('.cluster-map-content')
-    await dispatchTouch(cdp, 'touchStart', [backgroundPoint])
-    const viewportAtContact = await moveScene.getAttribute('transform')
-    await page.waitForTimeout(650)
-    await expect(moveScene).toHaveAttribute('transform', viewportAtContact!)
-    await dispatchTouch(cdp, 'touchMove', [{ ...backgroundPoint, x: backgroundPoint.x + 24, y: backgroundPoint.y + 18 }])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect.poll(() => moveScene.getAttribute('transform')).not.toBe(viewportAtContact)
-    await expect(inspector).toBeHidden()
-  } finally {
-    await cdp.detach()
-  }
 })

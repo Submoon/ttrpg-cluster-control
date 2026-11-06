@@ -78,6 +78,7 @@ test('a throwing ordinary applied hook preserves the memory verdict and original
   const durable = deferred<void>()
   let revision = 0
   let hookCount = 0
+  let observedAppliedName: string | undefined
   const mutations = createWorkspaceMutationExecutor({
     getWorkspace: () => workspace.value,
     getRevision: () => revision,
@@ -93,13 +94,14 @@ test('a throwing ordinary applied hook preserves the memory verdict and original
     prepare: current => ({ ...current, cluster: { ...current.cluster, name: 'Kestrel Reach Prime' } }),
     onApplied: () => {
       hookCount += 1
-      expect(workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
+      observedAppliedName = workspace.value?.cluster.name
       throw new Error('A best-effort editor observer failed.')
     },
   })
 
   expect(result.status).toBe('applied')
   expect(hookCount).toBe(1)
+  expect(observedAppliedName).toBe('Kestrel Reach Prime')
   expect(workspace.value?.cluster.name).toBe('Kestrel Reach Prime')
   if (result.status === 'applied') {
     expect(result.durable).toBe(durable.promise)

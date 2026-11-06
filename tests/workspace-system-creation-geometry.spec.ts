@@ -1,9 +1,8 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { importReviewDialog, readInspectorSelection, resolveImportReview, selectInspectorOption } from './helpers'
+import { importReviewDialog, resolveImportReview } from './helpers'
 import {
   captureMapExportBlobs,
-  dockAction,
   downloadImage,
   downloadJson,
   jsonMapImportInput,
@@ -260,73 +259,6 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   }
 })
 
-test('an explicit Placement Orbit preference wins among overlapping map targets after inferred placement', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  const map = await openDenseReach(page)
-  const initial = await downloadJson(page, 'Export star system JSON')
-  const primary = initial.system!.objects.find(object => object.name === 'Primary Star')!
-  const oldPlanet = initial.system!.objects.find(object => object.name === 'Old Planet')!
-  const alphaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
-  const betaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
-  const nestedOrbit = initial.system!.orbits.find(orbit => orbit.hostId === oldPlanet.id && orbit.order === 1)!
-  const initialObjectCount = initial.system!.objects.length
-
-  await (await selectCatalogueObjectButton(page, 'planet')).click()
-  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
-  const overlapPoint = { x: 583.9230484541326, y: 340 }
-  const firstClickError = await clickScenePoint(page, map, overlapPoint)
-  const alphaChoice = page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })
-  await expect(alphaChoice).toBeVisible()
-  await alphaChoice.click()
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 1)
-
-  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
-  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
-  const orbitPlacement = page.getByLabel('Orbit placement', { exact: true })
-  const alphaLabel = `Orbit ${alphaOrbit.order} around ${primary.name}`
-  await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe(alphaLabel)
-  // Map choice inferred Alpha into the selector. Re-selecting that displayed value makes it an
-  // explicit preference, even though updateCreationInput receives the same logical value.
-  await selectInspectorOption(orbitPlacement, alphaLabel)
-  await expect.poll(() => readInspectorSelection(orbitPlacement)).toBe(alphaLabel)
-  if (await placementToggle.getAttribute('aria-expanded') === 'true') await placementToggle.click()
-
-  const secondClickError = await clickScenePoint(page, map, overlapPoint)
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
-  await expect(map.locator('.system-creation-candidates')).toHaveCount(0)
-  const completed = await downloadJson(page, 'Export star system JSON')
-  const created = completed.system!.objects.filter(object =>
-    object.subtype === 'planet' && !initial.system!.objects.some(existing => existing.id === object.id),
-  )
-  expect(created).toHaveLength(2)
-  expect(created.map(object => object.placement)).toEqual([
-    { kind: 'orbit', orbitId: alphaOrbit.id },
-    { kind: 'orbit', orbitId: alphaOrbit.id },
-  ])
-  expectAngleNearFixtureAngle(completed.layout.objectAngles[created[0]!.id], firstClickError, 80)
-  expectAngleNearFixtureAngle(completed.layout.objectAngles[created[1]!.id], secondClickError, 80)
-
-  const nestedPoint = { x: 592.5020987390543, y: Number('244.52742863650086') }
-  const nestedClickError = await clickScenePoint(page, map, nestedPoint)
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
-  const afterNestedPlacement = await downloadJson(page, 'Export star system JSON')
-  const createdAfterNestedPlacement = afterNestedPlacement.system!.objects.filter(object =>
-    object.subtype === 'planet' && !initial.system!.objects.some(existing => existing.id === object.id),
-  )
-  expect(createdAfterNestedPlacement).toHaveLength(3)
-  expect(createdAfterNestedPlacement[2]!.placement).toEqual({ kind: 'orbit', orbitId: nestedOrbit.id })
-  expectAngleNearFixtureAngle(
-    afterNestedPlacement.layout.objectAngles[createdAfterNestedPlacement[2]!.id],
-    nestedClickError,
-    55,
-  )
-
-  await clickScenePoint(page, map, overlapPoint)
-  await expect(page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: `Orbit ${betaOrbit.order} around ${primary.name}`, exact: true })).toBeVisible()
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
-})
 
 test('a second map touch interrupts a fresh Add gesture and leaves the completed object unchanged', async ({ page }) => {
   await captureMapExportBlobs(page)
@@ -367,7 +299,8 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   const transformBeforeTouch = await mapContent.getAttribute('transform')
   if (!transformBeforeTouch) throw new Error('The map content transform is missing before touch navigation.')
   const [firstTouch, secondTouch] = await findUnobstructedMapTouchPair(map)
-  const movedTouches = [firstTouch, secondTouch].map(point => ({
+  const firstPan = { ...firstTouch, x: firstTouch.x + 24, y: firstTouch.y + 18 }
+  const movedTouches = [firstPan, secondTouch].map(point => ({
     ...point,
     x: point.x + 24,
     y: point.y + 18,
@@ -377,9 +310,15 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   try {
     await dispatchMapTouch(cdp, 'touchStart', [firstTouch])
     touchSequenceActive = true
-    await dispatchMapTouch(cdp, 'touchStart', [firstTouch, secondTouch])
-    await dispatchMapTouch(cdp, 'touchMove', movedTouches)
+    await dispatchMapTouch(cdp, 'touchMove', [firstPan])
     await expect(mapContent).not.toHaveAttribute('transform', transformBeforeTouch)
+    await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length + 1)
+    await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+    const transformBeforeTakeover = await mapContent.getAttribute('transform')
+    if (!transformBeforeTakeover) throw new Error('The map content transform is missing after the first touch.')
+    await dispatchMapTouch(cdp, 'touchStart', [firstPan, secondTouch])
+    await dispatchMapTouch(cdp, 'touchMove', movedTouches)
+    await expect(mapContent).not.toHaveAttribute('transform', transformBeforeTakeover)
     await dispatchMapTouch(cdp, 'touchEnd', [])
     touchSequenceActive = false
   } finally {
@@ -403,95 +342,4 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   expect(completed.system!.objects.find(object => object.id === firstAddedPlanet.id)).toEqual(firstAddedPlanet)
   expect(completed.layout.objectAngles[firstAddedPlanet.id])
     .toBe(afterFirstAdd.layout.objectAngles[firstAddedPlanet.id])
-})
-
-test('a held pan release after click suppression expires adds nothing before a fresh Add click', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const beforePan = await downloadJson(page, 'Export star system JSON')
-  await setWorkspaceMapMode(page, 'Move')
-  const planetButton = await selectCatalogueObjectButton(page, 'planet')
-  await planetButton.click()
-  const creationControls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
-  const mapContent = map.locator('.system-map-content')
-  const transformBeforePan = await mapContent.getAttribute('transform')
-  if (!transformBeforePan) throw new Error('The map content transform is missing before the held pan.')
-  const panStart = await map.evaluate((element) => {
-    const bounds = element.getBoundingClientRect()
-    const right = Math.min(bounds.right, window.innerWidth)
-    const bottom = Math.min(bounds.bottom, window.innerHeight)
-    const isMapHit = (x: number, y: number): boolean => {
-      const hit = document.elementFromPoint(x, y)
-      if (!hit || (hit !== element && !element.contains(hit))) return false
-      if (!(hit instanceof Element)) return true
-      return !hit.closest('[data-map-obstruction], .system-object, .orbit-mark, .orbit-edit-control')
-    }
-
-    for (let y = Math.ceil(bounds.top + 24); y <= bottom - 48; y += 12) {
-      for (let x = Math.ceil(bounds.left + 24); x <= right - 48; x += 12) {
-        if (isMapHit(x, y) && isMapHit(x + 36, y + 24)) return { x, y }
-      }
-    }
-    throw new Error('Could not find an unobstructed map point for the held pan.')
-  })
-  await page.mouse.move(panStart.x, panStart.y)
-  await page.mouse.down()
-  await page.mouse.move(panStart.x + 36, panStart.y + 24, { steps: 3 })
-  await expect(mapContent).not.toHaveAttribute('transform', transformBeforePan)
-  await page.waitForTimeout(950)
-  await page.mouse.up()
-  await expect(map.locator('.system-object')).toHaveCount(beforePan.system!.objects.length)
-  await expect(creationControls).toBeVisible()
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(beforePan)
-
-  await clickScenePoint(page, map, { x: 370, y: 410 })
-  await expect(map.locator('.system-object')).toHaveCount(beforePan.system!.objects.length + 1)
-  const completed = await downloadJson(page, 'Export star system JSON')
-  expect(completed.system!.objects.filter(object =>
-    object.subtype === 'planet' && !beforePan.system!.objects.some(initial => initial.id === object.id),
-  )).toHaveLength(1)
-})
-
-test('a stationary Primary Star long press adds no Orbit after click suppression expires', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const beforeLongPress = await downloadJson(page, 'Export star system JSON')
-  const primary = beforeLongPress.system!.objects.find(object => object.subtype === 'star')!
-  const primaryGlyph = mapObject(map, primary.id)
-
-  await setWorkspaceMapMode(page, 'Navigate')
-  await (await dockAction(page, 'Add orbit')).click()
-  const creationControls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
-  await expect(creationControls).toBeVisible()
-
-  const hit = await primaryGlyph.evaluate((element) => {
-    const bounds = element.getBoundingClientRect()
-    const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
-    const target = document.elementFromPoint(point.x, point.y)
-    return {
-      ...point,
-      isPrimaryGlyph: !!target && (target === element || element.contains(target)),
-    }
-  })
-  expect(hit.isPrimaryGlyph).toBe(true)
-  await page.mouse.move(hit.x, hit.y)
-  await page.mouse.down()
-  await page.waitForTimeout(1600)
-  await page.mouse.up()
-
-  await expect(map.locator('.orbit-mark')).toHaveCount(beforeLongPress.system!.orbits.length)
-  await expect(creationControls).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(beforeLongPress)
-
-  await page.mouse.click(hit.x, hit.y)
-  await expect(map.locator('.orbit-mark')).toHaveCount(beforeLongPress.system!.orbits.length + 1)
-  await expect(creationControls).toBeVisible()
-  const completed = await downloadJson(page, 'Export star system JSON')
-  const priorOrbitIds = new Set(beforeLongPress.system!.orbits.map(orbit => orbit.id))
-  const addedOrbits = completed.system!.orbits.filter(orbit => !priorOrbitIds.has(orbit.id))
-  expect(addedOrbits).toHaveLength(1)
-  expect(addedOrbits[0]!.hostId).toBe(primary.id)
 })

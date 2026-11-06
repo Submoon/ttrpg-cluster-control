@@ -17,6 +17,10 @@ export async function openBrowserReadiness({ url, timeoutMs, signal, channel, la
   const timeout = createReadinessTimeout(deadline, timeoutMs)
   /** @type {ReadinessBrowser | undefined} */
   let browser
+  /** @type {Promise<ReadinessBrowser> | undefined} */
+  let pendingBrowser
+  /** @type {AggregateError | undefined} */
+  let lateBrowserCleanupFailure
   /** @type {import('@playwright/test').BrowserContext | undefined} */
   let context
   let closed = false
@@ -31,13 +35,22 @@ export async function openBrowserReadiness({ url, timeoutMs, signal, channel, la
       timeout: remainingTimeout(deadline, timeoutMs),
       ...(channel ? { channel } : {}),
     }
-    const pendingBrowser = (launchBrowser
+    pendingBrowser = (launchBrowser
       ? launchBrowser(launchOptions)
       : chromium.launch(launchOptions))
       .then(async launchedBrowser => {
         if (signal?.aborted || Date.now() >= deadline) {
           const stopError = readinessStopError(signal, timeoutMs)
-          await launchedBrowser.close()
+          try {
+            await launchedBrowser.close()
+          } catch (cleanupError) {
+            lateBrowserCleanupFailure = new AggregateError(
+              [stopError, cleanupError],
+              'Browser readiness was stopped and its late Chromium process could not be closed.',
+              { cause: cleanupError },
+            )
+            throw lateBrowserCleanupFailure
+          }
           throw stopError
         }
         browser = launchedBrowser
@@ -63,6 +76,9 @@ export async function openBrowserReadiness({ url, timeoutMs, signal, channel, la
     if (signal?.aborted) throw signal.reason ?? new Error('Browser readiness was cancelled.')
     remainingTimeout(deadline, timeoutMs)
     page.setDefaultTimeout(remainingTimeout(deadline, timeoutMs))
+    // Attach the HMR observer before navigation so updates during hydration are part of
+    // this readiness epoch, rather than silently becoming its new baseline.
+    hmrArmed = true
     page.on('websocket', socket => {
       socket.on('framereceived', frame => {
         if (hmrArmed) invalidateForFrame(frame.payload, invalidate)
@@ -74,7 +90,7 @@ export async function openBrowserReadiness({ url, timeoutMs, signal, channel, la
     page.on('pageerror', error => invalidate(`The readiness page reported a browser error: ${error.message}`))
 
     const ready = await Promise.race([
-      assertWelcomeForm(page, expect, url, deadline, timeoutMs).then(() => { hmrArmed = true; return true }),
+      assertWelcomeForm(page, expect, url, deadline, timeoutMs),
       ...stopPromises,
       invalidated.then(reason => { throw new Error(reason) }),
     ])
@@ -88,6 +104,12 @@ export async function openBrowserReadiness({ url, timeoutMs, signal, channel, la
       },
     }
   } catch (error) {
+    if (pendingBrowser && !browser) {
+      // A canceled launch may still produce a browser. The launch promise owns closing that
+      // late process, so readiness must not settle until that cleanup finishes.
+      await pendingBrowser.catch(() => {})
+      if (lateBrowserCleanupFailure) throw lateBrowserCleanupFailure
+    }
     if (browser) {
       try {
         await browser.close()

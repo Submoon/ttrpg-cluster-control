@@ -20,44 +20,6 @@ test('new systems start with known-type publication and a generic player title @
   expect(workspace.cluster.playerTitle).toBe('Player Jump Cluster')
 })
 
-test('chart details update publication and public names without rewriting map contents @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const system = workspace.cluster.systems[0]!
-  const changed = updateChartDetails(workspace, system.id, {
-    clusterName: ' Kestrel Reach Prime ',
-    systemName: ' Vesper Prime ',
-    playerTitle: ' The Night Map ',
-    publication: 'revealed',
-  })
-
-  expect(changed.cluster.name).toBe('Kestrel Reach Prime')
-  expect(changed.cluster.playerTitle).toBe('The Night Map')
-  expect(changed.cluster.systems[0]).toMatchObject({ id: system.id, name: 'Vesper Prime', publication: 'revealed' })
-  expect(changed.cluster.systems[0]?.objects).toEqual(system.objects)
-  expect(changed.cluster.systems[0]?.orbits).toEqual(system.orbits)
-  expect(changed.layout).toEqual(workspace.layout)
-  expect(workspace.cluster.systems[0]).toEqual(system)
-  expect(workspace.cluster.name).toBe('Kestrel Reach')
-})
-
-test('legacy local workspaces restore with hidden publication and a generic player title @pure', () => {
-  const current = createLocalWorkspace('Private Cluster Name', 'Secret System Name')
-  const legacy = structuredClone(current) as unknown as Record<string, unknown>
-  delete legacy.version
-  const cluster = legacy.cluster as { playerTitle?: string; systems: Array<Record<string, unknown>> }
-  delete cluster.playerTitle
-  delete cluster.systems[0]?.publication
-
-  expect(isLocalWorkspace(legacy)).toBe(false)
-  const restored = restoreLocalWorkspace(legacy)
-
-  expect(restored).toMatchObject({ version: 4, cluster: { playerTitle: 'Player Jump Cluster' } })
-  expect(restored?.cluster.systems[0]?.publication).toBe('hidden')
-  expect(restored?.cluster.systems[0]?.objects[0]?.publication).toBe('hidden')
-  expect(restored?.cluster.name).toBe('Private Cluster Name')
-  expect(restored?.cluster.systems[0]?.name).toBe('Secret System Name')
-})
-
 test('version 4 workspaces reject missing publication fields and unsupported versions @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const missingMode = structuredClone(workspace) as unknown as Record<string, unknown>

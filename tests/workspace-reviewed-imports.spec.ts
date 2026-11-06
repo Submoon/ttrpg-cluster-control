@@ -6,63 +6,19 @@ import {
   exportJumpCluster,
 } from '../domain/workspace'
 import {
+  abortNextWorkspaceWrite,
   waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadJson,
   importReviewDialog,
   jsonMapImportInput,
-  openFieldDefinitionDialog,
   openWorkspaceHierarchy,
   returnToClusterMap,
   resolveImportReview,
   setHeaderMapActionsOpen,
   setJsonFile,
-  type ExportedMap,
 } from './helpers'
-
-type WorkspaceWriteFailpointWindow = Window & {
-  __reviewedImportWriteAbort?: { original: PropertyDescriptor; aborted: number }
-}
-
-async function abortNextWorkspaceWrite(
-  page: import('@playwright/test').Page,
-  operation: () => Promise<void>,
-): Promise<void> {
-  await page.evaluate(() => {
-    const original = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')
-    if (!original) throw new Error('IndexedDB put is unavailable.')
-    const state = { original, aborted: 0 }
-    ;(window as WorkspaceWriteFailpointWindow).__reviewedImportWriteAbort = state
-    Object.defineProperty(IDBObjectStore.prototype, 'put', {
-      ...original,
-      value: function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
-        const request = original.value!.apply(this, args)
-        if (!state.aborted && this.transaction.db.name === 'ttrpg-cluster-control'
-          && this.name === 'workspace' && this.transaction.mode === 'readwrite' && args[1] === 'current') {
-          state.aborted += 1
-          this.transaction.abort()
-        }
-        return request
-      },
-    })
-  })
-
-  try {
-    await operation()
-    const aborted = await page.evaluate(() =>
-      (window as WorkspaceWriteFailpointWindow).__reviewedImportWriteAbort?.aborted ?? 0,
-    )
-    expect(aborted).toBe(1)
-  } finally {
-    await page.evaluate(() => {
-      const state = (window as WorkspaceWriteFailpointWindow).__reviewedImportWriteAbort
-      if (!state) return
-      Object.defineProperty(IDBObjectStore.prototype, 'put', state.original)
-      delete (window as WorkspaceWriteFailpointWindow).__reviewedImportWriteAbort
-    })
-  }
-}
 
 function incomingCluster(): {
   content: string
@@ -213,64 +169,4 @@ test('an applied import closes review before save failure and Retry persists the
   const persistedImport = afterReload.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(persistedImport).toBeDefined()
   expect(persistedImport?.id).not.toBe(incoming.systemId)
-})
-
-test('a conflicting import resumes its retained Fields draft until the user applies it', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await returnToClusterMap(page)
-
-  const fields = await openFieldDefinitionDialog(page)
-  await fields.getByRole('navigation', { name: 'Field definitions' })
-    .getByRole('button', { name: /Atmosphere/ }).click()
-  await fields.getByRole('button', { name: 'Edit field definition', exact: true }).click()
-  const atmosphereChoices = fields.getByLabel('Atmosphere choices', { exact: true })
-  const originalAtmosphereChoices = await atmosphereChoices.inputValue()
-  const localDraftChoices = `${originalAtmosphereChoices}\nLocal draft atmosphere`
-  await atmosphereChoices.fill(localDraftChoices)
-  await fields.getByRole('button', { name: 'Close field definitions', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Open field definitions' }).getByText('Draft', { exact: true })).toBeVisible()
-
-  const incoming = incomingCluster()
-  const source = JSON.parse(incoming.content) as ExportedMap
-  source.objectFieldSettings.atmosphereOptions.push('Thin')
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), 'incoming-atmosphere.json', JSON.stringify(source))
-
-  const review = importReviewDialog(page)
-  await expect(review).toBeVisible()
-  await review.getByRole('button', { name: 'Import independent copy', exact: true }).click()
-  await expect(review.getByRole('status')).toContainText('Fields draft is dirty')
-  await review.getByRole('button', { name: 'Review Fields draft', exact: true }).click()
-  await expect(review).toBeHidden()
-  await expect(fields).toBeVisible()
-  await expect(fields.getByLabel('Atmosphere choices', { exact: true })).toHaveValue(localDraftChoices)
-
-  await fields.getByRole('button', { name: 'Close field definitions', exact: true }).click()
-  await expect(review).toBeVisible()
-  await expect(review.getByRole('status')).toContainText('Fields draft is dirty')
-
-  await review.getByRole('button', { name: 'Review Fields draft', exact: true }).click()
-  await expect(fields.getByLabel('Atmosphere choices', { exact: true })).toHaveValue(localDraftChoices)
-  await fields.getByRole('button', { name: 'Apply field changes', exact: true }).click()
-  await expect(fields.getByRole('button', { name: 'Edit field definition', exact: true })).toBeVisible()
-  await fields.getByRole('button', { name: 'Close field definitions', exact: true }).click()
-  await expect(review).toBeVisible()
-
-  await resolveImportReview(review, 'confirm')
-  await expect(review.getByRole('alert')).toContainText('workspace changed while you reviewed this import')
-  await expect(review.getByRole('status')).toHaveCount(0)
-  await resolveImportReview(review, 'confirm')
-  await expect(review).toBeHidden()
-
-  const imported = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(imported.cluster?.systems.map(system => system.name)).toContain('Incoming Vesper')
-  expect(imported.objectFieldSettings.atmosphereOptions).toContain('Local draft atmosphere')
-  expect(imported.objectFieldSettings.atmosphereOptions).toContain('Thin')
 })

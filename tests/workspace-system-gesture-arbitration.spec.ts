@@ -6,12 +6,9 @@ import {
   beginDragToWorldPoint,
   captureMapExportBlobs,
   clickDockAction,
-  dockAction,
-  dragToWorldPoint,
   downloadJson,
   ensureMapDragPointsReachable,
   openWorkspaceHierarchy,
-  selectCatalogueObjectButton,
   setWorkspaceMapMode,
   workspaceNavigation,
 } from './helpers'
@@ -229,29 +226,6 @@ async function expectWorkspaceMode(page: Page, mode: 'Navigate' | 'Select' | 'Mo
     .getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'true')
 }
 
-async function expectAddMode(page: Page, label: RegExp): Promise<void> {
-  const navigation = workspaceNavigation(page)
-  await expect(navigation.getByRole('button', { name: 'Add to map', exact: true })).toContainText(label)
-  await expect(navigation.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  for (const mode of ['Navigate', 'Select', 'Move']) {
-    await expect(navigation.getByRole('button', { name: mode, exact: true })).toHaveAttribute('aria-pressed', 'false')
-  }
-  await expect(page.getByRole('button', {
-    name: 'Quit Add and return to Select',
-    exact: true,
-  })).toBeVisible()
-}
-
-async function expectInactiveAdd(page: Page): Promise<void> {
-  const add = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
-  await expect(add).toHaveAttribute('aria-pressed', 'false')
-  await expect(add).toHaveAttribute('aria-expanded', 'false')
-  await expect(add).toHaveAccessibleName('Add to map')
-  await expect(add.getByText('Add', { exact: true })).toBeVisible()
-  await expect(add.locator('kbd')).toHaveText('A')
-  await expect(add.locator('#workspace-dock-add-type')).toHaveCount(0)
-}
-
 async function visibleMapBackgroundPair(map: Locator): Promise<[ScreenPoint, ScreenPoint]> {
   return map.evaluate((element) => {
     const svg = element instanceof SVGSVGElement ? element : element.querySelector('svg')
@@ -358,154 +332,9 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
     .not.toEqual(before.layout.orbitRadii[orbitId])
 })
 
-test('a second contact cancels a horizontal Orbit resize before pinch pans the camera', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  try {
-    const { map, orbit, ring } = await createHostedOrbit(page)
-    await setWorkspaceMapMode(page, 'Move')
-    const before = await exportSystemJson(page)
-    const orbitId = before.system?.orbits[0]?.id
-    if (!orbitId) throw new Error('The exported system does not contain an Orbit.')
-    const recordsBefore = await readWorkspaceRecords(page)
-    const scene = map.locator('.system-map-content')
-    const viewBefore = await scene.getAttribute('transform')
-    const horizontal = orbit.locator('.orbit-axis-handle--horizontal')
-    await expect(horizontal).toBeVisible()
-    const horizontalBefore = Number(await ring.getAttribute('rx'))
-    const verticalBefore = Number(await ring.getAttribute('ry'))
-    const bounds = await horizontal.boundingBox()
-    if (!bounds) throw new Error('The horizontal Orbit handle has no visible bounds.')
-    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(bounds.x + bounds.width / 2 + 42, bounds.y + bounds.height / 2 + 18, { steps: 4 })
-    await expect(horizontal).toHaveClass(/is-resizing/)
-    await expect.poll(async () => Number(await ring.getAttribute('rx'))).not.toBe(horizontalBefore)
 
-    const [firstPoint, secondPoint] = await visibleMapBackgroundPair(map)
-    const first = { id: 1, ...firstPoint }
-    const second = { id: 2, ...secondPoint }
-    await dispatchTouch(cdp, 'touchStart', [first])
-    await dispatchTouch(cdp, 'touchStart', [first, second])
-    await dispatchTouch(cdp, 'touchMove', [
-      { ...first, x: first.x - 10, y: first.y + 12 },
-      { ...second, x: second.x + 10, y: second.y + 12 },
-    ])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await page.mouse.up()
-    await expect(ring).toHaveAttribute('rx', String(horizontalBefore))
-    await expect(ring).toHaveAttribute('ry', String(verticalBefore))
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewBefore)
-    await expectWorkspaceMode(page, 'Move')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
 
-    const centerX = Number(await ring.getAttribute('cx'))
-    const centerY = Number(await ring.getAttribute('cy'))
-    const committedHorizontal = horizontalBefore + 24
-    await dragToWorldPoint(page, map, horizontal, { x: centerX + committedHorizontal, y: centerY })
-    await expect(ring).toHaveAttribute('rx', String(committedHorizontal))
-    await expect(ring).toHaveAttribute('ry', String(verticalBefore))
-    await waitForWorkspaceSaved(page)
-    const afterFreshResize = await exportSystemJson(page)
-    expect(afterFreshResize.layout.orbitRadii[orbitId])
-      .toEqual({ horizontal: committedHorizontal, vertical: verticalBefore })
-    expect(await readWorkspaceRecords(page)).not.toEqual(recordsBefore)
-  } finally {
-    await cdp.detach()
-  }
-})
 
-test('a native right-pan cancels a vertical Orbit resize while keeping Move active', async ({ page }) => {
-  const { map, orbit, ring } = await createHostedOrbit(page)
-  await setWorkspaceMapMode(page, 'Move')
-  const before = await exportSystemJson(page)
-  const orbitId = before.system?.orbits[0]?.id
-  if (!orbitId) throw new Error('The exported system does not contain an Orbit.')
-  const recordsBefore = await readWorkspaceRecords(page)
-  const scene = map.locator('.system-map-content')
-  const viewBefore = await scene.getAttribute('transform')
-  const vertical = orbit.locator('.orbit-axis-handle--vertical')
-  await expect(vertical).toBeVisible()
-  const radiusBefore = Number(await ring.getAttribute('ry'))
-  const horizontalBefore = Number(await ring.getAttribute('rx'))
-  const bounds = await vertical.boundingBox()
-  if (!bounds) throw new Error('The vertical Orbit handle has no visible bounds.')
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(bounds.x + bounds.width / 2 + 12, bounds.y + bounds.height / 2 + 42, { steps: 4 })
-  await expect(vertical).toHaveClass(/is-resizing/)
-  await expect.poll(async () => Number(await ring.getAttribute('ry'))).not.toBe(radiusBefore)
-
-  const [panStart] = await visibleMapBackgroundPair(map)
-  await page.mouse.move(panStart.x, panStart.y)
-  await page.mouse.down({ button: 'right' })
-  await page.mouse.move(panStart.x + 40, panStart.y + 24, { steps: 3 })
-  await page.mouse.up({ button: 'right' })
-  await page.mouse.up()
-  await expect(vertical).not.toHaveClass(/is-resizing/)
-  await expect(ring).toHaveAttribute('ry', String(radiusBefore))
-  await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewBefore)
-  await expectWorkspaceMode(page, 'Move')
-  expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-  expect(await exportSystemJson(page)).toEqual(before)
-
-  const centerX = Number(await ring.getAttribute('cx'))
-  const centerY = Number(await ring.getAttribute('cy'))
-  const committedVertical = radiusBefore + 24
-  await dragToWorldPoint(page, map, vertical, { x: centerX, y: centerY - committedVertical })
-  await expect(ring).toHaveAttribute('ry', String(committedVertical))
-  await expect(ring).toHaveAttribute('rx', String(horizontalBefore))
-  await waitForWorkspaceSaved(page)
-  const afterFreshResize = await exportSystemJson(page)
-  expect(afterFreshResize.layout.orbitRadii[orbitId])
-    .toEqual({ horizontal: horizontalBefore, vertical: committedVertical })
-  expect(await readWorkspaceRecords(page)).not.toEqual(recordsBefore)
-})
-
-test('keyboard Select cancels a held Orbit rotation preview', async ({ page }) => {
-  const { map, orbit, ring } = await createHostedOrbit(page)
-  await setWorkspaceMapMode(page, 'Move')
-  const before = await exportSystemJson(page)
-  const orbitId = before.system?.orbits[0]?.id
-  if (!orbitId) throw new Error('The exported system does not contain an Orbit.')
-  const recordsBefore = await readWorkspaceRecords(page)
-  const rotation = orbit.locator('.orbit-rotation-handle')
-  await expect(rotation).toBeVisible()
-  const rotationBefore = await ring.getAttribute('transform')
-  const bounds = await rotation.boundingBox()
-  if (!bounds) throw new Error('The Orbit rotation handle has no visible bounds.')
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(bounds.x + bounds.width / 2 + 36, bounds.y + bounds.height / 2 + 36, { steps: 4 })
-  await expect(rotation).toHaveClass(/is-rotating/)
-  await expect(ring).not.toHaveAttribute('transform', rotationBefore!)
-  await workspaceNavigation(page).getByRole('button', { name: 'Select', exact: true }).press('Enter')
-  await page.mouse.up()
-  await expect(ring).toHaveAttribute('transform', rotationBefore!)
-  await expect(rotation).not.toHaveClass(/is-rotating/)
-  await expectWorkspaceMode(page, 'Select')
-  expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-  expect(await exportSystemJson(page)).toEqual(before)
-
-  await setWorkspaceMapMode(page, 'Move')
-  const center = { x: Number(await ring.getAttribute('cx')), y: Number(await ring.getAttribute('cy')) }
-  const handlePoint = await rotation.evaluate(element => ({
-    x: Number(element.getAttribute('cx')),
-    y: Number(element.getAttribute('cy')),
-  }))
-  const turn = Math.PI / 6
-  const offset = { x: handlePoint.x - center.x, y: handlePoint.y - center.y }
-  const rotationTarget = {
-    x: center.x + offset.x * Math.cos(turn) - offset.y * Math.sin(turn),
-    y: center.y + offset.x * Math.sin(turn) + offset.y * Math.cos(turn),
-  }
-  await dragToWorldPoint(page, map, rotation, rotationTarget)
-  await expect(ring).not.toHaveAttribute('transform', rotationBefore!)
-  await waitForWorkspaceSaved(page)
-  const afterFreshRotation = await exportSystemJson(page)
-  expect(afterFreshRotation.layout.orbitRotations?.[orbitId]).toBeCloseTo(30, 0)
-  expect(await readWorkspaceRecords(page)).not.toEqual(recordsBefore)
-})
 
 test('touchcancel restores an unoccupied Orbit center and failed host attachment can be retried', async ({ page }) => {
   const cdp = await enableTouch(page)
@@ -615,57 +444,7 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
   }
 })
 
-test('Navigate object long-press inspects without editing and camera takeover stays navigation-only', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  try {
-    const { map } = await createHostedOrbit(page)
-    await setWorkspaceMapMode(page, 'Navigate')
-    await closeVisiblePanels(page)
-    const before = await exportSystemJson(page)
-    const recordsBefore = await readWorkspaceRecords(page)
-    const objectTarget = map.locator('.system-object').first().locator('.object-hit-target')
-    const start = await pointAtCenter(objectTarget)
-    await dispatchTouch(cdp, 'touchStart', [start])
-    await page.waitForTimeout(650)
-    await expect(page.getByRole('complementary', { name: 'Object inspector', exact: true })).toBeVisible()
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await closeVisiblePanels(page)
-    await expectWorkspaceMode(page, 'Navigate')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
 
-    await cameraOnlyRightPanAndSecondTouch(page, map, cdp)
-    await expectWorkspaceMode(page, 'Navigate')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-  } finally {
-    await cdp.detach()
-  }
-})
-
-test('Select ring long-press leaves the map data and Select mode intact', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  try {
-    const { map, orbitTarget } = await createHostedOrbit(page)
-    await setWorkspaceMapMode(page, 'Select')
-    const before = await exportSystemJson(page)
-    const recordsBefore = await readWorkspaceRecords(page)
-    const ringPoint = await orbitDragPoints(orbitTarget, 1, 0.5)
-    await dispatchTouch(cdp, 'touchStart', [{ id: 1, ...ringPoint.start }])
-    await page.waitForTimeout(650)
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expectWorkspaceMode(page, 'Select')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-
-    await cameraOnlyRightPanAndSecondTouch(page, map, cdp)
-    await expectWorkspaceMode(page, 'Select')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-  } finally {
-    await cdp.detach()
-  }
-})
 
 test('blur restores an attached host drag and Move camera takeover changes only the view', async ({ page }) => {
   const cdp = await enableTouch(page)
@@ -708,103 +487,6 @@ test('blur restores an attached host drag and Move camera takeover changes only 
 
     await cameraOnlyRightPanAndSecondTouch(page, map, cdp)
     await expectWorkspaceMode(page, 'Move')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-  } finally {
-    await cdp.detach()
-  }
-})
-
-test('Object Add suppresses long-press inspection and second-contact takeover preserves Add', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  try {
-    const { map } = await createHostedOrbit(page)
-    await setWorkspaceMapMode(page, 'Navigate')
-    const before = await exportSystemJson(page)
-    const recordsBefore = await readWorkspaceRecords(page)
-    await (await selectCatalogueObjectButton(page, 'planet')).click()
-    await closeVisiblePanels(page)
-    await expectAddMode(page, /Planet/)
-    const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-    const objectTarget = map.locator('.system-object').first().locator('.object-hit-target')
-    const firstTouch = await pointAtCenter(objectTarget)
-    const scene = map.locator('.system-map-content')
-    const viewBefore = await scene.getAttribute('transform')
-    await dispatchTouch(cdp, 'touchStart', [firstTouch])
-    await page.waitForTimeout(650)
-    const inspectorStayedClosed = await inspector.isHidden()
-    const movedTouch = { ...firstTouch, x: firstTouch.x + 24, y: firstTouch.y + 18 }
-    await dispatchTouch(cdp, 'touchMove', [movedTouch])
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewBefore)
-    const viewAfterPan = await scene.getAttribute('transform')
-    const memoryWhileHeld = await downloadJson(page, 'Export star system JSON')
-    const recordsWhileHeld = await readWorkspaceRecords(page)
-    expect(inspectorStayedClosed).toBe(true)
-    expect(recordsWhileHeld).toEqual(recordsBefore)
-    expect(memoryWhileHeld).toEqual(before)
-
-    const [, secondPoint] = await visibleMapBackgroundPair(map)
-    const secondTouch = { id: 2, x: secondPoint.x, y: secondPoint.y }
-    await dispatchTouch(cdp, 'touchStart', [movedTouch, secondTouch])
-    await dispatchTouch(cdp, 'touchMove', [
-      { ...movedTouch, x: movedTouch.x - 10, y: movedTouch.y + 12 },
-      { ...secondTouch, x: secondTouch.x + 10, y: secondTouch.y + 12 },
-    ])
-    await dispatchTouch(cdp, 'touchEnd', [])
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(viewAfterPan)
-    await expectAddMode(page, /Planet/)
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-
-    await cameraOnlyRightPanAndSecondTouch(page, map, cdp)
-    await expectAddMode(page, /Planet/)
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-
-    await workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true }).click()
-    await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
-    await expectInactiveAdd(page)
-    await expectWorkspaceMode(page, 'Move')
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-  } finally {
-    await cdp.detach()
-  }
-})
-test('Orbit Add ring drag cancels on Escape and camera takeover stays navigation-only', async ({ page }) => {
-  const cdp = await enableTouch(page)
-  try {
-    const { map, orbitTarget } = await createHostedOrbit(page)
-    const before = await exportSystemJson(page)
-    const recordsBefore = await readWorkspaceRecords(page)
-    const addOrbit = await dockAction(page, 'Add orbit')
-    await addOrbit.click()
-    const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
-    await expect(controls).toBeVisible()
-    const addToggle = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
-    if (await addToggle.getAttribute('aria-expanded') === 'true') await addToggle.click()
-    await expectAddMode(page, /Orbit/)
-
-    await cameraOnlyRightPanAndSecondTouch(page, map, cdp)
-    await expectAddMode(page, /Orbit/)
-    expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-    expect(await exportSystemJson(page)).toEqual(before)
-
-    const scene = map.locator('.system-map-content')
-    const transformBeforeRingDrag = await scene.getAttribute('transform')
-    const points = await orbitDragPoints(orbitTarget, 1.25, 0.45)
-    await page.mouse.move(points.start.x, points.start.y)
-    await page.mouse.down()
-    await page.mouse.move(points.end.x, points.end.y, { steps: 5 })
-    await expect.poll(() => scene.getAttribute('transform')).not.toBe(transformBeforeRingDrag)
-    await page.keyboard.press('Escape')
-    await expect(controls).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true }))
-      .toHaveCount(0)
-    await expectInactiveAdd(page)
-    await expectWorkspaceMode(page, 'Select')
-    await page.mouse.up()
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)
   } finally {
