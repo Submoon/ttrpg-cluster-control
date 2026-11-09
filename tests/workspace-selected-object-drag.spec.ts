@@ -146,7 +146,7 @@ test('a prepared drag includes the hit boundary and keeps system Orbit order for
   expect(plan({ x: 0, y: 0 })?.updates).toEqual([])
 })
 
-test('keeps an orbital object attached only when its exact translated point lies on its current rotated Orbit @pure', () => {
+test('keeps an orbital object attached when its translated point lies on or near its current rotated Orbit @pure', () => {
   const workspace = createFixture()
   const systemId = workspace.cluster.systems[0]!.id
   const target = { x: 425, y: 280 }
@@ -163,10 +163,22 @@ test('keeps an orbital object attached only when its exact translated point lies
   const appliedOnOrbit = applySelectedObjectTranslation(workspace, systemId, onOrbit!)
   expect(appliedOnOrbit.layout.objectAngles[planetId]).toBeCloseTo(Math.PI / 2)
 
-  const offOrbit = planSelectedObjectTranslation(workspace, systemId, [planetId], { x: 0, y: -241 })
+  const otherId = 'free-orbit-occupant'
+  const nearOrbit = planSelectedObjectTranslation(workspace, systemId, [planetId, otherId], { x: 0, y: -241 })!
+  expect(nearOrbit.changes.find(change => change.objectId === planetId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId })
+  expect(nearOrbit.departingObjectIds.has(planetId)).toBe(false)
+  expect(nearOrbit.positions.get(planetId)?.y).toBeCloseTo(160, 4)
+  expect(nearOrbit.positions.get(otherId)?.y).toBeCloseTo(5, 4)
+  const appliedNearOrbit = applySelectedObjectTranslation(workspace, systemId, nearOrbit)
+  expect(appliedNearOrbit.cluster.systems[0]!.objects.find(object => object.id === planetId)?.placement)
+    .toEqual({ kind: 'orbit', orbitId })
+  expect(projectedPositions(appliedNearOrbit).get(planetId)?.y).toBeCloseTo(160, 4)
+
+  const offOrbit = planSelectedObjectTranslation(workspace, systemId, [planetId], { x: 0, y: -257 })
   expect(offOrbit).not.toBeNull()
   expect(offOrbit!.changes.find(change => change.objectId === planetId)?.nextPlacement)
-    .toEqual({ kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 159 }) })
+    .toEqual({ kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 143 }) })
   expect(offOrbit!.departingObjectIds.has(planetId)).toBe(true)
 })
 
@@ -194,7 +206,37 @@ test('attaches two selected members whose common translation reaches exact point
   expect(projectedPositions(applied).get(planetId)).toEqual(plan!.positions.get(planetId))
 })
 
-test('keeps the current Orbit when the group snap reaches an intersection @pure', () => {
+test('the grabbed Orbit occupant transfers to the intended fixed Orbit despite a closer companion hit @pure', () => {
+  const fixture = createFixture()
+  const system = fixture.cluster.systems[0]!
+  const companionId = 'companion'
+  const workspace = replaceWorkspaceSystem(fixture, {
+    ...system,
+    objects: [object(companionId, {
+      kind: 'system',
+      ...toNormalizedMapPoint({ x: 206, y: 299 }),
+    }), ...system.objects],
+  })
+  const prepare = prepareSelectedObjectTranslation(workspace, system.id, [companionId, planetId], planetId)!
+  // The planet aims 6 units from the right edge of the unoccupied Orbit. The companion aims 1 unit from another Orbit.
+  const plan = prepare({ x: 274, y: -120 })!
+  expect(plan.arrivingObjectIds).toEqual(new Set([planetId]))
+  expect(plan.departingObjectIds).toEqual(new Set([planetId]))
+  expect(plan.changes.find(change => change.objectId === planetId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: freeOrbitId })
+  expect(plan.changes.find(change => change.objectId === companionId)?.nextPlacement.kind).toBe('system')
+
+  const applied = applySelectedObjectTranslation(workspace, system.id, plan)
+  const before = projectedPositions(workspace)
+  const after = projectedPositions(applied)
+  for (const id of [planetId, companionId, moonId]) {
+    expect(after.get(id)!.x - before.get(id)!.x).toBeCloseTo(268, 3)
+    expect(after.get(id)!.y - before.get(id)!.y).toBeCloseTo(-120, 3)
+  }
+  expect(applied.layout.objectAngles[planetId]).toBeCloseTo(0, 5)
+})
+
+test('keeps the current Orbit at an exact intersection @pure', () => {
   const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = base.cluster.systems[0]!
   const freeObjectId = 'free-object'
@@ -217,8 +259,8 @@ test('keeps the current Orbit when the group snap reaches an intersection @pure'
 
   const intersectionHeight = Math.sqrt(60 ** 2 - 30 ** 2)
   const plan = planSelectedObjectTranslation(workspace, system.id, [planetId, freeObjectId], {
-    x: -33,
-    y: 1.1 * intersectionHeight,
+    x: -30,
+    y: intersectionHeight,
   })!
 
   expect(plan.positions.get(planetId)?.x).toBeCloseTo(510, 9)
@@ -258,7 +300,7 @@ test('snaps the whole selection when a free member reaches a fixed Orbit and pre
   expect(after.get('free-orbit-occupant')).toEqual(before.get('free-orbit-occupant'))
 })
 
-test('keeps an occupant on an unoccupied-center Orbit only at an exact point on its fixed ellipse @pure', () => {
+test('keeps an occupant on an unoccupied-center Orbit within the hit tolerance of its fixed ellipse @pure', () => {
   const workspace = createFixture()
   const systemId = workspace.cluster.systems[0]!.id
   const occupantId = 'free-orbit-occupant'
@@ -272,12 +314,17 @@ test('keeps an occupant on an unoccupied-center Orbit only at an exact point on 
   const appliedOnEllipse = applySelectedObjectTranslation(workspace, systemId, onEllipse!)
   expect(appliedOnEllipse.layout.objectAngles[occupantId]).toBe(0)
 
-  const offEllipse = planSelectedObjectTranslation(workspace, systemId, [occupantId], { x: 61, y: 35 })
-  expect(offEllipse?.positions.get(occupantId)).toEqual({ x: 749, y: 280 })
+  const nearEllipse = planSelectedObjectTranslation(workspace, systemId, [occupantId], { x: 61, y: 35 })
+  expect(nearEllipse?.changes.find(change => change.objectId === occupantId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: freeOrbitId })
+  expect(nearEllipse?.positions.get(occupantId)?.x).toBeCloseTo(748, 4)
+
+  const offEllipse = planSelectedObjectTranslation(workspace, systemId, [occupantId], { x: 77, y: 35 })
+  expect(offEllipse?.positions.get(occupantId)).toEqual({ x: 765, y: 280 })
   expect(offEllipse?.departingObjectIds).toEqual(new Set([occupantId]))
   expect(offEllipse?.changes.find(change => change.objectId === occupantId)?.nextPlacement).toEqual({
     kind: 'system',
-    x: (749 - 64) / 832,
+    x: (765 - 64) / 832,
     y: (280 - 72) / 416,
   })
 })

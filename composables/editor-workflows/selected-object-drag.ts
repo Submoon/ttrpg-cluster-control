@@ -129,7 +129,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       || !systemId || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
     let preparedPlan: ReturnType<typeof prepareSelectedObjectTranslation>
     try {
-      preparedPlan = prepareSelectedObjectTranslation(currentWorkspace, systemId, selectedIds)
+      preparedPlan = prepareSelectedObjectTranslation(currentWorkspace, systemId, selectedIds, anchorId)
     } catch (error) {
       moveError.value = error instanceof Error ? error.message : String(error)
       return null

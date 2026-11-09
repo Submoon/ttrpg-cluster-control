@@ -336,13 +336,32 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
     x: starBeforeMove.x + rawOffset.x * scaleToRing - departureBeforeMove.x,
     y: starBeforeMove.y + rawOffset.y * scaleToRing - departureBeforeMove.y,
   }
-  const startGroupDrag = async () => {
+  const startGroupDrag = async (destination = deliveredTargetClient) => {
     await page.mouse.move(sourceClient.x, sourceClient.y)
     await page.mouse.down()
-    await page.mouse.move(deliveredTargetClient.x, deliveredTargetClient.y, { steps: 6 })
+    await page.mouse.move(destination.x, destination.y, { steps: 6 })
   }
 
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
+  // Aim Iria just outside another point of its own fixed Orbit.
+  const radiusComponent = (destinationRadius + 6) / Math.sqrt(2)
+  const sameOrbitClient = sceneCoordinates.toClient({
+    x: sourceScene.x + starBeforeMove.x + radiusComponent - iriaBeforeMove.x,
+    y: sourceScene.y + starBeforeMove.y - radiusComponent - iriaBeforeMove.y,
+  })
+  await startGroupDrag({ x: Math.round(sameOrbitClient.x), y: Math.round(sameOrbitClient.y) })
+  const iriaOnCurrentOrbit = await renderedObjectPosition(iriaMark)
+  expect(Math.abs(Math.hypot(
+    iriaOnCurrentOrbit.x - starBeforeMove.x,
+    iriaOnCurrentOrbit.y - starBeforeMove.y,
+  ) - destinationRadius)).toBeLessThan(1.1)
+  expect(iriaOnCurrentOrbit.x).toBeGreaterThan(starBeforeMove.x + destinationRadius / 2)
+  await expect(iriaMark.locator('.selected-object-departure-indicator')).toHaveAttribute('visibility', 'hidden')
+  await iriaMark.focus()
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await expect(selectedMapObjects).toHaveCount(2)
+
   await startGroupDrag()
   await expect(iriaMark.locator('.selected-object-departure-indicator')).toHaveAttribute('visibility', 'visible')
   await expect(groupDepartureMark.locator('.selected-object-arrival-indicator')).toHaveAttribute('visibility', 'visible')

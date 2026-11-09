@@ -196,39 +196,41 @@ interface GroupOrbitSnap {
   distance: number
 }
 
+interface SelectionSnapRoots {
+  ids: readonly string[]
+  preferredId?: string
+}
+
 function chooseGroupOrbitSnap(
   system: StarSystem,
   objectsById: ReadonlyMap<string, StarSystem['objects'][number]>,
   stationaryOrbits: readonly PreparedOrbitGeometry[],
   stationaryOrbitsById: ReadonlyMap<string, PreparedOrbitGeometry>,
-  selectedRootIds: readonly string[],
+  selectedRoots: SelectionSnapRoots,
   beforePositions: ReadonlyMap<string, Point>,
   delta: Point,
 ): GroupOrbitSnap | null {
   let best: GroupOrbitSnap | null = null
-
-  for (const objectId of selectedRootIds) {
+  for (const objectId of selectedRoots.ids) {
     const object = objectsById.get(objectId)
     const origin = beforePositions.get(objectId)
     if (!object || !origin) continue
     const rawTarget = { x: origin.x + delta.x, y: origin.y + delta.y }
     const currentOrbitId = orbitIdOf(object.placement)
-    const currentOrbit = currentOrbitId
-      ? stationaryOrbitsById.get(currentOrbitId)
-      : undefined
+    const currentOrbit = currentOrbitId ? stationaryOrbitsById.get(currentOrbitId) : undefined
 
-    // An exact point on the current fixed Orbit is already a valid destination and should not be pulled to a nearby ring.
-    if (currentOrbit && exactOrbitAngle(rawTarget, currentOrbit) !== null) continue
+    // An exact point on the current fixed Orbit is a zero-distance hit and wins over any
+    // intersecting destination Orbit for this object.
+    const currentAngle = currentOrbit ? exactOrbitAngle(rawTarget, currentOrbit) : null
+    if (currentOrbitId && currentAngle !== null) {
+      if (best?.distance === 0) return best
+      return { objectId, orbitId: currentOrbitId, angle: currentAngle, delta, distance: 0 }
+    }
 
-    const exactDestination = exactDestinationOrbit(
-      system,
-      stationaryOrbits,
-      objectId,
-      currentOrbitId,
-      rawTarget,
-    )
+    const exactDestination = exactDestinationOrbit(system, stationaryOrbits, objectId, currentOrbitId, rawTarget)
     if (exactDestination) {
-      return best?.distance === 0 ? best : {
+      if (best?.distance === 0) return best
+      return {
         objectId,
         orbitId: exactDestination.orbitId,
         angle: exactDestination.angle,
@@ -239,13 +241,13 @@ function chooseGroupOrbitSnap(
 
     for (const orbitGeometry of stationaryOrbits) {
       const orbit = orbitGeometry.orbit
-      const reach = best?.distance ?? ORBIT_PLACEMENT_HIT_TOLERANCE
-      if (orbit.id === currentOrbitId
-        || !targetMayReachOrbit(rawTarget, orbitGeometry, reach)) continue
+      const isCurrentOrbit = orbit.id === currentOrbitId
+      const bestDistance = best?.distance ?? ORBIT_PLACEMENT_HIT_TOLERANCE
+      if (!targetMayReachOrbit(rawTarget, orbitGeometry, bestDistance)) continue
       const projected = projectPointToOrbit(rawTarget, orbitGeometry.center, orbitGeometry.radii, orbitGeometry.rotation)
       const distance = Math.hypot(rawTarget.x - projected.point.x, rawTarget.y - projected.point.y)
       if (!(distance <= ORBIT_PLACEMENT_HIT_TOLERANCE) || (best && distance >= best.distance)
-        || !canPlaceObjectInOrbit(system, objectId, orbit.id)) continue
+        || (!isCurrentOrbit && !canPlaceObjectInOrbit(system, objectId, orbit.id))) continue
       best = {
         objectId,
         orbitId: orbit.id,
@@ -254,6 +256,12 @@ function chooseGroupOrbitSnap(
         distance,
       }
     }
+
+    // The grabbed orbital root owns the common snap when it has a compatible hit. Otherwise
+    // the unchanged global nearest-hit scan continues through the remaining roots.
+    if (objectId === selectedRoots.preferredId && best?.objectId === objectId) return best
+    // The root list is stable system order, so an earlier zero-distance hit cannot be improved.
+    if (best?.distance === 0) return best
   }
   return best
 }
@@ -277,12 +285,13 @@ function exactDestinationOrbit(
 
 /**
  * Resolves one common map-space translation and eligible group Orbit snap from the captured workspace.
- * A fixed current Orbit is retained only at an exact point; Orbit descendants inherit movement with their host.
+ * A fixed current Orbit participates in the normal snap tolerance; Orbit descendants inherit movement with their host.
  */
 export function prepareSelectedObjectTranslation(
   workspace: LocalWorkspace,
   systemId: string,
   selectedObjectIds: readonly string[],
+  anchorId?: string,
 ): ((delta: Point) => SelectedObjectTranslationPlan | null) | null {
   if (selectedObjectIds.length === 0) return null
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
@@ -296,6 +305,13 @@ export function prepareSelectedObjectTranslation(
   const beforePositions = objectPositions(system, geometry)
   const effectiveAngles = captureEffectiveObjectAngles(workspace, system, system.orbits.map(orbit => orbit.id))
   const selectedRootIds = independentlyMovingSelectionIds(system, uniqueSelection, movedObjectIdSet)
+  const anchor = anchorId ? system.objects.find(object => object.id === anchorId) : undefined
+  const preferredRootId = anchor?.placement.kind === 'orbit' && selectedRootIds.includes(anchor.id)
+    ? anchor.id
+    : undefined
+  const selectedRoots: SelectionSnapRoots = preferredRootId
+    ? { ids: [preferredRootId, ...selectedRootIds.filter(objectId => objectId !== preferredRootId)], preferredId: preferredRootId }
+    : { ids: selectedRootIds }
   const objectsById = new Map(system.objects.map(object => [object.id, object]))
   const orbitsById = new Map(system.orbits.map(orbit => [orbit.id, orbit]))
   const stationaryOrbits = prepareStationaryOrbitGeometry(system, geometry, beforePositions, movedObjectIdSet)
@@ -335,7 +351,7 @@ export function prepareSelectedObjectTranslation(
       objectsById,
       stationaryOrbits,
       stationaryOrbitsById,
-      selectedRootIds,
+      selectedRoots,
       beforePositions,
       delta,
     )
