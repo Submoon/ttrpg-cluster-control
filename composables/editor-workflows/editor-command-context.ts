@@ -1,5 +1,5 @@
 import { inject, provide, type InjectionKey } from 'vue'
-import type { JumpRoute } from '../../domain/workspace'
+import type { JumpRoute, Point } from '../../domain/workspace'
 import type { MapInteractionMode } from './types'
 import type { PublicationMenuLease, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
@@ -18,6 +18,12 @@ export interface EditorCommandContext {
   }
   cluster: {
     deleteSystem(systemId: string): void
+  }
+  creation: {
+    beginOrbitDrag(scenePoint: Point): boolean
+    updateOrbitDrag(scenePoint: Point, sceneClearance: number): void
+    completeOrbitDrag(): Promise<boolean>
+    cancelOrbitDrag(): void
   }
   map: {
     changeMode(mode: MapInteractionMode): void

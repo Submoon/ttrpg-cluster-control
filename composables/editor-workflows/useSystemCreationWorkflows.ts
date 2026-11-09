@@ -23,12 +23,15 @@ import {
   orbitPointAtAngle,
   orbitRadii,
   orbitRotation,
+  creationCandidatesAtPoint,
   type SystemMapGeometry,
 } from '../../utils/system-map-geometry'
+import { isCircularOrbitRadiusAvailable, nearestAvailableCircularOrbitRadius } from '../../utils/orbit-drag-geometry'
 import type {
   EntityCommand,
   SystemCreationCandidate,
   SystemCreationInputs,
+  SystemCreationPreview,
   SystemCreationSession,
   SystemCreationTarget,
   SystemCreationType,
@@ -43,6 +46,17 @@ interface OrbitRadiusInputOwnership {
   sessionId: number
   horizontal: boolean
   vertical: boolean
+}
+
+interface OrbitDragReservation {
+  session: SystemCreationSession
+  target: Extract<SystemCreationTarget, { kind: 'free' | 'host' }>
+  center: Point
+  workspaceSnapshot: LocalWorkspace
+  minimumRadius: number
+  existingCircularRadii: number[]
+  previewId: number | null
+  sceneClearance: number | null
 }
 
 const duplicateOrbitGeometryMessage =
@@ -136,11 +150,16 @@ export function useSystemCreationWorkflows({
   let confirmingPreviewId: number | null = null
   let explicitObjectOrbitPreference: { sessionId: number; orbitId: string } | null = null
   let orbitRadiusInputOwnership: OrbitRadiusInputOwnership | null = null
+  let orbitDragReservation: OrbitDragReservation | null = null
 
   watch(
     [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
     () => {
       if (!isSearchContextChangeHeld()) explicitObjectOrbitPreference = null
+      if (orbitDragReservation && !isConfirmingOrbitDrag(orbitDragReservation)
+        && !orbitDragMatchesCurrentContext(orbitDragReservation)) {
+        cancelOrbitDrag()
+      }
     },
   )
 
@@ -179,6 +198,7 @@ export function useSystemCreationWorkflows({
   }
 
   function invalidatePreview(session: SystemCreationSession): void {
+    if (orbitDragReservation?.session === session) orbitDragReservation = null
     session.preview = null
     session.candidates = []
     session.notice = ''
@@ -243,6 +263,10 @@ export function useSystemCreationWorkflows({
 
   /** Preserve a clean armed Add tool after history changes, repairing only references the restored data removed. */
   function reconcileCleanTargetsAfterWorkspaceChange(nextWorkspace: LocalWorkspace | null): void {
+    if (orbitDragReservation && !isConfirmingOrbitDrag(orbitDragReservation)
+      && !orbitDragMatchesCurrentContext(orbitDragReservation, nextWorkspace)) {
+      cancelOrbitDrag()
+    }
     const session = creationSession.value
     if (!session || hasPendingHistoryInput.value) return
 
@@ -357,6 +381,77 @@ export function useSystemCreationWorkflows({
 
   function geometryForCurrentWorkspace(): SystemMapGeometry {
     return geometryForWorkspace(workspace.value)
+  }
+
+  function orbitDragCenter(
+    system: StarSystem,
+    target: Extract<SystemCreationTarget, { kind: 'free' | 'host' }>,
+    geometry: SystemMapGeometry,
+  ): Point | undefined {
+    if (target.kind === 'host') return objectPositions(system, geometry).get(target.objectId)
+    return { x: 64 + target.point.x * 832, y: 72 + target.point.y * 416 }
+  }
+
+  function orbitDragMatchesCurrentContext(
+    reservation: OrbitDragReservation,
+    currentWorkspace: LocalWorkspace | null = workspace.value,
+  ): boolean {
+    if (!currentWorkspace || creationSession.value !== reservation.session
+      || !sessionMatchesCurrentContext(reservation.session)
+      || currentWorkspace !== reservation.workspaceSnapshot
+      || currentWorkspace.cluster.id !== reservation.session.clusterId) return false
+    return currentWorkspace.cluster.systems.some(candidate => candidate.id === reservation.session.systemId)
+  }
+
+  function isConfirmingOrbitDrag(reservation: OrbitDragReservation): boolean {
+    return reservation.previewId !== null && confirmingPreviewId === reservation.previewId
+  }
+
+  function concentricCircularRadii(
+    system: StarSystem,
+    target: SystemCreationTarget,
+    geometry: SystemMapGeometry,
+  ): number[] {
+    return orbitGeometriesAtTarget(system, target, geometry)
+      .filter(orbit => orbit.radii.horizontal === orbit.radii.vertical)
+      .map(orbit => orbit.radii.horizontal)
+  }
+
+  function validateOrbitDragPreview(
+    reservation: OrbitDragReservation,
+    system: StarSystem,
+    preview: SystemCreationPreview,
+    currentWorkspace: LocalWorkspace,
+  ): string | null {
+    if (preview.id !== reservation.previewId || !preview.orbitDrag
+      || JSON.stringify(preview.target) !== JSON.stringify(reservation.target)) {
+      return 'The Orbit drag preview is no longer current.'
+    }
+
+    const geometry = geometryForWorkspace(currentWorkspace)
+    const center = orbitDragCenter(system, reservation.target, geometry)
+    if (!center || center.x !== reservation.center.x || center.y !== reservation.center.y) {
+      return 'The Orbit center moved before placement completed.'
+    }
+    const targetError = validateTarget(reservation.session, system, reservation.target)
+    if (targetError) return targetError
+    const radius = preview.radii?.horizontal
+    if (radius === undefined || preview.radii?.vertical !== radius || preview.rotation !== 0
+      || !Number.isFinite(radius)) return 'The circular Orbit preview is invalid.'
+
+    const hostId = reservation.target.kind === 'host' ? reservation.target.objectId : null
+    const minimum = minimumOrbitRadius(system, prospectiveOrbit(system, hostId))
+    const existingGeometry = orbitGeometriesAtTarget(system, reservation.target, geometry)
+    if (hasDuplicateOrbitGeometry(preview.radii, 0, existingGeometry)) {
+      return duplicateOrbitGeometryMessage
+    }
+    if (!isCircularOrbitRadiusAvailable(
+      radius,
+      minimum,
+      concentricCircularRadii(system, reservation.target, geometry),
+      reservation.sceneClearance ?? 0,
+    )) return 'The Orbit center or spacing changed before this ring could be placed.'
+    return null
   }
 
   function scenePointForTarget(system: StarSystem, target: SystemCreationTarget): Point | undefined {
@@ -477,6 +572,148 @@ export function useSystemCreationWorkflows({
       return 'Resolve the Inspector draft before adding another Orbit to this host.'
     }
     return null
+  }
+
+  function beginOrbitDrag(scenePoint: Point): boolean {
+    if (confirmingPreviewId !== null || orbitDragReservation) return false
+    const session = creationSession.value
+    const currentWorkspace = workspace.value
+    const system = session && currentWorkspace ? currentSystemForSession(session) : undefined
+    if (!session || session.type.kind !== 'orbit' || !currentWorkspace || !system
+      || !sessionMatchesCurrentContext(session)
+      || !Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) return false
+
+    let candidates: SystemCreationCandidate[]
+    try {
+      candidates = systemMapRef.value?.getCreationCandidates(scenePoint, session.type)
+        ?? creationCandidatesAtPoint(system, scenePoint, session.type, geometryForWorkspace(currentWorkspace))
+    } catch {
+      return false
+    }
+
+    const validCandidates = candidates.filter((candidate): candidate is SystemCreationCandidate & {
+      target: Extract<SystemCreationTarget, { kind: 'free' | 'host' }>
+    } => !candidate.error
+      && (candidate.target.kind === 'host' || candidate.target.kind === 'free')
+      && !validateTarget(session, system, candidate.target))
+    const hosts = validCandidates
+      .filter((candidate): candidate is SystemCreationCandidate & {
+        target: Extract<SystemCreationTarget, { kind: 'host' }>
+      } => candidate.target.kind === 'host')
+    const positions = objectPositions(system, geometryForWorkspace(currentWorkspace))
+    const paintOrder = new Map(system.objects.map((object, index) => [object.id, index]))
+    hosts.sort((left, right) => {
+      const leftPosition = positions.get(left.target.objectId)
+      const rightPosition = positions.get(right.target.objectId)
+      if (!leftPosition || !rightPosition) return 0
+      const distance = Math.hypot(scenePoint.x - leftPosition.x, scenePoint.y - leftPosition.y)
+        - Math.hypot(scenePoint.x - rightPosition.x, scenePoint.y - rightPosition.y)
+      return distance || (paintOrder.get(right.target.objectId) ?? -1)
+        - (paintOrder.get(left.target.objectId) ?? -1)
+    })
+    const selected = hosts[0]
+      ?? validCandidates.find((candidate): candidate is SystemCreationCandidate & {
+        target: Extract<SystemCreationTarget, { kind: 'free' }>
+      } => candidate.target.kind === 'free')
+    if (!selected) return false
+
+    const center = orbitDragCenter(system, selected.target, geometryForWorkspace(currentWorkspace))
+    if (!center) return false
+    const hostId = selected.target.kind === 'host' ? selected.target.objectId : null
+    const minimumRadius = minimumOrbitRadius(system, prospectiveOrbit(system, hostId))
+    const existingCircularRadii = concentricCircularRadii(system, selected.target, geometryForWorkspace(currentWorkspace))
+    invalidatePreview(session)
+    clearErrors()
+    session.notice = ''
+    orbitDragReservation = {
+      session,
+      target: selected.target,
+      center,
+      workspaceSnapshot: currentWorkspace,
+      minimumRadius,
+      existingCircularRadii,
+      previewId: null,
+      sceneClearance: null,
+    }
+    return true
+  }
+
+  function updateOrbitDrag(scenePoint: Point, sceneClearance: number): void {
+    const reservation = orbitDragReservation
+    if (!reservation || !Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)
+      || !Number.isFinite(sceneClearance) || sceneClearance < 0
+      || !orbitDragMatchesCurrentContext(reservation)) {
+      if (reservation) cancelOrbitDrag()
+      return
+    }
+
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === reservation.session.systemId)
+    if (!currentWorkspace || !system) {
+      cancelOrbitDrag()
+      return
+    }
+    const proposed = Math.hypot(scenePoint.x - reservation.center.x, scenePoint.y - reservation.center.y)
+    const radii = nearestAvailableCircularOrbitRadius(
+      proposed,
+      reservation.minimumRadius,
+      reservation.existingCircularRadii,
+      sceneClearance,
+    )
+    if (radii === undefined || !Number.isFinite(radii)) {
+      cancelOrbitDrag()
+      return
+    }
+
+    const previewId = ++previewSequence
+    reservation.previewId = previewId
+    reservation.sceneClearance = sceneClearance
+    reservation.session.candidates = []
+    reservation.session.preview = {
+      id: previewId,
+      target: reservation.target,
+      radii: { horizontal: radii, vertical: radii },
+      rotation: 0,
+      orbitDrag: true,
+    }
+    reservation.session.notice = ''
+  }
+
+  function cancelOrbitDrag(): void {
+    const reservation = orbitDragReservation
+    if (!reservation) return
+    orbitDragReservation = null
+    if (reservation.session.preview?.orbitDrag
+      && (reservation.previewId === null || reservation.session.preview.id === reservation.previewId)) {
+      reservation.session.preview = null
+      reservation.session.candidates = []
+    }
+  }
+
+  async function completeOrbitDrag(): Promise<boolean> {
+    const reservation = orbitDragReservation
+    if (!reservation) return false
+    const preview = reservation.session.preview
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === reservation.session.systemId)
+    if (!preview || !currentWorkspace || !system || !orbitDragMatchesCurrentContext(reservation)) {
+      cancelOrbitDrag()
+      return false
+    }
+
+    const error = validateOrbitDragPreview(reservation, system, preview, currentWorkspace)
+    if (error) {
+      cancelOrbitDrag()
+      if (error === duplicateOrbitGeometryMessage) setTargetError(reservation.target, error)
+      return false
+    }
+
+    const completed = await confirmCreation(preview.id)
+    if (orbitDragReservation === reservation) {
+      if (completed) orbitDragReservation = null
+      else cancelOrbitDrag()
+    }
+    return completed
   }
 
   function orbitGeometryForPreview(
@@ -731,6 +968,7 @@ export function useSystemCreationWorkflows({
   function cancelCreationPreview(): void {
     const session = creationSession.value
     if (!session) return
+    cancelOrbitDrag()
     session.preview = null
     session.candidates = []
     session.notice = session.type.kind === 'object'
@@ -757,6 +995,18 @@ export function useSystemCreationWorkflows({
       invalidatePreview(session)
       setTargetError(target, error)
       return false
+    }
+    let previewSignature = JSON.stringify(preview)
+    if (preview.orbitDrag) {
+      const reservation = orbitDragReservation
+      const dragError = reservation
+        ? validateOrbitDragPreview(reservation, system, preview, currentWorkspace)
+        : 'The Orbit drag preview is no longer current.'
+      if (dragError) {
+        cancelOrbitDrag()
+        if (dragError === duplicateOrbitGeometryMessage) setTargetError(target, dragError)
+        return false
+      }
     }
 
     let otherTypeLabel: string | null = null
@@ -789,6 +1039,7 @@ export function useSystemCreationWorkflows({
         const latestPreview = session.preview
         if (!latestPreview || latestPreview.id !== previewId) return false
         preview = latestPreview
+        previewSignature = JSON.stringify(preview)
         target = preview.target
         const latestError = validateTarget(session, system, target)
         if (latestError) {
@@ -799,7 +1050,6 @@ export function useSystemCreationWorkflows({
       }
 
       const correctionNotice = session.notice.trim()
-      const targetSignature = JSON.stringify(target)
       let identityId: string
       let identityName = ''
       let identityOrder = 0
@@ -827,17 +1077,29 @@ export function useSystemCreationWorkflows({
         isCurrent: () => creationSession.value === session
           && confirmingPreviewId === previewId
           && session.preview?.id === previewId
-          && JSON.stringify(session.preview.target) === targetSignature
+          && JSON.stringify(session.preview) === previewSignature
+          && (!preview.orbitDrag || orbitDragReservation?.previewId === previewId)
           && sessionMatchesCurrentContext(session),
         prepare: (latestWorkspace) => {
           const latestSystem = latestWorkspace.cluster.systems.find(candidate => candidate.id === session.systemId)
           if (latestWorkspace.cluster.id !== session.clusterId || !latestSystem
             || creationSession.value !== session || session.preview?.id !== previewId
-            || JSON.stringify(session.preview.target) !== targetSignature) {
+            || JSON.stringify(session.preview) !== previewSignature) {
             throw new Error('The star system or Add preview changed before this item could be added.')
           }
           const latestError = validateTarget(session, latestSystem, target)
           if (latestError) throw new Error(latestError)
+
+          if (preview.orbitDrag) {
+            const reservation = orbitDragReservation
+            const latestPreview = session.preview
+            if (!reservation || reservation.previewId !== previewId || !latestPreview
+              || !orbitDragMatchesCurrentContext(reservation)) {
+              throw new Error('The Orbit drag data changed before this ring could be placed.')
+            }
+            const dragError = validateOrbitDragPreview(reservation, latestSystem, latestPreview, latestWorkspace)
+            if (dragError) throw new Error(dragError)
+          }
 
           if (session.type.kind === 'object') {
             if (target.kind !== 'free' && target.kind !== 'orbit') {
@@ -906,7 +1168,7 @@ export function useSystemCreationWorkflows({
       session.preview = null
       session.candidates = []
       if (result.status === 'applied') {
-        session.appliedInputs = { ...session.inputs }
+        if (!preview.orbitDrag) session.appliedInputs = { ...session.inputs }
         session.notice = session.type.kind === 'object'
           ? `${correctionNotice ? `${correctionNotice} ` : ''}${identityName} added. Choose another location or Quit Add.`
           : `${correctionNotice ? `${correctionNotice} ` : ''}Orbit ${identityOrder} added. Choose another target or Quit Add.`
@@ -953,6 +1215,7 @@ export function useSystemCreationWorkflows({
   function quitAdd(): void {
     explicitObjectOrbitPreference = null
     orbitRadiusInputOwnership = null
+    orbitDragReservation = null
     creationSession.value = null
   }
 
@@ -1022,6 +1285,10 @@ export function useSystemCreationWorkflows({
     offerCreationCandidates,
     chooseCreationCandidate,
     handleCreationDrop,
+    beginOrbitDrag,
+    updateOrbitDrag,
+    completeOrbitDrag,
+    cancelOrbitDrag,
     addCreationFromInputs,
     cancelCreationPreview,
     quitAdd,

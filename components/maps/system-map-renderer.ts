@@ -1117,17 +1117,19 @@ export function renderSystemMap({
           .attr('rx', creationPreview.radii.horizontal)
           .attr('ry', creationPreview.radii.vertical)
           .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
-        previewGroup.append('circle')
-          .attr('class', 'system-creation-preview-center')
-          .attr('cx', center.x)
-          .attr('cy', center.y)
-          .attr('r', 6)
-        previewGroup.append('text')
-          .attr('class', 'system-creation-preview-label')
-          .attr('x', center.x)
-          .attr('y', center.y - creationPreview.radii.vertical - 30)
-          .attr('text-anchor', 'middle')
-          .text(`Preview · Orbit ${targetLabel}`)
+        if (!creationPreview.orbitDrag) {
+          previewGroup.append('circle')
+            .attr('class', 'system-creation-preview-center')
+            .attr('cx', center.x)
+            .attr('cy', center.y)
+            .attr('r', 6)
+          previewGroup.append('text')
+            .attr('class', 'system-creation-preview-label')
+            .attr('x', center.x)
+            .attr('y', center.y - creationPreview.radii.vertical - 30)
+            .attr('text-anchor', 'middle')
+            .text(`Preview · Orbit ${targetLabel}`)
+        }
       }
     }
   }

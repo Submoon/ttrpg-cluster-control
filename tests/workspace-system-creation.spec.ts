@@ -151,6 +151,95 @@ test('system Add immediately places on repeated clicks and preserves each placem
     await expect(quitAdd).toBeVisible()
     expect(new Set(previous.map(ring => JSON.stringify(ring.geometry))).size, 'distinct rings').toBe(3)
   })
+
+  await test.step('An Orbit drag released over Quit Add creates the displayed circle once', async () => {
+    await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+    const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
+    const firstRing = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true }).locator('.orbit-ring')
+    const { start, requested } = await firstRing.evaluate((element) => {
+      if (!(element instanceof SVGEllipseElement)) throw new Error('Expected an Orbit ellipse.')
+      const matrix = element.getScreenCTM()
+      if (!matrix) throw new Error('Expected a visible Orbit transform.')
+      const x = element.cx.baseVal.value
+      const y = element.cy.baseVal.value
+      const radius = element.rx.baseVal.value
+      const startPoint = new DOMPoint(x, y).matrixTransform(matrix)
+      const requestedPoint = new DOMPoint(x + radius, y).matrixTransform(matrix)
+      return { start: { x: startPoint.x, y: startPoint.y }, requested: { x: requestedPoint.x, y: requestedPoint.y } }
+    })
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(requested.x, requested.y)
+    const preview = map.locator('.system-creation-preview-orbit')
+    await expect(preview).toBeVisible()
+    const radius = await preview.getAttribute('rx')
+    if (radius === null) throw new Error('Expected a preview radius.')
+    expect(Number(radius)).toBeGreaterThan(0)
+    expect(radius).not.toBe(await firstRing.getAttribute('rx'))
+    await expect(preview).toHaveAttribute('ry', radius)
+    const paintedGap = await preview.evaluate((element) => {
+      if (!(element instanceof SVGEllipseElement)) throw new Error('Expected a circular preview.')
+      const existing = element.closest('svg')?.querySelector('.orbit-ring')
+      const matrix = element.getScreenCTM()
+      if (!(existing instanceof SVGEllipseElement) || !matrix) throw new Error('Expected concentric rendered rings.')
+      const separation = Math.abs(element.rx.baseVal.value - existing.rx.baseVal.value)
+      const halfStrokes = (parseFloat(getComputedStyle(element).strokeWidth) + parseFloat(getComputedStyle(existing).strokeWidth)) / 2
+      return (separation - halfStrokes) * Math.hypot(matrix.a, matrix.b)
+    })
+    expect(paintedGap, 'gap between the rendered strokes in CSS pixels').toBeGreaterThanOrEqual(3.9)
+
+    // The Add status can reflow the toolbar when the preview starts.
+    const releasePoint = await quitAdd.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+      if (!element.contains(document.elementFromPoint(point.x, point.y))) {
+        throw new Error('Expected the release point to hit Quit Add.')
+      }
+      return point
+    })
+    await page.mouse.move(releasePoint.x, releasePoint.y)
+    await expect(preview).toHaveAttribute('rx', radius)
+    await page.mouse.up()
+
+    await expect(preview).toHaveCount(0)
+    await expect(quitAdd).toBeVisible()
+    const rings = map.getByRole('group', { name: /^Orbit \d+ around Primary Star$/ }).locator('.orbit-ring')
+    await expect(rings).toHaveCount(4)
+    const created = map.getByRole('group', { name: 'Orbit 4 around Primary Star', exact: true }).locator('.orbit-ring')
+    await expect(created).toHaveAttribute('rx', radius)
+    await expect(created).toHaveAttribute('ry', radius)
+    expect(await created.getAttribute('cx')).toBe(await firstRing.getAttribute('cx'))
+    expect(await created.getAttribute('cy')).toBe(await firstRing.getAttribute('cy'))
+
+    await test.step('Escape cancels an active pen drag and its late release', async () => {
+      const cdp = await page.context().newCDPSession(page)
+      try {
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...start, pointerType: 'pen' })
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mousePressed', ...start, pointerType: 'pen', button: 'left', buttons: 1, clickCount: 1,
+        })
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved', ...requested, pointerType: 'pen', buttons: 1,
+        })
+        await expect(preview).toBeVisible()
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved', x: requested.x + 12, y: requested.y, pointerType: 'pen', buttons: 1,
+        })
+        await expect(preview).toBeVisible()
+
+        await page.keyboard.press('Escape')
+        await expect(preview).toHaveCount(0)
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x: requested.x + 12, y: requested.y,
+          pointerType: 'pen', button: 'left', buttons: 0, clickCount: 1,
+        })
+        await expect(quitAdd).toBeVisible()
+        await expect(rings).toHaveCount(4)
+      } finally {
+        await cdp.detach()
+      }
+    })
+  })
 })
 
 

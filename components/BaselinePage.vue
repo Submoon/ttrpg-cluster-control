@@ -890,6 +890,12 @@ provideEditorCommands({
   },
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },
+  creation: {
+    beginOrbitDrag: creation.beginOrbitDrag,
+    updateOrbitDrag: creation.updateOrbitDrag,
+    completeOrbitDrag: creation.completeOrbitDrag,
+    cancelOrbitDrag: creation.cancelOrbitDrag,
+  },
   map: { changeMode: changeMapMode },
   publication: {
     set: publicationControls.set,
