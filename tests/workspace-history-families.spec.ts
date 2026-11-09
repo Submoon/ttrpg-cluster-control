@@ -602,10 +602,20 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const deletion = page.getByRole('button', { name: 'Delete New System 2 system', exact: true })
-  await deletion.click()
   const review = page.getByRole('dialog', { name: 'Review deletion', exact: true })
-  await expect(review).toBeVisible()
-  await review.getByRole('button', { name: 'Confirm deletion', exact: true }).click()
+  const confirm = review.getByRole('button', { name: 'Confirm deletion', exact: true })
+  await deletion.focus()
+  await page.keyboard.down('Enter')
+  try {
+    await expect(confirm).toBeFocused()
+    // Holding the key that opened the review must not confirm the deletion.
+    await page.keyboard.down('Enter')
+    await expect(confirm).toBeFocused()
+    await expect(confirm).toBeEnabled()
+  } finally {
+    await page.keyboard.up('Enter')
+  }
+  await page.keyboard.press('Enter')
   await expect(review).toBeHidden()
   await waitForWorkspaceSaved(page)
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
