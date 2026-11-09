@@ -31,6 +31,10 @@ export const useEditorUiStore = defineStore('editor-ui', {
     mapMode: 'select' as MapInteractionMode,
     searchOpen: false,
     searchQuery: '',
+    selectedSearchObjectTypes: [] as string[],
+    searchTypeFilterOptionLabels: {} as Record<string, string>,
+    selectedSearchPublicationModes: [] as PublicationMode[],
+    selectedSearchFieldConditions: [] as FieldCondition[],
     mapTypeFiltersOpen: false,
     selectedMapObjectTypes: [] as string[],
     mapTypeFilterOptionLabels: {} as Record<string, string>,
@@ -56,6 +60,32 @@ export const useEditorUiStore = defineStore('editor-ui', {
     },
     setSearchQuery(query: string): void {
       this.searchQuery = query
+    },
+    setSelectedSearchObjectTypes(types: readonly string[], options: readonly { value: string, label: string }[]): void {
+      const labels = { ...this.searchTypeFilterOptionLabels }
+      for (const option of options) labels[option.value] = option.label
+      this.searchTypeFilterOptionLabels = labels
+      this.selectedSearchObjectTypes = [...new Set(types)]
+    },
+    setSearchPublicationModes(modes: readonly PublicationMode[]): void {
+      this.selectedSearchPublicationModes = [...new Set(modes)]
+    },
+    setSearchFieldConditions(conditions: readonly FieldCondition[]): void {
+      const seen = new Set<string>()
+      this.selectedSearchFieldConditions = conditions.filter((condition) => {
+        if (seen.has(condition.fieldId)) return false
+        seen.add(condition.fieldId)
+        return true
+      })
+    },
+    /** Clears Search input and criteria at hydration or recovery boundaries without disturbing map filters. */
+    resetSearch(): void {
+      this.searchOpen = false
+      this.searchQuery = ''
+      this.selectedSearchObjectTypes = []
+      this.searchTypeFilterOptionLabels = {}
+      this.selectedSearchPublicationModes = []
+      this.selectedSearchFieldConditions = []
     },
     setMapTypeFiltersOpen(open: boolean): void {
       this.mapTypeFiltersOpen = open
@@ -122,6 +152,10 @@ export const useEditorUiStore = defineStore('editor-ui', {
         mapMode: 'select' as const,
         searchOpen: false,
         searchQuery: '',
+        selectedSearchObjectTypes: [],
+        searchTypeFilterOptionLabels: {},
+        selectedSearchPublicationModes: [],
+        selectedSearchFieldConditions: [],
         mapTypeFiltersOpen: false,
         selectedMapObjectTypes: [],
         mapTypeFilterOptionLabels: {},

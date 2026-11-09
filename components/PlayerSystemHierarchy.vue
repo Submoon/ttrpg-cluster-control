@@ -38,7 +38,7 @@
             })"
             :aria-label="item.ariaLabel"
             :aria-description="item.kind === 'object' && isDimmed(item.object)
-              ? 'Dimmed by active Type filters. Still available to inspect.'
+              ? 'Dimmed by active filters. Still available to inspect.'
               : undefined"
             :data-player-hierarchy-key="item.key"
             :data-player-hierarchy-level="level"
@@ -90,7 +90,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/player-projection'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
-import { playerObjectMatchesTypeFilters } from '../utils/player-type-filters'
 import { buildPlayerSystemHierarchy, summarizePlayerContextLabel } from '../utils/player-system-hierarchy'
 import type { PlayerHierarchyNode } from '../utils/player-system-hierarchy'
 import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
@@ -114,7 +113,7 @@ const props = withDefaults(defineProps<{
   document: PlayerSystemDocument
   selectedObjectId: string | null
   selectedOrbitId?: string | null
-  selectedTypeFilters?: readonly string[]
+  dimmedObjectIds: ReadonlySet<string>
   workspacePresentation?: boolean
 }>(), {
   selectedOrbitId: null,
@@ -218,7 +217,7 @@ function objectPresentation(item: PlayerTreeItem) {
 }
 
 function isDimmed(object: PlayerObjectMarker): boolean {
-  return !playerObjectMatchesTypeFilters(object, props.selectedTypeFilters ?? [])
+  return props.dimmedObjectIds.has(object.id)
 }
 
 function indexTreeItems(items: PlayerTreeItem[]): Map<string, PlayerTreeItem> {

@@ -197,14 +197,13 @@ import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerSystemGeometry } from '../utils/player-system-geometry'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
-import { playerObjectMatchesTypeFilters } from '../utils/player-type-filters'
 
 const props = defineProps<{
   document: PlayerSystemDocument
   label: string
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
-  selectedTypeFilters?: readonly string[]
+  dimmedObjectIds: ReadonlySet<string>
   searchLocatorObjectId?: string | null
   active?: boolean
   workspacePresentation?: boolean
@@ -280,7 +279,7 @@ function isSystemMapInteractiveTarget(target: EventTarget | null): boolean {
 }
 
 function isDimmed(object: PlayerSystemDocument['objects'][number]): boolean {
-  return !playerObjectMatchesTypeFilters(object, props.selectedTypeFilters ?? [])
+  return props.dimmedObjectIds.has(object.id)
 }
 
 function handleScenePointerIntent(): void {

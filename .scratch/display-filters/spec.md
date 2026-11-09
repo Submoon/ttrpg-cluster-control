@@ -1,6 +1,6 @@
 ---
 title: Display filters for the Warden and player consultation
-status: open
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -10,7 +10,7 @@ triage_labels:
 
 ## Source issue
 
-[Display filters and label management](https://github.com/Submoon/ttrpg-cluster-control/issues/8) was refreshed on 2026-11-06. It is open, carries `enhancement` and `priority:P1`, and has no comments. Its acceptance criteria cover an accessible filter panel, visibility controls, criteria that combine with AND, and filter state saved with the workspace. Its examples include the Jump Cluster, star systems, object types, status and custom labels. The [closed Wayfinder map](map.md) records the agreed local interpretation and extensions.
+[Display filters and label management](https://github.com/Submoon/ttrpg-cluster-control/issues/8) was refreshed on 2026-11-09. It is open, carries `enhancement` and `priority:P1`, and has no comments. Its acceptance criteria cover an accessible filter panel, visibility controls, criteria that combine with AND, and filter state saved with the workspace. Its examples include the Jump Cluster, star systems, object types, status and custom labels. The [closed Wayfinder map](map.md) records the agreed local interpretation and extensions.
 
 | Source request | Agreed local scope |
 | --- | --- |
@@ -190,3 +190,10 @@ The initial frontier contains Warden type filters and player published-type filt
 - **Handoff.** Refresh the source issue and baseline before implementation. Use the project development workflow and the approved dependency order above.
 - **Type-filter implementation baseline.** Work on the two initial slices started on 2026-11-09 from `7e4f6049dae7ab23b952316ab238410c2a714f0f`, equal to local `main` and the freshly fetched `origin/main`. The source issue was refreshed at intake.
 - **Publication, Field and Search locator baseline.** This batch uses `f66a18fbd02e8fb45e31bb626580526a4b7a053a` on `codex/display-type-filters`. It includes both prerequisite type-filter slices and is one commit ahead of the fetched `origin/main` at `7e4f6049dae7ab23b952316ab238410c2a714f0f`. The source issue was refreshed at intake.
+- **Search and public Field implementation baseline.** This batch uses `23e20c162a07bfb06d6b9cdd69bc26f983a88ab4` on `codex/display-type-filters`. It includes both prerequisite batches and is two commits ahead of the fetched `origin/main` at `7e4f6049dae7ab23b952316ab238410c2a714f0f`. The source issue was refreshed at intake.
+
+## Resolution
+
+All seven local implementation tickets are complete. The final two slices add independent criteria to Warden Search and published Field filters to player consultation. The GitHub source remains open and still lists saved filter settings among its acceptance criteria. The local specification uses session-only settings as agreed.
+
+The final runtime candidate `4f76698f` passed TypeScript, lint, the production build, 332 pure tests and the development storage test. The complete browser run passed 89 of 99 scenarios on its first run. The remaining ten passed sequentially against the same build, using the repository timeouts.

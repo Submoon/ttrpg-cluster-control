@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, ref } from 'vue'
-import { createLocalWorkspace, createOrbit, planMapEntityDeletion, updateWorkspaceObject } from '../domain/workspace'
+import { createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -225,6 +225,33 @@ test('search follows applied object edits through Undo and Redo without adding h
     search.query.value = 'veil-09'
     expect(search.results.value.find(result => result.target.kind === 'object')?.locationKey).toBe('VEIL-09')
     expect(harness.history.getStatus().totalActions).toBe(1)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('Search prunes removed Field choices and reports the Search-only criteria update @pure', () => {
+  const harness = createSearchHarness()
+  try {
+    const search = harness.workflows.search
+    search.setFieldConditions([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Breathable'],
+    }])
+    expect(search.fieldConditions.value).toEqual([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Breathable'],
+    }])
+
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
+
+    expect(search.fieldConditions.value).toEqual([])
+    expect(search.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+    expect(harness.store.selectedMapFieldConditions).toEqual([])
   } finally {
     harness.dispose()
   }

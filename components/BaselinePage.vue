@@ -123,6 +123,7 @@
               :cluster-move-presentation="clusterMovePresentation"
               :can-open-search-shortcut="canOpenSearchShortcut"
               :type-filter-options="typeFilterOptions"
+              :search-type-filter-options="searchTypeFilterOptions"
               :no-type-matches="activeView === 'system' && noMatches"
               :publication-filter-options="publicationFilterOptions"
               :field-filter-options="fieldOptions"
@@ -131,6 +132,11 @@
               :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
+              v-model:search-selected-types="searchSelectedTypes"
+              v-model:search-publication-modes="searchPublicationModes"
+              v-model:search-field-conditions="searchFieldConditions"
+              :search-active-criterion-count="search.activeCriterionCount.value"
+              :search-filter-invalidation-notice="search.invalidationNotice.value"
               v-model:type-filters-open="mapTypeFiltersOpen"
               v-model:selected-types="selectedMapObjectTypes"
               v-model:publication-modes="selectedPublicationModes"
@@ -799,6 +805,18 @@ function selectPublicationMenuMode(mode: import('../domain/workspace').Publicati
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
+const searchSelectedTypes = computed({
+  get: () => search.selectedTypes.value,
+  set: types => search.setSelectedTypes(types, searchTypeFilterOptions.value),
+})
+const searchPublicationModes = computed({
+  get: () => search.selectedPublicationModes.value,
+  set: modes => search.setPublicationModes(modes),
+})
+const searchFieldConditions = computed({
+  get: () => search.fieldConditions.value,
+  set: conditions => search.setFieldConditions(conditions),
+})
 async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): Promise<Awaited<ReturnType<typeof search.reveal>>> {
   const outcome = await search.reveal(target)
   if (outcome.status === 'rejected') await chartNamesDialog.value?.whenClosingFocusSettled()
@@ -816,7 +834,7 @@ const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
   set: open => editorUi.setMapTypeFiltersOpen(open),
 })
-const typeFilterOptions = computed(() => {
+const currentTypeFilterOptions = computed(() => {
   const options = new Map<string, { value: string, label: string }>()
   for (const type of catalogueTypes) {
     const option = mapObjectTypeOption({ family: type.family, subtype: type.value })
@@ -829,12 +847,30 @@ const typeFilterOptions = computed(() => {
       if (!options.has(option.value)) options.set(option.value, option)
     }
   }
-  for (const value of editorUi.selectedMapObjectTypes) {
-    const label = editorUi.mapTypeFilterOptionLabels[value]
+  return [...options.values()]
+})
+function typeOptionsWithRetainedSelection(
+  currentOptions: readonly { value: string, label: string }[],
+  selectedTypes: readonly string[],
+  retainedLabels: Readonly<Record<string, string>>,
+): { value: string, label: string }[] {
+  const options = new Map(currentOptions.map(option => [option.value, option]))
+  for (const value of selectedTypes) {
+    const label = retainedLabels[value]
     if (!options.has(value) && label) options.set(value, { value, label })
   }
   return [...options.values()]
-})
+}
+const typeFilterOptions = computed(() => typeOptionsWithRetainedSelection(
+  currentTypeFilterOptions.value,
+  editorUi.selectedMapObjectTypes,
+  editorUi.mapTypeFilterOptionLabels,
+))
+const searchTypeFilterOptions = computed(() => typeOptionsWithRetainedSelection(
+  currentTypeFilterOptions.value,
+  editorUi.selectedSearchObjectTypes,
+  editorUi.searchTypeFilterOptionLabels,
+))
 const selectedMapObjectTypes = computed({
   get: () => editorUi.selectedMapObjectTypes,
   set: types => editorUi.setSelectedMapObjectTypes(types, typeFilterOptions.value),
@@ -870,6 +906,7 @@ const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation,
 watch(hydrationState, (state, previous) => {
   if (state !== 'loading' && previous !== 'loading') return
   resetOrbitAdjustments()
+  search.reset()
   wardenFilters.clearAll()
   mapTypeFiltersOpen.value = false
 }, { flush: 'sync' })

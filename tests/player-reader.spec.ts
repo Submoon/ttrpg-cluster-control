@@ -71,7 +71,14 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     type: 'star-system',
     label: 'Remote System',
     map: {
-      objects: [{ ...publicStation, id: 'object-1', label: 'Remote Echo', position: { x: 250, y: 250 }, placement: { kind: 'system' } }],
+      objects: [{
+        ...publicStation,
+        id: 'object-1',
+        label: 'Remote Echo',
+        position: { x: 250, y: 250 },
+        placement: { kind: 'system' },
+        fields: [{ name: 'Atmosphere', type: 'single-select', value: 'Toxic' }],
+      }],
       orbits: [],
     },
   })
@@ -156,7 +163,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(system).toBeVisible()
 
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
-  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
   await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   const harborMarker = system.getByRole('button', { name: 'Inspect Harbor World', exact: true })
@@ -165,8 +172,45 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
   await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
   await expect(unknownMarker).toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toBeVisible()
+  const filterButton = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
+  await expect(filterButton).toBeVisible()
   await expect(system.locator('.player-system-orbits ellipse').first()).toHaveCSS('opacity', '1')
+
+  await filterButton.click()
+  await filters.getByRole('combobox', { name: 'Add Field filter', exact: true }).click()
+  await page.getByRole('option', { name: 'Single select · Atmosphere', exact: true }).click()
+  await filters.getByRole('combobox', { name: 'Single select · Atmosphere operator', exact: true }).click()
+  await expect(page.getByRole('option', { name: 'No value', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await filters.getByRole('checkbox', { name: 'Breathable', exact: true }).check()
+  await expect(filters).toHaveCount(1)
+  await expect(filters).toHaveAccessibleName('Filters (2 active criteria)')
+  await expect(filters.getByText('No objects match', { exact: true })).toBeVisible()
+
+  await filters.getByRole('button', { name: 'Remove Type', exact: true }).click()
+  await expect(filters).toHaveCount(1)
+  await expect(filters).toHaveAccessibleName('Filters (1 active criterion)')
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  const fieldFilterButton = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
+  await expect(fieldFilterButton).toHaveCount(1)
+  await expect(harborMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(moonMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await fieldFilterButton.click()
+  await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await filters.getByRole('button', { name: 'Clear all', exact: true }).click()
+  await expect(filters).toHaveCount(1)
+  await expect(filters).toHaveAccessibleName('Filters')
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  const clearedFilterButton = page.getByRole('button', { name: 'Filters', exact: true })
+  await expect(clearedFilterButton).toHaveCount(1)
+  await expect(harborMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await clearedFilterButton.click()
+  await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toHaveCount(1)
+  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
 
   const systemZoom = system.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 8; step += 1) {
@@ -250,6 +294,14 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
   await expect(searchLocator).toHaveCount(0)
 
+  const activeTypeFilters = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
+  await activeTypeFilters.click()
+  await filters.getByRole('combobox', { name: 'Add Field filter', exact: true }).click()
+  await page.getByRole('option', { name: 'Single select · Atmosphere', exact: true }).click()
+  await filters.getByRole('checkbox', { name: 'Breathable', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true })).toBeVisible()
+
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const crossSystemSearch = page.getByRole('dialog', { name: 'Search player map', exact: true })
   await crossSystemSearch.getByRole('combobox').fill('Remote Echo')
@@ -263,8 +315,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(remoteMarker).toHaveClass(/player-system-object-marker--dimmed/)
   await expect(searchLocator).toBeVisible()
 
-  await page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true }).click()
-  const activeFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true }).click()
+  const activeFilters = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
   await activeFilters.getByRole('button', { name: 'Clear all', exact: true }).click()
   await activeFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()

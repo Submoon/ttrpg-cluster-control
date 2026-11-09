@@ -16,9 +16,12 @@
     v-if="props.showTypeFilters"
     v-model:open="typeFilterOpen"
     v-model:selected-types="selectedTypes"
+    v-model:field-conditions="fieldConditions"
     :options="props.typeFilterOptions"
+    :field-filter-options="props.fieldFilterOptions"
+    :allow-no-value="false"
     :compact="props.compact"
-    :no-matches="props.typeFilterNoMatches"
+    :no-matches="props.filterNoMatches"
     :portal="!props.embedded"
   />
   <MapFilesPopover v-model:open="filesOpen" :scope="props.fileScope" :portal="!props.embedded">
@@ -48,6 +51,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
 import type { PlayerSearchTarget } from '../utils/player-search'
 import type { SearchResult } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
@@ -66,8 +70,9 @@ const props = defineProps<{
   embedded?: boolean
   showTypeFilters: boolean
   typeFilterOptions: readonly { value: string, label: string }[]
+  fieldFilterOptions: readonly FieldFilterOption[]
   compact: boolean
-  typeFilterNoMatches: boolean
+  filterNoMatches: boolean
 }>()
 const emit = defineEmits<{ 'export-image': [format: MapImageFormat, palette: MapImagePalette] }>()
 
@@ -76,6 +81,7 @@ const searchQuery = defineModel<string>('searchQuery', { required: true })
 const filesOpen = defineModel<boolean>('filesOpen', { required: true })
 const typeFilterOpen = defineModel<boolean>('typeFilterOpen', { required: true })
 const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
+const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { required: true })
 const search = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLight = ref(false)
 

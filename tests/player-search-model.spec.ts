@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import type { PlayerClusterDocument } from '../domain/player-projection'
+import type { FieldCondition } from '../utils/field-filter-matching'
 import { searchPlayerDocument } from '../utils/player-search'
+import { playerFieldFilterId, playerFieldFilterOptions, playerObjectMatchesFieldFilters } from '../utils/player-field-filters'
 
 function playerDocument(): PlayerClusterDocument {
   return {
@@ -137,4 +139,83 @@ test('player navigation targets retain the exact document identity across repeat
   expect(firstTarget?.document).toBe(firstDocument)
   expect(replacementTarget?.document).toBe(replacementDocument)
   expect(replacementTarget?.document).not.toBe(firstTarget?.document)
+})
+
+test('player Field options use only published assignments and distinguish same-named kinds @pure', () => {
+  const document = playerDocument()
+  const system = document.systems.find(candidate => candidate.disclosure === 'revealed')
+  if (!system || system.disclosure !== 'revealed') throw new Error('The public fixture has no revealed system.')
+  const object = system.map.objects.find(candidate => candidate.disclosure === 'revealed')
+  if (!object || object.disclosure !== 'revealed') throw new Error('The public fixture has no revealed object.')
+  object.fields = [
+    { name: 'Atmosphere', type: 'text', value: 'Vacuum' },
+    { name: 'Atmosphere', type: 'text', value: 'Breathable' },
+    { name: 'Atmosphere', type: 'single-select', value: 'Thin' },
+    { name: 'Survey index', type: 'number', value: 0 },
+    { name: 'Safe route', type: 'boolean', value: false },
+  ]
+
+  const options = playerFieldFilterOptions(document)
+  const atmosphereText = options.find(option => option.fieldId === playerFieldFilterId({ name: 'Atmosphere', type: 'text' }))
+  const atmosphereChoice = options.find(option => option.fieldId === playerFieldFilterId({ name: 'Atmosphere', type: 'single-select' }))
+
+  expect(options.map(option => option.label)).toEqual([
+    'Number · Survey index',
+    'Single select · Atmosphere',
+    'Text · Atmosphere',
+    'Yes or no · Safe route',
+  ])
+  expect(atmosphereText).toMatchObject({ label: 'Text · Atmosphere', type: 'text', options: [] })
+  expect(atmosphereChoice).toMatchObject({ label: 'Single select · Atmosphere', type: 'single-select', options: ['Thin'] })
+  expect(options.some(option => option.fieldId === playerFieldFilterId({ name: 'unpublished', type: 'text' }))).toBe(false)
+})
+
+test('player Field filters OR assignments and selected choices, then AND Field criteria @pure', () => {
+  const document = playerDocument()
+  const system = document.systems.find(candidate => candidate.disclosure === 'revealed')
+  if (!system || system.disclosure !== 'revealed') throw new Error('The public fixture has no revealed system.')
+  const object = system.map.objects.find(candidate => candidate.disclosure === 'revealed')
+  if (!object || object.disclosure !== 'revealed') throw new Error('The public fixture has no revealed object.')
+  object.fields = [
+    { name: 'Atmosphere', type: 'text', value: 'Vacuum' },
+    { name: 'Atmosphere', type: 'text', value: 'Breathable' },
+    { name: 'Atmosphere', type: 'single-select', value: 'Thin' },
+    { name: 'Survey index', type: 'number', value: 0 },
+    { name: 'Safe route', type: 'boolean', value: false },
+  ]
+  const conditions: FieldCondition[] = [
+    {
+      fieldId: playerFieldFilterId({ name: 'Atmosphere', type: 'text' }),
+      type: 'text',
+      operator: 'contains',
+      value: 'breath',
+    },
+    {
+      fieldId: playerFieldFilterId({ name: 'Atmosphere', type: 'single-select' }),
+      type: 'single-select',
+      operator: 'is',
+      values: ['Dense', 'Thin'],
+    },
+    {
+      fieldId: playerFieldFilterId({ name: 'Survey index', type: 'number' }),
+      type: 'number',
+      operator: 'equals',
+      value: 0,
+    },
+    {
+      fieldId: playerFieldFilterId({ name: 'Safe route', type: 'boolean' }),
+      type: 'boolean',
+      operator: 'is',
+      value: false,
+    },
+  ]
+
+  expect(playerObjectMatchesFieldFilters(object, conditions)).toBe(true)
+  expect(playerObjectMatchesFieldFilters(object, [
+    ...conditions,
+    { fieldId: playerFieldFilterId({ name: 'Safe route', type: 'boolean' }), type: 'boolean', operator: 'is', value: true },
+  ])).toBe(false)
+  expect(playerObjectMatchesFieldFilters(object, [
+    { fieldId: playerFieldFilterId({ name: 'Atmosphere', type: 'text' }), operator: 'no-value' },
+  ])).toBe(false)
 })

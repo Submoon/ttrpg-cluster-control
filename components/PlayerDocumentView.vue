@@ -41,7 +41,7 @@
             :label="cachedSystem.label"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
-            :selected-type-filters="selectedTypeFilters"
+            :dimmed-object-ids="dimmedObjectIds"
             :search-locator-object-id="searchLocatorObjectId"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
@@ -82,6 +82,7 @@
               v-model:files-open="filesOpen"
               v-model:type-filter-open="typeFilterOpen"
               v-model:selected-types="selectedTypeFilters"
+              v-model:field-conditions="selectedFieldConditions"
               :search-results="searchResults"
               :reveal-search-target="revealSearchTarget"
               :can-open-search-shortcut="canOpenSearchShortcut"
@@ -90,8 +91,9 @@
               :export-error="playerExportError"
               :show-type-filters="selectedSystem !== null"
               :type-filter-options="typeFilterOptions"
+              :field-filter-options="fieldFilterOptions"
               :compact="isCompactViewport"
-              :type-filter-no-matches="typeFilterNoMatches"
+              :filter-no-matches="filterNoMatches"
               @export-image="downloadPlayerImage"
             >
               <UButton
@@ -127,7 +129,7 @@
           :document="selectedSystem.map"
           :selected-object-id="selectedObjectId"
           :selected-orbit-id="selectedOrbitId"
-          :selected-type-filters="selectedTypeFilters"
+          :dimmed-object-ids="dimmedObjectIds"
           workspace-presentation
           @inspect-object="inspectObject"
           @inspect-orbit="inspectOrbit"
@@ -210,6 +212,7 @@
             v-model:files-open="filesOpen"
             v-model:type-filter-open="typeFilterOpen"
             v-model:selected-types="selectedTypeFilters"
+            v-model:field-conditions="selectedFieldConditions"
             :search-results="searchResults"
             :reveal-search-target="revealSearchTarget"
             :can-open-search-shortcut="canOpenSearchShortcut"
@@ -218,8 +221,9 @@
             :export-error="playerExportError"
             :show-type-filters="selectedSystem !== null"
             :type-filter-options="typeFilterOptions"
+            :field-filter-options="fieldFilterOptions"
             :compact="isCompactViewport"
-            :type-filter-no-matches="typeFilterNoMatches"
+            :filter-no-matches="filterNoMatches"
             embedded
             @export-image="downloadPlayerImage"
           >
@@ -258,7 +262,7 @@
             :label="cachedSystem.label"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
-            :selected-type-filters="selectedTypeFilters"
+            :dimmed-object-ids="dimmedObjectIds"
             :search-locator-object-id="searchLocatorObjectId"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
@@ -274,7 +278,7 @@
               :document="selectedSystem.map"
               :selected-object-id="selectedObjectId"
               :selected-orbit-id="selectedOrbitId"
-              :selected-type-filters="selectedTypeFilters"
+              :dimmed-object-ids="dimmedObjectIds"
               @inspect-object="inspectObject"
               @inspect-orbit="inspectOrbit"
             />
@@ -330,8 +334,10 @@ import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSyst
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
 import type { PlayerInspectionTarget, PlayerUsableRectReader } from '../utils/player-inspection'
+import type { FieldCondition } from '../utils/field-filter-matching'
 import { searchPlayerDocument, type PlayerSearchTarget } from '../utils/player-search'
 import { playerObjectMatchesTypeFilters, playerTypeFilterOptions } from '../utils/player-type-filters'
+import { playerFieldFilterOptions, playerObjectMatchesFieldFilters } from '../utils/player-field-filters'
 import PlayerClusterMap from './PlayerClusterMap.vue'
 import PlayerSystemMap from './PlayerSystemMap.vue'
 import PlayerClusterHierarchy from './PlayerClusterHierarchy.vue'
@@ -386,6 +392,7 @@ const searchQuery = ref('')
 const filesOpen = ref(false)
 const typeFilterOpen = ref(false)
 const selectedTypeFilters = ref<string[]>([])
+const selectedFieldConditions = ref<FieldCondition[]>([])
 const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
 const clusterMarkerOpener = ref<FocusTarget | null>(null)
@@ -406,12 +413,18 @@ const selectedSystem = computed<RevealedSystem | null>(() =>
 )
 const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
 const typeFilterOptions = computed(() => playerTypeFilterOptions(props.document))
-const typeFilterNoMatches = computed(() => {
+const fieldFilterOptions = computed(() => playerFieldFilterOptions(props.document))
+const dimmedObjectIds = computed<ReadonlySet<string>>(() => {
+  const objects = selectedSystem.value?.map.objects ?? []
+  return new Set(objects
+    .filter(object => !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
+      || !playerObjectMatchesFieldFilters(object, selectedFieldConditions.value))
+    .map(object => object.id))
+})
+const filterNoMatches = computed(() => {
   const system = selectedSystem.value
-  if (!system || selectedTypeFilters.value.length === 0 || system.map.objects.length === 0) return false
-  return !system.map.objects.some(object =>
-    playerObjectMatchesTypeFilters(object, selectedTypeFilters.value),
-  )
+  if (!system || dimmedObjectIds.value.size === 0 || system.map.objects.length === 0) return false
+  return dimmedObjectIds.value.size === system.map.objects.length
 })
 const mapFileScope = computed(() => selectedSystem.value
   ? `star system ${selectedSystem.value.label}`
@@ -427,7 +440,7 @@ const searchLocatorObjectId = computed(() => {
     || locator.systemDocument !== system?.map || target?.kind !== 'object'
     || locator.map !== systemMapHandle.value || target.id !== locator.objectId) return null
   const object = system.map.objects.find(candidate => candidate.id === locator.objectId)
-  return object && !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
+  return object && dimmedObjectIds.value.has(object.id)
     ? object.id
     : null
 })
@@ -522,7 +535,7 @@ watch(selectedSystem, system => {
     selectedTarget.value = null
   }
 })
-watch(selectedTypeFilters, () => {
+watch([selectedTypeFilters, selectedFieldConditions], () => {
   if (searchLocator.value && searchLocatorObjectId.value === null) searchLocator.value = null
 }, { deep: true, flush: 'sync' })
 
@@ -587,6 +600,7 @@ function resetDocumentView(): void {
   searchQuery.value = ''
   typeFilterOpen.value = false
   selectedTypeFilters.value = []
+  selectedFieldConditions.value = []
   invalidatePendingReveal()
   searchLocator.value = null
   selectedSystemId.value = null
@@ -810,7 +824,7 @@ async function attemptPendingReveal(pending: PendingReveal): Promise<void> {
   if (map.revealTarget(pending.target, pending.systemDocument) && ownsPendingReveal(pending)) {
     if (pending.fromSearch && pending.target.kind === 'object') {
       const object = pending.systemDocument.objects.find(candidate => candidate.id === pending.target.id)
-      if (object && !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)) {
+      if (object && dimmedObjectIds.value.has(object.id)) {
         searchLocator.value = {
           clusterDocument: pending.clusterDocument,
           system: pending.system,

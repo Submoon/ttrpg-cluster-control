@@ -20,9 +20,11 @@ import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExit
 import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
 import { usePublicationWorkflows } from './editor-workflows/usePublicationWorkflows'
 import { searchWorkspace } from '../utils/workspace-search'
+import { reconcileFieldConditions, wardenFieldFilterOptions } from '../utils/warden-map-filters'
 import { usePublicationMenu } from './usePublicationMenu'
+import type { FieldCondition } from '../utils/field-filter-matching'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
-import type { SearchResult } from '../utils/workspace-search'
+import type { SearchResult, WorkspaceSearchCriteria } from '../utils/workspace-search'
 
 type PublicationFocusWorkflowOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
@@ -34,13 +36,17 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
+  const searchFieldInvalidationNotice = ref<string | null>(null)
   const workspaceContextId = computed(() => {
     const current = workspace.value
     return current ? `${current.id}:${current.cluster.id}` : null
   })
 
   watch(workspaceContextId, contextId => {
-    if (store.workspaceId !== contextId) store.reset(contextId)
+    if (store.workspaceId !== contextId) {
+      store.reset(contextId)
+      searchFieldInvalidationNotice.value = null
+    }
   }, { immediate: true, flush: 'sync' })
   onBeforeUnmount(() => store.reset(null))
 
@@ -193,9 +199,34 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     get: () => store.searchQuery,
     set: (query: string) => store.setSearchQuery(query),
   })
+  const searchCriteria = computed<WorkspaceSearchCriteria>(() => ({
+    types: store.selectedSearchObjectTypes,
+    publicationModes: store.selectedSearchPublicationModes,
+    fieldConditions: store.selectedSearchFieldConditions,
+  }))
   const searchResults = computed<SearchResult[]>(() => workspace.value
-    ? searchWorkspace(workspace.value, searchQuery.value)
+    ? searchWorkspace(workspace.value, searchQuery.value, searchCriteria.value)
     : [])
+  const searchActiveCriterionCount = computed(() => Number(searchCriteria.value.types.length > 0)
+    + Number(searchCriteria.value.publicationModes.length > 0)
+    + searchCriteria.value.fieldConditions.length)
+  watch([workspace, () => store.selectedSearchFieldConditions], ([currentWorkspace, conditions]) => {
+    if (!currentWorkspace || conditions.length === 0) return
+    const reconciliation = reconcileFieldConditions(conditions, wardenFieldFilterOptions(currentWorkspace))
+    if (!reconciliation.changed) return
+    store.setSearchFieldConditions(reconciliation.conditions)
+    searchFieldInvalidationNotice.value = 'Search filters updated because a Field or choice is no longer available.'
+  }, { flush: 'sync' })
+
+  function setSearchFieldConditions(conditions: readonly FieldCondition[]): void {
+    searchFieldInvalidationNotice.value = null
+    store.setSearchFieldConditions(conditions)
+  }
+
+  function resetSearch(): void {
+    searchFieldInvalidationNotice.value = null
+    store.resetSearch()
+  }
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
@@ -412,6 +443,16 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       open: searchOpen,
       query: searchQuery,
       results: searchResults,
+      selectedTypes: computed(() => store.selectedSearchObjectTypes),
+      selectedPublicationModes: computed(() => store.selectedSearchPublicationModes),
+      fieldConditions: computed(() => store.selectedSearchFieldConditions),
+      invalidationNotice: computed(() => searchFieldInvalidationNotice.value),
+      activeCriterionCount: searchActiveCriterionCount,
+      setSelectedTypes: (types: readonly string[], options: readonly { value: string, label: string }[]) =>
+        store.setSelectedSearchObjectTypes(types, options),
+      setPublicationModes: store.setSearchPublicationModes,
+      setFieldConditions: setSearchFieldConditions,
+      reset: resetSearch,
       reveal: navigation.revealSearchTarget,
     },
     historyGuards: {

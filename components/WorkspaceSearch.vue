@@ -26,15 +26,15 @@
       :description="dialogDescription"
       :dismissible="true"
       :content="{ onOpenAutoFocus: focusSearchOnOpen, onCloseAutoFocus: focusAfterSearchClose }"
-      :ui="{
-        content: 'workspace-search-dialog-content max-h-[calc(100dvh-1rem)] overflow-hidden',
-        body: 'flex min-h-0 flex-col overflow-hidden',
-      }"
+      :ui="{ content: modalContentClass, body: modalBodyClass }"
     >
       <template #body>
         <div ref="searchBody" class="workspace-search-body">
+          <div v-if="$slots.filters" class="workspace-search-filters">
+            <slot name="filters" />
+          </div>
           <p
-            v-if="query.trim() && props.results.length"
+            v-if="hasSearchIntent && props.results.length"
             class="workspace-search-count"
             role="status"
             aria-live="polite"
@@ -65,7 +65,7 @@
               content: 'workspace-search-palette-content',
               viewport: 'workspace-search-palette-viewport',
               item: 'workspace-search-result',
-              empty: query.trim() ? undefined : 'hidden',
+              empty: hasSearchIntent || hasFilterSlot ? undefined : 'hidden',
             }"
             @keydown.capture="handlePaletteKeydown"
             @compositionstart="handleCompositionStart"
@@ -97,7 +97,15 @@
 
             <template #empty>
               <p v-if="query.trim()" class="workspace-search-hint" role="status">
-                No matches for “{{ query.trim() }}”.
+                {{ props.criteriaActive
+                  ? `No objects match “${query.trim()}” and the Search filters.`
+                  : `No matches for “${query.trim()}”.` }}
+              </p>
+              <p v-else-if="props.criteriaActive" class="workspace-search-hint" role="status">
+                No objects match the Search filters.
+              </p>
+              <p v-else-if="hasFilterSlot" class="workspace-search-hint" role="status">
+                Enter a name or Location key, or select Search filters.
               </p>
             </template>
           </UCommandPalette>
@@ -108,7 +116,7 @@
 </template>
 
 <script setup lang="ts" generic="TTarget = SearchTarget">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, watch } from 'vue'
 import type { CommandPaletteGroup, CommandPaletteItem } from '@nuxt/ui/components/CommandPalette.vue'
 import { useKbd } from '@nuxt/ui/composables/useKbd'
 import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
@@ -126,21 +134,34 @@ type WorkspaceSearchPaletteItem<T = SearchTarget> = CommandPaletteItem & {
 }
 type WorkspaceSearchPaletteGroup<T = SearchTarget> = CommandPaletteGroup<WorkspaceSearchPaletteItem<T>>
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   results: readonly SearchResult<TTarget>[]
   reveal: (target: TTarget) => Promise<RevealOutcome>
   canOpenSearchShortcut: () => boolean
   title?: string
   description?: string
+  criteriaActive?: boolean
   /** Optional namespace for SSR-stable per-instance combobox and listbox IDs. */
   idPrefix?: string
   /** Exact dialog allowed to own this palette's shortcut and rejected-result focus. */
   getShortcutOwningDialog?: () => HTMLElement | null
-}>()
+}>(), {
+  criteriaActive: false,
+})
 
 const open = defineModel<boolean>('open', { required: true })
 const query = defineModel<string>('query', { required: true })
 const { macOS } = useKbd()
+const slots = useSlots()
+const hasFilterSlot = computed(() => Boolean(slots.filters))
+const hasSearchIntent = computed(() => !!query.value.trim() || props.criteriaActive)
+const modalContentClass = computed(() => [
+  'workspace-search-dialog-content max-h-[calc(100dvh-1rem)]',
+  hasFilterSlot.value ? 'workspace-search-dialog-content--criteria overflow-visible' : 'overflow-hidden',
+].join(' '))
+const modalBodyClass = computed(() => hasFilterSlot.value
+  ? 'flex min-h-0 flex-col overflow-visible'
+  : 'flex min-h-0 flex-col overflow-hidden')
 const dialogTitle = computed(() => props.title ?? 'Search workspace')
 const dialogDescription = computed(() => props.description
   ?? 'Find the Jump Cluster or any star system by name, or any object in the workspace by name or Location key.')
@@ -283,7 +304,8 @@ function focusSearchInput(): void {
     listbox.id = resultsId.value
     listbox.setAttribute('aria-label', 'Search results')
   }
-  searchBody.value?.querySelector<HTMLInputElement>('[role="combobox"]')?.focus()
+  const input = document.getElementById(inputId.value)
+  if (input instanceof HTMLInputElement && searchBody.value?.contains(input)) input.focus()
 }
 
 function focusSearchOnOpen(event: Event): void {
@@ -436,6 +458,12 @@ defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
   gap: 0.5rem;
 }
 
+.workspace-search-filters {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+}
+
 .workspace-search-count {
   flex: 0 0 auto;
   margin: 0;
@@ -508,6 +536,10 @@ defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
 <style>
 .workspace-search-dialog-content {
   width: min(42rem, calc(100vw - 1.25rem));
+}
+
+.workspace-search-dialog-content--criteria {
+  isolation: isolate;
 }
 
 .workspace-search-dialog-content .workspace-search-palette-content {

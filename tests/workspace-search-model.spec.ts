@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace } from '../domain/workspace'
 
-import { searchWorkspace } from '../utils/workspace-search'
+import { searchWorkspace, type WorkspaceSearchCriteria } from '../utils/workspace-search'
+import { mapObjectTypeKey } from '../utils/map-type-filters'
 
 test('workspace search trims and normalizes a literal query, then ranks exact, prefix, and substring matches @pure', () => {
   const workspace = createLocalWorkspace('Café Nebula', 'Alpha Cafe')
@@ -105,4 +106,80 @@ test('object matches are ranked once by their strongest name or Location key mat
 
   expect(objects.map(result => result.name)).toEqual(['Echo', 'Far Echo', 'The Echo'])
   expect(objects.filter(result => result.target.kind === 'object' && result.target.objectId === exactNameObject.id)).toHaveLength(1)
+})
+
+test('criteria-only workspace search returns matching objects grouped by system and sorted by name with stable duplicate ties @pure', () => {
+  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const firstSystem = workspace.cluster.systems[0]
+  const template = firstSystem?.objects[0]
+  if (!firstSystem || !template) throw new Error('The local workspace did not create its first system object.')
+  const relayType = { family: 'Other' as const, subtype: 'relay' }
+  const relay = (id: string, name: string) => ({
+    ...template,
+    id,
+    name,
+    family: relayType.family,
+    subtype: relayType.subtype,
+  })
+  firstSystem.objects = [relay('vesper-relay', 'Beacon')]
+  workspace.cluster.systems.push({
+    ...firstSystem,
+    id: 'system-altair',
+    name: 'Altair',
+    objects: [relay('relay-z', 'Beacon'), relay('relay-a', 'Beacon'), relay('relay-signal', 'Signal')],
+  })
+
+  const results = searchWorkspace(workspace, '   ', {
+    types: [mapObjectTypeKey(relayType)],
+    publicationModes: [],
+    fieldConditions: [],
+  })
+
+  expect(results.map(result => [result.contextLabel, result.name, result.target.kind === 'object' ? result.target.objectId : null])).toEqual([
+    ['Star System: Altair', 'Beacon', 'relay-a'],
+    ['Star System: Altair', 'Beacon', 'relay-z'],
+    ['Star System: Altair', 'Signal', 'relay-signal'],
+    ['Star System: Vesper', 'Beacon', 'vesper-relay'],
+  ])
+})
+
+test('text and criteria combine with AND while text ranking and duplicate occurrences are assigned before criteria filtering @pure', () => {
+  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]
+  const template = system?.objects[0]
+  if (!system || !template) throw new Error('The local workspace did not create its first system object.')
+  workspace.objectFieldSettings.customFields = [{
+    id: 'field-alert',
+    name: 'Signal',
+    playerShared: false,
+    type: 'text',
+  }]
+  const beacon = (id: string, family: 'Other' | 'CelestialBody', subtype: string, value: string) => ({
+    ...template,
+    id,
+    name: 'Beacon',
+    family,
+    subtype,
+    publication: 'revealed' as const,
+    locationKey: 'B-01',
+    customFieldValues: { 'field-alert': value },
+  })
+  system.objects = [
+    beacon('object-a', 'Other', 'relay', 'quiet'),
+    beacon('object-z', 'Other', 'relay', 'alert'),
+    beacon('object-planet', 'CelestialBody', 'planet', 'alert'),
+  ]
+
+  const criteria = {
+    types: [mapObjectTypeKey({ family: 'Other', subtype: 'relay' })],
+    publicationModes: ['revealed'],
+    fieldConditions: [{ fieldId: 'field-alert', type: 'text', operator: 'contains', value: 'alert' }],
+  } satisfies WorkspaceSearchCriteria
+  const results = searchWorkspace(workspace, 'beacon', criteria)
+  const criteriaOnlyResults = searchWorkspace(workspace, '', criteria)
+
+  expect(results.map(result => result.target.kind === 'object' ? result.target.objectId : null)).toEqual(['object-z'])
+  expect(results[0]?.occurrence).toBe(2)
+  expect(criteriaOnlyResults.map(result => result.target.kind === 'object' ? result.target.objectId : null)).toEqual(['object-z'])
+  expect(criteriaOnlyResults[0]?.occurrence).toBe(2)
 })

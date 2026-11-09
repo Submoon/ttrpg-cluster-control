@@ -1,10 +1,11 @@
 <template>
-  <section class="grid min-w-0 gap-2" aria-labelledby="warden-field-filters-heading">
-    <h3 id="warden-field-filters-heading" class="m-0 font-medium">Fields</h3>
+  <section class="grid min-w-0 gap-2" :aria-labelledby="headingId">
+    <h3 :id="headingId" class="m-0 font-medium">Fields</h3>
     <UFormField label="Add Field filter">
       <USelect
         v-model="selectedFieldId"
         :items="availableFieldItems"
+        :portal="props.portal"
         placeholder="Choose a Field"
         aria-label="Add Field filter"
         class="w-full"
@@ -35,6 +36,7 @@
       <USelect
         :model-value="draftFor(option.fieldId).operator"
         :items="operatorItems(option)"
+        :portal="props.portal"
         :aria-label="`${option.label} operator`"
         @update:model-value="setOperator(option, String($event))"
       />
@@ -78,6 +80,7 @@
           <USelect
             :model-value="draftFor(option.fieldId).booleanValue"
             :items="booleanItems"
+            :portal="props.portal"
             placeholder="Choose Yes or No"
             :aria-label="`${option.label} value`"
             @update:model-value="setBooleanValue(option, String($event ?? ''))"
@@ -99,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
 
 interface FieldDraft {
@@ -112,15 +115,18 @@ interface FieldDraft {
   selectedValues: string[]
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   options: readonly FieldFilterOption[]
   conditions: readonly FieldCondition[]
-}>()
+  allowNoValue?: boolean
+  portal?: boolean | string
+}>(), { allowNoValue: true, portal: true })
 
 const emit = defineEmits<{
   'update:conditions': [conditions: FieldCondition[]]
 }>()
 
+const headingId = useId()
 const selectedFieldId = ref('')
 const drafts = ref<Record<string, FieldDraft>>(Object.create(null) as Record<string, FieldDraft>)
 const booleanItems = [
@@ -230,7 +236,9 @@ function operatorItems(option: FieldFilterOption): { label: string; value: strin
     : option.type === 'number'
       ? [['=', 'equals'], ['≠', 'not-equals'], ['<', 'less-than'], ['≤', 'less-than-or-equal'], ['>', 'greater-than'], ['≥', 'greater-than-or-equal'], ['Between', 'between']]
       : [['Is', 'is']]
-  return [...operators.map(([label, value]) => ({ label: label!, value: value! })), { label: 'No value', value: 'no-value' }]
+  const items = operators.map(([label, value]) => ({ label: label!, value: value! }))
+  if (props.allowNoValue) items.push({ label: 'No value', value: 'no-value' })
+  return items
 }
 
 function updateDraft(option: FieldFilterOption, update: Partial<FieldDraft>): void {
@@ -262,7 +270,7 @@ function toggleChoice(option: FieldFilterOption, choice: string, checked: boolea
 
 function conditionFromDraft(option: FieldFilterOption, draft: FieldDraft): FieldCondition | null {
   if (draft.operator === 'no-value') {
-    return { fieldId: option.fieldId, operator: 'no-value' }
+    return props.allowNoValue ? { fieldId: option.fieldId, operator: 'no-value' } : null
   }
   if (option.type === 'text') {
     if ((draft.operator === 'contains' || draft.operator === 'equals' || draft.operator === 'does-not-contain') && draft.textValue.trim()) {

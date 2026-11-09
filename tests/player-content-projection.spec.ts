@@ -9,6 +9,8 @@ import {
   updateCustomFieldApplicability,
   updateSystemObject,
 } from '../domain/workspace'
+import type { FieldCondition } from '../utils/field-filter-matching'
+import { playerFieldFilterId, playerFieldFilterOptions, playerObjectMatchesFieldFilters } from '../utils/player-field-filters'
 
 test('revealed player objects contain only player text and permitted Field values @pure', () => {
   const initial = createLocalWorkspace('Private Cluster Notes', 'Aster Reach')
@@ -90,6 +92,35 @@ test('revealed player objects contain only player text and permitted Field value
   if (!system || system.disclosure !== 'revealed') {
     throw new Error('Expected the published star system to have an internal map.')
   }
+
+  const fieldOptions = playerFieldFilterOptions(document)
+  const factionFieldId = playerFieldFilterId({ name: 'Faction', type: 'single-select' })
+  const merchantsCondition: FieldCondition = {
+    fieldId: factionFieldId,
+    type: 'single-select',
+    operator: 'is',
+    values: ['Merchants'],
+  }
+  const cultCondition: FieldCondition = { ...merchantsCondition, values: ['Cult'] }
+  const wardenClueCondition: FieldCondition = {
+    fieldId: playerFieldFilterId({ name: 'Warden Clue', type: 'text' }),
+    type: 'text',
+    operator: 'contains',
+    value: 'ONLY THE WARDEN',
+  }
+  expect(fieldOptions).toContainEqual({
+    fieldId: factionFieldId,
+    label: 'Single select · Faction',
+    type: 'single-select',
+    options: ['Merchants'],
+  })
+  expect(fieldOptions.some(option => option.label === 'Text · Warden Clue')).toBe(false)
+  expect(fieldOptions.flatMap(option => option.options)).not.toContain('Cult')
+  expect(playerObjectMatchesFieldFilters(system.map.objects[0]!, [merchantsCondition])).toBe(true)
+  expect(playerObjectMatchesFieldFilters(system.map.objects[0]!, [cultCondition])).toBe(false)
+  expect(playerObjectMatchesFieldFilters(system.map.objects[0]!, [wardenClueCondition])).toBe(false)
+  expect(playerObjectMatchesFieldFilters(system.map.objects[1]!, [cultCondition])).toBe(false)
+  expect(playerObjectMatchesFieldFilters(system.map.objects[2]!, [merchantsCondition])).toBe(false)
 
   expect(system.map.objects[0]).toMatchObject({
     disclosure: 'revealed',

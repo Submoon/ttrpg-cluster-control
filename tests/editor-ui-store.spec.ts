@@ -52,6 +52,31 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.selectedMapFieldConditions).toEqual([
     { fieldId: 'native:atmosphere', type: 'single-select', operator: 'is', values: ['Breathable'] },
   ])
+  store.setSearchOpen(true)
+  store.setSearchQuery('beacon')
+  store.setSelectedSearchObjectTypes([customPlanet.value], [customPlanet])
+  store.setSearchPublicationModes(['revealed'])
+  store.setSearchFieldConditions([
+    { fieldId: 'native:atmosphere', operator: 'no-value' },
+  ])
+  expect(store.selectedSearchObjectTypes).toEqual([customPlanet.value])
+  expect(store.searchTypeFilterOptionLabels[customPlanet.value]).toBe('Planet (Other)')
+  expect(store.selectedSearchPublicationModes).toEqual(['revealed'])
+  expect(store.selectedSearchFieldConditions).toEqual([
+    { fieldId: 'native:atmosphere', operator: 'no-value' },
+  ])
+  store.resetSearch()
+  expect(store.searchOpen).toBe(false)
+  expect(store.searchQuery).toBe('')
+  expect(store.selectedSearchObjectTypes).toEqual([])
+  expect(store.searchTypeFilterOptionLabels).toEqual({})
+  expect(store.selectedSearchPublicationModes).toEqual([])
+  expect(store.selectedSearchFieldConditions).toEqual([])
+  expect(store.selectedMapObjectTypes).toEqual([customPlanet.value])
+  expect(store.selectedMapPublicationModes).toEqual(['revealed', 'known-type'])
+  expect(store.selectedMapFieldConditions).toEqual([
+    { fieldId: 'native:atmosphere', type: 'single-select', operator: 'is', values: ['Breathable'] },
+  ])
   store.reset('workspace-b:cluster-b')
 
   expect(store.workspaceId).toBe('workspace-b:cluster-b')
@@ -61,6 +86,11 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.hierarchyPanelOpen).toBe(false)
   expect(store.inspectorPanelOpen).toBe(true)
   expect(store.mapTypeFiltersOpen).toBe(false)
+  expect(store.searchQuery).toBe('')
+  expect(store.selectedSearchObjectTypes).toEqual([])
+  expect(store.searchTypeFilterOptionLabels).toEqual({})
+  expect(store.selectedSearchPublicationModes).toEqual([])
+  expect(store.selectedSearchFieldConditions).toEqual([])
   expect(store.selectedMapObjectTypes).toEqual([])
   expect(store.mapTypeFilterOptionLabels).toEqual({})
   expect(store.selectedMapPublicationModes).toEqual([])

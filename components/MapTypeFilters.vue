@@ -11,15 +11,16 @@
         color="neutral"
         :variant="open || active ? 'soft' : 'outline'"
         size="sm"
-        :aria-label="active ? `Filters (${activeCriterionCount} active ${activeCriterionCount === 1 ? 'criterion' : 'criteria'})` : 'Filters'"
+        :aria-label="accessibleLabel"
       >
-        {{ active ? `Filters (${activeCriterionCount})` : 'Filters' }}
+        {{ active ? `${props.label} (${activeCriterionCount})` : props.label }}
       </UButton>
 
       <template #content="{ close }">
+        <div v-if="props.fieldFilterOptions.length > 0" :id="fieldSelectPortalId" />
         <div class="map-type-filter-panel grid gap-3 p-3" data-map-obstruction>
           <div class="map-type-filter-heading flex items-center justify-between gap-2">
-            <span class="font-semibold">{{ `Filters${activeCriterionCount > 0 ? ` (${activeCriterionCount} active ${activeCriterionCount === 1 ? 'criterion' : 'criteria'})` : ''}` }}</span>
+            <span class="font-semibold">{{ accessibleLabel }}</span>
             <UButton color="neutral" variant="outline" size="sm" @click="close">
               Close filters
             </UButton>
@@ -50,11 +51,13 @@
               @update:model-value="togglePublication(option.value, $event === true)"
             />
           </fieldset>
-          <WardenFieldFilters
+          <FieldFilterConditions
             v-if="props.fieldFilterOptions.length > 0"
             ref="fieldFilters"
             v-model:conditions="fieldConditions"
             :options="props.fieldFilterOptions"
+            :allow-no-value="props.allowNoValue"
+            :portal="`#${fieldSelectPortalId}`"
           />
           <div class="flex flex-wrap gap-2">
             <UButton color="neutral" variant="outline" size="sm" :disabled="!selectedTypes.length" @click="selectedTypes = []">
@@ -78,15 +81,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import type { PublicationMode } from '../domain/workspace'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
-import WardenFieldFilters from './WardenFieldFilters.vue'
+import FieldFilterConditions from './FieldFilterConditions.vue'
 
 const props = withDefaults(defineProps<{
   options: readonly { value: string, label: string }[]
   compact: boolean
   noMatches: boolean
+  label?: string
+  allowNoValue?: boolean
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
   fieldFilterOptions?: readonly FieldFilterOption[]
@@ -94,6 +99,8 @@ const props = withDefaults(defineProps<{
   portal?: boolean
 }>(), {
   activeFilterCriterionCount: undefined,
+  label: 'Filters',
+  allowNoValue: true,
   publicationFilterOptions: () => [],
   fieldFilterOptions: () => [],
   invalidationNotice: null,
@@ -109,12 +116,16 @@ const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
 const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
 const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
 const fieldFilters = ref<{ clearDrafts: () => void; hasDrafts: boolean } | null>(null)
+// Keep nested choices in this popover's focus scope, outside the scrolling criteria.
+const fieldSelectPortalId = `field-filter-options-${useId()}`
 const activeCriterionCount = computed(() => props.activeFilterCriterionCount
   ?? Number(selectedTypes.value.length > 0)
     + Number(selectedPublicationModes.value.length > 0)
     + fieldConditions.value.length)
 const active = computed(() => activeCriterionCount.value > 0)
-const wardenFiltersEnabled = computed(() => props.publicationFilterOptions.length > 0 || props.fieldFilterOptions.length > 0)
+const accessibleLabel = computed(() => active.value
+  ? `${props.label} (${activeCriterionCount.value} active ${activeCriterionCount.value === 1 ? 'criterion' : 'criteria'})`
+  : props.label)
 const cannotClearAll = computed(() => !active.value && !fieldFilters.value?.hasDrafts)
 const popoverContent = {
   side: 'bottom',
@@ -137,8 +148,11 @@ function togglePublication(mode: PublicationMode, checked: boolean): void {
 
 function clearAll(): void {
   fieldFilters.value?.clearDrafts()
-  if (wardenFiltersEnabled.value) emit('clear-all-filters')
-  else selectedTypes.value = []
+  if (props.publicationFilterOptions.length > 0) emit('clear-all-filters')
+  else {
+    selectedTypes.value = []
+    fieldConditions.value = []
+  }
 }
 </script>
 

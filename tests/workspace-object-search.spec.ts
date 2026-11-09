@@ -398,6 +398,32 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await page.keyboard.press('End')
   await expectPaletteOptionActive(query, resultOptions.last())
   await expect(resultOptions.last()).toBeInViewport()
+
+  await searchDialog.getByRole('button', { name: 'Search filters', exact: true }).click()
+  await searchDialog.getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await query.fill('')
+  await expect(resultOptions).toHaveCount(2)
+  await query.press('ArrowDown')
+  await expectPaletteOptionActive(query, resultOptions.first())
+
+  await searchDialog.getByRole('button', { name: /Search filters \(1 active criterion\)/ }).click()
+  const addFieldFilter = searchDialog.getByRole('combobox', { name: 'Add Field filter' })
+  await addFieldFilter.focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(searchDialog.getByRole('option', { name: 'Atmosphere', exact: true })).toBeVisible()
+  await page.keyboard.press('Enter')
+  const atmosphereOperator = searchDialog.getByRole('combobox', { name: 'Atmosphere operator' })
+  await atmosphereOperator.focus()
+  await page.keyboard.press('ArrowDown')
+  const noValueOperator = searchDialog.getByRole('option', { name: 'No value', exact: true })
+  await expect(noValueOperator).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(noValueOperator).toBeHidden()
+  await expect(searchDialog.getByRole('button', { name: 'Close filters', exact: true })).toBeVisible()
+  await expect(searchDialog).toBeVisible()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+
   const landscapeSearchScreenshot = testInfo.outputPath('object-search-short-landscape-populated.png')
   await page.screenshot({ path: landscapeSearchScreenshot, animations: 'disabled' })
   await testInfo.attach('object-search-short-landscape-populated', {
@@ -442,6 +468,18 @@ test('compact Location-key search preserves a dirty same-object draft and return
     path: portraitFrameScreenshot,
     contentType: 'image/png',
   })
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue(fixture.targetLocationKey)
+  const searchFiltersButton = searchDialog.getByRole('button', { name: /Search filters \(1 active criterion\)/ })
+  await expect(searchFiltersButton).toBeVisible()
+  await searchFiltersButton.click()
+  await expect(searchDialog.getByRole('checkbox', { name: 'Planet', exact: true })).toBeChecked()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await query.press('Escape')
+  await expect(searchDialog).toHaveCount(0)
+
   await setWorkspaceMapMode(page, 'Move')
   await expect(locator).toHaveCount(0)
   await expect(selectedTarget).toHaveClass(/is-dimmed/)
