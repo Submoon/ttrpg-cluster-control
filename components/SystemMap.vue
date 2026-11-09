@@ -287,7 +287,9 @@ function revealHistoryTarget(target: MapHistoryTarget): boolean {
   return revealSvgTarget(svgElement.value, element, panBy)
 }
 
-function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
+type ClientPoint = Pick<PointerEvent, 'clientX' | 'clientY'>
+
+function touchPoint(touch: ClientPoint, element: SVGSVGElement): [number, number] {
   return pointer(touch, element) as [number, number]
 }
 
@@ -328,12 +330,12 @@ function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
   return hit !== null && svg.contains(hit)
 }
 
-function beginTouchPinch(touches: TouchList): void {
+function beginTouchPinchFromPoints(points: readonly ClientPoint[]): void {
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!element || !zoomBehavior || touches.length < 2) return
-  const first = touchPoint(touches[0]!, element)
-  const second = touchPoint(touches[1]!, element)
+  if (!element || !zoomBehavior || points.length < 2) return
+  const first = touchPoint(points[0]!, element)
+  const second = touchPoint(points[1]!, element)
   const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
   const transform = zoomTransform(element)
   touchGesture = {
@@ -342,6 +344,24 @@ function beginTouchPinch(touches: TouchList): void {
     distance: Math.max(1, Math.hypot(second[0] - first[0], second[1] - first[1])),
     anchor: transform.invert(center),
   }
+}
+
+function beginTouchPinch(touches: TouchList): void {
+  beginTouchPinchFromPoints(Array.from(touches))
+}
+
+function moveTouchPinch(points: readonly ClientPoint[]): void {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  if (!element || !zoomBehavior || touchGesture?.mode !== 'pinch' || points.length < 2) return
+  const first = touchPoint(points[0]!, element)
+  const second = touchPoint(points[1]!, element)
+  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+  const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
+  const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+  select(element).call(zoomBehavior.transform, zoomIdentity
+    .translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale)
+    .scale(scale))
 }
 
 function startTouchNavigation(event: TouchEvent): void {
@@ -394,12 +414,7 @@ function moveTouchNavigation(event: TouchEvent): void {
   event.preventDefault()
   event.stopImmediatePropagation()
   if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
-    const first = touchPoint(event.touches[0]!, element)
-    const second = touchPoint(event.touches[1]!, element)
-    const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-    const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-    const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
-    select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale).scale(scale))
+    moveTouchPinch(Array.from(event.touches))
   } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
     const point = touchPoint(event.touches[0]!, element)
     select(element).call(zoomBehavior.transform, zoomIdentity
@@ -419,6 +434,25 @@ function endTouchNavigation(event: TouchEvent): void {
   } else {
     touchGesture = null
   }
+}
+
+/** Starts a canvas-owned pinch without canceling its frozen Add Orbit preview. */
+function startOrbitTouchPinch(points: readonly ClientPoint[]): void {
+  const element = svgElement.value
+  if (!props.touchNavigation || !element || points.length < 2) return
+  select(element).interrupt()
+  beginTouchPinchFromPoints(points)
+}
+
+/** Updates camera navigation from canvas-owned pointer contacts. */
+function moveOrbitTouchPinch(points: readonly ClientPoint[]): void {
+  if (!props.touchNavigation || points.length < 2) return
+  moveTouchPinch(points)
+}
+
+/** Ends the owned pinch without installing the ordinary one-finger pan state. */
+function endOrbitTouchPinch(): void {
+  touchGesture = null
 }
 
 /** Cancels active edits and navigation previews. */
@@ -767,6 +801,9 @@ defineExpose({
   startTouchNavigation,
   moveTouchNavigation,
   endTouchNavigation,
+  startOrbitTouchPinch,
+  moveOrbitTouchPinch,
+  endOrbitTouchPinch,
 })
 </script>
 

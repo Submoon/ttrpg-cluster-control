@@ -1,8 +1,24 @@
-import { expect, test, type Page } from './fixtures'
-import { captureMapExportBlobs, downloadJson, setWorkspaceMapMode, waitForWorkspaceSaved, workspaceZoomOutput } from './helpers'
+import { expect, test, type Locator, type Page } from './fixtures'
+import {
+  captureMapExportBlobs,
+  dockAction,
+  downloadJson,
+  setWorkspaceMapMode,
+  waitForWorkspaceSaved,
+  workspaceZoomOutput,
+  zoomOutMapToMinimum,
+} from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
+type OrbitPreviewScreenGeometry = {
+  cx: string | null
+  cy: string | null
+  rx: string | null
+  ry: string | null
+  center: { x: number; y: number }
+  radius: number
+}
 
 async function createWorkspace(
   page: Page,
@@ -44,6 +60,23 @@ async function pointAtCenter(locator: import('@playwright/test').Locator): Promi
   return { id: 1, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
 }
 
+async function readOrbitPreviewScreenGeometry(preview: Locator): Promise<OrbitPreviewScreenGeometry> {
+  return preview.evaluate((element) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('Expected a circular Orbit preview.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('Expected a rendered Orbit preview transform.')
+    const center = new DOMPoint(element.cx.baseVal.value, element.cy.baseVal.value).matrixTransform(matrix)
+    return {
+      cx: element.getAttribute('cx'),
+      cy: element.getAttribute('cy'),
+      rx: element.getAttribute('rx'),
+      ry: element.getAttribute('ry'),
+      center: { x: center.x, y: center.y },
+      radius: element.rx.baseVal.value * Math.hypot(matrix.a, matrix.b),
+    }
+  })
+}
+
 async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords> {
   return page.evaluate(async () => {
     const request = indexedDB.open('ttrpg-cluster-control', 1)
@@ -77,7 +110,7 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
   })
 }
 
-test('a second touch cancels a Move preview before pinch and pan change only the view', async ({ page }) => {
+test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and pans only the view', async ({ page }) => {
   await captureMapExportBlobs(page)
   const cdp = await enableTouch(page)
   await createWorkspace(page, { width: 390, height: 844 })
@@ -186,4 +219,137 @@ test('a second touch cancels a Move preview before pinch and pan change only the
   await waitForWorkspaceSaved(page)
   expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(jsonBefore)
+
+  const orbitCdp = await enableTouch(page)
+  try {
+    await test.step('Add Orbit resumes around the same host after pinch only after fresh movement', async () => {
+      await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+      await zoomOutMapToMinimum(page)
+      const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
+      const map = page.getByRole('group', { name: 'Vesper star system map' })
+      const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+        .locator('.object-hit-target')
+      const rings = map.locator('.orbit-ring')
+      const preview = map.locator('.system-creation-preview-orbit')
+      const scene = map.locator('.system-map-content')
+      const zoomOutput = workspaceZoomOutput(page)
+      await expect(rings).toHaveCount(0)
+      await (await dockAction(page, 'Add orbit')).click()
+      await expect(quitAdd).toBeVisible()
+
+      const pinchAndResume = async (firstId: number, secondId: number) => {
+        const origin = { ...(await pointAtCenter(host)), id: firstId }
+        const bounds = await map.boundingBox()
+        if (!bounds) throw new Error('The system map has no visible bounds for Add Orbit touch input.')
+        const mapCenterX = bounds.x + bounds.width / 2
+        const firstDragged = { ...origin, x: origin.x + 48, y: origin.y + 8 }
+        await dispatchTouch(orbitCdp, 'touchStart', [origin])
+        await dispatchTouch(orbitCdp, 'touchMove', [firstDragged])
+        await expect(preview).toBeVisible()
+        await expect(rings).toHaveCount(0)
+        const beforePinch = await readOrbitPreviewScreenGeometry(preview)
+        if (beforePinch.cx === null || beforePinch.cy === null || beforePinch.rx === null || beforePinch.ry === null) {
+          throw new Error('Expected complete Orbit preview geometry before pinch.')
+        }
+
+        const direction = firstDragged.x < mapCenterX ? 1 : -1
+        const secondStart = {
+          id: secondId,
+          x: direction > 0 ? bounds.x + bounds.width - 24 : bounds.x + 24,
+          y: Math.min(bounds.y + bounds.height - 24, firstDragged.y + 36),
+        }
+        const spread = Math.min(36, direction > 0
+          ? bounds.x + bounds.width - 8 - secondStart.x
+          : secondStart.x - bounds.x - 8)
+        const firstPinchMove = { ...firstDragged, x: firstDragged.x - 12 * direction, y: firstDragged.y + 12 }
+        const secondPinchMove = { ...secondStart, x: secondStart.x + spread * direction, y: secondStart.y + 12 }
+        const transformBeforePinch = await scene.getAttribute('transform')
+        const zoomBeforePinch = await zoomOutput.textContent()
+        if (!transformBeforePinch || !zoomBeforePinch) throw new Error('Expected the map view before pinch.')
+
+        await dispatchTouch(orbitCdp, 'touchStart', [firstDragged, secondStart])
+        await dispatchTouch(orbitCdp, 'touchMove', [firstPinchMove, secondPinchMove])
+        await expect.poll(() => scene.getAttribute('transform')).not.toBe(transformBeforePinch)
+        await expect.poll(() => zoomOutput.textContent()).not.toBe(zoomBeforePinch)
+        await expect(rings).toHaveCount(0)
+        await expect(preview).toHaveAttribute('cx', beforePinch.cx)
+        await expect(preview).toHaveAttribute('cy', beforePinch.cy)
+        await expect(preview).toHaveAttribute('rx', beforePinch.rx)
+        await expect(preview).toHaveAttribute('ry', beforePinch.ry)
+
+        // Chromium dispatches touchEnd for the departing identifier while preserving the remaining contact.
+        await dispatchTouch(orbitCdp, 'touchEnd', [secondPinchMove])
+        await expect(preview).toBeVisible()
+        const resumed = await readOrbitPreviewScreenGeometry(preview)
+        expect(resumed.cx).toBe(beforePinch.cx)
+        expect(resumed.cy).toBe(beforePinch.cy)
+        const pointerDistance = Math.hypot(
+          firstPinchMove.x - resumed.center.x,
+          firstPinchMove.y - resumed.center.y,
+        )
+        expect(Math.abs(resumed.radius - pointerDistance), 'resumed preview follows the remaining finger at the current zoom')
+          .toBeLessThanOrEqual(2)
+        await expect(rings).toHaveCount(0)
+
+        return { firstPinchMove, resumed }
+      }
+
+      const canceledGesture = await pinchAndResume(1, 2)
+      await dispatchTouch(orbitCdp, 'touchEnd', [])
+      await expect(rings).toHaveCount(0)
+      await expect(preview).toHaveCount(0)
+      await expect(quitAdd).toBeVisible()
+
+      const completedGesture = await pinchAndResume(3, 4)
+      const renewedMove = {
+        ...completedGesture.firstPinchMove,
+        x: completedGesture.firstPinchMove.x + 14,
+        y: completedGesture.firstPinchMove.y + 4,
+      }
+      await dispatchTouch(orbitCdp, 'touchMove', [renewedMove])
+      await expect(preview).toBeVisible()
+      const finalPreview = await readOrbitPreviewScreenGeometry(preview)
+      if (finalPreview.cx === null || finalPreview.cy === null || finalPreview.rx === null || finalPreview.ry === null) {
+        throw new Error('Expected complete Orbit preview geometry after renewed movement.')
+      }
+      const quitAddCenter = await quitAdd.evaluate((element, pointerId) => {
+        const bounds = element.getBoundingClientRect()
+        const point = { id: pointerId, x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+        if (!element.contains(document.elementFromPoint(point.x, point.y))) {
+          throw new Error('Expected the touch release point to hit Quit Add.')
+        }
+        return point
+      }, completedGesture.firstPinchMove.id)
+      await dispatchTouch(orbitCdp, 'touchMove', [quitAddCenter])
+      await expect(preview).toBeVisible()
+      await expect(preview).toHaveAttribute('cx', finalPreview.cx)
+      await expect(preview).toHaveAttribute('cy', finalPreview.cy)
+      await expect(preview).toHaveAttribute('rx', finalPreview.rx)
+      await expect(preview).toHaveAttribute('ry', finalPreview.ry)
+      await dispatchTouch(orbitCdp, 'touchEnd', [])
+
+      await expect(preview).toHaveCount(0)
+      await expect(quitAdd).toBeVisible()
+      await expect(rings).toHaveCount(1)
+      const created = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true }).locator('.orbit-ring')
+      await expect(created).toHaveAttribute('cx', finalPreview.cx)
+      await expect(created).toHaveAttribute('cy', finalPreview.cy)
+      await expect(created).toHaveAttribute('rx', finalPreview.rx)
+      await expect(created).toHaveAttribute('ry', finalPreview.ry)
+      expect(canceledGesture.resumed.cx).toBe(finalPreview.cx)
+      expect(canceledGesture.resumed.cy).toBe(finalPreview.cy)
+
+      const freshTap = { ...(await pointAtCenter(host)), id: 5 }
+      await dispatchTouch(orbitCdp, 'touchStart', [freshTap])
+      await dispatchTouch(orbitCdp, 'touchEnd', [])
+      await expect(rings).toHaveCount(2)
+      await expect(preview).toHaveCount(0)
+    })
+  } finally {
+    await orbitCdp.detach()
+  }
+
+  await waitForWorkspaceSaved(page)
+  const savedAfterTouch = await downloadJson(page, 'Export star system JSON')
+  expect(savedAfterTouch.system?.orbits).toHaveLength(2)
 })

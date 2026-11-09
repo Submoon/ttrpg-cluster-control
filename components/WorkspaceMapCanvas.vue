@@ -117,6 +117,7 @@ import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
+import { createOrbitTouchGesture, type OrbitTouchAction, type OrbitTouchContact } from './maps/orbit-touch-gesture'
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
@@ -227,12 +228,14 @@ type OrbitDragPointer = {
 }
 type OrbitDragClickGuard = {
   pointerId: number
-  pointerType: 'mouse' | 'pen'
+  pointerType: string
   releaseX?: number
   releaseY?: number
   timer: ReturnType<typeof setTimeout>
 }
 let orbitDragPointer: OrbitDragPointer | null = null
+type OrbitTouchGesture = ReturnType<typeof createOrbitTouchGesture>
+let orbitTouchGesture: OrbitTouchGesture | null = null
 let orbitDragClickGuard: OrbitDragClickGuard | null = null
 const sourceMapKey = props.mapKey
 let mapReady = false
@@ -285,7 +288,7 @@ function clearOrbitDragClickGuard(): void {
 }
 
 function holdOrbitDragClickGuard(
-  gesture: Pick<OrbitDragPointer, 'pointerId' | 'pointerType'>,
+  gesture: Pick<OrbitDragClickGuard, 'pointerId' | 'pointerType'>,
   release?: Pick<PointerEvent, 'clientX' | 'clientY'>,
 ): void {
   clearOrbitDragClickGuard()
@@ -305,6 +308,181 @@ function cancelOrbitPointerGesture(): void {
   if (!gesture || gesture.phase === 'cancelled') return
   gesture.phase = 'cancelled'
   commands.creation.cancelOrbitDrag()
+}
+
+function cancelOrbitTouchGesture(): void {
+  const gesture = orbitTouchGesture
+  if (!gesture || gesture.phase === 'cancelled') return
+  gesture.cancel()
+  commands.creation.cancelOrbitDrag()
+  systemMapRef.value?.endOrbitTouchPinch()
+  holdClickSuppression()
+}
+
+function updateOrbitTouchPreview(contact: OrbitTouchContact, allowOutsideMap = false): void {
+  if (!hasOrbitAddIntent() || orbitTouchGesture?.phase === 'cancelled'
+    || orbitTouchGesture === null || orbitTouchGesture === undefined
+    || orbitTouchGesture.contacts.length === 0) return
+  if (orbitTouchGesturePhaseIsStale()) {
+    cancelOrbitTouchGesture()
+    return
+  }
+  const map = systemMapRef.value
+  if (!map || (!allowOutsideMap && !map.isOrbitDragPointOnMap(contact.x, contact.y))) return
+  const scenePoint = map.clientPointToScene(contact.x, contact.y)
+  const clearance = map.getOrbitDragSceneClearance()
+  if (scenePoint && clearance !== null) commands.creation.updateOrbitDrag(scenePoint, clearance)
+}
+
+function orbitTouchGesturePhaseIsStale(): boolean {
+  return orbitTouchGesture?.phase !== 'cancelled'
+    && !!orbitTouchGesture
+    && (orbitTouchMapKey !== props.mapKey || !hasOrbitAddIntent())
+}
+
+let orbitTouchMapKey: string | null = null
+
+function captureOrbitTouchPointers(): void {
+  const root = canvasRoot.value
+  if (!root || !orbitTouchGesture) return
+  for (const contact of orbitTouchGesture.contacts) {
+    try {
+      root.setPointerCapture(contact.id)
+    } catch {
+      // Window-level pointer listeners still own contacts when capture is unavailable.
+    }
+  }
+}
+
+function orbitTouchContactFromEvent(event: PointerEvent): OrbitTouchContact {
+  return { id: event.pointerId, x: event.clientX, y: event.clientY }
+}
+
+function orbitTouchClientPoints(): Array<{ clientX: number; clientY: number }> {
+  return orbitTouchGesture?.contacts.map(contact => ({ clientX: contact.x, clientY: contact.y })) ?? []
+}
+
+/** Reserves touch input before its native click, then owns only a threshold-crossing Add Orbit gesture. */
+function onOrbitTouchPointerDown(event: PointerEvent): boolean {
+  const gesture = orbitTouchGesture
+  if (gesture) {
+    if (gesture.phase === 'cancelled' && event.isPrimary) {
+      orbitTouchGesture = null
+      orbitTouchMapKey = null
+      systemMapRef.value?.endOrbitTouchPinch()
+      return onOrbitTouchPointerDown(event)
+    }
+    const action = gesture.addContact(orbitTouchContactFromEvent(event))
+    if (action === 'cancel-pending') {
+      commands.creation.cancelOrbitDrag()
+      orbitTouchGesture = null
+      orbitTouchMapKey = null
+      return false
+    }
+    if (action === 'start-pinch') {
+      captureOrbitTouchPointers()
+      systemMapRef.value?.startOrbitTouchPinch(orbitTouchClientPoints())
+      holdClickSuppression()
+    }
+    event.stopImmediatePropagation()
+    return true
+  }
+
+  if (!event.isPrimary || event.button !== 0 || !hasOrbitAddIntent()
+    || !systemMapRef.value?.isOrbitDragPointOnMap(event.clientX, event.clientY)) return false
+  const scenePoint = systemMapRef.value.clientPointToScene(event.clientX, event.clientY)
+  if (!scenePoint || !commands.creation.beginOrbitDrag(scenePoint)) return false
+
+  orbitTouchGesture = createOrbitTouchGesture(orbitTouchContactFromEvent(event))
+  orbitTouchMapKey = props.mapKey
+  clearPointerLongPress()
+  clearLongPress()
+  event.stopImmediatePropagation()
+  return true
+}
+
+function handleOrbitTouchAction(action: OrbitTouchAction, event: PointerEvent): boolean {
+  const gesture = orbitTouchGesture
+  if (!gesture) return false
+  if (action === 'tap') {
+    commands.creation.cancelOrbitDrag()
+    orbitTouchGesture = null
+    orbitTouchMapKey = null
+    return false
+  }
+
+  if (action === 'start-drag' || action === 'update-drag') {
+    if (action === 'start-drag') {
+      captureOrbitTouchPointers()
+      systemMapRef.value?.endOrbitTouchPinch()
+    }
+    const contact = gesture.contacts.find(candidate => candidate.id === event.pointerId)
+    if (contact) updateOrbitTouchPreview(contact)
+  } else if (action === 'start-pinch') {
+    captureOrbitTouchPointers()
+    systemMapRef.value?.startOrbitTouchPinch(orbitTouchClientPoints())
+  } else if (action === 'update-pinch') {
+    if (event.type === 'pointerup') systemMapRef.value?.startOrbitTouchPinch(orbitTouchClientPoints())
+    else systemMapRef.value?.moveOrbitTouchPinch(orbitTouchClientPoints())
+  } else if (action === 'resume') {
+    holdOrbitDragClickGuard({ pointerId: event.pointerId, pointerType: 'touch' }, event)
+    systemMapRef.value?.endOrbitTouchPinch()
+    const [remaining] = gesture.contacts
+    if (remaining) updateOrbitTouchPreview(remaining, true)
+  } else if (action === 'commit') {
+    const shouldComplete = gesture.contacts.length === 0
+      && orbitTouchMapKey === props.mapKey
+      && hasOrbitAddIntent()
+    if (!shouldComplete) commands.creation.cancelOrbitDrag()
+    holdOrbitDragClickGuard({ pointerId: event.pointerId, pointerType: 'touch' }, event)
+    systemMapRef.value?.endOrbitTouchPinch()
+    orbitTouchGesture = null
+    orbitTouchMapKey = null
+    livePointerSequences.delete(event.pointerId)
+    if (shouldComplete) {
+      void commands.creation.completeOrbitDrag().catch(() => commands.creation.cancelOrbitDrag())
+    }
+  } else if (action === 'cancel' || action === 'cancel-pending') {
+    commands.creation.cancelOrbitDrag()
+    holdOrbitDragClickGuard({ pointerId: event.pointerId, pointerType: 'touch' }, event)
+    systemMapRef.value?.endOrbitTouchPinch()
+    if (gesture.contacts.length === 0) {
+      orbitTouchGesture = null
+      orbitTouchMapKey = null
+    }
+  }
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  return true
+}
+
+function onOrbitTouchPointerMove(event: PointerEvent): boolean {
+  const gesture = orbitTouchGesture
+  if (!gesture || !gesture.contacts.some(contact => contact.id === event.pointerId)) return false
+  if (orbitTouchGesturePhaseIsStale()) cancelOrbitTouchGesture()
+  const action = gesture.moveContact(orbitTouchContactFromEvent(event))
+  return handleOrbitTouchAction(action, event)
+}
+
+function onOrbitTouchPointerUp(event: PointerEvent): boolean {
+  const gesture = orbitTouchGesture
+  if (!gesture || !gesture.contacts.some(contact => contact.id === event.pointerId)) return false
+  const wasCancelled = gesture.phase === 'cancelled' || event.type === 'pointercancel'
+  if (event.type === 'pointercancel') {
+    cancelOrbitTouchGesture()
+    const action = gesture.removeContact(event.pointerId)
+    if (action === 'ignore') {
+      holdOrbitDragClickGuard({ pointerId: event.pointerId, pointerType: 'touch' }, event)
+    }
+    handleOrbitTouchAction(action, event)
+    return true
+  }
+  const action = gesture.removeContact(event.pointerId)
+  if (wasCancelled && action === 'ignore') {
+    holdOrbitDragClickGuard({ pointerId: event.pointerId, pointerType: 'touch' }, event)
+  }
+  return handleOrbitTouchAction(action, event)
 }
 
 function releaseCancelledOrbitPointer(gesture: OrbitDragPointer): void {
@@ -330,8 +508,8 @@ function onWindowClickCapture(event: MouseEvent): void {
     && Math.hypot(event.clientX - guard.releaseX, event.clientY - guard.releaseY) <= 2
   const legacyTargetMatches = !hasPointerIdentity
     && pointMatches
-    && !!canvasRoot.value
-    && event.composedPath().includes(canvasRoot.value)
+    && (guard.pointerType === 'touch'
+      || (!!canvasRoot.value && event.composedPath().includes(canvasRoot.value)))
   if (!identityMatches && !legacyTargetMatches) return
   event.preventDefault()
   event.stopPropagation()
@@ -340,6 +518,20 @@ function onWindowClickCapture(event: MouseEvent): void {
 }
 
 function onWindowPointerDownCapture(event: PointerEvent): void {
+  if (event.pointerType === 'touch'
+    && orbitTouchGesture
+    && (!canvasRoot.value || !event.composedPath().includes(canvasRoot.value))) {
+    const priorGesture = orbitTouchGesture
+    const priorPhase = priorGesture.phase
+    const priorContacts = priorGesture.contacts
+    const handled = onOrbitTouchPointerDown(event)
+    if (!handled && priorPhase === 'pending' && !orbitTouchGesture) {
+      systemMapRef.value?.startOrbitTouchPinch([
+        ...priorContacts.map(contact => ({ clientX: contact.x, clientY: contact.y })),
+        { clientX: event.clientX, clientY: event.clientY },
+      ])
+    }
+  }
   const gesture = orbitDragPointer
   if (gesture?.phase === 'cancelled' && gesture.pointerId === event.pointerId
     && event.isPrimary && event.button === 0) {
@@ -350,14 +542,21 @@ function onWindowPointerDownCapture(event: PointerEvent): void {
 }
 
 function onDocumentKeyDownCapture(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !orbitDragPointer) return
+  if (event.key !== 'Escape' || (!orbitDragPointer && !orbitTouchGesture)) return
   cancelOrbitPointerGesture()
+  cancelOrbitTouchGesture()
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
 }
 
 function onLostPointerCapture(event: PointerEvent): void {
+  if (event.pointerType === 'touch'
+    && event.target === canvasRoot.value
+    && orbitTouchGesture?.contacts.some(contact => contact.id === event.pointerId)) {
+    cancelOrbitTouchGesture()
+    return
+  }
   const gesture = orbitDragPointer
   if (!gesture || gesture.pointerId !== event.pointerId || event.target !== canvasRoot.value) return
   if (gesture.phase !== 'cancelled') cancelOrbitPointerGesture()
@@ -365,8 +564,11 @@ function onLostPointerCapture(event: PointerEvent): void {
 }
 
 function onWheelCapture(event: WheelEvent): void {
-  const gesture = orbitDragPointer
-  if (!gesture || gesture.phase !== 'dragging' || props.activeView !== 'system'
+  const mouseOrPenDragging = orbitDragPointer?.phase === 'dragging'
+  const touchOrbitActive = orbitTouchGesture?.phase === 'dragging'
+    || orbitTouchGesture?.phase === 'pinching'
+    || orbitTouchGesture?.phase === 'awaiting-movement'
+  if ((!mouseOrPenDragging && !touchOrbitActive) || props.activeView !== 'system'
     || !systemMapRef.value?.isOrbitDragPointOnMap(event.clientX, event.clientY)) return
   event.preventDefault()
   event.stopImmediatePropagation()
@@ -377,6 +579,7 @@ function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
   const orbitPointerId = orbitDragPointer?.pointerId
   cancelOrbitPointerGesture()
+  cancelOrbitTouchGesture()
   if (suppressRelease) {
     for (const sequence of livePointerSequences.values()) {
       if (sequence.pointerId !== orbitPointerId) sequence.cancelledRelease = true
@@ -479,7 +682,11 @@ function onPointerDownCapture(event: PointerEvent): void {
   beginLivePointerSequence(event, isMouseButtonChord)
   if (!isMouseButtonChord) consumedAddPointerId = null
   if (event.pointerType === 'mouse') activeMousePointerId = event.pointerId
-  if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
+  if (event.pointerType === 'touch') {
+    onOrbitTouchPointerDown(event)
+    return
+  }
+  if (event.button !== 0 && event.button !== 2) return
 
   if (orbitDragPointer && orbitDragPointer.pointerId !== event.pointerId) {
     if (orbitDragPointer.phase === 'cancelled') {
@@ -631,6 +838,7 @@ function forwardMoveTarget(point: Point): void {
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
+  if (event.pointerType === 'touch' && onOrbitTouchPointerMove(event)) return
   const orbitGesture = orbitDragPointer
   if (orbitGesture?.pointerId === event.pointerId && orbitGesture.pointerType === event.pointerType) {
     if (orbitGesture.mapKey !== props.mapKey || !hasOrbitAddIntent()) cancelOrbitPointerGesture()
@@ -688,6 +896,7 @@ function onWindowPointerMove(event: PointerEvent): void {
 }
 
 function onWindowPointerUp(event: PointerEvent): void {
+  if (event.pointerType === 'touch' && onOrbitTouchPointerUp(event)) return
   if (event.type === 'pointercancel') {
     const orbitGesture = orbitDragPointer
     if (orbitGesture?.pointerId === event.pointerId) {
@@ -861,6 +1070,11 @@ function onClickCapture(event: MouseEvent): void {
 function onTouchStartCapture(event: TouchEvent): void {
   publicationMenuLease?.close()
   publicationMenuLease = null
+  if (orbitTouchGesture?.phase === 'pending' && event.touches.length === 1) return
+  if (orbitTouchGesture) {
+    event.stopImmediatePropagation()
+    return
+  }
   if (event.touches.length !== 1) {
     clearLongPress()
     touchStart = null
@@ -915,6 +1129,11 @@ function onTouchStartCapture(event: TouchEvent): void {
 }
 
 function onTouchMoveCapture(event: TouchEvent): void {
+  if (orbitTouchGesture) {
+    if (orbitTouchGesture.phase !== 'pending') event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   if (event.touches.length > 1) {
     clearLongPress()
     touchStart = null
@@ -937,6 +1156,11 @@ function onTouchMoveCapture(event: TouchEvent): void {
 }
 
 function onTouchEndCapture(event: TouchEvent): void {
+  if (orbitTouchGesture) {
+    if (event.type === 'touchcancel') cancelOrbitTouchGesture()
+    event.stopImmediatePropagation()
+    return
+  }
   if (consumedAddTouchId !== null
     && Array.from(event.changedTouches).some(touch => touch.identifier === consumedAddTouchId)) {
     holdClickSuppression()
@@ -1170,6 +1394,7 @@ watch(() => props.mode, () => {
 }, { flush: 'sync' })
 watch(() => props.creationType, () => {
   cancelOrbitPointerGesture()
+  cancelOrbitTouchGesture()
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
 }, { deep: true, flush: 'sync' })
@@ -1184,6 +1409,7 @@ watch(
   ],
   () => {
     cancelOrbitPointerGesture()
+    cancelOrbitTouchGesture()
     publicationMenuLease?.close()
     publicationMenuLease = null
     emit('cancel-object-placement-preview')
