@@ -33,7 +33,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || publicationMenuRequest !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || publicationMenuRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -122,8 +122,13 @@
               :cluster-add-presentation="clusterAddPresentation"
               :cluster-move-presentation="clusterMovePresentation"
               :can-open-search-shortcut="canOpenSearchShortcut"
+              :type-filter-options="typeFilterOptions"
+              :no-type-matches="noTypeMatches"
+              :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
+              v-model:type-filters-open="mapTypeFiltersOpen"
+              v-model:selected-types="selectedMapObjectTypes"
               :search-results="searchResults"
               :reveal-search-target="revealSearchTarget"
               @export-cluster-json="downloadClusterJson"
@@ -308,6 +313,7 @@
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
                     :selected-orbit-id="selectedOrbitId"
+                    :dimmed-object-ids="dimmedMapObjectIds"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
                     :creation-type="creationSession?.type ?? null"
@@ -537,6 +543,8 @@ import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
+import { useEditorUiStore } from '../stores/editor-ui'
+import { mapObjectTypeKey, mapObjectTypeOption } from '../utils/map-type-filters'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -560,6 +568,7 @@ const {
   restoreBackup,
 } = useLocalWorkspace()
 const runtimeConfig = useRuntimeConfig()
+const editorUi = useEditorUiStore()
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -794,6 +803,52 @@ const {
   inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
   selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
 } = navigation
+const mapTypeFiltersOpen = computed({
+  get: () => editorUi.mapTypeFiltersOpen,
+  set: open => editorUi.setMapTypeFiltersOpen(open),
+})
+const typeFilterOptions = computed(() => {
+  const options = new Map<string, { value: string, label: string }>()
+  for (const type of catalogueTypes) {
+    const option = mapObjectTypeOption({ family: type.family, subtype: type.value })
+    options.set(option.value, option)
+  }
+  for (const system of workspace.value?.cluster.systems ?? []) {
+    for (const object of system.objects) {
+      if (object.family !== 'Other') continue
+      const option = mapObjectTypeOption(object)
+      if (!options.has(option.value)) options.set(option.value, option)
+    }
+  }
+  for (const value of editorUi.selectedMapObjectTypes) {
+    const label = editorUi.mapTypeFilterOptionLabels[value]
+    if (!options.has(value) && label) options.set(value, { value, label })
+  }
+  return [...options.values()]
+})
+const selectedMapObjectTypes = computed({
+  get: () => editorUi.selectedMapObjectTypes,
+  set: types => editorUi.setSelectedMapObjectTypes(types, typeFilterOptions.value),
+})
+const dimmedMapObjectIds = computed(() => {
+  const system = selectedSystem.value
+  const types = selectedMapObjectTypes.value
+  if (activeView.value !== 'system' || !system || types.length === 0) return []
+  return system.objects
+    .filter(object => !types.includes(mapObjectTypeKey(object)))
+    .map(object => object.id)
+})
+const noTypeMatches = computed(() => {
+  const system = selectedSystem.value
+  return activeView.value === 'system'
+    && Boolean(system)
+    && (system?.objects.length ?? 0) > 0
+    && selectedMapObjectTypes.value.length > 0
+    && dimmedMapObjectIds.value.length === system?.objects.length
+})
+watch(activeView, view => {
+  if (view === 'cluster') mapTypeFiltersOpen.value = false
+})
 const {
   clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
   transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
@@ -1248,6 +1303,7 @@ publicationFocusRestoreAllowed = request => !(
   || recoveryDetailsOpen.value
   || historyCapacityRequest.value !== null
   || searchOpen.value
+  || mapTypeFiltersOpen.value
   || deletionReview.value !== null
   || creationChooserOpen.value
   || (compactPanelOpen.value && request.source === 'map')
@@ -1265,6 +1321,7 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !headerFilesOpen.value
   && !recoveryDetailsOpen.value
   && historyCapacityRequest.value === null
+  && !mapTypeFiltersOpen.value
   && !creationChooserOpen.value
   && deletionReview.value === null
   && !importReview.value.open
@@ -1282,6 +1339,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
+  if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'
   if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
@@ -1299,6 +1357,7 @@ useWorkspaceHistoryShortcuts({
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
+    || mapTypeFiltersOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   undo: undoWorkspace,
@@ -1310,6 +1369,7 @@ const mapToolShortcuts = useMapToolShortcuts({
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
+    || mapTypeFiltersOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   editingGestureActive: () => editingGestureActive.value,

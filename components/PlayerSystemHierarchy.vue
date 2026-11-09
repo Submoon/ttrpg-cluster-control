@@ -29,11 +29,17 @@
                 item.kind === 'orbit'
                   ? 'player-system-hierarchy-row--orbit'
                   : `player-system-hierarchy-row--${item.object.disclosure}`,
-                { active: selected },
+                {
+                  active: selected,
+                  'player-system-hierarchy-row--dimmed': item.kind === 'object' && isDimmed(item.object),
+                },
               ],
               selected,
             })"
             :aria-label="item.ariaLabel"
+            :aria-description="item.kind === 'object' && isDimmed(item.object)
+              ? 'Dimmed by active Type filters. Still available to inspect.'
+              : undefined"
             :data-player-hierarchy-key="item.key"
             :data-player-hierarchy-level="level"
             :style="{ paddingInlineStart: `${Math.min(level - 1, maximumIndentLevels) * indentStep}rem` }"
@@ -82,8 +88,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import type { PlayerSystemDocument } from '../domain/player-projection'
+import type { PlayerObjectMarker, PlayerSystemDocument } from '../domain/player-projection'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
+import { playerObjectMatchesTypeFilters } from '../utils/player-type-filters'
 import { buildPlayerSystemHierarchy, summarizePlayerContextLabel } from '../utils/player-system-hierarchy'
 import type { PlayerHierarchyNode } from '../utils/player-system-hierarchy'
 import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
@@ -107,6 +114,7 @@ const props = withDefaults(defineProps<{
   document: PlayerSystemDocument
   selectedObjectId: string | null
   selectedOrbitId?: string | null
+  selectedTypeFilters?: readonly string[]
   workspacePresentation?: boolean
 }>(), {
   selectedOrbitId: null,
@@ -207,6 +215,10 @@ function playerTreeAccessibleLabel(node: PlayerHierarchyNode, document: PlayerSy
 
 function objectPresentation(item: PlayerTreeItem) {
   return item.kind === 'object' ? playerObjectPresentation(item.object) : null
+}
+
+function isDimmed(object: PlayerObjectMarker): boolean {
+  return !playerObjectMatchesTypeFilters(object, props.selectedTypeFilters ?? [])
 }
 
 function indexTreeItems(items: PlayerTreeItem[]): Map<string, PlayerTreeItem> {
@@ -331,10 +343,25 @@ onBeforeUnmount(() => {
   outline-offset: 1px;
 }
 .player-system-hierarchy-row--orbit { color: var(--text-secondary); }
+.player-system-hierarchy-row--dimmed { position: relative; }
+.player-system-hierarchy-row--dimmed::before {
+  position: absolute;
+  inset-block: .35rem;
+  inset-inline-start: .1rem;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  content: '';
+}
+.player-system-hierarchy-row--dimmed .player-system-hierarchy-glyph { opacity: .14; }
 .player-system-hierarchy-row.active {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--text-primary);
+}
+.player-system-hierarchy-row--dimmed.active {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
 }
 .player-system-hierarchy-label { min-width: 0; }
 .player-system-hierarchy-row--unknown .player-system-hierarchy-glyph,

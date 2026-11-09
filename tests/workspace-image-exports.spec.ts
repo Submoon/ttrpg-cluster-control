@@ -280,6 +280,20 @@ async function inspectSystemSvgGeometry(
   }, svgText)
 }
 
+async function inspectExportObjectOpacity(
+  page: import('@playwright/test').Page,
+  svgText: string,
+): Promise<{ dimmedMarkCount: number; glyphOpacities: string[] }> {
+  return page.evaluate(content => {
+    const svg = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement
+    return {
+      dimmedMarkCount: svg.querySelectorAll('.system-object.is-dimmed, .system-object-publication.is-dimmed').length,
+      glyphOpacities: Array.from(svg.querySelectorAll<SVGElement>('.system-object-glyph'))
+        .map(glyph => glyph.style.getPropertyValue('opacity')),
+    }
+  }, svgText)
+}
+
 async function downloadSvgWhilePointerHeld(
   page: import('@playwright/test').Page,
   buttonName: string,
@@ -527,11 +541,12 @@ async function expectMapFilesControlsUsable(
 
 for (const { mapCase, paletteCase } of imageExportCases) {
     test(`${mapCase.label} SVG and PNG exports preserve applied content in ${paletteCase.label}`, async ({ page }) => {
+      const detailedTitleVariant = mapCase.kind === 'system' && paletteCase.label === 'active-dark'
+      const typeFilterVariant = mapCase.kind === 'system'
       const clusterMap = await createImportedCampaign(page, paletteCase.colorScheme)
       let map: import('@playwright/test').Locator = clusterMap
       let expectedTitle: string | null = null
       let shortTitleSvgWidth: number | null = null
-      const detailedTitleVariant = mapCase.kind === 'system' && paletteCase.label === 'active-dark'
       if (mapCase.kind === 'system') {
         await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
         await setWorkspaceMapMode(page, 'Navigate')
@@ -561,6 +576,22 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         }
         map = page.getByRole('group', { name: `${expectedTitle} star system map`, exact: true })
         await expect(map).toBeVisible()
+        if (typeFilterVariant) {
+          const filterButton = page.getByRole('button', { name: /^Filters(?: \(|$)/ })
+          await filterButton.click()
+          const filterPanel = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+          await expect(filterPanel).toBeVisible()
+          await expect(filterPanel.getByRole('checkbox', { name: 'Planet', exact: true })).toBeVisible()
+          const ring = map.locator('.orbit-ring').first()
+          const ringOpacity = await ring.evaluate(element => getComputedStyle(element).opacity)
+
+          await filterPanel.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+          await expect(filterButton).toHaveAccessibleName('Filters (1 active criterion)')
+          await expect(map.locator('.system-map-items .system-object.is-dimmed')).toHaveCount(3)
+          await expect(ring).toHaveCSS('opacity', ringOpacity)
+          await filterPanel.getByRole('button', { name: 'Close filters', exact: true }).click()
+          await expect(filterButton).toBeFocused()
+        }
       }
 
       const liveBounds = await inspectLiveFeatureBounds(map, mapCase.kind)
@@ -588,13 +619,22 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         await expect(routeSelection).toHaveClass(/is-selected/)
       } else if (selectedObject) {
         const hierarchy = await openWorkspaceHierarchy(page)
-        await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
+        const hierarchyIria = hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ })
+        if (typeFilterVariant) {
+          await expect(hierarchyIria).toContainText('Dimmed on map')
+          await expect(hierarchyIria).toHaveAttribute('aria-description', /Dimmed on map/)
+        }
+        await hierarchyIria.click()
         await expect(selectedObject).toHaveClass(/is-selected/)
+        if (typeFilterVariant) await expect(selectedObject).toHaveClass(/is-dimmed/)
         const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
         if (await closeHierarchy.isVisible()) await closeHierarchy.click()
         const hideInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })
         if (await hideInspector.isVisible()) await hideInspector.click()
         await expect(selectedObject).toHaveClass(/is-selected/)
+        if (typeFilterVariant) {
+          await expect(selectedObject.locator('.system-object-glyph')).toHaveCSS('opacity', '0.14')
+        }
         await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
         await setWorkspaceMapMode(page, 'Move')
         const moveMode = page.getByRole('toolbar', { name: 'Workspace navigation' })
@@ -665,6 +705,11 @@ for (const { mapCase, paletteCase } of imageExportCases) {
       expectReadablePalette(svgInfo, semanticMarkColors)
       await expectFeatureBoundsInsideViewBox(page, svg.text, svgInfo.viewBox, mapCase.kind, liveBounds)
       await expectCleanExport(page, svg.text)
+      if (typeFilterVariant) {
+        const exportedOpacity = await inspectExportObjectOpacity(page, svg.text)
+        expect(exportedOpacity.dimmedMarkCount).toBe(0)
+        expect(exportedOpacity.glyphOpacities.every(opacity => opacity === '1')).toBe(true)
+      }
       if (printLight) expect(svgInfo.backgroundFill).not.toBe(liveBackground)
       else expect(svgInfo.backgroundFill).toBe(liveBackground)
 
@@ -716,6 +761,11 @@ for (const { mapCase, paletteCase } of imageExportCases) {
       expect(pngInfo.systemTitle).toEqual(svgInfo.systemTitle)
       expect(pngInfo.backgroundFill).toBe(svgInfo.backgroundFill)
       expect(pngInfo.glyphFill).toBe(svgInfo.glyphFill)
+      if (typeFilterVariant) {
+        const exportedOpacity = await inspectExportObjectOpacity(page, png.sourceSvgText)
+        expect(exportedOpacity).toEqual(await inspectExportObjectOpacity(page, svg.text))
+        await expect(selectedObject!).toHaveClass(/is-dimmed/)
+      }
       if (detailedTitleVariant) expect(pngInfo.systemTitle?.text).toBe('W'.repeat(80))
       await expectCleanExport(page, png.sourceSvgText)
       const topLeftPixel = await inspectPngTopLeftPixel(page, svgInfo.backgroundFill!)

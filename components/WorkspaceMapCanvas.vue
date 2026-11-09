@@ -51,6 +51,7 @@
       :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :selected-object-id="props.selectedObjectId"
       :selected-orbit-id="props.selectedOrbitId"
+      :dimmed-object-ids="props.dimmedObjectIds"
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
       :move-enabled="props.mode === 'move' && !props.creationType"
@@ -127,6 +128,7 @@ const props = defineProps<{
   selectedSystemId: string | null
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  dimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean

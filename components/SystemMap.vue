@@ -97,6 +97,7 @@ const props = withDefaults(defineProps<{
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   selectedObjectId: string | null
   selectedOrbitId: string | null
+  dimmedObjectIds?: readonly string[]
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   moveEnabled?: boolean
@@ -109,6 +110,7 @@ const props = withDefaults(defineProps<{
   creationPreview: null,
   creationChooserOpen: false,
   orbitAdjustmentPreview: null,
+  dimmedObjectIds: () => [] as string[],
   moveEnabled: true,
   moveTargeting: false,
   touchNavigation: false,
@@ -629,6 +631,7 @@ function render(preserveNavigation = false): void {
     element,
     system: props.system,
     geometry: mapGeometry.value,
+    dimmedObjectIds: props.dimmedObjectIds,
     selectedObjectId: props.selectedObjectId,
     selectedOrbitId: props.selectedOrbitId,
     creationType: props.creationType,
@@ -692,6 +695,7 @@ watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })
 watch(() => props.selectedObjectId, () => render())
 watch(() => props.selectedOrbitId, () => render())
+watch(() => props.dimmedObjectIds, objectIds => mapRenderer?.setDimmedObjectIds(objectIds), { deep: true })
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
 watch(() => props.creationType, () => render(), { deep: true })
@@ -901,6 +905,15 @@ defineExpose({
 .system-object {
   cursor: pointer;
   pointer-events: none;
+}
+
+.system-object.is-dimmed .object-glyph-halo,
+.system-object.is-dimmed .system-object-glyph,
+.system-object.is-dimmed .object-key,
+.system-object.is-dimmed .object-name,
+.system-object.is-dimmed .object-type-mark,
+.system-object-publication.is-dimmed {
+  opacity: 0.14;
 }
 
 .system-object.is-dragging {

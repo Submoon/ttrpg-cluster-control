@@ -29,6 +29,9 @@ export const useEditorUiStore = defineStore('editor-ui', {
     mapMode: 'select' as MapInteractionMode,
     searchOpen: false,
     searchQuery: '',
+    mapTypeFiltersOpen: false,
+    selectedMapObjectTypes: [] as string[],
+    mapTypeFilterOptionLabels: {} as Record<string, string>,
     hierarchyPanelOpen: false,
     inspectorPanelOpen: true,
     compactPanel: null as WorkspacePanel | null,
@@ -49,6 +52,15 @@ export const useEditorUiStore = defineStore('editor-ui', {
     },
     setSearchQuery(query: string): void {
       this.searchQuery = query
+    },
+    setMapTypeFiltersOpen(open: boolean): void {
+      this.mapTypeFiltersOpen = open
+    },
+    setSelectedMapObjectTypes(types: readonly string[], options: readonly { value: string, label: string }[]): void {
+      const labels = { ...this.mapTypeFilterOptionLabels }
+      for (const option of options) labels[option.value] = option.label
+      this.mapTypeFilterOptionLabels = labels
+      this.selectedMapObjectTypes = [...new Set(types)]
     },
     requestPanel(panel: WorkspacePanel): void {
       this.lastRequestedPanel = panel
@@ -95,6 +107,9 @@ export const useEditorUiStore = defineStore('editor-ui', {
         mapMode: 'select' as const,
         searchOpen: false,
         searchQuery: '',
+        mapTypeFiltersOpen: false,
+        selectedMapObjectTypes: [],
+        mapTypeFilterOptionLabels: {},
         hierarchyPanelOpen: false,
         inspectorPanelOpen: true,
         compactPanel: null,

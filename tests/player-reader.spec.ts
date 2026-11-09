@@ -103,6 +103,19 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await opener.click()
   await expect(system).toBeVisible()
 
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  const harborMarker = system.getByRole('button', { name: 'Inspect Harbor World', exact: true })
+  const moonMarker = system.getByRole('button', { name: 'Inspect Quiet Moon', exact: true })
+  const unknownMarker = system.getByRole('button', { name: 'Inspect Unknown presence', exact: true })
+  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(unknownMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toBeVisible()
+  await expect(system.locator('.player-system-orbits ellipse').first()).toHaveCSS('opacity', '1')
+
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const search = page.getByRole('dialog', { name: 'Search player map', exact: true })
   await search.getByRole('combobox').fill('Harbor World')
@@ -116,7 +129,24 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await inspector.getByRole('button', { name: 'Return to map', exact: true }).click()
   await expect(inspector).toBeHidden()
   await expect(system.locator('svg.player-system-map-scene')).toBeFocused()
+  await expect(harborMarker).toHaveAttribute('aria-pressed', 'true')
+  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
 
+  await page.getByRole('button', { name: 'Map files', exact: true }).click()
+  const svgDownloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export star system Public System SVG', exact: true }).click()
+  const svgDownload = await svgDownloadPromise
+  const exportedSvg = await readFile(await svgDownload.path(), 'utf8')
+  for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
+    expect(exportedSvg).toContain(publicName)
+  }
+
+  await page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true }).click()
+  const activeFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await activeFilters.getByRole('button', { name: 'Clear all', exact: true }).click()
+  await activeFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
+  await expect(harborMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
   const pendingDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export star system Public System PNG', exact: true }).click()

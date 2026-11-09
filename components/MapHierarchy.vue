@@ -192,6 +192,9 @@
               <small class="tree-parent-context mt-[0.12rem] block [overflow-wrap:anywhere]">
                 {{ item.parentContext }}
               </small>
+              <small v-if="item.isDimmed" class="tree-parent-context mt-[0.12rem] block [overflow-wrap:anywhere]">
+                Dimmed on map
+              </small>
             </span>
             <span class="key-tag col-start-1 row-start-2 block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
           </template>
@@ -262,6 +265,7 @@ import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationTarget } from '../composables/editor-workflows/publication-types'
 import { publicationPresentation, publicationStatus } from '../utils/publication-presentation'
+import { mapObjectTypeKey } from '../utils/map-type-filters'
 import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
 
 interface HierarchyTreeItemBase {
@@ -270,6 +274,7 @@ interface HierarchyTreeItemBase {
   textValue: string
   ariaLabel: string
   ariaDescription?: string
+  isDimmed?: boolean
   parentContext?: string
   ancestorKeys: string[]
   children?: HierarchyTreeItem[]
@@ -356,6 +361,9 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
     const publicationDescription = row.kind === 'object'
       ? publicationStatus(row.object.publication, selectedSystem.value?.publication).description
       : undefined
+    const isDimmed = row.kind === 'object'
+      && store.selectedMapObjectTypes.length > 0
+      && !store.selectedMapObjectTypes.includes(mapObjectTypeKey(row.object))
     const item: HierarchyTreeItem = row.kind === 'object'
       ? {
           kind: 'object',
@@ -364,7 +372,8 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
           label: row.object.name,
           textValue: row.object.name,
           ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
-          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}`,
+          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}${isDimmed ? ' Dimmed on map because it does not match the selected Type filters.' : ''}`,
+          isDimmed,
           parentContext,
           ancestorKeys,
         }

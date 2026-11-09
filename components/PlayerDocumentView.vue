@@ -15,7 +15,7 @@
       :entity-inspector-active="false"
       :compact-modal-open="compactModalOpen"
       :compact-panel="compactPanel"
-      :overlay-open="searchOpen || filesOpen"
+      :overlay-open="searchOpen || filesOpen || typeFilterOpen"
       :is-compact-viewport="isCompactViewport"
       @close-panel="closePanel"
     >
@@ -41,6 +41,7 @@
             :label="cachedSystem.label"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
+            :selected-type-filters="selectedTypeFilters"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
             workspace-presentation
@@ -77,12 +78,18 @@
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
               v-model:files-open="filesOpen"
+              v-model:type-filter-open="typeFilterOpen"
+              v-model:selected-types="selectedTypeFilters"
               :search-results="searchResults"
               :reveal-search-target="revealSearchTarget"
               :can-open-search-shortcut="canOpenSearchShortcut"
               :get-shortcut-owning-dialog="getShortcutOwningDialog"
               :file-scope="mapFileScope"
               :export-error="playerExportError"
+              :show-type-filters="selectedSystem !== null"
+              :type-filter-options="typeFilterOptions"
+              :compact="isCompactViewport"
+              :type-filter-no-matches="typeFilterNoMatches"
               @export-image="downloadPlayerImage"
             >
               <UButton
@@ -118,6 +125,7 @@
           :document="selectedSystem.map"
           :selected-object-id="selectedObjectId"
           :selected-orbit-id="selectedOrbitId"
+          :selected-type-filters="selectedTypeFilters"
           workspace-presentation
           @inspect-object="inspectObject"
           @inspect-orbit="inspectOrbit"
@@ -198,12 +206,18 @@
             v-model:search-open="searchOpen"
             v-model:search-query="searchQuery"
             v-model:files-open="filesOpen"
+            v-model:type-filter-open="typeFilterOpen"
+            v-model:selected-types="selectedTypeFilters"
             :search-results="searchResults"
             :reveal-search-target="revealSearchTarget"
             :can-open-search-shortcut="canOpenSearchShortcut"
             :get-shortcut-owning-dialog="getShortcutOwningDialog"
             :file-scope="mapFileScope"
             :export-error="playerExportError"
+            :show-type-filters="selectedSystem !== null"
+            :type-filter-options="typeFilterOptions"
+            :compact="isCompactViewport"
+            :type-filter-no-matches="typeFilterNoMatches"
             embedded
             @export-image="downloadPlayerImage"
           >
@@ -242,6 +256,7 @@
             :label="cachedSystem.label"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
+            :selected-type-filters="selectedTypeFilters"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
             @inspect-object="inspectObject"
@@ -255,6 +270,7 @@
               :document="selectedSystem.map"
               :selected-object-id="selectedObjectId"
               :selected-orbit-id="selectedOrbitId"
+              :selected-type-filters="selectedTypeFilters"
               @inspect-object="inspectObject"
               @inspect-orbit="inspectOrbit"
             />
@@ -311,6 +327,7 @@ import type { ClientRectBounds } from '../utils/map-usable-area'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
 import type { PlayerInspectionTarget, PlayerUsableRectReader } from '../utils/player-inspection'
 import { searchPlayerDocument, type PlayerSearchTarget } from '../utils/player-search'
+import { playerObjectMatchesTypeFilters, playerTypeFilterOptions } from '../utils/player-type-filters'
 import PlayerClusterMap from './PlayerClusterMap.vue'
 import PlayerSystemMap from './PlayerSystemMap.vue'
 import PlayerClusterHierarchy from './PlayerClusterHierarchy.vue'
@@ -354,6 +371,8 @@ const mapTools = ref<InstanceType<typeof PlayerMapTools> | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
 const filesOpen = ref(false)
+const typeFilterOpen = ref(false)
+const selectedTypeFilters = ref<string[]>([])
 const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
 const clusterMarkerOpener = ref<FocusTarget | null>(null)
@@ -372,6 +391,14 @@ const selectedSystem = computed<RevealedSystem | null>(() =>
   props.document.systems.find(isSelectedRevealedSystem) ?? null,
 )
 const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
+const typeFilterOptions = computed(() => playerTypeFilterOptions(props.document))
+const typeFilterNoMatches = computed(() => {
+  const system = selectedSystem.value
+  if (!system || selectedTypeFilters.value.length === 0 || system.map.objects.length === 0) return false
+  return !system.map.objects.some(object =>
+    playerObjectMatchesTypeFilters(object, selectedTypeFilters.value),
+  )
+})
 const mapFileScope = computed(() => selectedSystem.value
   ? `star system ${selectedSystem.value.label}`
   : `Jump Cluster ${props.document.title}`)
@@ -441,12 +468,14 @@ watch(() => props.document, () => {
 watch([() => props.document, () => props.active, selectedSystemId], () => {
   mapVisit += 1
   filesOpen.value = false
+  typeFilterOpen.value = false
   playerExportError.value = ''
 }, { flush: 'sync' })
 watch(searchOpen, open => {
   if (!open) return
   searchOpening += 1
   filesOpen.value = false
+  typeFilterOpen.value = false
 }, { flush: 'sync' })
 watch(() => compactModalOpen.value, () => {
   mapReaderEpoch.value += 1
@@ -525,6 +554,8 @@ function focusBackButton(request: number, sourceDocument: PlayerClusterDocument,
 function resetDocumentView(): void {
   searchOpen.value = false
   searchQuery.value = ''
+  typeFilterOpen.value = false
+  selectedTypeFilters.value = []
   invalidatePendingReveal()
   selectedSystemId.value = null
   selectedTarget.value = null

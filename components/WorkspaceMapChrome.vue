@@ -82,6 +82,14 @@
 
     <template #right>
       <slot name="history" />
+      <MapTypeFilters
+        v-if="activeView === 'system' && selectedSystem"
+        v-model:open="typeFiltersOpen"
+        v-model:selected-types="selectedTypes"
+        :options="props.typeFilterOptions"
+        :compact="props.isCompactViewport"
+        :no-matches="props.noTypeMatches"
+      />
       <WorkspaceSearch
         ref="workspaceSearch"
         v-model:open="searchOpen"
@@ -275,6 +283,7 @@ import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
 import PlayerShareControls from './PlayerShareControls.vue'
+import MapTypeFilters from './MapTypeFilters.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -287,6 +296,9 @@ const props = withDefaults(defineProps<{
   generatedPlayerUrl: string
   playerLinkBusy: boolean
   playerLinkStatus: string
+  typeFilterOptions: readonly { value: string, label: string }[]
+  noTypeMatches: boolean
+  isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
   compactModalOpen?: boolean
@@ -331,6 +343,8 @@ const headerMapActionsOpen = ref(false)
 const mapFiles = ref<InstanceType<typeof MapFilesPopover> | null>(null)
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
+const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true })
+const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)

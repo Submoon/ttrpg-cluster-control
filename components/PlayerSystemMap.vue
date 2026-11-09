@@ -121,6 +121,7 @@
             :class="[
               object.disclosure === 'unknown' ? undefined : `player-system-object-marker--${object.disclosure}`,
               { 'player-system-object-marker--selected': props.selectedObjectId === object.id },
+              { 'player-system-object-marker--dimmed': isDimmed(object) },
             ]"
             :transform="`translate(${object.position.x} ${object.position.y})`"
             role="button"
@@ -185,12 +186,14 @@ import { usePlayerMapViewport } from '../composables/usePlayerMapViewport'
 import { playerSystemGeometry } from '../utils/player-system-geometry'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
 import { fitPlayerMapToViewport } from '../utils/player-map-fit'
+import { playerObjectMatchesTypeFilters } from '../utils/player-type-filters'
 
 const props = defineProps<{
   document: PlayerSystemDocument
   label: string
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
+  selectedTypeFilters?: readonly string[]
   active?: boolean
   workspacePresentation?: boolean
   getUsableClientRect?: PlayerUsableRectReader
@@ -258,6 +261,10 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 function isSystemMapInteractiveTarget(target: EventTarget | null): boolean {
   return target instanceof Element
     && target.closest('.player-system-object-marker, .player-system-orbit-hit-target') !== null
+}
+
+function isDimmed(object: PlayerSystemDocument['objects'][number]): boolean {
+  return !playerObjectMatchesTypeFilters(object, props.selectedTypeFilters ?? [])
 }
 
 function measureViewport(): void {
@@ -395,6 +402,12 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
 
 .player-system-object-marker {
   cursor: pointer;
+}
+
+.player-system-object-marker--dimmed .player-system-object-marker-art,
+.player-system-object-marker--dimmed .player-system-object-glyph,
+.player-system-object-marker--dimmed .player-system-object-label {
+  opacity: .14;
 }
 
 .player-system-object-marker:focus {

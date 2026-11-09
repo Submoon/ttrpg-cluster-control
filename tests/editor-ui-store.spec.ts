@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import type { MapVisitMemory } from '../composables/editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
+import { mapObjectTypeOption } from '../utils/map-type-filters'
 
 test.beforeEach(() => {
   setActivePinia(createPinia())
@@ -38,6 +39,11 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   store.setSelection({ activeView: 'cluster', selectedSystemId: 'system-a' })
   store.setMode('move')
   store.requestPanel('hierarchy')
+  const customPlanet = mapObjectTypeOption({ family: 'Other', subtype: 'Planet' })
+  store.setMapTypeFiltersOpen(true)
+  store.setSelectedMapObjectTypes([customPlanet.value], [customPlanet])
+  expect(store.selectedMapObjectTypes).toEqual([customPlanet.value])
+  expect(store.mapTypeFilterOptionLabels[customPlanet.value]).toBe('Planet (Other)')
   store.reset('workspace-b:cluster-b')
 
   expect(store.workspaceId).toBe('workspace-b:cluster-b')
@@ -46,6 +52,9 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.mapMode).toBe('select')
   expect(store.hierarchyPanelOpen).toBe(false)
   expect(store.inspectorPanelOpen).toBe(true)
+  expect(store.mapTypeFiltersOpen).toBe(false)
+  expect(store.selectedMapObjectTypes).toEqual([])
+  expect(store.mapTypeFilterOptionLabels).toEqual({})
   expect(store.visits).toEqual({})
 })
 
