@@ -77,6 +77,27 @@ async function readOrbitPreviewScreenGeometry(preview: Locator): Promise<OrbitPr
   })
 }
 
+async function expectOrbitPreviewRadiusToFollowFinger(
+  preview: Locator,
+  finger: TouchPoint,
+): Promise<OrbitPreviewScreenGeometry> {
+  let matchingGeometry: OrbitPreviewScreenGeometry | undefined
+  // CDP dispatch can finish before the corresponding SVG geometry is rendered.
+  await expect.poll(async () => {
+    const geometry = await readOrbitPreviewScreenGeometry(preview)
+    const pointerDistance = Math.hypot(
+      finger.x - geometry.center.x,
+      finger.y - geometry.center.y,
+    )
+    const difference = Math.abs(geometry.radius - pointerDistance)
+    if (difference <= 2) matchingGeometry = geometry
+    return difference
+  }, { timeout: 2_000 }).toBeLessThanOrEqual(2)
+
+  if (!matchingGeometry) throw new Error('Expected the Orbit preview to follow the active finger.')
+  return matchingGeometry
+}
+
 async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords> {
   return page.evaluate(async () => {
     const request = indexedDB.open('ttrpg-cluster-control', 1)
@@ -280,15 +301,9 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
         // Chromium dispatches touchEnd for the departing identifier while preserving the remaining contact.
         await dispatchTouch(orbitCdp, 'touchEnd', [secondPinchMove])
         await expect(preview).toBeVisible()
-        const resumed = await readOrbitPreviewScreenGeometry(preview)
+        const resumed = await expectOrbitPreviewRadiusToFollowFinger(preview, firstPinchMove)
         expect(resumed.cx).toBe(beforePinch.cx)
         expect(resumed.cy).toBe(beforePinch.cy)
-        const pointerDistance = Math.hypot(
-          firstPinchMove.x - resumed.center.x,
-          firstPinchMove.y - resumed.center.y,
-        )
-        expect(Math.abs(resumed.radius - pointerDistance), 'resumed preview follows the remaining finger at the current zoom')
-          .toBeLessThanOrEqual(2)
         await expect(rings).toHaveCount(0)
 
         return { firstPinchMove, resumed }
@@ -308,10 +323,12 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       }
       await dispatchTouch(orbitCdp, 'touchMove', [renewedMove])
       await expect(preview).toBeVisible()
-      const finalPreview = await readOrbitPreviewScreenGeometry(preview)
+      const finalPreview = await expectOrbitPreviewRadiusToFollowFinger(preview, renewedMove)
       if (finalPreview.cx === null || finalPreview.cy === null || finalPreview.rx === null || finalPreview.ry === null) {
         throw new Error('Expected complete Orbit preview geometry after renewed movement.')
       }
+      expect(Math.abs(finalPreview.radius - completedGesture.resumed.radius), 'renewed movement changes the rendered preview radius')
+        .toBeGreaterThan(2)
       const quitAddCenter = await quitAdd.evaluate((element, pointerId) => {
         const bounds = element.getBoundingClientRect()
         const point = { id: pointerId, x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
