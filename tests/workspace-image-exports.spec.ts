@@ -543,7 +543,14 @@ for (const { mapCase, paletteCase } of imageExportCases) {
     test(`${mapCase.label} SVG and PNG exports preserve applied content in ${paletteCase.label}`, async ({ page }) => {
       const detailedTitleVariant = mapCase.kind === 'system' && paletteCase.label === 'active-dark'
       const typeFilterVariant = mapCase.kind === 'system'
-      const clusterMap = await createImportedCampaign(page, paletteCase.colorScheme)
+      const fixture = campaignWithUnresolvedExit()
+      if (typeFilterVariant) {
+        test.setTimeout(60_000)
+        const moon = fixture.cluster?.systems[0]?.objects.find(object => object.subtype === 'moon')
+        if (!moon) throw new Error('The combined filter fixture needs its Moon.')
+        moon.atmosphere = 'Vacuum'
+      }
+      const clusterMap = await createImportedCampaign(page, paletteCase.colorScheme, fixture)
       let map: import('@playwright/test').Locator = clusterMap
       let expectedTitle: string | null = null
       let shortTitleSvgWidth: number | null = null
@@ -579,17 +586,32 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         if (typeFilterVariant) {
           const filterButton = page.getByRole('button', { name: /^Filters(?: \(|$)/ })
           await filterButton.click()
-          const filterPanel = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+          const filterPanel = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
           await expect(filterPanel).toBeVisible()
           await expect(filterPanel.getByRole('checkbox', { name: 'Planet', exact: true })).toBeVisible()
           const ring = map.locator('.orbit-ring').first()
           const ringOpacity = await ring.evaluate(element => getComputedStyle(element).opacity)
 
           await filterPanel.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+          await filterPanel.getByRole('checkbox', { name: 'Planet', exact: true }).check()
           await expect(filterButton).toHaveAccessibleName('Filters (1 active criterion)')
+          await expect(map.locator('.system-map-items .system-object.is-dimmed')).toHaveCount(2)
+          await filterPanel.getByRole('checkbox', { name: 'Hidden', exact: true }).check()
+          await filterPanel.getByRole('combobox', { name: 'Add Field filter', exact: true }).click()
+          await page.getByRole('option', { name: 'Atmosphere', exact: true }).click()
+          const vacuum = filterPanel.getByRole('checkbox', { name: 'Vacuum', exact: true })
+          await vacuum.check()
+          await vacuum.uncheck()
+          const appliedField = filterPanel.getByText('Active condition Is Vacuum', { exact: true })
+          await expect(appliedField).toBeVisible()
+          await expect(filterButton).toHaveAccessibleName('Filters (3 active criteria)')
           await expect(map.locator('.system-map-items .system-object.is-dimmed')).toHaveCount(3)
+          await vacuum.check()
+          await expect(appliedField).toBeHidden()
           await expect(ring).toHaveCSS('opacity', ringOpacity)
-          await filterPanel.getByRole('button', { name: 'Close filters', exact: true }).click()
+          const closeFilters = filterPanel.getByRole('button', { name: 'Close filters', exact: true })
+          await expect(closeFilters).toBeInViewport()
+          await closeFilters.click()
           await expect(filterButton).toBeFocused()
         }
       }

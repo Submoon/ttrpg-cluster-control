@@ -42,11 +42,13 @@
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :selected-type-filters="selectedTypeFilters"
+            :search-locator-object-id="searchLocatorObjectId"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
             workspace-presentation
             @inspect-object="inspectObject"
             @inspect-orbit="inspectOrbit"
+            @map-interaction="handlePlayerMapInteraction"
           />
         </section>
       </template>
@@ -257,10 +259,12 @@
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :selected-type-filters="selectedTypeFilters"
+            :search-locator-object-id="searchLocatorObjectId"
             :get-usable-client-rect="usableRectReader"
             :active="isActive && selectedSystem !== null"
             @inspect-object="inspectObject"
             @inspect-orbit="inspectOrbit"
+            @map-interaction="handlePlayerMapInteraction"
           />
         </div>
         <aside class="player-inline-panels" aria-label="Player consultation panels">
@@ -364,6 +368,15 @@ interface PendingReveal {
   map: PlayerSystemMapHandle | null
   target: PlayerInspectionTarget
   request: number
+  fromSearch: boolean
+}
+interface SearchLocator {
+  clusterDocument: PlayerClusterDocument
+  system: RevealedSystem
+  systemDocument: PlayerSystemDocument
+  map: PlayerSystemMapHandle
+  objectId: string
+  request: number
 }
 
 const rootElement = ref<HTMLElement | null>(null)
@@ -385,6 +398,7 @@ const desktopHierarchyVisible = ref(true)
 const desktopInspectorVisible = ref(true)
 const mapReaderEpoch = ref(0)
 const pendingReveal = shallowRef<PendingReveal | null>(null)
+const searchLocator = shallowRef<SearchLocator | null>(null)
 const headingTag = computed(() => props.headingLevel)
 const isActive = computed(() => props.active)
 const selectedSystem = computed<RevealedSystem | null>(() =>
@@ -405,6 +419,18 @@ const mapFileScope = computed(() => selectedSystem.value
 const { playerExportError, downloadPlayerImage } = usePlayerFileExports({ prepare: preparePlayerImage })
 const selectedObjectId = computed(() => selectedTarget.value?.kind === 'object' ? selectedTarget.value.id : null)
 const selectedOrbitId = computed(() => selectedTarget.value?.kind === 'orbit' ? selectedTarget.value.id : null)
+const searchLocatorObjectId = computed(() => {
+  const locator = searchLocator.value
+  const system = selectedSystem.value
+  const target = selectedTarget.value
+  if (!locator || locator.request !== requestNonce || locator.clusterDocument !== props.document || locator.system !== system
+    || locator.systemDocument !== system?.map || target?.kind !== 'object'
+    || locator.map !== systemMapHandle.value || target.id !== locator.objectId) return null
+  const object = system.map.objects.find(candidate => candidate.id === locator.objectId)
+  return object && !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
+    ? object.id
+    : null
+})
 const selectedObject = computed<PlayerObjectMarker | null>(() => selectedObjectId.value
   ? selectedSystem.value?.map.objects.find(object => object.id === selectedObjectId.value) ?? null
   : null)
@@ -489,11 +515,16 @@ watch(() => [hierarchyVisible.value, inspectorVisible.value] as const, () => {
 watch(selectedSystem, system => {
   if (!system) return
   if (selectedObjectId.value && !system.map.objects.some(object => object.id === selectedObjectId.value)) {
+    searchLocator.value = null
     selectedTarget.value = null
   } else if (selectedOrbitId.value && !system.map.orbits.some(orbit => orbit.id === selectedOrbitId.value)) {
+    searchLocator.value = null
     selectedTarget.value = null
   }
 })
+watch(selectedTypeFilters, () => {
+  if (searchLocator.value && searchLocatorObjectId.value === null) searchLocator.value = null
+}, { deep: true, flush: 'sync' })
 
 function updateCompactViewport(): void {
   isCompactViewport.value = compactMedia?.matches ?? false
@@ -557,6 +588,7 @@ function resetDocumentView(): void {
   typeFilterOpen.value = false
   selectedTypeFilters.value = []
   invalidatePendingReveal()
+  searchLocator.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
   clusterMarkerOpener.value = null
@@ -612,7 +644,7 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
     }
     if (target.kind === 'object') {
       focusCurrentMap('.player-system-map-scene')
-      inspectObject(target.objectId)
+      inspectObjectFromSearch(target.objectId)
     } else if (selectedSystem.value) {
       focusBackButton(navigationRequest, source, selectedSystem.value)
     }
@@ -648,6 +680,7 @@ async function openSystem(publicSystemId: string, origin: 'map' | 'search' = 'ma
   if (!system || system.disclosure !== 'revealed') return
   const request = ++requestNonce
   pendingReveal.value = null
+  searchLocator.value = null
   clusterMarkerOpener.value = origin === 'map' ? focusableElement(document.activeElement) : null
   clusterMarkerSystemId.value = system.id
   cachedSystem.value = system
@@ -666,6 +699,7 @@ async function backToCluster(): Promise<void> {
   if (!system) return
   const request = ++requestNonce
   pendingReveal.value = null
+  searchLocator.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
@@ -700,11 +734,15 @@ function inspectObject(publicObjectId: string): void {
   inspectTarget({ kind: 'object', id: publicObjectId })
 }
 
+function inspectObjectFromSearch(publicObjectId: string): void {
+  inspectTarget({ kind: 'object', id: publicObjectId }, true)
+}
+
 function inspectOrbit(publicOrbitId: string): void {
   inspectTarget({ kind: 'orbit', id: publicOrbitId })
 }
 
-function inspectTarget(target: PlayerInspectionTarget): void {
+function inspectTarget(target: PlayerInspectionTarget, fromSearch = false): void {
   const clusterDocument = props.document
   const system = selectedSystem.value
   if (!system || !targetExists(target, system.map)) return
@@ -713,6 +751,7 @@ function inspectTarget(target: PlayerInspectionTarget): void {
     ? { kind: 'object', id: target.id }
     : { kind: 'orbit', id: target.id }
   const request = ++requestNonce
+  searchLocator.value = null
   const nextPending: PendingReveal = {
     clusterDocument,
     system,
@@ -720,6 +759,7 @@ function inspectTarget(target: PlayerInspectionTarget): void {
     map,
     target: copiedTarget,
     request,
+    fromSearch,
   }
   pendingReveal.value = nextPending
   lastRevealAttempt = ''
@@ -768,9 +808,31 @@ async function attemptPendingReveal(pending: PendingReveal): Promise<void> {
   const map = pending.map
   if (!map) return
   if (map.revealTarget(pending.target, pending.systemDocument) && ownsPendingReveal(pending)) {
+    if (pending.fromSearch && pending.target.kind === 'object') {
+      const object = pending.systemDocument.objects.find(candidate => candidate.id === pending.target.id)
+      if (object && !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)) {
+        searchLocator.value = {
+          clusterDocument: pending.clusterDocument,
+          system: pending.system,
+          systemDocument: pending.systemDocument,
+          map,
+          objectId: object.id,
+          request: pending.request,
+        }
+      }
+    }
     pendingReveal.value = null
     lastRevealAttempt = ''
   }
+}
+
+function handlePlayerMapInteraction(): void {
+  searchLocator.value = null
+  const pending = pendingReveal.value
+  if (!pending?.fromSearch) return
+  requestNonce += 1
+  pendingReveal.value = null
+  lastRevealAttempt = ''
 }
 
 function retryPendingReveal(): Promise<void> {

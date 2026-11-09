@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import type { MapVisitMemory, MapVisitSelection, MapInteractionMode, WorkspacePanel } from '../composables/editor-workflows/types'
+import type { PublicationMode } from '../domain/workspace'
+import type { FieldCondition } from '../utils/field-filter-matching'
 
 export interface EditorUiSelection {
   activeView: 'cluster' | 'system'
@@ -32,6 +34,8 @@ export const useEditorUiStore = defineStore('editor-ui', {
     mapTypeFiltersOpen: false,
     selectedMapObjectTypes: [] as string[],
     mapTypeFilterOptionLabels: {} as Record<string, string>,
+    selectedMapPublicationModes: [] as PublicationMode[],
+    selectedMapFieldConditions: [] as FieldCondition[],
     hierarchyPanelOpen: false,
     inspectorPanelOpen: true,
     compactPanel: null as WorkspacePanel | null,
@@ -61,6 +65,17 @@ export const useEditorUiStore = defineStore('editor-ui', {
       for (const option of options) labels[option.value] = option.label
       this.mapTypeFilterOptionLabels = labels
       this.selectedMapObjectTypes = [...new Set(types)]
+    },
+    setSelectedMapPublicationModes(modes: readonly PublicationMode[]): void {
+      this.selectedMapPublicationModes = [...new Set(modes)]
+    },
+    setSelectedMapFieldConditions(conditions: readonly FieldCondition[]): void {
+      const seen = new Set<string>()
+      this.selectedMapFieldConditions = conditions.filter(condition => {
+        if (seen.has(condition.fieldId)) return false
+        seen.add(condition.fieldId)
+        return true
+      })
     },
     requestPanel(panel: WorkspacePanel): void {
       this.lastRequestedPanel = panel
@@ -110,6 +125,8 @@ export const useEditorUiStore = defineStore('editor-ui', {
         mapTypeFiltersOpen: false,
         selectedMapObjectTypes: [],
         mapTypeFilterOptionLabels: {},
+        selectedMapPublicationModes: [],
+        selectedMapFieldConditions: [],
         hierarchyPanelOpen: false,
         inspectorPanelOpen: true,
         compactPanel: null,

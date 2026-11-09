@@ -123,14 +123,21 @@
               :cluster-move-presentation="clusterMovePresentation"
               :can-open-search-shortcut="canOpenSearchShortcut"
               :type-filter-options="typeFilterOptions"
-              :no-type-matches="noTypeMatches"
+              :no-type-matches="activeView === 'system' && noMatches"
+              :publication-filter-options="publicationFilterOptions"
+              :field-filter-options="fieldOptions"
+              :active-filter-criterion-count="activeCriterionCount"
+              :filter-invalidation-notice="invalidationNotice"
               :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
               v-model:type-filters-open="mapTypeFiltersOpen"
               v-model:selected-types="selectedMapObjectTypes"
+              v-model:publication-modes="selectedPublicationModes"
+              v-model:field-conditions="fieldConditions"
               :search-results="searchResults"
               :reveal-search-target="revealSearchTarget"
+              @clear-all-filters="wardenFilters.clearAll"
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
@@ -237,6 +244,7 @@
           <template #hierarchy>
             <MapHierarchy
               :workspace="workspace"
+              :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
             />
@@ -544,7 +552,8 @@ import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
 import { useEditorUiStore } from '../stores/editor-ui'
-import { mapObjectTypeKey, mapObjectTypeOption } from '../utils/map-type-filters'
+import { mapObjectTypeOption } from '../utils/map-type-filters'
+import { useWardenMapFilters } from '../composables/useWardenMapFilters'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -830,22 +839,11 @@ const selectedMapObjectTypes = computed({
   get: () => editorUi.selectedMapObjectTypes,
   set: types => editorUi.setSelectedMapObjectTypes(types, typeFilterOptions.value),
 })
-const dimmedMapObjectIds = computed(() => {
-  const system = selectedSystem.value
-  const types = selectedMapObjectTypes.value
-  if (activeView.value !== 'system' || !system || types.length === 0) return []
-  return system.objects
-    .filter(object => !types.includes(mapObjectTypeKey(object)))
-    .map(object => object.id)
-})
-const noTypeMatches = computed(() => {
-  const system = selectedSystem.value
-  return activeView.value === 'system'
-    && Boolean(system)
-    && (system?.objects.length ?? 0) > 0
-    && selectedMapObjectTypes.value.length > 0
-    && dimmedMapObjectIds.value.length === system?.objects.length
-})
+const wardenFilters = useWardenMapFilters({ workspace, selectedSystem })
+const {
+  fieldOptions, publicationFilterOptions, selectedPublicationModes, fieldConditions,
+  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount, noMatches, invalidationNotice,
+} = wardenFilters
 watch(activeView, view => {
   if (view === 'cluster') mapTypeFiltersOpen.value = false
 })
@@ -870,7 +868,10 @@ const {
 const { editorError, orbitAdjustmentNotice } = feedback
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
 watch(hydrationState, (state, previous) => {
-  if (state === 'loading' || previous === 'loading') resetOrbitAdjustments()
+  if (state !== 'loading' && previous !== 'loading') return
+  resetOrbitAdjustments()
+  wardenFilters.clearAll()
+  mapTypeFiltersOpen.value = false
 }, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,

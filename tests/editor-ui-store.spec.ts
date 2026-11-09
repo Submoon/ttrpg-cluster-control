@@ -42,8 +42,16 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   const customPlanet = mapObjectTypeOption({ family: 'Other', subtype: 'Planet' })
   store.setMapTypeFiltersOpen(true)
   store.setSelectedMapObjectTypes([customPlanet.value], [customPlanet])
+  store.setSelectedMapPublicationModes(['revealed', 'known-type'])
+  store.setSelectedMapFieldConditions([
+    { fieldId: 'native:atmosphere', type: 'single-select', operator: 'is', values: ['Breathable'] },
+  ])
   expect(store.selectedMapObjectTypes).toEqual([customPlanet.value])
   expect(store.mapTypeFilterOptionLabels[customPlanet.value]).toBe('Planet (Other)')
+  expect(store.selectedMapPublicationModes).toEqual(['revealed', 'known-type'])
+  expect(store.selectedMapFieldConditions).toEqual([
+    { fieldId: 'native:atmosphere', type: 'single-select', operator: 'is', values: ['Breathable'] },
+  ])
   store.reset('workspace-b:cluster-b')
 
   expect(store.workspaceId).toBe('workspace-b:cluster-b')
@@ -55,6 +63,8 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.mapTypeFiltersOpen).toBe(false)
   expect(store.selectedMapObjectTypes).toEqual([])
   expect(store.mapTypeFilterOptionLabels).toEqual({})
+  expect(store.selectedMapPublicationModes).toEqual([])
+  expect(store.selectedMapFieldConditions).toEqual([])
   expect(store.visits).toEqual({})
 })
 

@@ -1,6 +1,7 @@
 import type { LocalWorkspace } from '../domain/workspace'
 import { catalogueSubtypeLabel } from './catalogue-labels'
 import { objectMark } from './catalogue-marks'
+import { normalizeSearchText } from './normalize-search-text'
 
 export type SearchTarget = { workspaceId: string; clusterId: string }
   & ({ kind: 'cluster' } | { kind: 'system'; systemId: string } | { kind: 'object'; systemId: string; objectId: string })
@@ -28,10 +29,6 @@ export interface SearchCandidate<TTarget = SearchTarget> {
   identityOrder: string
   /** Explicit corpus terms for consumers whose public labels differ from their display context. */
   searchTerms?: readonly string[]
-}
-
-function normalizeSearchText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
 function compareText(left: string, right: string): number {

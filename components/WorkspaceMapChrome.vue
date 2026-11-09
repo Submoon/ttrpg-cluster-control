@@ -86,10 +86,27 @@
         v-if="activeView === 'system' && selectedSystem"
         v-model:open="typeFiltersOpen"
         v-model:selected-types="selectedTypes"
+        v-model:publication-modes="selectedPublicationModes"
+        v-model:field-conditions="fieldConditions"
         :options="props.typeFilterOptions"
         :compact="props.isCompactViewport"
         :no-matches="props.noTypeMatches"
+        :active-filter-criterion-count="props.activeFilterCriterionCount"
+        :publication-filter-options="props.publicationFilterOptions"
+        :field-filter-options="props.fieldFilterOptions"
+        :invalidation-notice="props.filterInvalidationNotice"
+        @clear-all-filters="emit('clear-all-filters')"
       />
+      <p
+        v-if="props.filterInvalidationNotice"
+        class="workspace-filter-invalidation"
+        role="status"
+        aria-live="polite"
+        :aria-label="props.filterInvalidationNotice"
+        :title="props.filterInvalidationNotice"
+      >
+        Filters updated
+      </p>
       <WorkspaceSearch
         ref="workspaceSearch"
         v-model:open="searchOpen"
@@ -277,6 +294,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
+import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import type { PublicationMode } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
@@ -298,6 +317,10 @@ const props = withDefaults(defineProps<{
   playerLinkStatus: string
   typeFilterOptions: readonly { value: string, label: string }[]
   noTypeMatches: boolean
+  activeFilterCriterionCount?: number
+  publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
+  fieldFilterOptions?: readonly FieldFilterOption[]
+  filterInvalidationNotice?: string | null
   isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
@@ -318,6 +341,9 @@ const props = withDefaults(defineProps<{
   creationSession: null,
   creationTypeLabel: 'object',
   clusterAddPresentation: null,
+  publicationFilterOptions: () => [],
+  fieldFilterOptions: () => [],
+  filterInvalidationNotice: null,
 })
 
 const emit = defineEmits<{
@@ -337,6 +363,7 @@ const emit = defineEmits<{
   'quit-add': []
   'confirm-system-move': []
   'cancel-system-move': []
+  'clear-all-filters': []
 }>()
 
 const headerMapActionsOpen = ref(false)
@@ -345,6 +372,8 @@ const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true })
 const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
+const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
+const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -452,6 +481,18 @@ defineExpose({ whenSearchClosingFocusSettled })
   font: 0.625rem Consolas, monospace;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+
+.workspace-filter-invalidation {
+  display: -webkit-box;
+  max-width: 8.5rem;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 :global(.workspace-map-chrome .workspace-map-context h2) {

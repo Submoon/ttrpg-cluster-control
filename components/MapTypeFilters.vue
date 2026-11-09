@@ -11,20 +11,23 @@
         color="neutral"
         :variant="open || active ? 'soft' : 'outline'"
         size="sm"
-        :aria-label="active ? 'Filters (1 active criterion)' : 'Filters'"
+        :aria-label="active ? `Filters (${activeCriterionCount} active ${activeCriterionCount === 1 ? 'criterion' : 'criteria'})` : 'Filters'"
       >
-        {{ active ? 'Filters (1)' : 'Filters' }}
+        {{ active ? `Filters (${activeCriterionCount})` : 'Filters' }}
       </UButton>
 
       <template #content="{ close }">
         <div class="map-type-filter-panel grid gap-3 p-3" data-map-obstruction>
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-semibold">Filters</span>
+          <div class="map-type-filter-heading flex items-center justify-between gap-2">
+            <span class="font-semibold">{{ `Filters${activeCriterionCount > 0 ? ` (${activeCriterionCount} active ${activeCriterionCount === 1 ? 'criterion' : 'criteria'})` : ''}` }}</span>
             <UButton color="neutral" variant="outline" size="sm" @click="close">
               Close filters
             </UButton>
           </div>
           <p v-if="noMatches" class="m-0 text-sm text-muted">No objects match</p>
+          <p v-if="props.invalidationNotice" class="m-0 text-sm text-muted" role="status">
+            {{ props.invalidationNotice }}
+          </p>
           <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
             <legend class="mb-2 font-medium">Type</legend>
             <UCheckbox
@@ -36,11 +39,31 @@
               @update:model-value="toggleType(option.value, $event === true)"
             />
           </fieldset>
+          <fieldset v-if="props.publicationFilterOptions.length > 0" class="m-0 grid min-w-0 gap-2 border-0 p-0">
+            <legend class="mb-2 font-medium">Publication</legend>
+            <UCheckbox
+              v-for="option in props.publicationFilterOptions"
+              :key="option.value"
+              :label="option.label"
+              :aria-label="option.label"
+              :model-value="selectedPublicationModes.includes(option.value)"
+              @update:model-value="togglePublication(option.value, $event === true)"
+            />
+          </fieldset>
+          <WardenFieldFilters
+            v-if="props.fieldFilterOptions.length > 0"
+            ref="fieldFilters"
+            v-model:conditions="fieldConditions"
+            :options="props.fieldFilterOptions"
+          />
           <div class="flex flex-wrap gap-2">
-            <UButton color="neutral" variant="outline" size="sm" :disabled="!active" @click="selectedTypes = []">
+            <UButton color="neutral" variant="outline" size="sm" :disabled="!selectedTypes.length" @click="selectedTypes = []">
               Remove Type
             </UButton>
-            <UButton color="neutral" variant="outline" size="sm" :disabled="!active" @click="selectedTypes = []">
+            <UButton v-if="props.publicationFilterOptions.length > 0" color="neutral" variant="outline" size="sm" :disabled="!selectedPublicationModes.length" @click="selectedPublicationModes = []">
+              Remove Publication
+            </UButton>
+            <UButton color="neutral" variant="outline" size="sm" :disabled="cannotClearAll" @click="clearAll">
               Clear all
             </UButton>
           </div>
@@ -48,22 +71,51 @@
       </template>
     </UPopover>
     <p v-if="noMatches" class="m-0 text-xs text-muted" role="status">No objects match</p>
+    <p v-if="props.invalidationNotice" class="map-filter-notice m-0 text-xs text-muted" role="status">
+      {{ props.invalidationNotice }}
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import type { PublicationMode } from '../domain/workspace'
+import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import WardenFieldFilters from './WardenFieldFilters.vue'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   options: readonly { value: string, label: string }[]
   compact: boolean
   noMatches: boolean
+  activeFilterCriterionCount?: number
+  publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
+  fieldFilterOptions?: readonly FieldFilterOption[]
+  invalidationNotice?: string | null
   portal?: boolean
-}>(), { portal: true })
+}>(), {
+  activeFilterCriterionCount: undefined,
+  publicationFilterOptions: () => [],
+  fieldFilterOptions: () => [],
+  invalidationNotice: null,
+  portal: true,
+})
+
+const emit = defineEmits<{
+  'clear-all-filters': []
+}>()
 
 const open = defineModel<boolean>('open', { required: true })
 const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
-const active = computed(() => selectedTypes.value.length > 0)
+const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
+const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
+const fieldFilters = ref<{ clearDrafts: () => void; hasDrafts: boolean } | null>(null)
+const activeCriterionCount = computed(() => props.activeFilterCriterionCount
+  ?? Number(selectedTypes.value.length > 0)
+    + Number(selectedPublicationModes.value.length > 0)
+    + fieldConditions.value.length)
+const active = computed(() => activeCriterionCount.value > 0)
+const wardenFiltersEnabled = computed(() => props.publicationFilterOptions.length > 0 || props.fieldFilterOptions.length > 0)
+const cannotClearAll = computed(() => !active.value && !fieldFilters.value?.hasDrafts)
 const popoverContent = {
   side: 'bottom',
   align: 'end',
@@ -76,6 +128,18 @@ function toggleType(type: string, checked: boolean): void {
     ? [...selectedTypes.value, type]
     : selectedTypes.value.filter(value => value !== type)
 }
+
+function togglePublication(mode: PublicationMode, checked: boolean): void {
+  selectedPublicationModes.value = checked
+    ? [...selectedPublicationModes.value, mode]
+    : selectedPublicationModes.value.filter(value => value !== mode)
+}
+
+function clearAll(): void {
+  fieldFilters.value?.clearDrafts()
+  if (wardenFiltersEnabled.value) emit('clear-all-filters')
+  else selectedTypes.value = []
+}
 </script>
 
 <style scoped>
@@ -84,6 +148,25 @@ function toggleType(type: string, checked: boolean): void {
   max-height: min(70dvh, 32rem, var(--reka-popover-content-available-height, 70dvh));
   overflow: auto;
   overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.map-type-filter-heading {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  margin-top: -0.25rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  background: var(--panel-bg);
+}
+
+.map-filter-notice {
+  display: -webkit-box;
+  max-width: 11rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
   overflow-wrap: anywhere;
 }
 </style>

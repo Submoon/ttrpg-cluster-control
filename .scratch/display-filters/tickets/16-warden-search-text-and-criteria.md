@@ -1,6 +1,6 @@
 ---
 title: Search Warden maps by text and criteria
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -170,6 +170,7 @@ export function useEditorMapControls(
   function setViewportPercentage(percentage: number): void {
     const map = activeMapHandle()
     if (!map || !Number.isFinite(percentage)) return
+    map.dismissSearchLocator?.()
     const viewport = map.getViewport()
     map.setViewport({ ...viewport, k: Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
   }

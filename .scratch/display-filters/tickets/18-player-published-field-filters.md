@@ -1,6 +1,6 @@
 ---
 title: Filter player maps by published Field values
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -174,6 +174,7 @@ export interface SystemMapRenderer {
   prepareExportClone(clone: SVGSVGElement): void
   /** Updates dimming classes in place without replacing D3 marks or interrupting gestures. */
   setDimmedObjectIds(objectIds: readonly string[]): void
+  setSearchLocator(objectId: string | null): void
   /** Cancels and rolls back active local previews without publishing geometry. */
   cancelActiveGesture(): void
   /** Updates a parent-owned preview without publishing it to workspace state. */
@@ -475,6 +476,7 @@ export function renderSystemMap({
   })
   const appliedPositions = () => objectPositions(system, geometry)
   function prepareExportClone(clone: SVGSVGElement): void {
+    clone.querySelector('[data-map-search-locator]')?.remove()
     clone.querySelectorAll('.system-object.is-dimmed, .system-object-publication.is-dimmed')
       .forEach(mark => mark.classList.remove('is-dimmed'))
     const positions = appliedPositions()
@@ -1012,6 +1014,22 @@ export function renderSystemMap({
     const dimmed = new Set(objectIds)
     objectMarks.classed('is-dimmed', object => dimmed.has(object.id))
     objectPublicationMarks.classed('is-dimmed', object => dimmed.has(object.id))
+  }
+
+  function setSearchLocator(objectId: string | null): void {
+    const point = objectId ? positions.get(objectId) : undefined
+    const screenTransform = point ? content.node()?.getScreenCTM() : null
+    const screenScale = screenTransform ? Math.hypot(screenTransform.a, screenTransform.b) : 0
+    const radius = Math.max(objectHitRadius + 4, screenScale > 0 ? 10 / screenScale : 0)
+    content.selectAll<SVGCircleElement, Point>('circle.map-search-locator')
+      .data(point ? [point] : [])
+      .join('circle')
+      .attr('class', 'map-search-locator')
+      .attr('data-map-search-locator', '')
+      .attr('aria-hidden', 'true')
+      .attr('cx', anchor => anchor.x)
+      .attr('cy', anchor => anchor.y)
+      .attr('r', radius)
   }
 
   objectMarks.each(function (object) {
@@ -1738,6 +1756,7 @@ export function renderSystemMap({
     zoomBehavior,
     prepareExportClone,
     setDimmedObjectIds,
+    setSearchLocator,
     cancelActiveGesture,
     setObjectPlacementPreview,
     setOrbitPlacementPreview,

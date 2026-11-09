@@ -10,7 +10,7 @@
             icon="i-lucide-arrow-left"
             aria-label="Pan left"
             :disabled="!canPan"
-            @click="panView(-1, 0)"
+            @click="runMapControl(() => panView(-1, 0))"
           />
           <UButton
             color="neutral"
@@ -19,7 +19,7 @@
             icon="i-lucide-arrow-up"
             aria-label="Pan up"
             :disabled="!canPan"
-            @click="panView(0, -1)"
+            @click="runMapControl(() => panView(0, -1))"
           />
           <UButton
             color="neutral"
@@ -28,7 +28,7 @@
             icon="i-lucide-arrow-down"
             aria-label="Pan down"
             :disabled="!canPan"
-            @click="panView(0, 1)"
+            @click="runMapControl(() => panView(0, 1))"
           />
           <UButton
             color="neutral"
@@ -37,7 +37,7 @@
             icon="i-lucide-arrow-right"
             aria-label="Pan right"
             :disabled="!canPan"
-            @click="panView(1, 0)"
+            @click="runMapControl(() => panView(1, 0))"
           />
           <UButton
             color="neutral"
@@ -46,7 +46,7 @@
             icon="i-lucide-minus"
             aria-label="Zoom out"
             :disabled="!canZoomOut"
-            @click="zoomOut"
+            @click="runMapControl(zoomOut)"
           />
           <UButton
             color="neutral"
@@ -55,7 +55,7 @@
             icon="i-lucide-plus"
             aria-label="Zoom in"
             :disabled="!canZoomIn"
-            @click="zoomIn"
+            @click="runMapControl(zoomIn)"
           />
           <UButton
             color="neutral"
@@ -63,7 +63,7 @@
             size="xs"
             icon="i-lucide-maximize"
             aria-label="Fit player map"
-            @click="fitPlayerMap"
+            @click="runMapControl(fitPlayerMap)"
           />
         </div>
         <svg
@@ -76,12 +76,14 @@
           :viewBox="viewBox"
           preserveAspectRatio="xMidYMid meet"
           tabindex="0"
+          @keydown.capture="handleSceneKeyIntent"
           @keydown="handleMapKeydown"
           @click.capture="suppressDraggedClick"
           @contextmenu.prevent.stop
+          @pointerdown.capture="handleScenePointerIntent"
           @pointerdown.stop="startPan"
           @lostpointercapture.self.stop="cancelPan"
-          @wheel.stop.prevent="handleWheel"
+          @wheel.stop.prevent="handleSceneWheel"
         >
           <g class="player-system-orbits" aria-hidden="true">
             <ellipse
@@ -162,6 +164,15 @@
             </text>
           </g>
           <circle
+            v-if="searchLocatorObject"
+            class="map-search-locator"
+            data-map-search-locator
+            :cx="searchLocatorObject.position.x"
+            :cy="searchLocatorObject.position.y"
+            r="14"
+            aria-hidden="true"
+          />
+          <circle
             v-for="orbit in unoccupiedOrbits"
             :key="`center-${orbit.id}`"
             class="player-system-unoccupied-center"
@@ -194,6 +205,7 @@ const props = defineProps<{
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
   selectedTypeFilters?: readonly string[]
+  searchLocatorObjectId?: string | null
   active?: boolean
   workspacePresentation?: boolean
   getUsableClientRect?: PlayerUsableRectReader
@@ -202,9 +214,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   'inspect-object': [publicObjectId: string]
   'inspect-orbit': [publicOrbitId: string]
+  'map-interaction': []
 }>()
 
 const unoccupiedOrbits = computed(() => props.document.orbits.filter(orbit => orbit.hostId === null))
+const searchLocatorObject = computed(() => props.searchLocatorObjectId
+  ? props.document.objects.find(object => object.id === props.searchLocatorObjectId) ?? null
+  : null)
 const objectPresentations = computed(() => new Map(props.document.objects.map(object => [
   object.id,
   playerObjectPresentation(object),
@@ -265,6 +281,25 @@ function isSystemMapInteractiveTarget(target: EventTarget | null): boolean {
 
 function isDimmed(object: PlayerSystemDocument['objects'][number]): boolean {
   return !playerObjectMatchesTypeFilters(object, props.selectedTypeFilters ?? [])
+}
+
+function handleScenePointerIntent(): void {
+  if (props.active !== false) emit('map-interaction')
+}
+
+function handleSceneKeyIntent(event: KeyboardEvent): void {
+  if (props.active === false || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '0'].includes(event.key)) return
+  emit('map-interaction')
+}
+
+function handleSceneWheel(event: WheelEvent): void {
+  if (props.active !== false) emit('map-interaction')
+  handleWheel(event)
+}
+
+function runMapControl(action: () => void): void {
+  if (props.active !== false) emit('map-interaction')
+  action()
 }
 
 function measureViewport(): void {

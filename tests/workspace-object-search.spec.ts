@@ -252,6 +252,10 @@ async function importAndOpenBranchSearchSystem(
 test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
   const fixture = branchSearchMap()
   const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   const content = systemMap.locator('.system-map-content')
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
@@ -276,6 +280,9 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
   await expect(systemMap).toBeFocused()
   const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
   await expect(selectedTarget).toHaveClass(/is-selected/)
+  await expect(selectedTarget).not.toHaveClass(/is-dimmed/)
+  await expect(systemMap.locator('.system-object').filter({ hasText: fixture.branchNames[0] })).toHaveClass(/is-dimmed/)
+  await expect(systemMap.locator('[data-map-search-locator]')).toHaveCount(0)
   const frameScale = scaleFromTransform(await content.getAttribute('transform'))
   expect(frameScale).toBeLessThan(0.25)
   expect(await content.getAttribute('transform')).not.toBe(beforeFrame)
@@ -338,6 +345,7 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
 
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
+  test.setTimeout(45_000)
   const fixture = branchSearchMap()
   await createSingleSystemWorkspace(page)
   await setHeaderMapActionsOpen(page, true)
@@ -358,6 +366,11 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
+
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
 
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
@@ -412,7 +425,13 @@ test('compact Location-key search preserves a dirty same-object draft and return
 
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
-  await expect(systemMap.locator('.system-object').filter({ hasText: fixture.targetName })).toHaveClass(/is-selected/)
+  const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
+  await expect(selectedTarget).toHaveClass(/is-selected/)
+  await expect(selectedTarget).toHaveClass(/is-dimmed/)
+  const locator = systemMap.locator('[data-map-search-locator]')
+  await expect(locator).toBeVisible()
+  const locatorBounds = await locator.boundingBox()
+  expect(locatorBounds?.width).toBeGreaterThanOrEqual(19)
   await expect(inspector).toBeHidden()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
 
@@ -423,6 +442,9 @@ test('compact Location-key search preserves a dirty same-object draft and return
     path: portraitFrameScreenshot,
     contentType: 'image/png',
   })
+  await setWorkspaceMapMode(page, 'Move')
+  await expect(locator).toHaveCount(0)
+  await expect(selectedTarget).toHaveClass(/is-dimmed/)
 
   await inspectToggle.click()
   await expect(inspector).toBeVisible()

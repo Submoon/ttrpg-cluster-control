@@ -7,6 +7,8 @@
     @contextmenu.capture="onContextMenuCapture"
     @click.capture="onClickCapture"
     @keydown.capture="onKeyDownCapture"
+    @wheel.capture="dismissSearchLocator"
+    @drop.capture="dismissSearchLocator"
     @touchstart.capture="onTouchStartCapture"
     @touchmove.capture="onTouchMoveCapture"
     @touchend.capture="onTouchEndCapture"
@@ -189,6 +191,11 @@ const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+
+function dismissSearchLocator(): void {
+  systemMapRef.value?.dismissSearchLocator()
+}
+
 const matchingOrbitAdjustmentPreview = computed(() => {
   const preview = props.orbitAdjustmentPreview
   const system = props.system
@@ -349,6 +356,7 @@ function beginLivePointerSequence(event: PointerEvent, isMouseButtonChord: boole
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
@@ -422,6 +430,12 @@ function onMouseDownCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if (event.target instanceof SVGElement && !event.isComposing
+    && (['Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'ContextMenu'].includes(event.key)
+      || (event.key === 'F10' && event.shiftKey)
+      || (event.target.closest('[role="slider"]') && ['Home', 'End'].includes(event.key)))) {
+    dismissSearchLocator()
+  }
   if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
     && event.target instanceof SVGElement) {
     const bounds = event.target.getBoundingClientRect()
@@ -589,6 +603,7 @@ function showPublicationMenu(
 }
 
 function onClickCapture(event: MouseEvent): void {
+  dismissSearchLocator()
   if (!suppressNextClick || event.detail === 0) return
   event.preventDefault()
   event.stopPropagation()
@@ -598,6 +613,7 @@ function onClickCapture(event: MouseEvent): void {
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
+  dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
   if (event.touches.length !== 1) {
@@ -935,6 +951,8 @@ defineExpose({
   revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
   whenReady,
   frameSearchTarget,
+  prepareSearchLocator: (objectId: string) => systemMapRef.value?.prepareSearchLocator(objectId),
+  dismissSearchLocator,
   focusMap: () => currentMap()?.focusMap?.(),
   fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),
