@@ -208,9 +208,10 @@ export function useEditorNavigation(options: {
     mapControls.captureActiveMap()
   }
 
-  async function setMapMode(mode: MapInteractionMode): Promise<boolean> {
+  async function setMapMode(mode: MapInteractionMode, isCurrent: () => boolean = () => true): Promise<boolean> {
     invalidatePendingSearchReveal()
     if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+    if (!isCurrent()) return false
     store.setMode(mode)
     return true
   }
@@ -834,6 +835,22 @@ export function useEditorNavigation(options: {
     await replaceObjectSelection(nextIds)
   }
 
+  /** Clears a multiple selection only while an active-system Move drag owns an outside object. */
+  function clearObjectSelectionForMove(expectedObjectIds: readonly string[]): boolean {
+    if (store.activeView !== 'system' || store.mapMode !== 'move'
+      || store.selectedObjectIds.length < 2
+      || store.selectedObjectIds.length !== expectedObjectIds.length
+      || !expectedObjectIds.every((id, index) => store.selectedObjectIds[index] === id)) return false
+    const currentWorkspace = workspace.value
+    const systemId = store.selectedSystemId
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!system || store.selectedObjectIds.some(id => !system.objects.some(object => object.id === id))) return false
+    setSelection({ selectedObjectId: null, selectedObjectIds: [] })
+    storeCurrentSelection()
+    editorError.value = ''
+    return true
+  }
+
   async function selectObject(
     objectId: string,
     openInspector = true,
@@ -1125,6 +1142,7 @@ export function useEditorNavigation(options: {
     selectObject,
     replaceObjectSelection,
     toggleObjectSelection,
+    clearObjectSelectionForMove,
     selectOrbit,
     selectRoute,
     resumeEntitySession,

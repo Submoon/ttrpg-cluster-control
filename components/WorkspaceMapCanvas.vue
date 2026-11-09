@@ -46,7 +46,7 @@
       @move-target="forwardMoveTarget"
       @cluster-target="forwardClusterTarget"
       @cancel-cluster-preview="emit('cancel-cluster-preview')"
-      @editing-gesture-change="emit('editing-gesture-change', $event)"
+      @editing-gesture-change="onEditingGestureChange"
       @viewport-change="emitViewport"
     />
     <SystemMap
@@ -62,6 +62,8 @@
       :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :selected-object-id="props.selectedObjectId"
       :selected-object-ids="props.selectedObjectIds"
+      :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
+      :clear-object-selection-for-move="commands.navigation.clearObjectSelectionForMove"
       :selected-orbit-id="props.selectedOrbitId"
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
@@ -88,7 +90,7 @@
       @cancel-creation-preview="forwardCancelCreationPreview"
       @cancel-object-placement-preview="emit('cancel-object-placement-preview')"
       @cancel-orbit-placement-preview="emit('cancel-orbit-placement-preview')"
-      @editing-gesture-change="emit('editing-gesture-change', $event)"
+      @editing-gesture-change="onEditingGestureChange"
       @viewport-change="emitViewport"
     />
   </div>
@@ -211,6 +213,7 @@ const matchingOrbitAdjustmentPreview = computed(() => {
 })
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let activeMousePointerId: number | null = null
+let editingGestureActive = false
 type LivePointerSequence = {
   pointerId: number
   pointerType: string
@@ -373,6 +376,11 @@ function clearPointerLongPress(): void {
 }
 
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
+
+function onEditingGestureChange(active: boolean): void {
+  editingGestureActive = active
+  emit('editing-gesture-change', active)
+}
 
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
   if (suppressRelease) {
@@ -575,11 +583,18 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       cancelCanvasGesture(true)
       return
     }
+  }
+  if (event.key === 'Escape' && props.activeView === 'system') {
     const focusedSystemMap = event.target instanceof Element
       ? event.target.closest<SVGSVGElement>('svg.system-map-svg')
       : null
-    if ((props.selectedObjectIds.length > 0 || props.selectedObjectId !== null)
-      && !activePointerPan && !touchStart && !touchPanStarted
+    const clearSelectionInSelect = props.mode === 'select'
+      && (props.selectedObjectIds.length > 0 || props.selectedObjectId !== null)
+    const clearGroupInMove = props.mode === 'move' && props.selectedObjectIds.length > 1
+      && !props.moveTargeting && !props.creationType && !props.creationChooserOpen
+    if ((clearSelectionInSelect || clearGroupInMove)
+      && !activePointerPan && !touchStart && !touchPanStarted && livePointerSequences.size === 0
+      && !editingGestureActive
       && focusedSystemMap && canvasRoot.value?.contains(focusedSystemMap)) {
       event.preventDefault()
       event.stopPropagation()

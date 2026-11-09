@@ -3,6 +3,7 @@ import type { JumpRoute } from '../../domain/workspace'
 import type { MapInteractionMode } from './types'
 import type { PublicationMenuLease, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
+import type { SelectedObjectDrag } from './selected-object-drag'
 
 export interface EditorCommandContext {
   navigation: {
@@ -10,6 +11,7 @@ export interface EditorCommandContext {
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
     replaceObjectSelection(objectIds: readonly string[]): Promise<void>
     toggleObjectSelection(objectId: string): Promise<void>
+    clearObjectSelectionForMove(expectedObjectIds: readonly string[]): boolean
     selectOrbit(orbitId: string, openInspector?: boolean): Promise<void>
     selectRoute(routeId: string, openInspector?: boolean): Promise<void>
     showClusterMap(): Promise<void>
@@ -22,7 +24,10 @@ export interface EditorCommandContext {
     deleteSystem(systemId: string): void
   }
   map: {
-    changeMode(mode: MapInteractionMode): void
+    changeMode(mode: MapInteractionMode, isCurrent?: () => boolean): void
+  }
+  move: {
+    beginSelectedObjectDrag(anchorId: string): SelectedObjectDrag | null
   }
   publication: {
     set(request: PublicationRequest): Promise<WorkspaceMutationResult>

@@ -47,6 +47,7 @@ import {
 } from '../domain/workspace'
 import type { EntityCommand, MapHistoryTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
+import type { SelectedObjectDrag } from '../composables/editor-workflows/selected-object-drag'
 import type {
   OrbitCenterMoveCandidate,
   OrbitPlacementPreview,
@@ -98,6 +99,8 @@ const props = withDefaults(defineProps<{
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   selectedObjectId: string | null
   selectedObjectIds?: readonly string[]
+  beginSelectedObjectDrag?: (anchorId: string) => SelectedObjectDrag | null
+  clearObjectSelectionForMove?: (expectedObjectIds: readonly string[]) => boolean
   selectedOrbitId: string | null
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -166,6 +169,8 @@ const orbitCenterMovePreviews = new Map<string, Point>()
 
 const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
+  beginSelectedObjectDrag: anchorId => props.beginSelectedObjectDrag?.(anchorId) ?? null,
+  clearObjectSelectionForMove: expectedObjectIds => props.clearObjectSelectionForMove?.(expectedObjectIds) ?? false,
   selectObject: (id, shiftKey) => { if (!props.creationType) emit('select-object', id, shiftKey) },
   selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
   orbitAdjustment: input => emit('orbit-adjustment', input),
@@ -711,7 +716,7 @@ watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })
 watch(() => props.selectedObjectId, () => render())
-watch(() => props.selectedObjectIds, () => render())
+watch(() => props.selectedObjectIds, selectedIds => mapRenderer?.setSelectedObjectIds(selectedIds ?? []))
 watch(() => props.selectedOrbitId, () => render())
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
@@ -981,6 +986,22 @@ defineExpose({
   fill: var(--map-text);
   font: 10px Consolas, monospace;
   pointer-events: none;
+}
+
+.selected-object-departure-indicator {
+  pointer-events: none;
+}
+
+.selected-object-departure-indicator circle {
+  fill: var(--error-bg);
+  stroke: var(--error-border);
+  stroke-width: 1.5;
+}
+
+.selected-object-departure-indicator text {
+  fill: var(--error);
+  font: 12px Consolas, monospace;
+  font-weight: 700;
 }
 
 .gm-publication-decorations {
