@@ -39,6 +39,15 @@ import { useEditorUiStore } from '../../stores/editor-ui'
 
 type CreationInputKey = keyof SystemCreationInputs
 
+interface OrbitRadiusInputOwnership {
+  sessionId: number
+  horizontal: boolean
+  vertical: boolean
+}
+
+const duplicateOrbitGeometryMessage =
+  'This would create an Orbit identical to an existing ring. Change a radius or rotation in Placement and try again.'
+
 interface SystemCreationWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   systemMapRef: Readonly<Ref<SystemMapHandle | null>>
@@ -84,6 +93,26 @@ function parseFinite(value: string): number | undefined {
   return Number.isFinite(number) ? number : undefined
 }
 
+function sameOrbitOrientation(first: number, second: number, offset = 0): boolean {
+  const delta = normalizeOrbitRotation(first - second - offset) % 180
+  return Math.min(delta, 180 - delta) <= 1e-8
+}
+
+function sameOrbitEllipse(
+  radii: OrbitRadii,
+  rotation: number,
+  otherRadii: OrbitRadii,
+  otherRotation: number,
+): boolean {
+  const sameAxes = radii.horizontal === otherRadii.horizontal
+    && radii.vertical === otherRadii.vertical
+  if (sameAxes && radii.horizontal === radii.vertical) return true
+  const swappedAxes = radii.horizontal === otherRadii.vertical
+    && radii.vertical === otherRadii.horizontal
+  return (sameAxes && sameOrbitOrientation(rotation, otherRotation))
+    || (swappedAxes && sameOrbitOrientation(rotation, otherRotation, 90))
+}
+
 /**
  * Builds the page-owned Add lifecycle around the synchronous memory-application boundary.
  * @param options Latest workspace, current system, map resolver, durable owner, and Inspector authority.
@@ -106,6 +135,7 @@ export function useSystemCreationWorkflows({
   let previewSequence = 0
   let confirmingPreviewId: number | null = null
   let explicitObjectOrbitPreference: { sessionId: number; orbitId: string } | null = null
+  let orbitRadiusInputOwnership: OrbitRadiusInputOwnership | null = null
 
   watch(
     [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
@@ -194,6 +224,9 @@ export function useSystemCreationWorkflows({
       notice: '',
     }
     creationSession.value = session
+    orbitRadiusInputOwnership = type.kind === 'orbit'
+      ? { sessionId: session.id, horizontal: false, vertical: false }
+      : null
     if (type.kind === 'orbit') fillDefaultOrbitGeometry(session, system, null)
     session.appliedInputs = { ...session.inputs }
     return true
@@ -218,6 +251,7 @@ export function useSystemCreationWorkflows({
       : undefined
     if (!system) {
       creationSession.value = null
+      orbitRadiusInputOwnership = null
       if (store.activeView === 'system' && store.selectedSystemId === session.systemId) store.setMode('select')
       return
     }
@@ -255,11 +289,27 @@ export function useSystemCreationWorkflows({
       : { hostId, order }) as Orbit
   }
 
-  function fillDefaultOrbitGeometry(session: SystemCreationSession, system: StarSystem, hostId: string | null): void {
+  function radiusInputOwnership(session: SystemCreationSession): OrbitRadiusInputOwnership {
+    return orbitRadiusInputOwnership?.sessionId === session.id
+      ? orbitRadiusInputOwnership
+      : { sessionId: session.id, horizontal: false, vertical: false }
+  }
+
+  function fillDefaultOrbitGeometry(
+    session: SystemCreationSession,
+    system: StarSystem,
+    hostId: string | null,
+    fillEmptyFields = true,
+  ): void {
     const radius = defaultOrbitRadius(system, prospectiveOrbit(system, hostId))
-    if (!session.inputs.horizontalRadius.trim()) session.inputs.horizontalRadius = String(radius)
-    if (!session.inputs.verticalRadius.trim()) session.inputs.verticalRadius = String(radius)
-    if (!session.inputs.rotation.trim()) session.inputs.rotation = '0'
+    const ownership = radiusInputOwnership(session)
+    if (!ownership.horizontal && (fillEmptyFields || session.inputs.horizontalRadius.trim())) {
+      session.inputs.horizontalRadius = String(radius)
+    }
+    if (!ownership.vertical && (fillEmptyFields || session.inputs.verticalRadius.trim())) {
+      session.inputs.verticalRadius = String(radius)
+    }
+    if (fillEmptyFields && !session.inputs.rotation.trim()) session.inputs.rotation = '0'
   }
 
   function updateCreationInput(key: CreationInputKey, value: string): void {
@@ -273,6 +323,10 @@ export function useSystemCreationWorkflows({
     }
     const previous = session.inputs[key]
     session.inputs[key] = nextValue
+    if (session.type.kind === 'orbit' && orbitRadiusInputOwnership?.sessionId === session.id) {
+      if (key === 'horizontalRadius') orbitRadiusInputOwnership.horizontal = nextValue.trim() !== ''
+      if (key === 'verticalRadius') orbitRadiusInputOwnership.vertical = nextValue.trim() !== ''
+    }
     invalidatePreview(session)
     clearError(key)
     clearError('target')
@@ -280,16 +334,7 @@ export function useSystemCreationWorkflows({
     if (session.type.kind === 'orbit' && key === 'hostId' && previous !== value) {
       const system = currentSystemForSession(session)
       if (system) {
-        const previousHostId = previous || null
         const nextHostId = value || null
-        const previousDefault = defaultOrbitRadius(system, prospectiveOrbit(system, previousHostId))
-        const nextDefault = defaultOrbitRadius(system, prospectiveOrbit(system, nextHostId))
-        if (Number(session.inputs.horizontalRadius) === previousDefault) {
-          session.inputs.horizontalRadius = String(nextDefault)
-        }
-        if (Number(session.inputs.verticalRadius) === previousDefault) {
-          session.inputs.verticalRadius = String(nextDefault)
-        }
         fillDefaultOrbitGeometry(session, system, nextHostId)
       }
     }
@@ -301,13 +346,17 @@ export function useSystemCreationWorkflows({
     return currentWorkspace.cluster.systems.find(system => system.id === session.systemId)
   }
 
-  function geometryForCurrentWorkspace(): SystemMapGeometry {
-    const layout = workspace.value?.layout
+  function geometryForWorkspace(currentWorkspace: LocalWorkspace | null): SystemMapGeometry {
+    const layout = currentWorkspace?.layout
     return {
       objectAngles: layout?.objectAngles ?? {},
       orbitRadii: layout?.orbitRadii ?? {},
       orbitRotations: layout?.orbitRotations ?? {},
     }
+  }
+
+  function geometryForCurrentWorkspace(): SystemMapGeometry {
+    return geometryForWorkspace(workspace.value)
   }
 
   function scenePointForTarget(system: StarSystem, target: SystemCreationTarget): Point | undefined {
@@ -325,6 +374,33 @@ export function useSystemCreationWorkflows({
       target.angle,
       orbitRotation(orbit, geometry),
     )
+  }
+
+  function orbitGeometriesAtTarget(
+    system: StarSystem,
+    target: SystemCreationTarget,
+    geometry: SystemMapGeometry,
+  ): Array<{ radii: OrbitRadii; rotation: number }> {
+    if (target.kind !== 'free' && target.kind !== 'host') return []
+    const positions = objectPositions(system, geometry)
+    const center = target.kind === 'host'
+      ? positions.get(target.objectId)
+      : { x: 64 + target.point.x * 832, y: 72 + target.point.y * 416 }
+    if (!center) return []
+
+    return system.orbits.flatMap((orbit) => {
+      const existingCenter = orbitCenter(orbit, positions)
+      if (center.x !== existingCenter.x || center.y !== existingCenter.y) return []
+      return [{ radii: orbitRadii(system, orbit, geometry), rotation: orbitRotation(orbit, geometry) }]
+    })
+  }
+
+  function hasDuplicateOrbitGeometry(
+    radii: OrbitRadii,
+    rotation: number,
+    existing: Array<{ radii: OrbitRadii; rotation: number }>,
+  ): boolean {
+    return existing.some(orbit => sameOrbitEllipse(radii, rotation, orbit.radii, orbit.rotation))
   }
 
   function validateFreeGeometry(
@@ -411,9 +487,9 @@ export function useSystemCreationWorkflows({
   ): { radii: OrbitRadii; rotation: number } | undefined {
     if (session.type.kind === 'orbit') {
       const hostId = target.kind === 'host' ? target.objectId : null
-      if (fillDefaults) fillDefaultOrbitGeometry(session, system, hostId)
-      const horizontal = parseFinite(session.inputs.horizontalRadius)
-      const vertical = parseFinite(session.inputs.verticalRadius)
+      fillDefaultOrbitGeometry(session, system, hostId, fillDefaults)
+      let horizontal = parseFinite(session.inputs.horizontalRadius)
+      let vertical = parseFinite(session.inputs.verticalRadius)
       const rotationValue = parseFinite(session.inputs.rotation)
       if (horizontal === undefined) setError('horizontalRadius', 'Horizontal radius must be a finite number.')
       if (vertical === undefined) setError('verticalRadius', 'Vertical radius must be a finite number.')
@@ -421,11 +497,50 @@ export function useSystemCreationWorkflows({
       if (horizontal === undefined || vertical === undefined || rotationValue === undefined) return undefined
 
       const minimum = minimumOrbitRadius(system, prospectiveOrbit(system, hostId))
-      const radii = {
+      const proposedOrbit = prospectiveOrbit(system, hostId)
+      const radiusStep = defaultOrbitRadius(system, {
+        ...proposedOrbit,
+        order: proposedOrbit.order + 1,
+      }) - defaultOrbitRadius(system, proposedOrbit)
+      let radii: OrbitRadii = {
         horizontal: Math.max(minimum, Math.round(horizontal)),
         vertical: Math.max(minimum, Math.round(vertical)),
       }
       const rotation = normalizeOrbitRotation(rotationValue)
+      const ownership = radiusInputOwnership(session)
+      const currentGeometry = geometryForCurrentWorkspace()
+      const existingGeometry = orbitGeometriesAtTarget(system, target, currentGeometry)
+      if (hasDuplicateOrbitGeometry(radii, rotation, existingGeometry)) {
+        let distinct = false
+        if (!ownership.horizontal || !ownership.vertical) {
+          for (let attempt = 0; attempt < existingGeometry.length + 1; attempt += 1) {
+            const nextHorizontal = ownership.horizontal ? radii.horizontal : radii.horizontal + radiusStep
+            const nextVertical = ownership.vertical ? radii.vertical : radii.vertical + radiusStep
+            if ((ownership.horizontal || Number.isSafeInteger(nextHorizontal))
+              && (ownership.vertical || Number.isSafeInteger(nextVertical))) {
+              radii = { horizontal: nextHorizontal, vertical: nextVertical }
+              if (!hasDuplicateOrbitGeometry(radii, rotation, existingGeometry)) {
+                distinct = true
+                break
+              }
+            }
+          }
+        }
+        if (!distinct) {
+          session.notice = duplicateOrbitGeometryMessage
+          setError('horizontalRadius', duplicateOrbitGeometryMessage)
+          return undefined
+        }
+        if (!ownership.horizontal) horizontal = radii.horizontal
+        if (!ownership.vertical) vertical = radii.vertical
+        if (!ownership.horizontal) session.inputs.horizontalRadius = String(radii.horizontal)
+        if (!ownership.vertical) session.inputs.verticalRadius = String(radii.vertical)
+        session.notice = ownership.horizontal
+          ? `Vertical radius set to ${radii.vertical} to avoid duplicating an existing ring.`
+          : ownership.vertical
+            ? `Horizontal radius set to ${radii.horizontal} to avoid duplicating an existing ring.`
+            : `Default Orbit radius set to ${radii.horizontal} to avoid duplicating an existing ring.`
+      }
       const corrections: string[] = []
       if (radii.horizontal !== horizontal) {
         session.inputs.horizontalRadius = String(radii.horizontal)
@@ -756,6 +871,11 @@ export function useSystemCreationWorkflows({
           if (!preview.radii || typeof rotation !== 'number' || !Number.isFinite(rotation)) {
             throw new Error('Enter valid Orbit radii and rotation before adding.')
           }
+          const latestGeometry = geometryForWorkspace(latestWorkspace)
+          const occupiedGeometry = orbitGeometriesAtTarget(latestSystem, target, latestGeometry)
+          if (hasDuplicateOrbitGeometry(preview.radii, rotation, occupiedGeometry)) {
+            throw new Error(duplicateOrbitGeometryMessage)
+          }
           const hostId = target.kind === 'host' ? target.objectId : null
           const generated = createOrbit(latestSystem, hostId)
           let orbit: Orbit
@@ -801,7 +921,12 @@ export function useSystemCreationWorkflows({
       }
       return true
     } catch (error) {
-      setError('form', error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      setError('form', message)
+      if (message === duplicateOrbitGeometryMessage) {
+        session.preview = null
+        session.notice = message
+      }
       return false
     } finally {
       if (confirmingPreviewId === previewId) confirmingPreviewId = null
@@ -827,6 +952,7 @@ export function useSystemCreationWorkflows({
 
   function quitAdd(): void {
     explicitObjectOrbitPreference = null
+    orbitRadiusInputOwnership = null
     creationSession.value = null
   }
 
@@ -837,6 +963,7 @@ export function useSystemCreationWorkflows({
 
     if (plan.removedSystemIds.includes(session.systemId)) {
       explicitObjectOrbitPreference = null
+      orbitRadiusInputOwnership = null
       creationSession.value = null
       return
     }

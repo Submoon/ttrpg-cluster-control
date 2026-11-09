@@ -4,6 +4,7 @@ import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   clickNormalizedSystemPoint,
+  dockAction,
   downloadJson,
   openWorkspaceHierarchy,
   readInspectorSelection,
@@ -74,7 +75,7 @@ function expectSystemPlacement(
   expect(placement.y).toBeCloseTo(expected.y, 6)
 }
 
-test('system Add immediately places on repeated clicks and reloads both placements', async ({ page }) => {
+test('system Add immediately places on repeated clicks and preserves each placement', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
 
@@ -125,6 +126,31 @@ test('system Add immediately places on repeated clicks and reloads both placemen
   expect(reloadedPlanets).toHaveLength(2)
   expectSystemPlacement(reloadedPlanets[0]?.placement, firstDeliveredPoint)
   expectSystemPlacement(reloadedPlanets[1]?.placement, secondDeliveredPoint)
+
+  await test.step('Three clicks on the same host in one Add Orbit session create distinct rings', async () => {
+    const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+      .locator('.object-hit-target')
+    const rings = map.getByRole('group', { name: /^Orbit \d+ around Primary Star$/ }).locator('.orbit-ring')
+    await expect(rings).toHaveCount(0)
+    await (await dockAction(page, 'Add orbit')).click()
+
+    const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
+    const readRings = () => rings.evaluateAll(ellipses => ellipses.map(ellipse => ({
+      id: ellipse.closest('[data-orbit-id]')?.getAttribute('data-orbit-id'),
+      geometry: ['cx', 'cy', 'rx', 'ry', 'transform'].map(attribute => ellipse.getAttribute(attribute)),
+    })))
+    let previous = await readRings()
+    for (const count of [1, 2, 3]) {
+      await expect(quitAdd).toBeVisible()
+      await host.click()
+      await expect(rings).toHaveCount(count)
+      const current = await readRings()
+      expect(current).toEqual(expect.arrayContaining(previous))
+      previous = current
+    }
+    await expect(quitAdd).toBeVisible()
+    expect(new Set(previous.map(ring => JSON.stringify(ring.geometry))).size, 'distinct rings').toBe(3)
+  })
 })
 
 
