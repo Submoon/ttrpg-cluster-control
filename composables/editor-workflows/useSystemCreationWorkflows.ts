@@ -62,6 +62,7 @@ interface OrbitDragReservation {
 
 const duplicateOrbitGeometryMessage =
   'This would create an Orbit identical to an existing ring. Change a radius or rotation in Placement and try again.'
+const automaticHostOrbitClearance = 16
 
 interface SystemCreationWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
@@ -106,6 +107,32 @@ function parseFinite(value: string): number | undefined {
   if (!value.trim()) return undefined
   const number = Number(value)
   return Number.isFinite(number) ? number : undefined
+}
+
+/** Finds a safe integer radius at or above a compact automatic hosted-Orbit default. */
+function nearestIntegerCircularRadiusAtOrAbove(
+  nominalRadius: number,
+  existingRadii: number[],
+  sceneClearance: number,
+): number | undefined {
+  let radiusFloor = nominalRadius
+  for (let attempt = 0; attempt <= existingRadii.length; attempt += 1) {
+    const availableRadius = nearestAvailableCircularOrbitRadius(
+      radiusFloor,
+      radiusFloor,
+      existingRadii,
+      sceneClearance,
+    )
+    if (availableRadius === undefined) return undefined
+
+    const integerRadius = Math.ceil(availableRadius)
+    if (!Number.isSafeInteger(integerRadius)) return undefined
+    if (integerRadius === availableRadius) return integerRadius
+
+    // Re-run from the rounded-up candidate so integer normalization cannot land inside a later gap.
+    radiusFloor = integerRadius
+  }
+  return undefined
 }
 
 function sameOrbitOrientation(first: number, second: number, offset = 0): boolean {
@@ -725,6 +752,32 @@ export function useSystemCreationWorkflows({
     if (session.type.kind === 'orbit') {
       const hostId = target.kind === 'host' ? target.objectId : null
       if (fromMap) fillDefaultOrbitGeometry(session, system, hostId)
+      const proposedOrbit = prospectiveOrbit(system, hostId)
+      const minimum = minimumOrbitRadius(system, proposedOrbit)
+      const ownership = radiusInputOwnership(session)
+      const currentGeometry = geometryForCurrentWorkspace()
+      const existingGeometry = orbitGeometriesAtTarget(system, target, currentGeometry)
+
+      if (fromMap && target.kind === 'host' && !ownership.horizontal && !ownership.vertical) {
+        const host = system.objects.find(object => object.id === target.objectId)
+        const nominalRadius = host?.subtype === 'star' ? 56 : minimum + 8
+        const compactRadius = nearestIntegerCircularRadiusAtOrAbove(
+          nominalRadius,
+          existingGeometry
+            .filter(orbit => orbit.radii.horizontal === orbit.radii.vertical)
+            .map(orbit => orbit.radii.horizontal),
+          automaticHostOrbitClearance,
+        )
+        if (compactRadius === undefined) {
+          const message = 'Could not find a safely spaced default Orbit radius. Enter a radius in Placement and try again.'
+          session.notice = message
+          setError('horizontalRadius', message)
+          return undefined
+        }
+        session.inputs.horizontalRadius = String(compactRadius)
+        session.inputs.verticalRadius = String(compactRadius)
+      }
+
       let horizontal = parseFinite(session.inputs.horizontalRadius)
       let vertical = parseFinite(session.inputs.verticalRadius)
       const rotationValue = parseFinite(session.inputs.rotation)
@@ -733,8 +786,6 @@ export function useSystemCreationWorkflows({
       if (rotationValue === undefined) setError('rotation', 'Rotation must be a finite number.')
       if (horizontal === undefined || vertical === undefined || rotationValue === undefined) return undefined
 
-      const minimum = minimumOrbitRadius(system, prospectiveOrbit(system, hostId))
-      const proposedOrbit = prospectiveOrbit(system, hostId)
       const radiusStep = defaultOrbitRadius(system, {
         ...proposedOrbit,
         order: proposedOrbit.order + 1,
@@ -744,9 +795,6 @@ export function useSystemCreationWorkflows({
         vertical: Math.max(minimum, Math.round(vertical)),
       }
       const rotation = normalizeOrbitRotation(rotationValue)
-      const ownership = radiusInputOwnership(session)
-      const currentGeometry = geometryForCurrentWorkspace()
-      const existingGeometry = orbitGeometriesAtTarget(system, target, currentGeometry)
       if (hasDuplicateOrbitGeometry(radii, rotation, existingGeometry)) {
         let distinct = false
         if (fromMap && (!ownership.horizontal || !ownership.vertical)) {

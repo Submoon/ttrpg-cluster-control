@@ -321,7 +321,7 @@ test('armed object Add blocks dirty inputs and unresolved candidate choices but 
   harness.dispose()
 })
 
-test('automatic Orbit Add skips a radius already used by a custom ring @pure', async () => {
+test('automatic Orbit Add uses the nearest compact radius around implicit and custom rings @pure', async () => {
   setActivePinia(createPinia())
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]!
@@ -329,8 +329,8 @@ test('automatic Orbit Add skips a radius already used by a custom ring @pure', a
   const first = createOrbit(system, hostId)
   const second = createOrbit({ ...system, orbits: [first] }, hostId)
   system.orbits.push(first, second)
-  // The first ring uses the implicit 112-unit default. The second uses the third ring's nominal radius.
-  const customRadii = { horizontal: 228, vertical: 228 }
+  // The first ring uses the implicit legacy geometry. The second occupies the compact automatic default.
+  const customRadii = { horizontal: 56, vertical: 56 }
   initial.layout.orbitRadii[second.id] = { ...customRadii }
   const harness = createHistoryHarness(initial)
   const controller = createSystemCreationController(harness.workspace, harness.history)
@@ -348,10 +348,38 @@ test('automatic Orbit Add skips a radius already used by a custom ring @pure', a
     expect(placed.layout.orbitRadii[first.id]).toBeUndefined()
     expect(placed.layout.orbitRadii[second.id]).toEqual(customRadii)
     const added = placed.layout.orbitRadii[orbits[2]!.id]
-    expect(added).toBeDefined()
-    expect(added).not.toEqual({ horizontal: 112, vertical: 112 })
-    expect(added).not.toEqual(customRadii)
+    expect(added).toEqual({ horizontal: 72, vertical: 72 })
     expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('automatic Orbit Add rounds a fractional gap outward before saving @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const hostId = system.objects[0]!.id
+  const existing = createOrbit(system, hostId)
+  system.orbits.push(existing)
+  initial.layout.orbitRadii[existing.id] = { horizontal: 56.4, vertical: 56.4 }
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: 'host', label: 'Primary Star', target: { kind: 'host', objectId: hostId }, error: null,
+    }])).toBe(true)
+
+    const placed = harness.workspace.value!
+    const orbits = placed.cluster.systems[0]!.orbits
+    expect(orbits).toHaveLength(2)
+    expect(placed.layout.orbitRadii[existing.id]).toEqual({ horizontal: 56.4, vertical: 56.4 })
+    const addedRadius = placed.layout.orbitRadii[orbits[1]!.id]!.horizontal
+    expect(addedRadius).toBe(73)
+    expect(addedRadius - 56.4).toBeGreaterThanOrEqual(16)
   } finally {
     controller.dispose()
     harness.dispose()

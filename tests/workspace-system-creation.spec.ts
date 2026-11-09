@@ -175,6 +175,8 @@ test('system Add immediately places on repeated clicks and preserves each placem
     }
     await expect(quitAdd).toBeVisible()
     expect(new Set(previous.map(ring => JSON.stringify(ring.geometry))).size, 'distinct rings').toBe(3)
+    expect(previous.map(ring => ring.geometry.slice(2, 4).map(Number)), 'compact hosted radii')
+      .toEqual([[56, 56], [72, 72], [88, 88]])
   })
 
   await test.step('A drag that leaves the map before showing a ring still blocks Undo', async () => {
