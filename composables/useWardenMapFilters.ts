@@ -53,12 +53,6 @@ export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapF
     if (!matcher || !system) return []
     return system.objects.filter(object => !matcher(object)).map(object => object.id)
   })
-  const noMatches = computed(() => activeCriterionCount.value > 0
-    && selectedSystem.value !== null
-    && selectedSystem.value !== undefined
-    && selectedSystem.value.objects.length > 0
-    && dimmedObjectIds.value.length === selectedSystem.value.objects.length)
-
   watch(fieldOptionSignature, () => {
     if (!workspace.value) return
     const result = reconcileFieldConditions(store.selectedMapFieldConditions, fieldOptions.value)
@@ -96,7 +90,6 @@ export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapF
     fieldConditions,
     dimmedObjectIds,
     activeCriterionCount,
-    noMatches,
     invalidationNotice,
     clearAll,
   }

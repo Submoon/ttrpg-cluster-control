@@ -1,16 +1,16 @@
 import type { PlayerClusterDocument, PlayerObjectMarker } from '../domain/player-projection'
-import { mapObjectTypeKey, mapObjectTypeOption } from './map-type-filters'
+import { mapObjectTypeKey, mapObjectTypeOption, type MapObjectTypeOption } from './map-type-filters'
 
 /** Shared public category for presences whose underlying object type is not disclosed. */
 export const PLAYER_UNKNOWN_TYPE_KEY = 'player:type-not-revealed'
 
-const unknownTypeOption = { value: PLAYER_UNKNOWN_TYPE_KEY, label: 'Type not revealed' } as const
+const unknownTypeOption: MapObjectTypeOption = { value: PLAYER_UNKNOWN_TYPE_KEY, label: 'Type not revealed', family: null }
 
 /** Builds the available Type choices from revealed maps in the supplied public document. */
 export function playerTypeFilterOptions(
   document: PlayerClusterDocument,
-): { value: string, label: string }[] {
-  const options = new Map<string, { value: string, label: string }>()
+): MapObjectTypeOption[] {
+  const options = new Map<string, MapObjectTypeOption>()
   let hasUnknownObjects = false
 
   for (const system of document.systems) {

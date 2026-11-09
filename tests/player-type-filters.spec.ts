@@ -71,6 +71,7 @@ test('player Type choices come only from public maps and Unknown objects share o
   expect(options.find(option => option.value === PLAYER_UNKNOWN_TYPE_KEY)).toEqual({
     value: PLAYER_UNKNOWN_TYPE_KEY,
     label: 'Type not revealed',
+    family: null,
   })
 })
 

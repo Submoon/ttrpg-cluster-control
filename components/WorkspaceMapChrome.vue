@@ -90,7 +90,6 @@
         v-model:field-conditions="fieldConditions"
         :options="props.typeFilterOptions"
         :compact="props.isCompactViewport"
-        :no-matches="props.noTypeMatches"
         :active-filter-criterion-count="props.activeFilterCriterionCount"
         :publication-filter-options="props.publicationFilterOptions"
         :field-filter-options="props.fieldFilterOptions"
@@ -125,7 +124,6 @@
             label="Search filters"
             :options="props.searchTypeFilterOptions ?? props.typeFilterOptions"
             :compact="false"
-            :no-matches="false"
             :active-filter-criterion-count="searchActiveCriterionCount"
             :publication-filter-options="props.publicationFilterOptions"
             :field-filter-options="props.fieldFilterOptions"
@@ -315,6 +313,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import type { PublicationMode } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
@@ -335,9 +334,8 @@ const props = withDefaults(defineProps<{
   generatedPlayerUrl: string
   playerLinkBusy: boolean
   playerLinkStatus: string
-  typeFilterOptions: readonly { value: string, label: string }[]
-  searchTypeFilterOptions?: readonly { value: string, label: string }[]
-  noTypeMatches: boolean
+  typeFilterOptions: readonly MapObjectTypeOption[]
+  searchTypeFilterOptions?: readonly MapObjectTypeOption[]
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
   fieldFilterOptions?: readonly FieldFilterOption[]

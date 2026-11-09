@@ -93,7 +93,6 @@
               :type-filter-options="typeFilterOptions"
               :field-filter-options="fieldFilterOptions"
               :compact="isCompactViewport"
-              :filter-no-matches="filterNoMatches"
               @export-image="downloadPlayerImage"
             >
               <UButton
@@ -223,7 +222,6 @@
             :type-filter-options="typeFilterOptions"
             :field-filter-options="fieldFilterOptions"
             :compact="isCompactViewport"
-            :filter-no-matches="filterNoMatches"
             embedded
             @export-image="downloadPlayerImage"
           >
@@ -420,11 +418,6 @@ const dimmedObjectIds = computed<ReadonlySet<string>>(() => {
     .filter(object => !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
       || !playerObjectMatchesFieldFilters(object, selectedFieldConditions.value))
     .map(object => object.id))
-})
-const filterNoMatches = computed(() => {
-  const system = selectedSystem.value
-  if (!system || dimmedObjectIds.value.size === 0 || system.map.objects.length === 0) return false
-  return dimmedObjectIds.value.size === system.map.objects.length
 })
 const mapFileScope = computed(() => selectedSystem.value
   ? `star system ${selectedSystem.value.label}`

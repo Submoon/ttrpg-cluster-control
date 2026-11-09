@@ -351,6 +351,7 @@ watch(
 function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
   const roots: HierarchyTreeItem[] = []
   const parentsAtDepth: HierarchyTreeItem[] = []
+  const dimmedObjectIds = new Set(props.dimmedObjectIds ?? [])
 
   for (const row of rows) {
     const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : undefined
@@ -362,7 +363,7 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
       ? publicationStatus(row.object.publication, selectedSystem.value?.publication).description
       : undefined
     const isDimmed = row.kind === 'object'
-      && (props.dimmedObjectIds?.includes(row.object.id) ?? false)
+      && dimmedObjectIds.has(row.object.id)
     const item: HierarchyTreeItem = row.kind === 'object'
       ? {
           kind: 'object',

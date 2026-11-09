@@ -21,7 +21,6 @@
     :field-filter-options="props.fieldFilterOptions"
     :allow-no-value="false"
     :compact="props.compact"
-    :no-matches="props.filterNoMatches"
     :portal="!props.embedded"
   />
   <MapFilesPopover v-model:open="filesOpen" :scope="props.fileScope" :portal="!props.embedded">
@@ -52,6 +51,7 @@
 import { ref, watch } from 'vue'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import type { PlayerSearchTarget } from '../utils/player-search'
 import type { SearchResult } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
@@ -69,10 +69,9 @@ const props = defineProps<{
   exportError: string
   embedded?: boolean
   showTypeFilters: boolean
-  typeFilterOptions: readonly { value: string, label: string }[]
+  typeFilterOptions: readonly MapObjectTypeOption[]
   fieldFilterOptions: readonly FieldFilterOption[]
   compact: boolean
-  filterNoMatches: boolean
 }>()
 const emit = defineEmits<{ 'export-image': [format: MapImageFormat, palette: MapImagePalette] }>()
 

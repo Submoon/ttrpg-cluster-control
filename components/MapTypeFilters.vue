@@ -18,54 +18,60 @@
 
       <template #content="{ close }">
         <div v-if="props.fieldFilterOptions.length > 0" :id="fieldSelectPortalId" />
-        <div class="map-type-filter-panel grid gap-3 p-3" data-map-obstruction>
-          <div class="map-type-filter-heading flex items-center justify-between gap-2">
+        <div class="map-type-filter-panel flex flex-col" data-map-obstruction>
+          <div class="flex shrink-0 items-center justify-between gap-2 border-b border-default p-3">
             <span class="font-semibold">{{ accessibleLabel }}</span>
             <UButton color="neutral" variant="outline" size="sm" @click="close">
               Close filters
             </UButton>
           </div>
-          <p v-if="noMatches" class="m-0 text-sm text-muted">No objects match</p>
-          <p v-if="props.invalidationNotice" class="m-0 text-sm text-muted" role="status">
-            {{ props.invalidationNotice }}
-          </p>
-          <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
-            <legend class="mb-2 font-medium">Type</legend>
-            <UCheckbox
-              v-for="option in options"
-              :key="option.value"
-              :label="option.label"
-              :aria-label="option.label"
-              :model-value="selectedTypes.includes(option.value)"
-              @update:model-value="toggleType(option.value, $event === true)"
-            />
-          </fieldset>
-          <fieldset v-if="props.publicationFilterOptions.length > 0" class="m-0 grid min-w-0 gap-2 border-0 p-0">
-            <legend class="mb-2 font-medium">Publication</legend>
-            <UCheckbox
-              v-for="option in props.publicationFilterOptions"
-              :key="option.value"
-              :label="option.label"
-              :aria-label="option.label"
-              :model-value="selectedPublicationModes.includes(option.value)"
-              @update:model-value="togglePublication(option.value, $event === true)"
-            />
-          </fieldset>
-          <FieldFilterConditions
-            v-if="props.fieldFilterOptions.length > 0"
-            ref="fieldFilters"
-            v-model:conditions="fieldConditions"
-            :options="props.fieldFilterOptions"
-            :allow-no-value="props.allowNoValue"
-            :portal="`#${fieldSelectPortalId}`"
-          />
-          <div class="flex flex-wrap gap-2">
-            <UButton color="neutral" variant="outline" size="sm" :disabled="!selectedTypes.length" @click="selectedTypes = []">
-              Remove Type
-            </UButton>
-            <UButton v-if="props.publicationFilterOptions.length > 0" color="neutral" variant="outline" size="sm" :disabled="!selectedPublicationModes.length" @click="selectedPublicationModes = []">
-              Remove Publication
-            </UButton>
+          <div class="min-h-0 overflow-y-auto overscroll-contain p-3">
+            <div class="grid gap-3">
+              <p v-if="props.invalidationNotice" class="m-0 text-sm text-muted" role="status">
+                {{ props.invalidationNotice }}
+              </p>
+              <fieldset v-if="typeGroups.length > 0" class="m-0 grid min-w-0 gap-3 border-0 p-0">
+                <legend class="mb-2 font-medium">Type</legend>
+                <fieldset
+                  v-for="group in typeGroups"
+                  :key="group.family ?? 'undisclosed'"
+                  class="m-0 grid min-w-0 gap-2 border-0 p-0"
+                >
+                  <legend class="mb-1 text-xs font-medium text-muted">
+                    {{ group.family ? catalogueFamilyLabel(group.family) : 'Undisclosed type' }}
+                  </legend>
+                  <UCheckbox
+                    v-for="option in group.options"
+                    :key="option.value"
+                    :label="option.label"
+                    :aria-label="option.label"
+                    :model-value="selectedTypes.includes(option.value)"
+                    @update:model-value="toggleType(option.value, $event === true)"
+                  />
+                </fieldset>
+              </fieldset>
+              <fieldset v-if="props.publicationFilterOptions.length > 0" class="m-0 grid min-w-0 gap-2 border-0 p-0">
+                <legend class="mb-2 font-medium">Publication</legend>
+                <UCheckbox
+                  v-for="option in props.publicationFilterOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :aria-label="option.label"
+                  :model-value="selectedPublicationModes.includes(option.value)"
+                  @update:model-value="togglePublication(option.value, $event === true)"
+                />
+              </fieldset>
+              <FieldFilterConditions
+                v-if="props.fieldFilterOptions.length > 0"
+                ref="fieldFilters"
+                v-model:conditions="fieldConditions"
+                :options="props.fieldFilterOptions"
+                :allow-no-value="props.allowNoValue"
+                :portal="`#${fieldSelectPortalId}`"
+              />
+            </div>
+          </div>
+          <div class="flex shrink-0 justify-end border-t border-default p-3">
             <UButton color="neutral" variant="outline" size="sm" :disabled="cannotClearAll" @click="clearAll">
               Clear all
             </UButton>
@@ -73,7 +79,6 @@
         </div>
       </template>
     </UPopover>
-    <p v-if="noMatches" class="m-0 text-xs text-muted" role="status">No objects match</p>
     <p v-if="props.invalidationNotice" class="map-filter-notice m-0 text-xs text-muted" role="status">
       {{ props.invalidationNotice }}
     </p>
@@ -84,12 +89,13 @@
 import { computed, ref, useId } from 'vue'
 import type { PublicationMode } from '../domain/workspace'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import { catalogueFamilyLabel } from '../utils/catalogue-labels'
+import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import FieldFilterConditions from './FieldFilterConditions.vue'
 
 const props = withDefaults(defineProps<{
-  options: readonly { value: string, label: string }[]
+  options: readonly MapObjectTypeOption[]
   compact: boolean
-  noMatches: boolean
   label?: string
   allowNoValue?: boolean
   activeFilterCriterionCount?: number
@@ -118,6 +124,15 @@ const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { defau
 const fieldFilters = ref<{ clearDrafts: () => void; hasDrafts: boolean } | null>(null)
 // Keep nested choices in this popover's focus scope, outside the scrolling criteria.
 const fieldSelectPortalId = `field-filter-options-${useId()}`
+const typeGroups = computed(() => {
+  const groups = new Map<MapObjectTypeOption['family'], MapObjectTypeOption[]>()
+  for (const option of props.options) {
+    const group = groups.get(option.family)
+    if (group) group.push(option)
+    else groups.set(option.family, [option])
+  }
+  return Array.from(groups, ([family, options]) => ({ family, options }))
+})
 const activeCriterionCount = computed(() => props.activeFilterCriterionCount
   ?? Number(selectedTypes.value.length > 0)
     + Number(selectedPublicationModes.value.length > 0)
@@ -160,19 +175,7 @@ function clearAll(): void {
 .map-type-filter-panel {
   width: min(22rem, calc(100vw - 1.5rem));
   max-height: min(70dvh, 32rem, var(--reka-popover-content-available-height, 70dvh));
-  overflow: auto;
-  overscroll-behavior: contain;
   overflow-wrap: anywhere;
-}
-
-.map-type-filter-heading {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  margin-top: -0.25rem;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-  background: var(--panel-bg);
 }
 
 .map-filter-notice {

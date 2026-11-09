@@ -29,6 +29,8 @@ The source issue requires an accessible control surface and active-filter feedba
 
 Confirmed on 2026-11-06.
 
+The [current specification](../spec.md#warden-map-presentation-and-session-state) supersedes the original zero-match message and reset controls below after review of the filter panel.
+
 - A **Filters** button sits next to Search in the upper star-system map toolbar. On desktop it opens an anchored panel. In compact layouts it opens a scrollable panel with a visible close command. Support keyboard and touch, use the layout's focus ownership conventions, and return focus to the opener on explicit close or Escape when it remains available.
 - The button shows the active criterion count. Type contributes one when it has selections, Player publication contributes one when it has selections, and each active Field contributes one. For example, Planet and Moon plus `Danger ≥ 3` produce **Filters (2)**. The accessible button name communicates the count.
 - The panel lists the active criteria and lets the Warden add, edit and remove them. Valid changes apply immediately. During an incomplete edit, the previous valid condition remains active until the replacement is valid or the Warden removes it. Closing and reopening shows the active criteria. A selected type remains visible and editable in the panel when the current system has zero objects of that type.

@@ -400,7 +400,8 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(resultOptions.last()).toBeInViewport()
 
   await searchDialog.getByRole('button', { name: 'Search filters', exact: true }).click()
-  await searchDialog.getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await searchDialog.getByRole('group', { name: 'Celestial body', exact: true })
+    .getByRole('checkbox', { name: 'Planet', exact: true }).check()
   await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
   await query.fill('')
   await expect(resultOptions).toHaveCount(2)

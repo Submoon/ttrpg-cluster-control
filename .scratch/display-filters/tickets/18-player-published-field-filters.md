@@ -30,7 +30,7 @@ The reader and preview can narrow published objects using Fields that appear in 
 - [x] Offer Field criteria from published assignments in the current player document. Group assignments by public name and kind. Distinguish two groups with the same name and different kinds using the public kind.
 - [x] For same-name, same-kind assignments on one object, any published value satisfying the condition is enough. A Field criterion requires a matching public assignment. The public panel offers value operators and omits **No value**.
 - [x] Reuse the typed value operators for text, number, boolean and single-select values. Build controlled choice lists from observed public assignments. Keep one condition per Field group and accept alternatives within a choice condition with OR.
-- [x] Combine the active Type and Field conditions with AND. Options, match counts and zero-match feedback derive entirely from the public document. A masked, omitted or inapplicable source value has the same observable absence.
+- [x] Combine the active Type and Field conditions with AND. Options and matches derive entirely from the public document. A masked, omitted or inapplicable source value has the same observable absence.
 - [x] Use the shared player filter controls to add, edit and remove criteria and clear the current set. Retain the independent reader and preview session lifetime, complete public relationships, Inspect details and complete exports.
 
 ## Verification

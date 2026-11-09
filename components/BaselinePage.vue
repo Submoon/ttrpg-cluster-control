@@ -124,7 +124,6 @@
               :can-open-search-shortcut="canOpenSearchShortcut"
               :type-filter-options="typeFilterOptions"
               :search-type-filter-options="searchTypeFilterOptions"
-              :no-type-matches="activeView === 'system' && noMatches"
               :publication-filter-options="publicationFilterOptions"
               :field-filter-options="fieldOptions"
               :active-filter-criterion-count="activeCriterionCount"
@@ -141,7 +140,7 @@
               v-model:selected-types="selectedMapObjectTypes"
               v-model:publication-modes="selectedPublicationModes"
               v-model:field-conditions="fieldConditions"
-              :search-results="searchResults"
+              :search-results="searchOpen ? searchResults : noSearchResults"
               :reveal-search-target="revealSearchTarget"
               @clear-all-filters="wardenFilters.clearAll"
               @export-cluster-json="downloadClusterJson"
@@ -558,7 +557,7 @@ import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
 import { useEditorUiStore } from '../stores/editor-ui'
-import { mapObjectTypeOption } from '../utils/map-type-filters'
+import { mapObjectTypeOption, type MapObjectTypeOption } from '../utils/map-type-filters'
 import { useWardenMapFilters } from '../composables/useWardenMapFilters'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
@@ -805,6 +804,7 @@ function selectPublicationMenuMode(mode: import('../domain/workspace').Publicati
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
+const noSearchResults: readonly never[] = []
 const searchSelectedTypes = computed({
   get: () => search.selectedTypes.value,
   set: types => search.setSelectedTypes(types, searchTypeFilterOptions.value),
@@ -835,7 +835,7 @@ const mapTypeFiltersOpen = computed({
   set: open => editorUi.setMapTypeFiltersOpen(open),
 })
 const currentTypeFilterOptions = computed(() => {
-  const options = new Map<string, { value: string, label: string }>()
+  const options = new Map<string, MapObjectTypeOption>()
   for (const type of catalogueTypes) {
     const option = mapObjectTypeOption({ family: type.family, subtype: type.value })
     options.set(option.value, option)
@@ -850,14 +850,14 @@ const currentTypeFilterOptions = computed(() => {
   return [...options.values()]
 })
 function typeOptionsWithRetainedSelection(
-  currentOptions: readonly { value: string, label: string }[],
+  currentOptions: readonly MapObjectTypeOption[],
   selectedTypes: readonly string[],
   retainedLabels: Readonly<Record<string, string>>,
-): { value: string, label: string }[] {
+): MapObjectTypeOption[] {
   const options = new Map(currentOptions.map(option => [option.value, option]))
   for (const value of selectedTypes) {
     const label = retainedLabels[value]
-    if (!options.has(value) && label) options.set(value, { value, label })
+    if (!options.has(value) && label) options.set(value, { value, label, family: 'Other' })
   }
   return [...options.values()]
 }
@@ -878,7 +878,7 @@ const selectedMapObjectTypes = computed({
 const wardenFilters = useWardenMapFilters({ workspace, selectedSystem })
 const {
   fieldOptions, publicationFilterOptions, selectedPublicationModes, fieldConditions,
-  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount, noMatches, invalidationNotice,
+  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount, invalidationNotice,
 } = wardenFilters
 watch(activeView, view => {
   if (view === 'cluster') mapTypeFiltersOpen.value = false
