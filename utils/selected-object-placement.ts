@@ -1,9 +1,11 @@
 /** Pure collective translation for selected system-map objects and their hosted branches. */
 import type { LocalWorkspace, ObjectPlacement, Point, StarSystem } from '../domain/workspace-model'
+import { canPlaceObjectInOrbit } from '../domain/workspace'
 import { captureEffectiveObjectAngles, updateWorkspaceObject } from '../domain/workspace-placement'
 import {
   objectPositions,
   orbitCenter,
+  orbitPlacementHitsAtPoint,
   orbitPointAtAngle,
   orbitRadii,
   orbitRotation,
@@ -28,6 +30,7 @@ export interface SelectedObjectTranslationPlan {
   movedObjectIds: readonly string[]
   positions: ReadonlyMap<string, Point>
   departingObjectIds: ReadonlySet<string>
+  arrivingObjectIds: ReadonlySet<string>
   /** Every object affected by placement or inherited movement, used for draft guards. */
   changes: readonly SelectedObjectPlacementChange[]
   /** Objects whose committed placement or explicit angle needs rebasing after publication. */
@@ -119,9 +122,134 @@ function collectMovedObjects(system: StarSystem, selectedObjectIds: readonly str
   return [...moved]
 }
 
+function independentlyMovingSelectionIds(
+  system: StarSystem,
+  selectedObjectIds: readonly string[],
+  movedObjectIds: ReadonlySet<string>,
+): string[] {
+  const selected = new Set(selectedObjectIds)
+  return system.objects
+    .filter(object => {
+      if (!selected.has(object.id)) return false
+      if (object.placement.kind !== 'orbit') return true
+      const orbitId = object.placement.orbitId
+      const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+      return !!orbit && (orbit.hostId === null || !movedObjectIds.has(orbit.hostId))
+    })
+    .map(object => object.id)
+}
+
+interface GroupOrbitSnap {
+  objectId: string
+  orbitId: string
+  angle: number
+  delta: Point
+  distance: number
+}
+
+function eligibleDestinationOrbit(
+  orbitId: string,
+  currentOrbitId: string | null,
+  orbitHostId: string | null,
+  movedObjectIds: ReadonlySet<string>,
+): boolean {
+  return orbitId !== currentOrbitId
+    && !(orbitHostId !== null && movedObjectIds.has(orbitHostId))
+}
+
+function chooseGroupOrbitSnap(
+  system: StarSystem,
+  geometry: ReturnType<typeof geometryOf>,
+  selectedRootIds: readonly string[],
+  movedObjectIds: ReadonlySet<string>,
+  beforePositions: ReadonlyMap<string, Point>,
+  delta: Point,
+): GroupOrbitSnap | null {
+  let best: GroupOrbitSnap | null = null
+
+  for (const objectId of selectedRootIds) {
+    const object = system.objects.find(candidate => candidate.id === objectId)
+    const origin = beforePositions.get(objectId)
+    if (!object || !origin) continue
+    const rawTarget = { x: origin.x + delta.x, y: origin.y + delta.y }
+    const currentOrbitId = orbitIdOf(object.placement)
+    const currentOrbit = currentOrbitId
+      ? system.orbits.find(orbit => orbit.id === currentOrbitId)
+      : undefined
+
+    // An exact point on the current fixed Orbit is already a valid destination and should not be pulled to a nearby ring.
+    if (currentOrbit && (currentOrbit.hostId === null || !movedObjectIds.has(currentOrbit.hostId))) {
+      const center = orbitCenter(currentOrbit, beforePositions)
+      const radii = orbitRadii(system, currentOrbit, geometry)
+      if (exactOrbitAngle(rawTarget, center, radii.horizontal, radii.vertical, orbitRotation(currentOrbit, geometry)) !== null) {
+        continue
+      }
+    }
+
+    const exactDestination = exactDestinationOrbit(
+      system,
+      geometry,
+      objectId,
+      currentOrbitId,
+      movedObjectIds,
+      rawTarget,
+      beforePositions,
+    )
+    if (exactDestination) {
+      const candidate: GroupOrbitSnap = {
+        objectId,
+        orbitId: exactDestination.orbitId,
+        angle: exactDestination.angle,
+        delta,
+        distance: 0,
+      }
+      if (!best || candidate.distance < best.distance) {
+        best = candidate
+      }
+      continue
+    }
+
+    const hits = orbitPlacementHitsAtPoint(system, rawTarget, beforePositions, geometry, objectId)
+    for (const hit of hits) {
+      if (!hit.valid || !eligibleDestinationOrbit(hit.orbit.id, currentOrbitId, hit.orbit.hostId, movedObjectIds)) continue
+      const candidate: GroupOrbitSnap = {
+        objectId,
+        orbitId: hit.orbit.id,
+        angle: hit.angle,
+        delta: { x: hit.point.x - origin.x, y: hit.point.y - origin.y },
+        distance: hit.distance,
+      }
+      if (!best || candidate.distance < best.distance) {
+        best = candidate
+      }
+    }
+  }
+  return best
+}
+
+function exactDestinationOrbit(
+  system: StarSystem,
+  geometry: ReturnType<typeof geometryOf>,
+  objectId: string,
+  currentOrbitId: string | null,
+  movedObjectIds: ReadonlySet<string>,
+  target: Point,
+  positions: ReadonlyMap<string, Point>,
+): { orbitId: string; angle: number } | null {
+  for (const orbit of system.orbits) {
+    if (!eligibleDestinationOrbit(orbit.id, currentOrbitId, orbit.hostId, movedObjectIds)
+      || !canPlaceObjectInOrbit(system, objectId, orbit.id)) continue
+    const center = orbitCenter(orbit, positions)
+    const radii = orbitRadii(system, orbit, geometry)
+    const angle = exactOrbitAngle(target, center, radii.horizontal, radii.vertical, orbitRotation(orbit, geometry))
+    if (angle !== null) return { orbitId: orbit.id, angle }
+  }
+  return null
+}
+
 /**
- * Resolves one common map-space translation from the captured workspace.
- * A fixed Orbit is retained only when the translated point is on that same ellipse; hosted branches inherit movement once.
+ * Resolves one common map-space translation and eligible group Orbit snap from the captured workspace.
+ * A fixed current Orbit is retained only at an exact point; Orbit descendants inherit movement with their host.
  */
 export function planSelectedObjectTranslation(
   workspace: LocalWorkspace,
@@ -140,8 +268,10 @@ export function planSelectedObjectTranslation(
   const geometry = geometryOf(workspace)
   const beforePositions = objectPositions(system, geometry)
   const effectiveAngles = captureEffectiveObjectAngles(workspace, system, system.orbits.map(orbit => orbit.id))
+  const selectedRootIds = independentlyMovingSelectionIds(system, uniqueSelection, movedObjectIdSet)
   const positions = new Map<string, Point>()
   const departingObjectIds = new Set<string>()
+  const arrivingObjectIds = new Set<string>()
   const changes: SelectedObjectPlacementChange[] = []
 
   // Pointer movement commonly returns to its starting point. Keep that path as an exact no-op,
@@ -163,14 +293,17 @@ export function planSelectedObjectTranslation(
         angleChanged: false,
       })
     }
-    return { movedObjectIds, positions, departingObjectIds, changes, updates: [] }
+    return { movedObjectIds, positions, departingObjectIds, arrivingObjectIds, changes, updates: [] }
   }
+
+  const snap = chooseGroupOrbitSnap(system, geometry, selectedRootIds, movedObjectIdSet, beforePositions, delta)
+  const translationDelta = snap?.delta ?? delta
 
   for (const objectId of movedObjectIds) {
     const object = system.objects.find(candidate => candidate.id === objectId)
     if (!object) return null
     const origin = requiredPosition(beforePositions, objectId)
-    const target = { x: origin.x + delta.x, y: origin.y + delta.y }
+    const target = { x: origin.x + translationDelta.x, y: origin.y + translationDelta.y }
     positions.set(objectId, target)
 
     const previousPlacement = clonePlacement(object.placement)
@@ -179,7 +312,18 @@ export function planSelectedObjectTranslation(
     let nextAngle = previousAngle
 
     if (object.placement.kind === 'system') {
-      nextPlacement = { kind: 'system', ...toNormalizedMapPoint(target) }
+      const snapWinner = snap?.objectId === objectId ? snap : null
+      const destination = snapWinner
+        ? { orbitId: snapWinner.orbitId, angle: snapWinner.angle }
+        : exactDestinationOrbit(system, geometry, objectId, null, movedObjectIdSet, target, beforePositions)
+      if (destination) {
+        nextPlacement = { kind: 'orbit', orbitId: destination.orbitId }
+        nextAngle = destination.angle
+      } else if (translationDelta.x === 0 && translationDelta.y === 0) {
+        nextPlacement = previousPlacement
+      } else {
+        nextPlacement = { kind: 'system', ...toNormalizedMapPoint(target) }
+      }
     } else {
       const orbitId = object.placement.orbitId
       const orbit = system.orbits.find(candidate => candidate.id === orbitId)
@@ -188,18 +332,33 @@ export function planSelectedObjectTranslation(
       if (!centerFollowsTranslation) {
         const center = orbitCenter(orbit, beforePositions)
         const radii = orbitRadii(system, orbit, geometry)
-        const angle = exactOrbitAngle(target, center, radii.horizontal, radii.vertical, orbitRotation(orbit, geometry))
-        if (angle === null) {
-          nextPlacement = { kind: 'system', ...toNormalizedMapPoint(target) }
-          departingObjectIds.add(objectId)
-          nextAngle = undefined
+        const currentAngle = exactOrbitAngle(target, center, radii.horizontal, radii.vertical, orbitRotation(orbit, geometry))
+        const snapWinner = snap?.objectId === objectId ? snap : null
+        if (currentAngle !== null) {
+          nextAngle = currentAngle
+        } else if (snapWinner) {
+          nextPlacement = { kind: 'orbit', orbitId: snapWinner.orbitId }
+          nextAngle = snapWinner.angle
         } else {
-          nextAngle = angle
+          const destination = exactDestinationOrbit(system, geometry, objectId, orbit.id, movedObjectIdSet, target, beforePositions)
+          if (destination) {
+            nextPlacement = { kind: 'orbit', orbitId: destination.orbitId }
+            nextAngle = destination.angle
+          } else {
+            nextPlacement = { kind: 'system', ...toNormalizedMapPoint(target) }
+            nextAngle = undefined
+          }
         }
       }
     }
 
     const placementChanged = !samePlacement(previousPlacement, nextPlacement)
+    const previousOrbitId = orbitIdOf(previousPlacement)
+    const nextOrbitId = orbitIdOf(nextPlacement)
+    if (previousOrbitId !== nextOrbitId) {
+      if (previousOrbitId !== null) departingObjectIds.add(objectId)
+      if (nextOrbitId !== null) arrivingObjectIds.add(objectId)
+    }
     const angleChanged = previousPlacement.kind === 'orbit'
       && nextPlacement.kind === 'orbit'
       && nextAngle !== undefined
@@ -221,6 +380,7 @@ export function planSelectedObjectTranslation(
     movedObjectIds,
     positions,
     departingObjectIds,
+    arrivingObjectIds,
     changes,
     updates,
   }
@@ -263,7 +423,9 @@ export function applySelectedObjectTranslation(
       systemId,
       change.objectId,
       { placement: change.nextPlacement },
-      change.angleChanged && change.nextAngle !== undefined
+      (change.placementChanged || change.angleChanged)
+        && change.nextPlacement.kind === 'orbit'
+        && change.nextAngle !== undefined
         ? { angle: change.nextAngle }
         : undefined,
     )

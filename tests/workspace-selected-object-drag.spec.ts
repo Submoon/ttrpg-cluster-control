@@ -94,23 +94,99 @@ test('keeps an orbital object attached only when its exact translated point lies
   const appliedOnOrbit = applySelectedObjectTranslation(workspace, systemId, onOrbit!)
   expect(appliedOnOrbit.layout.objectAngles[planetId]).toBeCloseTo(Math.PI / 2)
 
-  const offOrbit = planSelectedObjectTranslation(workspace, systemId, [planetId], { x: -54, y: -120 })
+  const offOrbit = planSelectedObjectTranslation(workspace, systemId, [planetId], { x: 0, y: -241 })
   expect(offOrbit).not.toBeNull()
   expect(offOrbit!.changes.find(change => change.objectId === planetId)?.nextPlacement)
-    .toEqual({ kind: 'system', ...toNormalizedMapPoint({ x: 426, y: 280 }) })
+    .toEqual({ kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 159 }) })
   expect(offOrbit!.departingObjectIds.has(planetId)).toBe(true)
 })
 
-test('does not attach a fixed-Orbit departure to a different Orbit at the target point @pure', () => {
-  const workspace = createFixture()
-  const systemId = workspace.cluster.systems[0]!.id
-  const plan = planSelectedObjectTranslation(workspace, systemId, [planetId], { x: -54, y: -120 })
+test('attaches two selected members whose common translation reaches exact points on a different Orbit @pure', () => {
+  const fixture = createFixture()
+  const system = fixture.cluster.systems[0]!
+  const freeObjectId = 'free-object'
+  const workspace = replaceWorkspaceSystem(fixture, {
+    ...system,
+    objects: [...system.objects, object(freeObjectId, {
+      kind: 'system',
+      ...toNormalizedMapPoint({ x: 507, y: 400 + 50 * Math.sqrt(3) }),
+    })],
+  })
+  const plan = planSelectedObjectTranslation(workspace, system.id, [planetId, freeObjectId], { x: -54, y: -120 })
 
   expect(plan).not.toBeNull()
-  expect(plan!.changes.find(change => change.objectId === planetId)?.nextPlacement.kind).toBe('system')
+  expect(plan!.changes.find(change => change.objectId === planetId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: crossingOrbitId })
   expect(plan!.departingObjectIds).toEqual(new Set([planetId]))
-  const crossingOrbit = workspace.cluster.systems[0]!.orbits.find(candidate => candidate.id === crossingOrbitId)!
-  expect(crossingOrbit.hostId).toBe(hostId)
+  expect(plan!.arrivingObjectIds).toEqual(new Set([planetId, freeObjectId]))
+  const applied = applySelectedObjectTranslation(workspace, system.id, plan!)
+  expect(applied.layout.objectAngles[planetId]).toBeCloseTo(Math.PI / 2)
+  expect(applied.layout.objectAngles[freeObjectId]).toBeCloseTo(Math.PI / 6)
+  expect(projectedPositions(applied).get(planetId)).toEqual(plan!.positions.get(planetId))
+})
+
+test('keeps the current Orbit when the group snap reaches an intersection @pure', () => {
+  const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = base.cluster.systems[0]!
+  const freeObjectId = 'free-object'
+  const workspace = replaceWorkspaceSystem(base, {
+    ...system,
+    objects: [
+      object(planetId, { kind: 'orbit', orbitId }),
+      object(freeObjectId, { kind: 'system', x: 0.85, y: 0.8 }),
+    ],
+    orbits: [
+      { id: orbitId, hostId: null, center: toNormalizedMapPoint({ x: 480, y: 280 }), order: 1 },
+      { id: crossingOrbitId, hostId: null, center: toNormalizedMapPoint({ x: 540, y: 280 }), order: 2 },
+    ],
+  })
+  workspace.layout.orbitRadii = {
+    [orbitId]: { horizontal: 60, vertical: 60 },
+    [crossingOrbitId]: { horizontal: 60, vertical: 60 },
+  }
+  workspace.layout.objectAngles[planetId] = 0
+
+  const intersectionHeight = Math.sqrt(60 ** 2 - 30 ** 2)
+  const plan = planSelectedObjectTranslation(workspace, system.id, [planetId, freeObjectId], {
+    x: -33,
+    y: 1.1 * intersectionHeight,
+  })!
+
+  expect(plan.positions.get(planetId)?.x).toBeCloseTo(510, 9)
+  expect(plan.positions.get(planetId)?.y).toBeCloseTo(280 + intersectionHeight, 9)
+  expect(plan.changes.find(change => change.objectId === planetId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId })
+  expect(plan.departingObjectIds.size).toBe(0)
+  expect(plan.arrivingObjectIds.size).toBe(0)
+})
+
+test('snaps the whole selection when a free member reaches a fixed Orbit and preserves its occupants @pure', () => {
+  const fixture = createFixture()
+  const system = fixture.cluster.systems[0]!
+  const freeObjectId = 'free-object'
+  const workspace = replaceWorkspaceSystem(fixture, {
+    ...system,
+    objects: [...system.objects, object(freeObjectId, { kind: 'system', x: 0.75, y: 0.5 })],
+  })
+  const before = projectedPositions(workspace)
+  const plan = planSelectedObjectTranslation(workspace, system.id, [planetId, freeObjectId], { x: 66, y: 0 })!
+  expect(plan.arrivingObjectIds).toEqual(new Set([freeObjectId]))
+  expect(plan.changes.find(change => change.objectId === freeObjectId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: freeOrbitId })
+
+  const applied = applySelectedObjectTranslation(workspace, system.id, plan)
+  const after = projectedPositions(applied)
+  for (const objectId of [planetId, moonId, freeObjectId]) {
+    const original = before.get(objectId)!
+    const position = after.get(objectId)!
+    const preview = plan.positions.get(objectId)!
+    expect(position.x).toBeCloseTo(preview.x, 9)
+    expect(position.y).toBeCloseTo(preview.y, 9)
+    expect(position.x - original.x).toBeCloseTo(60, 3)
+    expect(position.y - original.y).toBeCloseTo(0, 3)
+  }
+  expect(applied.layout.objectAngles[freeObjectId]).toBeCloseTo(0)
+  expect(after.get('free-orbit-occupant')).toEqual(before.get('free-orbit-occupant'))
 })
 
 test('keeps an occupant on an unoccupied-center Orbit only at an exact point on its fixed ellipse @pure', () => {
@@ -141,13 +217,13 @@ test('carries nested descendants once when their selected host leaves its fixed 
   const workspace = createFixture()
   const systemId = workspace.cluster.systems[0]!.id
   const before = projectedPositions(workspace)
-  const plan = planSelectedObjectTranslation(workspace, systemId, [planetId, moonId], { x: -54, y: -120 })
+  const plan = planSelectedObjectTranslation(workspace, systemId, [planetId, moonId], { x: -90, y: -120 })
 
   expect(plan).not.toBeNull()
   expect(plan!.movedObjectIds).toEqual([planetId, moonId])
-  expect(plan!.positions.get(planetId)).toEqual({ x: 426, y: 280 })
+  expect(plan!.positions.get(planetId)).toEqual({ x: 390, y: 280 })
   expect(plan!.positions.get(moonId)).toEqual({
-    x: before.get(moonId)!.x - 54,
+    x: before.get(moonId)!.x - 90,
     y: before.get(moonId)!.y - 120,
   })
   expect(plan!.departingObjectIds).toEqual(new Set([planetId]))

@@ -15,6 +15,8 @@ export interface SelectedObjectDragPreview {
   positions: ReadonlyMap<string, Point>
   /** Selected objects that will detach from their current Orbit at the exact translated point. */
   departingObjectIds: ReadonlySet<string>
+  /** Independently moving group members that will attach to an exact eligible Orbit destination. */
+  arrivingObjectIds: ReadonlySet<string>
 }
 
 /** Single-use pointer gesture whose proposal remains transient until its complete call. */
@@ -185,7 +187,11 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
             setError('Resolve the Inspector draft before changing an object or its placement.')
             return null
           }
-          return { positions: plan.positions, departingObjectIds: plan.departingObjectIds }
+          return {
+            positions: plan.positions,
+            departingObjectIds: plan.departingObjectIds,
+            arrivingObjectIds: plan.arrivingObjectIds,
+          }
         } catch (error) {
           setError(error instanceof Error ? error.message : String(error))
           return null

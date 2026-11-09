@@ -303,6 +303,11 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   const iriaBeforeMove = await renderedObjectPosition(iriaMark)
   const departureBeforeMove = await renderedObjectPosition(groupDepartureMark)
   const nixBeforeMove = await renderedObjectPosition(nixMark)
+  const destinationOrbitId = initialIria.placement.orbitId
+  const destinationRing = map.locator(`.orbit-mark[data-orbit-id="${destinationOrbitId}"] .orbit-ring`)
+  const destinationRadius = Number(await destinationRing.getAttribute('rx'))
+  expect(destinationRadius).toBeGreaterThan(0)
+  expect(Number(await destinationRing.getAttribute('ry'))).toBe(destinationRadius)
   const hitTarget = planetObject.locator('.object-hit-target')
   const sourceBounds = await hitTarget.boundingBox()
   if (!sourceBounds) throw new Error('Iria has no rendered hit target for the group drag.')
@@ -312,13 +317,22 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   }
   const sceneCoordinates = await snapshotSvgCoordinates(map.locator('.system-map-content'))
   const sourceScene = sceneCoordinates.fromClient(sourceClient)
-  const target = { x: sourceScene.x + 40, y: sourceScene.y }
+  // Aim the ungrabbed jump point just outside the fixed circular Orbit's right edge.
+  const target = {
+    x: sourceScene.x + starBeforeMove.x + destinationRadius + 6 - departureBeforeMove.x,
+    y: sourceScene.y + starBeforeMove.y - departureBeforeMove.y,
+  }
   const targetClient = sceneCoordinates.toClient(target)
   const deliveredTargetClient = { x: Math.round(targetClient.x), y: Math.round(targetClient.y) }
   const deliveredTarget = sceneCoordinates.fromClient(deliveredTargetClient)
-  const deliveredDelta = {
-    x: deliveredTarget.x - sourceScene.x,
-    y: deliveredTarget.y - sourceScene.y,
+  const rawOffset = {
+    x: departureBeforeMove.x + deliveredTarget.x - sourceScene.x - starBeforeMove.x,
+    y: departureBeforeMove.y + deliveredTarget.y - sourceScene.y - starBeforeMove.y,
+  }
+  const scaleToRing = destinationRadius / Math.hypot(rawOffset.x, rawOffset.y)
+  const snappedDelta = {
+    x: starBeforeMove.x + rawOffset.x * scaleToRing - departureBeforeMove.x,
+    y: starBeforeMove.y + rawOffset.y * scaleToRing - departureBeforeMove.y,
   }
   const startGroupDrag = async () => {
     await page.mouse.move(sourceClient.x, sourceClient.y)
@@ -329,17 +343,18 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await startGroupDrag()
   await expect(iriaMark.locator('.selected-object-departure-indicator')).toHaveAttribute('visibility', 'visible')
+  await expect(groupDepartureMark.locator('.selected-object-arrival-indicator')).toHaveAttribute('visibility', 'visible')
   expectPositionNear(await renderedObjectPosition(iriaMark), {
-    x: iriaBeforeMove.x + deliveredDelta.x,
-    y: iriaBeforeMove.y + deliveredDelta.y,
+    x: iriaBeforeMove.x + snappedDelta.x,
+    y: iriaBeforeMove.y + snappedDelta.y,
   })
   expectPositionNear(await renderedObjectPosition(groupDepartureMark), {
-    x: departureBeforeMove.x + deliveredDelta.x,
-    y: departureBeforeMove.y + deliveredDelta.y,
+    x: departureBeforeMove.x + snappedDelta.x,
+    y: departureBeforeMove.y + snappedDelta.y,
   })
   expectPositionNear(await renderedObjectPosition(nixMark), {
-    x: nixBeforeMove.x + deliveredDelta.x,
-    y: nixBeforeMove.y + deliveredDelta.y,
+    x: nixBeforeMove.x + snappedDelta.x,
+    y: nixBeforeMove.y + snappedDelta.y,
   })
   expectPositionNear(await renderedObjectPosition(starMark), starBeforeMove)
   await expect(selectedMapObjects).toHaveCount(2)
@@ -353,26 +368,18 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await page.keyboard.press('Escape')
   await expect(selectedMapObjects).toHaveCount(2)
   await expect(iriaMark.locator('.selected-object-departure-indicator')).toHaveAttribute('visibility', 'hidden')
+  await expect(groupDepartureMark.locator('.selected-object-arrival-indicator')).toHaveAttribute('visibility', 'hidden')
   await page.mouse.up()
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(beforeMove)
 
   await startGroupDrag()
   await expect(iriaMark.locator('.selected-object-departure-indicator')).toHaveAttribute('visibility', 'visible')
-  expectPositionNear(await renderedObjectPosition(iriaMark), {
-    x: iriaBeforeMove.x + deliveredDelta.x,
-    y: iriaBeforeMove.y + deliveredDelta.y,
-  })
-  expectPositionNear(await renderedObjectPosition(groupDepartureMark), {
-    x: departureBeforeMove.x + deliveredDelta.x,
-    y: departureBeforeMove.y + deliveredDelta.y,
-  })
-  expectPositionNear(await renderedObjectPosition(nixMark), {
-    x: nixBeforeMove.x + deliveredDelta.x,
-    y: nixBeforeMove.y + deliveredDelta.y,
-  })
-  expectPositionNear(await renderedObjectPosition(starMark), starBeforeMove)
   await page.mouse.up()
   await waitForWorkspaceSaved(page)
+  expectPositionNear(await renderedObjectPosition(groupDepartureMark), {
+    x: departureBeforeMove.x + snappedDelta.x,
+    y: departureBeforeMove.y + snappedDelta.y,
+  })
   await expect(selectedMapObjects).toHaveCount(2)
   await planetObject.focus()
   await page.keyboard.press('Escape')
@@ -392,11 +399,11 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   expect(movedObject(starId).placement).toEqual(initialObject(starId).placement)
   expect(movedIria.placement.kind).toBe('system')
   expect(movedNix.placement).toEqual(initialNix.placement)
-  expect(movedDeparture.placement.kind).toBe('system')
+  expect(movedDeparture.placement).toEqual({ kind: 'orbit', orbitId: destinationOrbitId })
   expect(movedIria.placement.kind === 'system' ? movedIria.placement.x : 0)
-    .toBeCloseTo((iriaBeforeMove.x + deliveredDelta.x - 64) / 832, 5)
+    .toBeCloseTo((iriaBeforeMove.x + snappedDelta.x - 64) / 832, 5)
   expect(movedIria.placement.kind === 'system' ? movedIria.placement.y : 0)
-    .toBeCloseTo((iriaBeforeMove.y + deliveredDelta.y - 72) / 416, 5)
+    .toBeCloseTo((iriaBeforeMove.y + snappedDelta.y - 72) / 416, 5)
   expect(movedDeparture.placement).not.toEqual(initialDeparture.placement)
 
   const undo = page.getByRole('button', { name: /^Undo: Move selected objects/ })

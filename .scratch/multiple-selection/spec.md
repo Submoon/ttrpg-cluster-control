@@ -60,9 +60,9 @@ Fetched origin on 2026-11-06. The isolated worktree HEAD, local main, and origin
 19. As a Warden, I want an Orbit and its occupants to follow their moving host, so that moving an object carries the branch it hosts.
 20. As a Warden, I want a selected descendant to travel only once with its moving ancestry, so that selecting an object and an ancestor together preserves their relative positions.
 21. As a Warden, I want an object on a fixed Orbit to stay on that Orbit when the exact translated point lies on it, so that I can preserve the attachment and still move the selection by the intended amount.
-22. As a Warden, I want an object whose translated point lies off its fixed Orbit to take that exact point as a free placement, so that the selection retains its spacing.
-23. As a Warden, I want the same collective move to ignore other Orbits along the drag or at the destination, so that incidental intersections do not create new attachments.
-24. As a Warden, I want the preview to identify each object about to leave its Orbit, so that I can see the consequences before releasing the drag.
+22. As a Warden, I want an object whose translated point lies off its fixed Orbit to take a free placement when it has no eligible destination Orbit, so that the selection retains its spacing.
+23. As a Warden, I want an independently moving member dropped on a fixed Orbit to attach there, even when I grab another member of the selection, so that I can place objects on Orbits while moving them together.
+24. As a Warden, I want the preview to identify pending Orbit departures and attachments, so that I can see the consequences before releasing the drag.
 25. As a Warden, I want a moving planet's hosted Orbits and their occupants to follow it even if the planet leaves its own Orbit, so that the planetary branch stays together.
 26. As a Warden, I want other occupants of a fixed Orbit to retain their effective positions when one occupant leaves or changes angle, so that nearby objects do not shift because of the collective move.
 27. As a Warden, I want a draft conflict to block the whole move with useful feedback, so that a rejected drag leaves no partial placement to repair.
@@ -91,9 +91,10 @@ Fetched origin on 2026-11-06. The isolated worktree HEAD, local main, and origin
 
 - Capture the selected objects, applied positions, workspace revision, and system context at gesture start. Compute the proposed translation from the map-space gesture delta. Preview from the captured positions rather than accumulating intermediate pointer deltas.
 - Resolve the existing object and Orbit relationships in dependency order. A hosted Orbit follows its host, including when that host itself follows another Orbit or takes a new free placement. Its occupants follow the resulting center. Count inherited movement once even if both an ancestor and a descendant are selected.
-- When an object's current Orbit center moves by the same translation, carry the occupant at its effective angle. When the center stays fixed, the target is the object's original resolved position plus the common translation. Keep the object on its current Orbit only when that target is representable on the actual ellipse, with numerical tolerance for geometry calculations. Otherwise give it the target's free placement. An Orbit with an unoccupied center is fixed in this object-only gesture. Use the current Orbit as the sole candidate for retaining an attachment.
+- When an object's current Orbit center moves by the same translation, carry the occupant at its effective angle. For a fixed center, keep the current attachment when the translated point is representable on the ellipse within numerical tolerance. An Orbit with an unoccupied center is fixed in this object-only gesture.
+- Use the ordinary object drag hit tolerance to find eligible destination Orbits for independently moving selected members. A member already targeting an exact point on its current Orbit keeps that target as its own preference. The closest eligible hit supplies one snap offset for the whole selection, with ties resolved in system order. Other members may attach where that same translation reaches an eligible Orbit. Orbits carried by the group cannot become new destinations. Objects without a resulting Orbit use their translated point as a free placement.
 - Preserve the effective angles of occupants whose placement is unaffected when another occupant leaves or changes position, including occupants whose angles were previously derived from sibling order. This applies to branches at any supported depth.
-- Show the proposed geometry and mark each pending departure during the gesture. Keep the preview transient and cancel it through the map's gesture ownership path. A gesture with no effective change produces no history action.
+- Show the proposed geometry and mark each pending Orbit departure or attachment during the gesture. Keep the preview transient and cancel it through the map's gesture ownership path. A gesture with no effective change produces no history action.
 
 ### Apply, history, and saving
 

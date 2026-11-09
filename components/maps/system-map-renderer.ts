@@ -290,6 +290,7 @@ export function renderSystemMap({
   const effectivePositions = new Map(objectPlacementPreviews)
   const selectedObjectDragPositions = new Map<string, Point>()
   const selectedObjectDragDepartures = new Set<string>()
+  const selectedObjectDragArrivals = new Set<string>()
   const previewOrbitCenters = new Map<string, Point>()
   const previewOrbitRadii = new Map<string, OrbitRadii>()
   const previewOrbitRotations = new Map<string, number>()
@@ -486,7 +487,8 @@ export function renderSystemMap({
   }
   const appliedPositions = () => objectPositions(system, geometry)
   function prepareExportClone(clone: SVGSVGElement): void {
-    clone.querySelectorAll('.selected-object-departure-indicator').forEach(indicator => indicator.remove())
+    clone.querySelectorAll('.selected-object-departure-indicator, .selected-object-arrival-indicator')
+      .forEach(indicator => indicator.remove())
     const positions = appliedPositions()
     clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
       mark.removeAttribute('aria-pressed')
@@ -1066,6 +1068,19 @@ export function renderSystemMap({
     .text('↗')
   objectDepartureIndicators.append('title').text('Will leave its Orbit')
 
+  const objectArrivalIndicators = objectMarks.append('g')
+    .attr('class', 'selected-object-arrival-indicator')
+    .attr('aria-hidden', 'true')
+    .attr('visibility', 'hidden')
+    .attr('pointer-events', 'none')
+    .attr('transform', 'translate(-23 -22)')
+  objectArrivalIndicators.append('circle').attr('r', 9)
+  objectArrivalIndicators.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dominant-baseline', 'central')
+    .text('↘')
+  objectArrivalIndicators.append('title').text('Will attach to an Orbit')
+
   if (creationType && creationPreview) {
     const previewGroup = content.append('g')
       .attr('class', 'system-creation-preview')
@@ -1266,16 +1281,27 @@ export function renderSystemMap({
   ): void {
     selectedObjectDragPositions.clear()
     selectedObjectDragDepartures.clear()
+    selectedObjectDragArrivals.clear()
     if (preview) {
       for (const [objectId, point] of preview.positions) {
         selectedObjectDragPositions.set(objectId, { ...point })
       }
       for (const objectId of preview.departingObjectIds) selectedObjectDragDepartures.add(objectId)
+      for (const objectId of preview.arrivingObjectIds) selectedObjectDragArrivals.add(objectId)
     }
     objectDepartureIndicators.attr('visibility', object =>
       selectedObjectDragDepartures.has(object.id) ? 'visible' : 'hidden')
-    objectMarks.attr('aria-label', object =>
-      `Select ${catalogueObjectLabel(object)}${selectedObjectDragDepartures.has(object.id) ? ', will leave its current Orbit' : ''}`)
+      .attr('transform', object => selectedObjectDragArrivals.has(object.id)
+        ? 'translate(-23 -43)' : 'translate(-23 -22)')
+    objectArrivalIndicators.attr('visibility', object =>
+      selectedObjectDragArrivals.has(object.id) ? 'visible' : 'hidden')
+    objectMarks.attr('aria-label', object => {
+      const consequences = [
+        ...(selectedObjectDragDepartures.has(object.id) ? ['will leave its current Orbit'] : []),
+        ...(selectedObjectDragArrivals.has(object.id) ? ['will attach to an Orbit'] : []),
+      ]
+      return `Select ${catalogueObjectLabel(object)}${consequences.length ? `, ${consequences.join(', ')}` : ''}`
+    })
     updateLiveGeometry()
   }
 

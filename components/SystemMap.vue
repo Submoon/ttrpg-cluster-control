@@ -1004,6 +1004,22 @@ defineExpose({
   font-weight: 700;
 }
 
+.selected-object-arrival-indicator {
+  pointer-events: none;
+}
+
+.selected-object-arrival-indicator circle {
+  fill: var(--map-bg);
+  stroke: var(--map-installation);
+  stroke-width: 1.5;
+}
+
+.selected-object-arrival-indicator text {
+  fill: var(--map-installation);
+  font: 12px Consolas, monospace;
+  font-weight: 700;
+}
+
 .gm-publication-decorations {
   pointer-events: none;
 }
