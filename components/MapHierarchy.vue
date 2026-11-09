@@ -165,7 +165,6 @@
           })"
           :aria-label="item.ariaLabel"
           :aria-description="item.ariaDescription"
-          :aria-current="selected ? 'true' : undefined"
           :data-hierarchy-level="level"
           :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
           :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"

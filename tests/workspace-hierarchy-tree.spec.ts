@@ -65,7 +65,9 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
 
   await planetObject.click({ modifiers: ['Shift'] })
   await expect(selectedMapObjects).toHaveCount(2)
+  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await expect(iria).toHaveAttribute('aria-selected', 'true')
+  await expect(hierarchy.locator('[aria-current="true"]')).toHaveCount(0)
   await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
 
   await departureRow.click({ modifiers: ['Shift'] })

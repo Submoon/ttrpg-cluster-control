@@ -5,8 +5,9 @@ import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import {
   applySelectedObjectTranslation,
-  planSelectedObjectTranslation,
+  prepareSelectedObjectTranslation,
   type SelectedObjectPlacementChange,
+  type SelectedObjectTranslationPlan,
 } from '../../utils/selected-object-placement'
 
 /** Scene-coordinate preview for one collective selected-object drag. */
@@ -111,17 +112,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       && store.selectedObjectIds.every((objectId, index) => objectId === captured.objectIds[index])
   }
 
-  function currentPlan(captured: CapturedGesture, delta: Point) {
-    if (!contextIsCurrent(captured)) return null
-    return planSelectedObjectTranslation(
-      captured.workspace,
-      captured.systemId,
-      captured.objectIds,
-      delta,
-    )
-  }
-
-  function validatePlan(plan: NonNullable<ReturnType<typeof planSelectedObjectTranslation>>): boolean {
+  function validatePlan(plan: SelectedObjectTranslationPlan): boolean {
     for (const change of plan.changes) {
       if (isEntityCommandBlocked(placementCommand(change))) {
         return false
@@ -136,8 +127,14 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     const selectedIds = [...store.selectedObjectIds]
     if (!currentWorkspace || store.activeView !== 'system' || store.mapMode !== 'move'
       || !systemId || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
-    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!system || selectedIds.some(objectId => !system.objects.some(object => object.id === objectId))) return null
+    let preparedPlan: ReturnType<typeof prepareSelectedObjectTranslation>
+    try {
+      preparedPlan = prepareSelectedObjectTranslation(currentWorkspace, systemId, selectedIds)
+    } catch (error) {
+      moveError.value = error instanceof Error ? error.message : String(error)
+      return null
+    }
+    if (!preparedPlan) return null
 
     const id = ++gestureSequence
     activeGestureId = id
@@ -154,6 +151,8 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     let completed = false
     let released = false
     let externallyCancelled = false
+
+    const currentPlan = (delta: Point) => contextIsCurrent(captured) ? preparedPlan(delta) : null
 
     function setError(message: string): void {
       if (feedbackGestureId === captured.id && !externallyCancelled) moveError.value = message
@@ -178,7 +177,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       preview(delta) {
         if (completed || released) return null
         try {
-          const plan = currentPlan(captured, delta)
+          const plan = currentPlan(delta)
           if (!plan) {
             if (!contextIsCurrent(captured)) setError('The selected objects or map context changed. Preview the move again.')
             return null
@@ -201,7 +200,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
         if (completed || released) return
         released = true
         try {
-          let plan = currentPlan(captured, delta)
+          let plan = currentPlan(delta)
           if (!plan) {
             setError('The selected objects or map context changed. Preview the move again.')
             return
@@ -228,7 +227,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
             return
           }
 
-          plan = currentPlan(captured, delta)
+          plan = currentPlan(delta)
           if (!plan) {
             setError('The selected objects or map context changed. Preview the move again.')
             return

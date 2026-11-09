@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace, replaceWorkspaceSystem, type LocalWorkspace, type StarSystem, type SystemObject } from '../domain/workspace'
-import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../utils/selected-object-placement'
+import {
+  applySelectedObjectTranslation,
+  planSelectedObjectTranslation,
+  prepareSelectedObjectTranslation,
+} from '../utils/selected-object-placement'
 import { objectPositions, toNormalizedMapPoint } from '../utils/system-map-geometry'
 
 const orbitId = 'orbit-hosted'
@@ -76,6 +80,71 @@ function projectedPositions(workspace: LocalWorkspace): Map<string, { x: number;
     orbitRotations: workspace.layout.orbitRotations,
   })
 }
+
+test('a prepared drag snaps near the rotated Orbit edge and rejects points beyond the hit tolerance @pure', () => {
+  const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = base.cluster.systems[0]!
+  const firstId = 'first'
+  const secondId = 'second'
+  const workspace = replaceWorkspaceSystem(base, {
+    ...system,
+    objects: [
+      object(firstId, { kind: 'system', x: 0.5, y: 0.5 }),
+      object(secondId, { kind: 'system', x: 0.15, y: 0.3 }),
+    ],
+    orbits: [{ id: freeOrbitId, hostId: null, center: { x: 0.5, y: 0.5 }, order: 1 }],
+  })
+  workspace.layout.orbitRadii[freeOrbitId] = { horizontal: 120, vertical: 40 }
+  workspace.layout.orbitRotations[freeOrbitId] = 45
+  const plan = prepareSelectedObjectTranslation(workspace, system.id, [firstId, secondId])!
+
+  // The rightmost point on this ellipse has a horizontal outward normal.
+  const edgeX = Math.sqrt((120 ** 2 + 40 ** 2) / 2)
+  const edgeY = (120 ** 2 - 40 ** 2) / (2 * edgeX)
+  const nearDelta = { x: edgeX + 15.99, y: edgeY }
+  const near = plan(nearDelta)!
+  expect(near.arrivingObjectIds).toEqual(new Set([firstId]))
+  expect(near.changes.find(change => change.objectId === firstId)?.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: freeOrbitId })
+  expect(near.positions.get(firstId)?.x).toBeCloseTo(480 + edgeX, 3)
+  expect(near.positions.get(firstId)?.y).toBeCloseTo(280 + edgeY, 3)
+
+  const exactDelta = { x: edgeX + 5e-8, y: edgeY }
+  const exact = plan(exactDelta)!
+  expect(exact.arrivingObjectIds).toEqual(new Set([firstId]))
+  expect(exact.positions.get(firstId)).toEqual({ x: 480 + exactDelta.x, y: 280 + exactDelta.y })
+
+  const farDelta = { x: edgeX + 16.01, y: edgeY }
+  const far = plan(farDelta)!
+  expect(far.arrivingObjectIds.size).toBe(0)
+  expect(far.positions.get(firstId)).toEqual({ x: 480 + farDelta.x, y: 280 + farDelta.y })
+  expect(plan(nearDelta)).toEqual(near)
+})
+
+test('a prepared drag includes the hit boundary and keeps system Orbit order for equal distances @pure', () => {
+  const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = base.cluster.systems[0]!
+  const objectId = 'free-object'
+  const center = { x: 0.5, y: 0.5 }
+  const workspace = replaceWorkspaceSystem(base, {
+    ...system,
+    objects: [object(objectId, { kind: 'system', ...center })],
+    orbits: [
+      { id: orbitId, hostId: null, center, order: 2 },
+      { id: crossingOrbitId, hostId: null, center, order: 1 },
+    ],
+  })
+  workspace.layout.orbitRadii[orbitId] = { horizontal: 60, vertical: 60 }
+  workspace.layout.orbitRadii[crossingOrbitId] = { horizontal: 40, vertical: 40 }
+  const plan = prepareSelectedObjectTranslation(workspace, system.id, [objectId])!
+
+  for (const x of [50, 76]) {
+    const translated = plan({ x, y: 0 })!
+    expect(translated.changes[0]?.nextPlacement).toEqual({ kind: 'orbit', orbitId })
+    expect(translated.positions.get(objectId)).toEqual({ x: 540, y: 280 })
+  }
+  expect(plan({ x: 0, y: 0 })?.updates).toEqual([])
+})
 
 test('keeps an orbital object attached only when its exact translated point lies on its current rotated Orbit @pure', () => {
   const workspace = createFixture()
