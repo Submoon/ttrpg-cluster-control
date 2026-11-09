@@ -1515,7 +1515,7 @@ async function defaultCatalogueCreationTarget(
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   if (await hierarchy.count() > 0) {
-    const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
+    const selected = hierarchy.getByRole('treeitem', { selected: true })
     if (await selected.count() > 0) {
       const orbitId = await selected.first().getAttribute('data-orbit-id')
       if (orbitId) return { kind: 'orbit', orbitId }
@@ -1588,7 +1588,7 @@ async function defaultOrbitCreationTarget(
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   if (await hierarchy.count() > 0) {
-    const selected = hierarchy.locator('[role="treeitem"][aria-current="true"]')
+    const selected = hierarchy.getByRole('treeitem', { selected: true })
     if (await selected.count() > 0) {
       const objectId = await selected.first().getAttribute('data-object-id')
         ?? await selected.first().getAttribute('data-host-object-id')

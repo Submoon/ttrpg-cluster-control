@@ -205,7 +205,7 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
   const selectedTree = selectedHierarchy.getByRole('tree', { name: 'Map object and Orbit hierarchy', exact: true })
   const selectedDeepestObject = selectedTree.getByRole('treeitem', { name: /^Select DEEP-10-ARCHIVE-KEY,/ })
   await selectedDeepestObject.scrollIntoViewIfNeeded()
-  await expect(selectedDeepestObject).toHaveAttribute('aria-current', 'true')
+  await expect(selectedDeepestObject).toHaveAttribute('aria-selected', 'true')
 
   const compactScreenshot = testInfo.outputPath('hierarchy-deep-branch-compact-touch-selected.png')
   await page.screenshot({ path: compactScreenshot, animations: 'disabled' })
