@@ -394,6 +394,42 @@ test('Orbit Add validates blank form inputs and restores their defaults on a map
   }
 })
 
+test('repeating unchanged numeric Orbit Placement rejects duplicates without altering displayed values @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const hostId = initial.cluster.systems[0]!.objects[0]!.id
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const { creation } = controller
+
+  try {
+    expect(await creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    creation.updateCreationInput('hostId', hostId)
+    creation.updateCreationInput('horizontalRadius', '73.5')
+    creation.updateCreationInput('verticalRadius', '81.25')
+    creation.updateCreationInput('rotation', '23')
+
+    expect(await creation.addCreationFromInputs()).toBe(true)
+    const displayedInputs = { ...creation.creationSession.value!.inputs }
+    expect(displayedInputs).toMatchObject({ horizontalRadius: '74', verticalRadius: '81', rotation: '23' })
+    expect(creation.creationSession.value?.notice).toMatch(/scene units to meet the 39-unit host minimum/)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(1)
+    const firstOrbit = harness.workspace.value!.cluster.systems[0]!.orbits[0]!
+    expect(harness.workspace.value?.layout.orbitRadii[firstOrbit.id])
+      .toEqual({ horizontal: 74, vertical: 81 })
+
+    expect(await creation.addCreationFromInputs()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(1)
+    expect(creation.creationSession.value?.inputs).toEqual(displayedInputs)
+    expect(creation.creationSession.value?.errors.horizontalRadius).toMatch(/identical to an existing ring/)
+    expect(creation.creationSession.value?.notice).toMatch(/identical to an existing ring/)
+    expect(creation.hasPendingHistoryInput.value).toBe(false)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
 test('Orbit drag radius snapping merges overlapping open gaps and favors the outer radius on a tie @pure', () => {
   expect(nearestAvailableCircularOrbitRadius(112, 39, [110, 114], 4)).toBe(118)
   expect(nearestAvailableCircularOrbitRadius(100, 39, [100], 4)).toBe(104)
@@ -401,6 +437,11 @@ test('Orbit drag radius snapping merges overlapping open gaps and favors the out
   expect(nearestAvailableCircularOrbitRadius(96, 39, [100], 4)).toBe(96)
   expect(nearestAvailableCircularOrbitRadius(104, 39, [100, 108], 4)).toBe(104)
   expect(nearestAvailableCircularOrbitRadius(40, 40, [50], 12)).toBe(62)
+  const fractionalTieClearance = 4 / 0.301 + 2.45
+  expect(nearestAvailableCircularOrbitRadius(56, 39, [56], fractionalTieClearance))
+    .toBeCloseTo(56 + fractionalTieClearance, 12)
+  expect(nearestAvailableCircularOrbitRadius(56 - 0.001, 39, [56], fractionalTieClearance))
+    .toBeCloseTo(56 - fractionalTieClearance, 12)
 })
 
 test('Add Orbit drag reserves the nearest frontmost host and commits its exact circular preview once @pure', async () => {

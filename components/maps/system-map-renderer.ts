@@ -46,6 +46,7 @@ import {
   orbitRadii,
   orbitRotation,
   orbitRotationHandlePoint,
+  fromNormalizedMapPoint,
   requiredPosition,
   rotatePoint,
   creationCandidatesAtPoint,
@@ -178,6 +179,8 @@ export interface SystemMapRenderer {
   setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
   /** Updates a parent-owned Orbit center overlay without replacing committed radii or rotation. */
   setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void
+  /** Updates only the inert Orbit creation-drag overlay; the committed map scene remains mounted. */
+  updateOrbitDragPreview(preview: SystemCreationPreview | null): void
   /** Captures Ctrl+wheel rotation before the same event reaches D3's zoom behavior. */
   captureOrbitRotationWheel(event: WheelEvent): void
   /** Resolves a supported palette drag into a scene-coordinate map-add intent. */
@@ -292,10 +295,7 @@ export function renderSystemMap({
     && system.orbits.some(orbit => orbit.id === adjustmentIdentity.orbitId)) {
     const { center, radii, rotation } = orbitAdjustmentPreview.geometry
     if ([center.x, center.y, radii.horizontal, radii.vertical, rotation].every(Number.isFinite)) {
-      previewOrbitCenters.set(adjustmentIdentity.orbitId, {
-        x: 64 + center.x * 832,
-        y: 72 + center.y * 416,
-      })
+      previewOrbitCenters.set(adjustmentIdentity.orbitId, fromNormalizedMapPoint(center))
       previewOrbitRadii.set(adjustmentIdentity.orbitId, { ...radii })
       previewOrbitRotations.set(adjustmentIdentity.orbitId, rotation)
     }
@@ -468,7 +468,11 @@ export function renderSystemMap({
     orbitRadii: effectiveOrbitRadii,
     orbitRotations: effectiveOrbitRotations,
   })
-  const appliedPositions = () => objectPositions(system, geometry)
+  let appliedPositionCache: Map<string, Point> | undefined
+  const appliedPositions = (): Map<string, Point> => {
+    appliedPositionCache ??= objectPositions(system, geometry)
+    return appliedPositionCache
+  }
   function prepareExportClone(clone: SVGSVGElement): void {
     const positions = appliedPositions()
     clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
@@ -1044,10 +1048,7 @@ export function renderSystemMap({
       let point: Point | undefined
       let targetLabel: string
       if (creationPreview.target.kind === 'free') {
-        point = {
-          x: 64 + creationPreview.target.point.x * 832,
-          y: 72 + creationPreview.target.point.y * 416,
-        }
+        point = fromNormalizedMapPoint(creationPreview.target.point)
         targetLabel = 'Free map position'
       } else if (creationPreview.target.kind === 'orbit') {
         const orbitTarget = creationPreview.target
@@ -1094,10 +1095,7 @@ export function renderSystemMap({
       let center: Point | undefined
       let targetLabel: string
       if (creationPreview.target.kind === 'free') {
-        center = {
-          x: 64 + creationPreview.target.point.x * 832,
-          y: 72 + creationPreview.target.point.y * 416,
-        }
+        center = fromNormalizedMapPoint(creationPreview.target.point)
         targetLabel = 'New unoccupied center'
       } else if (creationPreview.target.kind === 'host') {
         const hostTarget = creationPreview.target
@@ -1117,21 +1115,60 @@ export function renderSystemMap({
           .attr('rx', creationPreview.radii.horizontal)
           .attr('ry', creationPreview.radii.vertical)
           .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
-        if (!creationPreview.orbitDrag) {
-          previewGroup.append('circle')
-            .attr('class', 'system-creation-preview-center')
-            .attr('cx', center.x)
-            .attr('cy', center.y)
-            .attr('r', 6)
-          previewGroup.append('text')
-            .attr('class', 'system-creation-preview-label')
-            .attr('x', center.x)
-            .attr('y', center.y - creationPreview.radii.vertical - 30)
-            .attr('text-anchor', 'middle')
-            .text(`Preview · Orbit ${targetLabel}`)
-        }
+        previewGroup.append('circle')
+          .attr('class', 'system-creation-preview-center')
+          .attr('cx', center.x)
+          .attr('cy', center.y)
+          .attr('r', 6)
+        previewGroup.append('text')
+          .attr('class', 'system-creation-preview-label')
+          .attr('x', center.x)
+          .attr('y', center.y - creationPreview.radii.vertical - 30)
+          .attr('text-anchor', 'middle')
+          .text(`Preview · Orbit ${targetLabel}`)
       }
     }
+  }
+
+  /** Updates the drag-only ring without replacing the committed map scene or its D3-owned nodes. */
+  function updateOrbitDragPreview(preview: SystemCreationPreview | null): void {
+    const existing = content.select<SVGGElement>('.system-creation-preview-orbit-drag')
+    if (!preview?.orbitDrag || !preview.radii) {
+      existing.remove()
+      return
+    }
+
+    const center = preview.target.kind === 'free'
+      ? fromNormalizedMapPoint(preview.target.point)
+      : preview.target.kind === 'host'
+        ? appliedPositions().get(preview.target.objectId)
+        : undefined
+    const rotation = preview.rotation ?? 0
+    if (!center || ![
+      center.x,
+      center.y,
+      preview.radii.horizontal,
+      preview.radii.vertical,
+      rotation,
+    ].every(Number.isFinite) || preview.radii.horizontal < 0 || preview.radii.vertical < 0) {
+      existing.remove()
+      return
+    }
+
+    const group = existing.empty()
+      ? content.append('g')
+        .attr('class', 'system-creation-preview system-creation-preview-orbit-drag')
+        .attr('aria-hidden', 'true')
+        .style('pointer-events', 'none')
+      : existing
+    let ellipse = group.select<SVGEllipseElement>('.system-creation-preview-orbit')
+    if (ellipse.empty()) ellipse = group.append('ellipse').attr('class', 'system-creation-preview-orbit')
+    ellipse
+      .attr('cx', center.x)
+      .attr('cy', center.y)
+      .attr('rx', preview.radii.horizontal)
+      .attr('ry', preview.radii.vertical)
+      .attr('transform', `rotate(${rotation} ${center.x} ${center.y})`)
   }
 
   /**
@@ -1729,6 +1766,7 @@ export function renderSystemMap({
     setObjectPlacementPreview,
     setOrbitPlacementPreview,
     setOrbitCenterMovePreview,
+    updateOrbitDragPreview,
     captureOrbitRotationWheel,
     handleObjectDrop,
     handleCreationClick,

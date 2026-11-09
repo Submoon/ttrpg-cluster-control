@@ -70,8 +70,14 @@ export function nearestAvailableCircularOrbitRadius(
   return candidates.reduce((closest, candidate) => {
     const candidateDistance = Math.abs(candidate - radius)
     const closestDistance = Math.abs(closest - radius)
-    return candidateDistance < closestDistance
-      || candidateDistance === closestDistance && candidate > closest
+    const tieTolerance = Number.EPSILON * Math.max(
+      1,
+      Math.abs(radius),
+      Math.abs(candidate),
+      Math.abs(closest),
+    ) * 8
+    return candidateDistance < closestDistance - tieTolerance
+      || Math.abs(candidateDistance - closestDistance) <= tieTolerance && candidate > closest
       ? candidate
       : closest
   })

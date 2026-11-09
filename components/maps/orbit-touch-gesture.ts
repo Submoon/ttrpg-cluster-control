@@ -28,7 +28,7 @@ export function createOrbitTouchGesture(
   ])
   let phase: OrbitTouchPhase = 'pending'
   let activePointerId = initialContact.id
-  let startPoint = { x: initialContact.x, y: initialContact.y }
+  const startPoint = { x: initialContact.x, y: initialContact.y }
   let resumedPointerId: number | null = null
   let resumedAt: { x: number; y: number } | null = null
 
@@ -68,7 +68,6 @@ export function createOrbitTouchGesture(
       && Math.hypot(contact.x - resumedAt.x, contact.y - resumedAt.y) > 0) {
       phase = 'dragging'
       activePointerId = contact.id
-      startPoint = { x: contact.x, y: contact.y }
       resumedPointerId = null
       resumedAt = null
       return 'start-drag'

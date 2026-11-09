@@ -64,10 +64,7 @@ export function orbitCenter(
   if (orbit.hostId === null) {
     const override = overrides?.get(orbit.id)
     if (override) return override
-    return {
-      x: 64 + orbit.center.x * 832,
-      y: 72 + orbit.center.y * 416,
-    }
+    return fromNormalizedMapPoint(orbit.center)
   }
   return requiredPosition(positions, orbit.hostId)
 }
@@ -81,6 +78,18 @@ export function toNormalizedMapPoint(point: Point): Point {
   return {
     x: (point.x - 64) / 832,
     y: (point.y - 72) / 416,
+  }
+}
+
+/**
+ * Converts a normalized system-map point to SVG scene coordinates.
+ * @param point Normalized system-map placement or Orbit-center coordinates.
+ * @returns The corresponding point in SVG scene coordinates.
+ */
+export function fromNormalizedMapPoint(point: Point): Point {
+  return {
+    x: 64 + point.x * 832,
+    y: 72 + point.y * 416,
   }
 }
 
@@ -308,10 +317,7 @@ export function objectPositions(
 
     let point: Point
     if (object.placement.kind === 'system') {
-      point = {
-        x: 64 + object.placement.x * 832,
-        y: 72 + object.placement.y * 416,
-      }
+      point = fromNormalizedMapPoint(object.placement)
     } else {
       const placement = object.placement
       const orbit = system.orbits.find(candidate => candidate.id === placement.orbitId)

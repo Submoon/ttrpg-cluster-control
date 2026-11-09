@@ -24,6 +24,7 @@ import {
   orbitRadii,
   orbitRotation,
   creationCandidatesAtPoint,
+  fromNormalizedMapPoint,
   type SystemMapGeometry,
 } from '../../utils/system-map-geometry'
 import { isCircularOrbitRadiusAvailable, nearestAvailableCircularOrbitRadius } from '../../utils/orbit-drag-geometry'
@@ -323,17 +324,16 @@ export function useSystemCreationWorkflows({
     session: SystemCreationSession,
     system: StarSystem,
     hostId: string | null,
-    fillEmptyFields = true,
   ): void {
     const radius = defaultOrbitRadius(system, prospectiveOrbit(system, hostId))
     const ownership = radiusInputOwnership(session)
-    if (!ownership.horizontal && (fillEmptyFields || session.inputs.horizontalRadius.trim())) {
+    if (!ownership.horizontal) {
       session.inputs.horizontalRadius = String(radius)
     }
-    if (!ownership.vertical && (fillEmptyFields || session.inputs.verticalRadius.trim())) {
+    if (!ownership.vertical) {
       session.inputs.verticalRadius = String(radius)
     }
-    if (fillEmptyFields && !session.inputs.rotation.trim()) session.inputs.rotation = '0'
+    if (!session.inputs.rotation.trim()) session.inputs.rotation = '0'
   }
 
   function updateCreationInput(key: CreationInputKey, value: string): void {
@@ -389,7 +389,7 @@ export function useSystemCreationWorkflows({
     geometry: SystemMapGeometry,
   ): Point | undefined {
     if (target.kind === 'host') return objectPositions(system, geometry).get(target.objectId)
-    return { x: 64 + target.point.x * 832, y: 72 + target.point.y * 416 }
+    return fromNormalizedMapPoint(target.point)
   }
 
   function orbitDragMatchesCurrentContext(
@@ -457,7 +457,7 @@ export function useSystemCreationWorkflows({
   function scenePointForTarget(system: StarSystem, target: SystemCreationTarget): Point | undefined {
     const geometry = geometryForCurrentWorkspace()
     if (target.kind === 'free') {
-      return { x: 64 + target.point.x * 832, y: 72 + target.point.y * 416 }
+      return fromNormalizedMapPoint(target.point)
     }
     if (target.kind !== 'orbit') return undefined
     const orbit = system.orbits.find(candidate => candidate.id === target.orbitId)
@@ -480,7 +480,7 @@ export function useSystemCreationWorkflows({
     const positions = objectPositions(system, geometry)
     const center = target.kind === 'host'
       ? positions.get(target.objectId)
-      : { x: 64 + target.point.x * 832, y: 72 + target.point.y * 416 }
+      : fromNormalizedMapPoint(target.point)
     if (!center) return []
 
     return system.orbits.flatMap((orbit) => {
@@ -720,11 +720,11 @@ export function useSystemCreationWorkflows({
     session: SystemCreationSession,
     system: StarSystem,
     target: SystemCreationTarget,
-    fillDefaults: boolean,
+    fromMap: boolean,
   ): { radii: OrbitRadii; rotation: number } | undefined {
     if (session.type.kind === 'orbit') {
       const hostId = target.kind === 'host' ? target.objectId : null
-      fillDefaultOrbitGeometry(session, system, hostId, fillDefaults)
+      if (fromMap) fillDefaultOrbitGeometry(session, system, hostId)
       let horizontal = parseFinite(session.inputs.horizontalRadius)
       let vertical = parseFinite(session.inputs.verticalRadius)
       const rotationValue = parseFinite(session.inputs.rotation)
@@ -749,7 +749,7 @@ export function useSystemCreationWorkflows({
       const existingGeometry = orbitGeometriesAtTarget(system, target, currentGeometry)
       if (hasDuplicateOrbitGeometry(radii, rotation, existingGeometry)) {
         let distinct = false
-        if (!ownership.horizontal || !ownership.vertical) {
+        if (fromMap && (!ownership.horizontal || !ownership.vertical)) {
           for (let attempt = 0; attempt < existingGeometry.length + 1; attempt += 1) {
             const nextHorizontal = ownership.horizontal ? radii.horizontal : radii.horizontal + radiusStep
             const nextVertical = ownership.vertical ? radii.vertical : radii.vertical + radiusStep

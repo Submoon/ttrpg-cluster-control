@@ -150,6 +150,12 @@ const mapGeometry = computed<SystemMapGeometry>(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+const renderedCreationPreview = computed(() => props.creationPreview?.orbitDrag
+  ? null
+  : props.creationPreview)
+const orbitDragCreationPreview = computed(() => props.creationPreview?.orbitDrag
+  ? props.creationPreview
+  : null)
 let mapRenderer: SystemMapRenderer | undefined
 type SystemTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
@@ -705,7 +711,7 @@ function render(preserveNavigation = false): void {
     selectedObjectId: props.selectedObjectId,
     selectedOrbitId: props.selectedOrbitId,
     creationType: props.creationType,
-    creationPreview: props.creationPreview,
+    creationPreview: renderedCreationPreview.value,
     creationChooserOpen: props.creationChooserOpen,
     moveTargeting: props.moveTargeting,
     objectPlacementPreviews,
@@ -723,6 +729,7 @@ function render(preserveNavigation = false): void {
     },
     onViewportChange: viewport => emit('viewport-change', viewport),
   })
+  mapRenderer.updateOrbitDragPreview(orbitDragCreationPreview.value)
   mapRenderer.zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
   const zoomExtent = zoomExtentOverride
   if (zoomExtent) mapRenderer.zoomBehavior.extent(() => svgViewportExtent(zoomExtent))
@@ -768,8 +775,9 @@ watch(() => props.selectedOrbitId, () => render())
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
 watch(() => props.creationType, () => render(), { deep: true })
+watch(orbitDragCreationPreview, preview => mapRenderer?.updateOrbitDragPreview(preview), { deep: true })
 watch([
-  () => props.creationPreview,
+  renderedCreationPreview,
   () => props.creationChooserOpen,
   () => props.orbitAdjustmentPreview,
 ], () => render(true), { deep: true })

@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures'
+import { expect, test, type Locator } from './fixtures'
 import { waitForWorkspaceSaved } from './helpers'
 import {
   activeWorkspaceFeedback,
@@ -10,6 +10,8 @@ import {
   readInspectorSelection,
   selectCatalogueObjectButton,
   selectInspectorOption,
+  workspaceZoomControls,
+  workspaceZoomOutput,
   type WorldPoint,
 } from './helpers'
 
@@ -61,7 +63,30 @@ async function ensurePlacementOpen(controls: import('@playwright/test').Locator)
   await expect(placementToggle).toHaveAttribute('aria-expanded', 'true')
 }
 
+async function hitCenter(locator: Locator): Promise<{ x: number; y: number }> {
+  return locator.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+    if (!element.contains(document.elementFromPoint(point.x, point.y))) {
+      throw new Error('The center of the requested target is covered.')
+    }
+    return point
+  })
+}
 
+async function orbitDragPoints(ring: Locator): Promise<{ start: WorldPoint; requested: WorldPoint }> {
+  return ring.evaluate((element) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('Expected an Orbit ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('Expected a visible Orbit transform.')
+    const x = element.cx.baseVal.value
+    const y = element.cy.baseVal.value
+    const radius = element.rx.baseVal.value
+    const start = new DOMPoint(x, y).matrixTransform(matrix)
+    const requested = new DOMPoint(x + radius, y).matrixTransform(matrix)
+    return { start: { x: start.x, y: start.y }, requested: { x: requested.x, y: requested.y } }
+  })
+}
 
 
 function expectSystemPlacement(
@@ -152,51 +177,87 @@ test('system Add immediately places on repeated clicks and preserves each placem
     expect(new Set(previous.map(ring => JSON.stringify(ring.geometry))).size, 'distinct rings').toBe(3)
   })
 
+  await test.step('A drag that leaves the map before showing a ring still blocks Undo', async () => {
+    await waitForWorkspaceSaved(page)
+    const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:$|:)/ })
+    const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+      .locator('.object-hit-target')
+    const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
+    const start = await hitCenter(host)
+    await expect(undo).toBeEnabled()
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    try {
+      const outside = await hitCenter(quitAdd)
+      await page.mouse.move(outside.x, outside.y)
+      await expect(map.locator('.system-creation-preview-orbit')).toHaveCount(0)
+      await expect(undo).toBeDisabled()
+      await page.keyboard.press('Control+z')
+      await expect(map.locator('.orbit-ring')).toHaveCount(3)
+    } finally {
+      await page.mouse.up()
+    }
+    await expect(quitAdd).toBeVisible()
+    await expect(undo).toBeEnabled()
+    await expect(map.locator('.orbit-ring')).toHaveCount(3)
+  })
+
   await test.step('An Orbit drag released over Quit Add creates the displayed circle once', async () => {
     await page.getByRole('button', { name: 'Fit map', exact: true }).click()
     const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
     const firstRing = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true }).locator('.orbit-ring')
-    const { start, requested } = await firstRing.evaluate((element) => {
-      if (!(element instanceof SVGEllipseElement)) throw new Error('Expected an Orbit ellipse.')
-      const matrix = element.getScreenCTM()
-      if (!matrix) throw new Error('Expected a visible Orbit transform.')
-      const x = element.cx.baseVal.value
-      const y = element.cy.baseVal.value
-      const radius = element.rx.baseVal.value
-      const startPoint = new DOMPoint(x, y).matrixTransform(matrix)
-      const requestedPoint = new DOMPoint(x + radius, y).matrixTransform(matrix)
-      return { start: { x: startPoint.x, y: startPoint.y }, requested: { x: requestedPoint.x, y: requestedPoint.y } }
-    })
-    await page.mouse.move(start.x, start.y)
-    await page.mouse.down()
-    await page.mouse.move(requested.x, requested.y)
+    const { start } = await orbitDragPoints(firstRing)
     const preview = map.locator('.system-creation-preview-orbit')
-    await expect(preview).toBeVisible()
-    const radius = await preview.getAttribute('rx')
-    if (radius === null) throw new Error('Expected a preview radius.')
-    expect(Number(radius)).toBeGreaterThan(0)
-    expect(radius).not.toBe(await firstRing.getAttribute('rx'))
-    await expect(preview).toHaveAttribute('ry', radius)
-    const paintedGap = await preview.evaluate((element) => {
+    const readPaintedGap = () => preview.evaluate((element) => {
       if (!(element instanceof SVGEllipseElement)) throw new Error('Expected a circular preview.')
-      const existing = element.closest('svg')?.querySelector('.orbit-ring')
       const matrix = element.getScreenCTM()
-      if (!(existing instanceof SVGEllipseElement) || !matrix) throw new Error('Expected concentric rendered rings.')
-      const separation = Math.abs(element.rx.baseVal.value - existing.rx.baseVal.value)
-      const halfStrokes = (parseFloat(getComputedStyle(element).strokeWidth) + parseFloat(getComputedStyle(existing).strokeWidth)) / 2
-      return (separation - halfStrokes) * Math.hypot(matrix.a, matrix.b)
+      const existing = element.closest('svg')?.querySelectorAll<SVGEllipseElement>('.orbit-ring')
+      if (!matrix || !existing?.length) throw new Error('Expected concentric rendered rings.')
+      const previewStroke = parseFloat(getComputedStyle(element).strokeWidth)
+      const scale = Math.hypot(matrix.a, matrix.b)
+      const gap = Math.min(...Array.from(existing, (ring) => {
+        const separation = Math.abs(element.rx.baseVal.value - ring.rx.baseVal.value)
+        const halfStrokes = (previewStroke + parseFloat(getComputedStyle(ring).strokeWidth)) / 2
+        return (separation - halfStrokes) * scale
+      }))
+      return { gap, scale }
     })
-    expect(paintedGap, 'gap between the rendered strokes in CSS pixels').toBeGreaterThanOrEqual(3.9)
+    const originalRing = await firstRing.evaluateHandle(element => element)
+    let radius: string
+    try {
+      await page.mouse.move(start.x, start.y)
+      await page.mouse.down()
+      const { requested } = await orbitDragPoints(firstRing)
+      await page.mouse.move(requested.x, requested.y)
+      await expect(preview).toBeVisible()
+      const snappedRadius = await preview.getAttribute('rx')
+      if (snappedRadius === null) throw new Error('Expected a preview radius.')
+      const beforeGap = await readPaintedGap()
+      expect(beforeGap.gap, 'nearest rendered gap in CSS pixels').toBeGreaterThanOrEqual(3.95)
+      // Clearance accounts for the highlighted stroke, which is 0.4 scene units wider.
+      expect(beforeGap.gap, 'nearest available radius limits the gap').toBeLessThanOrEqual(4.05 + 0.2 * beforeGap.scale)
+
+      const zoom = workspaceZoomOutput(page)
+      const beforeZoom = await zoom.textContent()
+      if (!beforeZoom) throw new Error('Expected a zoom readout before changing zoom.')
+      const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
+      await zoomOut.focus()
+      await page.keyboard.press('Enter')
+      await expect(zoom).not.toHaveText(beforeZoom)
+      await expect(preview).not.toHaveAttribute('rx', snappedRadius)
+      expect((await readPaintedGap()).gap, 'gap stays clear at the new zoom').toBeGreaterThanOrEqual(3.95)
+      expect(await originalRing.evaluate(element => element.isConnected), 'preview updates keep existing map marks mounted').toBe(true)
+
+      const updatedRadius = await preview.getAttribute('rx')
+      if (updatedRadius === null) throw new Error('Expected a preview radius after changing zoom.')
+      radius = updatedRadius
+      await expect(preview).toHaveAttribute('ry', radius)
+    } finally {
+      await originalRing.dispose()
+    }
 
     // The Add status can reflow the toolbar when the preview starts.
-    const releasePoint = await quitAdd.evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
-      if (!element.contains(document.elementFromPoint(point.x, point.y))) {
-        throw new Error('Expected the release point to hit Quit Add.')
-      }
-      return point
-    })
+    const releasePoint = await hitCenter(quitAdd)
     await page.mouse.move(releasePoint.x, releasePoint.y)
     await expect(preview).toHaveAttribute('rx', radius)
     await page.mouse.up()
@@ -212,6 +273,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
     expect(await created.getAttribute('cy')).toBe(await firstRing.getAttribute('cy'))
 
     await test.step('Escape cancels an active pen drag and its late release', async () => {
+      const { start, requested } = await orbitDragPoints(firstRing)
       const cdp = await page.context().newCDPSession(page)
       try {
         await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...start, pointerType: 'pen' })
@@ -227,8 +289,15 @@ test('system Add immediately places on repeated clicks and preserves each placem
         })
         await expect(preview).toBeVisible()
 
-        await page.keyboard.press('Escape')
-        await expect(preview).toHaveCount(0)
+        await page.keyboard.down('Escape')
+        try {
+          await expect(preview).toHaveCount(0)
+          // A held Escape key repeats before the pen's physical release.
+          await page.keyboard.down('Escape')
+          await expect(quitAdd).toBeVisible()
+        } finally {
+          await page.keyboard.up('Escape')
+        }
         await cdp.send('Input.dispatchMouseEvent', {
           type: 'mouseReleased', x: requested.x + 12, y: requested.y,
           pointerType: 'pen', button: 'left', buttons: 0, clickCount: 1,
