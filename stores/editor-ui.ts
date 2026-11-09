@@ -7,6 +7,8 @@ export interface EditorUiSelection {
   clusterSelectedSystemId: string | null
   inspectedClusterSystemId: string | null
   selectedObjectId: string | null
+  /** Transient map selection when more than one object is selected. */
+  selectedObjectIds: string[]
   selectedOrbitId: string | null
   selectedRouteId: string | null
 }
@@ -17,6 +19,7 @@ const emptySelection = (): EditorUiSelection => ({
   clusterSelectedSystemId: null,
   inspectedClusterSystemId: null,
   selectedObjectId: null,
+  selectedObjectIds: [],
   selectedOrbitId: null,
   selectedRouteId: null,
 })

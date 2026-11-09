@@ -19,6 +19,7 @@ import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlac
 import { useUnresolvedExitPlacement } from './editor-workflows/useUnresolvedExitPlacement'
 import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacement'
 import { usePublicationWorkflows } from './editor-workflows/usePublicationWorkflows'
+import { useSelectedObjectDrag } from './editor-workflows/selected-object-drag'
 import { searchWorkspace } from '../utils/workspace-search'
 import { usePublicationMenu } from './usePublicationMenu'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
@@ -45,6 +46,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   onBeforeUnmount(() => store.reset(null))
 
   const entity = useEntityInspectorSession({ workspace, mutations })
+  const collectiveMoveError = ref('')
   const route = useRouteInspectorSession({ workspace, mutations })
   const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const orbitAdjustments = useContinuousOrbitAdjustments({
@@ -216,6 +218,15 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     createCommittedOrbitCenterAppliedHandler: entity.createCommittedOrbitCenterAppliedHandler,
     editorError,
     orbitAdjustments,
+    beforeWorkspaceOperation,
+  })
+  const move = useSelectedObjectDrag({
+    workspace,
+    appliedRevision: options.appliedRevision,
+    mutations,
+    isEntityCommandBlocked: navigation.isEntityCommandBlocked,
+    createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
+    error: collectiveMoveError,
     beforeWorkspaceOperation,
   })
   const objectInspectorFocusRequest = ref<ObjectInspectorFocusRequest | null>(null)
@@ -400,6 +411,10 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   }
 
   return {
+    move: {
+      ...move,
+      error: computed(() => collectiveMoveError.value),
+    },
     publication: {
       set: publicationCommands.set,
       setRouteSharing: publicationCommands.setRouteSharing,
@@ -585,6 +600,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       selectedSystemId: navigation.selectedSystemId,
       clusterSelectedSystemId: navigation.clusterSelectedSystemId,
       selectedObjectId: navigation.selectedObjectId,
+      selectedObjectIds: navigation.selectedObjectIds,
       selectedOrbitId: navigation.selectedOrbitId,
       selectedRouteId: navigation.selectedRouteId,
       selectedSystem: navigation.selectedSystem,
@@ -598,6 +614,9 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       selectSystem: navigation.selectSystem,
       selectClusterSystem: navigation.selectClusterSystem,
       selectObject: navigation.selectObject,
+      replaceObjectSelection: navigation.replaceObjectSelection,
+      toggleObjectSelection: navigation.toggleObjectSelection,
+      clearObjectSelectionForMove: navigation.clearObjectSelectionForMove,
       selectOrbit: navigation.selectOrbit,
       selectRoute: navigation.selectRoute,
       showChartDetails: navigation.showChartDetails,

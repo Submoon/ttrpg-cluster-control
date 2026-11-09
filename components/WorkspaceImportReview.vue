@@ -158,7 +158,9 @@ function restoreFocus(event: Event): void {
   event.preventDefault()
   const target = opener && isVisible(opener)
     ? opener
-    : document.querySelector<HTMLElement>('#workspace-hierarchy-panel [aria-current="true"]')
+    : document.querySelector<HTMLElement>(
+        '#workspace-hierarchy-panel [role="treeitem"][aria-selected="true"], #workspace-hierarchy-panel [aria-current="true"]',
+      )
       ?? document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
       ?? document.getElementById('workspace-main')
   target?.focus()
