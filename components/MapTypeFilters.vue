@@ -17,7 +17,7 @@
       </UButton>
 
       <template #content="{ close }">
-        <div v-if="props.fieldFilterOptions.length > 0" :id="fieldSelectPortalId" />
+        <div v-if="props.fieldFilterOptions.length > 0" :id="fieldSelectPortalId" class="relative z-10" />
         <div class="map-type-filter-panel flex flex-col" data-map-obstruction>
           <div class="flex shrink-0 items-center justify-between gap-2 border-b border-default p-3">
             <span class="font-semibold">{{ accessibleLabel }}</span>
@@ -25,7 +25,7 @@
               Close filters
             </UButton>
           </div>
-          <div class="min-h-0 overflow-y-auto overscroll-contain p-3">
+          <div ref="criteriaViewport" class="min-h-0 overflow-y-auto overscroll-contain p-3">
             <div class="grid gap-3">
               <p v-if="props.invalidationNotice" class="m-0 text-sm text-muted" role="status">
                 {{ props.invalidationNotice }}
@@ -68,6 +68,7 @@
                 :options="props.fieldFilterOptions"
                 :allow-no-value="props.allowNoValue"
                 :portal="`#${fieldSelectPortalId}`"
+                :collision-boundary="criteriaViewport"
               />
             </div>
           </div>
@@ -122,8 +123,9 @@ const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
 const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
 const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
 const fieldFilters = ref<{ clearDrafts: () => void; hasDrafts: boolean } | null>(null)
-// Keep nested choices in this popover's focus scope, outside the scrolling criteria.
+// Keep nested menus above the scrolling criteria and inside the popover's focus scope.
 const fieldSelectPortalId = `field-filter-options-${useId()}`
+const criteriaViewport = ref<HTMLElement | null>(null)
 const typeGroups = computed(() => {
   const groups = new Map<MapObjectTypeOption['family'], MapObjectTypeOption[]>()
   for (const option of props.options) {

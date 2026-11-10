@@ -6,9 +6,12 @@
         v-model="selectedFieldId"
         :items="availableFieldItems"
         :portal="props.portal"
+        :content="selectContent"
+        :ui="selectUi"
         placeholder="Choose a Field"
         aria-label="Add Field filter"
-        class="w-full"
+        size="sm"
+        class="w-full min-w-0"
       />
     </UFormField>
 
@@ -37,7 +40,11 @@
         :model-value="draftFor(option.fieldId).operator"
         :items="operatorItems(option)"
         :portal="props.portal"
+        :content="selectContent"
+        :ui="selectUi"
         :aria-label="`${option.label} operator`"
+        size="sm"
+        class="w-full min-w-0"
         @update:model-value="setOperator(option, String($event))"
       />
       <p v-if="activeConditionSummary(option)" class="m-0 text-sm text-muted" role="status">
@@ -81,8 +88,12 @@
             :model-value="draftFor(option.fieldId).booleanValue"
             :items="booleanItems"
             :portal="props.portal"
+            :content="selectContent"
+            :ui="selectUi"
             placeholder="Choose Yes or No"
             :aria-label="`${option.label} value`"
+            size="sm"
+            class="w-full min-w-0"
             @update:model-value="setBooleanValue(option, String($event ?? ''))"
           />
         </template>
@@ -120,6 +131,7 @@ const props = withDefaults(defineProps<{
   conditions: readonly FieldCondition[]
   allowNoValue?: boolean
   portal?: boolean | string
+  collisionBoundary: HTMLElement | null
 }>(), { allowNoValue: true, portal: true })
 
 const emit = defineEmits<{
@@ -127,6 +139,19 @@ const emit = defineEmits<{
 }>()
 
 const headingId = useId()
+const selectContent = computed(() => ({
+  align: 'start',
+  sideOffset: 4,
+  collisionBoundary: props.collisionBoundary ?? undefined,
+  collisionPadding: 4,
+  // A short filter panel can keep the menu readable by shifting it across its trigger.
+  prioritizePosition: true,
+} as const))
+const selectUi = {
+  content: 'max-h-[min(12rem,var(--reka-select-content-available-height,12rem))] max-w-[var(--reka-select-content-available-width)] bg-[var(--panel-raised)]',
+  viewport: 'min-h-0 overscroll-contain',
+  itemLabel: 'whitespace-normal wrap-anywhere',
+}
 const selectedFieldId = ref('')
 const drafts = ref<Record<string, FieldDraft>>(Object.create(null) as Record<string, FieldDraft>)
 const booleanItems = [

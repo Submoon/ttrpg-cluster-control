@@ -423,6 +423,10 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(noValueOperator).toBeHidden()
   await expect(searchDialog.getByRole('button', { name: 'Close filters', exact: true })).toBeVisible()
   await expect(searchDialog).toBeVisible()
+  await atmosphereOperator.click()
+  await noValueOperator.click()
+  await expect(atmosphereOperator).toHaveText('No value')
+  await searchDialog.getByRole('button', { name: 'Remove Atmosphere filter', exact: true }).click()
   await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
 
   const landscapeSearchScreenshot = testInfo.outputPath('object-search-short-landscape-populated.png')
