@@ -191,6 +191,7 @@ The initial frontier contains Warden type filters and player published-type filt
 - **Type-filter implementation baseline.** Work on the two initial slices started on 2026-11-09 from `7e4f6049dae7ab23b952316ab238410c2a714f0f`, equal to local `main` and the freshly fetched `origin/main`. The source issue was refreshed at intake.
 - **Publication, Field and Search locator baseline.** This batch uses `f66a18fbd02e8fb45e31bb626580526a4b7a053a` on `codex/display-type-filters`. It includes both prerequisite type-filter slices and is one commit ahead of the fetched `origin/main` at `7e4f6049dae7ab23b952316ab238410c2a714f0f`. The source issue was refreshed at intake.
 - **Search and public Field implementation baseline.** This batch uses `23e20c162a07bfb06d6b9cdd69bc26f983a88ab4` on `codex/display-type-filters`. It includes both prerequisite batches and is two commits ahead of the fetched `origin/main` at `7e4f6049dae7ab23b952316ab238410c2a714f0f`. The source issue was refreshed at intake.
+- **Filter panel follow-up.** The layout and performance corrections start from `60c91422739fff7d49d5867e044b21fa1ec03120`. The integration base is `origin/main` at `a3d9f54878e6a103945bf0ab37db6bb7c6cc9229`, which includes multiple selection. The merged map preserves dimming and group selection on the same objects.
 
 ## Resolution
 

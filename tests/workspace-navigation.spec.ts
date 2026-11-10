@@ -74,7 +74,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await page.getByRole('group', { name: 'Vesper star system map' }).getByRole('button', { name: starLabel }).click()
   const firstHierarchy = await openWorkspaceHierarchy(page)
   const firstStar = firstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })
-  await expect(firstStar).toHaveAttribute('aria-current', 'true')
+  await expect(firstStar).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   const scene = page.locator('.system-map-svg .system-map-content')
@@ -106,7 +106,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
   const restoredFirstHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredFirstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  await expect(restoredFirstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', firstSystemViewport!)
 
@@ -117,7 +117,7 @@ test('A to B to A restores each system camera and the selected map object', asyn
   await clusterMapAfterReturn.getByRole('button', { name: 'Open New System 2 system map' }).click()
   await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
   const restoredSecondHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredSecondHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-current', 'true')
+  await expect(restoredSecondHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-selected', 'true')
   await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', secondSystemViewport!)
 })
 

@@ -21,6 +21,7 @@ import type {
   SystemObjectMoveCandidate,
 } from '../../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../../composables/editor-workflows/continuous-orbit-adjustments'
+import type { SelectedObjectDrag } from '../../composables/editor-workflows/selected-object-drag'
 import type {
   SystemCreationCandidate,
   SystemCreationPreview,
@@ -87,7 +88,11 @@ export interface SystemMapEventHandlers {
   /** Publishes whether an uncommitted pointer preview is active on the map. */
   editingGestureChange(active: boolean): void
   /** Select an existing system object. */
-  selectObject(id: string): void
+  selectObject(id: string, shiftKey?: boolean): void
+  /** Captures one validated collective object movement for the selected map member. */
+  beginSelectedObjectDrag(anchorId: string): SelectedObjectDrag | null
+  /** Clears a multiple selection synchronously after an outside object starts moving. */
+  clearObjectSelectionForMove(expectedObjectIds: readonly string[]): boolean
   /** Checks whether a pending entity command touches an active inspector draft. */
   isEntityCommandBlocked(command: EntityCommand): boolean
   /** Reports a blocked pending entity command before the map preview changes. */
@@ -138,6 +143,7 @@ export interface SystemMapRendererOptions {
   dimmedObjectIds?: readonly string[]
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
+  selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
   /** Persistent map Add type and its transient placement preview. */
   creationType: SystemCreationType | null
@@ -179,6 +185,8 @@ export interface SystemMapRenderer {
   cancelActiveGesture(): void
   /** Updates a parent-owned preview without publishing it to workspace state. */
   setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  /** Updates transient multiple-selection membership without replacing the active D3 scene. */
+  setSelectedObjectIds(objectIds: readonly string[]): void
   /** Updates a parent-owned proposed-host Orbit preview without publishing workspace geometry. */
   setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
   /** Updates a parent-owned Orbit center overlay without replacing committed radii or rotation. */
@@ -220,6 +228,7 @@ export function renderSystemMap({
   geometry,
   dimmedObjectIds = [],
   selectedObjectId,
+  selectedObjectIds,
   selectedOrbitId,
   creationType,
   creationPreview,
@@ -237,6 +246,7 @@ export function renderSystemMap({
   onViewportChange,
 }: SystemMapRendererOptions): SystemMapRenderer {
   let rotateOrbitFromWheel: (event: WheelEvent) => boolean = () => false
+  let currentSelectedObjectIds = [...selectedObjectIds]
 
   function blockEntityCommand(command: EntityCommand): boolean {
     if (!handlers.isEntityCommandBlocked(command)) return false
@@ -284,6 +294,9 @@ export function renderSystemMap({
 
   const livePositions = new Map<string, Point>()
   const effectivePositions = new Map(objectPlacementPreviews)
+  const selectedObjectDragPositions = new Map<string, Point>()
+  const selectedObjectDragDepartures = new Set<string>()
+  const selectedObjectDragArrivals = new Set<string>()
   const previewOrbitCenters = new Map<string, Point>()
   const previewOrbitRadii = new Map<string, OrbitRadii>()
   const previewOrbitRotations = new Map<string, number>()
@@ -468,21 +481,29 @@ export function renderSystemMap({
     }
     updateLiveGeometry()
   }
-  const currentPositions = () => objectPositions(system, geometry, {
-    positions: effectivePositions,
-    orbitCenters: effectiveOrbitCenters,
-    orbitRadii: effectiveOrbitRadii,
-    orbitRotations: effectiveOrbitRotations,
-  })
+  const currentPositions = () => {
+    const positions = new Map(effectivePositions)
+    for (const [objectId, point] of selectedObjectDragPositions) positions.set(objectId, point)
+    return objectPositions(system, geometry, {
+      positions,
+      orbitCenters: effectiveOrbitCenters,
+      orbitRadii: effectiveOrbitRadii,
+      orbitRotations: effectiveOrbitRotations,
+    })
+  }
   const appliedPositions = () => objectPositions(system, geometry)
   function prepareExportClone(clone: SVGSVGElement): void {
-    clone.querySelector('[data-map-search-locator]')?.remove()
+    clone.querySelectorAll('[data-map-search-locator], .selected-object-departure-indicator, .selected-object-arrival-indicator')
+      .forEach(indicator => indicator.remove())
     clone.querySelectorAll('.system-object.is-dimmed, .system-object-publication.is-dimmed')
       .forEach(mark => mark.classList.remove('is-dimmed'))
     const positions = appliedPositions()
     clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
+      mark.removeAttribute('aria-pressed')
       const objectId = mark.getAttribute('data-object-id')
       if (!objectId) return
+      const object = system.objects.find(candidate => candidate.id === objectId)
+      if (object) mark.setAttribute('aria-label', `Select ${catalogueObjectLabel(object)}`)
       const point = requiredPosition(positions, objectId)
       mark.setAttribute('transform', `translate(${point.x} ${point.y})`)
     })
@@ -977,7 +998,10 @@ export function renderSystemMap({
   const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
-    .attr('class', object => `system-object${selectedObjectId === object.id ? ' is-selected' : ''}${initialDimmedObjectIds.has(object.id) ? ' is-dimmed' : ''}`)
+    .attr('class', 'system-object')
+    .classed('is-selected', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id))
+    .classed('is-dimmed', object => initialDimmedObjectIds.has(object.id))
+    .attr('aria-pressed', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id) ? 'true' : 'false')
     .attr('data-object-id', object => object.id)
     .attr('transform', object => {
       const point = requiredPosition(positions, object.id)
@@ -1063,6 +1087,32 @@ export function renderSystemMap({
       .attr('text-anchor', 'start')
       .text(objectMark(object))
   })
+
+  const objectDepartureIndicators = objectMarks.append('g')
+    .attr('class', 'selected-object-departure-indicator')
+    .attr('aria-hidden', 'true')
+    .attr('visibility', 'hidden')
+    .attr('pointer-events', 'none')
+    .attr('transform', 'translate(-23 -22)')
+  objectDepartureIndicators.append('circle').attr('r', 9)
+  objectDepartureIndicators.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dominant-baseline', 'central')
+    .text('↗')
+  objectDepartureIndicators.append('title').text('Will leave its Orbit')
+
+  const objectArrivalIndicators = objectMarks.append('g')
+    .attr('class', 'selected-object-arrival-indicator')
+    .attr('aria-hidden', 'true')
+    .attr('visibility', 'hidden')
+    .attr('pointer-events', 'none')
+    .attr('transform', 'translate(-23 -22)')
+  objectArrivalIndicators.append('circle').attr('r', 9)
+  objectArrivalIndicators.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dominant-baseline', 'central')
+    .text('↘')
+  objectArrivalIndicators.append('title').text('Will attach to an Orbit')
 
   if (creationType && creationPreview) {
     const previewGroup = content.append('g')
@@ -1252,7 +1302,48 @@ export function renderSystemMap({
     updateMapSurface()
   }
 
+  function setSelectedObjectIds(objectIds: readonly string[]): void {
+    currentSelectedObjectIds = [...new Set(objectIds)]
+    objectMarks
+      .classed('is-selected', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id))
+      .attr('aria-pressed', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id) ? 'true' : 'false')
+  }
+
+  function setSelectedObjectDragPreview(
+    preview: NonNullable<ReturnType<SelectedObjectDrag['preview']>> | null,
+  ): void {
+    selectedObjectDragPositions.clear()
+    selectedObjectDragDepartures.clear()
+    selectedObjectDragArrivals.clear()
+    if (preview) {
+      for (const [objectId, point] of preview.positions) {
+        selectedObjectDragPositions.set(objectId, { ...point })
+      }
+      for (const objectId of preview.departingObjectIds) selectedObjectDragDepartures.add(objectId)
+      for (const objectId of preview.arrivingObjectIds) selectedObjectDragArrivals.add(objectId)
+    }
+    objectDepartureIndicators.attr('visibility', object =>
+      selectedObjectDragDepartures.has(object.id) ? 'visible' : 'hidden')
+      .attr('transform', object => selectedObjectDragArrivals.has(object.id)
+        ? 'translate(-23 -43)' : 'translate(-23 -22)')
+    objectArrivalIndicators.attr('visibility', object =>
+      selectedObjectDragArrivals.has(object.id) ? 'visible' : 'hidden')
+    objectMarks.attr('aria-label', object => {
+      const consequences = [
+        ...(selectedObjectDragDepartures.has(object.id) ? ['will leave its current Orbit'] : []),
+        ...(selectedObjectDragArrivals.has(object.id) ? ['will attach to an Orbit'] : []),
+      ]
+      return `Select ${catalogueObjectLabel(object)}${consequences.length ? `, ${consequences.join(', ')}` : ''}`
+    })
+    updateLiveGeometry()
+  }
+
   const movedObjects = new WeakSet<SVGGElement>()
+  const selectedObjectGroupDrags = new WeakSet<SVGGElement>()
+  const selectedObjectGroupHandles = new WeakMap<SVGGElement, SelectedObjectDrag | null>()
+  const selectedObjectGroupOrigins = new WeakMap<SVGGElement, Point>()
+  const outsideSelectionDrags = new WeakSet<SVGGElement>()
+  const outsideSelectionDragIds = new WeakMap<SVGGElement, readonly string[]>()
   objectMarks
     .on('click', (event, object) => {
       event.stopPropagation()
@@ -1261,7 +1352,7 @@ export function renderSystemMap({
         movedObjects.delete(event.currentTarget as SVGGElement)
         return
       }
-      handlers.selectObject(object.id)
+      handlers.selectObject(object.id, event.shiftKey)
     })
     .on('keydown', (event, object) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -1275,11 +1366,22 @@ export function renderSystemMap({
       && (!('touches' in event) || event.touches.length === 1))
     .clickDistance(6)
     .container(() => content.node()!)
-    .subject((_event, object) => {
+    .subject(function (_event, object) {
       // Clear parent-owned precision before D3 captures the object subject.
       handlers.cancelObjectPlacementPreview()
       handlers.cancelOrbitPlacementPreview()
-      return requiredPosition(appliedPositions(), object.id)
+      const position = requiredPosition(appliedPositions(), object.id)
+      if (currentSelectedObjectIds.length > 1) {
+        if (currentSelectedObjectIds.includes(object.id)) {
+          selectedObjectGroupDrags.add(this)
+          selectedObjectGroupOrigins.set(this, { ...position })
+          selectedObjectGroupHandles.set(this, handlers.beginSelectedObjectDrag(object.id))
+        } else {
+          outsideSelectionDrags.add(this)
+          outsideSelectionDragIds.set(this, [...currentSelectedObjectIds])
+        }
+      }
+      return position
     })
     .on('start', function (event, object) {
       movedObjects.delete(this)
@@ -1288,19 +1390,29 @@ export function renderSystemMap({
       if (startPoint) objectDragStartClient.set(this, startPoint)
       beginGesture(this, () => {
         movedObjects.delete(this)
-        clearLivePosition(object.id)
+        if (selectedObjectGroupDrags.has(this)) {
+          selectedObjectGroupHandles.get(this)?.cancel()
+          selectedObjectGroupHandles.delete(this)
+          selectedObjectGroupOrigins.delete(this)
+          selectedObjectGroupDrags.delete(this)
+          setSelectedObjectDragPreview(null)
+        } else {
+          clearLivePosition(object.id)
+        }
         select(this).classed('is-dragging', false)
       }, false, event.sourceEvent)
       select(this).classed('is-dragging', true)
       const command = objectPlacementCommand(object, { x: event.x, y: event.y })
-      if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
+      if (!selectedObjectGroupDrags.has(this)
+        && (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command))) {
         draftBlockedObjectGestures.add(this)
         blockedObjectCommands.set(this, command)
       }
     })
     .on('drag', function (event, object) {
       let becameBlocked = false
-      if (!draftBlockedObjectGestures.has(this) && !cancelledGestures.has(this)) {
+      if (!selectedObjectGroupDrags.has(this)
+        && !draftBlockedObjectGestures.has(this) && !cancelledGestures.has(this)) {
         const command = objectPlacementCommand(object, { x: event.x, y: event.y })
         if (handlers.isObjectMoveBlocked(object.id) || handlers.isEntityCommandBlocked(command)) {
           draftBlockedObjectGestures.add(this)
@@ -1328,7 +1440,34 @@ export function renderSystemMap({
         return
       }
       if (cancelledGestures.has(this)) return
+      if (selectedObjectGroupDrags.has(this)) {
+        if (!event.dx && !event.dy) return
+        movedObjects.add(this)
+        const origin = selectedObjectGroupOrigins.get(this)
+        const handle = selectedObjectGroupHandles.get(this)
+        if (!origin || !handle) {
+          handlers.objectMoveBlocked(object.id)
+          cancelGesture(this)
+          return
+        }
+        const preview = handle.preview({ x: event.x - origin.x, y: event.y - origin.y })
+        if (!preview) {
+          cancelGesture(this)
+          return
+        }
+        setSelectedObjectDragPreview(preview)
+        return
+      }
       if (event.dx || event.dy) {
+        if (outsideSelectionDrags.has(this)) {
+          const expectedObjectIds = outsideSelectionDragIds.get(this) ?? []
+          if (!handlers.clearObjectSelectionForMove(expectedObjectIds)) {
+            cancelGesture(this)
+            return
+          }
+          outsideSelectionDrags.delete(this)
+          outsideSelectionDragIds.delete(this)
+        }
         movedObjects.add(this)
         const originalPosition = objectDragOriginalPositions.get(this)
           ?? requiredPosition(appliedPositions(), object.id)
@@ -1344,12 +1483,38 @@ export function renderSystemMap({
       if (finishGesture(this)) {
         select(this).classed('is-dragging', false)
         movedObjects.delete(this)
+        selectedObjectGroupHandles.delete(this)
+        selectedObjectGroupOrigins.delete(this)
+        selectedObjectGroupDrags.delete(this)
+        outsideSelectionDrags.delete(this)
+        outsideSelectionDragIds.delete(this)
         objectDragOriginalPositions.delete(this)
         return
       }
       select(this).classed('is-dragging', false)
+      if (selectedObjectGroupDrags.has(this)) {
+        const handle = selectedObjectGroupHandles.get(this)
+        const origin = selectedObjectGroupOrigins.get(this)
+        const didMove = movedObjects.has(this)
+        const delta = origin ? { x: event.x - origin.x, y: event.y - origin.y } : null
+        selectedObjectGroupHandles.delete(this)
+        selectedObjectGroupOrigins.delete(this)
+        selectedObjectGroupDrags.delete(this)
+        objectDragOriginalPositions.delete(this)
+        setSelectedObjectDragPreview(null)
+        if (!didMove || !handle || !delta) {
+          handle?.cancel()
+          movedObjects.delete(this)
+          return
+        }
+        setTimeout(() => movedObjects.delete(this), 0)
+        void handle.complete(delta)
+        return
+      }
       if (!movedObjects.has(this)) {
         objectDragOriginalPositions.delete(this)
+        outsideSelectionDrags.delete(this)
+        outsideSelectionDragIds.delete(this)
         return
       }
       setTimeout(() => movedObjects.delete(this), 0)
@@ -1379,6 +1544,8 @@ export function renderSystemMap({
       clearLivePosition(object.id)
       updateLiveGeometry()
       objectDragOriginalPositions.delete(this)
+      outsideSelectionDrags.delete(this)
+      outsideSelectionDragIds.delete(this)
 
       if (hits.length > 0) {
         if (eligibleCandidates.length !== 1) {
@@ -1759,6 +1926,7 @@ export function renderSystemMap({
     setSearchLocator,
     cancelActiveGesture,
     setObjectPlacementPreview,
+    setSelectedObjectIds,
     setOrbitPlacementPreview,
     setOrbitCenterMovePreview,
     captureOrbitRotationWheel,

@@ -7,6 +7,12 @@
 
     <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
+      <p
+        v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
+        class="feedback m-0 error-text"
+        role="alert"
+        aria-live="assertive"
+      >{{ moveSelectionError }}</p>
       <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
       <WorkspaceWelcome
         v-if="!workspace"
@@ -277,6 +283,7 @@
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
+                    :selected-object-ids="selectedObjectIds"
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
@@ -325,6 +332,7 @@
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
+                    :selected-object-ids="selectedObjectIds"
                     :selected-orbit-id="selectedOrbitId"
                     :dimmed-object-ids="dimmedMapObjectIds"
                     :selected-route-id="selectedRouteId"
@@ -427,6 +435,7 @@
               :selected-system="selectedSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
+              :selected-object-count="selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
               :selected-orbit="selectedOrbit"
@@ -480,7 +489,9 @@
           :request="publicationMenuRequest"
           :current-mode="publicationMenuMode"
           :busy="publicationBusy"
+          :move-selection-available="publicationMenuMoveSelectionAvailable"
           @select="selectPublicationMenuMode"
+          @move-selection="moveSelectedObjectsFromMenu"
           @dismiss="publicationControls.closeMenu()"
         />
       </section>
@@ -776,6 +787,7 @@ const workflows = useEditorWorkflows({
   workspace,
   saveState,
   saveError,
+  appliedRevision,
   mutations,
   initializeWorkspace: commit,
   waitForSearchPresentation,
@@ -795,6 +807,42 @@ const publicationMenuMode = computed(() => {
   return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
     ?.objects.find(object => object.id === request.target.id)?.publication ?? null
 })
+function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.value): boolean {
+  const target = request?.target
+  const system = selectedSystem.value
+  return !!request
+    && request.source === 'map'
+    && target?.kind === 'object'
+    && activeView.value === 'system'
+    && mapMode.value === 'select'
+    && selectedSystemId.value === target.systemId
+    && selectedObjectIds.value.length > 1
+    && selectedObjectIds.value.includes(target.id)
+    && system?.id === target.systemId
+    && !!system.objects.find(object => object.id === target.id)
+}
+const publicationMenuMoveSelectionAvailable = computed(() =>
+  canMoveSelectedObjectsFromMenu(publicationMenuRequest.value))
+
+function moveSelectedObjectsFromMenu(): void {
+  const request = publicationMenuRequest.value
+  if (!request || request.target.kind !== 'object' || !canMoveSelectedObjectsFromMenu(request)) return
+  const systemId = request.target.systemId
+  const objectId = request.target.id
+  const mapKey = activeMapKey.value
+  const selectedIds = [...selectedObjectIds.value]
+  const isCurrent = (): boolean => activeView.value === 'system'
+    && mapMode.value === 'select'
+    && selectedSystemId.value === systemId
+    && activeMapKey.value === mapKey
+    && selectedObjectIds.value.length === selectedIds.length
+    && selectedIds.every((id, index) => selectedObjectIds.value[index] === id)
+    && selectedObjectIds.value.includes(objectId)
+    && !!selectedSystem.value?.objects.some(object => object.id === objectId)
+  publicationControls.closeMenu()
+  void changeMapMode('move', isCurrent)
+}
+
 function selectPublicationMenuMode(mode: import('../domain/workspace').PublicationMode): void {
   const request = publicationMenuRequest.value
   publicationControls.closeMenu()
@@ -825,10 +873,10 @@ async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): 
 revealHistoryContext = navigation.revealHistoryContext
 
 const {
-  activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedOrbitId,
+  activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedObjectIds, selectedOrbitId,
   selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
   inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
-  selectClusterSystem, selectObject, selectOrbit, selectRoute, showChartDetails,
+  selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
 const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
@@ -902,6 +950,7 @@ const {
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
 const { editorError, orbitAdjustmentNotice } = feedback
+const moveSelectionError = workflows.move.error
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
 watch(hydrationState, (state, previous) => {
   if (state !== 'loading' && previous !== 'loading') return
@@ -976,6 +1025,9 @@ provideEditorCommands({
   navigation: {
     selectSystem,
     selectObject,
+    replaceObjectSelection,
+    toggleObjectSelection,
+    clearObjectSelectionForMove: navigation.clearObjectSelectionForMove,
     selectOrbit,
     selectRoute,
     showClusterMap,
@@ -984,6 +1036,7 @@ provideEditorCommands({
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },
   map: { changeMode: changeMapMode },
+  move: workflows.move,
   publication: {
     set: publicationControls.set,
     openMenu: publicationControls.openMenu,
@@ -1171,10 +1224,12 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
   await moveSystem(systemId, position)
 }
 
-async function changeMapMode(mode: 'navigate' | 'select' | 'move'): Promise<void> {
+async function changeMapMode(mode: 'navigate' | 'select' | 'move', isCurrent: () => boolean = () => true): Promise<void> {
   if (!await beforeWorkspaceOperation()) return
+  if (!isCurrent()) return
   if ((creationSession.value || clusterAddType.value) && !await quitSystemAdd()) return
-  await setMapMode(mode)
+  if (!isCurrent()) return
+  await setMapMode(mode, isCurrent)
 }
 
 async function handleAddEscape(event: KeyboardEvent): Promise<void> {

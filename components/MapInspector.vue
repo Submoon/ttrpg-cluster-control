@@ -43,7 +43,15 @@
       />
     </div>
     <div v-else-if="props.selectedSystem" class="map-inspector-system-content">
-      <div v-if="props.selectedObject" class="map-inspector-entity-content">
+      <div
+        v-if="props.selectedObjectCount > 1"
+        class="map-inspector-details-content map-inspector-selection-count"
+        role="status"
+        aria-live="polite"
+      >
+        {{ props.selectedObjectCount }} objects selected
+      </div>
+      <div v-else-if="props.selectedObject" class="map-inspector-entity-content">
         <MapObjectInspector
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
@@ -150,6 +158,7 @@ const props = defineProps<{
   selectedSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
+  selectedObjectCount: number
   objectFocusRequest: ObjectInspectorFocusRequest | null
   inspectorVisible: boolean
   selectedOrbit?: Orbit
@@ -261,6 +270,7 @@ watch(() => [
 .map-inspector-entity-content > :deep(*) { width: 100%; height: 100%; min-height: 0; }
 .map-inspector-details-content { display: flex; flex-direction: column; }
 .map-inspector-details-content > :deep(.chart-details-summary) { flex: 1 1 0; min-height: 0; }
+.map-inspector-selection-count { padding-inline-start: .9rem; }
 </style>
 
 <style>

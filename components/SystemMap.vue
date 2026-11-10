@@ -47,6 +47,7 @@ import {
 } from '../domain/workspace'
 import type { EntityCommand, MapHistoryTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
+import type { SelectedObjectDrag } from '../composables/editor-workflows/selected-object-drag'
 import type {
   OrbitCenterMoveCandidate,
   OrbitPlacementPreview,
@@ -70,6 +71,7 @@ import {
 import { revealSvgPoint, revealSvgTarget } from '../utils/reveal-svg-target'
 import {
   getDetachedOrbitCenter as findDetachedOrbitCenter,
+  objectPositions,
   type SystemMapGeometry,
 } from '../utils/system-map-geometry'
 import {
@@ -96,6 +98,9 @@ const props = withDefaults(defineProps<{
   creationChooserOpen?: boolean
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   selectedObjectId: string | null
+  selectedObjectIds?: readonly string[]
+  beginSelectedObjectDrag?: (anchorId: string) => SelectedObjectDrag | null
+  clearObjectSelectionForMove?: (expectedObjectIds: readonly string[]) => boolean
   selectedOrbitId: string | null
   dimmedObjectIds?: readonly string[]
   isObjectMoveBlocked?: (objectId: string) => boolean
@@ -113,12 +118,13 @@ const props = withDefaults(defineProps<{
   dimmedObjectIds: () => [] as string[],
   moveEnabled: true,
   moveTargeting: false,
+  selectedObjectIds: () => [],
   touchNavigation: false,
   showZoomControls: true,
 })
 
 const emit = defineEmits<{
-  'select-object': [id: string]
+  'select-object': [id: string, shiftKey?: boolean]
   'select-orbit': [id: string]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'object-move-blocked': [id: string]
@@ -185,7 +191,9 @@ function prepareSearchLocator(objectId: string): () => void {
 
 const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
-  selectObject: id => { if (!props.creationType) emit('select-object', id) },
+  beginSelectedObjectDrag: anchorId => props.beginSelectedObjectDrag?.(anchorId) ?? null,
+  clearObjectSelectionForMove: expectedObjectIds => props.clearObjectSelectionForMove?.(expectedObjectIds) ?? false,
+  selectObject: (id, shiftKey) => { if (!props.creationType) emit('select-object', id, shiftKey) },
   selectOrbit: id => { if (!props.creationType) emit('select-orbit', id) },
   orbitAdjustment: input => emit('orbit-adjustment', input),
   isObjectMoveBlocked: id => props.isObjectMoveBlocked?.(id) ?? false,
@@ -656,6 +664,7 @@ function render(preserveNavigation = false): void {
     geometry: mapGeometry.value,
     dimmedObjectIds: props.dimmedObjectIds,
     selectedObjectId: props.selectedObjectId,
+    selectedObjectIds: props.selectedObjectIds ?? [],
     selectedOrbitId: props.selectedOrbitId,
     creationType: props.creationType,
     creationPreview: props.creationPreview,
@@ -696,6 +705,22 @@ function getCreationCandidates(point: Point, type: SystemCreationType): SystemCr
   return mapRenderer?.getCreationCandidates(point, type) ?? []
 }
 
+/** Resolves a rectangle against rendered object anchor points in client coordinates. */
+function getObjectIdsWithinClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>): string[] {
+  const element = svgElement.value
+  const content = element?.querySelector<SVGGElement>('.system-map-content')
+  const matrix = content?.getScreenCTM()
+  if (!matrix) return []
+  const positions = objectPositions(props.system, mapGeometry.value)
+  return props.system.objects.filter(object => {
+    const position = positions.get(object.id)
+    if (!position) return false
+    const anchor = new DOMPoint(position.x, position.y).matrixTransform(matrix)
+    return anchor.x >= rect.left && anchor.x <= rect.right
+      && anchor.y >= rect.top && anchor.y <= rect.bottom
+  }).map(object => object.id)
+}
+
 onMounted(() => {
   render()
   document.addEventListener('keydown', cancelActiveMapGestureOnEscape, true)
@@ -723,6 +748,7 @@ watch(() => props.selectedObjectId, () => {
   dismissSearchLocator()
   render()
 })
+watch(() => props.selectedObjectIds, selectedIds => mapRenderer?.setSelectedObjectIds(selectedIds ?? []))
 watch(() => props.selectedOrbitId, () => render())
 watch(() => props.dimmedObjectIds, objectIds => {
   if (searchLocatorId !== null && !objectIds.includes(searchLocatorId)) dismissSearchLocator()
@@ -741,6 +767,7 @@ defineExpose({
   exportImage,
   getDetachedOrbitCenter,
   getCreationCandidates,
+  getObjectIdsWithinClientRect,
   getViewport,
   getMinimumZoomScale,
   setViewport,
@@ -1006,6 +1033,38 @@ defineExpose({
   fill: var(--map-text);
   font: 10px Consolas, monospace;
   pointer-events: none;
+}
+
+.selected-object-departure-indicator {
+  pointer-events: none;
+}
+
+.selected-object-departure-indicator circle {
+  fill: var(--error-bg);
+  stroke: var(--error-border);
+  stroke-width: 1.5;
+}
+
+.selected-object-departure-indicator text {
+  fill: var(--error);
+  font: 12px Consolas, monospace;
+  font-weight: 700;
+}
+
+.selected-object-arrival-indicator {
+  pointer-events: none;
+}
+
+.selected-object-arrival-indicator circle {
+  fill: var(--map-bg);
+  stroke: var(--map-installation);
+  stroke-width: 1.5;
+}
+
+.selected-object-arrival-indicator text {
+  fill: var(--map-installation);
+  font: 12px Consolas, monospace;
+  font-weight: 700;
 }
 
 .gm-publication-decorations {

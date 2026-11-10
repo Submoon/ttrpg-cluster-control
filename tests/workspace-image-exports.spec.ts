@@ -433,7 +433,8 @@ async function expectCleanExport(page: import('@playwright/test').Page, svgText:
     return svg.querySelectorAll(
       '.system-creation-preview, .orbit-edit-control, .object-hit-target, .orbit-hit-target, '
       + '.orbit-axis-handle, .orbit-center-handle, .orbit-rotation-handle, '
-      + '.is-selected, .is-dragging, .is-move-preview, .is-resizing, .is-moving, .is-rotating',
+      + '.is-selected, .is-dragging, .is-move-preview, .is-resizing, .is-moving, .is-rotating, '
+      + '.system-object[aria-pressed]',
     ).length
   }, svgText)
   expect(transientCount).toBe(0)
