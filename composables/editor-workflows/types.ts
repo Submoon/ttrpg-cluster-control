@@ -262,6 +262,8 @@ export interface SystemCreationSession {
 export interface EditorWorkflowOptions {
   /** Current committed in-memory workspace, or null before one exists. */
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  /** Monotonic revision for rejecting proposals whose applied workspace changed in place. */
+  appliedRevision?: Readonly<Ref<number>>
   /** Resolves after guarded navigation overlays have completed their presentation teardown. */
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
   /** Shared application boundary for ordinary editor mutations. */

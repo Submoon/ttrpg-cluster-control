@@ -26,10 +26,12 @@ const props = defineProps<{
   request: PublicationMenuView | null
   currentMode: PublicationMode | null
   busy?: boolean
+  moveSelectionAvailable?: boolean
 }>()
 
 const emit = defineEmits<{
   select: [mode: PublicationMode]
+  'move-selection': []
   dismiss: []
 }>()
 
@@ -72,19 +74,27 @@ watch(() => props.request, (request) => {
   if (request && content) rememberContent(content, request)
 }, { flush: 'sync' })
 
-const items = computed(() => publicationModes.map((mode) => {
-  const presentation = publicationPresentation(mode)
-  const current = props.currentMode === mode
-  return {
-    type: 'checkbox' as const,
-    checked: current,
-    label: presentation.label,
-    icon: presentation.icon,
+const items = computed(() => [
+  ...(props.moveSelectionAvailable ? [{
+    label: 'Move selection',
+    icon: 'i-lucide-move',
     disabled: props.busy,
-    onUpdateChecked: () => undefined,
-    onSelect: () => emit('select', mode),
-  }
-}))
+    onSelect: () => emit('move-selection'),
+  }] : []),
+  ...publicationModes.map((mode) => {
+    const presentation = publicationPresentation(mode)
+    const current = props.currentMode === mode
+    return {
+      type: 'checkbox' as const,
+      checked: current,
+      label: presentation.label,
+      icon: presentation.icon,
+      disabled: props.busy,
+      onUpdateChecked: () => undefined,
+      onSelect: () => emit('select', mode),
+    }
+  }),
+])
 
 function onOpenChange(open: boolean): void {
   if (!open) emit('dismiss')

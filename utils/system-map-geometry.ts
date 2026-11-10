@@ -48,6 +48,9 @@ export interface OrbitPlacementHit {
   valid: boolean
 }
 
+/** Maximum scene-space distance for an existing-object Orbit placement hit. */
+export const ORBIT_PLACEMENT_HIT_TOLERANCE = 16
+
 /**
  * Resolves an unoccupied Orbit's normalized center to scene coordinates or returns its host's position.
  * @param orbit Orbit whose center is requested.
@@ -540,7 +543,7 @@ export function orbitPlacementHitsAtPoint(
         index,
       }
     })
-    .filter(candidate => candidate.distance <= 16)
+    .filter(candidate => candidate.distance <= ORBIT_PLACEMENT_HIT_TOLERANCE)
     .sort((left, right) => left.distance - right.distance || left.index - right.index)
     .map(candidate => ({
       orbit: candidate.orbit,
