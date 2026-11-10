@@ -229,6 +229,8 @@ export interface SystemCreationPreview {
   target: SystemCreationTarget
   radii?: OrbitRadii
   rotation?: number
+  /** Marks a circular Add Orbit ring preview owned by a pointer gesture. */
+  orbitDrag?: true
 }
 
 export interface SystemCreationInputs {

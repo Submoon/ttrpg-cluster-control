@@ -1,5 +1,5 @@
 import { inject, provide, type InjectionKey } from 'vue'
-import type { JumpRoute } from '../../domain/workspace'
+import type { JumpRoute, Point } from '../../domain/workspace'
 import type { MapInteractionMode } from './types'
 import type { PublicationMenuLease, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
@@ -22,6 +22,30 @@ export interface EditorCommandContext {
   }
   cluster: {
     deleteSystem(systemId: string): void
+  }
+  creation: {
+    /**
+     * Reserves the current Add Orbit target and workspace context for one possible drag placement.
+     * A successful reservation clears an older preview and placement errors, but keeps the armed Add
+     * session and numeric Placement inputs; it does not change or persist workspace data.
+     */
+    beginOrbitDrag(scenePoint: Point): boolean
+    /**
+     * Replaces the transient drag preview using the pointer's scene point and current painted-ring clearance.
+     * Invalid or stale reservation context is cancelled; this command never publishes workspace data.
+     */
+    updateOrbitDrag(scenePoint: Point, sceneClearance: number): void
+    /**
+     * Completes the reserved drag through the guarded creation and history path.
+     * `true` means the creation was accepted and applied to in-memory workspace/history; it does not
+     * acknowledge durable storage, whose save result is reported separately by the workspace owner.
+     */
+    completeOrbitDrag(): Promise<boolean>
+    /**
+     * Discards only the reservation and its transient preview, keeping Add armed and preserving its inputs.
+     * Cancellation has no workspace or persistence side effects.
+     */
+    cancelOrbitDrag(): void
   }
   map: {
     changeMode(mode: MapInteractionMode, isCurrent?: () => boolean): void

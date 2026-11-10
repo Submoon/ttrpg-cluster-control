@@ -520,6 +520,10 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
         addCreationFromInputs: systemCreation.addCreationFromInputs,
         handleCreationDrop: systemCreation.handleCreationDrop,
         cancelCreationPreview: systemCreation.cancelCreationPreview,
+        beginOrbitDrag: systemCreation.beginOrbitDrag,
+        updateOrbitDrag: systemCreation.updateOrbitDrag,
+        completeOrbitDrag: systemCreation.completeOrbitDrag,
+        cancelOrbitDrag: systemCreation.cancelOrbitDrag,
       },
       systemObject: {
         systemObjectMapMoveTargeting: systemObjectPlacement.systemObjectMapMoveTargeting,
