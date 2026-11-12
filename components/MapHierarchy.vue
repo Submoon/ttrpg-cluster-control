@@ -192,6 +192,9 @@
               <small class="tree-parent-context mt-[0.12rem] block [overflow-wrap:anywhere]">
                 {{ item.parentContext }}
               </small>
+              <small v-if="item.isDimmed" class="tree-parent-context mt-[0.12rem] block [overflow-wrap:anywhere]">
+                Dimmed on map
+              </small>
             </span>
             <span class="key-tag col-start-1 row-start-2 block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
           </template>
@@ -270,6 +273,7 @@ interface HierarchyTreeItemBase {
   textValue: string
   ariaLabel: string
   ariaDescription?: string
+  isDimmed?: boolean
   parentContext?: string
   ancestorKeys: string[]
   children?: HierarchyTreeItem[]
@@ -285,6 +289,7 @@ const props = defineProps<{
   workspace: LocalWorkspace
   hasChartNameDraft: boolean
   saving: boolean
+  dimmedObjectIds?: readonly string[]
 }>()
 
 const store = useEditorUiStore()
@@ -354,6 +359,7 @@ watch(
 function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
   const roots: HierarchyTreeItem[] = []
   const parentsAtDepth: HierarchyTreeItem[] = []
+  const dimmedObjectIds = new Set(props.dimmedObjectIds ?? [])
 
   for (const row of rows) {
     const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : undefined
@@ -364,6 +370,8 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
     const publicationDescription = row.kind === 'object'
       ? publicationStatus(row.object.publication, selectedSystem.value?.publication).description
       : undefined
+    const isDimmed = row.kind === 'object'
+      && dimmedObjectIds.has(row.object.id)
     const item: HierarchyTreeItem = row.kind === 'object'
       ? {
           kind: 'object',
@@ -372,7 +380,8 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
           label: row.object.name,
           textValue: row.object.name,
           ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
-          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}`,
+          ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}${isDimmed ? ' Dimmed on map because it does not match the active filters.' : ''}`,
+          isDimmed,
           parentContext,
           ancestorKeys,
         }

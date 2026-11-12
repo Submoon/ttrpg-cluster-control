@@ -15,6 +15,7 @@ import {
 } from './helpers'
 
 test('a Warden publishes committed Player text while keeping drafts and GM notes private', async ({ page }) => {
+  test.setTimeout(45_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const unappliedText = 'UNAPPLIED: secret tunnel'
@@ -61,12 +62,24 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await playerText.fill(unappliedText)
   const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  await preview.getByRole('button', { name: 'Filters', exact: true }).click()
+  const previewFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await previewFilters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await expect(preview.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toBeVisible()
+  await expect(preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true }))
+    .not.toHaveClass(/player-system-object-marker--dimmed/)
+  await previewFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
   await preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
     .locator('.player-system-object-hit-target').click()
   await expect(preview.getByRole('region', { name: 'Player object details' })).toContainText(publicText)
   await expect(preview).not.toContainText(privateNotes)
   await expect(preview).not.toContainText(unappliedText)
   await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
+
+  const reopenedPreview = await openPlayerPreview(page)
+  await reopenedPreview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  await expect(reopenedPreview.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
+  await reopenedPreview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
   await setHeaderMapActionsOpen(page, true)
   const pendingDownload = page.waitForEvent('download')

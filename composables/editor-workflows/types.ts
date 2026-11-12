@@ -318,6 +318,9 @@ export interface MapNavigationHandle extends MapImageExporter {
   whenReady?(): Promise<boolean>
   /** Frames a search destination inside the current obstruction-aware map area. */
   frameSearchTarget?(target: SearchTarget): boolean
+  /** Captures a locator attempt for the current map, published only after accepted Search framing. */
+  prepareSearchLocator?(objectId: string): (() => void) | undefined
+  dismissSearchLocator?(): void
   /** Stable keyboard target when a traversal removes the focused map item. */
   focusMap?(): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */

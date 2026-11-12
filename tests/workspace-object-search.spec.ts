@@ -252,6 +252,10 @@ async function importAndOpenBranchSearchSystem(
 test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
   const fixture = branchSearchMap()
   const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   const content = systemMap.locator('.system-map-content')
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
@@ -276,6 +280,9 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
   await expect(systemMap).toBeFocused()
   const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
   await expect(selectedTarget).toHaveClass(/is-selected/)
+  await expect(selectedTarget).not.toHaveClass(/is-dimmed/)
+  await expect(systemMap.locator('.system-object').filter({ hasText: fixture.branchNames[0] })).toHaveClass(/is-dimmed/)
+  await expect(systemMap.locator('[data-map-search-locator]')).toHaveCount(0)
   const frameScale = scaleFromTransform(await content.getAttribute('transform'))
   expect(frameScale).toBeLessThan(0.25)
   expect(await content.getAttribute('transform')).not.toBe(beforeFrame)
@@ -338,6 +345,7 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
 
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
+  test.setTimeout(45_000)
   const fixture = branchSearchMap()
   await createSingleSystemWorkspace(page)
   await setHeaderMapActionsOpen(page, true)
@@ -358,6 +366,11 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
+
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
 
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
@@ -385,6 +398,37 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await page.keyboard.press('End')
   await expectPaletteOptionActive(query, resultOptions.last())
   await expect(resultOptions.last()).toBeInViewport()
+
+  await searchDialog.getByRole('button', { name: 'Search filters', exact: true }).click()
+  await searchDialog.getByRole('group', { name: 'Celestial body', exact: true })
+    .getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await query.fill('')
+  await expect(resultOptions).toHaveCount(2)
+  await query.press('ArrowDown')
+  await expectPaletteOptionActive(query, resultOptions.first())
+
+  await searchDialog.getByRole('button', { name: /Search filters \(1 active criterion\)/ }).click()
+  const addFieldFilter = searchDialog.getByRole('combobox', { name: 'Add Field filter' })
+  await addFieldFilter.focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(searchDialog.getByRole('option', { name: 'Atmosphere', exact: true })).toBeVisible()
+  await page.keyboard.press('Enter')
+  const atmosphereOperator = searchDialog.getByRole('combobox', { name: 'Atmosphere operator' })
+  await atmosphereOperator.focus()
+  await page.keyboard.press('ArrowDown')
+  const noValueOperator = searchDialog.getByRole('option', { name: 'No value', exact: true })
+  await expect(noValueOperator).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(noValueOperator).toBeHidden()
+  await expect(searchDialog.getByRole('button', { name: 'Close filters', exact: true })).toBeVisible()
+  await expect(searchDialog).toBeVisible()
+  await atmosphereOperator.click()
+  await noValueOperator.click()
+  await expect(atmosphereOperator).toHaveText('No value')
+  await searchDialog.getByRole('button', { name: 'Remove Atmosphere filter', exact: true }).click()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+
   const landscapeSearchScreenshot = testInfo.outputPath('object-search-short-landscape-populated.png')
   await page.screenshot({ path: landscapeSearchScreenshot, animations: 'disabled' })
   await testInfo.attach('object-search-short-landscape-populated', {
@@ -412,7 +456,13 @@ test('compact Location-key search preserves a dirty same-object draft and return
 
   await expect(searchDialog).toHaveCount(0)
   await expect(systemMap).toBeFocused()
-  await expect(systemMap.locator('.system-object').filter({ hasText: fixture.targetName })).toHaveClass(/is-selected/)
+  const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
+  await expect(selectedTarget).toHaveClass(/is-selected/)
+  await expect(selectedTarget).toHaveClass(/is-dimmed/)
+  const locator = systemMap.locator('[data-map-search-locator]')
+  await expect(locator).toBeVisible()
+  const locatorBounds = await locator.boundingBox()
+  expect(locatorBounds?.width).toBeGreaterThanOrEqual(19)
   await expect(inspector).toBeHidden()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
 
@@ -423,6 +473,23 @@ test('compact Location-key search preserves a dirty same-object draft and return
     path: portraitFrameScreenshot,
     contentType: 'image/png',
   })
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(searchDialog).toBeVisible()
+  await expect(query).toHaveValue(fixture.targetLocationKey)
+  const searchFiltersButton = searchDialog.getByRole('button', { name: /Search filters \(1 active criterion\)/ })
+  await expect(searchFiltersButton).toBeVisible()
+  await searchFiltersButton.click()
+  await expect(searchDialog.getByRole('checkbox', { name: 'Planet', exact: true })).toBeChecked()
+  await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await query.press('Escape')
+  await expect(searchDialog).toHaveCount(0)
+
+  await expect(locator).toBeVisible()
+  await systemMap.dispatchEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true })
+  await expect(locator).toHaveCount(0)
+  await setWorkspaceMapMode(page, 'Move')
+  await expect(selectedTarget).toHaveClass(/is-dimmed/)
 
   await inspectToggle.click()
   await expect(inspector).toBeVisible()

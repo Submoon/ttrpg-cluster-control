@@ -104,6 +104,7 @@ const props = withDefaults(defineProps<{
   beginSelectedObjectDrag?: (anchorId: string) => SelectedObjectDrag | null
   clearObjectSelectionForMove?: (expectedObjectIds: readonly string[]) => boolean
   selectedOrbitId: string | null
+  dimmedObjectIds?: readonly string[]
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   moveEnabled?: boolean
@@ -116,6 +117,7 @@ const props = withDefaults(defineProps<{
   creationPreview: null,
   creationChooserOpen: false,
   orbitAdjustmentPreview: null,
+  dimmedObjectIds: () => [] as string[],
   moveEnabled: true,
   moveTargeting: false,
   selectedObjectIds: () => [],
@@ -174,6 +176,26 @@ let cancelledCreationPreviewId: number | null = null
 const objectPlacementPreviews = new Map<string, Point>()
 const orbitPlacementPreviews = new Map<string, OrbitPlacementPreview>()
 const orbitCenterMovePreviews = new Map<string, Point>()
+let searchLocatorId: string | null = null
+let searchInteractionGeneration = 0
+
+function dismissSearchLocator(): void {
+  searchInteractionGeneration += 1
+  if (searchLocatorId === null) return
+  searchLocatorId = null
+  mapRenderer?.setSearchLocator(null)
+}
+
+function prepareSearchLocator(objectId: string): () => void {
+  const generation = searchInteractionGeneration
+  const systemId = props.system.id
+  return () => {
+    if (generation !== searchInteractionGeneration || props.system.id !== systemId
+      || props.selectedObjectId !== objectId || !props.dimmedObjectIds.includes(objectId)) return
+    searchLocatorId = objectId
+    mapRenderer?.setSearchLocator(objectId)
+  }
+}
 
 const handlers: SystemMapEventHandlers = {
   editingGestureChange: active => emit('editing-gesture-change', active),
@@ -269,12 +291,14 @@ function setViewport(viewport: MapViewport): void {
 /** Applies a positive relative D3 zoom factor to the mounted SVG. */
 function zoomBy(factor: number): void {
   if (!Number.isFinite(factor) || factor <= 0 || !svgElement.value || !mapRenderer) return
+  dismissSearchLocator()
   select(svgElement.value).call(mapRenderer.zoomBehavior.scaleBy, factor)
 }
 
 /** Pans by a delta in SVG viewport user coordinates. */
 function panBy(dx: number, dy: number): void {
   if (!Number.isFinite(dx) || !Number.isFinite(dy)) return
+  dismissSearchLocator()
   const viewport = getViewport()
   setViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy })
 }
@@ -576,6 +600,7 @@ async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'a
  * If no valid map geometry exists, resets the view to the identity transform.
  */
 function fitMap(usableRect?: SvgViewportRect): void {
+  dismissSearchLocator()
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
   if (!element || !zoomBehavior) return
@@ -716,6 +741,7 @@ function render(preserveNavigation = false): void {
     element,
     system: props.system,
     geometry: mapGeometry.value,
+    dimmedObjectIds: props.dimmedObjectIds,
     selectedObjectId: props.selectedObjectId,
     selectedObjectIds: props.selectedObjectIds ?? [],
     selectedOrbitId: props.selectedOrbitId,
@@ -740,6 +766,7 @@ function render(preserveNavigation = false): void {
   })
   mapRenderer.updateOrbitDragPreview(orbitDragCreationPreview.value)
   mapRenderer.zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  mapRenderer.setSearchLocator(searchLocatorId)
   const zoomExtent = zoomExtentOverride
   if (zoomExtent) mapRenderer.zoomBehavior.extent(() => svgViewportExtent(zoomExtent))
 }
@@ -780,6 +807,7 @@ onMounted(() => {
   window.addEventListener('blur', cancelActiveGesture)
 })
 onBeforeUnmount(() => {
+  dismissSearchLocator()
   document.removeEventListener('keydown', cancelActiveMapGestureOnEscape, true)
   window.removeEventListener('blur', cancelActiveGesture)
   cancelActiveGesture()
@@ -787,6 +815,7 @@ onBeforeUnmount(() => {
 let renderedSystemId = props.system.id
 watch(() => props.system, () => {
   if (props.system.id !== renderedSystemId) {
+    dismissSearchLocator()
     renderedSystemId = props.system.id
     minimumZoomScale.value = MAP_ZOOM_MIN_SCALE
   }
@@ -795,9 +824,16 @@ watch(() => props.system, () => {
 watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })
-watch(() => props.selectedObjectId, () => render())
+watch(() => props.selectedObjectId, () => {
+  dismissSearchLocator()
+  render()
+})
 watch(() => props.selectedObjectIds, selectedIds => mapRenderer?.setSelectedObjectIds(selectedIds ?? []))
 watch(() => props.selectedOrbitId, () => render())
+watch(() => props.dimmedObjectIds, objectIds => {
+  if (searchLocatorId !== null && !objectIds.includes(searchLocatorId)) dismissSearchLocator()
+  mapRenderer?.setDimmedObjectIds(objectIds)
+}, { deep: true })
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
 watch(() => props.creationType, () => render(), { deep: true })
@@ -825,6 +861,8 @@ defineExpose({
   focusMap,
   fitMap,
   frameObjectBranch,
+  prepareSearchLocator,
+  dismissSearchLocator,
   cancelActiveGesture,
   cancelCreationPreview,
   setObjectPlacementPreview,
@@ -1015,6 +1053,15 @@ defineExpose({
 .system-object {
   cursor: pointer;
   pointer-events: none;
+}
+
+.system-object.is-dimmed .object-glyph-halo,
+.system-object.is-dimmed .system-object-glyph,
+.system-object.is-dimmed .object-key,
+.system-object.is-dimmed .object-name,
+.system-object.is-dimmed .object-type-mark,
+.system-object-publication.is-dimmed {
+  opacity: 0.14;
 }
 
 .system-object.is-dragging {

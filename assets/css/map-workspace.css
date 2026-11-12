@@ -646,6 +646,16 @@ p-note {
 
 
 
+.map-search-locator {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+  stroke-dasharray: 5 3;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 2px var(--map-bg));
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
 

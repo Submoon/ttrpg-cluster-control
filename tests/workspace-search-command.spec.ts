@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, ref } from 'vue'
-import { createLocalWorkspace, createOrbit, planMapEntityDeletion, updateWorkspaceObject } from '../domain/workspace'
+import { createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -173,10 +173,12 @@ function createSystemMapHandle(options: {
   whenReady: () => Promise<boolean>
   frameSearchTarget: NonNullable<MapNavigationHandle['frameSearchTarget']>
   focusMap: () => void
+  prepareSearchLocator?: NonNullable<MapNavigationHandle['prepareSearchLocator']>
 }): SystemMapHandle {
   return {
     ...createMapHandle(options),
     focusMap: options.focusMap,
+    prepareSearchLocator: options.prepareSearchLocator,
     setObjectPlacementPreview: () => undefined,
     setOrbitPlacementPreview: () => undefined,
     setOrbitCenterMovePreview: () => undefined,
@@ -223,6 +225,33 @@ test('search follows applied object edits through Undo and Redo without adding h
     search.query.value = 'veil-09'
     expect(search.results.value.find(result => result.target.kind === 'object')?.locationKey).toBe('VEIL-09')
     expect(harness.history.getStatus().totalActions).toBe(1)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('Search prunes removed Field choices and reports the Search-only criteria update @pure', () => {
+  const harness = createSearchHarness()
+  try {
+    const search = harness.workflows.search
+    search.setFieldConditions([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Breathable'],
+    }])
+    expect(search.fieldConditions.value).toEqual([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Breathable'],
+    }])
+
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
+
+    expect(search.fieldConditions.value).toEqual([])
+    expect(search.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+    expect(harness.store.selectedMapFieldConditions).toEqual([])
   } finally {
     harness.dispose()
   }
@@ -487,10 +516,12 @@ test('compact object reveal hides the Inspector while preserving its matching di
     const session = harness.workflows.inspector.entitySession.value
     if (!session || session.kind !== 'object') throw new Error('The selected object edit session did not start.')
     session.draft.name = 'Whispering World draft'
+    const presentation: string[] = []
     harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
       whenReady: async () => true,
-      frameSearchTarget: () => true,
-      focusMap: () => undefined,
+      frameSearchTarget: () => { presentation.push('frame'); return true },
+      focusMap: () => { presentation.push('focus') },
+      prepareSearchLocator: objectId => () => { presentation.push(objectId) },
     })
     const search = harness.workflows.search
     search.open.value = true
@@ -499,6 +530,10 @@ test('compact object reveal hides the Inspector while preserving its matching di
     if (!objectResult) throw new Error('The selected object did not produce a search result.')
 
     expect(await search.reveal(objectResult.target)).toEqual({ status: 'revealed' })
+    expect(presentation).toEqual(['frame', 'focus', object.id])
+    search.open.value = true
+    expect(await search.reveal(objectResult.target)).toEqual({ status: 'revealed' })
+    expect(presentation).toEqual(['frame', 'focus', object.id, 'frame', 'focus', object.id])
     expect(harness.store.inspectorPanelOpen).toBe(true)
     expect(harness.store.compactPanel).toBeNull()
     expect(harness.workflows.inspector.entitySession.value?.id).toBe(session.id)
@@ -533,12 +568,20 @@ test('invalid object-draft Apply cannot partly select a different search result 
     if (!objectResult || objectResult.target.kind !== 'object' || objectResult.target.objectId !== targetObject.id) {
       throw new Error('The other object did not produce the captured result.')
     }
+    const locatedObjects: string[] = []
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+      prepareSearchLocator: objectId => () => { locatedObjects.push(objectId) },
+    })
 
     const reveal = search.reveal(objectResult.target)
     await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
     await harness.workflows.charts.resolveTransitionChoice('apply')
 
     expect(await reveal).toEqual({ status: 'rejected', reason: 'guard' })
+    expect(locatedObjects).toEqual([])
     expect(session.errors.name).toBe('Object name is required.')
     expect(harness.store.activeView).toBe('system')
     expect(harness.store.selectedSystemId).toBe(system.id)
@@ -967,12 +1010,13 @@ test('disposing the editor while a map is becoming ready prevents a deferred rev
 
 
 
-test('reopening search while overlay teardown is pending prevents a stale map focus @pure', async () => {
+test('reopening search while overlay teardown is pending prevents stale framing, focus and locator @pure', async () => {
   const presentation = deferred<void>()
   let presentationWaits = 0
   let presentationAborted = false
   let frameCount = 0
   let focusCount = 0
+  const locatedObjects: string[] = []
   const harness = createSearchHarness(
     'Kestrel Reach',
     'Vesper',
@@ -991,24 +1035,26 @@ test('reopening search while overlay teardown is pending prevents a stale map fo
   )
   try {
     const system = harness.workspace.value.cluster.systems[0]
-    if (!system) throw new Error('The local workspace did not create its first system.')
-    harness.store.setSelection({ activeView: 'system', selectedSystemId: system.id })
-    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster' })
+    harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
       whenReady: async () => true,
       frameSearchTarget: () => {
         frameCount += 1
         return true
       },
       focusMap: () => { focusCount += 1 },
+      prepareSearchLocator: objectId => () => { locatedObjects.push(objectId) },
     })
     const search = harness.workflows.search
     search.open.value = true
-    search.query.value = 'Vesper'
-    const result = search.results.value.find(candidate => candidate.target.kind === 'system')
-    if (!result) throw new Error('The applied system name was not searchable.')
+    search.query.value = object.locationKey
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result) throw new Error('The applied object was not searchable.')
 
     const reveal = search.reveal(result.target)
-    await expect.poll(() => harness.store.activeView).toBe('cluster')
+    await expect.poll(() => harness.store.activeView).toBe('system')
     await expect.poll(() => search.open.value).toBe(false)
     await expect.poll(() => presentationWaits).toBe(1)
     search.open.value = true
@@ -1016,10 +1062,11 @@ test('reopening search while overlay teardown is pending prevents a stale map fo
 
     expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
     expect(search.open.value).toBe(true)
-    expect(search.query.value).toBe('Vesper')
+    expect(search.query.value).toBe(object.locationKey)
     expect(presentationAborted).toBe(true)
     expect(frameCount).toBe(0)
     expect(focusCount).toBe(0)
+    expect(locatedObjects).toEqual([])
   } finally {
     presentation.resolve()
     harness.dispose()

@@ -10,6 +10,7 @@
     @contextmenu.capture="onContextMenuCapture"
     @click.capture="onClickCapture"
     @keydown.capture="onKeyDownCapture"
+    @drop.capture="dismissSearchLocator"
     @touchstart.capture="onTouchStartCapture"
     @touchmove.capture="onTouchMoveCapture"
     @touchend.capture="onTouchEndCapture"
@@ -68,6 +69,7 @@
       :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
       :clear-object-selection-for-move="commands.navigation.clearObjectSelectionForMove"
       :selected-orbit-id="props.selectedOrbitId"
+      :dimmed-object-ids="props.dimmedObjectIds"
       :is-object-move-blocked="props.isObjectMoveBlocked"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
       :move-enabled="props.mode === 'move' && !props.creationType"
@@ -146,6 +148,7 @@ const props = defineProps<{
   selectedObjectId: string | null
   selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
+  dimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
@@ -206,6 +209,11 @@ const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
 const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+
+function dismissSearchLocator(): void {
+  systemMapRef.value?.dismissSearchLocator()
+}
+
 const matchingOrbitAdjustmentPreview = computed(() => {
   const preview = props.orbitAdjustmentPreview
   const system = props.system
@@ -429,7 +437,10 @@ function onDocumentKeyDownCapture(event: KeyboardEvent): void {
 
 function onLostPointerCapture(event: PointerEvent): void { orbitInput.onLostPointerCapture(event) }
 
-function onWheelCapture(event: WheelEvent): void { orbitInput.onWheelCapture(event) }
+function onWheelCapture(event: WheelEvent): void {
+  dismissSearchLocator()
+  orbitInput.onWheelCapture(event)
+}
 
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
@@ -531,6 +542,7 @@ function beginLivePointerSequence(event: PointerEvent, isMouseButtonChord: boole
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
@@ -630,6 +642,12 @@ function onMouseUpCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if (event.target instanceof SVGElement && !event.isComposing
+    && (['Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'ContextMenu'].includes(event.key)
+      || (event.key === 'F10' && event.shiftKey)
+      || (event.target.closest('[role="slider"]') && ['Home', 'End'].includes(event.key)))) {
+    dismissSearchLocator()
+  }
   if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
     && event.target instanceof SVGElement) {
     const bounds = event.target.getBoundingClientRect()
@@ -851,6 +869,7 @@ function showPublicationMenu(
 }
 
 function onClickCapture(event: MouseEvent): void {
+  dismissSearchLocator()
   if (suppressNextClick && event.detail !== 0) {
     event.preventDefault()
     event.stopPropagation()
@@ -865,6 +884,7 @@ function onClickCapture(event: MouseEvent): void {
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
+  dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
   if (orbitInput.isTouchPending() && event.touches.length === 1) return
@@ -1236,6 +1256,8 @@ defineExpose({
   revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
   whenReady,
   frameSearchTarget,
+  prepareSearchLocator: (objectId: string) => systemMapRef.value?.prepareSearchLocator(objectId),
+  dismissSearchLocator,
   focusMap: () => currentMap()?.focusMap?.(),
   fitMap,
   cancelActiveGesture: () => cancelCanvasGesture(true),

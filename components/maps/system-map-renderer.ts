@@ -140,6 +140,8 @@ export interface SystemMapRendererOptions {
   /** Current domain entities and their saved Orbit/angle geometry. */
   system: StarSystem
   geometry: SystemMapGeometry
+  /** Object identities outside the active Warden type facet; scene marks remain mounted and interactive. */
+  dimmedObjectIds?: readonly string[]
   /** Selected identities used for rendering and keyboard focus restoration. */
   selectedObjectId: string | null
   selectedObjectIds: readonly string[]
@@ -177,6 +179,9 @@ export interface SystemMapRenderer {
   zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>
   /** Projects the saved object and Orbit geometry onto an isolated export copy. */
   prepareExportClone(clone: SVGSVGElement): void
+  /** Updates dimming classes in place without replacing D3 marks or interrupting gestures. */
+  setDimmedObjectIds(objectIds: readonly string[]): void
+  setSearchLocator(objectId: string | null): void
   /** Cancels and rolls back active local previews without publishing geometry. */
   cancelActiveGesture(): void
   /** Updates a parent-owned preview without publishing it to workspace state. */
@@ -224,6 +229,7 @@ export function renderSystemMap({
   element,
   system,
   geometry,
+  dimmedObjectIds = [],
   selectedObjectId,
   selectedObjectIds,
   selectedOrbitId,
@@ -491,8 +497,10 @@ export function renderSystemMap({
     return appliedPositionCache
   }
   function prepareExportClone(clone: SVGSVGElement): void {
-    clone.querySelectorAll('.selected-object-departure-indicator, .selected-object-arrival-indicator')
+    clone.querySelectorAll('[data-map-search-locator], .selected-object-departure-indicator, .selected-object-arrival-indicator')
       .forEach(indicator => indicator.remove())
+    clone.querySelectorAll('.system-object.is-dimmed, .system-object-publication.is-dimmed')
+      .forEach(mark => mark.classList.remove('is-dimmed'))
     const positions = appliedPositions()
     clone.querySelectorAll<SVGGElement>('.system-object[data-object-id]').forEach(mark => {
       mark.removeAttribute('aria-pressed')
@@ -986,6 +994,7 @@ export function renderSystemMap({
     })
 
   const items = content.append('g').attr('class', 'system-map-items')
+  const initialDimmedObjectIds = new Set(dimmedObjectIds)
   const publicationDecorations = content.append('g')
     .attr('class', 'gm-publication-decorations')
     .attr('aria-hidden', 'true')
@@ -993,7 +1002,9 @@ export function renderSystemMap({
   const objectMarks = items.selectAll<SVGGElement, SystemObject>('g.system-object')
     .data(system.objects)
     .join('g')
-    .attr('class', object => `system-object${selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id) ? ' is-selected' : ''}`)
+    .attr('class', 'system-object')
+    .classed('is-selected', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id))
+    .classed('is-dimmed', object => initialDimmedObjectIds.has(object.id))
     .attr('aria-pressed', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id) ? 'true' : 'false')
     .attr('data-object-id', object => object.id)
     .attr('transform', object => {
@@ -1011,7 +1022,7 @@ export function renderSystemMap({
   const objectPublicationMarks = publicationDecorations.selectAll<SVGGElement, SystemObject>('g.system-object-publication')
     .data(system.objects)
     .join('g')
-    .attr('class', 'system-object-publication')
+    .attr('class', object => `system-object-publication${initialDimmedObjectIds.has(object.id) ? ' is-dimmed' : ''}`)
     .attr('data-object-id', object => object.id)
     .attr('transform', object => {
       const point = requiredPosition(positions, object.id)
@@ -1026,6 +1037,28 @@ export function renderSystemMap({
       position: { x: 24, y: -18 },
     })
   })
+
+  function setDimmedObjectIds(objectIds: readonly string[]): void {
+    const dimmed = new Set(objectIds)
+    objectMarks.classed('is-dimmed', object => dimmed.has(object.id))
+    objectPublicationMarks.classed('is-dimmed', object => dimmed.has(object.id))
+  }
+
+  function setSearchLocator(objectId: string | null): void {
+    const point = objectId ? positions.get(objectId) : undefined
+    const screenTransform = point ? content.node()?.getScreenCTM() : null
+    const screenScale = screenTransform ? Math.hypot(screenTransform.a, screenTransform.b) : 0
+    const radius = Math.max(objectHitRadius + 4, screenScale > 0 ? 10 / screenScale : 0)
+    content.selectAll<SVGCircleElement, Point>('circle.map-search-locator')
+      .data(point ? [point] : [])
+      .join('circle')
+      .attr('class', 'map-search-locator')
+      .attr('data-map-search-locator', '')
+      .attr('aria-hidden', 'true')
+      .attr('cx', anchor => anchor.x)
+      .attr('cy', anchor => anchor.y)
+      .attr('r', radius)
+  }
 
   objectMarks.each(function (object) {
     const mark = select(this)
@@ -1928,6 +1961,8 @@ export function renderSystemMap({
   return {
     zoomBehavior,
     prepareExportClone,
+    setDimmedObjectIds,
+    setSearchLocator,
     cancelActiveGesture,
     setObjectPlacementPreview,
     setSelectedObjectIds,

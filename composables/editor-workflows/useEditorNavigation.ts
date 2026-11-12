@@ -212,6 +212,7 @@ export function useEditorNavigation(options: {
     invalidatePendingSearchReveal()
     if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
     if (!isCurrent()) return false
+    if (store.activeView === 'system') mapControls.systemMapRef.value?.dismissSearchLocator?.()
     store.setMode(mode)
     return true
   }
@@ -681,6 +682,9 @@ export function useEditorNavigation(options: {
       )
     }
 
+    const publishSearchLocator = target.kind === 'object'
+      ? destinationMap.prepareSearchLocator?.(target.objectId)
+      : undefined
     const presentationSettlement = options.waitForSearchPresentation
       ? await options.waitForSearchPresentation(presentationController.signal)
       : 'settled'
@@ -771,6 +775,7 @@ export function useEditorNavigation(options: {
     destinationMap.focusMap?.()
     if (!ownsAcceptedSearchState(requestId, acceptedGeneration, target, acceptedDestination)
       || !ownsSearchDestinationMap(target, destinationMap)) return { status: 'rejected', reason: 'stale' }
+    publishSearchLocator?.()
     editorError.value = ''
     leaseState.outcome = 'accepted'
     return { status: 'revealed' }

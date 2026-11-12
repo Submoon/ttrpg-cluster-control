@@ -1,6 +1,9 @@
-import type { LocalWorkspace } from '../domain/workspace'
+import type { LocalWorkspace, PublicationMode, StarSystem, SystemObject } from '../domain/workspace'
 import { catalogueSubtypeLabel } from './catalogue-labels'
 import { objectMark } from './catalogue-marks'
+import type { FieldCondition } from './field-filter-matching'
+import { normalizeSearchText } from './normalize-search-text'
+import { createWardenObjectFilterMatcher } from './warden-map-filters'
 
 export type SearchTarget = { workspaceId: string; clusterId: string }
   & ({ kind: 'cluster' } | { kind: 'system'; systemId: string } | { kind: 'object'; systemId: string; objectId: string })
@@ -30,8 +33,18 @@ export interface SearchCandidate<TTarget = SearchTarget> {
   searchTerms?: readonly string[]
 }
 
-function normalizeSearchText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+export interface WorkspaceSearchCriteria {
+  /** OR alternatives across catalogue types. */
+  types: readonly string[]
+  /** OR alternatives across current Player publication settings. */
+  publicationModes: readonly PublicationMode[]
+  /** One condition per Field; different Fields combine with AND. */
+  fieldConditions: readonly FieldCondition[]
+}
+
+interface WorkspaceObjectSearchCandidate extends SearchCandidate<SearchTarget> {
+  system: StarSystem
+  object: SystemObject
 }
 
 function compareText(left: string, right: string): number {
@@ -61,14 +74,7 @@ function matchRank(name: string, query: string): number | null {
   return null
 }
 
-/** Ranks one consumer's already allowlisted candidates with shared matching and duplicate-label rules. */
-export function rankSearchCandidates<TTarget>(
-  candidates: readonly SearchCandidate<TTarget>[],
-  rawQuery: string,
-): SearchResult<TTarget>[] {
-  const query = normalizeSearchText(rawQuery.trim())
-  if (!query) return []
-
+function setDuplicateOccurrences<TTarget>(candidates: readonly SearchCandidate<TTarget>[]): void {
   const duplicateLabels = new Map<string, SearchCandidate<TTarget>[]>()
   for (const candidate of candidates) {
     const normalizedName = normalizeSearchText(candidate.result.name)
@@ -83,6 +89,17 @@ export function rankSearchCandidates<TTarget>(
     matches.sort((left, right) => compareText(left.identityOrder, right.identityOrder))
     matches.forEach((candidate, index) => { candidate.result.occurrence = index + 1 })
   }
+}
+
+/** Ranks one consumer's already allowlisted candidates with shared matching and duplicate-label rules. */
+export function rankSearchCandidates<TTarget>(
+  candidates: readonly SearchCandidate<TTarget>[],
+  rawQuery: string,
+): SearchResult<TTarget>[] {
+  const query = normalizeSearchText(rawQuery.trim())
+  if (!query) return []
+
+  setDuplicateOccurrences(candidates)
 
   return candidates
     .map(candidate => {
@@ -104,30 +121,39 @@ export function rankSearchCandidates<TTarget>(
     .map(({ candidate }) => candidate.result)
 }
 
-/** Searches the current applied workspace snapshot; callers must not supply draft or preview data. */
-export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): SearchResult[] {
-  if (!normalizeSearchText(rawQuery.trim())) return []
-
-  const objectCandidates: SearchCandidate<SearchTarget>[] = workspace.cluster.systems.flatMap(system =>
-    system.objects.map((object): SearchCandidate<SearchTarget> => ({
-      result: {
-        key: '',
-        target: {
-          workspaceId: workspace.id,
-          clusterId: workspace.cluster.id,
-          kind: 'object',
-          systemId: system.id,
-          objectId: object.id,
+function workspaceSearchCandidates(workspace: LocalWorkspace): {
+  candidates: SearchCandidate<SearchTarget>[]
+  objectCandidates: WorkspaceObjectSearchCandidate[]
+  objectsByKey: Map<string, SystemObject>
+} {
+  const objectsByKey = new Map<string, SystemObject>()
+  const objectCandidates: WorkspaceObjectSearchCandidate[] = workspace.cluster.systems.flatMap(system =>
+    system.objects.map((object): WorkspaceObjectSearchCandidate => {
+      const target: SearchTarget = {
+        workspaceId: workspace.id,
+        clusterId: workspace.cluster.id,
+        kind: 'object',
+        systemId: system.id,
+        objectId: object.id,
+      }
+      const key = resultKey(target)
+      objectsByKey.set(key, object)
+      return {
+        system,
+        object,
+        result: {
+          key,
+          target,
+          name: object.name,
+          typeLabel: catalogueSubtypeLabel(object),
+          contextLabel: `Star System: ${system.name}`,
+          leadingMark: { kind: 'glyph', value: objectMark(object) },
+          locationKey: object.locationKey,
+          occurrence: null,
         },
-        name: object.name,
-        typeLabel: catalogueSubtypeLabel(object),
-        contextLabel: `Star System: ${system.name}`,
-        leadingMark: { kind: 'glyph', value: objectMark(object) },
-        locationKey: object.locationKey,
-        occurrence: null,
-      },
-      identityOrder: `object:${system.id}:${object.id}`,
-    })),
+        identityOrder: `object:${system.id}:${object.id}`,
+      }
+    }),
   )
 
   const candidates: SearchCandidate<SearchTarget>[] = [
@@ -171,5 +197,52 @@ export function searchWorkspace(workspace: LocalWorkspace, rawQuery: string): Se
     candidate.result.key = resultKey(candidate.result.target)
   }
 
-  return rankSearchCandidates(candidates, rawQuery)
+  return { candidates, objectCandidates, objectsByKey }
+}
+
+function compareName(left: string, right: string): number {
+  return compareText(normalizeSearchText(left), normalizeSearchText(right)) || compareText(left, right)
+}
+
+/** Searches the current applied workspace snapshot; callers must not supply draft or preview data. */
+export function searchWorkspace(
+  workspace: LocalWorkspace,
+  rawQuery: string,
+  criteria?: WorkspaceSearchCriteria,
+): SearchResult[] {
+  const queryIsEmpty = rawQuery.trim().length === 0
+  const hasCriteria = !!criteria && (criteria.types.length > 0
+    || criteria.publicationModes.length > 0
+    || criteria.fieldConditions.length > 0)
+  if (!hasCriteria) {
+    if (queryIsEmpty || !normalizeSearchText(rawQuery.trim())) return []
+    return rankSearchCandidates(workspaceSearchCandidates(workspace).candidates, rawQuery)
+  }
+  if (!queryIsEmpty && !normalizeSearchText(rawQuery.trim())) return []
+
+  const filterObject = createWardenObjectFilterMatcher(
+    workspace,
+    criteria.types,
+    criteria.publicationModes,
+    criteria.fieldConditions,
+  )
+
+  if (queryIsEmpty) {
+    const { objectCandidates } = workspaceSearchCandidates(workspace)
+    setDuplicateOccurrences(objectCandidates)
+    return objectCandidates
+      .filter(candidate => filterObject(candidate.object))
+      .sort((left, right) => compareName(left.system.name, right.system.name)
+        || compareText(left.system.id, right.system.id)
+        || compareName(left.object.name, right.object.name)
+        || compareText(left.object.id, right.object.id))
+      .map(candidate => candidate.result)
+  }
+
+  const { candidates, objectsByKey } = workspaceSearchCandidates(workspace)
+  return rankSearchCandidates(candidates, rawQuery).filter((result) => {
+    if (result.target.kind !== 'object') return false
+    const object = objectsByKey.get(result.key)
+    return object !== undefined && filterObject(object)
+  })
 }

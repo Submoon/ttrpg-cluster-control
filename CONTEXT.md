@@ -31,6 +31,9 @@ A short marker unique within a star system that links a map object to its Warden
 **Custom field applicability**:
 The catalogue objects a reusable custom field applies to: all objects by default, or selected catalogue categories and subtypes.
 
+**Warden display filter**:
+A view setting shared by the Warden's star-system maps. Objects outside the active criteria remain visible at greatly reduced opacity and available in Hierarchy and Inspect. Player publication is a separate choice.
+
 **Player publication**:
 The Warden's choice of how a location is presented to players: Hidden, Unknown presence, Known type, or Revealed. Publication does not change the authoritative location or track campaign discovery separately.
 

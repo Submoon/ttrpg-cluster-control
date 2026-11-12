@@ -82,14 +82,57 @@
 
     <template #right>
       <slot name="history" />
+      <MapTypeFilters
+        v-if="activeView === 'system' && selectedSystem"
+        v-model:open="typeFiltersOpen"
+        v-model:selected-types="selectedTypes"
+        v-model:publication-modes="selectedPublicationModes"
+        v-model:field-conditions="fieldConditions"
+        :options="props.typeFilterOptions"
+        :compact="props.isCompactViewport"
+        :active-filter-criterion-count="props.activeFilterCriterionCount"
+        :publication-filter-options="props.publicationFilterOptions"
+        :field-filter-options="props.fieldFilterOptions"
+        :invalidation-notice="props.filterInvalidationNotice"
+        @clear-all-filters="emit('clear-all-filters')"
+      />
+      <p
+        v-if="props.filterInvalidationNotice"
+        class="workspace-filter-invalidation"
+        role="status"
+        aria-live="polite"
+        :aria-label="props.filterInvalidationNotice"
+        :title="props.filterInvalidationNotice"
+      >
+        Filters updated
+      </p>
       <WorkspaceSearch
         ref="workspaceSearch"
         v-model:open="searchOpen"
         v-model:query="searchQuery"
         :results="props.searchResults"
+        :criteria-active="searchActiveCriterionCount > 0"
         :reveal="props.revealSearchTarget"
         :can-open-search-shortcut="props.canOpenSearchShortcut"
-      />
+      >
+        <template #filters>
+          <MapTypeFilters
+            v-model:open="searchTypeFiltersOpen"
+            v-model:selected-types="searchSelectedTypes"
+            v-model:publication-modes="searchPublicationModes"
+            v-model:field-conditions="searchFieldConditions"
+            label="Search filters"
+            :options="props.searchTypeFilterOptions ?? props.typeFilterOptions"
+            :compact="false"
+            :active-filter-criterion-count="searchActiveCriterionCount"
+            :publication-filter-options="props.publicationFilterOptions"
+            :field-filter-options="props.fieldFilterOptions"
+            :invalidation-notice="props.searchFilterInvalidationNotice"
+            :portal="false"
+            @clear-all-filters="clearSearchCriteria"
+          />
+        </template>
+      </WorkspaceSearch>
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
           class="workspace-control"
@@ -269,12 +312,16 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
+import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import type { MapObjectTypeOption } from '../utils/map-type-filters'
+import type { PublicationMode } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
 import PlayerShareControls from './PlayerShareControls.vue'
+import MapTypeFilters from './MapTypeFilters.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -287,6 +334,13 @@ const props = withDefaults(defineProps<{
   generatedPlayerUrl: string
   playerLinkBusy: boolean
   playerLinkStatus: string
+  typeFilterOptions: readonly MapObjectTypeOption[]
+  searchTypeFilterOptions?: readonly MapObjectTypeOption[]
+  activeFilterCriterionCount?: number
+  publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
+  fieldFilterOptions?: readonly FieldFilterOption[]
+  filterInvalidationNotice?: string | null
+  isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
   compactModalOpen?: boolean
@@ -296,6 +350,8 @@ const props = withDefaults(defineProps<{
   clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
   canOpenSearchShortcut: () => boolean
   searchResults: readonly SearchResult[]
+  searchActiveCriterionCount?: number
+  searchFilterInvalidationNotice?: string | null
   revealSearchTarget: (target: SearchTarget) => Promise<
     { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
   >
@@ -306,6 +362,10 @@ const props = withDefaults(defineProps<{
   creationSession: null,
   creationTypeLabel: 'object',
   clusterAddPresentation: null,
+  publicationFilterOptions: () => [],
+  fieldFilterOptions: () => [],
+  searchFilterInvalidationNotice: null,
+  filterInvalidationNotice: null,
 })
 
 const emit = defineEmits<{
@@ -325,13 +385,26 @@ const emit = defineEmits<{
   'quit-add': []
   'confirm-system-move': []
   'cancel-system-move': []
+  'clear-all-filters': []
 }>()
 
 const headerMapActionsOpen = ref(false)
 const mapFiles = ref<InstanceType<typeof MapFilesPopover> | null>(null)
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
+const searchSelectedTypes = defineModel<string[]>('searchSelectedTypes', { default: () => [] })
+const searchPublicationModes = defineModel<PublicationMode[]>('searchPublicationModes', { default: () => [] })
+const searchFieldConditions = defineModel<FieldCondition[]>('searchFieldConditions', { default: () => [] })
+const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true })
+const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
+const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
+const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
+const searchTypeFiltersOpen = ref(false)
+const searchActiveCriterionCount = computed(() => props.searchActiveCriterionCount
+  ?? Number(searchSelectedTypes.value.length > 0)
+    + Number(searchPublicationModes.value.length > 0)
+    + searchFieldConditions.value.length)
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -360,9 +433,18 @@ function whenSearchClosingFocusSettled(): Promise<void> {
 }
 
 watch(headerMapActionsOpen, open => emit('files-open-change', open))
+watch(searchOpen, open => {
+  if (!open) searchTypeFiltersOpen.value = false
+})
 watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
+
+function clearSearchCriteria(): void {
+  searchSelectedTypes.value = []
+  searchPublicationModes.value = []
+  searchFieldConditions.value = []
+}
 
 function exportClusterJson(): void {
   headerMapActionsOpen.value = false
@@ -438,6 +520,18 @@ defineExpose({ whenSearchClosingFocusSettled })
   font: 0.625rem Consolas, monospace;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+
+.workspace-filter-invalidation {
+  display: -webkit-box;
+  max-width: 8.5rem;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 :global(.workspace-map-chrome .workspace-map-context h2) {

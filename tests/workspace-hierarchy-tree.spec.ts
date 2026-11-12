@@ -57,6 +57,12 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   const starId = await starObject.evaluate(mark => mark.closest('.system-object')?.getAttribute('data-object-id'))
   if (!starId) throw new Error('Primary Star has no stable map identity.')
 
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
+  await filters.getByRole('group', { name: 'Celestial body', exact: true })
+    .getByRole('checkbox', { name: 'Planet', exact: true }).check()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+
   await setWorkspaceMapMode(page, 'Select')
   await starObject.click()
   await expect(selectedMapObjects).toHaveCount(1)
@@ -67,8 +73,18 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(selectedMapObjects).toHaveCount(2)
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await expect(iria).toHaveAttribute('aria-selected', 'true')
+  await expect(starObject).toHaveClass(/\bis-dimmed\b/)
+  await expect(starObject).toHaveAttribute('aria-pressed', 'true')
+  await expect(planetObject).not.toHaveClass(/\bis-dimmed\b/)
+  await expect(primaryStar).toHaveAttribute('aria-description', /Dimmed on map/)
   await expect(hierarchy.locator('[aria-current="true"]')).toHaveCount(0)
   await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true }).click()
+  await filters.getByRole('button', { name: 'Clear all', exact: true }).click()
+  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  await expect(starObject).not.toHaveClass(/\bis-dimmed\b/)
+  await expect(selectedMapObjects).toHaveCount(2)
 
   await departureRow.click({ modifiers: ['Shift'] })
   await expect(selectedMapObjects).toHaveCount(3)

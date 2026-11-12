@@ -12,6 +12,17 @@
     :get-shortcut-owning-dialog="props.getShortcutOwningDialog"
   />
   <slot />
+  <MapTypeFilters
+    v-if="props.showTypeFilters"
+    v-model:open="typeFilterOpen"
+    v-model:selected-types="selectedTypes"
+    v-model:field-conditions="fieldConditions"
+    :options="props.typeFilterOptions"
+    :field-filter-options="props.fieldFilterOptions"
+    :allow-no-value="false"
+    :compact="props.compact"
+    :portal="!props.embedded"
+  />
   <MapFilesPopover v-model:open="filesOpen" :scope="props.fileScope" :portal="!props.embedded">
     <div class="grid grid-cols-2 gap-2">
       <UButton
@@ -39,9 +50,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import type { PlayerSearchTarget } from '../utils/player-search'
 import type { SearchResult } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
+import MapTypeFilters from './MapTypeFilters.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
 
 const props = defineProps<{
@@ -54,17 +68,36 @@ const props = defineProps<{
   fileScope: string
   exportError: string
   embedded?: boolean
+  showTypeFilters: boolean
+  typeFilterOptions: readonly MapObjectTypeOption[]
+  fieldFilterOptions: readonly FieldFilterOption[]
+  compact: boolean
 }>()
 const emit = defineEmits<{ 'export-image': [format: MapImageFormat, palette: MapImagePalette] }>()
 
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const filesOpen = defineModel<boolean>('filesOpen', { required: true })
+const typeFilterOpen = defineModel<boolean>('typeFilterOpen', { required: true })
+const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
+const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { required: true })
 const search = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLight = ref(false)
 
 watch(filesOpen, open => {
-  if (!open) printLight.value = false
+  if (!open) {
+    printLight.value = false
+    return
+  }
+  typeFilterOpen.value = false
+})
+watch(searchOpen, open => {
+  if (open) typeFilterOpen.value = false
+})
+watch(typeFilterOpen, open => {
+  if (!open) return
+  searchOpen.value = false
+  filesOpen.value = false
 })
 
 function exportImage(format: MapImageFormat): void {

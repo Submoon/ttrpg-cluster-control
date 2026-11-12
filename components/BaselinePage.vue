@@ -39,7 +39,7 @@
           :route-session-active="activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || publicationMenuRequest !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || publicationMenuRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -128,10 +128,27 @@
               :cluster-add-presentation="clusterAddPresentation"
               :cluster-move-presentation="clusterMovePresentation"
               :can-open-search-shortcut="canOpenSearchShortcut"
+              :type-filter-options="typeFilterOptions"
+              :search-type-filter-options="searchTypeFilterOptions"
+              :publication-filter-options="publicationFilterOptions"
+              :field-filter-options="fieldOptions"
+              :active-filter-criterion-count="activeCriterionCount"
+              :filter-invalidation-notice="invalidationNotice"
+              :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
-              :search-results="searchResults"
+              v-model:search-selected-types="searchSelectedTypes"
+              v-model:search-publication-modes="searchPublicationModes"
+              v-model:search-field-conditions="searchFieldConditions"
+              :search-active-criterion-count="search.activeCriterionCount.value"
+              :search-filter-invalidation-notice="search.invalidationNotice.value"
+              v-model:type-filters-open="mapTypeFiltersOpen"
+              v-model:selected-types="selectedMapObjectTypes"
+              v-model:publication-modes="selectedPublicationModes"
+              v-model:field-conditions="fieldConditions"
+              :search-results="searchOpen ? searchResults : noSearchResults"
               :reveal-search-target="revealSearchTarget"
+              @clear-all-filters="wardenFilters.clearAll"
               @export-cluster-json="downloadClusterJson"
               @export-system-json="downloadSystemJson"
               @export-map-image="downloadMapImage"
@@ -238,6 +255,7 @@
           <template #hierarchy>
             <MapHierarchy
               :workspace="workspace"
+              :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
             />
@@ -316,6 +334,7 @@
                     :selected-object-id="selectedObjectId"
                     :selected-object-ids="selectedObjectIds"
                     :selected-orbit-id="selectedOrbitId"
+                    :dimmed-object-ids="dimmedMapObjectIds"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
                     :creation-type="creationSession?.type ?? null"
@@ -548,6 +567,9 @@ import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
+import { useEditorUiStore } from '../stores/editor-ui'
+import { mapObjectTypeOption, type MapObjectTypeOption } from '../utils/map-type-filters'
+import { useWardenMapFilters } from '../composables/useWardenMapFilters'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
@@ -571,6 +593,7 @@ const {
   restoreBackup,
 } = useLocalWorkspace()
 const runtimeConfig = useRuntimeConfig()
+const editorUi = useEditorUiStore()
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -829,6 +852,19 @@ function selectPublicationMenuMode(mode: import('../domain/workspace').Publicati
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
+const noSearchResults: readonly never[] = []
+const searchSelectedTypes = computed({
+  get: () => search.selectedTypes.value,
+  set: types => search.setSelectedTypes(types, searchTypeFilterOptions.value),
+})
+const searchPublicationModes = computed({
+  get: () => search.selectedPublicationModes.value,
+  set: modes => search.setPublicationModes(modes),
+})
+const searchFieldConditions = computed({
+  get: () => search.fieldConditions.value,
+  set: conditions => search.setFieldConditions(conditions),
+})
 async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): Promise<Awaited<ReturnType<typeof search.reveal>>> {
   const outcome = await search.reveal(target)
   if (outcome.status === 'rejected') await chartNamesDialog.value?.whenClosingFocusSettled()
@@ -842,6 +878,59 @@ const {
   inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
   selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
+const mapTypeFiltersOpen = computed({
+  get: () => editorUi.mapTypeFiltersOpen,
+  set: open => editorUi.setMapTypeFiltersOpen(open),
+})
+const currentTypeFilterOptions = computed(() => {
+  const options = new Map<string, MapObjectTypeOption>()
+  for (const type of catalogueTypes) {
+    const option = mapObjectTypeOption({ family: type.family, subtype: type.value })
+    options.set(option.value, option)
+  }
+  for (const system of workspace.value?.cluster.systems ?? []) {
+    for (const object of system.objects) {
+      if (object.family !== 'Other') continue
+      const option = mapObjectTypeOption(object)
+      if (!options.has(option.value)) options.set(option.value, option)
+    }
+  }
+  return [...options.values()]
+})
+function typeOptionsWithRetainedSelection(
+  currentOptions: readonly MapObjectTypeOption[],
+  selectedTypes: readonly string[],
+  retainedLabels: Readonly<Record<string, string>>,
+): MapObjectTypeOption[] {
+  const options = new Map(currentOptions.map(option => [option.value, option]))
+  for (const value of selectedTypes) {
+    const label = retainedLabels[value]
+    if (!options.has(value) && label) options.set(value, { value, label, family: 'Other' })
+  }
+  return [...options.values()]
+}
+const typeFilterOptions = computed(() => typeOptionsWithRetainedSelection(
+  currentTypeFilterOptions.value,
+  editorUi.selectedMapObjectTypes,
+  editorUi.mapTypeFilterOptionLabels,
+))
+const searchTypeFilterOptions = computed(() => typeOptionsWithRetainedSelection(
+  currentTypeFilterOptions.value,
+  editorUi.selectedSearchObjectTypes,
+  editorUi.searchTypeFilterOptionLabels,
+))
+const selectedMapObjectTypes = computed({
+  get: () => editorUi.selectedMapObjectTypes,
+  set: types => editorUi.setSelectedMapObjectTypes(types, typeFilterOptions.value),
+})
+const wardenFilters = useWardenMapFilters({ workspace, selectedSystem })
+const {
+  fieldOptions, publicationFilterOptions, selectedPublicationModes, fieldConditions,
+  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount, invalidationNotice,
+} = wardenFilters
+watch(activeView, view => {
+  if (view === 'cluster') mapTypeFiltersOpen.value = false
+})
 const {
   clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
   transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
@@ -864,7 +953,11 @@ const { editorError, orbitAdjustmentNotice } = feedback
 const moveSelectionError = workflows.move.error
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
 watch(hydrationState, (state, previous) => {
-  if (state === 'loading' || previous === 'loading') resetOrbitAdjustments()
+  if (state !== 'loading' && previous !== 'loading') return
+  resetOrbitAdjustments()
+  search.reset()
+  wardenFilters.clearAll()
+  mapTypeFiltersOpen.value = false
 }, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
@@ -1309,6 +1402,7 @@ publicationFocusRestoreAllowed = request => !(
   || recoveryDetailsOpen.value
   || historyCapacityRequest.value !== null
   || searchOpen.value
+  || mapTypeFiltersOpen.value
   || deletionReview.value !== null
   || creationChooserOpen.value
   || (compactPanelOpen.value && request.source === 'map')
@@ -1326,6 +1420,7 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !headerFilesOpen.value
   && !recoveryDetailsOpen.value
   && historyCapacityRequest.value === null
+  && !mapTypeFiltersOpen.value
   && !creationChooserOpen.value
   && deletionReview.value === null
   && !importReview.value.open
@@ -1343,6 +1438,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
+  if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'
   if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
     || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
@@ -1360,6 +1456,7 @@ useWorkspaceHistoryShortcuts({
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
+    || mapTypeFiltersOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   undo: undoWorkspace,
@@ -1371,6 +1468,7 @@ const mapToolShortcuts = useMapToolShortcuts({
   pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
+    || mapTypeFiltersOpen.value
     || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
     || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
   editingGestureActive: () => editingGestureActive.value,
