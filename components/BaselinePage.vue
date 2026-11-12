@@ -37,9 +37,9 @@
           :inspector-visible="inspectorPanelVisible"
           :entity-inspector-active="activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
           :route-session-active="activeView === 'cluster' && routeSession !== null"
-          :compact-modal-open="compactPanelOpen"
+          :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || publicationMenuRequest !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -88,9 +88,9 @@
               :workspace="workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
-              :compact-modal-open="compactPanelOpen"
+              :compact-modal-open="compactPanelPresentationOpen"
             >
-              <template #field-definitions>
+              <template #editor-actions>
                 <FieldDefinitionsDialog
                   ref="fieldDefinitionsDialog"
                   v-if="workspace"
@@ -102,6 +102,10 @@
                   :inspector-conflict-error="'Resolve the Inspector draft before changing this field.'"
                   :has-modified-draft="hasModifiedFieldDefinitionsSession"
                   @intent="handleFieldDefinitionsIntent"
+                />
+                <WorkspaceMapHelp
+                  v-model:open="helpOpen"
+                  @active-change="helpOwnsFocus = $event"
                 />
               </template>
             </WorkspaceHeader>
@@ -575,6 +579,7 @@ import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
+import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
 
 const {
   workspace,
@@ -599,6 +604,8 @@ let endCleanHistorySessions: () => void = () => undefined
 let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = () => undefined
 let publicationFocusRestoreAllowed: (request: PublicationMenuRequest) => boolean = () => false
 const historyOpen = ref(false)
+const helpOpen = ref(false)
+const helpOwnsFocus = ref(false)
 const playerPreviewOpen = ref(false)
 const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
 const history = useWorkspaceHistory({
@@ -963,6 +970,7 @@ const {
   isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
 } = mapControls
+const compactPanelPresentationOpen = computed(() => compactPanelOpen.value && !helpOwnsFocus.value)
 const {
   map: mapPlacement,
   creation,
@@ -1239,7 +1247,7 @@ async function changeMapMode(mode: 'navigate' | 'select' | 'move', isCurrent: ()
 
 async function handleAddEscape(event: KeyboardEvent): Promise<void> {
   const hasMovePreview = clusterSystemMovePreview.value !== null
-  if (event.key !== 'Escape' || event.defaultPrevented
+  if (helpOpen.value || event.key !== 'Escape' || event.defaultPrevented
     || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value && !mapMoveTargeting.value)
     || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
@@ -1394,6 +1402,7 @@ const {
 
 publicationFocusRestoreAllowed = request => !(
   historyOpen.value
+  || helpOpen.value
   || chartNamesDialogOpen.value
   || playerPreviewOpen.value
   || fieldDefinitionDialogOpen.value
@@ -1413,6 +1422,7 @@ publicationFocusRestoreAllowed = request => !(
 
 const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !historyOpen.value
+  && !helpOpen.value
   && !chartNamesDialogOpen.value
   && !playerPreviewOpen.value
   && !fieldDefinitionDialogOpen.value
@@ -1436,6 +1446,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 
 readEditorHistoryBlockReason = () => {
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
+  if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'
   if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
@@ -1452,7 +1463,7 @@ endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 useWorkspaceHistoryShortcuts({
   status: historyStatus,
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
     || mapTypeFiltersOpen.value
@@ -1464,7 +1475,7 @@ useWorkspaceHistoryShortcuts({
 
 const mapToolShortcuts = useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
+  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
     || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
     || searchOpen.value
     || mapTypeFiltersOpen.value
