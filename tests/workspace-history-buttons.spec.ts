@@ -3,7 +3,7 @@ import {
   waitForWorkspaceSaved,
   activeWorkspaceFeedback, addCatalogueObject, captureMapExportBlobs, clickDockAction,
   createSingleSystemWorkspace, dragToWorldPoint, downloadJson, editMapObject,
-  ensureMapDragPointsReachable, openChartDetailsEditor, openWorkspaceHierarchy,
+  ensureMapDragPointsReachable, hideWorkspaceInspector, openChartDetailsEditor, openWorkspaceHierarchy,
   returnToClusterMap, saveMapObject, setWorkspaceMapMode, workspaceZoomControls,
 } from './helpers'
 import {
@@ -67,7 +67,6 @@ test('a hidden name draft blocks history through reflow and clean sessions canno
   await expect(undo).toBeEnabled()
   await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
-  await page.keyboard.press('Escape')
   await expect(undo).toBeDisabled()
   await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('modified chart-details draft')
   await page.setViewportSize({ width: 390, height: 844 })
@@ -80,6 +79,7 @@ test('a hidden name draft blocks history through reflow and clean sessions canno
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
   await expect(names.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
   await names.getByRole('button', { name: 'Discard draft', exact: true }).click()
+  await hideWorkspaceInspector(page)
   await expect(undo).toBeEnabled()
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport)
@@ -99,7 +99,7 @@ test('a hidden name draft blocks history through reflow and clean sessions canno
   await page.setViewportSize({ width: 1440, height: 900 })
   await openChartDetailsEditor(page)
   await expect(names.getByLabel('Star system', { exact: true })).toHaveValue('Vesper Prime')
-  await page.keyboard.press('Escape')
+  await hideWorkspaceInspector(page)
   await undo.click()
   await expect(page.getByRole('button', { name: /^Redo(?:\b|:)/ })).toBeEnabled()
   await openChartDetailsEditor(page)

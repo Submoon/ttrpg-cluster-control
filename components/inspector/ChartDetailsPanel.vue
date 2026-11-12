@@ -49,12 +49,26 @@
       </p>
     </section>
 
-    <template
-      v-if="(props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft"
-      #footer
-    >
-      <div v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem" class="chart-details-actions">
-        <UButton block class="w-full min-w-0 justify-center" color="primary" @click="emit('open-system', props.selectedSystem.id)">
+    <template v-if="chartEditSystemId || (props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft" #footer>
+      <div class="chart-details-actions grid gap-2">
+        <UButton
+          v-if="chartEditSystemId"
+          block
+          class="w-full min-w-0 justify-center"
+          color="primary"
+          variant="soft"
+          aria-label="Edit chart details"
+          @click="commands.charts.beginNamesEdit(chartEditSystemId)"
+        >
+          Edit
+        </UButton>
+        <UButton
+          v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
+          block
+          class="w-full min-w-0 justify-center"
+          color="primary"
+          @click="emit('open-system', props.selectedSystem.id)"
+        >
           Open system
         </UButton>
       </div>
@@ -125,6 +139,7 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
+  chartEditSystemId?: string
   hasChartNameDraft: boolean
   editorError?: string
   saving: boolean
@@ -138,6 +153,9 @@ const emit = defineEmits<{
 }>()
 const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
+const chartEditSystemId = computed(() => props.chartEditSystemId
+  ?? props.selectedSystem?.id
+  ?? props.workspace.cluster.systems[0]?.id)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
 const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
 const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')

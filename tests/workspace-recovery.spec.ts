@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { openChartDetailsEditor, waitForWorkspaceSaved, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
+import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
@@ -42,10 +42,9 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  const chartNamesDialog = await openChartDetailsEditor(page)
-  await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
-  await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
+  const chartEditor = await openChartDetailsEditor(page)
+  await chartEditor.getByLabel('Jump Cluster').fill('Current Reach')
+  await chartEditor.getByRole('button', { name: 'Apply details' }).click()
   await waitForWorkspaceSaved(page)
 
   await overwriteWorkspaceRecord(page, 'current', { damaged: true })
@@ -61,6 +60,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
 
   await page.reload()
+  await waitForWorkspaceStartup(page)
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
   await returnToClusterMap(page)
   await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()

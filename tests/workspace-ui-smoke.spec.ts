@@ -123,14 +123,12 @@ for (const viewport of smokeViewports) {
     })
     await importRouteFooterWorkspace(page)
 
-    const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-    if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
     const inspector = page.locator('#workspace-inspector-panel')
-
-    const clusterChartDetailsButton = inspector.getByRole('button', { name: 'Chart details', exact: true }).first()
-    if (await clusterChartDetailsButton.getAttribute('aria-pressed') !== 'true') await clusterChartDetailsButton.click()
+    const chartHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+    await chartHierarchy.getByRole('button', { name: 'Open chart details', exact: true }).click()
     const clusterDetails = page.getByRole('region', { name: 'Jump Cluster details', exact: true })
-    await expect(clusterDetails.getByRole('button', { name: 'Edit chart details', exact: true })).toHaveCount(0)
+    const editChartDetails = clusterDetails.getByRole('button', { name: 'Edit chart details', exact: true })
+    await expectFooterActionToFit(clusterDetails, editChartDetails, viewport)
     await expect(clusterDetails.getByRole('region', { name: 'Player publication settings' })).toBeVisible()
     await closeInspector(page)
     const clusterMap = page.getByRole('group', { name: 'Footer Reach Jump Cluster map', exact: true })

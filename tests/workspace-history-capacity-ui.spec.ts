@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback, importReviewDialog, jsonMapImportInput, openChartDetailsEditor, resolveImportReview,
+  activeWorkspaceFeedback, hideWorkspaceInspector, importReviewDialog, jsonMapImportInput, openChartDetailsEditor, resolveImportReview,
   returnToClusterMap, setHeaderMapActionsOpen, setJsonFile, waitForWorkspaceSaved, waitForWorkspaceStartup,
 } from './helpers'
 
@@ -40,7 +40,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await consent.getByRole('button', { name: 'Cancel change', exact: true }).click()
   await expect(consent).toBeHidden()
   await expect(names.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Accepted large baseline')
-  await page.keyboard.press('Escape')
+  await hideWorkspaceInspector(page)
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands' })
   await expect(mapContext.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   await expect(undo).toBeDisabled()

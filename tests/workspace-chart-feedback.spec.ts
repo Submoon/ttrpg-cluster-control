@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { abortNextWorkspaceWrite, activeWorkspaceFeedback, addCatalogueObject, openChartDetailsEditor, waitForWorkspaceSaved } from './helpers'
+import { abortNextWorkspaceWrite, activeWorkspaceFeedback, addCatalogueObject, hideWorkspaceInspector, openChartDetailsEditor, openWorkspaceHierarchy, waitForWorkspaceSaved } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -34,27 +34,28 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
 
   const systemMap = page.locator('.system-map-content')
   const cameraBeforeFeedback = await systemMap.getAttribute('transform')
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await closeCompactPanels(page)
-  const appliedDialog = await openChartDetailsEditor(page)
-  await appliedDialog.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
-  await appliedDialog.getByLabel('Star system', { exact: true }).fill('Applied recovery star')
+  const appliedEditor = await openChartDetailsEditor(page)
+  await appliedEditor.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
+  await appliedEditor.getByLabel('Star system', { exact: true }).fill('Applied recovery star')
   await abortNextWorkspaceWrite(page, async () => {
-    await appliedDialog.getByRole('button', { name: 'Apply details', exact: true }).click()
-    await expect(appliedDialog).toBeHidden()
+    await appliedEditor.getByRole('button', { name: 'Apply details', exact: true }).click()
+    await expect(appliedEditor).toBeHidden()
   })
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Not saved.')
 
-  const draftDialog = await openChartDetailsEditor(page)
-  await draftDialog.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')
-  await draftDialog.getByLabel('Star system', { exact: true }).fill('Hidden unapplied draft star')
-  await page.keyboard.press('Escape')
-  await expect(draftDialog).toBeHidden()
+  const draftEditor = await openChartDetailsEditor(page)
+  await draftEditor.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')
+  await draftEditor.getByLabel('Star system', { exact: true }).fill('Hidden unapplied draft star')
+  await hideWorkspaceInspector(page)
+  await expect(draftEditor).toBeHidden()
   await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })).toBeVisible()
   await expect(systemMap).toHaveAttribute('transform', cameraBeforeFeedback!)
 
+  const systemHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  await systemHierarchy.getByRole('button', { name: 'Open chart details', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Star System details', exact: true })).toBeVisible()
   const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
+  await expect(compactRecovery).toBeVisible()
   const compactDetailsTrigger = compactRecovery.getByRole('button', { name: 'Recovery details', exact: true })
   await compactDetailsTrigger.click()
   let details = page.getByRole('group', { name: 'Workspace recovery details', exact: true })
@@ -94,8 +95,10 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   const guard = page.getByRole('dialog', { name: 'Edit chart details' })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: 'Edit chart details' })).toBeHidden()
+  await expect(guard).toBeHidden()
+  await expect(draftEditor).toBeVisible()
+  await expect(draftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Hidden unapplied draft star')
+  await hideWorkspaceInspector(page)
 
   const recoveryDetailsTrigger = activeWorkspaceFeedback(page).getByRole('button', { name: 'Recovery details', exact: true })
   await recoveryDetailsTrigger.click()

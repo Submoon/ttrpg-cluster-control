@@ -250,7 +250,6 @@ test('public campaign creation persists a custom value and unresolved route thro
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
   const chartNames = await openChartDetailsEditor(page)
   await chartNames.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
   await chartNames.getByLabel('Star system').fill('Vesper Prime')

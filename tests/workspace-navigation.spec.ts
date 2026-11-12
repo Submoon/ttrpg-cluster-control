@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  activeWorkspaceFeedback,
   addClusterSystem,
   dragHtmlElementToWorldPoint,
   ensureMapDragPointsReachable,
@@ -24,7 +25,7 @@ async function createWorkspace(page: Page): Promise<void> {
 
 
 
-test('Navigate opens systems, Select inspects them, and Hierarchy edits the inspected chart', async ({ page }) => {
+test('Navigate opens systems, Select inspects them, and Hierarchy opens inline chart editing in Inspector', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
 
@@ -71,24 +72,28 @@ test('Navigate opens systems, Select inspects them, and Hierarchy edits the insp
   await expect(inspector.getByRole('region', { name: 'Star System details', exact: true })).toBeVisible()
   await expect(inspector.getByRole('heading', { name: 'New System 2', exact: true })).toBeVisible()
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await expect.soft(inspector.getByRole('button', { name: 'Edit chart details', exact: true })).toHaveCount(0)
-
-  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  await expect(dialog).toBeVisible()
-  await expect(dialog.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
+  const openChartDetails = hierarchy.getByRole('button', { name: 'Open chart details', exact: true })
+  await expect(openChartDetails).toHaveCount(1)
+  await expect(hierarchy.getByRole('button', { name: 'Edit chart details', exact: true })).toHaveCount(0)
+  await openChartDetails.click()
+  const starSystemDetails = inspector.getByRole('region', { name: 'Star System details', exact: true })
+  const editChartDetails = starSystemDetails.getByRole('button', { name: 'Edit chart details', exact: true })
+  await expect(editChartDetails).toBeVisible()
+  await expect(inspector.getByRole('button', { name: 'Chart details', exact: true })).toHaveCount(0)
+  await editChartDetails.click()
+  const editor = page.getByRole('form', { name: 'Edit chart details', exact: true })
+  await expect(editor).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Edit chart details', exact: true })).toHaveCount(0)
+  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
   await expect(page.locator('.cluster-map-svg')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
-  const resumeDraft = hierarchy.getByRole('button', { name: 'Resume chart details draft', exact: true })
-  await expect(resumeDraft).toBeFocused()
-  await inspector.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await expect(inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
+  await editor.getByLabel('Star system', { exact: true }).fill('Unapplied System 2')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  await expect(inspector).toBeHidden()
+  await expect(editor).toBeHidden()
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })
   await resumeDraft.click()
-  await expect(dialog.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
-  await expect(resumeDraft).toBeFocused()
+  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied System 2')
+  await expect(editor.getByLabel('Jump Cluster', { exact: true })).toBeFocused()
   await expect(selectMap).toBeVisible()
 })
 

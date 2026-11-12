@@ -30,7 +30,7 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
-  await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
+  await page.getByRole('button', { name: 'Close inspector panel', exact: true }).click()
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
   const undoLabelBeforeConsultation = await undo.getAttribute('aria-label')

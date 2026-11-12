@@ -61,13 +61,11 @@
           :visible="props.inspectorVisible"
           :compact="props.compactModalOpen && props.compactPanel === 'inspector'"
           :board="mapBoard"
-          :show-header-actions="props.mode === 'system'"
           :show-close-button="!props.entityInspectorActive"
           :show-compact-recovery="!props.entityInspectorActive"
           :inert="props.compactModalOpen && props.compactPanel !== 'inspector' || undefined"
           @close="emit('close-panel', 'inspector')"
         >
-          <template #header-actions><slot name="inspector-header-actions" /></template>
           <template #compact-recovery><slot name="compact-recovery" /></template>
           <slot name="inspector" />
         </WorkspaceResizablePanel>
@@ -124,6 +122,7 @@ onBeforeUnmount(() => {
 type FocusableElement = (HTMLElement | SVGElement) & Pick<HTMLElement, 'focus'>
 type FocusReturnTarget = { element: FocusableElement; selector?: string }
 let focusBeforeCompact: FocusReturnTarget | null = null
+let lastCompactPanel: WorkspacePanel | null = null
 
 function panelContent(panel: WorkspacePanel): HTMLElement | null {
   return document.querySelector<HTMLElement>(panel === 'hierarchy'
@@ -159,6 +158,14 @@ function focusReturnTarget(element: Element | null): FocusReturnTarget | null {
   return null
 }
 
+function restoreFocus(element: FocusableElement | null | undefined): boolean {
+  if (!element || element === document.body || !element.isConnected || element.closest('[inert]')
+    || element.matches(':disabled') || !element.getClientRects().length
+    || getComputedStyle(element).visibility === 'hidden') return false
+  element.focus()
+  return document.activeElement === element
+}
+
 function focusFirstActivePanelControl(): void {
   if (typeof document === 'undefined') return
   const panel = props.compactPanel
@@ -186,24 +193,26 @@ watch(() => props.compactModalOpen, (open, wasOpen) => {
   if (typeof document === 'undefined') return
   if (open && !wasOpen) {
     focusBeforeCompact = focusReturnTarget(document.activeElement)
+    lastCompactPanel = props.compactPanel
     nextTick(focusFirstActivePanelControl)
   } else if (!open && wasOpen) {
+    const returnTarget = focusBeforeCompact
+    const closedPanel = lastCompactPanel
+    focusBeforeCompact = null
+    lastCompactPanel = null
     nextTick(() => {
-      const element = focusBeforeCompact?.element.isConnected
-        ? focusBeforeCompact.element
-        : focusBeforeCompact?.selector
-          ? document.querySelector(focusBeforeCompact.selector)
-          : null
-      if (element && 'focus' in element && !element.closest('[inert]') && !element.closest('[style*="display: none"]')) {
-        element.focus()
-      }
-      focusBeforeCompact = null
+      if (props.compactModalOpen || props.overlayOpen || restoreFocus(returnTarget?.element)) return
+      if (returnTarget?.selector && restoreFocus(document.querySelector<FocusableElement>(returnTarget.selector))) return
+      if (closedPanel) restoreFocus(mapChromeRegion.value?.querySelector<HTMLElement>(
+        `button[aria-controls="workspace-${closedPanel}-panel"]`,
+      ))
     })
   }
 }, { flush: 'sync' })
 
 watch(() => props.compactPanel, async panel => {
   if (!props.compactModalOpen || !panel) return
+  lastCompactPanel = panel
   await nextTick()
   panelContent(panel)?.querySelector<HTMLElement>(
     'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',

@@ -13,7 +13,8 @@ import {
   downloadJson,
   importReviewDialog,
   jsonMapImportInput,
-  openWorkspaceHierarchy,
+  hideWorkspaceInspector,
+  openChartDetailsEditor,
   returnToClusterMap,
   resolveImportReview,
   setHeaderMapActionsOpen,
@@ -57,13 +58,10 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
 
   const context = page.getByRole('navigation', { name: 'Map context and commands' })
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
-  await chartDialog.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
+  const chartEditor = await openChartDetailsEditor(page)
+  await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
+  await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
 
   const incoming = incomingCluster()
   const importFile = async () => {
@@ -85,9 +83,9 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   const afterCancel = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterCancel.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
-  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
-  await page.keyboard.press('Escape')
+  await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
+  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
 
   await importFile()
   await expect(review).toBeVisible()
@@ -99,10 +97,9 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' })
   await expect(resumeDraft).toBeVisible()
   await resumeDraft.click()
-  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
+  await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
+  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Incoming Vesper'])
@@ -124,13 +121,10 @@ test('an applied import closes review before save failure and Retry persists the
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
 
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
-  await chartDialog.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
-  await chartDialog.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
+  const chartEditor = await openChartDetailsEditor(page)
+  await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
+  await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
 
   const incoming = incomingCluster()
   await setHeaderMapActionsOpen(page, true)
@@ -156,9 +150,9 @@ test('an applied import closes review before save failure and Retry persists the
   const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft', exact: true })
   await expect(resumeDraft).toBeVisible()
   await resumeDraft.click()
-  await expect(chartDialog.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartDialog.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
-  await page.keyboard.press('Escape')
+  await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
+  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
 
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
   await waitForWorkspaceSaved(page)

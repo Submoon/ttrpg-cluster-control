@@ -15,6 +15,7 @@ export interface EditorCommandContext {
     selectOrbit(orbitId: string, openInspector?: boolean): Promise<void>
     selectRoute(routeId: string, openInspector?: boolean): Promise<void>
     showClusterMap(): Promise<void>
+    showChartDetails(): Promise<void>
     routeSummary(route: JumpRoute): string
   }
   charts: {

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, activeWorkspaceFeedback, openWorkspaceHierarchy, openChartDetailsEditor } from './helpers'
+import { waitForWorkspaceSaved, activeWorkspaceFeedback, hideWorkspaceInspector, openWorkspaceHierarchy, openChartDetailsEditor } from './helpers'
 
 
 import {
@@ -248,9 +248,9 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 
-  const dialog = await openChartDetailsEditor(page)
-  await dialog.getByLabel('Jump Cluster').fill('Unapplied Reach')
-  await page.keyboard.press('Escape')
+  const editor = await openChartDetailsEditor(page)
+  await editor.getByLabel('Jump Cluster').fill('Unapplied Reach')
+  await hideWorkspaceInspector(page)
 
   const prompt = page.waitForEvent('dialog', { timeout: 5_000 })
   await page.close({ runBeforeUnload: true })
@@ -261,7 +261,7 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
   await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }))
     .toBeVisible()
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
-  await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Unapplied Reach')
+  await expect(editor.getByLabel('Jump Cluster')).toHaveValue('Unapplied Reach')
 })
 
 
@@ -274,33 +274,34 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  const dialog = await openChartDetailsEditor(page)
-  await dialog.getByLabel('Jump Cluster').fill('')
-  await dialog.getByLabel('Star system').fill('Unapplied Vesper')
-  await dialog.getByRole('button', { name: 'Apply details' }).click()
-  const validation = dialog.getByRole('alert')
+  const editor = await openChartDetailsEditor(page)
+  await editor.getByLabel('Jump Cluster').fill('')
+  await editor.getByLabel('Star system').fill('Unapplied Vesper')
+  await editor.getByRole('button', { name: 'Apply details' }).click()
+  const validation = editor.getByRole('alert')
   await expect(validation).toHaveText('Jump Cluster name is required.')
-  await expect(dialog.getByLabel('Jump Cluster')).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
+  await expect(editor.getByLabel('Jump Cluster')).toBeFocused()
+  await hideWorkspaceInspector(page)
+  await expect(editor).toBeHidden()
 
   await addCatalogueObject(page, 'jump-point', { preserveDraft: true, noSelection: true })
   await waitForWorkspaceSaved(page)
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
-  await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('')
-  await expect(dialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
+  await expect(editor.getByLabel('Jump Cluster')).toHaveValue('')
+  await expect(editor.getByRole('alert')).toHaveText('Jump Cluster name is required.')
+  await hideWorkspaceInspector(page)
+  await expect(editor).toBeHidden()
 
   await (await openWorkspaceHierarchy(page))
     .getByRole('button', { name: 'Cluster map' }).click()
-  await expect(dialog.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Apply and continue' }).click()
-  await expect(dialog.getByRole('alert')).toHaveText('Jump Cluster name is required.')
-  await expect(dialog.getByLabel('Jump Cluster')).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
+  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  await expect(guard.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
+  await guard.getByRole('button', { name: 'Apply and continue' }).click()
+  await expect(guard).toBeHidden()
+  await expect(editor.getByRole('alert')).toHaveText('Jump Cluster name is required.')
+  await expect(editor.getByLabel('Jump Cluster')).toBeFocused()
+  await hideWorkspaceInspector(page)
+  await expect(editor).toBeHidden()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
 
   const exported = await downloadJson(page, 'Export star system JSON')
@@ -325,15 +326,12 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
 
   try {
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
-    const dialog = await openChartDetailsEditor(page)
-    await dialog.getByLabel('Jump Cluster').fill('Current Reach')
-    await dialog.getByLabel('Star system').fill('Vesper Prime')
+    const editor = await openChartDetailsEditor(page)
+    await editor.getByLabel('Jump Cluster').fill('Current Reach')
+    await editor.getByLabel('Star system').fill('Vesper Prime')
     expect(await beforeUnloadIsPrevented(page)).toBe(true)
-    await dialog.getByRole('button', { name: 'Apply details' }).click()
-    await expect(dialog).toBeHidden()
-    await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
-    await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-    await page.getByRole('button', { name: 'Chart details', exact: true }).click()
+    await editor.getByRole('button', { name: 'Apply details' }).click()
+    await expect(editor).toBeHidden()
     const inspector = page.getByRole('dialog', { name: 'Object inspector', exact: true })
     await expect(inspector).toBeVisible()
     await expect(inspector.getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
@@ -354,6 +352,11 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     await page.getByRole('button', { name: 'Close inspector panel' }).click()
     await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
     await page.setViewportSize({ width: 1440, height: 960 })
+    const desktopHierarchy = page.getByRole('complementary', { name: 'System hierarchy', exact: true })
+    if (await desktopHierarchy.isVisible()) {
+      await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+      await expect(desktopHierarchy).toBeHidden()
+    }
 
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
     await addCatalogueObject(page, 'jump-point')
@@ -394,28 +397,28 @@ test('an older failed write cannot replace newer saving feedback or clear a draf
 
   try {
     await setChartWriteGate(page, { abortCurrentWrites: 1, holdFailures: true, holdCompletions: true })
-    let dialog = await openChartDetailsEditor(page)
-    await dialog.getByLabel('Jump Cluster').fill('Older Failed Reach')
-    await dialog.getByRole('button', { name: 'Apply details' }).click()
-    await expect(dialog).toBeHidden()
+    let editor = await openChartDetailsEditor(page)
+    await editor.getByLabel('Jump Cluster').fill('Older Failed Reach')
+    await editor.getByRole('button', { name: 'Apply details' }).click()
+    await expect(editor).toBeHidden()
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
 
-    dialog = await openChartDetailsEditor(page)
-    await dialog.getByLabel('Jump Cluster').fill('Latest Applied Reach')
-    await dialog.getByRole('button', { name: 'Apply details' }).click()
+    editor = await openChartDetailsEditor(page)
+    await editor.getByLabel('Jump Cluster').fill('Latest Applied Reach')
+    await editor.getByRole('button', { name: 'Apply details' }).click()
     await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
 
-    dialog = await openChartDetailsEditor(page)
-    await dialog.getByLabel('Jump Cluster').fill('Newer Unapplied Draft')
-    await page.keyboard.press('Escape')
+    editor = await openChartDetailsEditor(page)
+    await editor.getByLabel('Jump Cluster').fill('Newer Unapplied Draft')
+    await hideWorkspaceInspector(page)
     await releaseFirstChartWriteFailure(page)
 
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
     await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveCount(0)
     await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
-    await expect(dialog.getByLabel('Jump Cluster')).toHaveValue('Newer Unapplied Draft')
-    await page.keyboard.press('Escape')
+    await expect(editor.getByLabel('Jump Cluster')).toHaveValue('Newer Unapplied Draft')
+    await hideWorkspaceInspector(page)
 
     await releaseChartWriteGate(page)
     await waitForWorkspaceSaved(page)

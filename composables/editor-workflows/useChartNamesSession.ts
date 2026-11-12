@@ -255,6 +255,16 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     session.value = null
   }
 
+  /** Hides the Inspector presentation while retaining the captured chart draft. */
+  function hideEditing(): void {
+    editing.value = false
+  }
+
+  /** Reopens the same retained chart draft in the Inspector. */
+  function showEditing(): void {
+    if (session.value) editing.value = true
+  }
+
   /** Ends an obsolete clean session after workspace-history traversal; changed names remain caller-owned. */
   function endCleanHistorySession(): void {
     if (session.value && !hasChangedNames.value) discard(session.value.id)
@@ -278,6 +288,8 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     apply,
     submit,
     discard,
+    hideEditing,
+    showEditing,
     endCleanHistorySession,
   }
 }

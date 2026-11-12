@@ -31,10 +31,10 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
-  const editDetails = await openChartDetailsEditor(page)
-  await selectDraftPublication(editDetails, 'Revealed')
-  await editDetails.getByRole('button', { name: 'Apply details', exact: true }).click()
-  await expect(editDetails).toBeHidden()
+  const chartEditor = await openChartDetailsEditor(page)
+  await selectDraftPublication(chartEditor, 'Revealed')
+  await chartEditor.getByRole('button', { name: 'Apply details', exact: true }).click()
+  await expect(chartEditor).toBeHidden()
 
   const hierarchy = await openWorkspaceHierarchy(page)
   const planet = hierarchy.getByRole('treeitem', { name: /Select .*Pilgrim World/ })
@@ -46,12 +46,13 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
     await planet.click({ button: 'right' })
     await menu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
   }
+  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
   await publish()
-  await editDetails.getByRole('button', { name: 'Stay here', exact: true }).click()
+  await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(playerText).toHaveValue(unappliedText)
   await expect(planet).toHaveAttribute('aria-description', /Configured visibility: Known type/)
   await publish()
-  await editDetails.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
+  await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
   await expect(planet).toHaveAttribute('aria-description', /Configured visibility: Revealed/)
   await waitForWorkspaceSaved(page)
 

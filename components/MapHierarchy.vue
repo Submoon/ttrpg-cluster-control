@@ -8,8 +8,8 @@
       <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
-      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit(chartNamesTargetSystemId)">
-        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
+      <UButton color="primary" variant="outline" @click="commands.navigation.showChartDetails()">
+        Open chart details
       </UButton>
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
@@ -103,8 +103,8 @@
     </div>
 
     <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
-      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit(chartNamesTargetSystemId)">
-        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
+      <UButton color="primary" variant="outline" @click="commands.navigation.showChartDetails()">
+        Open chart details
       </UButton>
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
     </div>
@@ -297,14 +297,6 @@ const commands = useEditorCommands()
 const activeSystemId = computed(() => store.activeView === 'cluster'
   ? store.clusterSelectedSystemId
   : store.selectedSystemId)
-const chartNamesTargetSystemId = computed(() => {
-  if (props.hasChartNameDraft) return undefined
-  const currentSystemId = store.selectedSystemId ?? undefined
-  return store.activeView === 'cluster'
-    ? store.inspectedClusterSystemId ?? currentSystemId
-    : currentSystemId
-})
-
 const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === activeSystemId.value),
 )

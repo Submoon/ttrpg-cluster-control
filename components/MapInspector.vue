@@ -1,5 +1,7 @@
 <template>
   <div class="map-inspector-layout">
+    <slot v-if="props.chartEditing" name="chart-editor" />
+    <template v-else>
     <div v-if="hasResumableEntitySession" class="map-inspector-resume-draft" role="status">
       <div>
         <p class="section-kicker">UNAPPLIED INSPECTOR DRAFT</p>
@@ -23,6 +25,7 @@
         :selected-orbit="props.selectedOrbit"
         :selected-route="props.selectedRoute"
         :inspected-system="props.inspectedClusterSystem"
+        :chart-edit-system-id="props.inspectedClusterSystem?.id ?? props.selectedSystem?.id ?? props.workspace.cluster.systems[0]?.id"
         :selected-route-summary="props.selectedRouteSummary"
         :has-chart-name-draft="props.hasChartNameDraft"
         :saving="props.saving"
@@ -30,7 +33,6 @@
         :session="props.routeSession"
         @open-system="emit('open-system', $event)"
         @delete-system="emit('delete-system', $event)"
-        @show-chart-details="emit('show-chart-details')"
         @request-route-edit="emit('request-route-edit', $event)"
         @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
@@ -119,6 +121,7 @@
           mode="system"
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
+          :chart-edit-system-id="props.selectedSystem.id"
           :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
@@ -126,6 +129,7 @@
         />
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -163,6 +167,7 @@ const props = defineProps<{
   selectedRoute?: JumpRoute
   routeSession: RouteInspectorSession | null
   selectedRouteSummary: string
+  chartEditing: boolean
   hasChartNameDraft: boolean
   hasUncommittedNames: boolean
   entitySession: EntityInspectorSession | null
@@ -180,7 +185,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
-  'show-chart-details': []
   hide: []
   'request-object-edit': []
   'object-focus-request-consumed': [requestId: number]
