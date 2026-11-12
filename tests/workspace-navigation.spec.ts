@@ -24,7 +24,7 @@ async function createWorkspace(page: Page): Promise<void> {
 
 
 
-test('Navigate opens a system while Select keeps the cluster map active and inspects system data', async ({ page }) => {
+test('Navigate opens systems, Select inspects them, and Hierarchy edits the inspected chart', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
 
@@ -62,6 +62,34 @@ test('Navigate opens a system while Select keeps the cluster map active and insp
 
   await expect(selectMap).toBeVisible()
   await expect(page.locator('#workspace-inspector-panel').getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
+  await addClusterSystem(page)
+
+  const secondSystem = selectMap.getByRole('button', { name: 'Select New System 2 system', exact: true })
+  await secondSystem.click()
+
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector.getByRole('region', { name: 'Star System details', exact: true })).toBeVisible()
+  await expect(inspector.getByRole('heading', { name: 'New System 2', exact: true })).toBeVisible()
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await expect.soft(inspector.getByRole('button', { name: 'Edit chart details', exact: true })).toHaveCount(0)
+
+  await hierarchy.getByRole('button', { name: 'Edit chart details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
+  await expect(page.locator('.cluster-map-svg')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  const resumeDraft = hierarchy.getByRole('button', { name: 'Resume chart details draft', exact: true })
+  await expect(resumeDraft).toBeFocused()
+  await inspector.getByRole('button', { name: 'Chart details', exact: true }).click()
+  await expect(inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
+  await resumeDraft.click()
+  await expect(dialog.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(resumeDraft).toBeFocused()
+  await expect(selectMap).toBeVisible()
 })
 
 

@@ -453,7 +453,6 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
-              @edit-chart-names="beginChartNamesEdit"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @show-chart-details="showChartDetails"

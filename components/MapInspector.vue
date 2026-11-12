@@ -28,7 +28,6 @@
         :saving="props.saving"
         :editor-error="props.editorError"
         :session="props.routeSession"
-        @edit-chart-names="emit('edit-chart-names', $event)"
         @open-system="emit('open-system', $event)"
         @delete-system="emit('delete-system', $event)"
         @show-chart-details="emit('show-chart-details')"
@@ -123,7 +122,6 @@
           :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
-          @edit-chart-names="emit('edit-chart-names', $event)"
           @delete-system="emit('delete-system', $event)"
         />
       </div>
@@ -180,7 +178,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': [targetSystemId?: string]
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
   'show-chart-details': []

@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback, importReviewDialog, jsonMapImportInput, openChartDetails, resolveImportReview,
+  activeWorkspaceFeedback, importReviewDialog, jsonMapImportInput, openChartDetailsEditor, resolveImportReview,
   returnToClusterMap, setHeaderMapActionsOpen, setJsonFile, waitForWorkspaceSaved, waitForWorkspaceStartup,
 } from './helpers'
 
@@ -31,9 +31,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel('Jump Cluster', { exact: true }).fill('Accepted large baseline')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   const consent = page.getByRole('dialog', { name: 'This change cannot be undone', exact: true })
@@ -52,7 +50,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await expect(undo).toHaveText('Undo 1')
   await expect(undo).toHaveAttribute('aria-description', '1 action available to undo')
 
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
+  await openChartDetailsEditor(page)
   await names.getByLabel('Jump Cluster', { exact: true }).fill('Accepted large baseline')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(consent).toBeVisible()

@@ -23,7 +23,7 @@
     <p class="inspector-intro mb-0">
       {{ props.mode === 'cluster'
         ? 'Choose a route to inspect its logical Jump Point endpoints, or review player-facing publication.'
-        : 'Choose a map object or Orbit to inspect it, or edit chart details.' }}
+        : 'Choose a map object or Orbit to inspect it, or review player-facing publication.' }}
     </p>
 
     <section class="chart-publication-summary mt-4" aria-label="Player publication settings">
@@ -49,24 +49,18 @@
       </p>
     </section>
 
-    <template #footer>
-      <div class="chart-details-actions grid gap-2" :class="{ 'chart-details-actions--system': props.allowOpenSystem && props.mode === 'system' && props.selectedSystem }">
-        <UButton block class="w-full min-w-0 justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
-          {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
-        </UButton>
-        <UButton
-          v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
-          block
-          class="w-full min-w-0 justify-center"
-          color="primary"
-          @click="emit('open-system', props.selectedSystem.id)"
-        >
+    <template
+      v-if="(props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft"
+      #footer
+    >
+      <div v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem" class="chart-details-actions">
+        <UButton block class="w-full min-w-0 justify-center" color="primary" @click="emit('open-system', props.selectedSystem.id)">
           Open system
         </UButton>
-        <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-center text-sm" role="status">
-          Chart details editing session
-        </span>
       </div>
+      <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-sm" role="status">
+        Chart details editing session
+      </span>
     </template>
 
     <USeparator v-if="props.mode === 'cluster' || props.selectedSystem" class="my-4" />
@@ -139,7 +133,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': [targetSystemId?: string]
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()
@@ -168,8 +161,6 @@ function setSystemPublication(mode: PublicationMode): void {
 
 <style scoped>
 .chart-details-card-heading { min-width: 0; }
-.chart-details-actions--system { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.chart-details-draft-status { grid-column: 1 / -1; }
 .chart-details-system-delete {
   display: flex;
   flex-direction: column;

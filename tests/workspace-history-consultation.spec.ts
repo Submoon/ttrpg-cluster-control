@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   createSingleSystemWorkspace,
-  openChartDetails,
+  openChartDetailsEditor,
 } from './helpers'
 
 test('History consultation stays read only across Undo and Redo and returns focus on compact screens', async ({ page }) => {
@@ -26,14 +26,11 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await expect(historyDialog).toBeHidden()
   await expect(historyButton).toBeFocused()
 
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
-  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
-  if (await closeInspector.isVisible()) await closeInspector.click()
+  await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
   const undoLabelBeforeConsultation = await undo.getAttribute('aria-label')

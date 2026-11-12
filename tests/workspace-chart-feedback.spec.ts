@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { abortNextWorkspaceWrite, activeWorkspaceFeedback, addCatalogueObject, waitForWorkspaceSaved } from './helpers'
+import { abortNextWorkspaceWrite, activeWorkspaceFeedback, addCatalogueObject, openChartDetailsEditor, waitForWorkspaceSaved } from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -35,10 +35,9 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   const systemMap = page.locator('.system-map-content')
   const cameraBeforeFeedback = await systemMap.getAttribute('transform')
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  const chartInspector = page.locator('#workspace-inspector-panel')
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await chartInspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const appliedDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  await closeCompactPanels(page)
+  const appliedDialog = await openChartDetailsEditor(page)
   await appliedDialog.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
   await appliedDialog.getByLabel('Star system', { exact: true }).fill('Applied recovery star')
   await abortNextWorkspaceWrite(page, async () => {
@@ -47,12 +46,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   })
   await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Not saved.')
 
-  await closeCompactPanels(page)
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  const draftInspector = page.locator('#workspace-inspector-panel')
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await draftInspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const draftDialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  const draftDialog = await openChartDetailsEditor(page)
   await draftDialog.getByLabel('Jump Cluster', { exact: true }).fill('Hidden unapplied draft reach')
   await draftDialog.getByLabel('Star system', { exact: true }).fill('Hidden unapplied draft star')
   await page.keyboard.press('Escape')

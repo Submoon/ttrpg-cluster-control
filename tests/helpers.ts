@@ -942,20 +942,22 @@ export async function openWorkspaceHierarchy(
   return await compactHierarchy.isVisible() ? compactHierarchy : desktopHierarchy
 }
 
-/** Shows the consultation summary in the inspector without changing map selection. */
-export async function openChartDetails(
+/** Opens the chart editing session from Hierarchy on the current map. */
+export async function openChartDetailsEditor(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  const detailsRegion = page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
-  if (await detailsRegion.isVisible().catch(() => false)) return detailsRegion
+  // The map chrome is inert when compact Hierarchy is already open.
+  const context = page.getByTestId('workspace-map-context-kind')
+  await expect(context).toHaveText(/^(Jump Cluster|Star System)$/)
+  const name = await context.textContent() === 'Jump Cluster' ? 'Jump Cluster contents' : 'System hierarchy'
+  const compactHierarchy = page.getByRole('dialog', { name, exact: true })
+  const hierarchy = await compactHierarchy.isVisible() ? compactHierarchy : await openWorkspaceHierarchy(page, name)
+  const edit = hierarchy.getByRole('button', { name: /^(Edit chart details|Resume chart details draft)$/ })
+  await edit.click()
 
-  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await expect(inspectToggle).toBeVisible()
-  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-  const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
-  await expect(chartDetails).toBeVisible()
-  if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
-  return detailsRegion
+  const dialog = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  await expect(dialog).toBeVisible()
+  return dialog
 }
 
 /** Selects a map interaction mode through the shared Dock before a map gesture. */

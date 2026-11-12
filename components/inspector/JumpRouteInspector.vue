@@ -113,7 +113,6 @@
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @edit-chart-names="emit('edit-chart-names', $event)"
     @open-system="emit('open-system', $event)"
     @delete-system="emit('delete-system', $event)"
   />
@@ -261,7 +260,6 @@
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @edit-chart-names="emit('edit-chart-names')"
   />
 </template>
 
@@ -296,7 +294,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': [targetSystemId?: string]
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
   'show-chart-details': []

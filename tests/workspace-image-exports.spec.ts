@@ -5,6 +5,7 @@ import {
   captureMapExportBlobs,
   downloadImage,
   downloadJson,
+  openChartDetailsEditor,
   inspectImageSvg,
   jsonMapImportInput,
   openWorkspaceHierarchy,
@@ -573,12 +574,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
           expect(shortTitleInfo.texts.some(text => /\bSYSTEMS\s*\/.*ROUTES\b/.test(text))).toBe(false)
 
           expectedTitle = 'W'.repeat(80)
-          const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-          if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-          await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-          const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-          await inspector.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-          const names = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+          const names = await openChartDetailsEditor(page)
           await names.getByLabel('Star system', { exact: true }).fill(expectedTitle)
           await names.getByRole('button', { name: 'Apply details', exact: true }).click()
         }

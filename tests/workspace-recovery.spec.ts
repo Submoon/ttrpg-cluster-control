@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
+import { openChartDetailsEditor, waitForWorkspaceSaved, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
@@ -42,10 +42,8 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartNamesDialog = page.getByRole('dialog', { name: 'Edit chart details' })
+  const chartNamesDialog = await openChartDetailsEditor(page)
   await chartNamesDialog.getByLabel('Jump Cluster').fill('Current Reach')
   await chartNamesDialog.getByRole('button', { name: 'Apply details' }).click()
   await waitForWorkspaceSaved(page)

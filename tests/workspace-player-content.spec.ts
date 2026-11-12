@@ -5,7 +5,7 @@ import {
   addCatalogueObject,
   createSingleSystemWorkspace,
   editMapObject,
-  openChartDetails,
+  openChartDetailsEditor,
   openPlayerPreview,
   openWorkspaceHierarchy,
   saveMapObject,
@@ -31,9 +31,7 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details', exact: true }).click()
-  const editDetails = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  const editDetails = await openChartDetailsEditor(page)
   await selectDraftPublication(editDetails, 'Revealed')
   await editDetails.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(editDetails).toBeHidden()

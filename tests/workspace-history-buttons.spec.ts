@@ -3,7 +3,7 @@ import {
   waitForWorkspaceSaved,
   activeWorkspaceFeedback, addCatalogueObject, captureMapExportBlobs, clickDockAction,
   createSingleSystemWorkspace, dragToWorldPoint, downloadJson, editMapObject,
-  ensureMapDragPointsReachable, openChartDetails, openWorkspaceHierarchy,
+  ensureMapDragPointsReachable, openChartDetailsEditor, openWorkspaceHierarchy,
   returnToClusterMap, saveMapObject, setWorkspaceMapMode, workspaceZoomControls,
 } from './helpers'
 import {
@@ -25,9 +25,7 @@ test('a held map move blocks traversal and its completed position round-trips ex
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()
@@ -62,19 +60,19 @@ test('a held map move blocks traversal and its completed position round-trips ex
 test('a hidden name draft blocks history through reflow and clean sessions cannot overwrite restored names', async ({ page }) => {
   test.setTimeout(60_000)
   await createSingleSystemWorkspace(page)
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
+  await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
   await page.keyboard.press('Escape')
   await expect(undo).toBeDisabled()
   await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('modified chart-details draft')
   await page.setViewportSize({ width: 390, height: 844 })
+  const closeHierarchy = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
+  if (await closeHierarchy.isVisible()) await closeHierarchy.click()
   const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
   if (await closeInspector.isVisible()) await closeInspector.click()
   await expect(undo).toBeVisible()
@@ -99,13 +97,12 @@ test('a hidden name draft blocks history through reflow and clean sessions canno
     await page.screenshot({ path: test.info().outputPath(`history-${viewport.width}x${viewport.height}.png`) })
   }
   await page.setViewportSize({ width: 1440, height: 900 })
-  const cleanDetails = await openChartDetails(page)
-  await cleanDetails.getByRole('button', { name: 'Edit chart details' }).click()
+  await openChartDetailsEditor(page)
   await expect(names.getByLabel('Star system', { exact: true })).toHaveValue('Vesper Prime')
   await page.keyboard.press('Escape')
   await undo.click()
   await expect(page.getByRole('button', { name: /^Redo(?:\b|:)/ })).toBeEnabled()
-  await cleanDetails.getByRole('button', { name: 'Edit chart details' }).click()
+  await openChartDetailsEditor(page)
   await expect(names.getByLabel('Star system', { exact: true })).toHaveValue('Vesper')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(page.getByRole('button', { name: /^Redo(?:\b|:)/ })).toBeEnabled()
@@ -114,9 +111,7 @@ test('a hidden name draft blocks history through reflow and clean sessions canno
 test('traversal keeps its visible result through delayed and failed IndexedDB saving, then Retry restores access', async ({ page }) => {
   test.setTimeout(60_000)
   await createSingleSystemWorkspace(page)
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel('Star system', { exact: true }).fill('Vesper Prime')
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
@@ -164,9 +159,7 @@ test('an older real save acknowledgement cannot enable traversal of a newer appl
   try {
     await setHistoryStorageGate(page, { hold: true })
     for (const nextName of ['Vesper Second', 'Vesper Third']) {
-      const details = await openChartDetails(page)
-      await details.getByRole('button', { name: 'Edit chart details' }).click()
-      const names = page.getByRole('dialog', { name: 'Edit chart details' })
+      const names = await openChartDetailsEditor(page)
       await names.getByLabel('Star system', { exact: true }).fill(nextName)
       await names.getByRole('button', { name: 'Apply details', exact: true }).click()
       await expect(names).toBeHidden()
