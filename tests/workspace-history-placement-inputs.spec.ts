@@ -9,6 +9,8 @@ import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useSystemObjectPlacement } from '../composables/editor-workflows/useSystemObjectPlacement'
 import { useEditorUiStore } from '../stores/editor-ui'
+import { nearestAvailableCircularOrbitRadius } from '../utils/orbit-drag-geometry'
+import { objectPositions } from '../utils/system-map-geometry'
 
 function createHistoryHarness(initial: LocalWorkspace) {
   const workspace = ref<LocalWorkspace | null>(initial)
@@ -317,6 +319,269 @@ test('armed object Add blocks dirty inputs and unresolved candidate choices but 
   controller.dispose()
   stopGuard()
   harness.dispose()
+})
+
+test('automatic Orbit Add uses the nearest compact radius around implicit and custom rings @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const hostId = system.objects[0]!.id
+  const first = createOrbit(system, hostId)
+  const second = createOrbit({ ...system, orbits: [first] }, hostId)
+  system.orbits.push(first, second)
+  // The first ring uses the implicit legacy geometry. The second occupies the compact automatic default.
+  const customRadii = { horizontal: 56, vertical: 56 }
+  initial.layout.orbitRadii[second.id] = { ...customRadii }
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: 'host', label: 'Primary Star', target: { kind: 'host', objectId: hostId }, error: null,
+    }])).toBe(true)
+
+    const placed = harness.workspace.value!
+    const orbits = placed.cluster.systems[0]!.orbits
+    expect(orbits).toHaveLength(3)
+    expect(orbits.slice(0, 2)).toEqual([first, second])
+    expect(placed.layout.orbitRadii[first.id]).toBeUndefined()
+    expect(placed.layout.orbitRadii[second.id]).toEqual(customRadii)
+    const added = placed.layout.orbitRadii[orbits[2]!.id]
+    expect(added).toEqual({ horizontal: 72, vertical: 72 })
+    expect(controller.creation.hasPendingHistoryInput.value).toBe(false)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('automatic Orbit Add rounds a fractional gap outward before saving @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const hostId = system.objects[0]!.id
+  const existing = createOrbit(system, hostId)
+  system.orbits.push(existing)
+  initial.layout.orbitRadii[existing.id] = { horizontal: 56.4, vertical: 56.4 }
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: 'host', label: 'Primary Star', target: { kind: 'host', objectId: hostId }, error: null,
+    }])).toBe(true)
+
+    const placed = harness.workspace.value!
+    const orbits = placed.cluster.systems[0]!.orbits
+    expect(orbits).toHaveLength(2)
+    expect(placed.layout.orbitRadii[existing.id]).toEqual({ horizontal: 56.4, vertical: 56.4 })
+    const addedRadius = placed.layout.orbitRadii[orbits[1]!.id]!.horizontal
+    expect(addedRadius).toBe(73)
+    expect(addedRadius - 56.4).toBeGreaterThanOrEqual(16)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('Orbit Add validates blank form inputs and restores their defaults on a map click @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const hostId = initial.cluster.systems[0]!.objects[0]!.id
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const { creation } = controller
+
+  try {
+    expect(await creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    creation.updateCreationInput('hostId', hostId)
+    creation.updateCreationInput('horizontalRadius', '90')
+    creation.updateCreationInput('horizontalRadius', '')
+    creation.updateCreationInput('verticalRadius', '80')
+    creation.updateCreationInput('rotation', '')
+
+    expect(await creation.addCreationFromInputs()).toBe(false)
+    expect(creation.creationSession.value?.errors).toMatchObject({
+      horizontalRadius: expect.any(String),
+      rotation: expect.any(String),
+    })
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+
+    expect(await creation.offerCreationCandidates([{
+      key: 'host', label: 'Primary Star', target: { kind: 'host', objectId: hostId }, error: null,
+    }])).toBe(true)
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[0]!.orbits[0]!
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 112, vertical: 80 })
+    expect(placed.layout.orbitRotations[orbit.id]).toBe(0)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('repeating unchanged numeric Orbit Placement rejects duplicates without altering displayed values @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const hostId = initial.cluster.systems[0]!.objects[0]!.id
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const { creation } = controller
+
+  try {
+    expect(await creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    creation.updateCreationInput('hostId', hostId)
+    creation.updateCreationInput('horizontalRadius', '73.5')
+    creation.updateCreationInput('verticalRadius', '81.25')
+    creation.updateCreationInput('rotation', '23')
+
+    expect(await creation.addCreationFromInputs()).toBe(true)
+    const displayedInputs = { ...creation.creationSession.value!.inputs }
+    expect(displayedInputs).toMatchObject({ horizontalRadius: '74', verticalRadius: '81', rotation: '23' })
+    expect(creation.creationSession.value?.notice).toMatch(/scene units to meet the 39-unit host minimum/)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(1)
+    const firstOrbit = harness.workspace.value!.cluster.systems[0]!.orbits[0]!
+    expect(harness.workspace.value?.layout.orbitRadii[firstOrbit.id])
+      .toEqual({ horizontal: 74, vertical: 81 })
+
+    expect(await creation.addCreationFromInputs()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(1)
+    expect(creation.creationSession.value?.inputs).toEqual(displayedInputs)
+    expect(creation.creationSession.value?.errors.horizontalRadius).toMatch(/identical to an existing ring/)
+    expect(creation.creationSession.value?.notice).toMatch(/identical to an existing ring/)
+    expect(creation.hasPendingHistoryInput.value).toBe(false)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('Orbit drag radius snapping merges overlapping open gaps and favors the outer radius on a tie @pure', () => {
+  expect(nearestAvailableCircularOrbitRadius(112, 39, [110, 114], 4)).toBe(118)
+  expect(nearestAvailableCircularOrbitRadius(100, 39, [100], 4)).toBe(104)
+  // Open interval endpoints remain legal, including the shared point of touching intervals.
+  expect(nearestAvailableCircularOrbitRadius(96, 39, [100], 4)).toBe(96)
+  expect(nearestAvailableCircularOrbitRadius(104, 39, [100, 108], 4)).toBe(104)
+  expect(nearestAvailableCircularOrbitRadius(40, 40, [50], 12)).toBe(62)
+  const fractionalTieClearance = 4 / 0.301 + 2.45
+  expect(nearestAvailableCircularOrbitRadius(56, 39, [56], fractionalTieClearance))
+    .toBeCloseTo(56 + fractionalTieClearance, 12)
+  expect(nearestAvailableCircularOrbitRadius(56 - 0.001, 39, [56], fractionalTieClearance))
+    .toBeCloseTo(56 - fractionalTieClearance, 12)
+})
+
+test('Add Orbit drag reserves the nearest frontmost host and commits its exact circular preview once @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const sourceSystem = initial.cluster.systems[0]!
+  const frontmost = createSystemObject(sourceSystem, 'planet')
+  frontmost.placement = { ...sourceSystem.objects[0]!.placement }
+  const system = { ...sourceSystem, objects: [...sourceSystem.objects, frontmost] }
+  initial.cluster.systems[0] = system
+  const sourceGeometry = {
+    objectAngles: initial.layout.objectAngles,
+    orbitRadii: initial.layout.orbitRadii,
+    orbitRotations: initial.layout.orbitRotations,
+  }
+  const center = objectPositions(system, sourceGeometry).get(frontmost.id)!
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    const baselineInputs = { ...controller.creation.creationSession.value!.appliedInputs }
+    controller.creation.updateCreationInput('horizontalRadius', '73.5')
+    controller.creation.updateCreationInput('verticalRadius', '81.25')
+    controller.creation.updateCreationInput('rotation', '23')
+    const preservedInputs = { ...controller.creation.creationSession.value!.inputs }
+    const stopGuard = connectInputGuard(
+      harness.blockedReason,
+      () => controller.creation.hasPendingHistoryInput.value,
+      'Finish or cancel the Orbit placement inputs first.',
+    )
+
+    expect(controller.creation.beginOrbitDrag(center)).toBe(true)
+    expect(controller.creation.creationSession.value?.preview).toBeNull()
+    expect(controller.creation.creationSession.value?.inputs).toEqual(preservedInputs)
+    expect(controller.creation.updateOrbitDrag({ x: center.x + 150, y: center.y }, 4)).toBeUndefined()
+
+    const preview = controller.creation.creationSession.value?.preview
+    expect(preview).toMatchObject({
+      orbitDrag: true,
+      target: { kind: 'host', objectId: frontmost.id },
+      radii: { horizontal: 150, vertical: 150 },
+      rotation: 0,
+    })
+    expect(controller.creation.creationSession.value?.inputs).toEqual(preservedInputs)
+
+    expect(await controller.creation.completeOrbitDrag()).toBe(true)
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[0]!.orbits[0]!
+    expect(orbit.hostId).toBe(frontmost.id)
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 150, vertical: 150 })
+    expect(placed.layout.orbitRotations[orbit.id]).toBe(0)
+    expect(controller.creation.creationSession.value?.inputs).toEqual(preservedInputs)
+    expect(controller.creation.creationSession.value?.appliedInputs).toEqual(baselineInputs)
+    expect(controller.creation.hasPendingHistoryInput.value).toBe(true)
+    expect(await harness.history.undo()).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+    controller.creation.updateCreationInput('horizontalRadius', baselineInputs.horizontalRadius)
+    controller.creation.updateCreationInput('verticalRadius', baselineInputs.verticalRadius)
+    controller.creation.updateCreationInput('rotation', baselineInputs.rotation)
+    expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+    stopGuard()
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('Orbit drag cancellation and workspace changes discard the captured preview @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const host = system.objects[0]!
+  const geometry = {
+    objectAngles: initial.layout.objectAngles,
+    orbitRadii: initial.layout.orbitRadii,
+    orbitRotations: initial.layout.orbitRotations,
+  }
+  const center = objectPositions(system, geometry).get(host.id)!
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' })).toBe(true)
+    expect(controller.creation.beginOrbitDrag(center)).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 140, y: center.y }, 4)
+    expect(controller.creation.creationSession.value?.preview?.orbitDrag).toBe(true)
+    controller.creation.cancelOrbitDrag()
+    expect(controller.creation.creationSession.value?.preview).toBeNull()
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+
+    expect(controller.creation.beginOrbitDrag(center)).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 140, y: center.y }, 4)
+    harness.workspace.value = {
+      ...harness.workspace.value!,
+      cluster: {
+        ...harness.workspace.value!.cluster,
+        systems: harness.workspace.value!.cluster.systems.map(candidate => candidate.id === system.id
+          ? { ...candidate, objects: candidate.objects.map(object => object.id === host.id
+            ? { ...object, placement: { kind: 'system' as const, x: 0.65, y: 0.7 } }
+            : object) }
+          : candidate),
+      },
+    }
+    expect(controller.creation.creationSession.value?.preview).toBeNull()
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
 })
 
 test('clean Add target references follow restored Orbit and system data @pure', async () => {

@@ -3,9 +3,11 @@
     <p id="system-map-keyboard-help" class="sr-only">
       {{ props.moveTargeting
         ? 'Choose a destination with the arrow keys or click the map. Confirm or cancel the preview in the Placement controls.'
-        : props.creationType
-          ? 'In Add mode, click a location or focus this map and press Enter or Space to choose its visible center. Arrow keys pan the map.'
-          : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.' }}
+        : props.creationType?.kind === 'orbit'
+          ? 'In Add Orbit, click a location or focus this map and press Enter or Space to choose its visible center. Drag from a valid target to size the Orbit. Arrow keys pan the map.'
+          : props.creationType
+            ? 'In Add mode, click a location or focus this map and press Enter or Space to choose its visible center. Arrow keys pan the map.'
+            : 'Focus this map and use the arrow keys to pan. Focus an object or Orbit to use its keyboard controls.' }}
     </p>
     <div v-if="showZoomControls" class="map-navigation flex shrink-0 items-center gap-1 border-b border-[var(--line-soft)] bg-[var(--panel-bg)] px-2 py-1" role="toolbar" aria-label="Map navigation">
       <button type="button" aria-label="Zoom out" :disabled="zoomLevel <= minimumZoomScale * 100" @click="zoomBy(1 / 1.2)">−</button>
@@ -156,6 +158,12 @@ const mapGeometry = computed<SystemMapGeometry>(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+const renderedCreationPreview = computed(() => props.creationPreview?.orbitDrag
+  ? null
+  : props.creationPreview)
+const orbitDragCreationPreview = computed(() => props.creationPreview?.orbitDrag
+  ? props.creationPreview
+  : null)
 let mapRenderer: SystemMapRenderer | undefined
 type SystemTouchGesture =
   | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
@@ -317,16 +325,55 @@ function revealHistoryTarget(target: MapHistoryTarget): boolean {
   return revealSvgTarget(svgElement.value, element, panBy)
 }
 
-function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
+type ClientPoint = Pick<PointerEvent, 'clientX' | 'clientY'>
+
+function touchPoint(touch: ClientPoint, element: SVGSVGElement): [number, number] {
   return pointer(touch, element) as [number, number]
 }
 
-function beginTouchPinch(touches: TouchList): void {
+/** Converts current client coordinates through the live content CTM, including the current map zoom. */
+function clientPointToScene(clientX: number, clientY: number): Point | null {
+  const content = svgElement.value?.querySelector<SVGGElement>('.system-map-content')
+  const matrix = content?.getScreenCTM()
+  if (!matrix) return null
+  try {
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+    return Number.isFinite(point.x) && Number.isFinite(point.y)
+      ? { x: point.x, y: point.y }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Converts a 4 CSS-pixel visible gap plus half of each adjacent painted stroke to scene units. */
+function getOrbitDragSceneClearance(): number | null {
+  const content = svgElement.value?.querySelector<SVGGElement>('.system-map-content')
+  const matrix = content?.getScreenCTM()
+  if (!matrix) return null
+  const xScale = Math.hypot(matrix.a, matrix.b)
+  const yScale = Math.hypot(matrix.c, matrix.d)
+  const smallestScale = Math.min(xScale, yScale)
+  if (!Number.isFinite(smallestScale) || smallestScale <= 0) return null
+  return 4 / smallestScale + (2.4 + 2.5) / 2
+}
+
+/** Keeps an outside-map or control-covered pointer from replacing the last displayed ring geometry. */
+function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
+  const svg = svgElement.value
+  if (!svg) return false
+  const bounds = svg.getBoundingClientRect()
+  if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) return false
+  const hit = document.elementFromPoint(clientX, clientY)
+  return hit !== null && svg.contains(hit)
+}
+
+function beginTouchPinchFromPoints(points: readonly ClientPoint[]): void {
   const element = svgElement.value
   const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!element || !zoomBehavior || touches.length < 2) return
-  const first = touchPoint(touches[0]!, element)
-  const second = touchPoint(touches[1]!, element)
+  if (!element || !zoomBehavior || points.length < 2) return
+  const first = touchPoint(points[0]!, element)
+  const second = touchPoint(points[1]!, element)
   const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
   const transform = zoomTransform(element)
   touchGesture = {
@@ -335,6 +382,24 @@ function beginTouchPinch(touches: TouchList): void {
     distance: Math.max(1, Math.hypot(second[0] - first[0], second[1] - first[1])),
     anchor: transform.invert(center),
   }
+}
+
+function beginTouchPinch(touches: TouchList): void {
+  beginTouchPinchFromPoints(Array.from(touches))
+}
+
+function moveTouchPinch(points: readonly ClientPoint[]): void {
+  const element = svgElement.value
+  const zoomBehavior = mapRenderer?.zoomBehavior
+  if (!element || !zoomBehavior || touchGesture?.mode !== 'pinch' || points.length < 2) return
+  const first = touchPoint(points[0]!, element)
+  const second = touchPoint(points[1]!, element)
+  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+  const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
+  const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
+  select(element).call(zoomBehavior.transform, zoomIdentity
+    .translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale)
+    .scale(scale))
 }
 
 function startTouchNavigation(event: TouchEvent): void {
@@ -387,12 +452,7 @@ function moveTouchNavigation(event: TouchEvent): void {
   event.preventDefault()
   event.stopImmediatePropagation()
   if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
-    const first = touchPoint(event.touches[0]!, element)
-    const second = touchPoint(event.touches[1]!, element)
-    const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-    const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-    const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
-    select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale).scale(scale))
+    moveTouchPinch(Array.from(event.touches))
   } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
     const point = touchPoint(event.touches[0]!, element)
     select(element).call(zoomBehavior.transform, zoomIdentity
@@ -412,6 +472,25 @@ function endTouchNavigation(event: TouchEvent): void {
   } else {
     touchGesture = null
   }
+}
+
+/** Starts a canvas-owned pinch without canceling its frozen Add Orbit preview. */
+function startOrbitTouchPinch(points: readonly ClientPoint[]): void {
+  const element = svgElement.value
+  if (!props.touchNavigation || !element || points.length < 2) return
+  select(element).interrupt()
+  beginTouchPinchFromPoints(points)
+}
+
+/** Updates camera navigation from canvas-owned pointer contacts. */
+function moveOrbitTouchPinch(points: readonly ClientPoint[]): void {
+  if (!props.touchNavigation || points.length < 2) return
+  moveTouchPinch(points)
+}
+
+/** Ends the owned pinch without installing the ordinary one-finger pan state. */
+function endOrbitTouchPinch(): void {
+  touchGesture = null
 }
 
 /** Cancels active edits and navigation previews. */
@@ -667,7 +746,7 @@ function render(preserveNavigation = false): void {
     selectedObjectIds: props.selectedObjectIds ?? [],
     selectedOrbitId: props.selectedOrbitId,
     creationType: props.creationType,
-    creationPreview: props.creationPreview,
+    creationPreview: renderedCreationPreview.value,
     creationChooserOpen: props.creationChooserOpen,
     moveTargeting: props.moveTargeting,
     objectPlacementPreviews,
@@ -685,6 +764,7 @@ function render(preserveNavigation = false): void {
     },
     onViewportChange: viewport => emit('viewport-change', viewport),
   })
+  mapRenderer.updateOrbitDragPreview(orbitDragCreationPreview.value)
   mapRenderer.zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
   mapRenderer.setSearchLocator(searchLocatorId)
   const zoomExtent = zoomExtentOverride
@@ -757,8 +837,9 @@ watch(() => props.dimmedObjectIds, objectIds => {
 watch(() => props.moveEnabled, () => render())
 watch(() => props.moveTargeting, () => render(true))
 watch(() => props.creationType, () => render(), { deep: true })
+watch(orbitDragCreationPreview, preview => mapRenderer?.updateOrbitDragPreview(preview), { deep: true })
 watch([
-  () => props.creationPreview,
+  renderedCreationPreview,
   () => props.creationChooserOpen,
   () => props.orbitAdjustmentPreview,
 ], () => render(true), { deep: true })
@@ -767,6 +848,9 @@ defineExpose({
   exportImage,
   getDetachedOrbitCenter,
   getCreationCandidates,
+  clientPointToScene,
+  getOrbitDragSceneClearance,
+  isOrbitDragPointOnMap,
   getObjectIdsWithinClientRect,
   getViewport,
   getMinimumZoomScale,
@@ -790,6 +874,9 @@ defineExpose({
   startTouchNavigation,
   moveTouchNavigation,
   endTouchNavigation,
+  startOrbitTouchPinch,
+  moveOrbitTouchPinch,
+  endOrbitTouchPinch,
 })
 </script>
 

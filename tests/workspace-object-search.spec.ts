@@ -485,8 +485,10 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await query.press('Escape')
   await expect(searchDialog).toHaveCount(0)
 
-  await setWorkspaceMapMode(page, 'Move')
+  await expect(locator).toBeVisible()
+  await systemMap.dispatchEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true })
   await expect(locator).toHaveCount(0)
+  await setWorkspaceMapMode(page, 'Move')
   await expect(selectedTarget).toHaveClass(/is-dimmed/)
 
   await inspectToggle.click()

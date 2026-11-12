@@ -4,7 +4,7 @@
     title="Review deletion"
     description="Review the current effects before removing this map entity."
     :dismissible="!props.review?.confirming"
-    :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
+    :content="{ onOpenAutoFocus: focusOnDialogOpen, onCloseAutoFocus: restoreFocus }"
     :ui="{
       content: 'workspace-deletion-review-content max-h-[calc(100dvh-2rem)] overflow-hidden max-[760px]:h-[calc(100dvh-1rem)] max-[760px]:max-h-none max-[760px]:w-[calc(100vw-1rem)]',
       body: 'min-h-0 overflow-y-auto',
@@ -54,6 +54,8 @@
           color="error"
           :loading="props.review?.confirming"
           :disabled="props.review?.confirming || Boolean(props.review?.error)"
+          data-deletion-review-confirm
+          @keydown="ignoreRepeatedEnter"
           @click="emit('confirm')"
         >
           Confirm deletion
@@ -90,8 +92,24 @@ function isVisible(element: HTMLElement): boolean {
     && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden'
 }
 
-function captureOpener(): void {
+function focusOnDialogOpen(event: Event): void {
   if (!opener) opener = focusableElement(document.activeElement)
+
+  const dialogContent = event.target
+  if (!(dialogContent instanceof HTMLElement)) return
+
+  const confirmButton = dialogContent.querySelector<HTMLButtonElement>('button[data-deletion-review-confirm]')
+  if (!confirmButton || !isVisible(confirmButton)) return
+
+  event.preventDefault()
+  confirmButton.focus()
+}
+
+function ignoreRepeatedEnter(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' || !event.repeat) return
+
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function restoreFocus(event: Event): void {

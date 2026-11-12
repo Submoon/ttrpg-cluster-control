@@ -4,10 +4,12 @@
     class="workspace-map-canvas"
     @pointerdown.capture="onPointerDownCapture"
     @mousedown.capture="onMouseDownCapture"
+    @mouseup.capture="onMouseUpCapture"
+    @lostpointercapture.capture="onLostPointerCapture"
+    @wheel.capture="onWheelCapture"
     @contextmenu.capture="onContextMenuCapture"
     @click.capture="onClickCapture"
     @keydown.capture="onKeyDownCapture"
-    @wheel.capture="dismissSearchLocator"
     @drop.capture="dismissSearchLocator"
     @touchstart.capture="onTouchStartCapture"
     @touchmove.capture="onTouchMoveCapture"
@@ -48,7 +50,7 @@
       @move-target="forwardMoveTarget"
       @cluster-target="forwardClusterTarget"
       @cancel-cluster-preview="emit('cancel-cluster-preview')"
-      @editing-gesture-change="onEditingGestureChange"
+      @editing-gesture-change="orbitInput.setChildGestureActive"
       @viewport-change="emitViewport"
     />
     <SystemMap
@@ -93,8 +95,8 @@
       @cancel-creation-preview="forwardCancelCreationPreview"
       @cancel-object-placement-preview="emit('cancel-object-placement-preview')"
       @cancel-orbit-placement-preview="emit('cancel-orbit-placement-preview')"
-      @editing-gesture-change="onEditingGestureChange"
-      @viewport-change="emitViewport"
+      @editing-gesture-change="orbitInput.setChildGestureActive"
+      @viewport-change="handleSystemViewportChange"
     />
   </div>
 </template>
@@ -132,6 +134,7 @@ import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
+import { useOrbitPlacementInput } from './maps/useOrbitPlacementInput'
 import ClusterMap from './ClusterMap.vue'
 import SystemMap from './SystemMap.vue'
 
@@ -223,6 +226,7 @@ const matchingOrbitAdjustmentPreview = computed(() => {
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
 let activeMousePointerId: number | null = null
 let editingGestureActive = false
+let orbitOrChildGestureActive = false
 type LivePointerSequence = {
   pointerId: number
   pointerType: string
@@ -265,6 +269,18 @@ let selectionRectangleGesture: {
 } | null = null
 const selectionRectangle = shallowRef<{ left: number; top: number; width: number; height: number } | null>(null)
 
+function syncEditingGestureActive(): void {
+  const active = !mapDisposed && (orbitOrChildGestureActive || selectionRectangleGesture !== null)
+  if (editingGestureActive === active) return
+  editingGestureActive = active
+  emit('editing-gesture-change', active)
+}
+
+function setOrbitOrChildGestureActive(active: boolean): void {
+  orbitOrChildGestureActive = active
+  syncEditingGestureActive()
+}
+
 function canContinueSelectionRectangle(gesture: NonNullable<typeof selectionRectangleGesture>): boolean {
   return gesture.svg.isConnected
     && props.activeView === 'system'
@@ -302,7 +318,7 @@ function beginSelectionRectangle(event: PointerEvent): boolean {
   }
   activePointerPan = null
   selectionRectangle.value = null
-  emit('editing-gesture-change', true)
+  syncEditingGestureActive()
   return true
 }
 
@@ -339,7 +355,7 @@ function finishSelectionRectangle(cancelled: boolean): void {
   const gesture = selectionRectangleGesture
   if (!gesture) return
   clearSelectionRectangle()
-  emit('editing-gesture-change', false)
+  syncEditingGestureActive()
   holdClickSuppression()
   if (cancelled) return
   gesture.svg.focus({ preventScroll: true })
@@ -354,6 +370,31 @@ function finishSelectionRectangle(cancelled: boolean): void {
     bottom: Math.max(gesture.start.y, gesture.current.y),
   }) ?? [])
 }
+
+const orbitInput = useOrbitPlacementInput({
+  root: () => canvasRoot.value,
+  map: () => systemMapRef.value,
+  isSystemView: () => props.activeView === 'system',
+  mapKey: () => props.mapKey,
+  hasAddOrbitIntent: hasOrbitAddIntent,
+  begin: scenePoint => commands.creation.beginOrbitDrag(scenePoint),
+  update: (scenePoint, clearance) => commands.creation.updateOrbitDrag(scenePoint, clearance),
+  complete: () => commands.creation.completeOrbitDrag(),
+  cancel: () => commands.creation.cancelOrbitDrag(),
+  clearPointerLongPress,
+  clearLongPress,
+  holdClickSuppression,
+  releaseCanvasPointer(pointerId) {
+    livePointerSequences.delete(pointerId)
+    if (activeMousePointerId === pointerId) activeMousePointerId = null
+    if (activePointerPan?.id === pointerId) {
+      currentMap()?.endViewPan()
+      activePointerPan = null
+    }
+  },
+  canContinueCancelledPointerPan: pointerId => activePointerPan?.id === pointerId,
+  editingGestureChange: setOrbitOrChildGestureActive,
+})
 
 function holdClickSuppression(): void {
   suppressNextClick = true
@@ -384,16 +425,32 @@ function clearPointerLongPress(): void {
   pointerLongPress = null
 }
 
-function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
+function onWindowClickCapture(event: MouseEvent): void { orbitInput.onClickCapture(event) }
 
-function onEditingGestureChange(active: boolean): void {
-  editingGestureActive = active
-  emit('editing-gesture-change', active)
+function onWindowPointerDownCapture(event: PointerEvent): void {
+  orbitInput.onGlobalPointerDown(event)
 }
 
+function onDocumentKeyDownCapture(event: KeyboardEvent): void {
+  orbitInput.onEscape(event)
+}
+
+function onLostPointerCapture(event: PointerEvent): void { orbitInput.onLostPointerCapture(event) }
+
+function onWheelCapture(event: WheelEvent): void {
+  dismissSearchLocator()
+  orbitInput.onWheelCapture(event)
+}
+
+function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
+
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
+  const orbitPointerId = orbitInput.pointerId()
+  orbitInput.cancel()
   if (suppressRelease) {
-    for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
+    for (const sequence of livePointerSequences.values()) {
+      if (sequence.pointerId !== orbitPointerId) sequence.cancelledRelease = true
+    }
   }
   finishSelectionRectangle(true)
   emit('cancel-map-move')
@@ -409,7 +466,7 @@ function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = tru
     systemMapRef.value?.cancelCreationPreview()
   }
   currentMap()?.cancelActiveGesture()
-  if (suppressRelease) holdClickSuppression()
+  if (suppressRelease && orbitPointerId === undefined) holdClickSuppression()
 }
 
 function cancelForFocusInterruption(): void {
@@ -432,6 +489,13 @@ function hasClusterAddIntent(): boolean {
 
 function hasMapAddIntent(): boolean {
   return hasClusterAddIntent() || (props.activeView === 'system' && props.creationType != null)
+}
+
+function hasOrbitAddIntent(): boolean {
+  return props.activeView === 'system'
+    && props.creationType?.kind === 'orbit'
+    && !props.creationChooserOpen
+    && !props.moveTargeting
 }
 
 function isMapEntityTarget(target: EventTarget | null): boolean {
@@ -487,7 +551,12 @@ function onPointerDownCapture(event: PointerEvent): void {
   beginLivePointerSequence(event, isMouseButtonChord)
   if (!isMouseButtonChord) consumedAddPointerId = null
   if (event.pointerType === 'mouse') activeMousePointerId = event.pointerId
-  if (event.pointerType === 'touch' || (event.button !== 0 && event.button !== 2)) return
+  if (event.pointerType === 'touch') {
+    orbitInput.onPointerDown(event)
+    return
+  }
+  if (orbitInput.onPointerDown(event)) return
+  if (event.button !== 0 && event.button !== 2) return
   // A right-button chord takes ownership as a pan and cancels the pending rectangle.
   if (event.button === 2 && selectionRectangleGesture) finishSelectionRectangle(true)
   if (beginSelectionRectangle(event)) {
@@ -540,6 +609,10 @@ function onPointerDownCapture(event: PointerEvent): void {
 function onMouseDownCapture(event: MouseEvent): void {
   publicationMenuLease?.close()
   publicationMenuLease = null
+  if (event.button === 0 && orbitInput.hasActivePointer()) {
+    event.stopImmediatePropagation()
+    return
+  }
   const rectangleGesture = selectionRectangleGesture
   if (event.button === 0 && rectangleGesture && rectangleGesture.pointerId === activeMousePointerId
     && event.target instanceof Node && rectangleGesture.svg.contains(event.target)) {
@@ -562,6 +635,10 @@ function onMouseDownCapture(event: MouseEvent): void {
   }
   holdClickSuppression()
   event.stopImmediatePropagation()
+}
+
+function onMouseUpCapture(event: MouseEvent): void {
+  orbitInput.onMouseUpCapture(event)
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
@@ -646,6 +723,8 @@ function forwardMoveTarget(point: Point): void {
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
+  if (orbitInput.onPointerMove(event)) return
+
   if (pointerLongPress?.id === event.pointerId
     && Math.hypot(event.clientX - pointerLongPress.x, event.clientY - pointerLongPress.y) > 9) {
     const addHold = pointerLongPress.addHold
@@ -677,6 +756,7 @@ function onWindowPointerMove(event: PointerEvent): void {
 }
 
 function onWindowPointerUp(event: PointerEvent): void {
+  if (orbitInput.onPointerUp(event)) return
   if (event.type === 'pointercancel') {
     if (consumedAddPointerId === event.pointerId) {
       holdClickSuppression()
@@ -687,6 +767,7 @@ function onWindowPointerUp(event: PointerEvent): void {
     livePointerSequences.delete(event.pointerId)
     return
   }
+
   const sequence = livePointerSequences.get(event.pointerId)
   if (sequence && event.buttons !== 0) return
   if (sequence) {
@@ -806,6 +887,8 @@ function onTouchStartCapture(event: TouchEvent): void {
   dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
+  if (orbitInput.isTouchPending() && event.touches.length === 1) return
+  if (orbitInput.onTouchStartCapture(event)) return
   if (event.touches.length !== 1) {
     clearLongPress()
     touchStart = null
@@ -860,6 +943,7 @@ function onTouchStartCapture(event: TouchEvent): void {
 }
 
 function onTouchMoveCapture(event: TouchEvent): void {
+  if (orbitInput.onTouchMoveCapture(event)) return
   if (event.touches.length > 1) {
     clearLongPress()
     touchStart = null
@@ -882,6 +966,7 @@ function onTouchMoveCapture(event: TouchEvent): void {
 }
 
 function onTouchEndCapture(event: TouchEvent): void {
+  if (orbitInput.onTouchEndCapture(event)) return
   if (consumedAddTouchId !== null
     && Array.from(event.changedTouches).some(touch => touch.identifier === consumedAddTouchId)) {
     holdClickSuppression()
@@ -970,6 +1055,11 @@ function forwardCancelCreationPreview(): void {
 
 function emitViewport(viewport: MapViewport): void {
   if (mapReady) emit('viewport-change', { key: sourceMapKey, viewport })
+}
+
+function handleSystemViewportChange(viewport: MapViewport): void {
+  orbitInput.refreshForViewportChange()
+  emitViewport(viewport)
 }
 
 function measureUnobstructedViewport(): SvgViewportRect | undefined {
@@ -1065,7 +1155,10 @@ onMounted(async () => {
   window.addEventListener('pointermove', onWindowPointerMove, true)
   window.addEventListener('pointerup', onWindowPointerUp, true)
   window.addEventListener('pointercancel', onWindowPointerUp, true)
+  window.addEventListener('pointerdown', onWindowPointerDownCapture, true)
+  window.addEventListener('click', onWindowClickCapture, true)
   window.addEventListener('blur', onWindowBlur)
+  document.addEventListener('keydown', onDocumentKeyDownCapture, true)
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   document.addEventListener('freeze', onDocumentFreeze)
   await nextTick()
@@ -1091,6 +1184,7 @@ onBeforeUnmount(() => {
   touchReleaseGuard?.dispose()
   touchReleaseGuard = null
   mapDisposed = true
+  syncEditingGestureActive()
   settleMapReadiness(false)
   cancelCanvasGesture()
   livePointerSequences.clear()
@@ -1099,8 +1193,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onWindowPointerMove, true)
   window.removeEventListener('pointerup', onWindowPointerUp, true)
   window.removeEventListener('pointercancel', onWindowPointerUp, true)
+  window.removeEventListener('pointerdown', onWindowPointerDownCapture, true)
+  window.removeEventListener('click', onWindowClickCapture, true)
   window.removeEventListener('keydown', onWindowKeyDownCapture, true)
   window.removeEventListener('blur', onWindowBlur)
+  document.removeEventListener('keydown', onDocumentKeyDownCapture, true)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
   document.removeEventListener('freeze', onDocumentFreeze)
 })
@@ -1111,6 +1208,7 @@ watch(() => props.mode, () => {
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
 watch(() => props.creationType, () => {
+  orbitInput.cancel()
   if (selectionRectangleGesture) finishSelectionRectangle(true)
   emit('cancel-object-placement-preview')
   emit('cancel-orbit-placement-preview')
@@ -1135,6 +1233,7 @@ watch(
     () => props.selectedOrbitId,
   ],
   () => {
+    orbitInput.cancel()
     if (selectionRectangleGesture) finishSelectionRectangle(true)
     publicationMenuLease?.close()
     publicationMenuLease = null
