@@ -9,9 +9,22 @@ test('map tool shortcuts follow the produced letter instead of physical key code
 
   const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
   const modes = page.getByRole('group', { name: 'Map interaction mode', exact: true })
+  const navigate = modes.getByRole('button', { name: 'Navigate', exact: true })
+  const select = modes.getByRole('button', { name: 'Select', exact: true })
+  const navigateHint = page.getByText(/Navigate map mode.*Shortcut N\b/).and(page.locator(':not([aria-hidden="true"])'))
+  await expect(navigate).toHaveText('')
+  await navigate.hover()
+  await expect(navigateHint).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(navigateHint).toBeHidden()
+  await select.focus()
+  await page.keyboard.press('Tab')
+  await expect(navigate).toBeFocused()
+  await expect(navigateHint).toBeVisible()
+
   await map.focus()
   await page.keyboard.press('n')
-  await expect(modes.getByRole('button', { name: 'Navigate', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(navigate).toHaveAttribute('aria-pressed', 'true')
 
   await map.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydown', {
     key: 's', code: 'KeyQ', bubbles: true, cancelable: true,

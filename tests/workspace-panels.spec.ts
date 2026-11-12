@@ -1,12 +1,12 @@
 import { expect, test, type Page } from './fixtures'
 import { waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
-async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
+async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('First star system').fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 }
@@ -49,6 +49,17 @@ test('desktop Hierarchy opens beside Inspector while the portaled Map files menu
   await expect(inspector).toBeVisible()
 
   const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
+  const filesHint = page.getByText('Map files', { exact: true }).and(page.locator(':not([aria-hidden="true"])'))
+  await expect(filesToggle).toHaveText('')
+  await filesToggle.hover()
+  await expect(filesHint).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(filesHint).toBeHidden()
+  await page.getByRole('button', { name: 'Inspect', exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await expect(filesToggle).toBeFocused()
+  await expect(filesHint).toBeVisible()
+
   await filesToggle.click()
   const files = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
   const exportButton = files.getByRole('button', { name: 'Export star system JSON' })
@@ -67,7 +78,27 @@ test('desktop Hierarchy opens beside Inspector while the portaled Map files menu
 })
 
 test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus @ui-smoke', async ({ page }) => {
-  await createWorkspace(page, { width: 844, height: 390 })
+  const systemName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
+  await createWorkspace(page, { width: 390, height: 844 }, systemName)
+
+  const toolbar = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+  await expect(toolbar.getByRole('heading', { name: systemName, exact: true })).toBeInViewport({ ratio: 1 })
+  const nameLabel = `${systemName}, show full map name`
+  const showName = toolbar.getByRole('button', { name: nameLabel, exact: true })
+  await showName.press('Enter')
+  const fullName = page.getByRole('dialog', { name: nameLabel, exact: true }).getByText(systemName, { exact: true })
+  await expect(fullName).toBeInViewport({ ratio: 1 })
+  await page.keyboard.press('Escape')
+  await expect(fullName).toBeHidden()
+  await expect(showName).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(fullName).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(toolbar.getByRole('button', { name: 'History', exact: true })).toBeFocused()
+  await expect(fullName).toBeHidden()
+  await expect(toolbar.getByRole('button', { name: 'Map files', exact: true })).toBeInViewport({ ratio: 1 })
+
+  await page.setViewportSize({ width: 844, height: 390 })
 
   const dock = workspaceNavigation(page)
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
@@ -92,7 +123,7 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   const selectMode = dock.getByRole('button', { name: 'Select', exact: true })
   await selectMode.click()
   await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const map = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
   const primaryStar = map.getByRole('button', { name: /Select A, Primary Star/ })
   await primaryStar.focus()
   await page.keyboard.press('Enter')

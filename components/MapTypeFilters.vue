@@ -6,15 +6,22 @@
       :portal="portal"
       :content="popoverContent"
     >
-      <UButton
-        class="workspace-control"
-        color="neutral"
-        :variant="open || active ? 'soft' : 'outline'"
-        size="sm"
-        :aria-label="accessibleLabel"
-      >
-        {{ active ? `${props.label} (${activeCriterionCount})` : props.label }}
-      </UButton>
+      <UTooltip :text="props.iconOnly ? props.label : undefined">
+        <UButton
+          class="workspace-control"
+          :class="{ 'workspace-map-icon-control': props.iconOnly }"
+          color="neutral"
+          :variant="open || active ? 'soft' : 'outline'"
+          size="sm"
+          :aria-label="accessibleLabel"
+        >
+          <UIcon v-if="props.iconOnly" name="i-lucide-list-filter" aria-hidden="true" />
+          <span v-if="!props.iconOnly">{{ active ? `${props.label} (${activeCriterionCount})` : props.label }}</span>
+          <span v-else-if="active" class="workspace-map-filter-count" aria-hidden="true">
+            {{ activeCriterionCount }}
+          </span>
+        </UButton>
+      </UTooltip>
 
       <template #content="{ close }">
         <div v-if="props.fieldFilterOptions.length > 0" :id="fieldSelectPortalId" class="relative z-10" />
@@ -98,6 +105,8 @@ const props = withDefaults(defineProps<{
   options: readonly MapObjectTypeOption[]
   compact: boolean
   label?: string
+  /** Show only the filter icon and an active count badge in map chrome. */
+  iconOnly?: boolean
   allowNoValue?: boolean
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
@@ -106,6 +115,7 @@ const props = withDefaults(defineProps<{
   portal?: boolean
 }>(), {
   activeFilterCriterionCount: undefined,
+  iconOnly: false,
   label: 'Filters',
   allowNoValue: true,
   publicationFilterOptions: () => [],
@@ -187,5 +197,20 @@ function clearAll(): void {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
   overflow-wrap: anywhere;
+}
+
+.workspace-map-filter-count {
+  display: inline-grid;
+  min-width: 1.2rem;
+  min-height: 1.2rem;
+  place-items: center;
+  border: 1px solid var(--focus);
+  border-radius: 999px;
+  padding: 0 0.2rem;
+  background: var(--panel);
+  color: var(--focus);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
 }
 </style>

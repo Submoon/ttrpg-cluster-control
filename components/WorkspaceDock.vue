@@ -5,7 +5,7 @@
         <UTooltip
           v-for="mode in modes"
           :key="mode.value"
-          :text="`Shortcut ${mode.shortcut}: ${mode.label} map mode. Focus the map or a map item to use tool shortcuts.`"
+          :text="`${mode.label} map mode · Shortcut ${mode.shortcut}. Focus the map or a map item to use tool shortcuts.`"
           :ui="shortcutTooltipUi"
         >
           <UButton
@@ -16,11 +16,10 @@
             :aria-label="mode.label"
             :aria-keyshortcuts="mode.shortcut"
             aria-describedby="workspace-map-tool-shortcut-help"
-            class="workspace-control"
+            class="workspace-control workspace-dock-mode-button workspace-map-icon-control"
             @click="commands.map.changeMode(mode.value)"
           >
-            <span>{{ mode.label }}</span>
-            <UKbd size="sm" aria-hidden="true">{{ mode.shortcut }}</UKbd>
+            <UIcon :name="mode.icon" aria-hidden="true" />
           </UButton>
         </UTooltip>
       </div>
@@ -41,11 +40,11 @@
         :ui="{ content: 'workspace-add-popover-content' }"
       >
         <UTooltip
-          text="Shortcut A: open the contextual Add chooser. Focus the map or a map item to use tool shortcuts."
+          :text="`Add to map · Shortcut A. ${addActive ? `Adding ${props.clusterAddLabel ?? props.creationTypeLabel}. ` : ''}Focus the map or a map item to use tool shortcuts.`"
           :ui="shortcutTooltipUi"
         >
           <UButton
-            class="workspace-control workspace-dock-add"
+            class="workspace-control workspace-dock-add workspace-map-icon-control"
             color="primary"
             :variant="addActive ? 'solid' : 'outline'"
             size="sm"
@@ -60,9 +59,6 @@
             ref="addTrigger"
           >
             <UIcon name="i-lucide-plus" aria-hidden="true" />
-            <span>Add</span>
-            <UKbd size="sm" aria-hidden="true">A</UKbd>
-            <span v-if="props.creationSession || props.clusterAddLabel" class="workspace-dock-add-separator" aria-hidden="true">·</span>
             <span
               v-if="props.creationSession || props.clusterAddLabel"
               id="workspace-dock-add-type"
@@ -218,10 +214,10 @@ const emit = defineEmits<{
 const store = useEditorUiStore()
 const commands = useEditorCommands()
 
-const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string }> = [
-  { value: 'select', label: 'Select', shortcut: 'S' },
-  { value: 'navigate', label: 'Navigate', shortcut: 'N' },
-  { value: 'move', label: 'Move', shortcut: 'M' },
+const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string; icon: string }> = [
+  { value: 'select', label: 'Select', shortcut: 'S', icon: 'i-lucide-mouse-pointer-2' },
+  { value: 'navigate', label: 'Navigate', shortcut: 'N', icon: 'i-lucide-hand' },
+  { value: 'move', label: 'Move', shortcut: 'M', icon: 'i-lucide-move' },
 ]
 const shortcutTooltipUi = {
   content: 'workspace-map-shortcut-tooltip-content',
@@ -486,11 +482,22 @@ defineExpose({ openAddChooserFromKeyboard })
 
 .workspace-dock-add {
   flex: 0 0 auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+}
+
+.workspace-dock-mode-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+  padding-inline: 0.55rem;
 }
 
 .workspace-dock-add-type {
   display: inline-block;
   min-width: 0;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
