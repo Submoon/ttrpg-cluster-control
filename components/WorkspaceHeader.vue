@@ -33,7 +33,7 @@
           </ColorScheme>
           <UColorModeButton class="theme-control-toggle workspace-control" />
         </div>
-        <slot name="field-definitions" />
+        <slot name="editor-actions" />
       </div>
     </template>
   </UDashboardNavbar>
