@@ -88,9 +88,9 @@
               :workspace="workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
-              :compact-modal-open="compactPanelOpen"
+              :compact-modal-open="compactPanelPresentationOpen"
             >
-              <template #field-definitions>
+              <template #editor-actions>
                 <FieldDefinitionsDialog
                   ref="fieldDefinitionsDialog"
                   v-if="workspace"
@@ -102,6 +102,10 @@
                   :inspector-conflict-error="'Resolve the Inspector draft before changing this field.'"
                   :has-modified-draft="hasModifiedFieldDefinitionsSession"
                   @intent="handleFieldDefinitionsIntent"
+                />
+                <WorkspaceMapHelp
+                  v-model:open="helpOpen"
+                  @active-change="helpOwnsFocus = $event"
                 />
               </template>
             </WorkspaceHeader>
@@ -122,7 +126,7 @@
               :player-link-status="playerLinkStatus"
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
-              :compact-modal-open="compactPanelPresentationOpen"
+              :compact-modal-open="compactPanelOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
               :cluster-add-presentation="clusterAddPresentation"
@@ -136,7 +140,6 @@
               :filter-invalidation-notice="invalidationNotice"
               :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
-              v-model:help-open="helpOpen"
               v-model:search-query="searchQuery"
               v-model:search-selected-types="searchSelectedTypes"
               v-model:search-publication-modes="searchPublicationModes"
@@ -163,7 +166,6 @@
               @toggle-hierarchy="togglePanel('hierarchy')"
               @toggle-inspector="togglePanel('inspector')"
               @files-open-change="headerFilesOpen = $event"
-              @help-active-change="helpOwnsFocus = $event"
               @quit-add="quitSystemAdd"
               @confirm-system-move="confirmSystemMove"
               @cancel-system-move="cancelSystemMovePreview"
@@ -578,6 +580,7 @@ import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
+import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
 
 const {
   workspace,

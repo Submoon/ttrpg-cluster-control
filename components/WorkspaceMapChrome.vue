@@ -133,7 +133,6 @@
           />
         </template>
       </WorkspaceSearch>
-      <WorkspaceMapHelp v-model:open="helpOpen" @active-change="emit('help-active-change', $event)" />
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
         <UButton
           class="workspace-control"
@@ -323,7 +322,6 @@ import MapFilesPopover from './MapFilesPopover.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
 import PlayerShareControls from './PlayerShareControls.vue'
 import MapTypeFilters from './MapTypeFilters.vue'
-import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
 
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
@@ -384,7 +382,6 @@ const emit = defineEmits<{
   'toggle-hierarchy': []
   'toggle-inspector': []
   'files-open-change': [open: boolean]
-  'help-active-change': [active: boolean]
   'quit-add': []
   'confirm-system-move': []
   'cancel-system-move': []
@@ -402,7 +399,6 @@ const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true
 const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
 const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
 const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
-const helpOpen = defineModel<boolean>('helpOpen', { required: true })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const searchTypeFiltersOpen = ref(false)
 const searchActiveCriterionCount = computed(() => props.searchActiveCriterionCount
