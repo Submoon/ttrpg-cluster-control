@@ -89,11 +89,19 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await setWorkspaceMapMode(page, 'Select')
 
+  await iria.scrollIntoViewIfNeeded()
+  await expect(iria).toBeInViewport()
+  // Let browser-delivered scroll handling finish before the context-menu gesture starts.
+  await page.evaluate(() => new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
   await iria.click({ button: 'right' })
   await expect(singleSelectionMenu).toBeVisible()
   await expect(hierarchyWhileMenuOpen.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true, includeHidden: true }))
     .toHaveAttribute('aria-selected', 'true')
-  await singleSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
+  const moveIriaSelection = singleSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true })
+  await expect(moveIriaSelection).toBeVisible()
+  await moveIriaSelection.click()
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await expect(selectedMapObjects).toHaveCount(1)
   await expect(iria).toHaveAttribute('aria-selected', 'true')
