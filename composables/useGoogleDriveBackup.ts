@@ -2,6 +2,7 @@ import { computed, onScopeDispose, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import { GoogleDriveApiError, generateGoogleDriveFileId, getGoogleDrivePermissionId, uploadGoogleDriveBackup } from '../utils/google-drive-api'
+import type { GoogleDriveBackupFile } from '../utils/google-drive-api'
 import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
@@ -12,6 +13,7 @@ export type GoogleDriveBackupState = 'idle' | 'authorizing' | 'uploading' | 'ret
 export interface GoogleDriveBackupController {
   readonly state: Readonly<Ref<GoogleDriveBackupState>>
   readonly message: Readonly<Ref<string>>
+  readonly lastSaved: Readonly<Ref<GoogleDriveBackupFile | undefined>>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
   readonly buttonLabel: ComputedRef<string>
@@ -41,6 +43,7 @@ export function useGoogleDriveBackup(
     ? 'At least one earlier backup may already be saved in Google Drive; its status was not confirmed.'
     : '')
   const message = computed(() => [uncertaintyNotice.value, operationMessage.value].filter(Boolean).join(' '))
+  const lastSaved = ref<GoogleDriveBackupFile>()
   const snapshot = ref<GoogleDriveBackupSnapshot>()
   const retryAttempt = ref<BackupAttempt>()
   const isDisposed = ref(false)
@@ -186,7 +189,8 @@ export function useGoogleDriveBackup(
       snapshot.value = undefined
       retryAttempt.value = undefined
       if (preservingUncertainty) resolveUncertainty(attempt)
-      operationMessage.value = `Saved ${saved.name} to Google Drive app data.`
+      operationMessage.value = ''
+      lastSaved.value = saved
     } catch (error) {
       if (!isCurrent(operation)) return
       invalidateAfterUnauthorized(error, accessToken)
@@ -276,7 +280,7 @@ export function useGoogleDriveBackup(
     activeOperation = ++operationSequence
   })
 
-  return { state, message, busy, canCancel, buttonLabel, activate, cancelBeforeUpload, startNewBackupInstead }
+  return { state, message, lastSaved, busy, canCancel, buttonLabel, activate, cancelBeforeUpload, startNewBackupInstead }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

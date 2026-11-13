@@ -14,7 +14,7 @@ For a Vercel preview, set the test client ID in `NUXT_PUBLIC_GOOGLE_DRIVE_CLIENT
 ## Run the live test
 
 1. In the first browser profile, create or restore a synthetic Jump Cluster with GM notes, player publication settings, Fields, relationships, and a saved layout. Download the full JSON as the reference.
-2. In **Map files**, start a Drive backup and authorize the test Google account. Record the confirmed filename. In the same open page, create a second backup while the access token is valid. Verify that Google does not prompt again and that both dated copies appear in the app's Drive backup list.
+2. In **Map files**, start a Drive backup and authorize the test Google account. Check that the **Backed up to Google Drive** toast appears. In the same open page, create a second backup while the access token is valid. Verify that Google does not prompt again and that both dated copies appear in the app's Drive backup list. Record their filenames from the list.
 3. Open the app in a separate browser profile with no saved workspace. On the welcome screen, choose to open a Drive backup, authorize the same account, and select the saved file from the app's list. Verify that downloading the listed JSON preserves the original contents, and that the restored map survives reload. Compare its cluster and layout with the reference.
 4. Record the app revision, origin, browser, account type, verified outcomes, and any unavailable cases. Store evidence without access tokens, API keys, or personal map data.
 

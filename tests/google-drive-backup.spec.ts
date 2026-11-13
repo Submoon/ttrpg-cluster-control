@@ -454,6 +454,7 @@ test('the controller captures the applied map before Google access and retains u
       workspace.cluster.name = 'Edited after initial click'
       await expect.poll(() => controller.state.value).toBe('retry')
       expect(controller.message.value).toContain('Retry this same backup')
+      expect(controller.lastSaved.value).toBeUndefined()
       controller.activate()
       await expect.poll(() => controller.state.value).toBe('retry')
       expect(uploadIds).toEqual(['backup-1', 'backup-1'])
@@ -463,8 +464,8 @@ test('the controller captures the applied map before Google access and retains u
       await expect.poll(() => controller.state.value).toBe('idle')
       expect(uploadIds).toEqual(['backup-1', 'backup-1', 'backup-2'])
       expect(controller.message.value).toContain('At least one earlier backup may already be saved')
-      expect(controller.message.value).toContain('Saved Edited after initial click-jump-cluster-')
-      expect(controller.message.value).toContain('Google Drive app data')
+      expect(controller.lastSaved.value).toMatchObject({ id: 'backup-2', name: uploadNames[2] })
+      expect(controller.message.value).not.toContain(uploadNames[2])
     } finally {
       scope.stop()
       globalThis.fetch = oldFetch

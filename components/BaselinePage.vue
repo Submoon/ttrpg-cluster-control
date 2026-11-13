@@ -643,6 +643,10 @@ const {
 const googleDriveSignIn = useGoogleDriveSignIn()
 const googleDriveBackup = useGoogleDriveBackup(() => workspace.value, googleDriveSignIn)
 const cloudBackupMessage = googleDriveBackup.message
+const toast = useToast()
+watch(googleDriveBackup.lastSaved, () => {
+  toast.add({ title: 'Backed up to Google Drive', color: 'success', icon: 'i-lucide-check' })
+})
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 
