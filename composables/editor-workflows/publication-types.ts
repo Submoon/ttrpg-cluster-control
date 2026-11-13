@@ -19,7 +19,7 @@ export interface PublicationMenuRequest {
 }
 
 export interface PublicationMenuOptions {
-  /** Select the target object before opening a Select-mode context menu. */
+  /** Select the target object before opening its context menu. */
   selectObjectForContext?: boolean
 }
 

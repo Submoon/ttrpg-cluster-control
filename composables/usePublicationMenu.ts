@@ -134,8 +134,7 @@ export function usePublicationMenu(options: {
 
     const current = workspace.value
     if (!current || current.id !== menu.workspaceId || current.cluster.id !== menu.clusterId
-      || contextSignature() !== menu.context || !targetExists(current, menu.target)
-      || (menu.source === 'map' && store.mapMode !== 'select')) return
+      || contextSignature() !== menu.context || !targetExists(current, menu.target)) return
 
     let allowed: boolean
     try {
@@ -156,7 +155,6 @@ export function usePublicationMenu(options: {
 
   function isActiveTargetValid(menu: OwnedMenu): boolean {
     return menuContextIsCurrent(menu) && menu.opener.isConnected
-      && (menu.source !== 'map' || store.mapMode === 'select')
   }
 
   function isPendingContextCurrent(menu: OwnedMenu): boolean {
@@ -166,7 +164,6 @@ export function usePublicationMenu(options: {
       && (menu.source === 'map' || menu.source === 'hierarchy')
       && store.activeView === 'system'
       && store.selectedSystemId === menu.target.systemId
-      && store.mapMode === 'select'
   }
 
   const currentRequest = computed<PublicationMenuView | null>(() => {
@@ -215,14 +212,12 @@ export function usePublicationMenu(options: {
   function openMenu(request: PublicationMenuRequest, menuOptions?: PublicationMenuOptions): PublicationMenuLease | null {
     const current = workspace.value
     if (disposed || !current || !request?.opener?.isConnected || !Number.isFinite(request.clientPoint.x)
-      || !Number.isFinite(request.clientPoint.y) || !targetExists(current, request.target)
-      || (request.source === 'map' && store.mapMode !== 'select')) return null
+      || !Number.isFinite(request.clientPoint.y) || !targetExists(current, request.target)) return null
 
     const shouldPrepareSelection = !!menuOptions?.selectObjectForContext
       && request.target.kind === 'object'
       && (request.source === 'map' || request.source === 'hierarchy')
       && store.activeView === 'system'
-      && store.mapMode === 'select'
     if (pending) pending.selectionPending = false
     const menu: OwnedMenu = {
       ...request,

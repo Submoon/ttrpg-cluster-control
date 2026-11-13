@@ -794,15 +794,15 @@ export function useEditorNavigation(options: {
       : store.selectedObjectId ? [store.selectedObjectId] : []
   }
 
-  /** Replaces the transient object selection through the same draft and context guard as map navigation. */
-  async function replaceObjectSelection(
+  async function replaceObjectSelectionInContext(
     objectIds: readonly string[],
-    isCurrent: () => boolean = () => true,
+    isCurrent: () => boolean,
+    allowContextModes: boolean,
   ): Promise<boolean> {
     if (!isCurrent()) return false
     invalidatePendingSearchReveal()
     const entryMode = store.mapMode
-    if (objectIds.length > 0 && entryMode !== 'select') return false
+    if (objectIds.length > 0 && entryMode !== 'select' && !allowContextModes) return false
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
@@ -837,11 +837,19 @@ export function useEditorNavigation(options: {
     return true
   }
 
+  /** Replaces the transient map selection through the Select-mode draft and context guard. */
+  async function replaceObjectSelection(
+    objectIds: readonly string[],
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    return replaceObjectSelectionInContext(objectIds, isCurrent, false)
+  }
+
   /** Selects a context-menu target without collapsing a multiple selection that already contains it. */
   async function selectContextObject(objectId: string, isCurrent: () => boolean): Promise<boolean> {
     if (!isCurrent()) return false
     if (currentObjectSelection().includes(objectId)) return true
-    return replaceObjectSelection([objectId], isCurrent)
+    return replaceObjectSelectionInContext([objectId], isCurrent, true)
   }
 
   /** Adds or removes one object from the shared map and Hierarchy selection. */

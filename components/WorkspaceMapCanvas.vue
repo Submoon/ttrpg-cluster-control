@@ -824,7 +824,7 @@ function onContextMenuCapture(event: MouseEvent): void {
 }
 
 function publicationTargetAt(target: EventTarget | null): { target: PublicationTarget; mark: SVGElement } | null {
-  if (props.mode !== 'select' || props.moveTargeting || props.clusterChooserOpen
+  if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
     || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {

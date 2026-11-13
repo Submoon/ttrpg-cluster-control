@@ -820,7 +820,6 @@ function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.v
     && (request.source === 'map' || request.source === 'hierarchy')
     && target?.kind === 'object'
     && activeView.value === 'system'
-    && mapMode.value === 'select'
     && selectedSystemId.value === target.systemId
     && selectedIds.length > 0
     && system?.id === target.systemId
@@ -834,12 +833,13 @@ function moveSelectedObjectsFromMenu(): void {
   if (!request || request.target.kind !== 'object' || !canMoveSelectedObjectsFromMenu(request)) return
   const systemId = request.target.systemId
   const objectId = request.target.id
+  const entryMode = mapMode.value
   const mapKey = activeMapKey.value
   const selectedIds = currentSelectedObjectIds()
   const isCurrent = (): boolean => {
     const currentSelectedIds = currentSelectedObjectIds()
     return activeView.value === 'system'
-      && mapMode.value === 'select'
+      && mapMode.value === entryMode
       && selectedSystemId.value === systemId
       && activeMapKey.value === mapKey
       && currentSelectedIds.length === selectedIds.length
@@ -847,6 +847,7 @@ function moveSelectedObjectsFromMenu(): void {
       && !!selectedSystem.value?.objects.some(object => object.id === objectId)
   }
   publicationControls.closeMenu()
+  if (entryMode === 'move') return
   void changeMapMode('move', isCurrent)
 }
 
