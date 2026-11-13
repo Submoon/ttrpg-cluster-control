@@ -90,7 +90,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await setWorkspaceMapMode(page, 'Select')
 
   await iria.scrollIntoViewIfNeeded()
-  await expect(iria).toBeInViewport()
+  await expect(iria).toBeInViewport({ ratio: 1 })
   // Let browser-delivered scroll handling finish before the context-menu gesture starts.
   await page.evaluate(() => new Promise<void>(resolve => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))

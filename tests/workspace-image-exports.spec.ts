@@ -678,6 +678,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         ? { width: 844, height: 390 }
         : null
       if (compactViewport) {
+        await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
         await page.setViewportSize(compactViewport)
         await expect(map).toBeVisible()
         await setHeaderMapActionsOpen(page, true)

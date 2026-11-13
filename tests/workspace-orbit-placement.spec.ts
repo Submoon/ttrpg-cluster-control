@@ -190,9 +190,7 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expect(page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'B, Companion Star (Star)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'Unoccupied center', exact: true })).toHaveCount(0)
-  const primaryStarOption = page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true })
-  await expect(primaryStarOption).toBeVisible()
-  await primaryStarOption.click()
+  await page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true }).click()
   expect(await readInspectorSelection(host)).toBe('A, Primary Star (Star)')
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
 
