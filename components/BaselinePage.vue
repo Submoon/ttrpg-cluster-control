@@ -7,6 +7,7 @@
 
     <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
+      <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">{{ cloudBackupMessage }}</p>
       <p
         v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
@@ -156,6 +157,9 @@
               @confirm-system-move="confirmSystemMove"
               @cancel-system-move="cancelSystemMovePreview"
             >
+              <template #cloud-backup>
+                <GoogleDriveBackupButton :controller="googleDriveBackup" />
+              </template>
               <template #history>
                 <WorkspaceHistoryControls
                   v-model:open="historyOpen"
@@ -572,6 +576,7 @@ import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
+import GoogleDriveBackupButton from './GoogleDriveBackupButton.vue'
 import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
 
 const {
@@ -589,6 +594,8 @@ const {
   retrySaveLatest,
   restoreBackup,
 } = useLocalWorkspace()
+const googleDriveBackup = useGoogleDriveBackup(() => workspace.value)
+const cloudBackupMessage = googleDriveBackup.message
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 

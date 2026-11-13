@@ -219,6 +219,8 @@
           </UButton>
         </div>
 
+        <slot name="cloud-backup" />
+
         <section class="workspace-player-exports" aria-label="Player exports">
           <p class="workspace-map-files-heading">Player exports</p>
           <div class="workspace-player-export-actions">
