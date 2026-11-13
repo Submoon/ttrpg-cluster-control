@@ -1,6 +1,7 @@
 import { computed, effectScope, ref } from 'vue'
 import { expect, test } from './fixtures'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
+import type { WorkspaceRestoreSource } from '../composables/useWorkspaceRestore'
 import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 import { GoogleDriveApiError } from '../utils/google-drive-api'
 
@@ -29,7 +30,7 @@ function readySignIn(
 
 test('Drive appData backups can be paged, downloaded as JSON, and passed unchanged to shared restore @pure', async () => {
   const events: string[] = []
-  const sources: Array<{ name: string; content: unknown }> = []
+  const sources: WorkspaceRestoreSource[] = []
   const downloads: Array<{ filename: string; content: string }> = []
   const providerSignals: AbortSignal[] = []
   const listStarted = deferred<void>()
@@ -37,7 +38,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
   const fileOne = { id: 'backup-1', name: 'Ember Reach-jump-cluster-2026-11-13.json', createdTime: '2026-11-13T10:00:00.000Z' }
   const fileTwo = { id: 'backup-2', name: 'Ember Reach-jump-cluster-2026-11-12.json', createdTime: '2026-11-12T10:00:00.000Z' }
   const restore = {
-    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
       events.push('restore lease')
       const source = await load(signal)
       if (source) sources.push(source)
@@ -107,6 +108,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
     expect(sources).toEqual([{
       name: fileTwo.name,
       content: '{"backup":"backup-2"}',
+      sourceKind: 'google-drive',
     }])
     expect(providerSignals.length).toBe(5)
     expect(providerSignals.every(signal => signal === providerSignals[0])).toBe(true)
@@ -119,7 +121,7 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
   const events: string[] = []
   const restoreFinished = deferred<void>()
   const restore = {
-    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
       await load(signal)
       restoreFinished.resolve()
       return true
@@ -157,7 +159,7 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
 
 test('a list 401 invalidates its token so the next explicit restore requests authorization again @pure', async () => {
   const restore = {
-    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
       try {
         await load(signal)
       } catch {
@@ -206,7 +208,7 @@ test('a list 401 invalidates its token so the next explicit restore requests aut
 test('a selected-file 401 invalidates the token and closes the stale backup list @pure', async () => {
   const file = { id: 'backup-1', name: 'Backup.json', createdTime: '2026-11-13T10:00:00Z' }
   const restore = {
-    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
       await load(signal)
       return true
     },

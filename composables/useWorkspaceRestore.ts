@@ -4,9 +4,12 @@ import type { LocalWorkspace } from '../domain/workspace'
 import { createWorkspaceSnapshot, type WorkspaceStorageVersion } from '../utils/workspace-storage'
 import { restoreJumpClusterBackup } from '../domain/workspace-json-import'
 
+export type WorkspaceRestoreSourceKind = 'local-file' | 'google-drive'
+
 export interface WorkspaceRestoreSource {
   name: string
   content: unknown
+  sourceKind: WorkspaceRestoreSourceKind
 }
 
 export interface WorkspaceRestoreReview {
@@ -23,6 +26,7 @@ export interface WorkspaceRestoreReview {
 
 interface CapturedRestoreReview {
   id: number
+  sourceKind: WorkspaceRestoreSourceKind
   presentation: WorkspaceRestoreReview
   incoming: LocalWorkspace
   active: LocalWorkspace | null
@@ -46,7 +50,7 @@ interface WorkspaceRestoreOptions {
   getDraftConsentState(): { signature: string; hasDrafts: boolean }
   replaceFromBackup(workspace: LocalWorkspace, expected: WorkspaceStorageVersion): Promise<void>
   downloadCurrent(workspace: LocalWorkspace): void
-  afterReplacement(): void
+  afterReplacement(sourceKind: WorkspaceRestoreSourceKind): void
 }
 
 function valueSignature(value: unknown): string {
@@ -91,7 +95,7 @@ function parseJsonContent(value: unknown): unknown {
 
 /**
  * Owns one editor restore flow. Provider loading is passed as a callback so operation ownership starts before OAuth,
- * Picker, or download; only a still-current load may replace the visible review.
+ * backup listing or file reads; only a still-current load may replace the visible review.
  */
 export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
   const mutableReview = ref<CapturedRestoreReview | null>(null)
@@ -108,6 +112,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
 
   function captureReview(
     sourceName: string,
+    sourceKind: WorkspaceRestoreSourceKind,
     incoming: LocalWorkspace,
     id: number,
     stale: boolean,
@@ -124,6 +129,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
     const draftState = options.getDraftConsentState()
     const captured: CapturedRestoreReview = {
       id,
+      sourceKind,
       incoming,
       active: activeSnapshot,
       activeSignature: valueSignature(activeSnapshot),
@@ -203,7 +209,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
       const parsed = parseJsonContent(source.content)
       const incoming = restoreJumpClusterBackup(parsed)
       if (operationId !== operationSequence) return false
-      captureReview(source.name, incoming, operationId, false)
+      captureReview(source.name, source.sourceKind, incoming, operationId, false)
       return true
     } catch (error) {
       if (operationId === operationSequence) loadError.value = errorText(error)
@@ -223,7 +229,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
     const file = input.files?.[0]
     input.value = ''
     if (!file) return
-    await openFrom(async () => ({ name: file.name, content: await file.text() }))
+    await openFrom(async () => ({ name: file.name, content: await file.text(), sourceKind: 'local-file' }))
   }
 
   function setDiscardDraftsConfirmed(confirmed: boolean): void {
@@ -258,7 +264,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
     const captured = mutableReview.value
     if (!captured || captured.presentation.confirming) return
     if (reviewIsStale(captured)) {
-      captureReview(captured.presentation.sourceName, captured.incoming, captured.id, true)
+      captureReview(captured.presentation.sourceName, captured.sourceKind, captured.incoming, captured.id, true)
       return
     }
     if (captured.presentation.hasDrafts && !captured.presentation.discardDraftsConfirmed) {
@@ -271,7 +277,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
     try {
       await options.replaceFromBackup(captured.incoming, captured.durableVersion)
       if (operationSequence !== captured.id || mutableReview.value?.id !== captured.id) return
-      options.afterReplacement()
+      options.afterReplacement(captured.sourceKind)
       mutableReview.value = null
       loadError.value = ''
       operationSequence += 1

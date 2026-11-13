@@ -69,7 +69,7 @@ test('a local backup read cannot replace a workspace installed while the file is
     fingerprint: null,
     ownerId: null,
   })
-  const pendingRead = deferred<{ name: string; content: unknown } | null>()
+  const pendingRead = deferred<{ name: string; content: unknown; sourceKind: 'local-file' } | null>()
   let replacementCount = 0
   let restore: ReturnType<typeof useWorkspaceRestore> | undefined
   const application = defineComponent({
@@ -97,7 +97,7 @@ test('a local backup read cannot replace a workspace installed while the file is
     workspace.value = installed
     appliedRevision.value += 1
     durableVersion.value = validVersion(installed, 1)
-    pendingRead.resolve({ name: 'late-backup.json', content: '{}' })
+    pendingRead.resolve({ name: 'late-backup.json', content: '{}', sourceKind: 'local-file' })
 
     await opening
 
@@ -114,9 +114,9 @@ test('canceling a provider read releases only its restore operation and preserve
   const workspace = ref<LocalWorkspace | null>(createLocalWorkspace('Active Reach', 'Vesper'))
   const appliedRevision = ref(0)
   const durableVersion = shallowRef<WorkspaceStorageVersion | null>(validVersion(workspace.value!, 0))
-  const canceledDriveRead = deferred<{ name: string; content: unknown } | null>()
-  const supersededDriveRead = deferred<{ name: string; content: unknown } | null>()
-  const pendingLocalRead = deferred<{ name: string; content: unknown } | null>()
+  const canceledDriveRead = deferred<{ name: string; content: unknown; sourceKind: 'google-drive' } | null>()
+  const supersededDriveRead = deferred<{ name: string; content: unknown; sourceKind: 'google-drive' } | null>()
+  const pendingLocalRead = deferred<{ name: string; content: unknown; sourceKind: 'local-file' } | null>()
   let restore: ReturnType<typeof useWorkspaceRestore> | undefined
   const application = defineComponent({
     setup() {
@@ -155,10 +155,11 @@ test('canceling a provider read releases only its restore operation and preserve
     pendingLocalRead.resolve({
       name: 'local-backup.json',
       content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Local Reach', 'Cinder'))),
+      sourceKind: 'local-file',
     })
     await localOpening
-    supersededDriveRead.resolve({ name: 'late-drive-backup.json', content: '{}' })
-    canceledDriveRead.resolve({ name: 'canceled-drive-backup.json', content: '{}' })
+    supersededDriveRead.resolve({ name: 'late-drive-backup.json', content: '{}', sourceKind: 'google-drive' })
+    canceledDriveRead.resolve({ name: 'canceled-drive-backup.json', content: '{}', sourceKind: 'google-drive' })
     await driveOpening
 
     expect(restore.review.value?.sourceName).toBe('local-backup.json')
@@ -200,6 +201,7 @@ test('a changed draft after confirmation requires fresh consent before replaceme
     await restore.openFrom(async () => ({
       name: 'incoming-backup.json',
       content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Cinder'))),
+      sourceKind: 'local-file',
     }))
     restore.setDiscardDraftsConfirmed(true)
     draftState.value = { signature: 'system-name:Changed while reviewing', hasDrafts: true }
@@ -213,6 +215,104 @@ test('a changed draft after confirmation requires fresh consent before replaceme
     })
     expect(replacementCount).toBe(0)
     expect(workspace.value?.cluster.name).toBe('Active Reach')
+  } finally {
+    renderer.render(null, container)
+  }
+})
+
+test('a Drive restore keeps its source through stale review and reports only after durable replacement @pure', async () => {
+  const activeWorkspace = createLocalWorkspace('Active Reach', 'Vesper')
+  const workspace = ref<LocalWorkspace | null>(activeWorkspace)
+  const appliedRevision = ref(0)
+  const durableVersion = shallowRef<WorkspaceStorageVersion | null>(validVersion(activeWorkspace, 0))
+  const draftState = ref({ signature: 'initial', hasDrafts: false })
+  const durableWrite = deferred<void>()
+  const replacementStarted = deferred<void>()
+  const completedSources: string[] = []
+  let restore: ReturnType<typeof useWorkspaceRestore> | undefined
+  const application = defineComponent({
+    setup() {
+      restore = useWorkspaceRestore({
+        workspace,
+        appliedRevision,
+        durableVersion,
+        getDraftConsentState: () => draftState.value,
+        replaceFromBackup: async () => {
+          replacementStarted.resolve()
+          await durableWrite.promise
+        },
+        downloadCurrent: () => undefined,
+        afterReplacement: sourceKind => { completedSources.push(sourceKind) },
+      })
+      return () => h('div')
+    },
+  })
+  const renderer = createTestRenderer()
+  const container: HostNode = { kind: 'root', children: [] }
+  renderer.render(h(application), container)
+  if (!restore) throw new Error('The workspace restore controller did not initialize.')
+
+  try {
+    await restore.openFrom(async () => ({
+      name: 'drive-backup.json',
+      content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Cinder'))),
+      sourceKind: 'google-drive',
+    }))
+    draftState.value = { signature: 'changed while reviewing', hasDrafts: false }
+    await restore.confirm()
+
+    expect(restore.review.value).toMatchObject({ sourceName: 'drive-backup.json', stale: true })
+    expect(completedSources).toEqual([])
+
+    const confirmation = restore.confirm()
+    await replacementStarted.promise
+    expect(completedSources).toEqual([])
+    durableWrite.resolve()
+    await confirmation
+
+    expect(completedSources).toEqual(['google-drive'])
+    expect(restore.review.value).toBeNull()
+  } finally {
+    renderer.render(null, container)
+  }
+})
+
+test('a failed Drive replacement does not report a completed restore @pure', async () => {
+  const activeWorkspace = createLocalWorkspace('Active Reach', 'Vesper')
+  const workspace = ref<LocalWorkspace | null>(activeWorkspace)
+  const appliedRevision = ref(0)
+  const durableVersion = shallowRef<WorkspaceStorageVersion | null>(validVersion(activeWorkspace, 0))
+  const completedSources: string[] = []
+  let restore: ReturnType<typeof useWorkspaceRestore> | undefined
+  const application = defineComponent({
+    setup() {
+      restore = useWorkspaceRestore({
+        workspace,
+        appliedRevision,
+        durableVersion,
+        getDraftConsentState: () => ({ signature: '', hasDrafts: false }),
+        replaceFromBackup: async () => { throw new Error('The durable write failed.') },
+        downloadCurrent: () => undefined,
+        afterReplacement: sourceKind => { completedSources.push(sourceKind) },
+      })
+      return () => h('div')
+    },
+  })
+  const renderer = createTestRenderer()
+  const container: HostNode = { kind: 'root', children: [] }
+  renderer.render(h(application), container)
+  if (!restore) throw new Error('The workspace restore controller did not initialize.')
+
+  try {
+    await restore.openFrom(async () => ({
+      name: 'drive-backup.json',
+      content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Cinder'))),
+      sourceKind: 'google-drive',
+    }))
+    await restore.confirm()
+
+    expect(restore.review.value?.error).toBe('The durable write failed.')
+    expect(completedSources).toEqual([])
   } finally {
     renderer.render(null, container)
   }

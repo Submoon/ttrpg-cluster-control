@@ -1561,7 +1561,12 @@ const workspaceRestore = useWorkspaceRestore({
   getDraftConsentState: draftConsentState,
   replaceFromBackup,
   downloadCurrent: workspaceFiles.downloadWorkspaceSnapshot,
-  afterReplacement: resetAfterWorkspaceReplacement,
+  afterReplacement: sourceKind => {
+    resetAfterWorkspaceReplacement()
+    if (sourceKind === 'google-drive') {
+      toast.add({ title: 'Restored from Google Drive', color: 'success', icon: 'i-lucide-check' })
+    }
+  },
 })
 const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn)
 const workspaceRestoreReview = workspaceRestore.review

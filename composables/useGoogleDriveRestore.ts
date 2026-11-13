@@ -198,7 +198,7 @@ export function useGoogleDriveRestore(
     void dependencies.readFile(accessToken, file.id, signal).then(content => {
       if (!isCurrent(operation, signal)) return
       state.value = 'idle'
-      settleSelection({ name: file.name, content })
+      settleSelection({ name: file.name, content, sourceKind: 'google-drive' })
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
       if (closeForUnauthorized(error, accessToken)) return
