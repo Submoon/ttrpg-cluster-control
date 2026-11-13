@@ -255,7 +255,7 @@ export async function replaceWorkspaceFromBackup(
     ]).then(([current, backup, revisionValue, ownerValue]) => {
       const revision = storedRevision(revisionValue)
       if (revision !== expected.revision || !sameStoredVersion(current, ownerValue, expected)) {
-        throw new WorkspaceStorageConflictError('The active workspace changed after this restore was reviewed. Review it again before replacing it.')
+        throw new WorkspaceStorageConflictError('The saved workspace changed after this restore was reviewed. Reload this tab before starting another restore.')
       }
 
       const currentWorkspace = current === undefined ? null : restoreLocalWorkspace(current)
