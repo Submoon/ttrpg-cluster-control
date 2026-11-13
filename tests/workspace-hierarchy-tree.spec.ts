@@ -69,12 +69,20 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await expect(inspector).toContainText('Primary Star')
 
-  await starObject.locator('.object-hit-target').click({ button: 'right' })
   const singleSelectionMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  await planetObject.locator('.object-hit-target').click({ button: 'right' })
   await singleSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
   const moveModeButton = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await expect(selectedMapObjects).toHaveCount(1)
+  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
+  await setWorkspaceMapMode(page, 'Select')
+
+  await iria.click({ button: 'right' })
+  await singleSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
+  await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(selectedMapObjects).toHaveCount(1)
+  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await setWorkspaceMapMode(page, 'Select')
 
   await planetObject.click({ modifiers: ['Shift'] })

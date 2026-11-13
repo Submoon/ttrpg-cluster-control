@@ -817,12 +817,12 @@ function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.v
   const system = selectedSystem.value
   const selectedIds = currentSelectedObjectIds()
   return !!request
-    && request.source === 'map'
+    && (request.source === 'map' || request.source === 'hierarchy')
     && target?.kind === 'object'
     && activeView.value === 'system'
     && mapMode.value === 'select'
     && selectedSystemId.value === target.systemId
-    && selectedIds.includes(target.id)
+    && selectedIds.length > 0
     && system?.id === target.systemId
     && !!system.objects.find(object => object.id === target.id)
 }
@@ -844,7 +844,6 @@ function moveSelectedObjectsFromMenu(): void {
       && activeMapKey.value === mapKey
       && currentSelectedIds.length === selectedIds.length
       && selectedIds.every((id, index) => currentSelectedIds[index] === id)
-      && currentSelectedIds.includes(objectId)
       && !!selectedSystem.value?.objects.some(object => object.id === objectId)
   }
   publicationControls.closeMenu()

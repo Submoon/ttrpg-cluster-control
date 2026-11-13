@@ -48,8 +48,8 @@
                 Choose <strong>Change Visibility</strong> to control what players see on a shared map.
               </li>
               <li>
-                In <strong>Select</strong>, click an object or Shift-click to select several. Right-click a selected object, choose
-                <strong>Move selection</strong>, then drag a selected object to move the selection.
+                In <strong>Select</strong>, click an object or Shift-click to select several. With objects selected, right-click any object on
+                the map or in <strong>Hierarchy</strong>, choose <strong>Move selection</strong>, then drag a selected object to move the selection.
               </li>
               <li>To open the menu from the keyboard, focus the system or object and press <strong>Shift+F10</strong> or the <strong>Context Menu</strong> key.</li>
             </ul>
