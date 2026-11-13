@@ -3,6 +3,7 @@ import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline
 import {
   captureMapExportBlobs,
   abortNextWorkspaceWrite,
+  activeWorkspaceFeedback,
   clickDockAction,
   downloadJson,
   editMapObject,
@@ -237,6 +238,9 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   await resolveJumpClusterRestoreReview(canceledPreview, 'cancel')
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(initialExport)
 
+  const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:$|:)/ })
+  await expect(undo).toHaveAttribute('aria-description', /1 action available to undo/)
+
   const draftEditor = await openChartDetailsEditor(page)
   await draftEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
   await hideWorkspaceInspector(page)
@@ -252,20 +256,18 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
     const draftReview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
     await expect(draftReview).toContainText('Unapplied editor drafts are open.')
     await expect(draftReview.getByRole('checkbox', {
-      name: 'Discard current drafts if the replacement succeeds',
+      name: /discard current drafts if the replacement succeeds/i,
       exact: true,
     })).not.toBeChecked()
     expect(await readReviewedDownload(page, draftReview)).toEqual(initialExport)
     await resolveJumpClusterRestoreReview(draftReview, 'cancel')
-    await expect(draftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    const resumedDraftEditor = await openChartDetailsEditor(page)
+    await expect(resumedDraftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
     const acceptedPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-    const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:$|:)/ })
-    await expect(undo).toBeDisabled()
-    await expect(undo).toHaveAttribute('aria-description', /1 action available to undo/)
     await expect(acceptedPreview.getByRole('checkbox', {
-      name: 'Discard current drafts if the replacement succeeds',
+      name: /discard current drafts if the replacement succeeds/i,
       exact: true,
     })).not.toBeChecked()
 
@@ -274,13 +276,17 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
       await expect(acceptedPreview.getByRole('alert')).toContainText(/abort|transaction/i)
     })
     await expect(acceptedPreview).toBeVisible()
-    await expect(undo).toHaveAttribute('aria-description', /1 action available to undo/)
-    await expect(draftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
     expect(await readWorkspaceRecoveryRecords(page)).toEqual(recordsBeforeReplacement)
     expect(await readReviewedDownload(page, acceptedPreview)).toEqual(initialExport)
 
-    await resolveJumpClusterRestoreReview(acceptedPreview, 'confirm', true)
-    await expect(acceptedPreview).toBeHidden()
+    await resolveJumpClusterRestoreReview(acceptedPreview, 'cancel')
+    const draftAfterFailedReplacement = await openChartDetailsEditor(page)
+    await expect(draftAfterFailedReplacement.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    await hideWorkspaceInspector(page)
+
+    const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    await resolveJumpClusterRestoreReview(retryPreview, 'confirm', true)
+    await expect(retryPreview).toBeHidden()
     await waitForWorkspaceSaved(page)
     const restoredWorkspaceId = await page.evaluate(async () => {
       const request = indexedDB.open('ttrpg-cluster-control', 1)

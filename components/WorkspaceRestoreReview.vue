@@ -1,8 +1,10 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Replace Jump Cluster"
-    description="Review the complete backup and confirm before replacing the active Jump Cluster."
+    :title="props.review?.canDownloadCurrent ? 'Replace Jump Cluster' : 'Open Jump Cluster'"
+    :description="props.review?.canDownloadCurrent
+      ? 'Review the complete backup and confirm before replacing the active Jump Cluster.'
+      : 'Review the complete backup and confirm to open this Jump Cluster.'"
     :dismissible="!props.review?.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
     :ui="{
@@ -16,11 +18,16 @@
         <section class="grid gap-3" aria-label="Replacement details">
           <div>
             <span class="section-kicker">COMPLETE BACKUP</span>
-            <h2 class="mb-1 mt-2 break-words text-xl">Replace the active Jump Cluster?</h2>
-            <p class="m-0 break-words">{{ props.review.activeName }} will be replaced by {{ props.review.incomingName }}.</p>
+            <h2 class="mb-1 mt-2 break-words text-xl">
+              {{ props.review.canDownloadCurrent ? 'Replace the active Jump Cluster?' : 'Open this Jump Cluster backup?' }}
+            </h2>
+            <p v-if="props.review.canDownloadCurrent" class="m-0 break-words">
+              {{ props.review.activeName }} will be replaced by {{ props.review.incomingName }}.
+            </p>
+            <p v-else class="m-0 break-words">Open {{ props.review.incomingName }} from this complete backup.</p>
             <p class="m-0 break-words text-sm text-muted">Source file: {{ props.review.sourceName }}</p>
           </div>
-          <p class="m-0 text-sm text-muted">
+          <p v-if="props.review.canDownloadCurrent" class="m-0 text-sm text-muted">
             Your current Jump Cluster will become this browser's last valid recovery copy.
           </p>
           <div v-if="props.review.canDownloadCurrent" class="flex flex-wrap gap-2">
@@ -67,7 +74,7 @@
           :disabled="!props.review || props.review.confirming || (props.review.hasDrafts && !props.review.discardDraftsConfirmed)"
           @click="emit('confirm')"
         >
-          Replace Jump Cluster
+          {{ props.review?.canDownloadCurrent ? 'Replace Jump Cluster' : 'Open Jump Cluster' }}
         </UButton>
       </div>
     </template>
