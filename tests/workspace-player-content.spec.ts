@@ -46,7 +46,7 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
     await planet.click({ button: 'right' })
     await menu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
   }
-  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await publish()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(playerText).toHaveValue(unappliedText)

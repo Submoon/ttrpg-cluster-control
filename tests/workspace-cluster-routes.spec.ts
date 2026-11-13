@@ -37,7 +37,7 @@ campaignTest('invalid route edits focus the validation summary and Stay preserve
   await apply.click()
   await expect(validation).toBeFocused()
   await clickDockAction(page, 'Add Jump Route')
-  const transition = page.getByRole('dialog', { name: 'Edit chart details' })
+  const transition = page.getByRole('dialog', { name: 'Edit Jump Cluster details' })
   await expect(transition.getByText('Continue without this draft?')).toBeVisible()
   await transition.getByRole('button', { name: 'Stay here', exact: true }).click()
 

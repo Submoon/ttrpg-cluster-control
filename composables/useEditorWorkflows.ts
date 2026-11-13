@@ -392,7 +392,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   const historyGuards = computed(() => {
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
-    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-details draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
     if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
     if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'

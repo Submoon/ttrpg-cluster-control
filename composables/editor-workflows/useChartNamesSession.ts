@@ -117,7 +117,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   async function apply(): Promise<boolean> {
     const submittedSession = session.value
     if (!submittedSession) {
-      formError.value = 'Start a chart-details edit before applying these values.'
+      formError.value = 'Start editing Jump Cluster details before applying these values.'
       return false
     }
 
@@ -174,7 +174,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
         action: {
           kind: publicationDetailsChanged ? 'update' : 'rename',
           label: publicationDetailsChanged
-            ? 'Update player-facing chart details'
+            ? 'Update player-facing Jump Cluster details'
             : 'Rename Jump Cluster and star system',
           target: { kind: 'cluster', id: active.clusterId },
           parent: { kind: 'system', id: active.systemId },

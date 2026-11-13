@@ -9,11 +9,11 @@
       footer: 'shrink-0 border-t border-[var(--line-soft)] px-4 py-3 sm:px-5',
     }"
     role="region"
-    :aria-label="detailsRegionLabel"
+    aria-label="Jump Cluster details"
   >
     <template #header>
       <div class="chart-details-card-heading">
-        <span class="section-kicker">{{ props.mode === 'cluster' ? 'CLUSTER DETAILS' : 'CHART DETAILS' }}</span>
+        <span class="section-kicker">Jump Cluster details</span>
         <h2 class="mt-2 mb-0 [overflow-wrap:anywhere] text-[1.65rem]">
           {{ props.mode === 'cluster' ? props.workspace.cluster.name : props.selectedSystem?.name }}
         </h2>
@@ -57,7 +57,7 @@
           class="w-full min-w-0 justify-center"
           color="primary"
           variant="soft"
-          aria-label="Edit chart details"
+          aria-label="Edit Jump Cluster details"
           @click="commands.charts.beginNamesEdit(chartEditSystemId)"
         >
           Edit
@@ -73,7 +73,7 @@
         </UButton>
       </div>
       <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-sm" role="status">
-        Chart details editing session
+        Jump Cluster details editing session
       </span>
     </template>
 
@@ -157,7 +157,6 @@ const chartEditSystemId = computed(() => props.chartEditSystemId
   ?? props.selectedSystem?.id
   ?? props.workspace.cluster.systems[0]?.id)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
-const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
 const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
 const publicationLabels: Record<PublicationMode, string> = {
   hidden: 'Hidden',

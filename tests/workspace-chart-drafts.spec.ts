@@ -258,9 +258,9 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
   expect(beforeUnload.type()).toBe('beforeunload')
   await beforeUnload.dismiss()
   expect(page.isClosed()).toBe(false)
-  await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }))
+  await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }))
     .toBeVisible()
-  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
+  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()
   await expect(editor.getByLabel('Jump Cluster')).toHaveValue('Unapplied Reach')
 })
 
@@ -286,7 +286,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
 
   await addCatalogueObject(page, 'jump-point', { preserveDraft: true, noSelection: true })
   await waitForWorkspaceSaved(page)
-  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
+  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()
   await expect(editor.getByLabel('Jump Cluster')).toHaveValue('')
   await expect(editor.getByRole('alert')).toHaveText('Jump Cluster name is required.')
   await hideWorkspaceInspector(page)
@@ -294,7 +294,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
 
   await (await openWorkspaceHierarchy(page))
     .getByRole('button', { name: 'Cluster map' }).click()
-  const guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(guard.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await guard.getByRole('button', { name: 'Apply and continue' }).click()
   await expect(guard).toBeHidden()
@@ -416,7 +416,7 @@ test('an older failed write cannot replace newer saving feedback or clear a draf
     await expect.poll(async () => (await readChartWriteGate(page)).pendingTransactions).toBe(1)
     await expect(page.locator('.workspace-feedback-content').first()).toHaveAttribute('data-save-state', 'saving')
     await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toHaveCount(0)
-    await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume chart details draft' }).click()
+    await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()
     await expect(editor.getByLabel('Jump Cluster')).toHaveValue('Newer Unapplied Draft')
     await hideWorkspaceInspector(page)
 

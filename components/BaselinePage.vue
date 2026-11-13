@@ -986,7 +986,7 @@ watch(() => [
 
 function focusInspectorChartEditAction(): void {
   const inspector = document.getElementById('workspace-inspector-panel')
-  const editAction = inspector?.querySelector<HTMLElement>('button[aria-label="Edit chart details"]')
+  const editAction = inspector?.querySelector<HTMLElement>('button[aria-label="Edit Jump Cluster details"]')
   const closeAction = inspector?.querySelector<HTMLElement>(
     'button[aria-label="Close inspector panel"], button[aria-label="Hide inspector"]',
   )

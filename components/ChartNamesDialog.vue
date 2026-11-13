@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="open"
-    title="Edit chart details"
+    title="Edit Jump Cluster details"
     description="Resolve this draft before continuing."
     :dismissible="true"
     :ui="{ content: 'chart-details-dialog-content' }"
@@ -14,7 +14,7 @@
           <h2 class="mb-1 mt-2 text-2xl">Continue without this draft?</h2>
           <p class="inspector-intro m-0">
             {{ props.guardMode === 'chart'
-              ? 'Apply these chart details, discard the draft, or stay here and keep editing.'
+              ? 'Apply these Jump Cluster details, discard the draft, or stay here and keep editing.'
               : props.hasModifiedEntitySession
                 ? 'Apply these Inspector changes, discard them, or stay here and keep editing.'
                 : 'Discard the current inspector changes, or stay here.' }}

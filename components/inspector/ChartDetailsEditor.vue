@@ -1,15 +1,14 @@
 <template>
-  <section class="chart-details-editor flex min-h-0 flex-1 flex-col" aria-label="Chart details editor">
+  <section class="chart-details-editor flex min-h-0 flex-1 flex-col" aria-label="Jump Cluster details editor">
     <header class="shrink-0 border-b border-[var(--line-soft)] px-4 py-3 sm:px-5">
-      <span class="section-kicker">CHART DETAILS / PUBLICATION</span>
-      <h2 class="mt-2 mb-1 text-2xl">Edit chart details</h2>
+      <h2 class="mt-2 mb-1 text-2xl">Edit Jump Cluster details</h2>
       <p class="inspector-intro m-0">Editing details for {{ props.targetSystemName || 'the selected star system' }}.</p>
     </header>
 
     <form
       id="chart-details-form"
       class="chart-details-editor-form flex min-h-0 flex-1 flex-col"
-      aria-label="Edit chart details"
+      aria-label="Edit Jump Cluster details"
       novalidate
       @submit.prevent="emit('apply')"
     >

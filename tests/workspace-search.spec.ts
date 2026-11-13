@@ -32,7 +32,7 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   const clusterResult = searchDialog.getByRole('option', { name: /Kestrel Reach.*Jump Cluster.*Current workspace/i })
   await clusterResult.click()
 
-  let guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  let guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toHaveCount(0)
@@ -63,7 +63,7 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   })
 
   await clusterResult.click()
-  guard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(guard.getByRole('button', { name: 'Discard edits and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
 

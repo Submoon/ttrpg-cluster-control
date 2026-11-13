@@ -960,11 +960,11 @@ export async function hideWorkspaceInspector(page: import('@playwright/test').Pa
 export async function openChartDetailsEditor(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  const editor = page.getByRole('form', { name: 'Edit chart details', exact: true })
+  const editor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
   if (await editor.isVisible()) return editor
 
   const inspector = page.locator('#workspace-inspector-panel')
-  const chartDetails = inspector.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
+  const chartDetails = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
   const context = page.getByTestId('workspace-map-context-kind')
   await expect(context).toHaveText(/^(Jump Cluster|Star System)$/)
   const name = await context.textContent() === 'Jump Cluster' ? 'Jump Cluster contents' : 'System hierarchy'
@@ -979,11 +979,11 @@ export async function openChartDetailsEditor(
     const hierarchy = await compactHierarchy.isVisible()
       ? compactHierarchy
       : await openWorkspaceHierarchy(page, name)
-    await hierarchy.getByRole('button', { name: 'Open chart details', exact: true }).click()
+    await hierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true }).click()
     await expect(chartDetails).toBeVisible()
   }
 
-  const edit = chartDetails.getByRole('button', { name: /^(Edit chart details|Resume chart details draft)$/ })
+  const edit = chartDetails.getByRole('button', { name: /^(Edit Jump Cluster details|Resume Jump Cluster details draft)$/ })
   await edit.click()
   await expect(editor).toBeVisible()
   return editor
