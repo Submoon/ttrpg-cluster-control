@@ -18,6 +18,8 @@ Baseline after fetching `origin` is `efd9b094634cf60d6c466f612df11cf9573b6b33`. 
 
 Implementation starts at `dfe07f7d9a7cd0a8f8e300b68c9467b7262dc59d` after fetching `origin` and fast-forwarding `main`. The integration branch is `codex/issue-51-cloud-backup`.
 
+The integration branch incorporates `origin/main` at `a369e60943a062b24e4404af8ce9610b4bdbb393`, which is the merge base for final review.
+
 ## Problem Statement
 
 Wardens can lose the local copy of a Jump Cluster when they clear site data or switch browser profiles. They can download a complete JSON file today, but the import action adds systems and routes to an existing cluster. A Warden who wants to resume work from a backup needs to open the saved Jump Cluster with its GM notes, player publication settings, relationships, and layout intact.
