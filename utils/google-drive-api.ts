@@ -35,6 +35,13 @@ export interface GoogleDriveBackupList {
 
 export type DriveFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
+interface ProviderResponse {
+  ok: boolean
+  status: number
+  headers: Headers
+  bytes: Uint8Array
+}
+
 /** Reserves a stable ID in the hidden app-data space for one logical backup. */
 export async function generateGoogleDriveFileId(
   accessToken: string,
@@ -107,7 +114,7 @@ export async function readGoogleDriveFile(
     throw new GoogleDriveApiError('request-failed', 'The selected file is not an available JSON backup in Google Drive app data.')
   }
 
-  let response: Response
+  let response: ProviderResponse
   try {
     response = await providerFetch(fetcher, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -118,7 +125,7 @@ export async function readGoogleDriveFile(
   }
   if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not read this backup.')
   try {
-    return await readResponseText(response)
+    return readResponseText(response.bytes)
   } catch {
     throw new GoogleDriveApiError('request-failed', 'Google Drive took too long to read this backup.')
   }
@@ -145,23 +152,29 @@ export async function uploadGoogleDriveBackup(options: {
   })
   const contentBytes = new TextEncoder().encode(options.contents)
 
-  let response: Response
+  let response: ProviderResponse
   try {
     response = contentBytes.byteLength <= MULTIPART_UPLOAD_LIMIT
       ? await uploadMultipart(options, metadata, fetcher)
       : await uploadResumable(options, metadata, contentBytes, fetcher)
   } catch (error) {
+    if (options.signal?.aborted) {
+      throw new GoogleDriveApiError('request-failed', 'Google Drive backup was canceled.')
+    }
     if (error instanceof GoogleDriveApiError && !error.outcomeUncertain) throw error
     return reconcileUpload(options, fetcher)
   }
 
   if (response.ok) {
-    const receipt = await readJson(response)
+    const receipt = parseResponseJson(response.bytes)
     if (isConfirmedFile(receipt, options, contentBytes)) return toBackupFile(receipt)
     return reconcileUpload(options, fetcher)
   }
 
-  const reconciliation = await tryReconcileUpload(options, fetcher)
+  if (options.signal?.aborted) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive backup was canceled.')
+  }
+  const reconciliation = await tryReconcileUpload(options, fetcher, options.signal)
   if (reconciliation.kind === 'confirmed') return reconciliation.file
   if (response.status === 409
     || response.status >= 500
@@ -181,7 +194,7 @@ async function uploadMultipart(
   options: Parameters<typeof uploadGoogleDriveBackup>[0],
   metadata: string,
   fetcher: DriveFetcher,
-): Promise<Response> {
+): Promise<ProviderResponse> {
   const boundary = `cluster-control-${createBoundarySuffix()}`
   const body = [
     `--${boundary}`,
@@ -213,7 +226,7 @@ async function uploadResumable(
   metadata: string,
   contentBytes: Uint8Array,
   fetcher: DriveFetcher,
-): Promise<Response> {
+): Promise<ProviderResponse> {
   const sessionResponse = await providerFetch(fetcher, `${DRIVE_UPLOAD_API}/files?${createUploadQuery('resumable')}`, {
     method: 'POST',
     headers: {
@@ -268,7 +281,10 @@ async function reconcileUpload(
   options: Parameters<typeof uploadGoogleDriveBackup>[0],
   fetcher: DriveFetcher,
 ): Promise<GoogleDriveBackupFile> {
-  const reconciliation = await tryReconcileUpload(options, fetcher)
+  if (options.signal?.aborted) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive backup was canceled.')
+  }
+  const reconciliation = await tryReconcileUpload(options, fetcher, options.signal)
   if (reconciliation.kind === 'confirmed') return reconciliation.file
   throw uncertainOutcome()
 }
@@ -276,26 +292,31 @@ async function reconcileUpload(
 async function tryReconcileUpload(
   options: Parameters<typeof uploadGoogleDriveBackup>[0],
   fetcher: DriveFetcher,
+  signal?: AbortSignal,
 ): Promise<UploadReconciliation> {
   const { accessToken, fileId, filename, contents } = options
+  if (signal?.aborted) return { kind: 'inconclusive' }
   try {
     const response = await providerFetch(fetcher,
       `${DRIVE_API}/files/${encodeURIComponent(fileId)}?${new URLSearchParams({
         fields: 'id,name,mimeType,parents,spaces,size,createdTime,trashed,md5Checksum,sha256Checksum',
       })}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
+      { headers: { Authorization: `Bearer ${accessToken}` }, ...(signal ? { signal } : {}) },
     )
+    if (signal?.aborted) return { kind: 'inconclusive' }
     if (response.status === 404) return { kind: 'not-found' }
     if (!response.ok) return { kind: 'inconclusive' }
 
-    const metadata = await readJson(response)
+    const metadata = parseResponseJson(response.bytes)
     if (!isConfirmedMetadata(metadata, fileId, filename, contents)) return { kind: 'mismatch' }
 
     const mediaResponse = await providerFetch(fetcher, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      ...(signal ? { signal } : {}),
     })
+    if (signal?.aborted) return { kind: 'inconclusive' }
     if (!mediaResponse.ok) return { kind: 'inconclusive' }
-    const savedBytes = new Uint8Array(await readResponseBytes(mediaResponse))
+    const savedBytes = mediaResponse.bytes
     const expectedBytes = new TextEncoder().encode(contents)
     if (!sameBytes(savedBytes, expectedBytes)) return { kind: 'mismatch' }
     return { kind: 'confirmed', file: toBackupFile(metadata as Record<string, unknown>) }
@@ -368,7 +389,7 @@ async function requestJson(
   fetcher: DriveFetcher,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  let response: Response
+  let response: ProviderResponse
   try {
     response = await providerFetch(fetcher, url, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -379,46 +400,44 @@ async function requestJson(
   }
   if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not complete this request.')
 
-  const body = await readJson(response)
+  const body = parseResponseJson(response.bytes)
   if (body === undefined) throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid response.')
   return body
 }
 
-async function readJson(response: Response): Promise<unknown> {
+function parseResponseJson(bytes: Uint8Array): unknown {
+  if (bytes.byteLength === 0) return undefined
   try {
-    return await withResponseBodyDeadline(response, () => response.json() as Promise<unknown>)
+    return JSON.parse(readResponseText(bytes)) as unknown
   } catch {
     return undefined
   }
 }
 
-async function readResponseText(response: Response): Promise<string> {
-  return withResponseBodyDeadline(response, () => response.text())
+function readResponseText(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes)
 }
 
-async function readResponseBytes(response: Response): Promise<ArrayBuffer> {
-  return withResponseBodyDeadline(response, () => response.arrayBuffer())
-}
-
-async function withResponseBodyDeadline<T>(response: Response, read: () => Promise<T>): Promise<T> {
+async function providerFetch(
+  fetcher: DriveFetcher,
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<ProviderResponse> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      void response.body?.cancel().catch(() => undefined)
-      reject(new Error('Google Drive response timed out.'))
-    }, DRIVE_REQUEST_TIMEOUT_MS)
-  })
-  try {
-    return await Promise.race([read(), deadline])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
-async function providerFetch(fetcher: DriveFetcher, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const controller = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
+  const callerSignal = init?.signal
   let timedOut = false
+  let rejectCallerAbort: ((reason: Error) => void) | undefined
+  const callerAbort = new Promise<never>((_resolve, reject) => {
+    rejectCallerAbort = reject
+  })
+  const onCallerAbort = () => {
+    controller.abort()
+    rejectCallerAbort?.(createAbortError())
+  }
+  if (callerSignal?.aborted) throw createAbortError()
+  callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       timedOut = true
@@ -426,20 +445,78 @@ async function providerFetch(fetcher: DriveFetcher, input: RequestInfo | URL, in
       reject(new Error('Google Drive request timed out.'))
     }, DRIVE_REQUEST_TIMEOUT_MS)
   })
-  const callerSignal = init?.signal
-  const relayCallerAbort = () => controller.abort()
-  if (callerSignal?.aborted) controller.abort()
-  else callerSignal?.addEventListener('abort', relayCallerAbort, { once: true })
+
+  const operation = async (): Promise<ProviderResponse> => {
+    const response = await fetcher(input, { ...init, signal: controller.signal })
+    if (controller.signal.aborted) {
+      void response.body?.cancel().catch(() => undefined)
+      throw createAbortError()
+    }
+    const bytes = await readResponseBytes(response, controller.signal)
+    return { ok: response.ok, status: response.status, headers: response.headers, bytes }
+  }
 
   try {
-    return await Promise.race([fetcher(input, { ...init, signal: controller.signal }), deadline])
+    return await Promise.race([operation(), deadline, callerAbort])
   } catch (error) {
     if (timedOut) throw new Error('Google Drive request timed out.', { cause: error })
+    if (callerSignal?.aborted) throw createAbortError()
     throw error
   } finally {
     if (timer !== undefined) clearTimeout(timer)
-    callerSignal?.removeEventListener('abort', relayCallerAbort)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
   }
+}
+
+async function readResponseBytes(response: Response, signal: AbortSignal): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array()
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalLength = 0
+  let rejectAbort: ((reason: Error) => void) | undefined
+  const abort = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject
+  })
+  const onAbort = () => {
+    rejectAbort?.(createAbortError())
+    void reader.cancel().catch(() => undefined)
+  }
+  if (signal.aborted) onAbort()
+  else signal.addEventListener('abort', onAbort, { once: true })
+
+  const readStream = async (): Promise<Uint8Array> => {
+    while (true) {
+      const result = await reader.read()
+      if (result.done) break
+      chunks.push(result.value)
+      totalLength += result.value.byteLength
+    }
+
+    const bytes = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    return bytes
+  }
+
+  try {
+    return await Promise.race([readStream(), abort])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+    try {
+      reader.releaseLock()
+    } catch {
+      // A pending read may still be unwinding after its cancellation race settles.
+    }
+  }
+}
+
+function createAbortError(): Error {
+  const error = new Error('The Google Drive request was canceled.')
+  error.name = 'AbortError'
+  return error
 }
 
 function uncertainOutcome(): GoogleDriveApiError {
