@@ -98,6 +98,7 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
   const loadError = ref('')
   const loading = ref(false)
   let operationSequence = 0
+  let activeOperationAbortController: AbortController | undefined
 
   const review = computed(() => mutableReview.value?.presentation ?? null)
 
@@ -155,28 +156,62 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
   }
 
   /** Starts a new operation before awaiting external work; stale provider responses are ignored. */
-  async function openFrom(load: () => Promise<WorkspaceRestoreSource | null>): Promise<void> {
-    if (mutableReview.value?.presentation.confirming) return
+  async function openFrom(
+    load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (mutableReview.value?.presentation.confirming || signal?.aborted) return false
     const operationId = ++operationSequence
+    activeOperationAbortController?.abort()
+    const operationAbortController = new AbortController()
+    activeOperationAbortController = operationAbortController
+    const relayExternalAbort = () => operationAbortController.abort()
+    signal?.addEventListener('abort', relayExternalAbort, { once: true })
     const initialContext = captureOperationContext(options)
     mutableReview.value = null
     loadError.value = ''
     loading.value = true
 
+    let onAbort: (() => void) | undefined
+    const aborted = new Promise<{ kind: 'aborted' }>(resolve => {
+      onAbort = () => {
+        if (operationSequence === operationId
+          && activeOperationAbortController === operationAbortController
+          && !mutableReview.value?.presentation.confirming) {
+          operationSequence += 1
+          activeOperationAbortController = undefined
+          loading.value = false
+          mutableReview.value = null
+          loadError.value = ''
+        }
+        resolve({ kind: 'aborted' })
+      }
+      operationAbortController.signal.addEventListener('abort', onAbort, { once: true })
+    })
+
     try {
-      const source = await load()
-      if (operationId !== operationSequence || !source) return
+      // Invoke the loader synchronously so gesture-gated providers can start OAuth before the first await.
+      const loadResult = load(operationAbortController.signal).then(value => ({ kind: 'loaded' as const, value }))
+      const outcome = await Promise.race([loadResult, aborted])
+      if (outcome.kind === 'aborted' || operationId !== operationSequence) return false
+      const source = outcome.value
+      if (!source) return true
       if (!operationContextIsCurrent(options, initialContext)) {
         loadError.value = 'The active workspace or draft state changed while choosing a backup. Start restore again to review the latest state.'
-        return
+        return true
       }
       const parsed = parseJsonContent(source.content)
       const incoming = restoreJumpClusterBackup(parsed)
-      if (operationId !== operationSequence) return
+      if (operationId !== operationSequence) return false
       captureReview(source.name, incoming, operationId, false)
+      return true
     } catch (error) {
       if (operationId === operationSequence) loadError.value = errorText(error)
+      return true
     } finally {
+      if (signal) signal.removeEventListener('abort', relayExternalAbort)
+      if (onAbort) operationAbortController.signal.removeEventListener('abort', onAbort)
+      if (activeOperationAbortController === operationAbortController) activeOperationAbortController = undefined
       if (operationId === operationSequence) loading.value = false
     }
   }
@@ -200,6 +235,8 @@ export function useWorkspaceRestore(options: WorkspaceRestoreOptions) {
   function cancel(): void {
     if (mutableReview.value?.presentation.confirming) return
     operationSequence += 1
+    activeOperationAbortController?.abort()
+    activeOperationAbortController = undefined
     loading.value = false
     mutableReview.value = null
     loadError.value = ''
