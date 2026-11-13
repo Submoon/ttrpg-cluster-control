@@ -4,8 +4,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       googleDriveClientId: '',
-      googleDriveProjectNumber: '',
-      googleDriveApiKey: '',
     },
   },
   modules: ['@nuxt/ui', '@pinia/nuxt'],
