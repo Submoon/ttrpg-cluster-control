@@ -111,24 +111,27 @@
         v-if="activeView === 'system' && selectedSystem"
         :icon-only="true"
         v-model:open="typeFiltersOpen"
-        v-model:selected-types="selectedTypes"
-        v-model:publication-modes="selectedPublicationModes"
-        v-model:field-conditions="fieldConditions"
-        :options="props.typeFilterOptions"
+        :selected-types="mapCriteriaValues.types"
+        :publication-modes="mapCriteriaValues.publicationModes"
+        :field-conditions="mapCriteriaValues.fieldConditions"
+        :options="props.filterCriteria.map.typeOptions.value"
         :compact="props.isCompactViewport"
-        :active-filter-criterion-count="props.activeFilterCriterionCount"
-        :publication-filter-options="props.publicationFilterOptions"
-        :field-filter-options="props.fieldFilterOptions"
-        :invalidation-notice="props.filterInvalidationNotice"
-        @clear-all-filters="emit('clear-all-filters')"
+        :active-filter-criterion-count="props.filterCriteria.map.activeCriterionCount.value"
+        :publication-filter-options="props.filterCriteria.publicationFilterOptions.value"
+        :field-filter-options="props.filterCriteria.fieldOptions.value"
+        :invalidation-notice="props.filterCriteria.map.invalidationNotice.value"
+        @update:selected-types="props.filterCriteria.map.setTypes"
+        @update:publication-modes="props.filterCriteria.map.setPublicationModes"
+        @update:field-conditions="props.filterCriteria.map.setFieldConditions"
+        @clear-all-filters="props.filterCriteria.map.clearAll"
       />
       <p
-        v-if="props.filterInvalidationNotice"
+        v-if="props.filterCriteria.map.invalidationNotice.value"
         class="workspace-filter-invalidation"
         role="status"
         aria-live="polite"
-        :aria-label="props.filterInvalidationNotice"
-        :title="props.filterInvalidationNotice"
+        :aria-label="props.filterCriteria.map.invalidationNotice.value"
+        :title="props.filterCriteria.map.invalidationNotice.value"
       >
         Filters updated
       </p>
@@ -138,25 +141,28 @@
         v-model:open="searchOpen"
         v-model:query="searchQuery"
         :results="props.searchResults"
-        :criteria-active="searchActiveCriterionCount > 0"
+        :criteria-active="props.filterCriteria.search.activeCriterionCount.value > 0"
         :reveal="props.revealSearchTarget"
         :can-open-search-shortcut="props.canOpenSearchShortcut"
       >
         <template #filters>
           <MapTypeFilters
             v-model:open="searchTypeFiltersOpen"
-            v-model:selected-types="searchSelectedTypes"
-            v-model:publication-modes="searchPublicationModes"
-            v-model:field-conditions="searchFieldConditions"
+            :selected-types="searchCriteriaValues.types"
+            :publication-modes="searchCriteriaValues.publicationModes"
+            :field-conditions="searchCriteriaValues.fieldConditions"
             label="Search filters"
-            :options="props.searchTypeFilterOptions ?? props.typeFilterOptions"
+            :options="props.filterCriteria.search.typeOptions.value"
             :compact="false"
-            :active-filter-criterion-count="searchActiveCriterionCount"
-            :publication-filter-options="props.publicationFilterOptions"
-            :field-filter-options="props.fieldFilterOptions"
-            :invalidation-notice="props.searchFilterInvalidationNotice"
+            :active-filter-criterion-count="props.filterCriteria.search.activeCriterionCount.value"
+            :publication-filter-options="props.filterCriteria.publicationFilterOptions.value"
+            :field-filter-options="props.filterCriteria.fieldOptions.value"
+            :invalidation-notice="props.filterCriteria.search.invalidationNotice.value"
             :portal="false"
-            @clear-all-filters="clearSearchCriteria"
+            @update:selected-types="props.filterCriteria.search.setTypes"
+            @update:publication-modes="props.filterCriteria.search.setPublicationModes"
+            @update:field-conditions="props.filterCriteria.search.setFieldConditions"
+            @clear-all-filters="props.filterCriteria.search.clearAll"
           />
         </template>
       </WorkspaceSearch>
@@ -344,10 +350,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
-import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
-import type { MapObjectTypeOption } from '../utils/map-type-filters'
-import type { PublicationMode } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
+import type { WardenFilterControl, WardenFilterCriteriaOwner } from '../composables/useWardenFilterCriteria'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import MapFilesPopover from './MapFilesPopover.vue'
@@ -366,12 +370,7 @@ const props = withDefaults(defineProps<{
   generatedPlayerUrl: string
   playerLinkBusy: boolean
   playerLinkStatus: string
-  typeFilterOptions: readonly MapObjectTypeOption[]
-  searchTypeFilterOptions?: readonly MapObjectTypeOption[]
-  activeFilterCriterionCount?: number
-  publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
-  fieldFilterOptions?: readonly FieldFilterOption[]
-  filterInvalidationNotice?: string | null
+  filterCriteria: WardenFilterCriteriaOwner
   isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
@@ -382,8 +381,6 @@ const props = withDefaults(defineProps<{
   clusterMovePresentation?: { status: string; error?: string; previewing: boolean } | null
   canOpenSearchShortcut: () => boolean
   searchResults: readonly SearchResult[]
-  searchActiveCriterionCount?: number
-  searchFilterInvalidationNotice?: string | null
   revealSearchTarget: (target: SearchTarget) => Promise<
     { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
   >
@@ -394,10 +391,6 @@ const props = withDefaults(defineProps<{
   creationSession: null,
   creationTypeLabel: 'object',
   clusterAddPresentation: null,
-  publicationFilterOptions: () => [],
-  fieldFilterOptions: () => [],
-  searchFilterInvalidationNotice: null,
-  filterInvalidationNotice: null,
 })
 
 const emit = defineEmits<{
@@ -417,7 +410,6 @@ const emit = defineEmits<{
   'quit-add': []
   'confirm-system-move': []
   'cancel-system-move': []
-  'clear-all-filters': []
 }>()
 
 const headerMapActionsOpen = ref(false)
@@ -426,19 +418,19 @@ const mapNameDisclosureOpen = ref(false)
 const mapNameLabelId = `workspace-map-name-${useId()}`
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
-const searchSelectedTypes = defineModel<string[]>('searchSelectedTypes', { default: () => [] })
-const searchPublicationModes = defineModel<PublicationMode[]>('searchPublicationModes', { default: () => [] })
-const searchFieldConditions = defineModel<FieldCondition[]>('searchFieldConditions', { default: () => [] })
 const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true })
-const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
-const selectedPublicationModes = defineModel<PublicationMode[]>('publicationModes', { default: () => [] })
-const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { default: () => [] })
 const workspaceSearch = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const searchTypeFiltersOpen = ref(false)
-const searchActiveCriterionCount = computed(() => props.searchActiveCriterionCount
-  ?? Number(searchSelectedTypes.value.length > 0)
-    + Number(searchPublicationModes.value.length > 0)
-    + searchFieldConditions.value.length)
+function mutableCriteriaValues(control: WardenFilterControl) {
+  const criteria = control.criteria.value
+  return {
+    types: [...criteria.types],
+    publicationModes: [...criteria.publicationModes],
+    fieldConditions: [...criteria.fieldConditions],
+  }
+}
+const mapCriteriaValues = computed(() => mutableCriteriaValues(props.filterCriteria.map))
+const searchCriteriaValues = computed(() => mutableCriteriaValues(props.filterCriteria.search))
 const printLightForPrinting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -475,12 +467,6 @@ watch(searchOpen, open => {
 watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
-
-function clearSearchCriteria(): void {
-  searchSelectedTypes.value = []
-  searchPublicationModes.value = []
-  searchFieldConditions.value = []
-}
 
 function exportClusterJson(): void {
   headerMapActionsOpen.value = false

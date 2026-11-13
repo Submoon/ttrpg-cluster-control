@@ -97,6 +97,7 @@
 import { computed, ref, useId } from 'vue'
 import type { PublicationMode } from '../domain/workspace'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
+import { countActiveFilterCriteria } from '../utils/filter-criteria'
 import { catalogueFamilyLabel } from '../utils/catalogue-labels'
 import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import FieldFilterConditions from './FieldFilterConditions.vue'
@@ -146,9 +147,11 @@ const typeGroups = computed(() => {
   return Array.from(groups, ([family, options]) => ({ family, options }))
 })
 const activeCriterionCount = computed(() => props.activeFilterCriterionCount
-  ?? Number(selectedTypes.value.length > 0)
-    + Number(selectedPublicationModes.value.length > 0)
-    + fieldConditions.value.length)
+  ?? countActiveFilterCriteria({
+    types: selectedTypes.value,
+    publicationModes: selectedPublicationModes.value,
+    fieldConditions: fieldConditions.value,
+  }))
 const active = computed(() => activeCriterionCount.value > 0)
 const accessibleLabel = computed(() => active.value
   ? `${props.label} (${activeCriterionCount.value} active ${activeCriterionCount.value === 1 ? 'criterion' : 'criteria'})`
