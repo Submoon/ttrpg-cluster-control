@@ -642,7 +642,7 @@ const {
 } = useLocalWorkspace()
 const googleDriveSignIn = useGoogleDriveSignIn()
 const toast = useToast()
-const toastAnnouncement = shallowRef<{ id: string; text: string }>()
+const toastAnnouncement = shallowRef<{ id: string | number; text: string }>()
 watch(toast.toasts, (current, previous) => {
   const added = current.filter(notification => !previous.some(prior => prior.id === notification.id))
   const latest = added.at(-1)
