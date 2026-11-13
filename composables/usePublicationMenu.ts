@@ -3,6 +3,7 @@ import type { LocalWorkspace } from '../domain/workspace'
 import type { useEditorUiStore } from '../stores/editor-ui'
 import type {
   PublicationMenuLease,
+  PublicationMenuOptions,
   PublicationMenuRequest,
   PublicationMenuView,
   PublicationTarget,
@@ -16,6 +17,7 @@ interface OwnedMenu extends PublicationMenuView {
   clusterId: string
   context: string
   mapCanvas: Element | null
+  selectionPending: boolean
 }
 
 /** Checks visibility through the captured surface's ancestors without moving the viewport. */
@@ -35,11 +37,18 @@ export function usePublicationMenu(options: {
   workspace: Ref<LocalWorkspace | null>
   store: PublicationUiStore
   canRestoreFocus?: (request: PublicationMenuRequest) => boolean
+  prepareContextObjectSelection?: (objectId: string, isCurrent: () => boolean) => Promise<boolean>
 }) {
-  const { workspace, store, canRestoreFocus = () => true } = options
+  const {
+    workspace,
+    store,
+    canRestoreFocus = () => true,
+    prepareContextObjectSelection,
+  } = options
   const active = shallowRef<OwnedMenu | null>(null)
   let sequence = 0
   let disposed = false
+  let pending: OwnedMenu | null = null
 
   function contextSignature(): string {
     return JSON.stringify([
@@ -60,8 +69,23 @@ export function usePublicationMenu(options: {
   }
 
   function close(id?: number): void {
-    if (id !== undefined && active.value?.id !== id) return
-    active.value = null
+    if (id === undefined) {
+      active.value = null
+      if (pending) pending.selectionPending = false
+      pending = null
+      return
+    }
+    if (active.value?.id === id) active.value = null
+    if (pending?.id === id) {
+      pending.selectionPending = false
+      pending = null
+    }
+  }
+
+  function menuContextIsCurrent(menu: OwnedMenu): boolean {
+    const current = workspace.value
+    return !!current && current.id === menu.workspaceId && current.cluster.id === menu.clusterId
+      && contextSignature() === menu.context && targetExists(current, menu.target)
   }
 
   function isTargetInMapContext(menu: OwnedMenu): boolean {
@@ -131,11 +155,18 @@ export function usePublicationMenu(options: {
   }
 
   function isActiveTargetValid(menu: OwnedMenu): boolean {
-    const current = workspace.value
-    return !!current && current.id === menu.workspaceId && current.cluster.id === menu.clusterId
-      && contextSignature() === menu.context && menu.opener.isConnected
-      && targetExists(current, menu.target)
+    return menuContextIsCurrent(menu) && menu.opener.isConnected
       && (menu.source !== 'map' || store.mapMode === 'select')
+  }
+
+  function isPendingContextCurrent(menu: OwnedMenu): boolean {
+    return pending?.id === menu.id
+      && menuContextIsCurrent(menu)
+      && menu.target.kind === 'object'
+      && (menu.source === 'map' || menu.source === 'hierarchy')
+      && store.activeView === 'system'
+      && store.selectedSystemId === menu.target.systemId
+      && store.mapMode === 'select'
   }
 
   const currentRequest = computed<PublicationMenuView | null>(() => {
@@ -147,12 +178,52 @@ export function usePublicationMenu(options: {
     if (menu && !request) close(menu.id)
   }, { flush: 'sync' })
 
-  function openMenu(request: PublicationMenuRequest): PublicationMenuLease | null {
+  watch([
+    () => workspace.value?.id,
+    () => workspace.value?.cluster.id,
+    contextSignature,
+  ], () => {
+    const menu = pending
+    if (menu && !isPendingContextCurrent(menu)) close(menu.id)
+  }, { flush: 'sync' })
+
+  async function openPreparedContextMenu(
+    menu: OwnedMenu,
+  ): Promise<void> {
+    const prepareSelection = prepareContextObjectSelection
+    const accepted = prepareSelection
+      ? await prepareSelection(menu.target.id, () => isPendingContextCurrent(menu))
+      : false
+    if (!accepted || !isPendingContextCurrent(menu)) {
+      close(menu.id)
+      return
+    }
+
+    await nextTick()
+    const opener = isPendingContextCurrent(menu) ? focusTarget(menu) : null
+    menu.selectionPending = false
+    if (!opener) {
+      close(menu.id)
+      return
+    }
+
+    menu.opener = opener
+    pending = null
+    active.value = menu
+  }
+
+  function openMenu(request: PublicationMenuRequest, menuOptions?: PublicationMenuOptions): PublicationMenuLease | null {
     const current = workspace.value
     if (disposed || !current || !request?.opener?.isConnected || !Number.isFinite(request.clientPoint.x)
       || !Number.isFinite(request.clientPoint.y) || !targetExists(current, request.target)
       || (request.source === 'map' && store.mapMode !== 'select')) return null
 
+    const shouldPrepareSelection = !!menuOptions?.selectObjectForContext
+      && request.target.kind === 'object'
+      && (request.source === 'map' || request.source === 'hierarchy')
+      && store.activeView === 'system'
+      && store.mapMode === 'select'
+    if (pending) pending.selectionPending = false
     const menu: OwnedMenu = {
       ...request,
       target: { ...request.target },
@@ -162,10 +233,27 @@ export function usePublicationMenu(options: {
       clusterId: current.cluster.id,
       context: contextSignature(),
       mapCanvas: request.source === 'map' ? request.opener.closest('.workspace-map-canvas') : null,
+      selectionPending: shouldPrepareSelection,
       restoreFocus: closingContent => restoreFocus(menu, closingContent),
     }
-    active.value = menu
-    return { close: () => close(menu.id) }
+    const lease: PublicationMenuLease = {
+      close: () => close(menu.id),
+      isPreparingSelectionFor: objectId => menu.selectionPending
+        && menu.target.kind === 'object'
+        && objectId === menu.target.id,
+    }
+    if (shouldPrepareSelection) {
+      active.value = null
+      pending = menu
+      void openPreparedContextMenu(menu).catch(() => {
+        menu.selectionPending = false
+        close(menu.id)
+      })
+    } else {
+      pending = null
+      active.value = menu
+    }
+    return lease
   }
 
   const closeOnViewportChange = (): void => close()

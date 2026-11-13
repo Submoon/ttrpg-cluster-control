@@ -859,7 +859,7 @@ function showPublicationMenu(
     clientPoint: point,
     opener: candidate.mark,
     source: 'map',
-  })
+  }, { selectObjectForContext: true })
   if (!lease) return false
   publicationMenuLease = lease
   event.preventDefault()
@@ -1232,11 +1232,18 @@ watch(
     () => props.selectedObjectId,
     () => props.selectedOrbitId,
   ],
-  () => {
+  ([activeView, mapKey, systemId, selectedSystemId, selectedObjectId], previous) => {
+    const expectedContextSelection = publicationMenuLease?.isPreparingSelectionFor(selectedObjectId)
+      && activeView === previous[0]
+      && mapKey === previous[1]
+      && systemId === previous[2]
+      && selectedSystemId === previous[3]
     orbitInput.cancel()
     if (selectionRectangleGesture) finishSelectionRectangle(true)
-    publicationMenuLease?.close()
-    publicationMenuLease = null
+    if (!expectedContextSelection) {
+      publicationMenuLease?.close()
+      publicationMenuLease = null
+    }
     emit('cancel-object-placement-preview')
     emit('cancel-orbit-placement-preview')
   },

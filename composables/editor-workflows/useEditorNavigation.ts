@@ -795,32 +795,36 @@ export function useEditorNavigation(options: {
   }
 
   /** Replaces the transient object selection through the same draft and context guard as map navigation. */
-  async function replaceObjectSelection(objectIds: readonly string[]): Promise<void> {
+  async function replaceObjectSelection(
+    objectIds: readonly string[],
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (!isCurrent()) return false
     invalidatePendingSearchReveal()
     const entryMode = store.mapMode
-    if (objectIds.length > 0 && entryMode !== 'select') return
+    if (objectIds.length > 0 && entryMode !== 'select') return false
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
-    if (!clusterId || store.activeView !== 'system' || !systemId) return
+    if (!clusterId || store.activeView !== 'system' || !systemId) return false
     const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
-    if (!entrySystem) return
+    if (!entrySystem) return false
     const availableIds = new Set(entrySystem.objects.map(object => object.id))
     const nextIds = [...new Set(objectIds)].filter(id => availableIds.has(id))
     const currentIds = currentObjectSelection()
-    if (currentIds.length === nextIds.length && currentIds.every((id, index) => id === nextIds[index])) return
-    if (nextIds.length === 0 && currentIds.length === 0) return
+    if (currentIds.length === nextIds.length && currentIds.every((id, index) => id === nextIds[index])) return isCurrent()
+    if (nextIds.length === 0 && currentIds.length === 0) return false
 
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
     const returningToDraft = nextIds.length === 1 && entity.isEntityDraftTarget('object', nextIds[0]!)
-    if (!await transitions.resolveTransition({ leaveEntitySession: !returningToDraft })) return
+    if (!await transitions.resolveTransition({ leaveEntitySession: !returningToDraft }, isCurrent)) return false
     const latestWorkspace = workspace.value
     if (!latestWorkspace || !acceptNavigationTransition(startingStamp, startingSessionId)
       || latestWorkspace.cluster.id !== clusterId || store.selectedSystemId !== systemId
-      || store.activeView !== 'system' || store.mapMode !== entryMode) return
+      || store.activeView !== 'system' || store.mapMode !== entryMode || !isCurrent()) return false
     const latestSystem = latestWorkspace.cluster.systems.find(system => system.id === systemId)
-    if (!latestSystem || nextIds.some(id => !latestSystem.objects.some(object => object.id === id))) return
+    if (!latestSystem || nextIds.some(id => !latestSystem.objects.some(object => object.id === id))) return false
 
     setSelection({
       selectedObjectId: nextIds.length === 1 ? nextIds[0]! : null,
@@ -830,6 +834,14 @@ export function useEditorNavigation(options: {
     })
     storeCurrentSelection()
     editorError.value = ''
+    return true
+  }
+
+  /** Selects a context-menu target without collapsing a multiple selection that already contains it. */
+  async function selectContextObject(objectId: string, isCurrent: () => boolean): Promise<boolean> {
+    if (!isCurrent()) return false
+    if (currentObjectSelection().includes(objectId)) return true
+    return replaceObjectSelection([objectId], isCurrent)
   }
 
   /** Adds or removes one object from the shared map and Hierarchy selection. */
@@ -1149,6 +1161,7 @@ export function useEditorNavigation(options: {
     selectClusterSystem,
     selectObject,
     replaceObjectSelection,
+    selectContextObject,
     toggleObjectSelection,
     clearObjectSelectionForMove,
     selectOrbit,

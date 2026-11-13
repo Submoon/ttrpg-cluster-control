@@ -135,6 +135,24 @@ function createChartTransition(gate: ReturnType<typeof createMutationGate>) {
   return { ...transition, chart }
 }
 
+test('a cancelled navigation request cannot discard its pending chart draft @pure', async () => {
+  const gate = createMutationGate()
+  const chart = createChartTransition(gate)
+  let isCurrent = true
+  try {
+    const pendingTransition = chart.transitions.resolveTransition({}, () => isCurrent)
+    expect(chart.transitions.transitionGuard.value).toBe('chart')
+    isCurrent = false
+    await chart.transitions.resolveTransitionChoice('discard')
+    await expect(pendingTransition).resolves.toBe(false)
+    expect(chart.transitions.transitionGuard.value).toBeNull()
+    expect(chart.chart.session.value).not.toBeNull()
+    expect(chart.chart.clusterName.value).toBe('Kestrel Reach Prime')
+  } finally {
+    chart.dispose()
+  }
+})
+
 test('a rejected delayed Apply retains its chart draft and ignores a duplicate Discard @pure', async () => {
   const gate = createMutationGate()
   const chart = createChartTransition(gate)
