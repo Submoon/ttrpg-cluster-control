@@ -74,7 +74,9 @@ Wardens can lose the local copy of a Jump Cluster when they clear site data or s
 
 ### Live verification
 
-On 2026-11-13, the production build at `c51b92dc` ran on `http://localhost:3051` in the Codex integrated Chromium browser. With an allowlisted Google test account, the app confirmed two distinct dated copies of a synthetic Jump Cluster in its private Drive space and listed both together. The first copy downloaded as JSON and matched the reference exactly as parsed data, including GM notes, player publication, Fields, the Jump Route, and layout. Restoring that copy through the editor replacement review succeeded and the map reopened after reload. The separate-profile welcome restore is pending.
+On 2026-11-13, the production build at `c51b92dc` ran on `http://localhost:3051` in the Codex integrated Chromium browser. With an allowlisted Google test account, the app confirmed two distinct dated copies of a synthetic Jump Cluster in its private Drive space and listed both together. The first copy downloaded as JSON and matched the reference exactly as parsed data, including GM notes, player publication, Fields, the Jump Route, and layout. Restoring that copy through the editor replacement review succeeded and the map reopened after reload. The tester separately confirmed that they could open the same Jump Cluster from the welcome screen in a private browsing window using the same Google account and that it remained open after reloading.
+
+In a fresh Playwright context with controlled Google OAuth and Drive responses, the welcome flow also restored the exact Cluster, Field settings, and layout into IndexedDB and reopened them after reload. The exact JSON comparison above used the real Drive download.
 
 ## Out of Scope
 
