@@ -62,6 +62,9 @@ async function dragToClusterScenePoint(
 
 test('the Warden can move an unresolved target, preview cancellation, save it, and resolve it independently', async ({ campaignWorkspacePage: page }) => {
   test.setTimeout(60000)
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
+  await hierarchyToggle.click()
   await clickDockAction(page, 'Add Jump Route')
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
   await page.getByRole('spinbutton', { name: 'Jump level', exact: true }).fill('3')
@@ -164,6 +167,8 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
 
   await page.reload()
   await returnToClusterMap(page)
+  await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
+  await hierarchyToggle.click()
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await waitForWorkspaceSaved(page)
   const reloadedExport = await downloadJson(page, 'Export Jump Cluster JSON')
