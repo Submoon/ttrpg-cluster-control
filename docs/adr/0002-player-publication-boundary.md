@@ -19,6 +19,8 @@ An additive version 1 extension would rely on older readers retaining unknown pr
 
 ## Append-import metadata
 
+[ADR 0003](0003-restore-complete-jump-cluster-backups.md) supersedes full-cluster append import when portable restore ships. The following records the earlier import behavior.
+
 Complete backup/restore round trips retain the source cluster's player title and each system/object's publication. Ordinary JSON import still appends independent systems to the destination cluster and remaps entity IDs. It preserves incoming publication modes and the destination cluster's player title, just as it preserves the destination cluster name. The source title is not applied to a different destination chart. No additional cluster-provenance store or second workspace is introduced.
 
 ## Effective geometry before disclosure
