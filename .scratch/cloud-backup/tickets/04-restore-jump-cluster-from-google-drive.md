@@ -1,6 +1,7 @@
 ---
 title: Restore a Jump Cluster backup from Google Drive
-status: open
+status: in-progress
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
@@ -15,19 +16,19 @@ triage_labels:
 
 ## What to build
 
-Let a Warden open a complete backup from Google Drive in the editor, on the welcome screen, or on the damaged-workspace recovery screen. Send the selected file's original bytes through the same validation and restore workflow as a local file. Verify the full Drive backup and recovery journey before delivery.
+Let a Warden list dated backups in the app's private Google Drive space in the editor, on the welcome screen, or on the damaged-workspace recovery screen. Let them download a copy or restore the selected file through the same workflow as a local file. Verify the full Drive backup and recovery journey before delivery.
 
 ## Blocked by
 
 - [Restore a local Jump Cluster backup from welcome and recovery](02-restore-local-backup-from-welcome-and-recovery.md), which extends the common restore workflow to all three entry points.
-- [Back up a Jump Cluster to Google Drive](03-back-up-jump-cluster-to-google-drive.md), which supplies browser authorization, Picker, and a real uploaded backup for the round trip.
+- [Back up a Jump Cluster to Google Drive](03-back-up-jump-cluster-to-google-drive.md), which supplies browser authorization, app-data access, and the upload for the round trip.
 
 ## Acceptance criteria
 
-- [ ] A Warden can authorize Drive and select a backup from each entry point, including in a fresh browser profile with no prior site state. Accept valid supported complete Jump Cluster files, including a valid JSON file uploaded independently of the app.
+- [ ] A Warden can authorize Drive and choose a dated backup from the app's list at each entry point, including in a fresh browser profile with no prior site state. A Warden can download a listed file as portable JSON without changing the workspace.
 - [ ] The editor uses the same replacement review, pre-replacement download, draft consent, and durable commit as file restore. Welcome and recovery follow the same installation and recovery-record rules as local file restore.
 - [ ] Provider denial, cancellation, download failure, invalid content, and stale requests leave local state intact. The provider flow runs outside the local write queue until the confirmed restore is ready to commit. Local editing, autosave, file restore, and last-valid recovery remain available independently.
-- [ ] Before delivery, verify the end-to-end flow with a real Google Drive test account and two isolated browser profiles on a configured origin. Confirm a dated backup's filename and location in a private folder, refusal of a shared destination, and recovery in the second profile with GM notes, player publication, Fields, routes, and layout intact.
+- [ ] Before delivery, verify the end-to-end flow with a real Google Drive test account and two isolated browser profiles on a configured origin. Confirm the dated filename after upload, recover from the app-space list in the second profile, and verify that restore and JSON download preserve GM notes, player publication, Fields, routes, and layout.
 - [ ] Record live-provider evidence separately from controlled checks. Document the applicable Google OAuth production and brand configuration for public rollout.
 
 ## Verification

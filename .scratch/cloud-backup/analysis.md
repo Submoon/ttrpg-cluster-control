@@ -77,3 +77,7 @@ Accepted by the user on 2026-11-13:
 The user approved the combined scope on 2026-11-13 and requested the specification. During ticket review, the user reopened provider selection and requested an analysis of supported cloud providers before closing the scope.
 
 After reviewing the [cloud provider comparison](provider-research.md), the user confirmed Google Drive as the first provider on 2026-11-13 and required live verification before delivery. The user approved the four local implementation tickets listed in the [specification](spec.md). Dropbox and OneDrive are separate follow-up issues with native dependencies on #51.
+
+## Drive destination revision
+
+After testing the Google consent and folder picker, the user chose the hidden Drive application data space. This supersedes the original My Drive folder choice and sharing checks. The app requests `drive.appdata`, creates dated backups in `appDataFolder`, and lists them in its own restore UI. The Warden can download a portable JSON from that list. Local replacement and the live two-profile requirement still apply. [Application data folder](https://developers.google.com/workspace/drive/api/guides/appdata)

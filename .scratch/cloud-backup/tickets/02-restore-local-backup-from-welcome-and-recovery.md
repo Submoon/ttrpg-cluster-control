@@ -1,6 +1,7 @@
 ---
 title: Restore a local Jump Cluster backup from welcome and recovery
-status: open
+status: in-progress
+assignee: coordinator
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -8,11 +8,11 @@ triage_labels:
 
 # Back up and restore a Jump Cluster
 
-The user confirmed Google Drive for the first delivery after the [cloud provider comparison](provider-research.md) and required a live Drive round trip before delivery.
+The user confirmed Google Drive for the first delivery after the [cloud provider comparison](provider-research.md). During live testing, the user chose the hidden Drive space reserved for TTRPG Cluster Control. A live Drive round trip is required before delivery.
 
 ## Source issue
 
-[Back up and recover maps using cloud storage — GitHub #51](https://github.com/Submoon/ttrpg-cluster-control/issues/51), fetched on 2026-11-13. The issue is open with the `enhancement` label and no comments. Its first delivery calls for explicit backup and restore through one provider, the existing portable format, Warden-selected storage, a complete round trip in a fresh browser, confirmation from the provider before reporting success, and continued offline local workflows. The [approved scope and provider comparison](analysis.md) also cover correcting the existing append behavior for full local Jump Cluster JSON files.
+[Back up and recover maps using cloud storage — GitHub #51](https://github.com/Submoon/ttrpg-cluster-control/issues/51), fetched on 2026-11-13. The issue is open with the `enhancement` label and no comments. Its first delivery calls for explicit backup and restore through one provider, the existing portable format, a complete round trip in a fresh browser, confirmation from the provider before reporting success, and continued offline local workflows. The [approved scope](analysis.md) changes destination selection to the application's private Drive space and corrects the append behavior for complete local Jump Cluster JSON files.
 
 Baseline after fetching `origin` is `efd9b094634cf60d6c466f612df11cf9573b6b33`. Detached HEAD, `main`, and `origin/main` agree.
 
@@ -24,17 +24,17 @@ Wardens can lose the local copy of a Jump Cluster when they clear site data or s
 
 ## Solution
 
-**Map files** offers a manual Google Drive backup of the applied Jump Cluster alongside the existing local JSON download. The Warden chooses a verified private folder. Each backup creates a dated file. The Warden can restore a Jump Cluster backup from Drive or disk on the welcome screen, on the local recovery screen, or from the editor. Opening a backup in the editor previews the replacement and requires confirmation. Adding a standalone star system remains a separate action.
+**Map files** offers a manual Google Drive backup of the applied Jump Cluster alongside the local JSON download. Each backup creates a dated file in the hidden Drive space reserved for the application. A Warden can list, download, and restore those backups from the application after authorizing their Google account. Disk and Drive restore are available on the welcome screen, on the local recovery screen, and from the editor. Opening a backup in the editor previews the replacement and requires confirmation. Adding a standalone star system remains a separate action.
 
 ## User Stories
 
 1. As a Warden, I want to start a Google Drive backup from Map files so that I can keep an off-device copy of my work.
-2. As a Warden, I want to choose my own private folder so that I can find the backup in Drive and manage its access there.
-3. As a Warden, I want to authorize access only to selected or app-created Drive items so that I can use the feature without giving the app access to all of Drive.
+2. As a Warden, I want my backups in a private space reserved for this app so that I can save them without managing Drive folders or sharing settings.
+3. As a Warden, I want to authorize access only to the application's data space so that my other Drive files stay outside its access.
 4. As a Warden, I want the file to reflect the applied state when I click **Back up to cloud storage** so that later edits and pending drafts do not change that backup.
 5. As a Warden, I want each backup to create a new dated file so that I can keep earlier copies.
-6. As a Warden, I want the actual filename and destination after Drive confirms the write so that I can find the file and know it was saved.
-7. As a Warden, I want clear feedback if I select a shared folder, deny consent, or encounter an upload whose outcome is uncertain so that I can choose a private folder or retry safely.
+6. As a Warden, I want the confirmed filename and a dated list inside the app so that I can identify the backup to restore or download.
+7. As a Warden, I want clear feedback if I deny consent or encounter an upload whose outcome is uncertain so that I can retry safely.
 8. As a Warden, I want to open a complete backup from disk or Drive in a fresh browser so that I can resume my preparation without creating a placeholder cluster.
 9. As a Warden, I want the restored cluster to retain its names, GM notes, Fields, player publication, routes, and saved layout so that I can resume with the same map.
 10. As a Warden, I want local file and Drive choices on the recovery screen alongside the browser's last valid snapshot so that I can recover even when the current local record is damaged.
@@ -51,10 +51,10 @@ Wardens can lose the local copy of a Jump Cluster when they clear site data or s
 ### Backup files and Drive
 
 - Use the existing versioned Jump Cluster JSON format for both disk and Drive. Use the same complete applied data as the local cluster download. Preserve the source cluster's identity, geometry, GM notes, player share title and publication settings, Field definitions and values, relationships, and saved layout. Drafts, temporary editor state, browser-local workspace identity, and undo history are outside the file contract.
-- Capture one detached snapshot at the initial backup click. Keep draft and gesture state under the editor's ownership. Authorization, destination selection, upload, and feedback operate on the captured file while editing and local autosave continue independently.
-- Use Google Identity Services with short-lived browser access and `drive.file`, Google Picker for folder and file selection, and direct browser-to-Drive transfer. Keep credentials and tokens within the authorized browser flow. Load the provider on demand so local actions are usable when configuration, connectivity, or authorization is unavailable.
-- Allow a Warden-selected writable private My Drive folder only when its effective access can be verified before upload. Refuse shared or unverifiable folders. Leave sharing permissions under the Warden's control, and bypass domain default visibility on file creation. Verification is a point-in-time check. Drive can apply later permission changes to existing files. [Drive sharing](https://developers.google.com/workspace/drive/api/guides/manage-sharing) · [File creation](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/create)
-- Create a new dated file for each backup. Show the actual filename and destination after Drive confirms the completed create. Preserve previous files on cancellation, failure, or retry. A lost response after dispatch can leave the outcome uncertain. Reconcile against the same provider file identity when possible so retrying one operation does not create duplicates. [Drive upload guidance](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
+- Capture one detached snapshot at the initial backup click. Keep draft and gesture state under the editor's ownership. Authorization, upload, and feedback operate on the captured file while editing and local autosave continue independently.
+- Use Google Identity Services with short-lived browser access and `drive.appdata`. Transfer JSON directly between the browser and Drive. Load the provider on demand so local actions work independently of its configuration, connectivity, and authorization.
+- Create and list backups in `appDataFolder`. Google restricts this space to the application and prevents sharing. The app shows dated backups and offers portable JSON downloads for independent retention. Removing the integration or its application data in Drive can remove the remote copies. A different Google Cloud project has a separate application data space. [Application data folder](https://developers.google.com/workspace/drive/api/guides/appdata)
+- Create a new dated file for each backup. Show the actual filename and application space after Drive confirms the completed create. Preserve previous files on cancellation, failure, or retry. A lost response after dispatch can leave the outcome uncertain. Reconcile against the same provider file identity when possible so retrying one operation does not create duplicates. [Drive upload guidance](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
 
 ### Opening and replacing a Jump Cluster
 
@@ -66,9 +66,9 @@ Wardens can lose the local copy of a Jump Cluster when they clear site data or s
 ## Testing Decisions
 
 - At the portable format boundary, verify complete round trips for current and supported older Jump Cluster backups, exact retention of private and publication data, and rejection of incompatible input. Continue covering standalone star-system compatibility separately. Reuse the established workspace codec and publication-data coverage.
-- At the operation boundary, exercise the real backup and restore orchestration with controlled provider and storage responses. Cover capture at the initial click, denied or canceled provider actions, rejection of shared or unverifiable destinations, confirmed versus uncertain writes, stale review, and unsuccessful local commit. Assert outcomes through operation results, retained files and snapshots, and visible state.
+- At the operation boundary, exercise the real backup and restore orchestration with controlled provider and storage responses. Cover capture at the initial click, denied or canceled provider actions, app-space-only writes and listing, confirmed versus uncertain writes, stale review, and unsuccessful local commit. Assert outcomes through operation results, retained files and snapshots, and visible state.
 - Use representative browser journeys and real IndexedDB to verify the local file entry points, replacement confirmation and pre-replacement download, draft and history lifetimes, rolling recovery, and stale-tab write protection. Build on the current reviewed-import and local recovery journeys and keep deterministic cases at their narrower boundaries.
-- Before delivery, verify a real Drive round trip across two isolated browser profiles with an allowlisted account and a configured browser origin. Exercise the private folder path, refusal of a shared folder, the reported filename and destination, and complete recovery from the saved file. Record live-provider results separately from controlled browser coverage.
+- Before delivery, verify a real Drive round trip across two isolated browser profiles with an allowlisted account and a configured browser origin. Confirm the first profile reports the completed backup, the second profile lists the dated file in the application space, and restore and JSON download preserve the complete backup. Record live-provider results separately from controlled browser coverage.
 
 ## Out of Scope
 
