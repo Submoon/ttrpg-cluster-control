@@ -5,20 +5,28 @@
     :modal="false"
     :content="{ side: 'bottom', align: 'end', sideOffset: 8, collisionPadding: 12, onCloseAutoFocus: closeFocus.settleClosingFocus }"
   >
-    <UButton
-      ref="trigger"
-      class="workspace-control workspace-map-files-toggle"
-      color="neutral"
-      :variant="open ? 'soft' : 'outline'"
-      size="sm"
-      aria-label="Map files"
-      :aria-controls="panelId"
-      :aria-expanded="open"
-      :title="scopeLabel"
-    >
-      <span>Map files</span>
-      <UIcon :name="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" aria-hidden="true" />
-    </UButton>
+    <UTooltip :text="props.iconOnly ? 'Map files' : undefined">
+      <UButton
+        ref="trigger"
+        class="workspace-control workspace-map-files-toggle"
+        :class="{ 'workspace-map-icon-control': props.iconOnly }"
+        color="neutral"
+        :variant="open ? 'soft' : 'outline'"
+        size="sm"
+        aria-label="Map files"
+        :aria-controls="panelId"
+        :aria-expanded="open"
+        :title="props.iconOnly ? undefined : scopeLabel"
+      >
+        <template v-if="props.iconOnly">
+          <UIcon name="i-lucide-folder-open" aria-hidden="true" />
+        </template>
+        <template v-else>
+          <span>Map files</span>
+          <UIcon :name="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" aria-hidden="true" />
+        </template>
+      </UButton>
+    </UTooltip>
 
     <template #content>
       <div
@@ -41,9 +49,11 @@ import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBa
 
 const props = withDefaults(defineProps<{
   scope: string
+  /** Show only the files icon with a tooltip in map chrome. */
+  iconOnly?: boolean
   panelId?: string
   portal?: boolean
-}>(), { portal: true })
+}>(), { iconOnly: false, portal: true })
 const open = defineModel<boolean>('open', { required: true })
 const closeFocus = useDialogCloseFocusBarrier(open)
 const trigger = useTemplateRef('trigger')

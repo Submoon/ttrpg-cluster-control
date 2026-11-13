@@ -11,22 +11,47 @@
     <template #left>
       <div class="workspace-map-context-line">
         <div class="workspace-map-title">
-          <UButton
-            v-if="activeView === 'system'"
-            class="workspace-control workspace-map-back"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Back to Jump Cluster"
-            title="Back to Jump Cluster"
-            @click="emit('show-cluster')"
-          >
-            <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-            <span>Back</span>
-          </UButton>
+          <UTooltip v-if="activeView === 'system'" text="Back to Jump Cluster">
+            <UButton
+              class="workspace-control workspace-map-back workspace-map-icon-control"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              aria-label="Back to Jump Cluster"
+              @click="emit('show-cluster')"
+            >
+              <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
+            </UButton>
+          </UTooltip>
           <div class="workspace-map-heading">
             <span data-testid="workspace-map-context-kind">{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
-            <h2>{{ contextName }}</h2>
+            <h2 :aria-labelledby="mapNameLabelId">
+              <UPopover
+                v-model:open="mapNameDisclosureOpen"
+                :modal="false"
+                :content="{
+                  side: 'bottom', align: 'start', sideOffset: 4, collisionPadding: 12,
+                  onOpenAutoFocus: event => event.preventDefault(),
+                }"
+              >
+                <UButton
+                  class="workspace-control workspace-map-name-trigger"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="`${contextName}, show full map name`"
+                  :aria-expanded="mapNameDisclosureOpen"
+                >
+                  <span :id="mapNameLabelId" class="workspace-map-name-text">{{ contextName }}</span>
+                  <UIcon name="i-lucide-chevron-down" class="workspace-map-name-disclosure-icon" aria-hidden="true" />
+                </UButton>
+                <template #content>
+                  <div class="workspace-map-name-popover" data-map-obstruction>
+                    <p class="workspace-map-full-name">{{ contextName }}</p>
+                  </div>
+                </template>
+              </UPopover>
+            </h2>
           </div>
         </div>
         <template v-if="props.creationSession || props.clusterAddPresentation">
@@ -84,6 +109,7 @@
       <slot name="history" />
       <MapTypeFilters
         v-if="activeView === 'system' && selectedSystem"
+        :icon-only="true"
         v-model:open="typeFiltersOpen"
         v-model:selected-types="selectedTypes"
         v-model:publication-modes="selectedPublicationModes"
@@ -108,6 +134,7 @@
       </p>
       <WorkspaceSearch
         ref="workspaceSearch"
+        :icon-only="true"
         v-model:open="searchOpen"
         v-model:query="searchQuery"
         :results="props.searchResults"
@@ -134,36 +161,41 @@
         </template>
       </WorkspaceSearch>
       <div class="workspace-map-panel-actions" role="group" aria-label="Map panels">
-        <UButton
-          class="workspace-control"
-          color="neutral"
-          :variant="hierarchyOpen ? 'soft' : 'outline'"
-          size="sm"
-          aria-label="Hierarchy"
-          aria-controls="workspace-hierarchy-panel"
-          :aria-expanded="hierarchyOpen"
-          @click="emit('toggle-hierarchy')"
-        >
-          Hierarchy
-        </UButton>
-        <UButton
-          class="workspace-control"
-          color="neutral"
-          :variant="inspectorOpen ? 'soft' : 'outline'"
-          size="sm"
-          aria-label="Inspect"
-          aria-controls="workspace-inspector-panel"
-          :aria-expanded="inspectorOpen"
-          @click="emit('toggle-inspector')"
-        >
-          Inspect
-        </UButton>
+        <UTooltip text="Hierarchy">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            :variant="hierarchyOpen ? 'soft' : 'outline'"
+            size="sm"
+            aria-label="Hierarchy"
+            aria-controls="workspace-hierarchy-panel"
+            :aria-expanded="hierarchyOpen"
+            @click="emit('toggle-hierarchy')"
+          >
+            <UIcon name="i-lucide-network" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
+        <UTooltip text="Inspect">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            :variant="inspectorOpen ? 'soft' : 'outline'"
+            size="sm"
+            aria-label="Inspect"
+            aria-controls="workspace-inspector-panel"
+            :aria-expanded="inspectorOpen"
+            @click="emit('toggle-inspector')"
+          >
+            <UIcon name="i-lucide-panel-right" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
       </div>
 
       <MapFilesPopover
         ref="mapFiles"
         v-model:open="headerMapActionsOpen"
         :scope="mapFileScope"
+        :icon-only="true"
         panel-id="workspace-header-map-files-panel"
       >
         <div class="workspace-map-files-exports">
@@ -332,7 +364,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
 import type { MapObjectTypeOption } from '../utils/map-type-filters'
@@ -414,6 +446,8 @@ const emit = defineEmits<{
 
 const headerMapActionsOpen = ref(false)
 const mapFiles = ref<InstanceType<typeof MapFilesPopover> | null>(null)
+const mapNameDisclosureOpen = ref(false)
+const mapNameLabelId = `workspace-map-name-${useId()}`
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const searchSelectedTypes = defineModel<string[]>('searchSelectedTypes', { default: () => [] })
@@ -452,6 +486,8 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
   : `star system ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
+
+watch(contextName, () => { mapNameDisclosureOpen.value = false })
 
 function whenSearchClosingFocusSettled(): Promise<void> {
   return workspaceSearch.value?.whenClosingFocusSettled() ?? Promise.resolve()
@@ -565,17 +601,15 @@ defineExpose({ whenSearchClosingFocusSettled })
 }
 
 :global(.workspace-map-chrome .workspace-map-context h2) {
+  width: 100%;
   min-width: 0;
-  max-width: min(32vw, 28rem);
-  flex: 0 1 auto;
+  max-width: min(52vw, 36rem);
+  flex: 1 1 auto;
   margin: 0;
-  overflow: hidden;
   font-family: Georgia, serif;
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 1.2rem;
+  font-weight: 600;
   line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspace-map-context-line {
@@ -598,7 +632,57 @@ defineExpose({ whenSearchClosingFocusSettled })
 .workspace-map-heading {
   display: grid;
   min-width: 0;
+  flex: 1 1 auto;
   gap: 0.12rem;
+}
+
+.workspace-map-name-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.5rem;
+  max-width: 100%;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  overflow: hidden;
+  padding: 0 0.15rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.workspace-map-name-text {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-map-name-disclosure-icon {
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--text-muted);
+}
+
+.workspace-map-name-popover {
+  max-width: min(30rem, calc(100vw - 2rem));
+  border: 1px solid var(--line-soft);
+  border-radius: 0.35rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--panel-raised);
+  color: var(--text-primary);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 24%);
+}
+
+.workspace-map-full-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .workspace-add-status {
@@ -632,6 +716,17 @@ defineExpose({ whenSearchClosingFocusSettled })
 
 .workspace-map-back {
   flex: 0 0 auto;
+}
+
+:global(.workspace-map-icon-control) {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+  padding-inline: 0.55rem;
+}
+
+:global(.workspace-map-icon-control.workspace-control) {
+  font-size: 1.125rem;
 }
 
 .workspace-map-files-exports {
@@ -705,8 +800,8 @@ defineExpose({ whenSearchClosingFocusSettled })
   }
 
   :global(.workspace-map-chrome .workspace-map-context h2) {
-    max-width: min(52vw, 20rem);
-    font-size: 0.9rem;
+    max-width: 100%;
+    font-size: 1.05rem;
   }
 
   :global(.workspace-map-chrome .workspace-map-actions) {
@@ -715,7 +810,23 @@ defineExpose({ whenSearchClosingFocusSettled })
   }
 
   .workspace-map-back {
-    min-height: 2rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-height: 600px) and (min-width: 761px) {
+  :global(.workspace-map-chrome) {
+    flex-wrap: nowrap;
+  }
+
+  :global(.workspace-map-chrome .workspace-map-context h2) {
+    max-width: min(30vw, 22rem);
+    font-size: 1.05rem;
+  }
+
+  :global(.workspace-map-chrome .workspace-map-actions) {
+    width: auto;
+    flex: 0 1 auto;
   }
 }
 </style>
