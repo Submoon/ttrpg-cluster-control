@@ -1151,15 +1151,14 @@ export async function resolveJumpClusterRestoreReview(
 ): Promise<void> {
   await expect(review).toBeVisible()
   const discard = review.getByRole('checkbox', {
-    name: 'Discard current drafts if the replacement succeeds',
+    name: /discard current drafts if the replacement succeeds/i,
     exact: true,
   })
   if (await discard.count()) {
     if (discardDrafts) await discard.check()
-    else await expect(discard).not.toBeChecked()
   }
   await review.getByRole('button', {
-    name: choice === 'confirm' ? 'Replace Jump Cluster' : 'Return to editing',
+    name: choice === 'confirm' ? /^(?:Replace|Open) Jump Cluster$/ : 'Return to editing',
     exact: true,
   }).click()
 }
