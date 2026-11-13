@@ -4,6 +4,7 @@ import type { LocalWorkspace } from '../domain/workspace'
 import {
   GoogleDriveApiError,
   generateGoogleDriveFileId,
+  googleDriveFolderUrl,
   uploadGoogleDriveBackup,
   verifyPrivateGoogleDriveFolder,
 } from '../utils/google-drive-api'
@@ -19,14 +20,24 @@ import type { GoogleDriveBackupSnapshot } from '../utils/google-drive-backup-sna
 
 export type GoogleDriveBackupState = 'idle' | 'preparing' | 'continue' | 'authorizing' | 'selecting' | 'uploading' | 'retry'
 
+interface GoogleDriveRuntimeConfig {
+  public: {
+    googleDriveClientId: string
+    googleDriveProjectNumber: string
+    googleDriveApiKey: string
+  }
+}
+
 export interface GoogleDriveBackupController {
   readonly state: Readonly<Ref<GoogleDriveBackupState>>
   readonly message: Readonly<Ref<string>>
+  readonly destination: Readonly<Ref<{ name: string, url: string } | undefined>>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
   readonly buttonLabel: ComputedRef<string>
   activate(): void
   cancelBeforeUpload(): void
+  startNewBackupInstead(): void
 }
 
 interface BackupAttempt {
@@ -40,15 +51,25 @@ interface BackupAttempt {
  * Owns one page-lifetime Drive backup flow so closing a Map files popover cannot discard its
  * captured bytes, retry identity, or result. The workspace getter is read only at initial click.
  */
-export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | undefined): GoogleDriveBackupController {
-  const runtimeConfig = useRuntimeConfig()
+export function useGoogleDriveBackup(
+  workspace: () => LocalWorkspace | null | undefined,
+  runtimeConfig: GoogleDriveRuntimeConfig = useRuntimeConfig(),
+): GoogleDriveBackupController {
   const state = ref<GoogleDriveBackupState>('idle')
-  const message = ref('')
+  const operationMessage = ref('')
+  const unresolvedAttemptCount = ref(0)
+  const uncertaintyNotice = computed(() => unresolvedAttemptCount.value > 0
+    ? 'At least one earlier backup may already be saved in Google Drive; its status was not confirmed.'
+    : '')
+  const message = computed(() => [uncertaintyNotice.value, operationMessage.value].filter(Boolean).join(' '))
+  const destination = ref<{ name: string, url: string }>()
   const snapshot = ref<GoogleDriveBackupSnapshot>()
   const retryAttempt = ref<BackupAttempt>()
   const isDisposed = ref(false)
   let operationSequence = 0
   let activeOperation = 0
+  let activeAbortController: AbortController | undefined
+  const unresolvedAttemptIds = new Set<string>()
 
   const busy = computed(() => ['preparing', 'authorizing', 'selecting', 'uploading'].includes(state.value))
   const canCancel = computed(() => ['preparing', 'continue', 'authorizing', 'selecting'].includes(state.value))
@@ -70,16 +91,20 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
     if (state.value === 'idle') startBackup()
   }
 
-  function startBackup(): void {
+  function startNewBackupInstead(): void {
+    if (state.value === 'retry') startBackup(true)
+  }
+
+  function startBackup(abandonUncertainAttempt = false): void {
     const config = readConfig()
     if (!config) {
-      message.value = 'Google Drive backup is not configured for this site.'
+      operationMessage.value = 'Google Drive backup is not configured for this site.'
       return
     }
 
     const appliedWorkspace = workspace()
     if (!appliedWorkspace) {
-      message.value = 'Open a Jump Cluster before starting a Google Drive backup.'
+      operationMessage.value = 'Open a Jump Cluster before starting a Google Drive backup.'
       return
     }
 
@@ -88,14 +113,16 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
       // Capture the applied data synchronously before scripts, authorization, or Picker can yield.
       nextSnapshot = createGoogleDriveBackupSnapshot(appliedWorkspace)
     } catch (error) {
-      message.value = getErrorMessage(error, 'The applied Jump Cluster could not be captured for backup.')
+      operationMessage.value = getErrorMessage(error, 'The applied Jump Cluster could not be captured for backup.')
       return
     }
 
     const operation = beginOperation()
     snapshot.value = nextSnapshot
     retryAttempt.value = undefined
-    message.value = ''
+    operationMessage.value = abandonUncertainAttempt
+      ? 'Starting a separate dated backup. The earlier backup may still be in Drive.'
+      : ''
 
     if (googleDriveServicesAreLoaded()) {
       void authorizeAndSelectFolder(operation)
@@ -106,12 +133,12 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
     void loadGoogleDriveServices().then(() => {
       if (!isCurrent(operation)) return
       state.value = 'continue'
-      message.value = 'Google Drive is ready. Continue to sign in and choose a private folder.'
+      operationMessage.value = 'Google Drive is ready. Continue to sign in and choose a private folder.'
     }).catch(error => {
       if (!isCurrent(operation)) return
       snapshot.value = undefined
       state.value = 'idle'
-      message.value = getErrorMessage(error, 'Google Drive could not be loaded. Your local map is unchanged.')
+      operationMessage.value = getErrorMessage(error, 'Google Drive could not be loaded. Your local map is unchanged.')
     })
   }
 
@@ -131,6 +158,7 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
       const selected = await pickGoogleDriveFolder({
         accessToken,
         config: { apiKey: config.apiKey, projectNumber: config.projectNumber },
+        signal: activeAbortController?.signal,
       })
       if (!isCurrent(operation)) return
       if (!selected) {
@@ -138,9 +166,9 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
         return
       }
 
-      const folder = await verifyPrivateGoogleDriveFolder(accessToken, selected.id)
-      if (!isCurrent(operation)) return
       const fileId = await generateGoogleDriveFileId(accessToken)
+      if (!isCurrent(operation)) return
+      const folder = await verifyPrivateGoogleDriveFolder(accessToken, selected.id)
       if (!isCurrent(operation)) return
 
       const attempt: BackupAttempt = {
@@ -174,21 +202,26 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
 
       const folder = await verifyPrivateGoogleDriveFolder(accessToken, attempt.folderId)
       if (!isCurrent(operation)) return
-      await saveBackup(accessToken, { ...attempt, folderName: folder.name }, operation)
+      await saveBackup(accessToken, { ...attempt, folderName: folder.name }, operation, true)
     } catch (error) {
       if (!isCurrent(operation)) return
       if (error instanceof GoogleDriveCancelledError) {
         state.value = 'retry'
-        message.value = 'Google Drive authorization was canceled. You can retry the same backup.'
+        operationMessage.value = 'Google Drive authorization was canceled. You can retry the same backup or start a new one.'
         return
       }
       // The previous upload might already exist even if this retry cannot check or write it.
       state.value = 'retry'
-      message.value = `${getErrorMessage(error, 'Google Drive could not check the backup.')} The earlier upload outcome is still unconfirmed; retry the same backup to check its file.`
+      operationMessage.value = `${getErrorMessage(error, 'Google Drive could not check the backup.')} The earlier upload outcome is still unconfirmed; retry the same file or start a new dated backup.`
     }
   }
 
-  async function saveBackup(accessToken: string, attempt: BackupAttempt, operation: number): Promise<void> {
+  async function saveBackup(
+    accessToken: string,
+    attempt: BackupAttempt,
+    operation: number,
+    preserveUncertaintyOnFailure = false,
+  ): Promise<void> {
     if (!isCurrent(operation)) return
     state.value = 'uploading'
     retryAttempt.value = attempt
@@ -200,33 +233,51 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
         fileId: attempt.fileId,
         filename: attempt.snapshot.filename,
         contents: attempt.snapshot.contents,
+        verifyBeforeMediaUpload: async () => {
+          if (!isCurrent(operation)) {
+            throw new GoogleDriveApiError('request-failed', 'Backup canceled before the file data was sent.')
+          }
+          await verifyPrivateGoogleDriveFolder(accessToken, attempt.folderId)
+          if (!isCurrent(operation)) {
+            throw new GoogleDriveApiError('request-failed', 'Backup canceled before the file data was sent.')
+          }
+        },
       })
       if (!isCurrent(operation)) return
 
       state.value = 'idle'
       snapshot.value = undefined
       retryAttempt.value = undefined
-      message.value = `Saved ${saved.name} to ${saved.folderName}.`
+      if (preserveUncertaintyOnFailure) resolveUncertainty(attempt)
+      destination.value = { name: saved.folderName, url: saved.folderUrl || googleDriveFolderUrl(attempt.folderId) }
+      operationMessage.value = `Saved ${saved.name} to ${saved.folderName}.`
     } catch (error) {
       if (!isCurrent(operation)) return
+      if (preserveUncertaintyOnFailure && retryAttempt.value) {
+        rememberUncertainty(attempt)
+        state.value = 'retry'
+        operationMessage.value = `${getErrorMessage(error, 'Google Drive could not confirm the backup.')} The earlier outcome remains unknown; retry the same file or start a new dated backup.`
+        return
+      }
       finishFailedAttempt(operation, error)
     }
   }
 
   function cancelBeforeUpload(): void {
     if (!canCancel.value) return
+    activeAbortController?.abort()
     ++operationSequence
     activeOperation = operationSequence
 
     if (retryAttempt.value) {
       state.value = 'retry'
-      message.value = 'Canceled before another upload. The earlier upload outcome is still unconfirmed; retry the same backup to check its file.'
+      operationMessage.value = 'Canceled before another upload. The earlier upload outcome is still unconfirmed.'
       return
     }
 
     state.value = 'idle'
     snapshot.value = undefined
-    message.value = 'Backup canceled before upload. No backup file was created.'
+    operationMessage.value = 'Backup canceled before upload. No backup file was created.'
   }
 
   function finishCanceledAttempt(operation: number, status: string): void {
@@ -234,26 +285,40 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
     state.value = 'idle'
     snapshot.value = undefined
     retryAttempt.value = undefined
-    message.value = status
+    operationMessage.value = status
   }
 
   function finishFailedAttempt(operation: number, error: unknown): void {
     if (!isCurrent(operation)) return
     if (error instanceof GoogleDriveApiError && error.outcomeUncertain && retryAttempt.value) {
+      rememberUncertainty(retryAttempt.value)
       state.value = 'retry'
-      message.value = error.message
+      operationMessage.value = error.message
       return
     }
 
     state.value = 'idle'
     snapshot.value = undefined
     retryAttempt.value = undefined
-    message.value = getErrorMessage(error, 'Google Drive backup failed. Your local map is unchanged.')
+    operationMessage.value = getErrorMessage(error, 'Google Drive backup failed. Your local map is unchanged.')
   }
 
   function beginOperation(): number {
+    activeAbortController?.abort()
+    activeAbortController = new AbortController()
     activeOperation = ++operationSequence
     return activeOperation
+  }
+
+  function rememberUncertainty(attempt: BackupAttempt): void {
+    if (unresolvedAttemptIds.has(attempt.fileId)) return
+    unresolvedAttemptIds.add(attempt.fileId)
+    unresolvedAttemptCount.value = unresolvedAttemptIds.size
+  }
+
+  function resolveUncertainty(attempt: BackupAttempt): void {
+    if (!unresolvedAttemptIds.delete(attempt.fileId)) return
+    unresolvedAttemptCount.value = unresolvedAttemptIds.size
   }
 
   function isCurrent(operation: number): boolean {
@@ -265,22 +330,25 @@ export function useGoogleDriveBackup(workspace: () => LocalWorkspace | null | un
     const projectNumber = runtimeConfig.public.googleDriveProjectNumber
     const apiKey = runtimeConfig.public.googleDriveApiKey
     if (!clientId.trim() || !projectNumber.trim() || !apiKey.trim()) return undefined
-    return { clientId, projectNumber, apiKey }
+    return { clientId: clientId.trim(), projectNumber: projectNumber.trim(), apiKey: apiKey.trim() }
   }
 
   onScopeDispose(() => {
     isDisposed.value = true
+    activeAbortController?.abort()
     activeOperation = ++operationSequence
   })
 
   return {
     state,
     message,
+    destination,
     busy,
     canCancel,
     buttonLabel,
     activate,
     cancelBeforeUpload,
+    startNewBackupInstead,
   }
 }
 

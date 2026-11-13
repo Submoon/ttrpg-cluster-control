@@ -2,6 +2,7 @@ const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
 const GOOGLE_API_SCRIPT = 'https://apis.google.com/js/api.js'
 const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const GOOGLE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+const PICKER_DEADLINE_MS = 5 * 60_000
 
 export interface GoogleDrivePickerConfig {
   apiKey: string
@@ -45,6 +46,7 @@ interface PickerData {
 }
 
 interface PickerView {
+  setMode(mode: string): PickerView
   setIncludeFolders(value: boolean): PickerView
   setSelectFolderEnabled(value: boolean): PickerView
   setMimeTypes(value: string): PickerView
@@ -67,6 +69,7 @@ interface GooglePickerApi {
   DocsView: new (viewId: string) => PickerView
   PickerBuilder: new () => PickerBuilder
   ViewId: { FOLDERS: string, DOCS: string }
+  DocsViewMode: { LIST: string }
   Action: { PICKED: string, CANCEL: string, ERROR: string }
 }
 
@@ -102,10 +105,14 @@ export function loadGoogleDriveServices(): Promise<void> {
   const browser = getBrowserWindow()
   if (hasGoogleDriveServices(browser)) return Promise.resolve()
 
-  servicesLoading ??= Promise.all([
+  servicesLoading ??= Promise.allSettled([
     loadScript('google-identity-services', GOOGLE_IDENTITY_SCRIPT),
     loadScript('google-api-client', GOOGLE_API_SCRIPT),
-  ]).then(() => loadPickerApi(browser)).catch(error => {
+  ]).then(([identity, api]) => {
+    if (identity.status === 'rejected') throw identity.reason
+    if (api.status === 'rejected') throw api.reason
+    return loadPickerApi(browser)
+  }).catch(error => {
     servicesLoading = undefined
     throw error
   })
@@ -179,14 +186,16 @@ export function requestGoogleDriveAccessToken(clientId: string): Promise<string>
 export async function pickGoogleDriveFolder(options: {
   accessToken: string
   config: GoogleDrivePickerConfig
+  signal?: AbortSignal
 }): Promise<GoogleDrivePickerItem | null> {
   const picker = await getPickerApi()
+  throwIfAborted(options.signal)
   const view = new picker.DocsView(picker.ViewId.FOLDERS)
     .setIncludeFolders(true)
     .setSelectFolderEnabled(true)
     .setMimeTypes(GOOGLE_FOLDER_MIME_TYPE)
 
-  return openPicker(picker, options.accessToken, options.config, view)
+  return openPicker(picker, options.accessToken, options.config, view, options.signal)
 }
 
 /**
@@ -196,10 +205,14 @@ export async function pickGoogleDriveFolder(options: {
 export async function pickGoogleDriveBackupFile(options: {
   accessToken: string
   config: GoogleDrivePickerConfig
+  signal?: AbortSignal
 }): Promise<GoogleDrivePickerItem | null> {
   const picker = await getPickerApi()
-  const view = new picker.DocsView(picker.ViewId.DOCS).setIncludeFolders(false)
-  return openPicker(picker, options.accessToken, options.config, view)
+  throwIfAborted(options.signal)
+  const view = new picker.DocsView(picker.ViewId.DOCS)
+    .setMode(picker.DocsViewMode.LIST)
+    .setIncludeFolders(false)
+  return openPicker(picker, options.accessToken, options.config, view, options.signal)
 }
 
 async function getPickerApi(): Promise<GooglePickerApi> {
@@ -214,33 +227,70 @@ function openPicker(
   accessToken: string,
   config: GoogleDrivePickerConfig,
   view: PickerView,
+  signal?: AbortSignal,
 ): Promise<GoogleDrivePickerItem | null> {
   if (!config.apiKey.trim() || !config.projectNumber.trim()) {
     return Promise.reject(new Error('Google Drive Picker is not configured for this site.'))
   }
 
   return new Promise((resolve, reject) => {
-    const instance = new picker.PickerBuilder()
+    const browser = getBrowserWindow()
+    let instance: PickerInstance | undefined
+    let settled = false
+    const timeout = browser.setTimeout(() => {
+      finishReject(new Error('Google Drive Picker did not finish. Try again.'))
+    }, PICKER_DEADLINE_MS)
+    const cleanup = () => {
+      browser.clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+      try {
+        instance?.setVisible(false)
+      } catch {
+        // Picker can already be closed by Google when it reports CANCEL or ERROR.
+      }
+    }
+    const finishResolve = (selection: GoogleDrivePickerItem | null) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(selection)
+    }
+    const finishReject = (error: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onAbort = () => finishReject(new GoogleDriveCancelledError('Google Drive Picker was closed because this operation was canceled.'))
+
+    if (signal?.aborted) {
+      finishReject(new GoogleDriveCancelledError('Google Drive Picker was closed because this operation was canceled.'))
+      return
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    try {
+      instance = new picker.PickerBuilder()
       .addView(view)
       .setOAuthToken(accessToken)
       .setDeveloperKey(config.apiKey)
       .setAppId(config.projectNumber)
       .setCallback(data => {
         if (data.action === picker.Action.CANCEL) {
-          resolve(null)
+          finishResolve(null)
           return
         }
         if (data.action === picker.Action.ERROR) {
-          reject(new Error('Google Drive Picker failed. Check its configuration and try again.'))
+          finishReject(new Error('Google Drive Picker failed. Check its configuration and try again.'))
           return
         }
         if (data.action !== picker.Action.PICKED) return
         const item = data.docs?.[0]
         if (!item || typeof item.id !== 'string' || typeof item.name !== 'string') {
-          reject(new Error('Google Drive did not return a valid selection.'))
+          finishReject(new Error('Google Drive did not return a valid selection.'))
           return
         }
-        resolve({
+        finishResolve({
           id: item.id,
           name: item.name,
           ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
@@ -248,10 +298,9 @@ function openPicker(
       })
       .build()
 
-    try {
       instance.setVisible(true)
     } catch {
-      reject(new Error('Google Drive Picker could not be opened. Try again.'))
+      finishReject(new Error('Google Drive Picker could not be opened. Try again.'))
     }
   })
 }
@@ -297,6 +346,12 @@ function loadScript(id: string, source: string): Promise<void> {
     }
     if (!existing) document.head.append(script)
   })
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new GoogleDriveCancelledError('Google Drive Picker was closed because this operation was canceled.')
+  }
 }
 
 function hasGoogleDriveServices(browser: GoogleBrowserWindow): boolean {
