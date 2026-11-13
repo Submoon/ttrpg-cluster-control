@@ -3,12 +3,13 @@ import campaignBaselineFixture from '../fixtures/workspace-data-campaign-baselin
 import {
   waitForWorkspaceSaved,
   captureMapExportBlobs,
-  importReviewDialog,
-  jsonMapImportInput,
-  resolveImportReview,
+  jumpClusterRestoreReviewDialog,
+  openJumpClusterRestorePicker,
+  resolveJumpClusterRestoreReview,
   returnToClusterMap,
   setJsonFile,
   waitForWorkspaceStartup,
+  workspaceMapContextType,
   workspaceZoomControls,
 } from '../helpers'
 
@@ -24,16 +25,21 @@ export async function importCampaignWorkspace(
   if (viewport) await page.setViewportSize(viewport)
   await page.goto('/')
   await waitForWorkspaceStartup(page)
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
+  await page.getByLabel('Jump Cluster').fill('Campaign staging')
   await page.getByLabel('First star system').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(fixture))
-  const preview = importReviewDialog(page)
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('Jump Routes: 1')
-  await resolveImportReview(preview, 'confirm')
-  await returnToClusterMap(page)
+  await setJsonFile(
+    await openJumpClusterRestorePicker(page),
+    'campaign-baseline.json',
+    JSON.stringify(fixture),
+  )
+  const preview = jumpClusterRestoreReviewDialog(page)
+  await expect(preview).toContainText('Campaign staging')
+  await expect(preview).toContainText(fixture.cluster.name)
+  await resolveJumpClusterRestoreReview(preview, 'confirm')
+  await expect(preview).toBeHidden()
+  await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await waitForWorkspaceSaved(page)
 }

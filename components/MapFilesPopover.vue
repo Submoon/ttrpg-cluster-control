@@ -61,12 +61,16 @@ const generatedPanelId = useId()
 const panelId = computed(() => props.panelId ?? `map-files-${generatedPanelId}`)
 const scopeLabel = computed(() => `Map file actions for ${props.scope}`)
 
-function focusTrigger(): void {
+function triggerElement(): HTMLElement | null {
   const button = trigger.value?.$el
-  if (button instanceof HTMLElement) button.focus({ preventScroll: true })
+  return button instanceof HTMLElement ? button : null
 }
 
-defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled, focusTrigger })
+function focusTrigger(): void {
+  triggerElement()?.focus({ preventScroll: true })
+}
+
+defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled, focusTrigger, triggerElement })
 </script>
 
 <style scoped>

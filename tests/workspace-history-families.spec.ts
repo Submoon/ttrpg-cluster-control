@@ -493,7 +493,9 @@ test('an import reopens consequence review when shared Fields change while draft
       return true
     },
   })
-  const input = fakeImportInput(JSON.stringify(exportJumpCluster(sourceMap)))
+  const importSystem = sourceMap.cluster.systems[0]
+  if (!importSystem) throw new Error('The import review fixture has no standalone system.')
+  const input = fakeImportInput(JSON.stringify(exportStarSystem(sourceMap, importSystem.id)))
 
   try {
     await harness.files.importJsonFile(input.event)
@@ -537,11 +539,13 @@ test('an import capacity cancellation keeps the reviewed copy available without 
   let settleCapacity: ((accepted: boolean) => void) | undefined
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The import capacity fixture has no standalone system.')
   const harness = makeFileActions(initial, {
     maxBytes: 1,
     confirmCapacity: () => new Promise<boolean>((resolve) => { settleCapacity = resolve }),
   })
-  const input = fakeImportInput(JSON.stringify(exportJumpCluster(source)))
+  const input = fakeImportInput(JSON.stringify(exportStarSystem(source, sourceSystem.id)))
 
   try {
     await harness.files.importJsonFile(input.event)
@@ -568,11 +572,13 @@ test('a stale import capacity answer cannot publish into a replacement workspace
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const replacement = createLocalWorkspace('New Reach', 'Different System')
   const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The stale import capacity fixture has no standalone system.')
   const harness = makeFileActions(initial, {
     maxBytes: 1,
     confirmCapacity: () => new Promise<boolean>((resolve) => { settleCapacity = resolve }),
   })
-  const input = fakeImportInput(JSON.stringify(exportJumpCluster(source)))
+  const input = fakeImportInput(JSON.stringify(exportStarSystem(source, sourceSystem.id)))
 
   try {
     await harness.files.importJsonFile(input.event)

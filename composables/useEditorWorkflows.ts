@@ -23,21 +23,23 @@ import { useSelectedObjectDrag } from './editor-workflows/selected-object-drag'
 import { searchWorkspace } from '../utils/workspace-search'
 import { reconcileFieldConditions, wardenFieldFilterOptions } from '../utils/warden-map-filters'
 import { usePublicationMenu } from './usePublicationMenu'
-import type { FieldCondition } from '../utils/field-filter-matching'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
 import type { SearchResult, WorkspaceSearchCriteria } from '../utils/workspace-search'
 
-type PublicationFocusWorkflowOptions = EditorWorkflowOptions & {
+type EditorWorkflowsOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
   canRestorePublicationFocus?: (request: PublicationMenuRequest) => boolean
+  /** Announces that Search removed criteria invalidated by a Field or choice change. */
+  onSearchFiltersInvalidated?: () => void
+  /** Announces the applied Orbit radii adjustment caused by a new host minimum. */
+  onOrbitRadiiIncreased?: (minimum: number) => void
 }
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
-export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
+export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
-  const searchFieldInvalidationNotice = ref<string | null>(null)
   const workspaceContextId = computed(() => {
     const current = workspace.value
     return current ? `${current.id}:${current.cluster.id}` : null
@@ -46,7 +48,6 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   watch(workspaceContextId, contextId => {
     if (store.workspaceId !== contextId) {
       store.reset(contextId)
-      searchFieldInvalidationNotice.value = null
     }
   }, { immediate: true, flush: 'sync' })
   onBeforeUnmount(() => store.reset(null))
@@ -218,18 +219,8 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     const reconciliation = reconcileFieldConditions(conditions, wardenFieldFilterOptions(currentWorkspace))
     if (!reconciliation.changed) return
     store.setSearchFieldConditions(reconciliation.conditions)
-    searchFieldInvalidationNotice.value = 'Search filters updated because a Field or choice is no longer available.'
+    options.onSearchFiltersInvalidated?.()
   }, { flush: 'sync' })
-
-  function setSearchFieldConditions(conditions: readonly FieldCondition[]): void {
-    searchFieldInvalidationNotice.value = null
-    store.setSearchFieldConditions(conditions)
-  }
-
-  function resetSearch(): void {
-    searchFieldInvalidationNotice.value = null
-    store.resetSearch()
-  }
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
@@ -248,6 +239,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
     createCommittedOrbitCenterAppliedHandler: entity.createCommittedOrbitCenterAppliedHandler,
+    onOrbitRadiiIncreased: options.onOrbitRadiiIncreased,
     editorError,
     orbitAdjustments,
     beforeWorkspaceOperation,
@@ -430,6 +422,29 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     fields.endCleanHistorySession()
   }
 
+  /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
+  function resetForWorkspaceReplacement(): void {
+    transitions.cancelPendingTransition()
+    const chartSession = charts.session.value
+    if (chartSession) charts.discard(chartSession.id)
+    const entitySession = entity.entitySession.value
+    if (entitySession) entity.discardEntitySession(entitySession.id)
+    const routeSession = route.routeSession.value
+    if (routeSession) route.discardRouteSession(routeSession.id)
+    fields.resetForWorkspaceReplacement()
+    cluster.cancelDeletionReview()
+    systemCreation.cancelCreationPreview()
+    systemCreation.cancelOrbitDrag()
+    systemCreation.quitAdd()
+    systemObjectPlacement.cancelSystemObjectMovePreview()
+    clusterSystemPlacement.cancelSystemMovePreview()
+    clusterSystemPlacement.quitClusterAdd()
+    unresolvedExitPlacement.cancel()
+    orbitCenterPlacement.cancelOrbitCenterMove(false)
+    orbitAdjustments.reset()
+    store.reset(workspaceContextId.value)
+  }
+
   async function quitAdd(): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
     route.cancelRouteCreation()
@@ -462,18 +477,18 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       selectedTypes: computed(() => store.selectedSearchObjectTypes),
       selectedPublicationModes: computed(() => store.selectedSearchPublicationModes),
       fieldConditions: computed(() => store.selectedSearchFieldConditions),
-      invalidationNotice: computed(() => searchFieldInvalidationNotice.value),
       activeCriterionCount: searchActiveCriterionCount,
       setSelectedTypes: (types: readonly string[], options: readonly { value: string, label: string }[]) =>
         store.setSelectedSearchObjectTypes(types, options),
       setPublicationModes: store.setSearchPublicationModes,
-      setFieldConditions: setSearchFieldConditions,
-      reset: resetSearch,
+      setFieldConditions: store.setSearchFieldConditions,
+      reset: store.resetSearch,
       reveal: navigation.revealSearchTarget,
     },
     historyGuards: {
       blockReason: historyGuards,
       endCleanSessions: endCleanHistorySessions,
+      resetForWorkspaceReplacement,
     },
     inspector: {
       objectInspectorFocusRequest,
@@ -501,6 +516,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       cancelRouteCreation: route.cancelRouteCreation,
     },
     charts: {
+      session: charts.session,
       clusterName: charts.clusterName,
       systemName: charts.systemName,
       playerTitle: charts.playerTitle,
@@ -640,7 +656,6 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     },
     feedback: {
       editorError,
-      orbitAdjustmentNotice: map.orbitAdjustmentNotice,
     },
     navigation: {
       activeView: navigation.activeView,

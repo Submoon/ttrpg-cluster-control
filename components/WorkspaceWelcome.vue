@@ -22,13 +22,14 @@
       <p class="workspace-recovery-copy my-3 max-w-[38rem]">
         This browser keeps the last valid workspace snapshot as a backup when one is available.
       </p>
-      <div class="workspace-recovery-actions flex flex-wrap gap-2">
+      <div class="workspace-recovery-actions flex flex-wrap items-start gap-2">
         <UButton
           class="secondary-button launch-action"
           color="neutral"
           variant="outline"
           size="md"
           type="button"
+          :disabled="restoreLoading"
           @click="emit('retry')"
         >
         Try again
@@ -39,10 +40,24 @@
           variant="outline"
           size="md"
           type="button"
+          :disabled="restoreLoading"
+          :loading="restoreLoading"
+          @click="openLocalBackupPicker"
+        >
+          {{ restoreLoading ? 'Opening backup...' : 'Open local Jump Cluster backup' }}
+        </UButton>
+        <UButton
+          class="secondary-button launch-action"
+          color="neutral"
+          variant="outline"
+          size="md"
+          type="button"
+          :disabled="restoreLoading"
           @click="emit('restore-backup')"
         >
         Restore last valid backup
         </UButton>
+        <slot name="restore-actions" />
       </div>
     </UCard>
   </section>
@@ -132,6 +147,25 @@
           </UButton>
         </fieldset>
 
+        <div class="workspace-launch-backup mt-4 grid gap-2 border-t border-[var(--line-soft)] pt-4">
+          <p class="m-0 text-sm text-[var(--text-secondary)]">Already have a complete Jump Cluster backup?</p>
+          <div class="flex flex-wrap items-start gap-2">
+            <UButton
+              class="secondary-button launch-action"
+              color="neutral"
+              variant="outline"
+              size="md"
+              type="button"
+              :disabled="restoreLoading"
+              :loading="restoreLoading"
+              @click="openLocalBackupPicker"
+            >
+              {{ restoreLoading ? 'Opening backup...' : 'Open local Jump Cluster backup' }}
+            </UButton>
+            <slot name="restore-actions" />
+          </div>
+        </div>
+
         <template #footer>
           <UAlert
             v-if="saveState === 'error'"
@@ -153,9 +187,21 @@
       </UCard>
     </form>
   </section>
+
+  <input
+    ref="restoreFileInput"
+    class="sr-only"
+    type="file"
+    accept="application/json,.json"
+    aria-label="Choose local JSON backup file"
+    :disabled="restoreLoading"
+    @change="emit('restore-file', $event, restoreFileOpener)"
+  >
 </template>
 
 <script setup lang="ts">
+import { useTemplateRef } from 'vue'
+
 /**
  * Presents workspace loading and creation states without owning hydration or persistence.
  */
@@ -169,10 +215,13 @@ defineProps<{
   saveState: SaveState
   saveError: string | null
   formError: string
+  restoreLoading: boolean
 }>()
 
 const clusterName = defineModel<string>('clusterName', { required: true })
 const systemName = defineModel<string>('systemName', { required: true })
+const restoreFileInput = useTemplateRef<HTMLInputElement>('restoreFileInput')
+let restoreFileOpener: HTMLElement | null = null
 const launchInputUi = {
   root: 'w-full',
   base: 'min-h-[2.75rem] w-full rounded-[2px] border border-[var(--control-border)] bg-[var(--control-bg)] px-[0.7rem] py-[0.6rem] text-[0.875rem] text-[var(--text-primary)] shadow-none focus-visible:outline-2 focus-visible:outline-[var(--focus)] focus-visible:outline-offset-[3px]',
@@ -184,8 +233,14 @@ const messageCardUi = {
 const emit = defineEmits<{
   retry: []
   'restore-backup': []
+  'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
   submit: []
 }>()
+
+function openLocalBackupPicker(event: MouseEvent): void {
+  restoreFileOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  restoreFileInput.value?.click()
+}
 </script>
 
 <style scoped>
@@ -194,7 +249,9 @@ const emit = defineEmits<{
   outline-color: var(--focus) !important;
 }
 
-.launch-action {
+.launch-action,
+.workspace-launch-backup :deep(.launch-action),
+.workspace-recovery-actions :deep(.launch-action) {
   scroll-margin-block: 0.75rem;
 }
 

@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Review import"
+    title="Review Star System Restore"
     description="Review the validated independent copy before adding it to this workspace."
     :dismissible="!props.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
@@ -15,9 +15,9 @@
       <div v-if="props.summary" class="grid gap-4">
         <section class="grid gap-3" aria-label="Import effects">
           <div>
-            <span class="section-kicker">INDEPENDENT COPY</span>
+            <span class="section-kicker">RESTORE A STAR SYSTEM</span>
             <h2 class="mb-1 mt-2 break-words text-xl">
-              Import this {{ props.summary.type === 'cluster' ? 'Jump Cluster' : 'star system' }} as an independent copy?
+              Add this star system to the active Jump Cluster?
             </h2>
           </div>
 
@@ -56,7 +56,7 @@
           </div>
 
           <p class="inspector-intro m-0">
-            Map entities remain separate copies and receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.
+            The system and its entities receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.
           </p>
         </section>
 
@@ -90,7 +90,7 @@
     <template #footer>
       <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton color="neutral" variant="ghost" :disabled="props.confirming" @click="emit('cancel')">
-          Cancel import
+          Cancel restore
         </UButton>
         <UButton
           color="primary"
@@ -98,7 +98,7 @@
           :disabled="props.confirming"
           @click="emit('confirm')"
         >
-          Import independent copy
+          Restore a Star System
         </UButton>
       </div>
     </template>

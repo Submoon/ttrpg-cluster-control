@@ -113,7 +113,8 @@ async function installChartWriteGate(page: import('@playwright/test').Page): Pro
         gate.writeCount += 1
         if (key === 'current' && gate.abortCurrentWrites > 0) {
           gate.abortCurrentWrites -= 1
-          this.transaction.abort()
+          const transaction = this.transaction
+          queueMicrotask(() => transaction.abort())
         }
       }
       return request
@@ -197,7 +198,7 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
   }
 }> {
   return page.evaluate(async () => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))

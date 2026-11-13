@@ -98,6 +98,7 @@ function createSearchHarness(
     initialWorkspace.layout.systemPositions[additionalSystemId] = { x: 0.78, y: 0.54 }
   }
   const workspace = ref(initialWorkspace)
+  const searchFilterInvalidations: number[] = []
   let revision = 0
   const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
@@ -120,6 +121,7 @@ function createSearchHarness(
         saveState: ref<SaveState>('saved'),
         saveError: ref<string | null>(null),
         waitForSearchPresentation,
+        onSearchFiltersInvalidated: () => { searchFilterInvalidations.push(searchFilterInvalidations.length + 1) },
       })
       return () => null
     },
@@ -133,6 +135,7 @@ function createSearchHarness(
     history,
     workflows: mountedWorkflows,
     store: useEditorUiStore(),
+    searchFilterInvalidations,
     dispose() {
       if (disposed) return
       disposed = true
@@ -230,7 +233,7 @@ test('search follows applied object edits through Undo and Redo without adding h
   }
 })
 
-test('Search prunes removed Field choices and reports the Search-only criteria update @pure', () => {
+test('Search notifies for each Field choice invalidation without pruning map criteria @pure', () => {
   const harness = createSearchHarness()
   try {
     const search = harness.workflows.search
@@ -250,8 +253,19 @@ test('Search prunes removed Field choices and reports the Search-only criteria u
     harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
 
     expect(search.fieldConditions.value).toEqual([])
-    expect(search.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+    expect(harness.searchFilterInvalidations).toEqual([1])
     expect(harness.store.selectedMapFieldConditions).toEqual([])
+
+    search.setFieldConditions([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Not breathable'],
+    }])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Neutral'], true)
+
+    expect(search.fieldConditions.value).toEqual([])
+    expect(harness.searchFilterInvalidations).toEqual([1, 2])
   } finally {
     harness.dispose()
   }

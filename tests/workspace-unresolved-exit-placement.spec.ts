@@ -4,6 +4,7 @@ import {
   clickDockAction,
   downloadImage,
   downloadJson,
+  openWorkspaceHierarchy,
   returnToClusterMap,
   selectInspectorOption,
   setWorkspaceMapMode,
@@ -138,7 +139,11 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
 
   // Undo while inside the source system must restore the global route action in its Cluster context.
   await setWorkspaceMapMode(page, 'Navigate')
-  await clusterMap.locator(`.cluster-system-node[data-system-id="${originSystem.id}"]`).click()
+  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await clusterHierarchy.getByRole('button', {
+    name: `Open ${originSystem.name} system map`,
+    exact: true,
+  }).click()
   await expect(page.getByRole('group', { name: `${originSystem.name} star system map`, exact: true })).toBeVisible()
   await undo.click()
   await expect(clusterMap).toBeVisible()

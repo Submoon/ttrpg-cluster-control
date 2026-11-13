@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { waitForWorkspaceSaved, importReviewDialog, resolveImportReview } from './helpers'
+import { waitForWorkspaceSaved, resolveImportReview, reviewStarSystemImport } from './helpers'
 import {
   beginDragToWorldPoint,
   captureMapExportBlobs,
@@ -8,10 +8,8 @@ import {
   clickSystemOrbitPoint,
   downloadJson,
   ensureMapDragPointsReachable,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   returnToClusterMap,
-  setJsonFile,
   setWorkspaceMapMode,
   workspaceNavigation,
 } from './helpers'
@@ -96,12 +94,7 @@ async function createDenseReach(page: Page, fixture: ExportedMap = creationGeome
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await returnToClusterMap(page)
-  await setJsonFile(
-    jsonMapImportInput(page),
-    'dense-reach.json',
-    JSON.stringify(fixture),
-  )
-  const preview = importReviewDialog(page)
+  const preview = await reviewStarSystemImport(page, 'dense-reach.json', JSON.stringify(fixture))
   const previewSummary = await preview.innerText()
   expect(previewSummary).toContain('Star systems: 1')
   await resolveImportReview(preview, 'confirm')

@@ -119,19 +119,8 @@
         :active-filter-criterion-count="props.activeFilterCriterionCount"
         :publication-filter-options="props.publicationFilterOptions"
         :field-filter-options="props.fieldFilterOptions"
-        :invalidation-notice="props.filterInvalidationNotice"
         @clear-all-filters="emit('clear-all-filters')"
       />
-      <p
-        v-if="props.filterInvalidationNotice"
-        class="workspace-filter-invalidation"
-        role="status"
-        aria-live="polite"
-        :aria-label="props.filterInvalidationNotice"
-        :title="props.filterInvalidationNotice"
-      >
-        Filters updated
-      </p>
       <WorkspaceSearch
         ref="workspaceSearch"
         :icon-only="true"
@@ -154,7 +143,6 @@
             :active-filter-criterion-count="searchActiveCriterionCount"
             :publication-filter-options="props.publicationFilterOptions"
             :field-filter-options="props.fieldFilterOptions"
-            :invalidation-notice="props.searchFilterInvalidationNotice"
             :portal="false"
             @clear-all-filters="clearSearchCriteria"
           />
@@ -251,6 +239,8 @@
           </UButton>
         </div>
 
+        <slot name="cloud-backup" />
+
         <section class="workspace-player-exports" aria-label="Player exports">
           <p class="workspace-map-files-heading">Player exports</p>
           <div class="workspace-player-export-actions">
@@ -316,27 +306,47 @@
           color="neutral"
           variant="outline"
           size="sm"
-          aria-label="Import JSON copy"
-          title="Import JSON copy"
-          @click="openJsonImportPicker"
+          aria-label="Restore a Star System"
+          title="Restore a Star System from a standalone JSON file"
+          @click="openSystemImportPicker"
         >
-          Import JSON copy
+          Restore a Star System
         </UButton>
-        <input
-          ref="importFileInput"
-          class="workspace-map-import-input"
-          type="file"
-          accept="application/json,.json"
-          aria-label="Import map JSON"
-          data-testid="map-json-import-input"
-          @change="emit('import-file', $event)"
+        <UButton
+          class="workspace-control workspace-map-import-button"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          aria-label="Restore Jump Cluster"
+          title="Replace the active Jump Cluster from a complete JSON backup"
+          :disabled="props.restoreLoading"
+          @click="openClusterRestorePicker"
         >
-
+          Restore Jump Cluster
+        </UButton>
         <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
         <p class="workspace-map-files-note">
-          Import JSON creates a separate copy in the current Jump Cluster: {{ workspace.cluster.name }}.
+          Restore a Star System adds an independent copy to {{ workspace.cluster.name }}. Restore Jump Cluster replaces this map after review.
         </p>
       </MapFilesPopover>
+      <input
+        ref="systemImportFileInput"
+        class="workspace-map-import-input"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Choose star system JSON"
+        data-testid="map-system-import-input"
+        @change="emit('import-file', $event)"
+      >
+      <input
+        ref="clusterRestoreFileInput"
+        class="workspace-map-import-input"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Choose Jump Cluster backup JSON"
+        data-testid="map-cluster-restore-input"
+        @change="emit('restore-file', $event, mapFiles?.triggerElement() ?? null)"
+      >
     </template>
   </UDashboardToolbar>
 </template>
@@ -362,6 +372,7 @@ const props = withDefaults(defineProps<{
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
+  restoreLoading?: boolean
   playerExportError: string
   generatedPlayerUrl: string
   playerLinkBusy: boolean
@@ -371,7 +382,6 @@ const props = withDefaults(defineProps<{
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
   fieldFilterOptions?: readonly FieldFilterOption[]
-  filterInvalidationNotice?: string | null
   isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
@@ -383,7 +393,6 @@ const props = withDefaults(defineProps<{
   canOpenSearchShortcut: () => boolean
   searchResults: readonly SearchResult[]
   searchActiveCriterionCount?: number
-  searchFilterInvalidationNotice?: string | null
   revealSearchTarget: (target: SearchTarget) => Promise<
     { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
   >
@@ -396,8 +405,6 @@ const props = withDefaults(defineProps<{
   clusterAddPresentation: null,
   publicationFilterOptions: () => [],
   fieldFilterOptions: () => [],
-  searchFilterInvalidationNotice: null,
-  filterInvalidationNotice: null,
 })
 
 const emit = defineEmits<{
@@ -410,6 +417,7 @@ const emit = defineEmits<{
   'generate-player-link': []
   'copy-player-link': []
   'import-file': [event: Event]
+  'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
   'show-cluster': []
   'toggle-hierarchy': []
   'toggle-inspector': []
@@ -440,7 +448,8 @@ const searchActiveCriterionCount = computed(() => props.searchActiveCriterionCou
     + Number(searchPublicationModes.value.length > 0)
     + searchFieldConditions.value.length)
 const printLightForPrinting = ref(false)
-const importFileInput = ref<HTMLInputElement | null>(null)
+const systemImportFileInput = ref<HTMLInputElement | null>(null)
+const clusterRestoreFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
 const selectedSystem = computed(() => props.selectedSystem)
 const activeView = computed(() => props.activeView)
@@ -519,8 +528,13 @@ async function openPlayerPreview(): Promise<void> {
   emit('preview-player-view', files.focusTrigger)
 }
 
-function openJsonImportPicker(): void {
-  importFileInput.value?.click()
+function openSystemImportPicker(): void {
+  systemImportFileInput.value?.click()
+  headerMapActionsOpen.value = false
+}
+
+function openClusterRestorePicker(): void {
+  clusterRestoreFileInput.value?.click()
   headerMapActionsOpen.value = false
 }
 
@@ -556,18 +570,6 @@ defineExpose({ whenSearchClosingFocusSettled })
   font: 0.625rem Consolas, monospace;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-}
-
-.workspace-filter-invalidation {
-  display: -webkit-box;
-  max-width: 8.5rem;
-  margin: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 0.62rem;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 :global(.workspace-map-chrome .workspace-map-context h2) {
@@ -727,7 +729,7 @@ defineExpose({ whenSearchClosingFocusSettled })
 }
 
 .workspace-map-file-button,
-.workspace-map-import-button {
+:global(.workspace-map-import-button) {
   min-width: 0;
   justify-content: center;
   overflow-wrap: anywhere;
