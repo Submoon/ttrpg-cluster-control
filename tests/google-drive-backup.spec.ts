@@ -193,6 +193,136 @@ test('reading a file outside appDataFolder does not request its content @pure', 
   expect(requests).toHaveLength(1)
 })
 
+test('caller abort cancels a pending media body after response headers @pure', async () => {
+  const abortController = new AbortController()
+  const signals: AbortSignal[] = []
+  let bodyStartedResolve: (() => void) | undefined
+  const bodyStarted = new Promise<void>(resolve => { bodyStartedResolve = resolve })
+  let chunkSent = false
+  let streamCanceled = false
+  const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    if (init?.signal) signals.push(init.signal)
+    if (!String(input).includes('alt=media')) {
+      return jsonResponse({ id: 'backup-1', name: 'Backup.json', mimeType: 'application/json', spaces: ['appDataFolder'], trashed: false })
+    }
+    return new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (chunkSent) return
+        chunkSent = true
+        controller.enqueue(new TextEncoder().encode('{'))
+        bodyStartedResolve?.()
+      },
+      cancel() { streamCanceled = true },
+    }))
+  }
+
+  const pendingRead = readGoogleDriveFile('token', 'backup-1', fetcher, abortController.signal).catch(error => error)
+  await bodyStarted
+  abortController.abort()
+  const error = await pendingRead
+
+  expect(error).toBeInstanceOf(GoogleDriveApiError)
+  expect(signals.length).toBe(2)
+  expect(signals[1]?.aborted).toBe(true)
+  expect(streamCanceled).toBe(true)
+})
+
+test('the Drive deadline remains active until a pending response body is consumed @pure', async () => {
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const deadlines: Array<{ cleared: boolean, fire(): void }> = []
+  let bodyStartedResolve: (() => void) | undefined
+  const bodyStarted = new Promise<void>(resolve => { bodyStartedResolve = resolve })
+  let chunkSent = false
+  let streamCanceled = false
+  globalThis.setTimeout = ((handler: TimerHandler, delay?: number) => {
+    if (delay === 60_000 && typeof handler === 'function') {
+      const deadline = { cleared: false, fire: () => handler() }
+      deadlines.push(deadline)
+      return deadline as unknown as ReturnType<typeof setTimeout>
+    }
+    return originalSetTimeout(handler, delay)
+  }) as typeof setTimeout
+  globalThis.clearTimeout = ((timer?: ReturnType<typeof setTimeout>) => {
+    const deadlineHandle = timer as unknown as Array<{ cleared: boolean, fire(): void }>[number] | undefined
+    const deadline = deadlines.find(candidate => candidate === deadlineHandle)
+    if (deadline) {
+      deadline.cleared = true
+      return
+    }
+    originalClearTimeout(timer)
+  }) as typeof clearTimeout
+
+  try {
+    const fetcher = async (input: RequestInfo | URL): Promise<Response> => {
+      if (!String(input).includes('alt=media')) {
+        return jsonResponse({ id: 'backup-1', name: 'Backup.json', mimeType: 'application/json', spaces: ['appDataFolder'], trashed: false })
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (chunkSent) return
+          chunkSent = true
+          controller.enqueue(new TextEncoder().encode('{'))
+          bodyStartedResolve?.()
+        },
+        cancel() { streamCanceled = true },
+      }))
+    }
+
+    const pendingRead = readGoogleDriveFile('token', 'backup-1', fetcher).catch(error => error)
+    await bodyStarted
+    expect(deadlines).toHaveLength(2)
+    expect(deadlines[0]?.cleared).toBe(true)
+    expect(deadlines[1]?.cleared).toBe(false)
+    deadlines[1]?.fire()
+    const error = await pendingRead
+
+    expect(error).toBeInstanceOf(GoogleDriveApiError)
+    expect(streamCanceled).toBe(true)
+    expect(deadlines[1]?.cleared).toBe(true)
+  } finally {
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+})
+
+test('an upload aborted while its response body is pending skips reconciliation @pure', async () => {
+  const abortController = new AbortController()
+  const requests: string[] = []
+  let bodyStartedResolve: (() => void) | undefined
+  const bodyStarted = new Promise<void>(resolve => { bodyStartedResolve = resolve })
+  let chunkSent = false
+  let streamCanceled = false
+  const fetcher = async (input: RequestInfo | URL): Promise<Response> => {
+    requests.push(String(input))
+    return new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (chunkSent) return
+        chunkSent = true
+        controller.enqueue(new TextEncoder().encode('{'))
+        bodyStartedResolve?.()
+      },
+      cancel() { streamCanceled = true },
+    }))
+  }
+
+  const pendingUpload = uploadGoogleDriveBackup({
+    accessToken: 'token',
+    fileId: 'backup-1',
+    filename: 'Backup.json',
+    contents: '{}',
+    fetcher,
+    signal: abortController.signal,
+  }).catch(error => error)
+  await bodyStarted
+  abortController.abort()
+  const error = await pendingUpload
+
+  expect(error).toBeInstanceOf(GoogleDriveApiError)
+  expect(requests).toHaveLength(1)
+  expect(streamCanceled).toBe(true)
+})
+
 test('large backups use a resumable app-data upload without sending the token to the session URL @pure', async () => {
   const contents = 'x'.repeat(5 * 1024 * 1024 + 1)
   const sessionUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=session'
