@@ -44,7 +44,9 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
   const publish = async () => {
     await planet.click({ button: 'right' })
-    await menu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
+    await menu.getByRole('menuitem', { name: 'Change Visibility', exact: true }).hover()
+    await page.getByRole('menu', { name: 'Change Visibility', exact: true })
+      .getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
   }
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await publish()

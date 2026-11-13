@@ -489,18 +489,27 @@ function openSystemMenuFromButton(event: MouseEvent, system: { id: string }): vo
   openSystemMenu(event, system.id, opener)
 }
 
-function openObjectMenu(event: Event, objectId: string, opener: HTMLElement, point: { x: number; y: number }): void {
+function openObjectMenu(
+  event: Event,
+  objectId: string,
+  opener: HTMLElement,
+  point: { x: number; y: number },
+  selectObjectForContext = false,
+): void {
   event.preventDefault()
   event.stopPropagation()
   const target = objectTarget(objectId)
   if (!target) return
-  commands.publication.openMenu({ target, clientPoint: point, opener, source: 'hierarchy' })
+  commands.publication.openMenu(
+    { target, clientPoint: point, opener, source: 'hierarchy' },
+    selectObjectForContext ? { selectObjectForContext: true } : undefined,
+  )
 }
 
 function openHierarchyMenu(event: MouseEvent, item: HierarchyTreeItem): void {
   if (item.kind !== 'object' || !(event.currentTarget instanceof HTMLElement)) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
-  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY })
+  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY }, true)
 }
 
 function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTreeItem): void {
@@ -508,7 +517,7 @@ function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTree
   if (!(event.currentTarget instanceof HTMLElement)) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
   const bounds = opener.getBoundingClientRect()
-  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom })
+  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true)
 }
 
 function openObjectMenuFromButton(event: MouseEvent, objectId: string): void {

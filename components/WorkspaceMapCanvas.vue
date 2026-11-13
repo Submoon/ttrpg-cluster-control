@@ -253,6 +253,11 @@ let suppressNextClick = false
 let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
+let pendingRightClickContextMenu: {
+  pointerId: number
+  target: EventTarget | null
+  clientPoint: { x: number; y: number }
+} | null = null
 let longPressTimer: ReturnType<typeof setTimeout> | undefined
 let publicationMenuLease: PublicationMenuLease | null = null
 let touchStart: { id: number; x: number; y: number; target: EventTarget | null } | null = null
@@ -438,6 +443,7 @@ function onDocumentKeyDownCapture(event: KeyboardEvent): void {
 function onLostPointerCapture(event: PointerEvent): void { orbitInput.onLostPointerCapture(event) }
 
 function onWheelCapture(event: WheelEvent): void {
+  pendingRightClickContextMenu = null
   dismissSearchLocator()
   orbitInput.onWheelCapture(event)
 }
@@ -446,6 +452,7 @@ function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
   const orbitPointerId = orbitInput.pointerId()
+  pendingRightClickContextMenu = null
   orbitInput.cancel()
   if (suppressRelease) {
     for (const sequence of livePointerSequences.values()) {
@@ -543,6 +550,7 @@ function beginLivePointerSequence(event: PointerEvent, isMouseButtonChord: boole
 
 function onPointerDownCapture(event: PointerEvent): void {
   dismissSearchLocator()
+  pendingRightClickContextMenu = null
   publicationMenuLease?.close()
   publicationMenuLease = null
   const isMouseButtonChord = event.pointerType === 'mouse'
@@ -748,6 +756,7 @@ function onWindowPointerMove(event: PointerEvent): void {
   pan.moved = true
   if (firstPanMove && props.activeView === 'cluster') emit('cancel-cluster-preview')
   if (pan.button === 2) {
+    if (pendingRightClickContextMenu?.pointerId === pan.id) pendingRightClickContextMenu = null
     event.preventDefault()
     holdContextMenuSuppression()
   }
@@ -758,6 +767,7 @@ function onWindowPointerMove(event: PointerEvent): void {
 function onWindowPointerUp(event: PointerEvent): void {
   if (orbitInput.onPointerUp(event)) return
   if (event.type === 'pointercancel') {
+    if (pendingRightClickContextMenu?.pointerId === event.pointerId) pendingRightClickContextMenu = null
     if (consumedAddPointerId === event.pointerId) {
       holdClickSuppression()
       consumedAddPointerId = null
@@ -797,8 +807,20 @@ function onWindowPointerUp(event: PointerEvent): void {
   }
   if (ownsActiveMousePointer) activeMousePointerId = null
   if (!activePointerPan || event.pointerId !== activePointerPan.id) return
+  const pan = activePointerPan
   currentMap()?.endViewPan()
   activePointerPan = null
+  if (pan.button === 2 && !pan.moved && event.pointerType === 'mouse' && event.button === 2
+    && event.buttons === 0 && pendingRightClickContextMenu?.pointerId === event.pointerId) {
+    const pending = pendingRightClickContextMenu
+    pendingRightClickContextMenu = null
+    const canvas = canvasRoot.value
+    if (canvas && event.target instanceof Node && canvas.contains(event.target)
+      && pending.target instanceof Node && canvas.contains(pending.target)
+      && openPublicationMenu(pending.target, pending.clientPoint)) {
+      holdContextMenuSuppression()
+    }
+  }
 }
 
 function isDisabledObstructionRelease(event: PointerEvent): boolean {
@@ -813,18 +835,40 @@ function isDisabledObstructionRelease(event: PointerEvent): boolean {
 
 function onContextMenuCapture(event: MouseEvent): void {
   event.preventDefault()
-  if ((activePointerPan?.button === 2 && activePointerPan.moved) || suppressNextContextMenu) {
+  const pan = activePointerPan
+  const isRightMouseContextMenu = event.button === 2
+    && pan?.button === 2
+    && livePointerSequences.get(pan.id)?.pointerType === 'mouse'
+  if (event.button === 2
+    && ((pan?.button === 2 && pan.moved) || suppressNextContextMenu)) {
+    pendingRightClickContextMenu = null
     event.stopPropagation()
     event.stopImmediatePropagation()
     suppressNextContextMenu = false
     if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
     return
   }
+  if (pan?.button === 2 && event.button === 2 && (event.buttons & 1) !== 0) {
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    pendingRightClickContextMenu = null
+    return
+  }
+  if (isRightMouseContextMenu && pan) {
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    pendingRightClickContextMenu = {
+      pointerId: pan.id,
+      target: event.target,
+      clientPoint: { x: event.clientX, y: event.clientY },
+    }
+    return
+  }
   showPublicationMenu(event, { x: event.clientX, y: event.clientY })
 }
 
 function publicationTargetAt(target: EventTarget | null): { target: PublicationTarget; mark: SVGElement } | null {
-  if (props.mode !== 'select' || props.moveTargeting || props.clusterChooserOpen
+  if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
     || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
@@ -852,19 +896,24 @@ function showPublicationMenu(
   event: MouseEvent | KeyboardEvent,
   point: { x: number; y: number },
 ): boolean {
-  const candidate = publicationTargetAt(event.target)
+  if (!openPublicationMenu(event.target, point)) return false
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  return true
+}
+
+function openPublicationMenu(target: EventTarget | null, point: { x: number; y: number }): boolean {
+  const candidate = publicationTargetAt(target)
   if (!candidate) return false
   const lease = commands.publication.openMenu({
     target: candidate.target,
     clientPoint: point,
     opener: candidate.mark,
     source: 'map',
-  })
+  }, { selectObjectForContext: true })
   if (!lease) return false
   publicationMenuLease = lease
-  event.preventDefault()
-  event.stopPropagation()
-  event.stopImmediatePropagation()
   return true
 }
 
@@ -1208,6 +1257,7 @@ watch(() => props.mode, () => {
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
 watch(() => props.creationType, () => {
+  pendingRightClickContextMenu = null
   orbitInput.cancel()
   if (selectionRectangleGesture) finishSelectionRectangle(true)
   emit('cancel-object-placement-preview')
@@ -1219,6 +1269,7 @@ watch(
     () => props.moveTargeting,
   ],
   () => {
+    pendingRightClickContextMenu = null
     if (selectionRectangleGesture) finishSelectionRectangle(true)
   },
   { flush: 'sync' },
@@ -1232,11 +1283,21 @@ watch(
     () => props.selectedObjectId,
     () => props.selectedOrbitId,
   ],
-  () => {
+  ([activeView, mapKey, systemId, selectedSystemId, selectedObjectId], previous) => {
+    if (activeView !== previous[0] || mapKey !== previous[1] || systemId !== previous[2]) {
+      pendingRightClickContextMenu = null
+    }
+    const expectedContextSelection = publicationMenuLease?.isPreparingSelectionFor(selectedObjectId)
+      && activeView === previous[0]
+      && mapKey === previous[1]
+      && systemId === previous[2]
+      && selectedSystemId === previous[3]
     orbitInput.cancel()
     if (selectionRectangleGesture) finishSelectionRectangle(true)
-    publicationMenuLease?.close()
-    publicationMenuLease = null
+    if (!expectedContextSelection) {
+      publicationMenuLease?.close()
+      publicationMenuLease = null
+    }
     emit('cancel-object-placement-preview')
     emit('cancel-orbit-placement-preview')
   },

@@ -39,16 +39,20 @@ export function useEditorTransitions(options: {
     routeSessionId: number | null
     resolve: (accepted: boolean) => void
     choiceInFlight: boolean
+    isCurrent: () => boolean
   } | null = null
 
   /**
    * Resolves only the drafts named by this transition; a second pending request is rejected.
    * Apply means the controller published memory; the workspace owner reports durable save completion separately.
    */
-  async function resolveTransition(transition: TransitionOptions = {}): Promise<boolean> {
-    if (pendingTransition) return Promise.resolve(false)
+  async function resolveTransition(
+    transition: TransitionOptions = {},
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (pendingTransition || !isCurrent()) return false
     if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
-    if (pendingTransition) return false
+    if (pendingTransition || !isCurrent()) return false
 
     const leaveChart = transition.leaveChart !== false
     const leaveEntitySession = transition.leaveEntitySession !== false
@@ -74,6 +78,7 @@ export function useEditorTransitions(options: {
         routeSessionId: route.session.value?.id ?? null,
         resolve,
         choiceInFlight: false,
+        isCurrent,
       }
       transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
     })
@@ -90,6 +95,10 @@ export function useEditorTransitions(options: {
   function advancePendingTransition(): void {
     const pending = pendingTransition
     if (!pending) return
+    if (!pending.isCurrent()) {
+      finishPendingTransition(false)
+      return
+    }
     const chartDraft = pending.leaveChart ? chart.session.value : null
     if (chartDraft && chartDraft.id !== pending.chartSessionId) {
       finishPendingTransition(false)
@@ -130,6 +139,10 @@ export function useEditorTransitions(options: {
     const pending = pendingTransition
     const guard = transitionGuard.value
     if (!pending || !guard || pending.choiceInFlight) return
+    if (!pending.isCurrent()) {
+      finishPendingTransition(false)
+      return
+    }
     pending.choiceInFlight = true
     try {
       if (decision === 'stay') {
@@ -182,6 +195,10 @@ export function useEditorTransitions(options: {
             return
           }
           if (pendingTransition !== pending) return
+          if (!pending.isCurrent()) {
+            finishPendingTransition(false)
+            return
+          }
           const nextRouteSession = route.session.value
           if (nextRouteSession?.id === routeDraft.id) {
             finishPendingTransition(false)

@@ -1,7 +1,7 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { JumpRoute, Point } from '../../domain/workspace'
 import type { MapInteractionMode } from './types'
-import type { PublicationMenuLease, PublicationMenuRequest, PublicationRequest } from './publication-types'
+import type { PublicationMenuLease, PublicationMenuOptions, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
 import type { SelectedObjectDrag } from './selected-object-drag'
 
@@ -9,7 +9,7 @@ export interface EditorCommandContext {
   navigation: {
     selectSystem(systemId: string): Promise<void>
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
-    replaceObjectSelection(objectIds: readonly string[]): Promise<void>
+    replaceObjectSelection(objectIds: readonly string[], isCurrent?: () => boolean): Promise<boolean>
     toggleObjectSelection(objectId: string): Promise<void>
     clearObjectSelectionForMove(expectedObjectIds: readonly string[]): boolean
     selectOrbit(orbitId: string, openInspector?: boolean): Promise<void>
@@ -56,7 +56,7 @@ export interface EditorCommandContext {
   }
   publication: {
     set(request: PublicationRequest): Promise<WorkspaceMutationResult>
-    openMenu(request: PublicationMenuRequest): PublicationMenuLease | null
+    openMenu(request: PublicationMenuRequest, options?: PublicationMenuOptions): PublicationMenuLease | null
   }
 }
 
