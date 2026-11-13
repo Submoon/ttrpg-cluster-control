@@ -2,6 +2,7 @@ import { computed, effectScope, ref } from 'vue'
 import { expect, test } from './fixtures'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
+import { GoogleDriveApiError } from '../utils/google-drive-api'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -9,14 +10,20 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function readySignIn(requestAccessToken: (signal?: AbortSignal) => Promise<string>): GoogleDriveSignInController {
+function readySignIn(
+  requestAccessToken: (signal?: AbortSignal) => Promise<string>,
+  invalidateAccessToken: (accessToken: string) => void = () => undefined,
+): GoogleDriveSignInController {
   const status = ref<GoogleDriveSignInStatus>('ready')
   return {
     status,
     message: ref(''),
     ready: computed(() => status.value === 'ready'),
+    hasAccessToken: computed(() => false),
     retryLoading: async () => undefined,
     requestAccessToken,
+    invalidateAccessToken,
+    forgetAccessToken: () => undefined,
   }
 }
 
@@ -143,6 +150,94 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
     expect(events).toEqual(['token requested'])
     expect(controller.state.value).toBe('idle')
     expect(controller.backups.value).toEqual([])
+  } finally {
+    scope.stop()
+  }
+})
+
+test('a list 401 invalidates its token so the next explicit restore requests authorization again @pure', async () => {
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+      try {
+        await load(signal)
+      } catch {
+        // The real restore owner reports loader failures through its page-level review state.
+      }
+      return true
+    },
+  }
+  const tokens: string[] = []
+  const invalidated: string[] = []
+  let listCount = 0
+  const scope = effectScope()
+  const controller = scope.run(() => useGoogleDriveRestore(
+    restore,
+    readySignIn(async () => {
+      const token = `token-${tokens.length + 1}`
+      tokens.push(token)
+      return token
+    }, token => invalidated.push(token)),
+    {
+      listBackups: async () => {
+        listCount += 1
+        if (listCount === 1) throw new GoogleDriveApiError('request-failed', 'Expired.', false, 401)
+        return { files: [] }
+      },
+      readFile: async () => '',
+      downloadFile: () => undefined,
+    },
+  ))
+  if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(invalidated).toEqual(['token-1'])
+    expect(controller.message.value).toMatch(/authorization expired/i)
+    controller.activate()
+    await expect.poll(() => listCount).toBe(2)
+    expect(tokens).toEqual(['token-1', 'token-2'])
+    controller.cancel(false)
+  } finally {
+    scope.stop()
+  }
+})
+
+test('a selected-file 401 invalidates the token and closes the stale backup list @pure', async () => {
+  const file = { id: 'backup-1', name: 'Backup.json', createdTime: '2026-11-13T10:00:00Z' }
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<{ name: string; content: unknown } | null>, signal?: AbortSignal): Promise<boolean> {
+      await load(signal)
+      return true
+    },
+  }
+  const invalidated: string[] = []
+  let listCount = 0
+  const scope = effectScope()
+  const controller = scope.run(() => useGoogleDriveRestore(
+    restore,
+    readySignIn(async () => 'cached-token', token => invalidated.push(token)),
+    {
+      listBackups: async () => { listCount += 1; return { files: [file] } },
+      readFile: async () => { throw new GoogleDriveApiError('request-failed', 'Expired.', false, 401) },
+      downloadFile: () => undefined,
+    },
+  ))
+  if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    controller.openBackup(file.id)
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(invalidated).toEqual(['cached-token'])
+    expect(controller.backups.value).toEqual([])
+    expect(controller.message.value).toMatch(/authorization expired/i)
+    expect(controller.dialogOpen.value).toBe(false)
+    controller.activate()
+    await expect.poll(() => listCount).toBe(2)
+    expect(controller.state.value).toBe('choosing')
+    controller.cancel(false)
   } finally {
     scope.stop()
   }

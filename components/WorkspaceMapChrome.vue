@@ -318,11 +318,11 @@
           color="neutral"
           variant="outline"
           size="sm"
-          aria-label="Add a star system"
-          title="Add a star system from a standalone JSON file"
+          aria-label="Restore a Star System"
+          title="Restore a Star System from a standalone JSON file"
           @click="openSystemImportPicker"
         >
-          Add a star system
+          Restore a Star System
         </UButton>
         <UButton
           class="workspace-control workspace-map-import-button"
@@ -338,7 +338,7 @@
         </UButton>
         <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
         <p class="workspace-map-files-note">
-          Add a star system imports an independent copy into {{ workspace.cluster.name }}. Restore Jump Cluster replaces this map after review.
+          Restore a Star System adds an independent copy to {{ workspace.cluster.name }}. Restore Jump Cluster replaces this map after review.
         </p>
       </MapFilesPopover>
       <input

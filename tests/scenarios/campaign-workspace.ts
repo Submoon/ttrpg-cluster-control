@@ -9,6 +9,7 @@ import {
   returnToClusterMap,
   setJsonFile,
   waitForWorkspaceStartup,
+  workspaceMapContextType,
   workspaceZoomControls,
 } from '../helpers'
 
@@ -37,7 +38,8 @@ export async function importCampaignWorkspace(
   await expect(preview).toContainText('Campaign staging')
   await expect(preview).toContainText(fixture.cluster.name)
   await resolveJumpClusterRestoreReview(preview, 'confirm')
-  await returnToClusterMap(page)
+  await expect(preview).toBeHidden()
+  await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await waitForWorkspaceSaved(page)
 }

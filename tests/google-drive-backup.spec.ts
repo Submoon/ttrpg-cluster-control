@@ -8,6 +8,7 @@ import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-sn
 import {
   GoogleDriveApiError,
   generateGoogleDriveFileId,
+  getGoogleDrivePermissionId,
   listGoogleDriveBackups,
   readGoogleDriveFile,
   uploadGoogleDriveBackup,
@@ -32,14 +33,18 @@ function confirmedFile(id: string, name: string, contents: string): Record<strin
 
 function readySignIn(
   requestAccessToken: (signal?: AbortSignal) => Promise<string> = async () => 'short-lived-token',
+  invalidateAccessToken: (accessToken: string) => void = () => undefined,
 ): GoogleDriveSignInController {
   const status = ref<GoogleDriveSignInStatus>('ready')
   return {
     status,
     message: ref(''),
     ready: computed(() => status.value === 'ready'),
+    hasAccessToken: computed(() => false),
     retryLoading: async () => undefined,
     requestAccessToken,
+    invalidateAccessToken,
+    forgetAccessToken: () => undefined,
   }
 }
 
@@ -69,6 +74,50 @@ test('a stable generated file ID is reserved in appDataFolder @pure', async () =
   expect(id).toBe('app-data-file')
   expect(requestedUrl).toContain('/files/generateIds?')
   expect(new URL(requestedUrl).searchParams.get('space')).toBe('appDataFolder')
+})
+
+test('Drive about identity returns the opaque permission ID with the app-data scope @pure', async () => {
+  let requestedUrl = ''
+  const permissionId = await getGoogleDrivePermissionId('token', async input => {
+    requestedUrl = String(input)
+    return jsonResponse({ user: { permissionId: 'opaque-account-id' } })
+  })
+
+  expect(permissionId).toBe('opaque-account-id')
+  expect(new URL(requestedUrl).pathname).toBe('/drive/v3/about')
+  expect(new URL(requestedUrl).searchParams.get('fields')).toBe('user(permissionId)')
+})
+
+test('Drive API 401 responses retain their HTTP status for cached-token invalidation @pure', async () => {
+  const error = await getGoogleDrivePermissionId('expired-token', async () => jsonResponse({ error: 'unauthorized' }, 401))
+    .catch(reason => reason)
+
+  expect(error).toBeInstanceOf(GoogleDriveApiError)
+  expect(error).toMatchObject({ httpStatus: 401, outcomeUncertain: false })
+})
+
+test('Drive 401 is recognized from headers while its response body remains pending @pure', async () => {
+  let bodyCanceled = false
+  const error = await getGoogleDrivePermissionId('expired-token', async () => new Response(new ReadableStream({
+    cancel() { bodyCanceled = true },
+  }), { status: 401 })).catch(reason => reason)
+
+  expect(error).toMatchObject({ httpStatus: 401 })
+  expect(bodyCanceled).toBe(true)
+})
+
+test('a 401 during reconciliation preserves an uncertain backup and its status @pure', async () => {
+  const error = await uploadGoogleDriveBackup({
+    accessToken: 'expired-token',
+    fileId: 'backup-uncertain',
+    filename: 'Backup.json',
+    contents: '{}',
+    fetcher: async input => new URL(String(input)).pathname.includes('/upload/drive/v3/files')
+      ? jsonResponse({ error: 'server error' }, 503)
+      : jsonResponse({ error: 'unauthorized' }, 401),
+  }).catch(reason => reason)
+
+  expect(error).toMatchObject({ code: 'outcome-uncertain', outcomeUncertain: true, httpStatus: 401 })
 })
 
 test('a generated ID from another Drive space is refused @pure', async () => {
@@ -372,6 +421,7 @@ test('the controller captures the applied map before Google access and retains u
     const oldFetch = globalThis.fetch
     globalThis.fetch = async (input, init) => {
       const url = new URL(String(input))
+      if (url.pathname.endsWith('/about')) return jsonResponse({ user: { permissionId: 'warden-account' } })
       if (url.pathname.endsWith('/files/generateIds')) {
         generateCount += 1
         return jsonResponse({ ids: [generateCount === 1 ? 'backup-1' : 'backup-2'], space: 'appDataFolder' })
@@ -422,6 +472,104 @@ test('the controller captures the applied map before Google access and retains u
   }
 })
 
+test('the backup controller invalidates a cached token after a definitive Drive 401 @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  const invalidatedTokens: string[] = []
+  let uploadCount = 0
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async input => {
+    const url = new URL(String(input))
+    if (url.pathname.endsWith('/about')) return jsonResponse({ user: { permissionId: 'warden-account' } })
+    if (url.pathname.endsWith('/files/generateIds')) return jsonResponse({ ids: ['backup-401'], space: 'appDataFolder' })
+    if (url.pathname.includes('/upload/drive/v3/files')) {
+      uploadCount += 1
+      return jsonResponse({ error: 'unauthorized' }, 401)
+    }
+    throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
+  }
+
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(
+      () => workspace,
+      readySignIn(async () => 'expired-token', token => invalidatedTokens.push(token)),
+    ))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(uploadCount).toBe(1)
+    expect(invalidatedTokens).toEqual(['expired-token'])
+    expect(controller.message.value).toMatch(/authorization expired/i)
+  } finally {
+    scope.stop()
+    globalThis.fetch = oldFetch
+  }
+})
+
+test('an uncertain backup retry verifies account identity and can resume under the original account @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  const tokenRequests: string[] = []
+  const invalidatedTokens: string[] = []
+  const uploadedIds: string[] = []
+  let accountRead = 0
+  let generateCount = 0
+  let uploadCount = 0
+  const signIn = readySignIn(async () => {
+    const token = `token-${tokenRequests.length + 1}`
+    tokenRequests.push(token)
+    return token
+  }, token => invalidatedTokens.push(token))
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input))
+    if (url.pathname.endsWith('/about')) {
+      accountRead += 1
+      return jsonResponse({ user: { permissionId: accountRead === 2 ? 'different-account' : 'original-account' } })
+    }
+    if (url.pathname.endsWith('/files/generateIds')) {
+      generateCount += 1
+      return jsonResponse({ ids: ['same-backup-id'], space: 'appDataFolder' })
+    }
+    if (url.pathname.includes('/upload/drive/v3/files')) {
+      uploadCount += 1
+      const body = String(init?.body)
+      const id = body.match(/"id":"([^"]+)"/)?.[1] ?? ''
+      const filename = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
+      uploadedIds.push(id)
+      if (uploadCount === 1) throw new TypeError('The first acknowledgement was lost.')
+      const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
+      const contentsEnd = body.lastIndexOf('\r\n--')
+      return jsonResponse(confirmedFile(id, filename, body.slice(contentsStart, contentsEnd)))
+    }
+    if (url.pathname.endsWith('/files/same-backup-id')) return jsonResponse({ error: 'temporarily unavailable' }, 403)
+    throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
+  }
+
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(() => workspace, signIn))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('retry')
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('retry')
+    expect(controller.message.value).toMatch(/differs from the account that started this backup/i)
+    expect(uploadCount).toBe(1)
+    expect(invalidatedTokens).toEqual(['token-2'])
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(tokenRequests).toEqual(['token-1', 'token-2', 'token-3'])
+    expect(generateCount).toBe(1)
+    expect(uploadedIds).toEqual(['same-backup-id', 'same-backup-id'])
+  } finally {
+    scope.stop()
+    globalThis.fetch = oldFetch
+  }
+})
+
 test('canceling OAuth for an uncertain retry leaves a fresh signal for the same backup ID @pure', async () => {
   const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
   const uploadedIds: string[] = []
@@ -444,6 +592,7 @@ test('canceling OAuth for an uncertain retry leaves a fresh signal for the same 
   const oldFetch = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
+    if (url.pathname.endsWith('/about')) return jsonResponse({ user: { permissionId: 'warden-account' } })
     if (url.pathname.endsWith('/files/generateIds')) {
       generateCount += 1
       return jsonResponse({ ids: ['backup-1'], space: 'appDataFolder' })

@@ -1113,7 +1113,7 @@ export async function openStarSystemImportPicker(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
   await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Add a star system', exact: true }).click()
+  await page.getByRole('button', { name: 'Restore a Star System', exact: true }).click()
   await setHeaderMapActionsOpen(page, false)
   return starSystemImportInput(page)
 }
@@ -1170,7 +1170,7 @@ export function deletionReviewDialog(page: import('@playwright/test').Page): imp
 
 /** Returns the public review dialog for a validated standalone star-system import. */
 export function importReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
-  return page.getByRole('dialog', { name: 'Review import', exact: true })
+  return page.getByRole('dialog', { name: 'Review Star System Restore', exact: true })
 }
 
 /** Resolves a deletion review through its visible action. Read its summary before calling this helper. */
@@ -1192,7 +1192,7 @@ export async function resolveImportReview(
 ): Promise<void> {
   await expect(review).toBeVisible()
   await review.getByRole('button', {
-    name: choice === 'confirm' ? 'Add star system' : 'Cancel import',
+    name: choice === 'confirm' ? 'Restore a Star System' : 'Cancel restore',
     exact: true,
   }).click()
 }

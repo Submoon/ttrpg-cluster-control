@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { WorkspaceRestoreSource } from './useWorkspaceRestore'
 import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
-import { listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
+import { GoogleDriveApiError, listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
 import { downloadBlob } from '../utils/browser-download'
 
 export interface GoogleDriveRestoreFile {
@@ -115,6 +115,7 @@ export function useGoogleDriveRestore(
     if (!callerAbort) return
     state.value = 'authorizing'
     let providerSignal: AbortSignal | undefined
+    let accessToken: string | undefined
     const accepted = await workspaceRestore.openFrom(async signal => {
       const operationSignal = signal ?? callerAbort.signal
       providerSignal = operationSignal
@@ -122,7 +123,7 @@ export function useGoogleDriveRestore(
       try {
         // Start OAuth synchronously with the button click so Google can open its token window.
         const tokenRequest = signIn.requestAccessToken(operationSignal)
-        const accessToken = await tokenRequest
+        accessToken = await tokenRequest
         if (!isCurrent(operation, operationSignal)) return null
         activeAccessToken = accessToken
 
@@ -136,6 +137,7 @@ export function useGoogleDriveRestore(
         return await waitForSelection(operationSignal)
       } catch (error) {
         if (operationSignal.aborted) return null
+        if (invalidateAfterUnauthorized(error, accessToken)) return null
         if (error instanceof GoogleDriveCancelledError) {
           message.value = 'Google Drive sign-in was canceled. Your workspace is unchanged.'
           return null
@@ -199,6 +201,7 @@ export function useGoogleDriveRestore(
       settleSelection({ name: file.name, content })
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
       selectionError.value = error instanceof Error ? error.message : 'Google Drive could not read this backup.'
       state.value = 'choosing'
     })
@@ -221,6 +224,7 @@ export function useGoogleDriveRestore(
       state.value = 'choosing'
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
       selectionError.value = error instanceof Error ? error.message : 'Google Drive could not list more backups.'
       state.value = 'choosing'
     })
@@ -243,6 +247,7 @@ export function useGoogleDriveRestore(
       state.value = 'choosing'
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
       selectionError.value = error instanceof Error ? error.message : 'Google Drive could not download this backup.'
       state.value = 'choosing'
     })
@@ -261,6 +266,20 @@ export function useGoogleDriveRestore(
     nextPageToken.value = undefined
     selectionError.value = ''
     message.value = showMessage ? 'Google Drive restore canceled. Your workspace is unchanged.' : ''
+  }
+
+  function invalidateAfterUnauthorized(error: unknown, accessToken: string | undefined): boolean {
+    if (!accessToken || !(error instanceof GoogleDriveApiError) || error.httpStatus !== 401) return false
+    signIn.invalidateAccessToken(accessToken)
+    message.value = 'Google Drive authorization expired. Open Google Drive again to sign in.'
+    return true
+  }
+
+  function closeForUnauthorized(error: unknown, accessToken: string): boolean {
+    if (!invalidateAfterUnauthorized(error, accessToken)) return false
+    cancel(false)
+    message.value = 'Google Drive authorization expired. Open Google Drive again to sign in.'
+    return true
   }
 
   onScopeDispose(() => {

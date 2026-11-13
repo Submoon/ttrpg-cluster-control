@@ -81,3 +81,5 @@ After reviewing the [cloud provider comparison](provider-research.md), the user 
 ## Drive destination revision
 
 After testing the Google consent and folder picker, the user chose the hidden Drive application data space. This supersedes the original My Drive folder choice and sharing checks. The app requests `drive.appdata`, creates dated backups in `appDataFolder`, and lists them in its own restore UI. The Warden can download a portable JSON from that list. Local replacement and the live two-profile requirement still apply. [Application data folder](https://developers.google.com/workspace/drive/api/guides/appdata)
+
+During Preview review, the user renamed the standalone JSON action to **Restore a Star System**. The action adds an independent copy to the open Jump Cluster after review.

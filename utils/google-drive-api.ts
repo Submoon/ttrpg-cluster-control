@@ -13,12 +13,14 @@ export type GoogleDriveApiErrorCode = 'request-failed' | 'outcome-uncertain'
 export class GoogleDriveApiError extends Error {
   readonly code: GoogleDriveApiErrorCode
   readonly outcomeUncertain: boolean
+  readonly httpStatus?: number
 
-  constructor(code: GoogleDriveApiErrorCode, message: string, outcomeUncertain = false) {
+  constructor(code: GoogleDriveApiErrorCode, message: string, outcomeUncertain = false, httpStatus?: number) {
     super(message)
     this.name = 'GoogleDriveApiError'
     this.code = code
     this.outcomeUncertain = outcomeUncertain
+    this.httpStatus = httpStatus
   }
 }
 
@@ -58,6 +60,23 @@ export async function generateGoogleDriveFileId(
     throw new GoogleDriveApiError('request-failed', 'Google Drive did not provide a usable app-data file ID.')
   }
   return body.ids[0]
+}
+
+/** Returns the opaque Drive identity used to bind a backup attempt to one Google account. */
+export async function getGoogleDrivePermissionId(
+  accessToken: string,
+  fetcher: DriveFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<string> {
+  const query = new URLSearchParams({ fields: 'user(permissionId)' })
+  const body = await requestJson(accessToken, `${DRIVE_API}/about?${query}`, fetcher, signal)
+  if (!isRecord(body)
+    || !isRecord(body.user)
+    || typeof body.user.permissionId !== 'string'
+    || body.user.permissionId.length === 0) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive did not provide a verifiable account identity.')
+  }
+  return body.user.permissionId
 }
 
 /** Lists only JSON files whose provider metadata confirms appDataFolder membership. */
@@ -123,7 +142,7 @@ export async function readGoogleDriveFile(
   } catch {
     throw new GoogleDriveApiError('request-failed', 'Google Drive could not be reached to read this backup.')
   }
-  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not read this backup.')
+  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not read this backup.', false, response.status)
   try {
     return readResponseText(response.bytes)
   } catch {
@@ -174,8 +193,12 @@ export async function uploadGoogleDriveBackup(options: {
   if (options.signal?.aborted) {
     throw new GoogleDriveApiError('request-failed', 'Google Drive backup was canceled.')
   }
+  if (response.status === 401) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive authorization expired. Sign in again to continue.', false, 401)
+  }
   const reconciliation = await tryReconcileUpload(options, fetcher, options.signal)
   if (reconciliation.kind === 'confirmed') return reconciliation.file
+  if (reconciliation.kind === 'unauthorized') throw uncertainOutcome(401)
   if (response.status === 409
     || response.status >= 500
     || response.status === 408
@@ -273,6 +296,7 @@ function isTrustedDriveUploadLocation(location: string): boolean {
 
 type UploadReconciliation =
   | { kind: 'confirmed', file: GoogleDriveBackupFile }
+  | { kind: 'unauthorized' }
   | { kind: 'not-found' }
   | { kind: 'inconclusive' }
   | { kind: 'mismatch' }
@@ -286,6 +310,7 @@ async function reconcileUpload(
   }
   const reconciliation = await tryReconcileUpload(options, fetcher, options.signal)
   if (reconciliation.kind === 'confirmed') return reconciliation.file
+  if (reconciliation.kind === 'unauthorized') throw uncertainOutcome(401)
   throw uncertainOutcome()
 }
 
@@ -305,6 +330,7 @@ async function tryReconcileUpload(
     )
     if (signal?.aborted) return { kind: 'inconclusive' }
     if (response.status === 404) return { kind: 'not-found' }
+    if (response.status === 401) return { kind: 'unauthorized' }
     if (!response.ok) return { kind: 'inconclusive' }
 
     const metadata = parseResponseJson(response.bytes)
@@ -315,6 +341,7 @@ async function tryReconcileUpload(
       ...(signal ? { signal } : {}),
     })
     if (signal?.aborted) return { kind: 'inconclusive' }
+    if (mediaResponse.status === 401) return { kind: 'unauthorized' }
     if (!mediaResponse.ok) return { kind: 'inconclusive' }
     const savedBytes = mediaResponse.bytes
     const expectedBytes = new TextEncoder().encode(contents)
@@ -398,7 +425,7 @@ async function requestJson(
   } catch {
     throw new GoogleDriveApiError('request-failed', 'Google Drive could not be reached. Check your connection and try again.')
   }
-  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not complete this request.')
+  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not complete this request.', false, response.status)
 
   const body = parseResponseJson(response.bytes)
   if (body === undefined) throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid response.')
@@ -451,6 +478,11 @@ async function providerFetch(
     if (controller.signal.aborted) {
       void response.body?.cancel().catch(() => undefined)
       throw createAbortError()
+    }
+    if (response.status === 401) {
+      // Authentication is decided from headers; don't let an irrelevant error body hide expiry.
+      void response.body?.cancel().catch(() => undefined)
+      return { ok: false, status: response.status, headers: response.headers, bytes: new Uint8Array() }
     }
     const bytes = await readResponseBytes(response, controller.signal)
     return { ok: response.ok, status: response.status, headers: response.headers, bytes }
@@ -519,11 +551,12 @@ function createAbortError(): Error {
   return error
 }
 
-function uncertainOutcome(): GoogleDriveApiError {
+function uncertainOutcome(httpStatus?: number): GoogleDriveApiError {
   return new GoogleDriveApiError(
     'outcome-uncertain',
     'Google Drive did not confirm whether the backup finished. Retry this same backup to check its saved file.',
     true,
+    httpStatus,
   )
 }
 

@@ -16,7 +16,7 @@ triage_labels:
 
 ## What to build
 
-From **Map files**, a Warden can open a complete local Jump Cluster JSON backup and replace the active map after review. **Add a star system** continues to append an independent copy of a standalone system through its existing review.
+From **Map files**, a Warden can open a complete local Jump Cluster JSON backup and replace the active map after review. **Restore a Star System** appends an independent copy of a standalone system through its existing review.
 
 ## Blocked by
 
@@ -29,7 +29,7 @@ None. This ticket can start immediately.
 - [x] If the active workspace, applied revision, or reviewed draft consent changes, refresh the review and obtain confirmation again before replacing it.
 - [x] The existing persistence owner commits the replacement in IndexedDB before publishing it. Success installs a fresh browser-local workspace identity and an empty undo and redo history. The displaced valid cluster becomes the rolling last-valid snapshot. A tab holding the displaced workspace cannot overwrite the restored one.
 - [x] Cancellation and a failed write preserve the active cluster, drafts, history, and durable recovery records.
-- [x] **Add a star system** accepts a standalone system and preserves the existing reviewed append, relationship remapping, Field compatibility, and undo behavior. Complete cluster restore has its own entry point. Both local workflows work with Drive disconnected.
+- [x] **Restore a Star System** accepts a standalone system and preserves the existing reviewed append, relationship remapping, Field compatibility, and undo behavior. Complete cluster restore has its own entry point. Both local workflows work with Drive disconnected.
 
 ## Verification
 

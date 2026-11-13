@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Review import"
+    title="Review Star System Restore"
     description="Review the validated independent copy before adding it to this workspace."
     :dismissible="!props.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
@@ -15,7 +15,7 @@
       <div v-if="props.summary" class="grid gap-4">
         <section class="grid gap-3" aria-label="Import effects">
           <div>
-            <span class="section-kicker">ADD A STAR SYSTEM</span>
+            <span class="section-kicker">RESTORE A STAR SYSTEM</span>
             <h2 class="mb-1 mt-2 break-words text-xl">
               Add this star system to the active Jump Cluster?
             </h2>
@@ -90,7 +90,7 @@
     <template #footer>
       <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton color="neutral" variant="ghost" :disabled="props.confirming" @click="emit('cancel')">
-          Cancel import
+          Cancel restore
         </UButton>
         <UButton
           color="primary"
@@ -98,7 +98,7 @@
           :disabled="props.confirming"
           @click="emit('confirm')"
         >
-          Add star system
+          Restore a Star System
         </UButton>
       </div>
     </template>

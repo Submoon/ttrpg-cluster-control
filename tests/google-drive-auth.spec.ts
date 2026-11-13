@@ -10,12 +10,13 @@ test('Google Drive authorization requests only appData access and validates the 
           initTokenClient: (options: {
             scope: string
             include_granted_scopes: false
-            callback: (response: { access_token: string, scope: string }) => void
+            callback: (response: { access_token: string, scope: string, expires_in?: number | string }) => void
           }) => {
             optionsSeen = options
             return { requestAccessToken: () => options.callback({
               access_token: 'short-lived-token',
               scope: 'https://www.googleapis.com/auth/drive.appdata',
+              expires_in: '3600',
             }) }
           },
         },
@@ -23,7 +24,8 @@ test('Google Drive authorization requests only appData access and validates the 
     },
   }, () => requestGoogleDriveAccessToken('client-id'))
 
-  expect(token).toBe('short-lived-token')
+  expect(token).toMatchObject({ accessToken: 'short-lived-token' })
+  expect(token.expiresAt).toBeGreaterThan(Date.now())
   expect(optionsSeen).toMatchObject({
     scope: 'https://www.googleapis.com/auth/drive.appdata',
     include_granted_scopes: false,
@@ -36,7 +38,7 @@ test('canceling Google authorization settles the pending request and ignores lat
     google: {
       accounts: {
         oauth2: {
-          initTokenClient: (options: { callback: (response: { access_token: string, scope: string }) => void }) => {
+          initTokenClient: (options: { callback: (response: { access_token: string, scope: string, expires_in?: number }) => void }) => {
             callback = options.callback
             return { requestAccessToken: () => undefined }
           },
@@ -53,6 +55,26 @@ test('canceling Google authorization settles the pending request and ignores lat
   })
 
   expect(error).toBeInstanceOf(GoogleDriveCancelledError)
+})
+
+test('a token without a valid expiration can be used once but is not marked cacheable @pure', async () => {
+  const token = await withWindow({
+    google: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (options: { callback: (response: { access_token: string, scope: string, expires_in?: number }) => void }) => ({
+            requestAccessToken: () => options.callback({
+              access_token: 'one-use-token',
+              scope: 'https://www.googleapis.com/auth/drive.appdata',
+              expires_in: 0,
+            }),
+          }),
+        },
+      },
+    },
+  }, () => requestGoogleDriveAccessToken('client-id'))
+
+  expect(token).toEqual({ accessToken: 'one-use-token' })
 })
 
 async function withWindow<T>(fakeWindow: object, run: () => Promise<T>): Promise<T> {

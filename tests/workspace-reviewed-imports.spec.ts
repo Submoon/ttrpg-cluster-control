@@ -64,7 +64,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const review = await openReview()
   await expect(review).toBeVisible()
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
-  await review.getByRole('button', { name: 'Cancel import', exact: true }).click()
+  await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
   await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' })).toBeVisible()

@@ -181,6 +181,7 @@
                 <GoogleDriveRestoreButton
                   :controller="googleDriveRestore"
                   :sign-in="googleDriveSignIn"
+                  :backup-in-progress="googleDriveBackup.busy.value"
                   :review-open="workspaceRestoreReview !== null"
                   :fallback-focus-target="workspaceMain"
                   @restore-review-open="workspaceRestoreReturnTarget = $event"

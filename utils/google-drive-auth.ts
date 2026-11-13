@@ -13,8 +13,15 @@ export class GoogleDriveCancelledError extends Error {
 
 interface IdentityTokenResponse {
   access_token?: string
+  expires_in?: number | string
   scope?: string
   error?: string
+}
+
+export interface GoogleDriveAccessToken {
+  accessToken: string
+  /** Absolute expiration time in milliseconds; absent tokens are used once and never cached. */
+  expiresAt?: number
 }
 
 interface IdentityTokenClient {
@@ -57,7 +64,7 @@ export function loadGoogleDriveServices(): Promise<void> {
 }
 
 /** Starts Google's short-lived app-data token flow directly from a user gesture. */
-export function requestGoogleDriveAccessToken(clientId: string, signal?: AbortSignal): Promise<string> {
+export function requestGoogleDriveAccessToken(clientId: string, signal?: AbortSignal): Promise<GoogleDriveAccessToken> {
   if (!clientId.trim()) return Promise.reject(new Error('Google Drive is not configured for this site.'))
   if (signal?.aborted) return Promise.reject(canceledError())
 
@@ -72,7 +79,7 @@ export function requestGoogleDriveAccessToken(clientId: string, signal?: AbortSi
       browser.clearTimeout(timeout)
       signal?.removeEventListener('abort', onAbort)
     }
-    const finishResolve = (token: string) => {
+    const finishResolve = (token: GoogleDriveAccessToken) => {
       if (settled) return
       settled = true
       cleanup()
@@ -102,7 +109,15 @@ export function requestGoogleDriveAccessToken(clientId: string, signal?: AbortSi
           if (response.access_token
             && typeof response.scope === 'string'
             && response.scope.split(/\s+/).includes(DRIVE_APP_DATA_SCOPE)) {
-            finishResolve(response.access_token)
+            const expiresIn = typeof response.expires_in === 'string'
+              ? Number(response.expires_in)
+              : response.expires_in
+            finishResolve({
+              accessToken: response.access_token,
+              ...(typeof expiresIn === 'number' && Number.isFinite(expiresIn) && expiresIn > 0
+                ? { expiresAt: Date.now() + expiresIn * 1000 }
+                : {}),
+            })
             return
           }
           if (response.error === 'access_denied' || response.error === 'popup_closed') {

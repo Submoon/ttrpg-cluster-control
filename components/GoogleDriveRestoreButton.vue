@@ -1,6 +1,7 @@
 <template>
   <div class="google-drive-restore">
     <UButton
+      ref="restoreTrigger"
       :class="triggerClass"
       color="neutral"
       variant="outline"
@@ -30,6 +31,18 @@
       @click="props.signIn.retryLoading"
     >
       Retry loading Google Drive
+    </UButton>
+    <UButton
+      v-if="props.signIn.hasAccessToken.value"
+      ref="forgetTrigger"
+      color="neutral"
+      variant="ghost"
+      size="xs"
+      type="button"
+      :disabled="canCancel || props.backupInProgress"
+      @click="props.signIn.forgetAccessToken"
+    >
+      Forget Google Drive account
     </UButton>
     <p v-if="message" class="m-0 basis-full text-sm" role="status" aria-live="polite">{{ message }}</p>
 
@@ -115,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick } from 'vue'
+import { computed, nextTick, useTemplateRef, watch } from 'vue'
 import type { GoogleDriveRestoreController } from '../composables/useGoogleDriveRestore'
 import type { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
@@ -125,6 +138,7 @@ const props = defineProps<{
   controller: GoogleDriveRestoreController
   signIn: ReturnType<typeof useGoogleDriveSignIn>
   surface?: 'welcome'
+  backupInProgress?: boolean
   reviewOpen: boolean
   fallbackFocusTarget: HTMLElement | null
 }>()
@@ -148,7 +162,21 @@ const dialogOpen = computed({
   get: () => props.controller.dialogOpen.value,
   set: open => { if (!open) cancelRestore() },
 })
+const restoreTrigger = useTemplateRef('restoreTrigger')
+const forgetTrigger = useTemplateRef('forgetTrigger')
 let opener: HTMLElement | null = null
+
+watch(props.signIn.hasAccessToken, available => {
+  const previous = forgetTrigger.value?.$el
+  if (available || !previous || document.activeElement !== previous) return
+  void nextTick(() => {
+    const trigger = restoreTrigger.value?.$el
+    restoreDialogFocus(
+      createDialogFocusTarget(trigger instanceof HTMLElement ? trigger : null),
+      createDialogFocusTarget(props.fallbackFocusTarget),
+    )
+  })
+})
 
 function activateFromTrigger(event: MouseEvent): void {
   opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
