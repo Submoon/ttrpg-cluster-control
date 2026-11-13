@@ -78,7 +78,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
 
   await openReview()
   await expect(review).toBeVisible()
-  await review.getByRole('button', { name: 'Import independent copy', exact: true }).click()
+  await resolveImportReview(review, 'confirm')
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()

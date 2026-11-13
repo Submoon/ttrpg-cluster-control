@@ -1192,7 +1192,7 @@ export async function resolveImportReview(
 ): Promise<void> {
   await expect(review).toBeVisible()
   await review.getByRole('button', {
-    name: choice === 'confirm' ? 'Import independent copy' : 'Cancel import',
+    name: choice === 'confirm' ? 'Add star system' : 'Cancel import',
     exact: true,
   }).click()
 }
