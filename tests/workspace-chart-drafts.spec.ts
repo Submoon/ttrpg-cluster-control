@@ -353,10 +353,9 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
     await page.setViewportSize({ width: 1440, height: 960 })
     const desktopHierarchy = page.getByRole('complementary', { name: 'System hierarchy', exact: true })
-    if (await desktopHierarchy.isVisible()) {
-      await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-      await expect(desktopHierarchy).toBeHidden()
-    }
+    await expect(desktopHierarchy).toBeVisible()
+    await desktopHierarchy.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
+    await expect(desktopHierarchy).toBeHidden()
 
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
     await addCatalogueObject(page, 'jump-point')
