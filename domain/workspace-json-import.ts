@@ -319,6 +319,52 @@ function remapImportedSystem(
 }
 
 /**
+ * Admits a complete portable Jump Cluster backup and restores it as a new browser-local workspace.
+ * Unlike `prepareJsonImport`, this preserves the source map identity and does not merge with a destination.
+ * @param value Parsed portable JSON value.
+ * @returns Validated complete workspace with a fresh local identity.
+ * @throws If the value is not a supported complete Jump Cluster export.
+ */
+export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
+  const map = prepareImportedMap(value)
+  if (!isImportedMap(map) || map.type !== 'cluster') {
+    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster JSON backup.')
+  }
+
+  const entityIds = new Set<string>([
+    map.cluster.id,
+    ...map.cluster.systems.flatMap(system => [
+      system.id,
+      ...system.objects.map(object => object.id),
+      ...system.orbits.map(orbit => orbit.id),
+    ]),
+    ...map.cluster.routes.map(route => route.id),
+    ...map.objectFieldSettings.customFields.map(field => field.id),
+  ])
+  let localId = crypto.randomUUID()
+  while (entityIds.has(localId)) localId = crypto.randomUUID()
+
+  const workspace: LocalWorkspace = {
+    version: 4,
+    id: localId,
+    cluster: map.cluster,
+    objectFieldSettings: map.objectFieldSettings,
+    layout: {
+      systemPositions: map.layout.systemPositions,
+      unresolvedExitPositions: map.layout.unresolvedExitPositions ?? {},
+      orbitRadii: normalizeOrbitRadii(map.layout.orbitRadii, map.layout.orbitEllipseRadii ?? {}) ?? {},
+      orbitRotations: normalizeOrbitRotations(map.layout.orbitRotations ?? {}) ?? {},
+      objectAngles: map.layout.objectAngles ?? {},
+    },
+  }
+  if (!isLocalWorkspace(workspace)) {
+    throw new Error('The selected file is not a valid complete Jump Cluster JSON backup.')
+  }
+
+  return workspace
+}
+
+/**
  * Validates an export and prepares its independent copy and preview without persistence or confirmation.
  * All map-entity IDs are allocated before their references are remapped; compatible field definitions may be reused.
  * Explicit applicability scopes are unioned, while an undefined/global scope dominates the union.

@@ -1,46 +1,30 @@
 import { expect, test } from './fixtures'
-import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
+import { createLocalWorkspace, exportStarSystem } from '../domain/workspace'
 import {
   createSingleSystemWorkspace,
-  jsonMapImportInput,
   resolveImportReview,
-  setJsonFile,
+  reviewStarSystemImport,
 } from './helpers'
 import { expectPaletteOptionActive } from './scenarios/search-palette'
 
-function repeatedSystemImportContent(clusterName: string, systemName: string, systemCount: number): string {
-  const source = createLocalWorkspace(clusterName, systemName)
-  const systems = [...source.cluster.systems]
-  const systemPositions = { ...source.layout.systemPositions }
-
-  for (let index = 1; index < systemCount; index += 1) {
-    const importedSource = createLocalWorkspace(clusterName, systemName)
-    const system = importedSource.cluster.systems[0]
-    if (!system) throw new Error('The repeated-system import needs a star system.')
-    systems.push(system)
-    systemPositions[system.id] = { x: 0.2 + (index % 4) * 0.16, y: 0.2 + Math.floor(index / 4) * 0.18 }
-  }
-
-  const firstSystem = systems[0]
-  const objectTemplate = firstSystem?.objects[0]
-  if (!firstSystem || !objectTemplate) throw new Error('The repeated-system import needs a primary star.')
-  systems[0] = {
-    ...firstSystem,
-    objects: [...firstSystem.objects, {
-      ...objectTemplate,
-      id: 'custom-search-other',
-      family: 'Other' as const,
-      subtype: 'Signal ghost',
-      locationKey: 'GHOST-01',
-      name: 'New Other Beacon',
-    }],
-  }
-
-  return JSON.stringify(exportJumpCluster({
-    ...source,
-    cluster: { ...source.cluster, systems },
-    layout: { ...source.layout, systemPositions },
-  }))
+function repeatedSystemImportContents(clusterName: string, systemName: string, systemCount: number): string[] {
+  return Array.from({ length: systemCount }, (_, index) => {
+    const source = createLocalWorkspace(clusterName, systemName)
+    const system = source.cluster.systems[0]
+    const primary = system?.objects[0]
+    if (!system || !primary) throw new Error('The repeated-system import needs a primary star.')
+    if (index === 0) {
+      system.objects.push({
+        ...primary,
+        id: 'custom-search-other',
+        family: 'Other',
+        subtype: 'Signal ghost',
+        locationKey: 'GHOST-01',
+        name: 'New Other Beacon',
+      })
+    }
+    return JSON.stringify(exportStarSystem(source, system.id))
+  })
 }
 
 test('Search result marks stay decorative and readable, then activate an existing result @preview-smoke', async ({ page }, testInfo) => {
@@ -52,10 +36,14 @@ test('Search result marks stay decorative and readable, then activate an existin
     viewport: { width: 390, height: 844 },
   })
 
-  await setJsonFile(jsonMapImportInput(page), 'matching-systems.json', repeatedSystemImportContent(clusterName, systemName, 2))
-  const importReview = page.getByRole('dialog', { name: 'Review import', exact: true })
-  await resolveImportReview(importReview, 'confirm')
-  await expect(importReview).toHaveCount(0)
+  const matchingSystems = repeatedSystemImportContents(clusterName, systemName, 2)
+  for (let index = 0; index < matchingSystems.length; index += 1) {
+    const content = matchingSystems[index]
+    if (!content) throw new Error('The repeated-system import has an empty fixture entry.')
+    const importReview = await reviewStarSystemImport(page, `matching-system-${index + 1}.json`, content)
+    await resolveImportReview(importReview, 'confirm')
+    await expect(importReview).toHaveCount(0)
+  }
   await page.setViewportSize({ width: 1280, height: 800 })
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()

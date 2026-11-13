@@ -87,6 +87,11 @@ export function useEditorTransitions(options: {
     pending.resolve(accepted)
   }
 
+  /** Cancels a pending draft transition when its owning workspace is replaced. */
+  function cancelPendingTransition(): void {
+    finishPendingTransition(false)
+  }
+
   function advancePendingTransition(): void {
     const pending = pendingTransition
     if (!pending) return
@@ -235,5 +240,5 @@ export function useEditorTransitions(options: {
 
   onBeforeUnmount(() => finishPendingTransition(false))
 
-  return { transitionGuard, chartNamesDialogOpen, resolveTransition, resolveTransitionChoice }
+  return { transitionGuard, chartNamesDialogOpen, resolveTransition, resolveTransitionChoice, cancelPendingTransition }
 }

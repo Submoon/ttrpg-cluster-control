@@ -14,6 +14,7 @@
         aria-live="assertive"
       >{{ moveSelectionError }}</p>
       <p v-if="importError" class="feedback m-0 error-text" role="alert">{{ importError }}</p>
+      <p v-if="workspaceRestoreError" class="feedback m-0 error-text" role="alert">{{ workspaceRestoreError }}</p>
       <WorkspaceWelcome
         v-if="!workspace"
         v-model:cluster-name="clusterName"
@@ -106,6 +107,7 @@
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
+              :restore-loading="workspaceRestoreLoading"
               :player-export-error="playerExportError"
               :generated-player-url="generatedPlayerUrl"
               :player-link-busy="playerLinkBusy"
@@ -148,6 +150,7 @@
               @generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
               @import-file="importJsonFile"
+              @restore-file="openLocalWorkspaceRestore"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
               @toggle-inspector="togglePanel('inspector')"
@@ -521,6 +524,14 @@
       @review-fields="openImportFieldsDraft"
     />
 
+    <WorkspaceRestoreReview
+      :review="workspaceRestoreReview"
+      @cancel="workspaceRestore.cancel"
+      @confirm="workspaceRestore.confirm"
+      @download-current="workspaceRestore.downloadReviewedCurrent"
+      @update:discard-drafts-confirmed="workspaceRestore.setDiscardDraftsConfirmed"
+    />
+
     <ChartNamesDialog
       ref="chartNamesDialog"
       v-if="workspace"
@@ -558,6 +569,7 @@ import type { PublicationMenuRequest } from '../composables/editor-workflows/pub
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
+import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
@@ -569,6 +581,7 @@ import ChartNamesDialog from './ChartNamesDialog.vue'
 import ChartDetailsEditor from './inspector/ChartDetailsEditor.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
+import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
@@ -588,6 +601,9 @@ const {
   commit,
   retrySaveLatest,
   restoreBackup,
+  replaceFromBackup,
+  durableVersion,
+  replacementState,
 } = useLocalWorkspace()
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
@@ -1438,6 +1454,72 @@ const workspaceFiles = useWorkspaceFiles({
   beforeWorkspaceOperation,
 })
 importReviewActions = workspaceFiles
+
+function draftConsentState(): { signature: string; hasDrafts: boolean } {
+  const snapshot = {
+    chart: {
+      sessionId: charts.session.value?.id ?? null,
+      editing: chartEditing.value,
+      clusterName: clusterName.value,
+      systemName: chartDraftSystemName.value,
+      playerTitle: playerTitle.value,
+      publication: publication.value,
+    },
+    entity: entitySession.value,
+    route: routeSession.value,
+    fields: fieldDefinitionsSession,
+    creation: creationSession.value,
+    clusterAdd: clusterAddType.value,
+    clusterMove: clusterSystemMovePreview.value,
+    objectMove: systemObjectMovePreview.value,
+    unresolvedExit: unresolvedExitPreview.value,
+    orbitCenter: orbitCenterMovePreview.value,
+    orbitAdjustment: orbitAdjustmentPreview.value,
+    editingGesture: editingGestureActive.value,
+  }
+  return {
+    signature: JSON.stringify(snapshot),
+    hasDrafts: hasUncommittedNames.value
+      || hasModifiedEntitySession.value
+      || hasModifiedRouteSession.value
+      || hasModifiedFieldDefinitionsSession.value
+      || workflows.historyGuards.blockReason.value !== null,
+  }
+}
+
+function resetAfterWorkspaceReplacement(): void {
+  workflows.historyGuards.resetForWorkspaceReplacement()
+  cancelJsonImport()
+  history.resolveCapacity(false)
+  historyOpen.value = false
+  helpOpen.value = false
+  helpOwnsFocus.value = false
+  playerPreviewOpen.value = false
+  headerFilesOpen.value = false
+  recoveryDetailsOpen.value = false
+  mapTypeFiltersOpen.value = false
+  search.reset()
+  wardenFilters.clearAll()
+  publicationControls.closeMenu()
+}
+
+const workspaceRestore = useWorkspaceRestore({
+  workspace,
+  appliedRevision,
+  durableVersion,
+  getDraftConsentState: draftConsentState,
+  replaceFromBackup,
+  downloadCurrent: workspaceFiles.downloadWorkspaceSnapshot,
+  afterReplacement: resetAfterWorkspaceReplacement,
+})
+const workspaceRestoreReview = workspaceRestore.review
+const workspaceRestoreLoading = workspaceRestore.loading
+const workspaceRestoreError = workspaceRestore.error
+
+function openLocalWorkspaceRestore(event: Event): void {
+  cancelJsonImport()
+  void workspaceRestore.openLocalFile(event)
+}
 
 const {
   exportError,

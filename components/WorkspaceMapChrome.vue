@@ -284,27 +284,47 @@
           color="neutral"
           variant="outline"
           size="sm"
-          aria-label="Import JSON copy"
-          title="Import JSON copy"
-          @click="openJsonImportPicker"
+          aria-label="Add a star system"
+          title="Add a star system from a standalone JSON file"
+          @click="openSystemImportPicker"
         >
-          Import JSON copy
+          Add a star system
         </UButton>
-        <input
-          ref="importFileInput"
-          class="workspace-map-import-input"
-          type="file"
-          accept="application/json,.json"
-          aria-label="Import map JSON"
-          data-testid="map-json-import-input"
-          @change="emit('import-file', $event)"
+        <UButton
+          class="workspace-control workspace-map-import-button"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          aria-label="Restore Jump Cluster"
+          title="Replace the active Jump Cluster from a complete JSON backup"
+          :disabled="props.restoreLoading"
+          @click="openClusterRestorePicker"
         >
-
+          Restore Jump Cluster
+        </UButton>
         <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
         <p class="workspace-map-files-note">
-          Import JSON creates a separate copy in the current Jump Cluster: {{ workspace.cluster.name }}.
+          Add a star system imports an independent copy into {{ workspace.cluster.name }}. Restore Jump Cluster replaces this map after review.
         </p>
       </MapFilesPopover>
+      <input
+        ref="systemImportFileInput"
+        class="workspace-map-import-input"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Choose star system JSON"
+        data-testid="map-system-import-input"
+        @change="emit('import-file', $event)"
+      >
+      <input
+        ref="clusterRestoreFileInput"
+        class="workspace-map-import-input"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Choose Jump Cluster backup JSON"
+        data-testid="map-cluster-restore-input"
+        @change="emit('restore-file', $event)"
+      >
     </template>
   </UDashboardToolbar>
 </template>
@@ -330,6 +350,7 @@ const props = withDefaults(defineProps<{
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
+  restoreLoading?: boolean
   playerExportError: string
   generatedPlayerUrl: string
   playerLinkBusy: boolean
@@ -378,6 +399,7 @@ const emit = defineEmits<{
   'generate-player-link': []
   'copy-player-link': []
   'import-file': [event: Event]
+  'restore-file': [event: Event]
   'show-cluster': []
   'toggle-hierarchy': []
   'toggle-inspector': []
@@ -406,7 +428,8 @@ const searchActiveCriterionCount = computed(() => props.searchActiveCriterionCou
     + Number(searchPublicationModes.value.length > 0)
     + searchFieldConditions.value.length)
 const printLightForPrinting = ref(false)
-const importFileInput = ref<HTMLInputElement | null>(null)
+const systemImportFileInput = ref<HTMLInputElement | null>(null)
+const clusterRestoreFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
 const selectedSystem = computed(() => props.selectedSystem)
 const activeView = computed(() => props.activeView)
@@ -483,8 +506,13 @@ async function openPlayerPreview(): Promise<void> {
   emit('preview-player-view', files.focusTrigger)
 }
 
-function openJsonImportPicker(): void {
-  importFileInput.value?.click()
+function openSystemImportPicker(): void {
+  systemImportFileInput.value?.click()
+  headerMapActionsOpen.value = false
+}
+
+function openClusterRestorePicker(): void {
+  clusterRestoreFileInput.value?.click()
   headerMapActionsOpen.value = false
 }
 

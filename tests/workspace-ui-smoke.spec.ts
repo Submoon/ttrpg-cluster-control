@@ -9,13 +9,11 @@ import {
 import {
   waitForWorkspaceSaved,
   createSingleSystemWorkspace,
-  importReviewDialog,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
-  resolveImportReview,
+  resolveJumpClusterRestoreReview,
   returnToClusterMap,
+  reviewJumpClusterBackup,
   setHeaderMapActionsOpen,
-  setJsonFile,
 } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -48,11 +46,11 @@ function makeRouteFooterWorkspace() {
   return { ...workspace, cluster: { ...cluster, routes: [route] } }
 }
 
-async function importRouteFooterWorkspace(page: import('@playwright/test').Page): Promise<void> {
+async function restoreRouteFooterWorkspace(page: import('@playwright/test').Page): Promise<void> {
   const incoming = makeRouteFooterWorkspace()
   await returnToClusterMap(page)
-  await setJsonFile(jsonMapImportInput(page), 'footer-routes.json', JSON.stringify(exportJumpCluster(incoming)))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
+  const review = await reviewJumpClusterBackup(page, 'footer-routes.json', JSON.stringify(exportJumpCluster(incoming)))
+  await resolveJumpClusterRestoreReview(review, 'confirm')
   await setHeaderMapActionsOpen(page, false)
   await returnToClusterMap(page)
   await waitForWorkspaceSaved(page)
@@ -121,7 +119,7 @@ for (const viewport of smokeViewports) {
       systemName: 'Temporary',
       viewport,
     })
-    await importRouteFooterWorkspace(page)
+    await restoreRouteFooterWorkspace(page)
 
     const inspector = page.locator('#workspace-inspector-panel')
     const chartHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')

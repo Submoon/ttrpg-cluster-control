@@ -429,6 +429,29 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     fields.endCleanHistorySession()
   }
 
+  /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
+  function resetForWorkspaceReplacement(): void {
+    transitions.cancelPendingTransition()
+    const chartSession = charts.session.value
+    if (chartSession) charts.discard(chartSession.id)
+    const entitySession = entity.entitySession.value
+    if (entitySession) entity.discardEntitySession(entitySession.id)
+    const routeSession = route.routeSession.value
+    if (routeSession) route.discardRouteSession(routeSession.id)
+    fields.resetForWorkspaceReplacement()
+    cluster.cancelDeletionReview()
+    systemCreation.cancelCreationPreview()
+    systemCreation.cancelOrbitDrag()
+    systemCreation.quitAdd()
+    systemObjectPlacement.cancelSystemObjectMovePreview()
+    clusterSystemPlacement.cancelSystemMovePreview()
+    clusterSystemPlacement.quitClusterAdd()
+    unresolvedExitPlacement.cancel()
+    orbitCenterPlacement.cancelOrbitCenterMove(false)
+    orbitAdjustments.reset()
+    store.reset(workspaceContextId.value)
+  }
+
   async function quitAdd(): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
     route.cancelRouteCreation()
@@ -473,6 +496,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     historyGuards: {
       blockReason: historyGuards,
       endCleanSessions: endCleanHistorySessions,
+      resetForWorkspaceReplacement,
     },
     inspector: {
       objectInspectorFocusRequest,
@@ -500,6 +524,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       cancelRouteCreation: route.cancelRouteCreation,
     },
     charts: {
+      session: charts.session,
       clusterName: charts.clusterName,
       systemName: charts.systemName,
       playerTitle: charts.playerTitle,
