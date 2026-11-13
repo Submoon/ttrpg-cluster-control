@@ -1194,3 +1194,77 @@ test('reopening search while overlay teardown is pending prevents stale framing,
     harness.dispose()
   }
 })
+
+test('replacing the ready destination map during Search presentation rejects without publishing its prepared locator @pure', async () => {
+  const presentation = deferred<SearchPresentationSettlement>()
+  let presentationWaiting = false
+  const harness = createSearchHarness(
+    'Kestrel Reach',
+    'Vesper',
+    Promise.resolve(),
+    undefined,
+    () => {
+      presentationWaiting = true
+      return presentation.promise
+    },
+  )
+  function createObservedMap() {
+    const events: string[] = []
+    const handle = createSystemMapHandle({
+      whenReady: async () => { events.push('ready'); return true },
+      frameSearchTarget: () => { events.push('frame'); return true },
+      focusMap: () => { events.push('focus') },
+      prepareSearchLocator: objectId => {
+        events.push(`prepare:${objectId}`)
+        return () => { events.push(`publish:${objectId}`) }
+      },
+    })
+    return { handle, events }
+  }
+  try {
+    const workspace = harness.workspace.value
+    const system = workspace.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: system.id })
+
+    const oldMap = createObservedMap()
+    harness.workflows.mapControls.systemMapRef.value = oldMap.handle
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = object.locationKey
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result) throw new Error('The first system object was not searchable.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => presentationWaiting).toBe(true)
+    expect(oldMap.events).toEqual(['ready', `prepare:${object.id}`])
+
+    const replacementMap = createObservedMap()
+    harness.workflows.mapControls.systemMapRef.value = replacementMap.handle
+    presentation.resolve('settled')
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
+    expect(harness.workspace.value).toBe(workspace)
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(system.id)
+    expect(harness.store.selectedObjectId).toBe(object.id)
+    expect(harness.store.clusterSelectedSystemId).toBeNull()
+    expect(search.open.value).toBe(false)
+    expect(search.query.value).toBe(object.locationKey)
+    expect(oldMap.events).toEqual(['ready', `prepare:${object.id}`])
+    expect(replacementMap.events).toEqual([])
+
+    const destinationKey = `system:${workspace.cluster.id}:${system.id}`
+    const viewport = { x: 14, y: 27, k: 1.4 }
+    harness.workflows.mapControls.recordViewport(destinationKey, viewport)
+    expect(harness.store.visits[destinationKey]).toEqual({
+      viewport,
+      selection: { kind: 'object', id: object.id },
+    })
+  } finally {
+    presentation.resolve('settled')
+    harness.dispose()
+  }
+})
