@@ -1,19 +1,15 @@
-/** Direct browser-to-Drive API operations used by cloud backup and restore. */
+/** Direct browser-to-Drive operations for the application's hidden app-data space. */
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
+const APP_DATA_SPACE = 'appDataFolder'
 const JSON_MIME_TYPE = 'application/json'
-const GOOGLE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 const MULTIPART_UPLOAD_LIMIT = 5 * 1024 * 1024
 const DRIVE_REQUEST_TIMEOUT_MS = 60_000
 
-export type GoogleDriveApiErrorCode =
-  | 'private-folder-required'
-  | 'folder-not-writable'
-  | 'request-failed'
-  | 'outcome-uncertain'
+export type GoogleDriveApiErrorCode = 'request-failed' | 'outcome-uncertain'
 
-/** A provider failure safe to show to a user; `outcomeUncertain` preserves an upload identity for retry. */
+/** A provider failure with safe feedback; uncertain creates retain their generated ID for retry. */
 export class GoogleDriveApiError extends Error {
   readonly code: GoogleDriveApiErrorCode
   readonly outcomeUncertain: boolean
@@ -26,132 +22,134 @@ export class GoogleDriveApiError extends Error {
   }
 }
 
-export interface GoogleDriveFolder {
-  id: string
-  name: string
-}
-
 export interface GoogleDriveBackupFile {
   id: string
   name: string
-  folderId: string
-  folderName: string
-  folderUrl: string
-  webViewLink?: string
+  createdTime: string
+}
+
+export interface GoogleDriveBackupList {
+  files: GoogleDriveBackupFile[]
+  nextPageToken?: string
 }
 
 export type DriveFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-/** Builds the canonical destination URL from a Drive folder ID that passed the private-folder check. */
-export function googleDriveFolderUrl(folderId: string): string {
-  return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`
-}
-
-/**
- * Confirms a selected folder is writable, in My Drive, and has a complete owner-only ACL.
- * Missing provider fields, pagination gaps, inherited permissions, and every extra principal fail closed.
- */
-export async function verifyPrivateGoogleDriveFolder(
-  accessToken: string,
-  folderId: string,
-  fetcher: DriveFetcher = fetch,
-): Promise<GoogleDriveFolder> {
-  const file = await requestJson(
-    accessToken,
-    `${DRIVE_API}/files/${encodeURIComponent(folderId)}?${new URLSearchParams({
-      fields: 'id,name,mimeType,ownedByMe,shared,driveId,trashed,capabilities(canAddChildren)',
-      supportsAllDrives: 'true',
-    })}`,
-    fetcher,
-  )
-
-  if (!isRecord(file)
-    || file.id !== folderId
-    || typeof file.name !== 'string'
-    || file.mimeType !== GOOGLE_FOLDER_MIME_TYPE
-    || file.ownedByMe !== true
-    || file.shared !== false
-    || file.driveId !== undefined
-    || file.trashed !== false) {
-    throw new GoogleDriveApiError(
-      'private-folder-required',
-      'Choose an unshared folder in My Drive. Google Drive could not verify that this folder is private.',
-    )
-  }
-
-  if (!isRecord(file.capabilities) || file.capabilities.canAddChildren !== true) {
-    throw new GoogleDriveApiError(
-      'folder-not-writable',
-      'Choose a folder where your Google account can add files.',
-    )
-  }
-
-  const permissions = await listCompleteFolderPermissions(accessToken, folderId, fetcher)
-  if (permissions.length !== 1
-    || !isRecord(permissions[0])
-    || permissions[0].type !== 'user'
-    || permissions[0].role !== 'owner'
-    || typeof permissions[0].id !== 'string'
-    || permissions[0].id.length === 0
-    || permissions[0].deleted === true
-    || hasInheritedPermissionDetails(permissions[0])) {
-    throw new GoogleDriveApiError(
-      'private-folder-required',
-      'Choose an unshared folder in My Drive. Google Drive could not verify that this folder is private.',
-    )
-  }
-
-  return { id: file.id, name: file.name }
-}
-
-/** Requests a stable Drive ID once for one logical backup operation. */
+/** Reserves a stable ID in the hidden app-data space for one logical backup. */
 export async function generateGoogleDriveFileId(
   accessToken: string,
   fetcher: DriveFetcher = fetch,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const body = await requestJson(
-    accessToken,
-    `${DRIVE_API}/files/generateIds?${new URLSearchParams({ count: '1', space: 'drive', fields: 'ids' })}`,
-    fetcher,
-  )
-
-  if (!isRecord(body) || !Array.isArray(body.ids) || typeof body.ids[0] !== 'string' || body.ids[0].length === 0) {
-    throw new GoogleDriveApiError('request-failed', 'Google Drive did not provide an ID for this backup.')
+  const query = new URLSearchParams({ count: '1', space: APP_DATA_SPACE, fields: 'ids,space' })
+  const body = await requestJson(accessToken, `${DRIVE_API}/files/generateIds?${query}`, fetcher, signal)
+  if (!isRecord(body)
+    || body.space !== APP_DATA_SPACE
+    || !Array.isArray(body.ids)
+    || typeof body.ids[0] !== 'string'
+    || body.ids[0].length === 0) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive did not provide a usable app-data file ID.')
   }
-
   return body.ids[0]
 }
 
+/** Lists only JSON files whose provider metadata confirms appDataFolder membership. */
+export async function listGoogleDriveBackups(
+  accessToken: string,
+  pageToken?: string,
+  fetcher: DriveFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<GoogleDriveBackupList> {
+  const query = new URLSearchParams({
+    spaces: APP_DATA_SPACE,
+    q: 'trashed = false',
+    pageSize: '100',
+    orderBy: 'createdTime desc',
+    fields: 'nextPageToken,files(id,name,createdTime,mimeType,spaces,trashed)',
+  })
+  if (pageToken) query.set('pageToken', pageToken)
+
+  const body = await requestJson(accessToken, `${DRIVE_API}/files?${query}`, fetcher, signal)
+  if (!isRecord(body) || (body.files !== undefined && !Array.isArray(body.files))) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid backup list.')
+  }
+
+  const files = (body.files ?? []).flatMap((entry): GoogleDriveBackupFile[] => {
+    if (!isAppDataJsonFile(entry)) return []
+    return [{ id: entry.id, name: entry.name, createdTime: entry.createdTime }]
+  })
+  if (body.nextPageToken !== undefined
+    && (typeof body.nextPageToken !== 'string' || body.nextPageToken.length === 0)) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid backup list page.')
+  }
+
+  return {
+    files,
+    ...(typeof body.nextPageToken === 'string' ? { nextPageToken: body.nextPageToken } : {}),
+  }
+}
+
+/** Reads a selected file only after its metadata confirms JSON content in appDataFolder. */
+export async function readGoogleDriveFile(
+  accessToken: string,
+  fileId: string,
+  fetcher: DriveFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<string> {
+  const metadata = await requestJson(accessToken, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?${new URLSearchParams({
+    fields: 'id,name,mimeType,spaces,trashed',
+  })}`, fetcher, signal)
+  if (!isRecord(metadata)
+    || metadata.id !== fileId
+    || metadata.mimeType !== JSON_MIME_TYPE
+    || !isAppDataSpace(metadata.spaces)
+    || !isNotTrashed(metadata.trashed)) {
+    throw new GoogleDriveApiError('request-failed', 'The selected file is not an available JSON backup in Google Drive app data.')
+  }
+
+  let response: Response
+  try {
+    response = await providerFetch(fetcher, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      ...(signal ? { signal } : {}),
+    })
+  } catch {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive could not be reached to read this backup.')
+  }
+  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not read this backup.')
+  try {
+    return await readResponseText(response)
+  } catch {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive took too long to read this backup.')
+  }
+}
+
 /**
- * Creates a new JSON file with a caller-retained ID. A lost acknowledgement is reconciled by that
- * ID; callers must reuse the same ID when retrying an uncertain operation.
+ * Creates one dated JSON file with a caller-retained ID. On an ambiguous write, reconciliation
+ * checks that exact ID, validates its app-data space, and compares the saved bytes before success.
  */
 export async function uploadGoogleDriveBackup(options: {
   accessToken: string
-  folderId: string
-  folderName: string
   fileId: string
   filename: string
   contents: string
-  /** Rechecks destination privacy after resumable session setup and before sending file bytes. */
-  verifyBeforeMediaUpload?: () => Promise<void>
   fetcher?: DriveFetcher
+  signal?: AbortSignal
 }): Promise<GoogleDriveBackupFile> {
-  const { folderId, folderName, fileId, filename, contents } = options
   const fetcher = options.fetcher ?? fetch
   const metadata = JSON.stringify({
-    id: fileId,
-    name: filename,
+    id: options.fileId,
+    name: options.filename,
     mimeType: JSON_MIME_TYPE,
-    parents: [folderId],
+    parents: [APP_DATA_SPACE],
   })
-  const contentBytes = new TextEncoder().encode(contents)
+  const contentBytes = new TextEncoder().encode(options.contents)
 
   let response: Response
   try {
     response = contentBytes.byteLength <= MULTIPART_UPLOAD_LIMIT
-      ? await uploadMultipart({ ...options, metadata }, fetcher)
-      : await uploadResumable({ ...options, metadata, contentBytes }, fetcher)
+      ? await uploadMultipart(options, metadata, fetcher)
+      : await uploadResumable(options, metadata, contentBytes, fetcher)
   } catch (error) {
     if (error instanceof GoogleDriveApiError && !error.outcomeUncertain) throw error
     return reconcileUpload(options, fetcher)
@@ -159,114 +157,29 @@ export async function uploadGoogleDriveBackup(options: {
 
   if (response.ok) {
     const receipt = await readJson(response)
-    if (isConfirmedFile(receipt, fileId, folderId, filename, contentBytes)) {
-      return makeBackupFile(receipt, folderId, folderName)
-    }
-
+    if (isConfirmedFile(receipt, options, contentBytes)) return toBackupFile(receipt)
     return reconcileUpload(options, fetcher)
   }
 
   const reconciliation = await tryReconcileUpload(options, fetcher)
   if (reconciliation.kind === 'confirmed') return reconciliation.file
-
   if (response.status === 409
     || response.status >= 500
     || response.status === 408
     || response.status === 429
     || reconciliation.kind !== 'not-found') {
-    throw new GoogleDriveApiError(
-      'outcome-uncertain',
-      'Google Drive did not confirm whether the backup finished. Retry this same backup to check its saved file.',
-      true,
-    )
+    throw uncertainOutcome()
   }
 
   throw new GoogleDriveApiError(
     'request-failed',
-    await getResponseError(response, 'Google Drive rejected the backup. Your local map and earlier backups are unchanged.'),
+    'Google Drive rejected the backup. Your local map and earlier backups are unchanged.',
   )
 }
 
-/** Reads selected Drive file bytes directly; format admission remains the restore workflow's responsibility. */
-export async function readGoogleDriveFile(
-  accessToken: string,
-  fileId: string,
-  fetcher: DriveFetcher = fetch,
-): Promise<string> {
-  let response: Response
-  try {
-    response = await providerFetch(fetcher, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-  } catch {
-    throw new GoogleDriveApiError('request-failed', 'Google Drive could not be reached to read this file.')
-  }
-
-  if (!response.ok) {
-    throw new GoogleDriveApiError(
-      'request-failed',
-      await getResponseError(response, 'Google Drive could not read the selected file.'),
-    )
-  }
-
-  try {
-    return await readResponseText(response)
-  } catch {
-    throw new GoogleDriveApiError('request-failed', 'Google Drive took too long to read the selected file.')
-  }
-}
-
-async function listCompleteFolderPermissions(
-  accessToken: string,
-  folderId: string,
-  fetcher: DriveFetcher,
-): Promise<unknown[]> {
-  const permissions: unknown[] = []
-  let pageToken: string | undefined
-  const seenPageTokens = new Set<string>()
-
-  do {
-    const query = new URLSearchParams({
-      fields: 'permissions(id,type,role,emailAddress,deleted,permissionDetails(inherited,inheritedFrom,role)),nextPageToken',
-      pageSize: '100',
-      supportsAllDrives: 'true',
-    })
-    if (pageToken) query.set('pageToken', pageToken)
-
-    const body = await requestJson(
-      accessToken,
-      `${DRIVE_API}/files/${encodeURIComponent(folderId)}/permissions?${query}`,
-      fetcher,
-    )
-    if (!isRecord(body) || !Array.isArray(body.permissions)) {
-      throw new GoogleDriveApiError(
-        'private-folder-required',
-        'Google Drive could not verify the folder permissions. Choose a different private folder.',
-      )
-    }
-    permissions.push(...body.permissions)
-
-    if (body.nextPageToken !== undefined) {
-      if (typeof body.nextPageToken !== 'string'
-        || body.nextPageToken.length === 0
-        || seenPageTokens.has(body.nextPageToken)) {
-        throw new GoogleDriveApiError(
-          'private-folder-required',
-          'Google Drive returned an incomplete folder permission list. Choose a different private folder.',
-        )
-      }
-      seenPageTokens.add(body.nextPageToken)
-      pageToken = body.nextPageToken
-    } else {
-      pageToken = undefined
-    }
-  } while (pageToken)
-
-  return permissions
-}
-
 async function uploadMultipart(
-  options: Parameters<typeof uploadGoogleDriveBackup>[0] & { metadata: string },
+  options: Parameters<typeof uploadGoogleDriveBackup>[0],
+  metadata: string,
   fetcher: DriveFetcher,
 ): Promise<Response> {
   const boundary = `cluster-control-${createBoundarySuffix()}`
@@ -274,7 +187,7 @@ async function uploadMultipart(
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
     '',
-    options.metadata,
+    metadata,
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
@@ -291,11 +204,14 @@ async function uploadMultipart(
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
     body,
+    ...(options.signal ? { signal: options.signal } : {}),
   })
 }
 
 async function uploadResumable(
-  options: Parameters<typeof uploadGoogleDriveBackup>[0] & { metadata: string, contentBytes: Uint8Array },
+  options: Parameters<typeof uploadGoogleDriveBackup>[0],
+  metadata: string,
+  contentBytes: Uint8Array,
   fetcher: DriveFetcher,
 ): Promise<Response> {
   const sessionResponse = await providerFetch(fetcher, `${DRIVE_UPLOAD_API}/files?${createUploadQuery('resumable')}`, {
@@ -304,52 +220,28 @@ async function uploadResumable(
       Authorization: `Bearer ${options.accessToken}`,
       'Content-Type': 'application/json; charset=UTF-8',
       'X-Upload-Content-Type': JSON_MIME_TYPE,
-      'X-Upload-Content-Length': String(options.contentBytes.byteLength),
+      'X-Upload-Content-Length': String(contentBytes.byteLength),
     },
-    body: options.metadata,
+    body: metadata,
+    ...(options.signal ? { signal: options.signal } : {}),
   })
-
   if (!sessionResponse.ok) return sessionResponse
 
   const location = sessionResponse.headers.get('Location')
-  if (!location || !isTrustedDriveUploadLocation(location)) {
-    throw new GoogleDriveApiError(
-      'outcome-uncertain',
-      'Google Drive did not provide a trusted upload address. Retry this same backup to check its saved file.',
-      true,
-    )
-  }
-
-  await options.verifyBeforeMediaUpload?.()
+  if (!location || !isTrustedDriveUploadLocation(location)) throw uncertainOutcome()
 
   return providerFetch(fetcher, location, {
     method: 'PUT',
-    headers: {
-      'Content-Type': `${JSON_MIME_TYPE}; charset=UTF-8`,
-    },
+    headers: { 'Content-Type': `${JSON_MIME_TYPE}; charset=UTF-8` },
     body: options.contents,
+    ...(options.signal ? { signal: options.signal } : {}),
   })
-}
-
-async function reconcileUpload(
-  options: Parameters<typeof uploadGoogleDriveBackup>[0],
-  fetcher: DriveFetcher,
-): Promise<GoogleDriveBackupFile> {
-  const reconciliation = await tryReconcileUpload(options, fetcher)
-  if (reconciliation.kind === 'confirmed') return reconciliation.file
-  throw new GoogleDriveApiError(
-    'outcome-uncertain',
-    'Google Drive did not confirm whether the backup finished. Retry this same backup to check its saved file.',
-    true,
-  )
 }
 
 function createUploadQuery(uploadType: 'multipart' | 'resumable'): string {
   return new URLSearchParams({
     uploadType,
-    ignoreDefaultVisibility: 'true',
-    supportsAllDrives: 'true',
-    fields: 'id,name,mimeType,parents,size,webViewLink,trashed,md5Checksum,sha256Checksum',
+    fields: 'id,name,mimeType,parents,spaces,size,createdTime,trashed,md5Checksum,sha256Checksum',
   }).toString()
 }
 
@@ -372,34 +264,41 @@ type UploadReconciliation =
   | { kind: 'inconclusive' }
   | { kind: 'mismatch' }
 
+async function reconcileUpload(
+  options: Parameters<typeof uploadGoogleDriveBackup>[0],
+  fetcher: DriveFetcher,
+): Promise<GoogleDriveBackupFile> {
+  const reconciliation = await tryReconcileUpload(options, fetcher)
+  if (reconciliation.kind === 'confirmed') return reconciliation.file
+  throw uncertainOutcome()
+}
+
 async function tryReconcileUpload(
   options: Parameters<typeof uploadGoogleDriveBackup>[0],
   fetcher: DriveFetcher,
 ): Promise<UploadReconciliation> {
-  const { accessToken, fileId, folderId, folderName, filename } = options
+  const { accessToken, fileId, filename, contents } = options
   try {
     const response = await providerFetch(fetcher,
       `${DRIVE_API}/files/${encodeURIComponent(fileId)}?${new URLSearchParams({
-        fields: 'id,name,mimeType,parents,size,webViewLink,trashed,md5Checksum,sha256Checksum',
-        supportsAllDrives: 'true',
+        fields: 'id,name,mimeType,parents,spaces,size,createdTime,trashed,md5Checksum,sha256Checksum',
       })}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     )
     if (response.status === 404) return { kind: 'not-found' }
     if (!response.ok) return { kind: 'inconclusive' }
 
-    const receipt = await readJson(response)
-    if (!isConfirmedMetadata(receipt, fileId, folderId, filename, options.contents)) return { kind: 'mismatch' }
+    const metadata = await readJson(response)
+    if (!isConfirmedMetadata(metadata, fileId, filename, contents)) return { kind: 'mismatch' }
 
     const mediaResponse = await providerFetch(fetcher, `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
     if (!mediaResponse.ok) return { kind: 'inconclusive' }
-
     const savedBytes = new Uint8Array(await readResponseBytes(mediaResponse))
-    const expectedBytes = new TextEncoder().encode(options.contents)
+    const expectedBytes = new TextEncoder().encode(contents)
     if (!sameBytes(savedBytes, expectedBytes)) return { kind: 'mismatch' }
-    return { kind: 'confirmed', file: makeBackupFile(receipt as Record<string, unknown>, folderId, folderName) }
+    return { kind: 'confirmed', file: toBackupFile(metadata as Record<string, unknown>) }
   } catch {
     return { kind: 'inconclusive' }
   }
@@ -407,20 +306,15 @@ async function tryReconcileUpload(
 
 function isConfirmedFile(
   value: unknown,
-  fileId: string,
-  folderId: string,
-  filename: string,
+  options: Parameters<typeof uploadGoogleDriveBackup>[0],
   contentBytes: Uint8Array,
 ): value is Record<string, unknown> {
-  if (!isConfirmedMetadata(value, fileId, folderId, filename, contentBytes)) return false
-  // A success receipt for the exact upload request is authoritative; retries additionally read back the bytes.
-  return true
+  return isConfirmedMetadata(value, options.fileId, options.filename, contentBytes)
 }
 
 function isConfirmedMetadata(
   value: unknown,
   fileId: string,
-  folderId: string,
   filename: string,
   contents: string | Uint8Array,
 ): value is Record<string, unknown> {
@@ -429,39 +323,65 @@ function isConfirmedMetadata(
   return value.id === fileId
     && value.name === filename
     && value.mimeType === JSON_MIME_TYPE
-    && Array.isArray(value.parents)
-    && value.parents.includes(folderId)
+    && isAppDataSpace(value.spaces)
     && value.size === String(expectedSize)
-    && value.trashed === false
+    && isValidDate(value.createdTime)
+    && isNotTrashed(value.trashed)
 }
 
-function makeBackupFile(value: Record<string, unknown>, folderId: string, folderName: string): GoogleDriveBackupFile {
+function toBackupFile(value: Record<string, unknown>): GoogleDriveBackupFile {
   return {
     id: value.id as string,
     name: value.name as string,
-    folderId,
-    folderName,
-    folderUrl: googleDriveFolderUrl(folderId),
-    ...(typeof value.webViewLink === 'string' ? { webViewLink: value.webViewLink } : {}),
+    createdTime: value.createdTime as string,
   }
 }
 
-async function requestJson(accessToken: string, url: string, fetcher: DriveFetcher): Promise<unknown> {
+function isAppDataJsonFile(value: unknown): value is Record<string, unknown> & GoogleDriveBackupFile {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && value.id.length > 0
+    && typeof value.name === 'string'
+    && value.name.toLocaleLowerCase().endsWith('.json')
+    && isValidDate(value.createdTime)
+    && value.mimeType === JSON_MIME_TYPE
+    && isAppDataSpace(value.spaces)
+    && isNotTrashed(value.trashed)
+}
+
+function isAppDataSpace(value: unknown): boolean {
+  return Array.isArray(value) && value.includes(APP_DATA_SPACE)
+}
+
+function isNotTrashed(value: unknown): boolean {
+  // Google may omit protobuf default false values; true and malformed flags still fail closed.
+  return value === undefined || value === false
+}
+
+function isValidDate(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value))
+}
+
+async function requestJson(
+  accessToken: string,
+  url: string,
+  fetcher: DriveFetcher,
+  signal?: AbortSignal,
+): Promise<unknown> {
   let response: Response
   try {
-    response = await providerFetch(fetcher, url, { headers: { Authorization: `Bearer ${accessToken}` } })
+    response = await providerFetch(fetcher, url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      ...(signal ? { signal } : {}),
+    })
   } catch {
     throw new GoogleDriveApiError('request-failed', 'Google Drive could not be reached. Check your connection and try again.')
   }
+  if (!response.ok) throw new GoogleDriveApiError('request-failed', 'Google Drive could not complete this request.')
 
-  if (!response.ok) {
-    throw new GoogleDriveApiError(
-      'request-failed',
-      await getResponseError(response, 'Google Drive could not verify this operation.'),
-    )
-  }
-
-  return readJson(response)
+  const body = await readJson(response)
+  if (body === undefined) throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid response.')
+  return body
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -512,10 +432,7 @@ async function providerFetch(fetcher: DriveFetcher, input: RequestInfo | URL, in
   else callerSignal?.addEventListener('abort', relayCallerAbort, { once: true })
 
   try {
-    return await Promise.race([
-      fetcher(input, { ...init, signal: controller.signal }),
-      deadline,
-    ])
+    return await Promise.race([fetcher(input, { ...init, signal: controller.signal }), deadline])
   } catch (error) {
     if (timedOut) throw new Error('Google Drive request timed out.', { cause: error })
     throw error
@@ -525,24 +442,12 @@ async function providerFetch(fetcher: DriveFetcher, input: RequestInfo | URL, in
   }
 }
 
-async function getResponseError(response: Response, fallback: string): Promise<string> {
-  const body = await readJson(response)
-  if (isRecord(body) && isRecord(body.error) && typeof body.error.message === 'string') {
-    return `${fallback} ${body.error.message}`
-  }
-  return fallback
-}
-
-function hasInheritedPermissionDetails(permission: Record<string, unknown>): boolean {
-  if (permission.permissionDetails === undefined) return false
-  if (!Array.isArray(permission.permissionDetails)) return true
-  return permission.permissionDetails.some(detail => !isRecord(detail)
-    || detail.inherited !== false
-    || detail.inheritedFrom !== undefined)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+function uncertainOutcome(): GoogleDriveApiError {
+  return new GoogleDriveApiError(
+    'outcome-uncertain',
+    'Google Drive did not confirm whether the backup finished. Retry this same backup to check its saved file.',
+    true,
+  )
 }
 
 function createBoundarySuffix(): string {
@@ -550,6 +455,9 @@ function createBoundarySuffix(): string {
 }
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
-  return left.byteLength === right.byteLength
-    && left.every((value, index) => value === right[index])
+  return left.byteLength === right.byteLength && left.every((value, index) => value === right[index])
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
