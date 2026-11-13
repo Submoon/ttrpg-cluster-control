@@ -5,64 +5,48 @@
     role="group"
     aria-label="Edit history"
   >
-    <div class="flex items-center gap-1">
-      <UTooltip :text="undoTooltipText" :kbds="undoKeycaps" :ui="historyTooltipUi">
-        <UButton
-          class="workspace-control workspace-map-icon-control workspace-history-action"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          :aria-label="undoLabel"
-          aria-keyshortcuts="Control+Z Meta+Z"
-          :aria-description="undoDescription"
-          :disabled="props.status.undoUnavailableReason !== null"
-          aria-describedby="workspace-history-feedback workspace-history-error"
-          @click="emit('undo')"
-        >
-          <UIcon class="workspace-history-action-icon" name="i-lucide-undo-2" aria-hidden="true" />
-          <span aria-hidden="true">
-            <UChip
-              as="span"
-              standalone
-              inset
-              color="neutral"
-              class="workspace-history-count-chip"
-              :ui="{ base: 'workspace-history-count-badge' }"
-              :text="props.status.undoDepth"
-            />
-          </span>
-        </UButton>
-      </UTooltip>
-      <UTooltip :text="redoTooltipText" :kbds="redoKeycaps" :ui="historyTooltipUi">
-        <UButton
-          class="workspace-control workspace-map-icon-control workspace-history-action"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          :aria-label="redoLabel"
-          aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
-          :aria-description="redoDescription"
-          :disabled="props.status.redoUnavailableReason !== null"
-          aria-describedby="workspace-history-feedback workspace-history-error"
-          @click="emit('redo')"
-        >
-          <UIcon class="workspace-history-action-icon" name="i-lucide-redo-2" aria-hidden="true" />
-          <span aria-hidden="true">
-            <UChip
-              as="span"
-              standalone
-              inset
-              color="neutral"
-              class="workspace-history-count-chip"
-              :ui="{ base: 'workspace-history-count-badge' }"
-              :text="props.status.redoDepth"
-            />
-          </span>
-        </UButton>
-      </UTooltip>
+    <div class="flex items-center gap-3">
+      <UChip size="3xl" class="workspace-history-count" :ui="countChipUi">
+        <UTooltip :text="undoTooltipText" :kbds="undoKeycaps" :ui="historyTooltipUi">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="undoLabel"
+            aria-keyshortcuts="Control+Z Meta+Z"
+            :aria-description="undoDescription"
+            :disabled="props.status.undoUnavailableReason !== null"
+            aria-describedby="workspace-history-feedback workspace-history-error"
+            @click="emit('undo')"
+          >
+            <UIcon class="workspace-history-action-icon" name="i-lucide-undo-2" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
+        <template #content><span aria-hidden="true">{{ props.status.undoDepth }}</span></template>
+      </UChip>
+      <UChip size="3xl" class="workspace-history-count" :ui="countChipUi">
+        <UTooltip :text="redoTooltipText" :kbds="redoKeycaps" :ui="historyTooltipUi">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="redoLabel"
+            aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
+            :aria-description="redoDescription"
+            :disabled="props.status.redoUnavailableReason !== null"
+            aria-describedby="workspace-history-feedback workspace-history-error"
+            @click="emit('redo')"
+          >
+            <UIcon class="workspace-history-action-icon" name="i-lucide-redo-2" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
+        <template #content><span aria-hidden="true">{{ props.status.redoDepth }}</span></template>
+      </UChip>
       <UTooltip text="History" :ui="historyTooltipUi">
         <UButton
-          class="workspace-control workspace-map-icon-control workspace-history-action"
+          class="workspace-control workspace-map-icon-control"
           color="neutral"
           variant="outline"
           size="sm"
@@ -140,6 +124,7 @@ const undoTooltipText = computed(() => props.status.undoUnavailableReason ?? und
 const redoTooltipText = computed(() => props.status.redoUnavailableReason ?? redoLabel.value)
 const undoDescription = computed(() => `${props.status.undoDepth} ${props.status.undoDepth === 1 ? 'action' : 'actions'} available to undo`)
 const redoDescription = computed(() => `${props.status.redoDepth} ${props.status.redoDepth === 1 ? 'action' : 'actions'} available through Redo`)
+const countChipUi = { base: 'pointer-events-none px-0.5 tabular-nums' }
 const historyTooltipUi = {
   content: 'workspace-history-tooltip-content',
   text: 'workspace-history-tooltip-text',
@@ -169,32 +154,6 @@ const feedback = computed(() => {
 .workspace-history-action-icon {
   width: 1.125rem;
   height: 1.125rem;
-}
-
-:deep(.workspace-history-count-chip) {
-  flex: 0 0 auto;
-}
-
-:deep(.workspace-history-count-badge) {
-  box-sizing: border-box;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  border: 1px solid var(--line);
-  padding-inline: 0.25rem;
-  background: var(--panel-raised);
-  color: var(--text-primary);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  opacity: 1;
-}
-
-:deep(.workspace-history-action:disabled) {
-  opacity: 1;
-}
-
-:deep(.workspace-history-action:disabled .workspace-history-action-icon) {
-  opacity: 0.55;
 }
 
 :global(.workspace-history-tooltip-content) {
