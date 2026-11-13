@@ -9,9 +9,6 @@
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
-        <a v-if="cloudBackupDestination" :href="cloudBackupDestination.url" target="_blank" rel="noopener noreferrer">
-          Open folder in Google Drive
-        </a>
       </p>
       <p
         v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
@@ -31,14 +28,14 @@
         :save-state="saveState"
         :save-error="saveError"
         :form-error="formError"
-        :restore-loading="workspaceRestoreLoading"
+        :restore-loading="localWorkspaceRestoreLoading"
         @retry="hydrate"
-        @restore-backup="restoreBackup"
+        @restore-backup="restoreLastValidWorkspace"
         @restore-file="openLocalWorkspaceRestore"
         @submit="submitNames"
       >
         <template #restore-actions>
-          <slot name="restore-actions" />
+          <GoogleDriveRestoreButton :controller="googleDriveRestore" />
         </template>
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
@@ -119,7 +116,7 @@
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
-              :restore-loading="workspaceRestoreLoading"
+              :restore-loading="localWorkspaceRestoreLoading"
               :player-export-error="playerExportError"
               :generated-player-url="generatedPlayerUrl"
               :player-link-busy="playerLinkBusy"
@@ -173,6 +170,7 @@
             >
               <template #cloud-backup>
                 <GoogleDriveBackupButton :controller="googleDriveBackup" />
+                <GoogleDriveRestoreButton :controller="googleDriveRestore" />
               </template>
               <template #history>
                 <WorkspaceHistoryControls
@@ -585,6 +583,7 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
+import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
@@ -601,6 +600,7 @@ import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 import GoogleDriveBackupButton from './GoogleDriveBackupButton.vue'
+import GoogleDriveRestoreButton from './GoogleDriveRestoreButton.vue'
 import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
 
 const {
@@ -622,7 +622,6 @@ const {
 } = useLocalWorkspace()
 const googleDriveBackup = useGoogleDriveBackup(() => workspace.value)
 const cloudBackupMessage = googleDriveBackup.message
-const cloudBackupDestination = googleDriveBackup.destination
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 
@@ -1531,13 +1530,21 @@ const workspaceRestore = useWorkspaceRestore({
   downloadCurrent: workspaceFiles.downloadWorkspaceSnapshot,
   afterReplacement: resetAfterWorkspaceReplacement,
 })
+const googleDriveRestore = useGoogleDriveRestore(workspaceRestore)
 const workspaceRestoreReview = workspaceRestore.review
 const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error
+const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value && !googleDriveRestore.canCancel.value)
 
 function openLocalWorkspaceRestore(event: Event): void {
+  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
   cancelJsonImport()
   void workspaceRestore.openLocalFile(event)
+}
+
+function restoreLastValidWorkspace(): void {
+  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  void restoreBackup()
 }
 
 const {

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createRenderer, defineComponent, h, ref, shallowRef } from 'vue'
-import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { createLocalWorkspace, exportJumpCluster, type LocalWorkspace } from '../domain/workspace'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
 import type { WorkspaceStorageVersion } from '../utils/workspace-storage'
 
@@ -105,6 +105,65 @@ test('a local backup read cannot replace a workspace installed while the file is
     expect(restore.error.value).toContain('active workspace or draft state changed')
     expect(replacementCount).toBe(0)
     expect(workspace.value?.cluster.name).toBe('Installed Reach')
+  } finally {
+    renderer.render(null, container)
+  }
+})
+
+test('canceling a provider read releases only its restore operation and preserves a newer local restore @pure', async () => {
+  const workspace = ref<LocalWorkspace | null>(createLocalWorkspace('Active Reach', 'Vesper'))
+  const appliedRevision = ref(0)
+  const durableVersion = shallowRef<WorkspaceStorageVersion | null>(validVersion(workspace.value!, 0))
+  const canceledDriveRead = deferred<{ name: string; content: unknown } | null>()
+  const supersededDriveRead = deferred<{ name: string; content: unknown } | null>()
+  const pendingLocalRead = deferred<{ name: string; content: unknown } | null>()
+  let restore: ReturnType<typeof useWorkspaceRestore> | undefined
+  const application = defineComponent({
+    setup() {
+      restore = useWorkspaceRestore({
+        workspace,
+        appliedRevision,
+        durableVersion,
+        getDraftConsentState: () => ({ signature: '', hasDrafts: false }),
+        replaceFromBackup: async () => undefined,
+        downloadCurrent: () => undefined,
+        afterReplacement: () => undefined,
+      })
+      return () => h('div')
+    },
+  })
+  const renderer = createTestRenderer()
+  const container: HostNode = { kind: 'root', children: [] }
+  renderer.render(h(application), container)
+  if (!restore) throw new Error('The workspace restore controller did not initialize.')
+
+  try {
+    const canceledSignal = new AbortController()
+    const canceledOpening = restore.openFrom(() => canceledDriveRead.promise, canceledSignal.signal)
+    expect(restore.loading.value).toBe(true)
+    canceledSignal.abort()
+    expect(restore.loading.value).toBe(false)
+    await canceledOpening
+
+    const supersededSignal = new AbortController()
+    const driveOpening = restore.openFrom(() => supersededDriveRead.promise, supersededSignal.signal)
+    const localOpening = restore.openFrom(() => pendingLocalRead.promise)
+    expect(restore.loading.value).toBe(true)
+    supersededSignal.abort()
+    expect(restore.loading.value).toBe(true)
+
+    pendingLocalRead.resolve({
+      name: 'local-backup.json',
+      content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Local Reach', 'Cinder'))),
+    })
+    await localOpening
+    supersededDriveRead.resolve({ name: 'late-drive-backup.json', content: '{}' })
+    canceledDriveRead.resolve({ name: 'canceled-drive-backup.json', content: '{}' })
+    await driveOpening
+
+    expect(restore.review.value?.sourceName).toBe('local-backup.json')
+    expect(restore.error.value).toBe('')
+    expect(workspace.value?.cluster.name).toBe('Active Reach')
   } finally {
     renderer.render(null, container)
   }
