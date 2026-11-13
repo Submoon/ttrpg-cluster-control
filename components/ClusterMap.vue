@@ -32,7 +32,10 @@
  */
 import { drag, pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import { captureD3MouseGesture, type D3MouseGestureDisposer } from './maps/d3-mouse-gesture'
-import { isMapZoomMark, isSingleTouchPanEligible } from './maps/map-touch-navigation'
+import {
+  createMapTouchNavigation,
+  isMapZoomMark,
+} from './maps/map-touch-navigation'
 import {
   jumpPointsInCluster,
   type JumpCluster,
@@ -122,11 +125,6 @@ const zoomLevel = ref(100)
 const SEARCH_SYSTEM_FRAME_MAX_SCALE = 2
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
-type ClusterTouchGesture =
-  | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
-  | { mode: 'pending-pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number]; startClient: [number, number] }
-  | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
-let touchGesture: ClusterTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
 let appliedItemsBounds: SvgViewportRect | undefined
@@ -141,6 +139,34 @@ const unresolvedExitPositionPreviews = new Map<string, Point>()
 let refreshLiveRouteGeometry: (() => void) | undefined
 let applyClusterSystemPositionPreview: ((systemId: string, position: Point | null) => void) | undefined
 let applyUnresolvedExitPositionPreview: ((routeId: string, position: Point | null) => void) | undefined
+
+const touchCameraNavigation = createMapTouchNavigation({
+  surface: 'cluster',
+  isEnabled: () => props.touchNavigation,
+  moveEnabled: () => props.moveEnabled,
+  getCamera: () => {
+    const element = svgElement.value
+    if (!element) return null
+    return {
+      isPinchReady: () => zoomBehavior !== undefined,
+      getViewport: () => {
+        const transform = zoomTransform(element)
+        return { x: transform.x, y: transform.y, k: transform.k }
+      },
+      pointFromClient: touch => pointer(touch, element) as [number, number],
+      minimumZoomScale: () => minimumZoomScale.value,
+      applyViewport: viewport => {
+        const behavior = zoomBehavior
+        if (!behavior) return
+        select(element).call(behavior.transform, zoomIdentity
+          .translate(viewport.x, viewport.y)
+          .scale(viewport.k))
+      },
+      interrupt: () => select(element).interrupt(),
+    }
+  },
+  onPinchTakeover: () => cancelActiveGesture(),
+})
 
 /** Returns the current D3 transform as the map's public viewport state. */
 function getViewport(): MapViewport {
@@ -448,103 +474,20 @@ function frameSystem(systemId: string, usableRect: SvgViewportRect): boolean {
   return true
 }
 
-function touchPoint(touch: Touch, element: SVGSVGElement): [number, number] {
-  return pointer(touch, element) as [number, number]
-}
-
-function beginTouchPinch(touches: TouchList): void {
-  const element = svgElement.value
-  if (!element || !zoomBehavior || touches.length < 2) return
-  const first = touchPoint(touches[0]!, element)
-  const second = touchPoint(touches[1]!, element)
-  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-  const dx = second[0] - first[0]
-  const dy = second[1] - first[1]
-  const transform = zoomTransform(element)
-  touchGesture = {
-    mode: 'pinch',
-    transform,
-    distance: Math.max(1, Math.hypot(dx, dy)),
-    anchor: transform.invert(center),
-  }
-}
-
 function startTouchNavigation(event: TouchEvent): void {
-  if (!props.touchNavigation) return
-  if (event.touches.length === 1) {
-    const element = svgElement.value
-    const touch = event.touches[0]!
-    if (!element || (props.moveEnabled && event.ctrlKey)
-      || !isSingleTouchPanEligible(event.target, props.moveEnabled, 'cluster')) {
-      touchGesture = null
-      return
-    }
-    select(element).interrupt()
-    touchGesture = {
-      mode: 'pending-pan',
-      transform: zoomTransform(element),
-      start: touchPoint(touch, element),
-      startClient: [touch.clientX, touch.clientY],
-    }
-    return
-  }
-  if (event.touches.length < 2) return
-  cancelActiveGesture()
-  const element = svgElement.value
-  if (element) select(element).interrupt()
-  beginTouchPinch(event.touches)
-  event.preventDefault()
-  event.stopPropagation()
+  touchCameraNavigation.start(event)
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  const element = svgElement.value
-  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
-  if (touchGesture.mode === 'pending-pan') {
-    const touch = event.touches[0]
-    if (!touch || Math.hypot(
-      touch.clientX - touchGesture.startClient[0],
-      touch.clientY - touchGesture.startClient[1],
-    ) <= 9) return
-    touchGesture = {
-      mode: 'pan',
-      transform: touchGesture.transform,
-      start: touchGesture.start,
-    }
-  }
-  event.preventDefault()
-  event.stopImmediatePropagation()
-
-  if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
-    const first = touchPoint(event.touches[0]!, element)
-    const second = touchPoint(event.touches[1]!, element)
-    const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-    const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-    const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
-    const [anchorX, anchorY] = touchGesture.anchor
-    select(element).call(zoomBehavior.transform, zoomIdentity.translate(center[0] - anchorX * scale, center[1] - anchorY * scale).scale(scale))
-  } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
-    const point = touchPoint(event.touches[0]!, element)
-    select(element).call(zoomBehavior.transform, zoomIdentity
-      .translate(touchGesture.transform.x + point[0] - touchGesture.start[0], touchGesture.transform.y + point[1] - touchGesture.start[1])
-      .scale(touchGesture.transform.k))
-  }
+  touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  const element = svgElement.value
-  if (!props.touchNavigation || !element || !touchGesture) return
-  if (event.touches.length >= 2) {
-    beginTouchPinch(event.touches)
-  } else if (event.touches.length === 1) {
-    touchGesture = { mode: 'pan', transform: zoomTransform(element), start: touchPoint(event.touches[0]!, element) }
-  } else {
-    touchGesture = null
-  }
+  touchCameraNavigation.end(event)
 }
 
 function cancelActiveGesture(): void {
-  touchGesture = null
+  touchCameraNavigation.cancel()
   viewPan = null
   for (const [node, gesture] of activeSystemGestures) {
     cancelledSystemGestures.add(node)

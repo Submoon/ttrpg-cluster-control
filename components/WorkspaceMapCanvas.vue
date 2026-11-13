@@ -132,6 +132,7 @@ import type { PublicationMenuLease, PublicationTarget } from '../composables/edi
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
+import { MAP_TOUCH_PAN_THRESHOLD_PX } from './maps/map-touch-navigation'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import { useOrbitPlacementInput } from './maps/useOrbitPlacementInput'
@@ -1000,7 +1001,7 @@ function onTouchMoveCapture(event: TouchEvent): void {
   } else {
     const touch = event.touches[0]
     if (touchStart && touch && !touchPanStarted
-      && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > 9) {
+      && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > MAP_TOUCH_PAN_THRESHOLD_PX) {
       touchPanStarted = true
       clearLongPress()
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')

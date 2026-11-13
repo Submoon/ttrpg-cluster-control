@@ -18,6 +18,8 @@ An Inspect touch hold owns its release beyond the canvas DOM: opening a compact 
 
 The mounted Warden maps own touch panning and pinch in the same gesture path. A single contact becomes a pan after the canvas movement threshold, leaving taps and holds available for inspection or navigation. In Move, touches on editable marks keep the existing D3 drag path. Managed maps disable D3's native touch zoom listeners so a hold that redraws the scene cannot leave a zoom gesture bound to detached SVG content.
 
+Each mounted Warden map creates its own shared touch-camera controller in `components/maps/map-touch-navigation.ts`. It owns contact processing, pending pan, pinch anchoring, contact rebasing and cancellation. Native starts retain their SVG capture point; the canvas forwards moves and releases after its existing Orbit and hold arbitration. Each map retains its D3 viewport adapter, minimum zoom, edit rollback and redraw/disposal rules. Ordinary pinch takeover cancels editing before capturing the new camera baseline, because rollback can synchronously reset the camera controller. Add Orbit uses the camera-only pinch path without cancelling its frozen preview, then ends that path before resuming placement; it does not install the ordinary remaining-contact pan.
+
 Domain calculations accept data and return results. Placement, relationship, and validation rules must not depend on Vue components, Pinia, browser APIs, or IndexedDB. Keep each complete operation together when it has to coordinate a draft guard, asynchronous confirmation, context checks, and a final state change.
 
 ## Dependencies and operation flow
