@@ -7,7 +7,12 @@
 
     <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
-      <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">{{ cloudBackupMessage }}</p>
+      <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">
+        {{ cloudBackupMessage }}
+        <a v-if="cloudBackupDestination" :href="cloudBackupDestination.url" target="_blank" rel="noopener noreferrer">
+          Open folder in Google Drive
+        </a>
+      </p>
       <p
         v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
@@ -614,10 +619,10 @@ const {
   restoreBackup,
   replaceFromBackup,
   durableVersion,
-  replacementState,
 } = useLocalWorkspace()
 const googleDriveBackup = useGoogleDriveBackup(() => workspace.value)
 const cloudBackupMessage = googleDriveBackup.message
+const cloudBackupDestination = googleDriveBackup.destination
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 
@@ -1502,6 +1507,7 @@ function draftConsentState(): { signature: string; hasDrafts: boolean } {
 
 function resetAfterWorkspaceReplacement(): void {
   workflows.historyGuards.resetForWorkspaceReplacement()
+  editorUi.setSelection({ activeView: 'cluster' })
   cancelJsonImport()
   history.resolveCapacity(false)
   historyOpen.value = false

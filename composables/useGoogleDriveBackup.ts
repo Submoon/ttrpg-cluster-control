@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, ref } from 'vue'
+import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import type { ComputedRef, Ref } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import {
@@ -326,11 +327,7 @@ export function useGoogleDriveBackup(
   }
 
   function readConfig(): { clientId: string, projectNumber: string, apiKey: string } | undefined {
-    const clientId = runtimeConfig.public.googleDriveClientId
-    const projectNumber = runtimeConfig.public.googleDriveProjectNumber
-    const apiKey = runtimeConfig.public.googleDriveApiKey
-    if (!clientId.trim() || !projectNumber.trim() || !apiKey.trim()) return undefined
-    return { clientId: clientId.trim(), projectNumber: projectNumber.trim(), apiKey: apiKey.trim() }
+    return readGoogleDriveConfig(runtimeConfig.public)
   }
 
   onScopeDispose(() => {

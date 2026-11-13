@@ -1,4 +1,17 @@
 import { expect, test } from './fixtures'
+import { readGoogleDriveConfig } from '../utils/google-drive-config'
+
+test('Google Drive configuration accepts the numeric project number parsed by Nuxt @pure', () => {
+  expect(readGoogleDriveConfig({
+    googleDriveClientId: ' client.apps.googleusercontent.com ',
+    googleDriveProjectNumber: 123456789012,
+    googleDriveApiKey: ' key ',
+  })).toEqual({
+    clientId: 'client.apps.googleusercontent.com',
+    projectNumber: '123456789012',
+    apiKey: 'key',
+  })
+})
 import { effectScope } from 'vue'
 import {
   GoogleDriveApiError,
