@@ -1,17 +1,4 @@
 <template>
-  <UButton
-    v-if="!props.session"
-    color="neutral"
-    variant="ghost"
-    size="sm"
-    class="chart-details-control mb-4"
-    type="button"
-    :aria-pressed="chartDetailsActive"
-    @click="emit('show-chart-details')"
-  >
-    Chart details
-  </UButton>
-
   <template v-if="selectedRoute && !props.session">
     <section class="jump-route-details" aria-label="Jump Route details">
       <div class="jump-route-details-body">
@@ -109,11 +96,11 @@
     :workspace="props.workspace"
     :publication-busy="props.publicationBusy"
     :selected-system="props.inspectedSystem"
+    :chart-edit-system-id="props.inspectedSystem?.id"
     :allow-open-system="true"
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @edit-chart-names="emit('edit-chart-names', $event)"
     @open-system="emit('open-system', $event)"
     @delete-system="emit('delete-system', $event)"
   />
@@ -258,10 +245,10 @@
     v-else
     mode="cluster"
     :workspace="props.workspace"
+    :chart-edit-system-id="props.chartEditSystemId"
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @edit-chart-names="emit('edit-chart-names')"
   />
 </template>
 
@@ -287,6 +274,7 @@ const props = defineProps<{
   selectedOrbit?: Orbit
   selectedRoute?: JumpRoute
   inspectedSystem?: StarSystem
+  chartEditSystemId?: string
   selectedRouteSummary: string
   hasChartNameDraft: boolean
   saving: boolean
@@ -296,10 +284,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': [targetSystemId?: string]
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
-  'show-chart-details': []
   'request-route-edit': [routeId: string]
   'set-route-sharing': [routeId: string, playerShared: boolean]
   'delete-route': []
@@ -314,7 +300,6 @@ const selectedRoute = computed(() => props.selectedRoute)
 const selectedRouteSharingStatus = computed(() => selectedRoute.value
   ? routeSharingStatus(props.workspace.cluster, selectedRoute.value)
   : null)
-const chartDetailsActive = computed(() => !props.selectedObject && !props.selectedOrbit && !selectedRoute.value && !props.session)
 const pickFromMap = '__route-pick-from-map__'
 const pickToMap = '__route-pick-to-map__'
 const jumpPointItems = computed(() => jumpPointsInCluster(props.workspace.cluster).map(({ point, system }) => ({

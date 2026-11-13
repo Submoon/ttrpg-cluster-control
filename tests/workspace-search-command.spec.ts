@@ -857,7 +857,7 @@ test('a hidden modified chart-name draft guards an object result and Stay leaves
     harness.store.setMode('move')
     await harness.workflows.charts.beginNamesEdit()
     harness.workflows.charts.systemName.value = 'Vesper Prime'
-    harness.workflows.charts.setDialogOpen(false)
+    harness.workflows.charts.hideEditing()
     harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
       whenReady: async () => true,
       frameSearchTarget: () => true,
@@ -886,7 +886,8 @@ test('a hidden modified chart-name draft guards an object result and Stay leaves
     expect(harness.workflows.charts.hasChartNameDraft.value).toBe(true)
     expect(harness.workflows.charts.hasUncommittedNames.value).toBe(true)
     expect(harness.workflows.charts.systemName.value).toBe('Vesper Prime')
-    expect(harness.workflows.charts.dialogOpen.value).toBe(true)
+    expect(harness.workflows.charts.editing.value).toBe(true)
+    expect(harness.workflows.charts.dialogOpen.value).toBe(false)
     expect(search.open.value).toBe(true)
     expect(search.query.value).toBe('VEIL-11')
   } finally {
@@ -906,7 +907,7 @@ test('invalid Apply on a hidden chart-name draft cannot partly select an object 
     harness.store.setMode('move')
     await harness.workflows.charts.beginNamesEdit()
     harness.workflows.charts.systemName.value = '   '
-    harness.workflows.charts.setDialogOpen(false)
+    harness.workflows.charts.hideEditing()
     harness.workflows.mapControls.systemMapRef.value = createSystemMapHandle({
       whenReady: async () => true,
       frameSearchTarget: () => true,

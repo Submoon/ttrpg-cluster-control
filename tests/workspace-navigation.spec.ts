@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  activeWorkspaceFeedback,
   addClusterSystem,
   dragHtmlElementToWorldPoint,
   ensureMapDragPointsReachable,
@@ -24,7 +25,7 @@ async function createWorkspace(page: Page): Promise<void> {
 
 
 
-test('Navigate opens a system while Select keeps the cluster map active and inspects system data', async ({ page }) => {
+test('Navigate opens systems, Select inspects them, and Hierarchy opens inline chart editing in Inspector', async ({ page }) => {
   await createWorkspace(page)
   await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
 
@@ -62,6 +63,40 @@ test('Navigate opens a system while Select keeps the cluster map active and insp
 
   await expect(selectMap).toBeVisible()
   await expect(page.locator('#workspace-inspector-panel').getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
+  await addClusterSystem(page)
+
+  const secondSystem = selectMap.getByRole('button', { name: 'Select New System 2 system', exact: true })
+  await secondSystem.click()
+
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
+  await expect(inspector.getByRole('heading', { name: 'New System 2', exact: true })).toBeVisible()
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const openChartDetails = hierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true })
+  await expect(openChartDetails).toHaveCount(1)
+  await expect(hierarchy.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
+  await openChartDetails.click()
+  const starSystemDetails = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
+  await expect(starSystemDetails.getByText('Jump Cluster details', { exact: true })).toBeVisible()
+  const editChartDetails = starSystemDetails.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })
+  await expect(editChartDetails).toBeVisible()
+  await expect(inspector.getByRole('button', { name: /^(Chart|Jump Cluster) details$/i })).toHaveCount(0)
+  await editChartDetails.click()
+  const editor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
+  await expect(editor).toBeVisible()
+  await expect(inspector.getByRole('heading', { name: 'Edit Jump Cluster details', exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
+  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
+  await expect(page.locator('.cluster-map-svg')).toBeVisible()
+  await editor.getByLabel('Star system', { exact: true }).fill('Unapplied System 2')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  await expect(inspector).toBeHidden()
+  await expect(editor).toBeHidden()
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })
+  await resumeDraft.click()
+  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied System 2')
+  await expect(editor.getByLabel('Jump Cluster', { exact: true })).toBeFocused()
+  await expect(selectMap).toBeVisible()
 })
 
 

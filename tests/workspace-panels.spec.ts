@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
@@ -210,33 +210,42 @@ test('touch long press keeps focus inside the compact inspector after the touch 
 })
 
 
-test('a nested chart dialog pauses the compact panel focus trap and returns focus to its opener @ui-smoke', async ({ page }) => {
+test('inline chart editing stays inside the compact Inspector focus trap @ui-smoke', async ({ page }) => {
   await createWorkspace(page, { width: 844, height: 390 })
 
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
   const hierarchy = page.locator('#workspace-hierarchy-panel')
-  const chartNamesControl = hierarchy.locator('.workspace-side-panel-content')
-    .getByRole('button', { name: /Edit chart details|Resume chart details draft/ })
-  const editNames = hierarchy.getByRole('button', { name: 'Edit chart details' })
-  await editNames.click()
+  await hierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true }).click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expectCompactPanel(page, 'inspector')
+  const details = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
+  await details.getByRole('button', { name: 'Edit Jump Cluster details', exact: true }).click()
 
-  const chartDialog = page.getByRole('dialog', { name: 'Edit chart details' })
-  await expect(chartDialog).toBeVisible()
-  await expect(chartDialog.getByLabel('Jump Cluster')).toBeFocused()
+  const editor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
+  await expect(editor).toBeVisible()
+  await expect(editor.getByLabel('Jump Cluster')).toBeFocused()
   for (let index = 0; index < 7; index += 1) {
     await page.keyboard.press('Tab')
-    expect(await chartDialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    expect(await inspector.evaluate(element => element.contains(document.activeElement))).toBe(true)
   }
+  await editor.getByLabel('Jump Cluster').fill('Compact draft reach')
 
-  await expect(chartDialog.getByRole('button', { name: 'Discard draft' })).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(chartDialog).toBeHidden()
-  await expect(hierarchy).toBeVisible()
-  await expect(chartNamesControl).toBeFocused()
-
-  await page.getByRole('button', { name: 'Close hierarchy panel' }).click()
+  await page.getByRole('button', { name: 'Close inspector panel', exact: true }).click()
+  await expect(inspector).toBeHidden()
   await expect(hierarchyToggle).toBeFocused()
+  await expect(editor).toBeHidden()
+  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })
+  await resumeDraft.click()
+  await expectCompactPanel(page, 'inspector')
+  await expect(editor.getByLabel('Jump Cluster')).toHaveValue('Compact draft reach')
+  await expect(editor.getByLabel('Jump Cluster')).toBeFocused()
+  await editor.getByRole('button', { name: 'Discard draft', exact: true }).click()
+  await expect(editor).toBeHidden()
+
+  await page.getByRole('button', { name: 'Close inspector panel' }).click()
+  await expect(inspector).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Inspect', exact: true })).toBeFocused()
   await expect(workspaceNavigation(page)).toBeVisible()
 })

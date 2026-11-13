@@ -33,7 +33,7 @@ test('object deletion reviews the current cascade before resolving its inspector
   await expect(review).toBeVisible()
   await expect(review).toContainText('Primary Star')
   await expect(review).toContainText('Orbit 1 around Primary Star')
-  await expect(page.getByRole('dialog', { name: 'Edit chart details', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await review.getByRole('button', { name: 'Cancel deletion', exact: true }).click()
   await expect(review).toBeHidden()
   await expect(nameInput).toHaveValue('Unapplied star')
@@ -42,7 +42,7 @@ test('object deletion reviews the current cascade before resolving its inspector
   await expect(review).toBeVisible()
   await review.getByRole('button', { name: 'Confirm deletion', exact: true }).click()
 
-  const inspectorGuard = page.getByRole('dialog', { name: 'Edit chart details', exact: true })
+  const inspectorGuard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(inspectorGuard).toBeVisible()
   await inspectorGuard.getByRole('button', { name: 'Apply and continue', exact: true }).click()
 

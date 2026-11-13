@@ -35,8 +35,8 @@
           :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
-          :entity-inspector-active="activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
-          :route-session-active="activeView === 'cluster' && routeSession !== null"
+          :entity-inspector-active="!chartEditing && activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
+          :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
           :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null"
@@ -68,20 +68,6 @@
                 @recovery-details-open-change="recoveryDetailsOpen = $event"
               />
             </section>
-          </template>
-          <template #inspector-header-actions>
-            <UButton
-              class="workspace-control chart-details-control"
-              color="neutral"
-              :variant="!selectedObject && !selectedOrbit ? 'soft' : 'outline'"
-              size="sm"
-              icon="i-lucide-info"
-              aria-label="Chart details"
-              :aria-pressed="!selectedObject && !selectedOrbit"
-              @click="showChartDetails()"
-            >
-              Chart details
-            </UButton>
           </template>
           <template #header>
             <WorkspaceHeader
@@ -447,6 +433,7 @@
               :route-session="routeSession"
               :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
               :has-chart-name-draft="hasChartNameDraft"
+              :chart-editing="chartEditing"
               :has-uncommitted-names="hasUncommittedNames"
               :entity-session="entitySession"
               :has-modified-entity-session="hasModifiedEntitySession"
@@ -457,10 +444,8 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
-              @edit-chart-names="beginChartNamesEdit"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
-              @show-chart-details="showChartDetails"
               @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"
               @object-focus-request-consumed="acknowledgeObjectInspectorFocusRequest"
@@ -486,7 +471,22 @@
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
-            />
+            >
+              <template #chart-editor>
+                <ChartDetailsEditor
+                  ref="chartDetailsEditor"
+                  v-model:cluster-name="clusterName"
+                  v-model:system-name="systemName"
+                  v-model:player-title="playerTitle"
+                  v-model:publication="publication"
+                  :active="inspectorPanelVisible"
+                  :form-error="formError"
+                  :target-system-name="chartDraftSystemName"
+                  @apply="applyChartNames"
+                  @discard="discardChartNames"
+                />
+              </template>
+            </MapInspector>
           </template>
         </MapEditorLayout>
         <PublicationContextMenu
@@ -526,18 +526,9 @@
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
-      :has-uncommitted-names="hasUncommittedNames"
       :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
-      v-model:cluster-name="clusterName"
-      v-model:system-name="systemName"
-      :form-error="formError"
-      :target-system-name="chartDraftSystemName"
-      @update:open="setChartNamesDialogOpen"
-      v-model:player-title="playerTitle"
-      v-model:publication="publication"
-      @apply="submitNames"
-      @discard="cancelChartNamesEdit"
-      @resolve-transition="resolveTransitionChoice"
+      @update:open="handleChartGuardOpenChange"
+      @resolve-transition="resolveChartTransitionChoice"
     />
 
     <PlayerViewPreviewDialog
@@ -575,6 +566,7 @@ import { useEditorUiStore } from '../stores/editor-ui'
 import { mapObjectTypeOption, type MapObjectTypeOption } from '../utils/map-type-filters'
 import { useWardenMapFilters } from '../composables/useWardenMapFilters'
 import ChartNamesDialog from './ChartNamesDialog.vue'
+import ChartDetailsEditor from './inspector/ChartDetailsEditor.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
@@ -625,6 +617,7 @@ const {
   resolveCapacity: resolveHistoryCapacity, undo: undoWorkspace, redo: redoWorkspace,
 } = history
 const chartNamesDialog = ref<InstanceType<typeof ChartNamesDialog> | null>(null)
+const chartDetailsEditor = ref<InstanceType<typeof ChartDetailsEditor> | null>(null)
 const workspaceMapChrome = ref<InstanceType<typeof WorkspaceMapChrome> | null>(null)
 interface SearchPresentationGeometry {
   values: number[]
@@ -940,9 +933,11 @@ watch(activeView, view => {
 })
 const {
   clusterName, systemName, playerTitle, publication, draftSystemName: chartDraftSystemName, dialogOpen: chartNamesDialogOpen,
+  editing: chartEditing,
   transitionGuard, formError, hasUncommittedNames, hasChartNameDraft, saveMessage, submitNames,
-  cancelNamesEdit: cancelChartNamesEdit, setDialogOpen: setChartNamesDialogOpen,
-  resolveTransition, resolveTransitionChoice, beginNamesEdit: beginChartNamesEdit,
+  cancelNamesEdit: cancelChartNamesEdit,
+  resolveTransition, resolveTransitionChoice: resolveChartTransitionChoiceFromWorkflow,
+  beginNamesEdit: beginChartNamesEdit,
 } = charts
 const {
   fieldDefinitionsSession, fieldDefinitionDialogOpen, fieldDefinitionError, hasModifiedFieldDefinitionsSession,
@@ -968,9 +963,65 @@ watch(hydrationState, (state, previous) => {
 }, { flush: 'sync' })
 const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
-  isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel, requestPanel, closePanel, togglePanel,
+  isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel,
+  requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
 } = mapControls
+
+watch(inspectorPanelVisible, visible => {
+  if (!visible) charts.hideEditing()
+}, { flush: 'sync' })
+
+watch(() => [
+  selectedObjectId.value,
+  selectedObjectIds.value.join('\u0000'),
+  selectedOrbitId.value,
+  selectedRouteId.value,
+  entitySession.value?.id ?? null,
+  routeSession.value?.id ?? null,
+], (current, previous) => {
+  const selectionChanged = current.some((value, index) => value !== previous[index])
+  if (selectionChanged) charts.hideEditing()
+}, { flush: 'sync' })
+
+function focusInspectorChartEditAction(): void {
+  const inspector = document.getElementById('workspace-inspector-panel')
+  const editAction = inspector?.querySelector<HTMLElement>('button[aria-label="Edit Jump Cluster details"]')
+  const closeAction = inspector?.querySelector<HTMLElement>(
+    'button[aria-label="Close inspector panel"], button[aria-label="Hide inspector"]',
+  )
+  const target = editAction?.getClientRects().length ? editAction : closeAction
+  if (target && !target.closest('[inert]')) target.focus()
+}
+
+async function applyChartNames(): Promise<void> {
+  await submitNames()
+  if (!chartEditing.value) {
+    await nextTick()
+    focusInspectorChartEditAction()
+  }
+}
+
+function discardChartNames(): void {
+  cancelChartNamesEdit()
+  void nextTick(focusInspectorChartEditAction)
+}
+
+async function resolveChartTransitionChoice(decision: Parameters<typeof resolveChartTransitionChoiceFromWorkflow>[0]): Promise<void> {
+  const guard = transitionGuard.value
+  await resolveChartTransitionChoiceFromWorkflow(decision)
+  if (guard !== 'chart' || transitionGuard.value !== null || !hasChartNameDraft.value) return
+  if (decision === 'stay' || decision === 'apply') charts.showEditing()
+  else return
+  requestPanel('inspector')
+  await chartNamesDialog.value?.whenClosingFocusSettled()
+  await nextTick()
+  await chartDetailsEditor.value?.focusField()
+}
+
+function handleChartGuardOpenChange(open: boolean): void {
+  if (!open && transitionGuard.value) void resolveChartTransitionChoice('stay')
+}
 const compactPanelPresentationOpen = computed(() => compactPanelOpen.value && !helpOwnsFocus.value)
 const {
   map: mapPlacement,
@@ -1039,6 +1090,7 @@ provideEditorCommands({
     selectOrbit,
     selectRoute,
     showClusterMap,
+    showChartDetails,
     routeSummary: routeEndpointSummary,
   },
   charts: { beginNamesEdit: beginChartNamesEdit },

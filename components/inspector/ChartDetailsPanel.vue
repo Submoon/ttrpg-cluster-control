@@ -9,11 +9,11 @@
       footer: 'shrink-0 border-t border-[var(--line-soft)] px-4 py-3 sm:px-5',
     }"
     role="region"
-    :aria-label="detailsRegionLabel"
+    aria-label="Jump Cluster details"
   >
     <template #header>
       <div class="chart-details-card-heading">
-        <span class="section-kicker">{{ props.mode === 'cluster' ? 'CLUSTER DETAILS' : 'CHART DETAILS' }}</span>
+        <span class="section-kicker">Jump Cluster details</span>
         <h2 class="mt-2 mb-0 [overflow-wrap:anywhere] text-[1.65rem]">
           {{ props.mode === 'cluster' ? props.workspace.cluster.name : props.selectedSystem?.name }}
         </h2>
@@ -23,7 +23,7 @@
     <p class="inspector-intro mb-0">
       {{ props.mode === 'cluster'
         ? 'Choose a route to inspect its logical Jump Point endpoints, or review player-facing publication.'
-        : 'Choose a map object or Orbit to inspect it, or edit chart details.' }}
+        : 'Choose a map object or Orbit to inspect it, or review player-facing publication.' }}
     </p>
 
     <section class="chart-publication-summary mt-4" aria-label="Player publication settings">
@@ -49,10 +49,18 @@
       </p>
     </section>
 
-    <template #footer>
-      <div class="chart-details-actions grid gap-2" :class="{ 'chart-details-actions--system': props.allowOpenSystem && props.mode === 'system' && props.selectedSystem }">
-        <UButton block class="w-full min-w-0 justify-center" color="primary" variant="outline" @click="emit('edit-chart-names', props.mode === 'system' ? props.selectedSystem?.id : undefined)">
-          {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
+    <template v-if="chartEditSystemId || (props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft" #footer>
+      <div class="chart-details-actions grid gap-2">
+        <UButton
+          v-if="chartEditSystemId"
+          block
+          class="w-full min-w-0 justify-center"
+          color="primary"
+          variant="soft"
+          aria-label="Edit Jump Cluster details"
+          @click="commands.charts.beginNamesEdit(chartEditSystemId)"
+        >
+          Edit
         </UButton>
         <UButton
           v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
@@ -63,10 +71,10 @@
         >
           Open system
         </UButton>
-        <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-center text-sm" role="status">
-          Chart details editing session
-        </span>
       </div>
+      <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-sm" role="status">
+        Jump Cluster details editing session
+      </span>
     </template>
 
     <USeparator v-if="props.mode === 'cluster' || props.selectedSystem" class="my-4" />
@@ -131,6 +139,7 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
+  chartEditSystemId?: string
   hasChartNameDraft: boolean
   editorError?: string
   saving: boolean
@@ -139,14 +148,15 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'edit-chart-names': [targetSystemId?: string]
   'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()
 const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
+const chartEditSystemId = computed(() => props.chartEditSystemId
+  ?? props.selectedSystem?.id
+  ?? props.workspace.cluster.systems[0]?.id)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
-const detailsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster details' : 'Star System details')
 const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
 const publicationLabels: Record<PublicationMode, string> = {
   hidden: 'Hidden',
@@ -168,8 +178,6 @@ function setSystemPublication(mode: PublicationMode): void {
 
 <style scoped>
 .chart-details-card-heading { min-width: 0; }
-.chart-details-actions--system { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.chart-details-draft-status { grid-column: 1 / -1; }
 .chart-details-system-delete {
   display: flex;
   flex-direction: column;

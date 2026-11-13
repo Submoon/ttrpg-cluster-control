@@ -942,20 +942,51 @@ export async function openWorkspaceHierarchy(
   return await compactHierarchy.isVisible() ? compactHierarchy : desktopHierarchy
 }
 
-/** Shows the consultation summary in the inspector without changing map selection. */
-export async function openChartDetails(
+/** Hides the Inspector through its visible panel control while preserving any chart draft. */
+export async function hideWorkspaceInspector(page: import('@playwright/test').Page): Promise<void> {
+  const inspector = page.locator('#workspace-inspector-panel')
+  if (!(await inspector.isVisible())) return
+
+  const compactClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  const desktopHide = page.getByRole('button', { name: 'Hide inspector', exact: true })
+  const toggle = page.getByRole('button', { name: 'Inspect', exact: true })
+  if (await compactClose.isVisible()) await compactClose.click()
+  else if (await desktopHide.isVisible()) await desktopHide.click()
+  else if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+  await expect(inspector).toBeHidden()
+}
+
+/** Opens the chart editor from Hierarchy through the Inspector consultation panel. */
+export async function openChartDetailsEditor(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  const detailsRegion = page.getByRole('region', { name: /^(Jump Cluster|Star System) details$/ })
-  if (await detailsRegion.isVisible().catch(() => false)) return detailsRegion
+  const editor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
+  if (await editor.isVisible()) return editor
 
-  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  await expect(inspectToggle).toBeVisible()
-  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-  const chartDetails = page.getByRole('button', { name: 'Chart details', exact: true })
-  await expect(chartDetails).toBeVisible()
-  if (await chartDetails.getAttribute('aria-pressed') !== 'true') await chartDetails.click()
-  return detailsRegion
+  const inspector = page.locator('#workspace-inspector-panel')
+  const chartDetails = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
+  const context = page.getByTestId('workspace-map-context-kind')
+  await expect(context).toHaveText(/^(Jump Cluster|Star System)$/)
+  const name = await context.textContent() === 'Jump Cluster' ? 'Jump Cluster contents' : 'System hierarchy'
+  const compactHierarchy = page.getByRole('dialog', { name, exact: true })
+  const hierarchyAlreadyOpen = await compactHierarchy.isVisible()
+  if (hierarchyAlreadyOpen || !(await chartDetails.isVisible())) {
+    // The map chrome is inert while a compact Inspector is open.
+    if (await inspector.isVisible() && await inspector.getAttribute('role') === 'dialog') {
+      await hideWorkspaceInspector(page)
+    }
+
+    const hierarchy = await compactHierarchy.isVisible()
+      ? compactHierarchy
+      : await openWorkspaceHierarchy(page, name)
+    await hierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true }).click()
+    await expect(chartDetails).toBeVisible()
+  }
+
+  const edit = chartDetails.getByRole('button', { name: /^(Edit Jump Cluster details|Resume Jump Cluster details draft)$/ })
+  await edit.click()
+  await expect(editor).toBeVisible()
+  return editor
 }
 
 /** Selects a map interaction mode through the shared Dock before a map gesture. */

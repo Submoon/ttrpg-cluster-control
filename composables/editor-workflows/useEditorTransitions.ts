@@ -29,7 +29,7 @@ export function useEditorTransitions(options: {
 }) {
   const { chart, entity, route, clearEditorError } = options
   const transitionGuard = ref<TransitionGuard>(null)
-  const chartNamesDialogOpen = computed(() => chart.editing.value || transitionGuard.value !== null)
+  const chartNamesDialogOpen = computed(() => transitionGuard.value !== null)
   let pendingTransition: {
     leaveChart: boolean
     leaveEntitySession: boolean
@@ -233,17 +233,7 @@ export function useEditorTransitions(options: {
     }
   }
 
-  function setChartNamesDialogOpen(open: boolean): void {
-    if (open) {
-      chart.editing.value = true
-    } else if (transitionGuard.value) {
-      resolveTransitionChoice('stay')
-    } else {
-      chart.editing.value = false
-    }
-  }
-
   onBeforeUnmount(() => finishPendingTransition(false))
 
-  return { transitionGuard, chartNamesDialogOpen, resolveTransition, resolveTransitionChoice, setChartNamesDialogOpen }
+  return { transitionGuard, chartNamesDialogOpen, resolveTransition, resolveTransitionChoice }
 }

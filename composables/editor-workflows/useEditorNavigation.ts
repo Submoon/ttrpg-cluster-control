@@ -285,6 +285,7 @@ export function useEditorNavigation(options: {
     if (chart.session.value?.clusterId === currentWorkspace.cluster.id && chart.session.value.systemId === target.id) {
       if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return
       chart.beginAccepted(currentWorkspace, target)
+      viewport.requestPanel('inspector')
       return
     }
     const startingStamp = navigationContextStamp()
@@ -300,6 +301,7 @@ export function useEditorNavigation(options: {
       || latestWorkspace.cluster.id !== startingClusterId
       || !latestTarget) return
     chart.beginAccepted(latestWorkspace, latestTarget)
+    viewport.requestPanel('inspector')
   }
 
   function isChartDraftTarget(systemId: string): boolean {
@@ -972,12 +974,13 @@ export function useEditorNavigation(options: {
       || !acceptNavigationTransition(startingStamp, startingSessionId)) return
     setSelection({
       selectedObjectId: null,
+      selectedObjectIds: [],
       selectedOrbitId: null,
       selectedRouteId: null,
-      clusterSelectedSystemId: null,
-      inspectedClusterSystemId: null,
     })
+    chart.hideEditing()
     storeCurrentSelection()
+    viewport.requestPanel('inspector')
     editorError.value = ''
   }
 

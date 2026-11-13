@@ -8,10 +8,10 @@
       <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
-      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
+      <UButton color="primary" variant="outline" @click="commands.navigation.showChartDetails()">
+        Open Jump Cluster details
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -103,10 +103,10 @@
     </div>
 
     <div class="my-4 flex flex-wrap items-center gap-2 border-y border-[var(--line-soft)] py-3">
-      <UButton color="primary" variant="outline" @click="commands.charts.beginNamesEdit()">
-        {{ props.hasChartNameDraft ? 'Resume chart details draft' : 'Edit chart details' }}
+      <UButton color="primary" variant="outline" @click="commands.navigation.showChartDetails()">
+        Open Jump Cluster details
       </UButton>
-      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Chart details editing session</span>
+      <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
     <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
@@ -297,7 +297,6 @@ const commands = useEditorCommands()
 const activeSystemId = computed(() => store.activeView === 'cluster'
   ? store.clusterSelectedSystemId
   : store.selectedSystemId)
-
 const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === activeSystemId.value),
 )

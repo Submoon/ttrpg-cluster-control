@@ -392,7 +392,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
   const historyGuards = computed(() => {
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
-    if (charts.hasChangedNames.value) return 'Apply or discard the modified chart-details draft first.'
+    if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
     if (transitions.transitionGuard.value) return 'Finish the pending draft decision first.'
     if (fields.hasPendingHistoryDecision.value) return 'Finish the pending Fields review or decision first.'
@@ -506,6 +506,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       publication: charts.publication,
       draftSystemName: charts.draftSystemName,
       dialogOpen: transitions.chartNamesDialogOpen,
+      editing: charts.editing,
       transitionGuard: transitions.transitionGuard,
       formError: charts.formError,
       hasUncommittedNames: charts.hasUncommittedNames,
@@ -513,8 +514,9 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       saveMessage: charts.saveMessage,
       submitNames: charts.submit,
       cancelNamesEdit: charts.discard,
+      hideEditing: charts.hideEditing,
+      showEditing: charts.showEditing,
       beginNamesEdit: navigation.beginChartNamesEdit,
-      setDialogOpen: transitions.setChartNamesDialogOpen,
       resolveTransition: transitions.resolveTransition,
       resolveTransitionChoice: transitions.resolveTransitionChoice,
     },

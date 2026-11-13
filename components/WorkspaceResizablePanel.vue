@@ -15,10 +15,7 @@
         class="workspace-side-panel-content"
         :class="{ 'workspace-side-panel-content-inspector': props.panelId === 'workspace-inspector-panel' }"
       >
-        <div v-if="props.showHeaderActions || props.showCloseButton" class="workspace-side-panel-header">
-          <div v-if="props.showHeaderActions" class="workspace-side-panel-header-actions">
-            <slot name="header-actions" />
-          </div>
+        <div v-if="props.showCloseButton" class="workspace-side-panel-header">
           <UButton
             v-if="props.showCloseButton"
             class="workspace-control panel-close-button"
@@ -77,11 +74,9 @@ const props = withDefaults(defineProps<{
   visible: boolean
   compact: boolean
   board: HTMLElement | null
-  showHeaderActions?: boolean
   showCloseButton?: boolean
   showCompactRecovery?: boolean
 }>(), {
-  showHeaderActions: false,
   showCloseButton: true,
   showCompactRecovery: true,
 })
@@ -197,7 +192,6 @@ onBeforeUnmount(() => {
   padding: 0.3rem 0.55rem 0.1rem;
 }
 
-.workspace-side-panel-header-actions { display: flex; min-width: 0; align-items: center; gap: 0.35rem; }
 
 .workspace-side-panel-header .panel-close-button {
   position: relative;

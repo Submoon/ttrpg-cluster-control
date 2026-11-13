@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, createSingleSystemWorkspace, openChartDetails } from './helpers'
+import { waitForWorkspaceSaved, createSingleSystemWorkspace, openChartDetailsEditor } from './helpers'
 import {
   installHistoryStorageGate, pendingHistoryAcknowledgements, releaseHistoryAcknowledgements, setHistoryStorageGate,
 } from './scenarios/history-storage-gate'
@@ -233,9 +233,7 @@ async function applySavedChartRename(
   field: 'Jump Cluster' | 'Star system',
   value: string,
 ): Promise<void> {
-  const details = await openChartDetails(page)
-  await details.getByRole('button', { name: 'Edit chart details' }).click()
-  const names = page.getByRole('dialog', { name: 'Edit chart details' })
+  const names = await openChartDetailsEditor(page)
   await names.getByLabel(field, { exact: true }).fill(value)
   await names.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(names).toBeHidden()

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { captureMapExportBlobs, importReviewDialog, resolveImportReview, selectInspectorOption, waitForWorkspaceSaved } from './helpers'
+import { captureMapExportBlobs, importReviewDialog, openChartDetailsEditor, resolveImportReview, selectInspectorOption, waitForWorkspaceSaved } from './helpers'
 import { returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
 import { setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, addCustomFieldThroughDialog, setJsonFile, addCatalogueObject } from './helpers'
 import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace'
@@ -250,10 +250,7 @@ test('public campaign creation persists a custom value and unresolved route thro
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await page.getByRole('button', { name: 'Chart details', exact: true }).click()
-  await inspector.getByRole('button', { name: 'Edit chart details' }).click()
-  const chartNames = page.getByRole('dialog', { name: 'Edit chart details' })
+  const chartNames = await openChartDetailsEditor(page)
   await chartNames.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
   await chartNames.getByLabel('Star system').fill('Vesper Prime')
   await chartNames.getByRole('button', { name: 'Apply details' }).click()

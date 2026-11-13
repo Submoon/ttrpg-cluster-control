@@ -198,7 +198,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
 
   await page.mouse.click(rectangle.start.x, rectangle.start.y)
   await expect(selectedMapObjects).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Star System details', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
 
   await starObject.click()
   await expect(selectedMapObjects).toHaveCount(1)
