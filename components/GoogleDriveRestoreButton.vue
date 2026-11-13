@@ -6,7 +6,7 @@
       size="sm"
       :disabled="busy || (canCancel && !isContinuing)"
       :loading="busy"
-      @click="props.controller.activate"
+      @click="activateFromTrigger"
     >
       {{ buttonLabel }}
     </UButton>
@@ -15,7 +15,7 @@
       color="neutral"
       variant="ghost"
       size="xs"
-      @click="() => props.controller.cancel()"
+      @click="cancelRestore"
     >
       Cancel restore
     </UButton>
@@ -26,7 +26,7 @@
       title="Google Drive backups"
       description="Choose a complete Jump Cluster backup from this app's private Google Drive storage. These files do not appear in regular Drive folders."
       :dismissible="!busy"
-      :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
+      :content="{ onCloseAutoFocus: restoreFocus }"
       :ui="{ content: 'max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto' }"
     >
       <template #body>
@@ -71,7 +71,7 @@
                   variant="soft"
                   size="sm"
                   :disabled="busy"
-                  @click="props.controller.openBackup(backup.id)"
+                  @click="openBackup(backup.id)"
                 >
                   Restore
                 </UButton>
@@ -95,7 +95,7 @@
       </template>
       <template #footer>
         <div class="flex w-full justify-end">
-          <UButton color="neutral" variant="ghost" @click="() => props.controller.cancel()">Cancel</UButton>
+          <UButton color="neutral" variant="ghost" @click="cancelRestore">Cancel</UButton>
         </div>
       </template>
     </UModal>
@@ -103,11 +103,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import type { GoogleDriveRestoreController } from '../composables/useGoogleDriveRestore'
+import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 
 /** Presents the appDataFolder backup list while the page controller owns provider and restore state. */
-const props = defineProps<{ controller: GoogleDriveRestoreController }>()
+const props = defineProps<{
+  controller: GoogleDriveRestoreController
+  reviewOpen: boolean
+  fallbackFocusTarget: HTMLElement | null
+}>()
+const emit = defineEmits<{
+  'restore-review-open': [target: HTMLElement | null]
+  'restore-canceled': []
+}>()
 const state = computed(() => props.controller.state.value)
 const busy = computed(() => props.controller.busy.value)
 const canCancel = computed(() => props.controller.canCancel.value)
@@ -119,18 +128,37 @@ const backups = computed(() => props.controller.backups.value)
 const isContinuing = computed(() => state.value === 'continue')
 const dialogOpen = computed({
   get: () => props.controller.dialogOpen.value,
-  set: open => { if (!open) props.controller.cancel() },
+  set: open => { if (!open) cancelRestore() },
 })
 let opener: HTMLElement | null = null
 
-function captureOpener(event: Event): void {
-  opener = event.target instanceof HTMLElement ? event.target : document.activeElement as HTMLElement | null
+function activateFromTrigger(event: MouseEvent): void {
+  opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  props.controller.activate()
 }
 
-function restoreFocus(): void {
-  const target = opener
-  opener = null
-  if (target?.isConnected && !target.closest('[inert]')) target.focus()
+function openBackup(fileId: string): void {
+  emit('restore-review-open', opener)
+  props.controller.openBackup(fileId)
+}
+
+function cancelRestore(): void {
+  emit('restore-canceled')
+  props.controller.cancel()
+}
+
+function restoreFocus(event: Event): void {
+  event.preventDefault()
+  const originalOpener = opener
+  void nextTick(() => {
+    // Let the replacement review take focus when this dialog closes into it.
+    if (props.reviewOpen) return
+    restoreDialogFocus(
+      createDialogFocusTarget(originalOpener),
+      createDialogFocusTarget(props.fallbackFocusTarget),
+    )
+    opener = null
+  })
 }
 
 function formatCreatedTime(value: string): string {

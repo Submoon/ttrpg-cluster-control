@@ -5,7 +5,7 @@
   >
     <WorkspaceHeader v-if="!workspace" :workspace="workspace" />
 
-    <main id="workspace-main" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
+    <main id="workspace-main" ref="workspaceMain" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
       <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
@@ -35,7 +35,13 @@
         @submit="submitNames"
       >
         <template #restore-actions>
-          <GoogleDriveRestoreButton :controller="googleDriveRestore" />
+          <GoogleDriveRestoreButton
+            :controller="googleDriveRestore"
+            :review-open="workspaceRestoreReview !== null"
+            :fallback-focus-target="workspaceMain"
+            @restore-review-open="workspaceRestoreReturnTarget = $event"
+            @restore-canceled="workspaceRestoreReturnTarget = null"
+          />
         </template>
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
@@ -170,7 +176,13 @@
             >
               <template #cloud-backup>
                 <GoogleDriveBackupButton :controller="googleDriveBackup" />
-                <GoogleDriveRestoreButton :controller="googleDriveRestore" />
+                <GoogleDriveRestoreButton
+                  :controller="googleDriveRestore"
+                  :review-open="workspaceRestoreReview !== null"
+                  :fallback-focus-target="workspaceMain"
+                  @restore-review-open="workspaceRestoreReturnTarget = $event"
+                  @restore-canceled="workspaceRestoreReturnTarget = null"
+                />
               </template>
               <template #history>
                 <WorkspaceHistoryControls
@@ -539,10 +551,13 @@
 
     <WorkspaceRestoreReview
       :review="workspaceRestoreReview"
+      :return-focus-target="workspaceRestoreReturnTarget"
+      :fallback-focus-target="workspaceMain"
       @cancel="workspaceRestore.cancel"
       @confirm="workspaceRestore.confirm"
       @download-current="workspaceRestore.downloadReviewedCurrent"
       @update:discard-drafts-confirmed="workspaceRestore.setDiscardDraftsConfirmed"
+      @focus-returned="workspaceRestoreReturnTarget = null"
     />
 
     <ChartNamesDialog
@@ -1478,7 +1493,7 @@ function draftConsentState(): { signature: string; hasDrafts: boolean } {
       sessionId: charts.session.value?.id ?? null,
       editing: chartEditing.value,
       clusterName: clusterName.value,
-      systemName: chartDraftSystemName.value,
+      systemName: systemName.value,
       playerTitle: playerTitle.value,
       publication: publication.value,
     },
@@ -1534,16 +1549,24 @@ const googleDriveRestore = useGoogleDriveRestore(workspaceRestore)
 const workspaceRestoreReview = workspaceRestore.review
 const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error
+const workspaceMain = ref<HTMLElement | null>(null)
+const workspaceRestoreReturnTarget = ref<HTMLElement | null>(null)
 const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value && !googleDriveRestore.canCancel.value)
+
+watch(workspaceRestoreError, error => {
+  if (error) workspaceRestoreReturnTarget.value = null
+})
 
 function openLocalWorkspaceRestore(event: Event): void {
   if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  workspaceRestoreReturnTarget.value = null
   cancelJsonImport()
   void workspaceRestore.openLocalFile(event)
 }
 
 function restoreLastValidWorkspace(): void {
   if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  workspaceRestoreReturnTarget.value = null
   void restoreBackup()
 }
 

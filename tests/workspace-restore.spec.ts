@@ -168,3 +168,52 @@ test('canceling a provider read releases only its restore operation and preserve
     renderer.render(null, container)
   }
 })
+
+test('a changed draft after confirmation requires fresh consent before replacement @pure', async () => {
+  const activeWorkspace = createLocalWorkspace('Active Reach', 'Vesper')
+  const workspace = ref<LocalWorkspace | null>(activeWorkspace)
+  const appliedRevision = ref(0)
+  const durableVersion = shallowRef<WorkspaceStorageVersion | null>(validVersion(activeWorkspace, 0))
+  const draftState = ref({ signature: 'system-name:Vesper', hasDrafts: true })
+  let replacementCount = 0
+  let restore: ReturnType<typeof useWorkspaceRestore> | undefined
+  const application = defineComponent({
+    setup() {
+      restore = useWorkspaceRestore({
+        workspace,
+        appliedRevision,
+        durableVersion,
+        getDraftConsentState: () => draftState.value,
+        replaceFromBackup: async () => { replacementCount += 1 },
+        downloadCurrent: () => undefined,
+        afterReplacement: () => undefined,
+      })
+      return () => h('div')
+    },
+  })
+  const renderer = createTestRenderer()
+  const container: HostNode = { kind: 'root', children: [] }
+  renderer.render(h(application), container)
+  if (!restore) throw new Error('The workspace restore controller did not initialize.')
+
+  try {
+    await restore.openFrom(async () => ({
+      name: 'incoming-backup.json',
+      content: JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Cinder'))),
+    }))
+    restore.setDiscardDraftsConfirmed(true)
+    draftState.value = { signature: 'system-name:Changed while reviewing', hasDrafts: true }
+    await restore.confirm()
+
+    expect(restore.review.value).toMatchObject({
+      sourceName: 'incoming-backup.json',
+      stale: true,
+      hasDrafts: true,
+      discardDraftsConfirmed: false,
+    })
+    expect(replacementCount).toBe(0)
+    expect(workspace.value?.cluster.name).toBe('Active Reach')
+  } finally {
+    renderer.render(null, container)
+  }
+})
