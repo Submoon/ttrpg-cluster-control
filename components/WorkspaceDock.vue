@@ -5,7 +5,8 @@
         <UTooltip
           v-for="mode in modes"
           :key="mode.value"
-          :text="`${mode.label} map mode · Shortcut ${mode.shortcut}. Focus the map or a map item to use tool shortcuts.`"
+          :text="`${mode.label} map mode. Focus the map or a map item to use tool shortcuts.`"
+          :kbds="[mode.shortcut.toLowerCase()]"
           :ui="shortcutTooltipUi"
         >
           <UButton
@@ -40,7 +41,8 @@
         :ui="{ content: 'workspace-add-popover-content' }"
       >
         <UTooltip
-          :text="`Add to map · Shortcut A. ${addActive ? `Adding ${props.clusterAddLabel ?? props.creationTypeLabel}. ` : ''}Focus the map or a map item to use tool shortcuts.`"
+          :text="`Add to map. ${addActive ? `Adding ${props.clusterAddLabel ?? props.creationTypeLabel}. ` : ''}Focus the map or a map item to use tool shortcuts.`"
+          :kbds="['a']"
           :ui="shortcutTooltipUi"
         >
           <UButton
@@ -222,6 +224,7 @@ const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string;
 const shortcutTooltipUi = {
   content: 'workspace-map-shortcut-tooltip-content',
   text: 'workspace-map-shortcut-tooltip-text',
+  kbds: 'inline-flex',
 }
 const addActive = computed(() => !!(props.creationSession || props.clusterAddLabel))
 const addOpen = defineModel<boolean>('addOpen', { default: false })
