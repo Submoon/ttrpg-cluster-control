@@ -55,17 +55,40 @@ test('Navigate opens systems, Select inspects them, and Hierarchy opens inline c
   const viewportBeforeDrag = await scene.getAttribute('transform')
   const bounds = await systemMark.boundingBox()
   if (!bounds || !viewportBeforeDrag) throw new Error('The cluster map is not ready for right-drag.')
+  // Exercise browsers that emit contextmenu on press, before the drag threshold is reached.
+  const pressRightButtonOnSystem = async (point: { x: number; y: number }) => {
+    await page.mouse.move(point.x, point.y)
+    await page.mouse.down({ button: 'right' })
+    await page.evaluate(({ x, y }) => {
+      const target = document.elementFromPoint(x, y)
+      if (!target?.closest('.cluster-system-node')) throw new Error('The right button press did not hit a system.')
+      target.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 2,
+        clientX: x,
+        clientY: y,
+      }))
+    }, point)
+  }
   const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-  await page.mouse.move(start.x, start.y)
-  await page.mouse.down({ button: 'right' })
+  await pressRightButtonOnSystem(start)
   await page.mouse.move(start.x + 75, start.y + 32, { steps: 5 })
   await page.mouse.up({ button: 'right' })
-  await expect(scene).not.toHaveAttribute('transform', viewportBeforeDrag)
   await expect(contextMenu).toHaveCount(0)
+  await expect(scene).not.toHaveAttribute('transform', viewportBeforeDrag)
   await expect(selectMap.locator('.cluster-system-node.is-selected')).toHaveCount(0)
 
   // Recalculate the target after the camera moves and verify that a new click is not suppressed.
-  await systemMark.click({ button: 'right' })
+  const movedBounds = await systemMark.boundingBox()
+  if (!movedBounds) throw new Error('The system is not ready for a right click after the pan.')
+  await pressRightButtonOnSystem({
+    x: movedBounds.x + movedBounds.width / 2,
+    y: movedBounds.y + movedBounds.height / 2,
+  })
+  await expect(contextMenu).toHaveCount(0)
+  await page.mouse.up({ button: 'right' })
   await expect(contextMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(contextMenu).toBeHidden()
