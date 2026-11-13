@@ -119,19 +119,8 @@
         :active-filter-criterion-count="props.activeFilterCriterionCount"
         :publication-filter-options="props.publicationFilterOptions"
         :field-filter-options="props.fieldFilterOptions"
-        :invalidation-notice="props.filterInvalidationNotice"
         @clear-all-filters="emit('clear-all-filters')"
       />
-      <p
-        v-if="props.filterInvalidationNotice"
-        class="workspace-filter-invalidation"
-        role="status"
-        aria-live="polite"
-        :aria-label="props.filterInvalidationNotice"
-        :title="props.filterInvalidationNotice"
-      >
-        Filters updated
-      </p>
       <WorkspaceSearch
         ref="workspaceSearch"
         :icon-only="true"
@@ -154,7 +143,6 @@
             :active-filter-criterion-count="searchActiveCriterionCount"
             :publication-filter-options="props.publicationFilterOptions"
             :field-filter-options="props.fieldFilterOptions"
-            :invalidation-notice="props.searchFilterInvalidationNotice"
             :portal="false"
             @clear-all-filters="clearSearchCriteria"
           />
@@ -394,7 +382,6 @@ const props = withDefaults(defineProps<{
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
   fieldFilterOptions?: readonly FieldFilterOption[]
-  filterInvalidationNotice?: string | null
   isCompactViewport: boolean
   hierarchyOpen?: boolean
   inspectorOpen?: boolean
@@ -406,7 +393,6 @@ const props = withDefaults(defineProps<{
   canOpenSearchShortcut: () => boolean
   searchResults: readonly SearchResult[]
   searchActiveCriterionCount?: number
-  searchFilterInvalidationNotice?: string | null
   revealSearchTarget: (target: SearchTarget) => Promise<
     { status: 'revealed' } | { status: 'rejected'; reason: 'guard' | 'stale' | 'unavailable' }
   >
@@ -419,8 +405,6 @@ const props = withDefaults(defineProps<{
   clusterAddPresentation: null,
   publicationFilterOptions: () => [],
   fieldFilterOptions: () => [],
-  searchFilterInvalidationNotice: null,
-  filterInvalidationNotice: null,
 })
 
 const emit = defineEmits<{
@@ -586,18 +570,6 @@ defineExpose({ whenSearchClosingFocusSettled })
   font: 0.625rem Consolas, monospace;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-}
-
-.workspace-filter-invalidation {
-  display: -webkit-box;
-  max-width: 8.5rem;
-  margin: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 0.62rem;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 :global(.workspace-map-chrome .workspace-map-context h2) {

@@ -4,6 +4,7 @@ import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import type { WorkspaceRestoreSource } from '../composables/useWorkspaceRestore'
 import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 import { GoogleDriveApiError } from '../utils/google-drive-api'
+import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -93,6 +94,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
       filename: fileOne.name,
       content: '{"backup":"backup-1"}',
     }])
+    expect(controller.completedDownloads.value).toBe(1)
 
     controller.openBackup(fileTwo.id)
     await restoreFinished.promise
@@ -119,6 +121,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
 
 test('canceling during OAuth aborts the owned request and prevents listing stale backups @pure', async () => {
   const events: string[] = []
+  let canceledCount = 0
   const restoreFinished = deferred<void>()
   const restore = {
     async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
@@ -139,7 +142,7 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
       listBackups: async () => { events.push('list requested'); return { files: [] } },
       readFile: async () => '',
       downloadFile: () => undefined,
-    })
+    }, { onCanceled: () => { canceledCount += 1 } })
   })
   if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
 
@@ -147,11 +150,14 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
     controller.activate()
     expect(events).toEqual(['token requested'])
     controller.cancel()
+    controller.cancel()
     await restoreFinished.promise
 
     expect(events).toEqual(['token requested'])
     expect(controller.state.value).toBe('idle')
     expect(controller.backups.value).toEqual([])
+    expect(controller.message.value).toBe('')
+    expect(canceledCount).toBe(1)
   } finally {
     scope.stop()
   }
@@ -170,6 +176,7 @@ test('a list 401 invalidates its token so the next explicit restore requests aut
   }
   const tokens: string[] = []
   const invalidated: string[] = []
+  let canceledCount = 0
   let listCount = 0
   const scope = effectScope()
   const controller = scope.run(() => useGoogleDriveRestore(
@@ -188,6 +195,7 @@ test('a list 401 invalidates its token so the next explicit restore requests aut
       readFile: async () => '',
       downloadFile: () => undefined,
     },
+    { onCanceled: () => { canceledCount += 1 } },
   ))
   if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
 
@@ -196,10 +204,76 @@ test('a list 401 invalidates its token so the next explicit restore requests aut
     await expect.poll(() => controller.state.value).toBe('idle')
     expect(invalidated).toEqual(['token-1'])
     expect(controller.message.value).toMatch(/authorization expired/i)
+    expect(controller.completedDownloads.value).toBe(0)
+    expect(canceledCount).toBe(0)
     controller.activate()
     await expect.poll(() => listCount).toBe(2)
     expect(tokens).toEqual(['token-1', 'token-2'])
+    expect(canceledCount).toBe(0)
     controller.cancel(false)
+    expect(canceledCount).toBe(0)
+  } finally {
+    scope.stop()
+  }
+})
+
+test('closing Google Drive authorization reports a cancellation without an inline status @pure', async () => {
+  let canceledCount = 0
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      await load(signal)
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useGoogleDriveRestore(
+    restore,
+    readySignIn(async () => { throw new GoogleDriveCancelledError() }),
+    {
+      listBackups: async () => ({ files: [] }),
+      readFile: async () => '',
+      downloadFile: () => undefined,
+    },
+    { onCanceled: () => { canceledCount += 1 } },
+  ))
+  if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(canceledCount).toBe(1)
+    expect(controller.message.value).toBe('')
+  } finally {
+    scope.stop()
+  }
+})
+
+test('a failed JSON download does not increment the completed-download count @pure', async () => {
+  const file = { id: 'backup-1', name: 'Backup.json', createdTime: '2026-11-13T10:00:00Z' }
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      await load(signal)
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useGoogleDriveRestore(
+    restore,
+    readySignIn(async () => 'drive-token'),
+    {
+      listBackups: async () => ({ files: [file] }),
+      readFile: async () => { throw new Error('Drive could not read this backup.') },
+      downloadFile: () => undefined,
+    },
+  ))
+  if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    controller.downloadBackup(file.id)
+    await expect.poll(() => controller.selectionError.value).toBe('Drive could not read this backup.')
+    expect(controller.completedDownloads.value).toBe(0)
   } finally {
     scope.stop()
   }

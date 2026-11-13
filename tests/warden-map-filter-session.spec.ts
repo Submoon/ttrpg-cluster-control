@@ -34,6 +34,7 @@ test('Field filter choices revalidate after real Apply, Undo, and Redo history t
     confirmCapacity: async () => true,
   })
   const store = useEditorUiStore()
+  let invalidationNotifications = 0
   store.setSelectedMapFieldConditions([{
     fieldId: 'field-condition',
     type: 'single-select',
@@ -44,6 +45,7 @@ test('Field filter choices revalidate after real Apply, Undo, and Redo history t
   const filters = scope.run(() => useWardenMapFilters({
     workspace,
     selectedSystem: computed(() => workspace.value?.cluster.systems[0]),
+    onFiltersInvalidated: () => { invalidationNotifications += 1 },
   }))
   if (!filters) throw new Error('Warden filter session was not created.')
 
@@ -65,7 +67,7 @@ test('Field filter choices revalidate after real Apply, Undo, and Redo history t
     { fieldId: 'field-condition', type: 'single-select', operator: 'is', values: ['Known'] },
   ])
   expect(filters.fieldOptions.value.find(option => option.fieldId === 'field-condition')?.label).toBe('Object state (Custom)')
-  expect(filters.invalidationNotice.value).toContain('Fields or choices changed')
+  expect(invalidationNotifications).toBe(1)
 
   const undo = await history.undo()
   expect(undo.status).toBe('applied')
@@ -84,6 +86,23 @@ test('Field filter choices revalidate after real Apply, Undo, and Redo history t
   expect(store.selectedMapFieldConditions[0]).toEqual({
     fieldId: 'field-condition', type: 'single-select', operator: 'is', values: ['Known'],
   })
+
+  const secondApply = await history.execute({
+    action: { kind: 'update', label: 'Remove the remaining Condition choice', target: { kind: 'field', id: 'field-condition' } },
+    prepare: current => ({
+      ...current,
+      objectFieldSettings: {
+        ...current.objectFieldSettings,
+        customFields: current.objectFieldSettings.customFields.map(field => field.id === 'field-condition'
+          ? { ...field, options: ['Damaged'] }
+          : field),
+      },
+    }),
+  })
+  expect(secondApply.status).toBe('applied')
+  await nextTick()
+  expect(store.selectedMapFieldConditions).toEqual([])
+  expect(invalidationNotifications).toBe(2)
 
   scope.stop()
   history.dispose()

@@ -57,11 +57,8 @@
       <template #body>
         <div class="grid gap-3">
           <p class="m-0 text-sm text-muted">These backups are kept in this app's private Google Drive storage and are managed here.</p>
-          <p v-if="state === 'listing'" class="m-0" role="status" aria-live="polite">Loading your Google Drive backups...</p>
-          <p v-else-if="state === 'listing-more'" class="m-0" role="status" aria-live="polite">Loading more backups...</p>
-          <p v-else-if="state === 'reading'" class="m-0" role="status" aria-live="polite">Opening the selected backup...</p>
-          <p v-else-if="state === 'downloading'" class="m-0" role="status" aria-live="polite">Preparing the selected JSON download...</p>
-          <p v-else-if="!backups.length" class="m-0" role="status">No Google Drive backups are available yet.</p>
+          <p v-if="state === 'choosing' && !backups.length" class="m-0" role="status">No Google Drive backups are available yet.</p>
+          <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ restoreToastTitle }}</p>
 
           <UAlert
             v-if="selectionError"
@@ -119,8 +116,32 @@
         </div>
       </template>
       <template #footer>
-        <div class="flex w-full justify-end">
-          <UButton color="neutral" variant="ghost" @click="cancelRestore">Cancel</UButton>
+        <div class="grid w-full gap-3">
+          <ToastProvider label="Google Drive restore updates" :duration="5000" :disable-swipe="true">
+            <ToastViewport
+              :hotkey="[]"
+              :class="restoreToastTitle ? 'grid w-full list-none gap-2 p-0' : 'w-full list-none p-0'"
+              label="Google Drive restore notifications"
+            >
+              <UToast
+                v-if="restoreToastTitle"
+                :key="restoreToastKey"
+                :open="true"
+                :title="restoreToastTitle"
+                :duration="restoreProgressTitle ? 0 : undefined"
+                :close="!restoreProgressTitle"
+                :progress="!restoreProgressTitle"
+                :color="restoreProgressTitle ? 'neutral' : 'success'"
+                :icon="restoreProgressTitle ? 'i-lucide-loader-circle' : 'i-lucide-check'"
+                :ui="restoreToastUi"
+                class="w-full"
+                @update:open="onRestoreToastOpenChange"
+              />
+            </ToastViewport>
+          </ToastProvider>
+          <div class="flex w-full justify-end">
+            <UButton color="neutral" variant="ghost" @click="cancelRestore">Cancel</UButton>
+          </div>
         </div>
       </template>
     </UModal>
@@ -128,8 +149,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, useTemplateRef, watch } from 'vue'
-import type { GoogleDriveRestoreController } from '../composables/useGoogleDriveRestore'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { ToastProvider, ToastViewport } from 'reka-ui'
+import type { GoogleDriveRestoreController, GoogleDriveRestoreState } from '../composables/useGoogleDriveRestore'
 import type { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 
@@ -154,6 +176,24 @@ const buttonLabel = computed(() => props.controller.buttonLabel.value)
 const message = computed(() => props.signIn.message.value || props.controller.message.value)
 const selectionError = computed(() => props.controller.selectionError.value)
 const backups = computed(() => props.controller.backups.value)
+const restoreProgressTitles: Record<GoogleDriveRestoreState, string> = {
+  idle: '',
+  authorizing: '',
+  listing: 'Loading Google Drive backups…',
+  choosing: '',
+  'listing-more': 'Loading more backups…',
+  reading: 'Opening the selected backup…',
+  downloading: 'Preparing the backup download…',
+}
+const restoreProgressTitle = computed(() => restoreProgressTitles[state.value])
+const downloadToastOpen = ref(false)
+const downloadToastVersion = ref(0)
+const restoreToastTitle = computed(() => restoreProgressTitle.value
+  || (downloadToastOpen.value ? 'Backup downloaded from Google Drive' : ''))
+const restoreToastKey = computed(() => restoreProgressTitle.value
+  ? `progress:${restoreProgressTitle.value}`
+  : `download:${downloadToastVersion.value}`)
+const restoreToastUi = computed(() => ({ icon: restoreProgressTitle.value ? 'motion-safe:animate-spin' : undefined }))
 const triggerClass = computed(() => props.surface === 'welcome'
   ? 'secondary-button launch-action'
   : 'workspace-control workspace-map-import-button w-full')
@@ -165,6 +205,16 @@ const dialogOpen = computed({
 const restoreTrigger = useTemplateRef('restoreTrigger')
 const forgetTrigger = useTemplateRef('forgetTrigger')
 let opener: HTMLElement | null = null
+
+watch(props.controller.completedDownloads, (count, previousCount) => {
+  if (count <= previousCount) return
+  downloadToastOpen.value = true
+  downloadToastVersion.value = count
+}, { flush: 'sync' })
+
+watch(restoreProgressTitle, title => {
+  if (title) downloadToastOpen.value = false
+})
 
 watch(props.signIn.hasAccessToken, available => {
   const previous = forgetTrigger.value?.$el
@@ -191,6 +241,10 @@ function openBackup(fileId: string): void {
 function cancelRestore(): void {
   emit('restore-canceled')
   props.controller.cancel()
+}
+
+function onRestoreToastOpenChange(open: boolean): void {
+  if (!open && !restoreProgressTitle.value) downloadToastOpen.value = false
 }
 
 function restoreFocus(event: Event): void {

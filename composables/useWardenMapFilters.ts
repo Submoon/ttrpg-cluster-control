@@ -1,4 +1,4 @@
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, watch, type ComputedRef, type Ref } from 'vue'
 import type { LocalWorkspace, PublicationMode, StarSystem } from '../domain/workspace'
 import { useEditorUiStore } from '../stores/editor-ui'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
@@ -8,6 +8,8 @@ import { createWardenObjectFilterMatcher, reconcileFieldConditions, wardenFieldF
 export interface UseWardenMapFiltersOptions {
   workspace: Ref<LocalWorkspace | null>
   selectedSystem: ComputedRef<StarSystem | null | undefined>
+  /** Announces that Fields or choices invalidated an active map filter. */
+  onFiltersInvalidated?: () => void
 }
 
 const publicationFilterOptions = publicationModes.map(mode => ({
@@ -16,9 +18,8 @@ const publicationFilterOptions = publicationModes.map(mode => ({
 }))
 
 /** Owns transient Warden filter criteria, their current-system projection, and Field reconciliation. */
-export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapFiltersOptions) {
+export function useWardenMapFilters({ workspace, selectedSystem, onFiltersInvalidated }: UseWardenMapFiltersOptions) {
   const store = useEditorUiStore()
-  const invalidationNotice = ref<string | null>(null)
 
   const fieldOptions = computed<FieldFilterOption[]>(() =>
     workspace.value ? wardenFieldFilterOptions(workspace.value) : [],
@@ -58,12 +59,8 @@ export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapF
     const result = reconcileFieldConditions(store.selectedMapFieldConditions, fieldOptions.value)
     if (!result.changed) return
     store.setSelectedMapFieldConditions(result.conditions)
-    invalidationNotice.value = 'Some filters were removed because Fields or choices changed.'
+    onFiltersInvalidated?.()
   }, { immediate: true })
-
-  watch(() => workspace.value?.id, (workspaceId, previousWorkspaceId) => {
-    if (previousWorkspaceId !== undefined && workspaceId !== previousWorkspaceId) invalidationNotice.value = null
-  })
 
   function setPublicationModes(values: readonly PublicationMode[]): void {
     const validModes = new Set<PublicationMode>(publicationModes)
@@ -80,7 +77,6 @@ export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapF
     store.setSelectedMapObjectTypes([], [])
     setPublicationModes([])
     setFieldConditions([])
-    invalidationNotice.value = null
   }
 
   return {
@@ -90,7 +86,6 @@ export function useWardenMapFilters({ workspace, selectedSystem }: UseWardenMapF
     fieldConditions,
     dimmedObjectIds,
     activeCriterionCount,
-    invalidationNotice,
     clearAll,
   }
 }

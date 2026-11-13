@@ -5,6 +5,7 @@ import { useGoogleDriveBackup } from '../composables/useGoogleDriveBackup'
 import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
+import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import {
   GoogleDriveApiError,
   generateGoogleDriveFileId,
@@ -508,6 +509,27 @@ test('the backup controller invalidates a cached token after a definitive Drive 
   }
 })
 
+test('closing Google Drive authorization reports a backup cancellation without inline status @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  let canceledCount = 0
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(
+      () => workspace,
+      readySignIn(async () => { throw new GoogleDriveCancelledError() }),
+      { onCanceled: () => { canceledCount += 1 } },
+    ))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(canceledCount).toBe(1)
+    expect(controller.message.value).toBe('')
+  } finally {
+    scope.stop()
+  }
+})
+
 test('an uncertain backup retry verifies account identity and can resume under the original account @pure', async () => {
   const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
   const tokenRequests: string[] = []
@@ -578,6 +600,7 @@ test('canceling OAuth for an uncertain retry leaves a fresh signal for the same 
   let requestCount = 0
   let generateCount = 0
   let uploadCount = 0
+  let canceledCount = 0
   const signIn = readySignIn((signal) => {
     requestCount += 1
     if (signal) authorizationSignals.push(signal)
@@ -616,7 +639,9 @@ test('canceling OAuth for an uncertain retry leaves a fresh signal for the same 
 
   const scope = effectScope()
   try {
-    const controller = scope.run(() => useGoogleDriveBackup(() => workspace, signIn))
+    const controller = scope.run(() => useGoogleDriveBackup(() => workspace, signIn, {
+      onCanceled: () => { canceledCount += 1 },
+    }))
     if (!controller) throw new Error('The backup controller did not initialize.')
 
     controller.activate()
@@ -625,14 +650,18 @@ test('canceling OAuth for an uncertain retry leaves a fresh signal for the same 
     await expect.poll(() => requestCount).toBe(2)
     expect(controller.state.value).toBe('authorizing')
     controller.cancelBeforeUpload()
+    controller.cancelBeforeUpload()
     expect(controller.state.value).toBe('retry')
     expect(authorizationSignals[1]?.aborted).toBe(true)
+    expect(canceledCount).toBe(1)
+    expect(controller.message.value).toMatch(/earlier upload outcome is still unconfirmed/i)
 
     controller.activate()
     await expect.poll(() => controller.state.value).toBe('idle')
     expect(generateCount).toBe(1)
     expect(uploadedIds).toEqual(['backup-1', 'backup-1'])
     expect(authorizationSignals[2]?.aborted).toBe(false)
+    expect(canceledCount).toBe(1)
   } finally {
     scope.stop()
     globalThis.fetch = oldFetch

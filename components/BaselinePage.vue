@@ -4,9 +4,11 @@
     :class="{ 'map-workspace-shell': workspace && (activeView === 'cluster' || selectedSystem) }"
   >
     <WorkspaceHeader v-if="!workspace" :workspace="workspace" />
+    <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      <span v-if="toastAnnouncement" :key="toastAnnouncement.id">{{ toastAnnouncement.text }}</span>
+    </div>
 
     <main id="workspace-main" ref="workspaceMain" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
-      <p v-if="orbitAdjustmentNotice" class="feedback m-0" role="status" aria-live="polite">{{ orbitAdjustmentNotice }}</p>
       <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
       </p>
@@ -142,7 +144,6 @@
               :publication-filter-options="publicationFilterOptions"
               :field-filter-options="fieldOptions"
               :active-filter-criterion-count="activeCriterionCount"
-              :filter-invalidation-notice="invalidationNotice"
               :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
@@ -150,7 +151,6 @@
               v-model:search-publication-modes="searchPublicationModes"
               v-model:search-field-conditions="searchFieldConditions"
               :search-active-criterion-count="search.activeCriterionCount.value"
-              :search-filter-invalidation-notice="search.invalidationNotice.value"
               v-model:type-filters-open="mapTypeFiltersOpen"
               v-model:selected-types="selectedMapObjectTypes"
               v-model:publication-modes="selectedPublicationModes"
@@ -591,7 +591,7 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -641,9 +641,20 @@ const {
   durableVersion,
 } = useLocalWorkspace()
 const googleDriveSignIn = useGoogleDriveSignIn()
-const googleDriveBackup = useGoogleDriveBackup(() => workspace.value, googleDriveSignIn)
-const cloudBackupMessage = googleDriveBackup.message
 const toast = useToast()
+const toastAnnouncement = shallowRef<{ id: string; text: string }>()
+watch(toast.toasts, (current, previous) => {
+  const added = current.filter(notification => !previous.some(prior => prior.id === notification.id))
+  const latest = added.at(-1)
+  if (!latest) return
+  const text = added.flatMap(({ title, description }) => [title, description])
+    .filter(part => typeof part === 'string').join('. ')
+  if (text) toastAnnouncement.value = { id: latest.id, text }
+})
+const googleDriveBackup = useGoogleDriveBackup(() => workspace.value, googleDriveSignIn, {
+  onCanceled: () => toast.add({ title: 'Google Drive backup canceled', color: 'neutral', icon: 'i-lucide-info' }),
+})
+const cloudBackupMessage = googleDriveBackup.message
 watch(googleDriveBackup.lastSaved, () => {
   toast.add({ title: 'Backed up to Google Drive', color: 'success', icon: 'i-lucide-check' })
 })
@@ -850,6 +861,18 @@ const workflows = useEditorWorkflows({
   initializeWorkspace: commit,
   waitForSearchPresentation,
   canRestorePublicationFocus: request => publicationFocusRestoreAllowed(request),
+  onSearchFiltersInvalidated: () => toast.add({
+    title: 'Search filters updated',
+    description: 'Some filters were removed because a Field or choice is no longer available.',
+    color: 'info',
+    icon: 'i-lucide-info',
+  }),
+  onOrbitRadiiIncreased: minimum => toast.add({
+    title: 'Orbit radii adjusted',
+    description: `Orbit radii increased to the new host minimum of ${minimum}.`,
+    color: 'info',
+    icon: 'i-lucide-info',
+  }),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search } = workflows
 const publicationControls = workflows.publication
@@ -989,10 +1012,19 @@ const selectedMapObjectTypes = computed({
   get: () => editorUi.selectedMapObjectTypes,
   set: types => editorUi.setSelectedMapObjectTypes(types, typeFilterOptions.value),
 })
-const wardenFilters = useWardenMapFilters({ workspace, selectedSystem })
+const wardenFilters = useWardenMapFilters({
+  workspace,
+  selectedSystem,
+  onFiltersInvalidated: () => toast.add({
+    title: 'Map filters updated',
+    description: 'Some filters were removed because Fields or choices changed.',
+    color: 'info',
+    icon: 'i-lucide-info',
+  }),
+})
 const {
   fieldOptions, publicationFilterOptions, selectedPublicationModes, fieldConditions,
-  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount, invalidationNotice,
+  dimmedObjectIds: dimmedMapObjectIds, activeCriterionCount,
 } = wardenFilters
 watch(activeView, view => {
   if (view === 'cluster') mapTypeFiltersOpen.value = false
@@ -1017,7 +1049,7 @@ const {
   routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
-const { editorError, orbitAdjustmentNotice } = feedback
+const { editorError } = feedback
 const moveSelectionError = workflows.move.error
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
 watch(hydrationState, (state, previous) => {
@@ -1446,7 +1478,11 @@ async function preparePlayerExport() {
   return { document, scene, isCurrent }
 }
 
-const playerFileExports = usePlayerFileExports({ prepare: preparePlayerExport })
+const playerFileExports = usePlayerFileExports({
+  prepare: preparePlayerExport,
+  onPlayerLinkReady: () => toast.add({ title: 'Player link ready', color: 'success', icon: 'i-lucide-check' }),
+  onPlayerLinkCopied: () => toast.add({ title: 'Player link copied', color: 'success', icon: 'i-lucide-check' }),
+})
 const {
   playerExportError,
   generatedPlayerUrl,
@@ -1568,7 +1604,9 @@ const workspaceRestore = useWorkspaceRestore({
     }
   },
 })
-const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn)
+const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn, undefined, {
+  onCanceled: () => toast.add({ title: 'Google Drive restore canceled', color: 'neutral', icon: 'i-lucide-info' }),
+})
 const workspaceRestoreReview = workspaceRestore.review
 const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error

@@ -410,10 +410,9 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
       await expect(hostedRing).toHaveAttribute('rx', '39')
       await expect(hostedRing).toHaveAttribute('ry', '60')
       await expect(activeWorkspaceFeedback(page).getByRole('alert')).toContainText('Not saved.')
-      const radiusNotice = page.getByRole('status').filter({
-        hasText: 'Orbit radii increased to the new host minimum of 39.',
-      })
-      await expect(radiusNotice).toBeVisible()
+      const radiusToast = page.getByText('Orbit radii adjusted', { exact: true })
+      await expect(radiusToast).toBeVisible()
+      await expect(page.getByText('Orbit radii increased to the new host minimum of 39.', { exact: true })).toBeVisible()
       expect(await currentWriteAttempts(page)).toBe(1)
       expect(await readWorkspaceRecords(page)).toEqual(recordsBeforeWrite)
 

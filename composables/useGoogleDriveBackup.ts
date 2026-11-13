@@ -22,6 +22,10 @@ export interface GoogleDriveBackupController {
   startNewBackupInstead(): void
 }
 
+export interface GoogleDriveBackupOptions {
+  onCanceled?: () => void
+}
+
 interface BackupAttempt {
   snapshot: GoogleDriveBackupSnapshot
   fileId: string
@@ -35,6 +39,7 @@ interface BackupAttempt {
 export function useGoogleDriveBackup(
   workspace: () => LocalWorkspace | null | undefined,
   signIn: GoogleDriveSignInController,
+  options: GoogleDriveBackupOptions = {},
 ): GoogleDriveBackupController {
   const state = ref<GoogleDriveBackupState>('idle')
   const operationMessage = ref('')
@@ -127,7 +132,7 @@ export function useGoogleDriveBackup(
       if (!isCurrent(operation)) return
       invalidateAfterUnauthorized(error, accessToken)
       if (error instanceof GoogleDriveCancelledError) {
-        finishCanceledAttempt(operation, 'Google Drive authorization was canceled. No backup was created.')
+        finishCanceledAttempt(operation)
         return
       }
       finishFailedAttempt(operation, error)
@@ -157,7 +162,8 @@ export function useGoogleDriveBackup(
       invalidateAfterUnauthorized(error, accessToken)
       if (error instanceof GoogleDriveCancelledError) {
         state.value = 'retry'
-        operationMessage.value = 'Google Drive authorization was canceled. You can retry the same backup or start a new one.'
+        operationMessage.value = 'The earlier upload outcome is still unconfirmed. You can retry the same backup or start a new one.'
+        options.onCanceled?.()
         return
       }
       // The original create may exist even if this retry cannot check it.
@@ -214,21 +220,24 @@ export function useGoogleDriveBackup(
       // The canceled retry retains its file identity, but the next activation needs a fresh signal.
       activeAbortController = new AbortController()
       state.value = 'retry'
-      operationMessage.value = 'Canceled before another upload. The earlier upload outcome is still unconfirmed.'
+      operationMessage.value = 'The earlier upload outcome is still unconfirmed. You can retry the same backup or start a new one.'
+      options.onCanceled?.()
       return
     }
 
     state.value = 'idle'
     snapshot.value = undefined
-    operationMessage.value = 'Backup canceled before upload. No backup file was created.'
+    operationMessage.value = ''
+    options.onCanceled?.()
   }
 
-  function finishCanceledAttempt(operation: number, status: string): void {
+  function finishCanceledAttempt(operation: number): void {
     if (!isCurrent(operation)) return
     state.value = 'idle'
     snapshot.value = undefined
     retryAttempt.value = undefined
-    operationMessage.value = status
+    operationMessage.value = ''
+    options.onCanceled?.()
   }
 
   function finishFailedAttempt(operation: number, error: unknown): void {

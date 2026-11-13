@@ -29,19 +29,24 @@ export interface GoogleDriveRestoreDependencies {
   downloadFile(filename: string, content: string): void
 }
 
+export interface GoogleDriveRestoreOptions {
+  onCanceled?: () => void
+}
+
 export interface GoogleDriveRestoreController {
   readonly state: Readonly<Ref<GoogleDriveRestoreState>>
   readonly message: Readonly<Ref<string>>
   readonly selectionError: Readonly<Ref<string>>
   readonly backups: Readonly<Ref<readonly GoogleDriveRestoreFile[]>>
   readonly nextPageToken: Readonly<Ref<string | undefined>>
+  readonly completedDownloads: Readonly<Ref<number>>
   readonly dialogOpen: ComputedRef<boolean>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
   readonly canLoadMore: ComputedRef<boolean>
   readonly buttonLabel: ComputedRef<string>
   activate(): void
-  cancel(showMessage?: boolean): void
+  cancel(notifyCancellation?: boolean): void
   openBackup(fileId: string): void
   downloadBackup(fileId: string): void
   loadMore(): void
@@ -61,12 +66,14 @@ export function useGoogleDriveRestore(
   workspaceRestore: WorkspaceRestoreOwner,
   signIn: GoogleDriveSignInController,
   dependencies: GoogleDriveRestoreDependencies = defaultDependencies,
+  options: GoogleDriveRestoreOptions = {},
 ): GoogleDriveRestoreController {
   const state = ref<GoogleDriveRestoreState>('idle')
   const message = ref('')
   const selectionError = ref('')
   const backups = ref<GoogleDriveRestoreFile[]>([])
   const nextPageToken = ref<string>()
+  const completedDownloads = ref(0)
   let operationSequence = 0
   let activeOperation = 0
   let activeAbortController: AbortController | undefined
@@ -116,6 +123,7 @@ export function useGoogleDriveRestore(
     state.value = 'authorizing'
     let providerSignal: AbortSignal | undefined
     let accessToken: string | undefined
+    let oauthCanceled = false
     const accepted = await workspaceRestore.openFrom(async signal => {
       const operationSignal = signal ?? callerAbort.signal
       providerSignal = operationSignal
@@ -139,7 +147,7 @@ export function useGoogleDriveRestore(
         if (operationSignal.aborted) return null
         if (invalidateAfterUnauthorized(error, accessToken)) return null
         if (error instanceof GoogleDriveCancelledError) {
-          message.value = 'Google Drive sign-in was canceled. Your workspace is unchanged.'
+          oauthCanceled = isCurrent(operation, operationSignal)
           return null
         }
         throw error
@@ -163,6 +171,7 @@ export function useGoogleDriveRestore(
       activeAbortController = undefined
       backups.value = []
       nextPageToken.value = undefined
+      if (oauthCanceled) options.onCanceled?.()
     }
   }
 
@@ -243,8 +252,9 @@ export function useGoogleDriveRestore(
     void dependencies.readFile(accessToken, file.id, signal).then(content => {
       if (!isCurrent(operation, signal)) return
       dependencies.downloadFile(jsonDownloadFilename(file.name), content)
-      message.value = `Downloaded ${file.name}.`
+      if (!isCurrent(operation, signal)) return
       state.value = 'choosing'
+      completedDownloads.value += 1
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
       if (closeForUnauthorized(error, accessToken)) return
@@ -253,7 +263,7 @@ export function useGoogleDriveRestore(
     })
   }
 
-  function cancel(showMessage = true): void {
+  function cancel(notifyCancellation = true): void {
     if (!canCancel.value) return
     activeAbortController?.abort()
     activeAbortController = undefined
@@ -265,7 +275,8 @@ export function useGoogleDriveRestore(
     backups.value = []
     nextPageToken.value = undefined
     selectionError.value = ''
-    message.value = showMessage ? 'Google Drive restore canceled. Your workspace is unchanged.' : ''
+    message.value = ''
+    if (notifyCancellation) options.onCanceled?.()
   }
 
   function invalidateAfterUnauthorized(error: unknown, accessToken: string | undefined): boolean {
@@ -294,6 +305,7 @@ export function useGoogleDriveRestore(
     selectionError,
     backups,
     nextPageToken,
+    completedDownloads,
     dialogOpen,
     busy,
     canCancel,

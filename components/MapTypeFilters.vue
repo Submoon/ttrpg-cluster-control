@@ -34,9 +34,6 @@
           </div>
           <div ref="criteriaViewport" class="min-h-0 overflow-y-auto overscroll-contain p-3">
             <div class="grid gap-3">
-              <p v-if="props.invalidationNotice" class="m-0 text-sm text-muted" role="status">
-                {{ props.invalidationNotice }}
-              </p>
               <fieldset v-if="typeGroups.length > 0" class="m-0 grid min-w-0 gap-3 border-0 p-0">
                 <legend class="mb-2 font-medium">Type</legend>
                 <fieldset
@@ -87,9 +84,6 @@
         </div>
       </template>
     </UPopover>
-    <p v-if="props.invalidationNotice" class="map-filter-notice m-0 text-xs text-muted" role="status">
-      {{ props.invalidationNotice }}
-    </p>
   </div>
 </template>
 
@@ -111,7 +105,6 @@ const props = withDefaults(defineProps<{
   activeFilterCriterionCount?: number
   publicationFilterOptions?: readonly { value: PublicationMode; label: string }[]
   fieldFilterOptions?: readonly FieldFilterOption[]
-  invalidationNotice?: string | null
   portal?: boolean
 }>(), {
   activeFilterCriterionCount: undefined,
@@ -120,7 +113,6 @@ const props = withDefaults(defineProps<{
   allowNoValue: true,
   publicationFilterOptions: () => [],
   fieldFilterOptions: () => [],
-  invalidationNotice: null,
   portal: true,
 })
 
@@ -187,15 +179,6 @@ function clearAll(): void {
 .map-type-filter-panel {
   width: min(22rem, calc(100vw - 1.5rem));
   max-height: min(70dvh, 32rem, var(--reka-popover-content-available-height, 70dvh));
-  overflow-wrap: anywhere;
-}
-
-.map-filter-notice {
-  display: -webkit-box;
-  max-width: 11rem;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
   overflow-wrap: anywhere;
 }
 
