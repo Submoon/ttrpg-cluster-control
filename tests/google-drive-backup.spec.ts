@@ -1,7 +1,8 @@
-import { effectScope } from 'vue'
+import { computed, effectScope, ref } from 'vue'
 import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import { useGoogleDriveBackup } from '../composables/useGoogleDriveBackup'
+import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
 import {
@@ -29,13 +30,25 @@ function confirmedFile(id: string, name: string, contents: string): Record<strin
   }
 }
 
+function readySignIn(
+  requestAccessToken: (signal?: AbortSignal) => Promise<string> = async () => 'short-lived-token',
+): GoogleDriveSignInController {
+  const status = ref<GoogleDriveSignInStatus>('ready')
+  return {
+    status,
+    message: ref(''),
+    ready: computed(() => status.value === 'ready'),
+    retryLoading: async () => undefined,
+    requestAccessToken,
+  }
+}
+
 test('Google Drive configuration requires only a client ID @pure', () => {
   expect(readGoogleDriveConfig({ googleDriveClientId: ' client.apps.googleusercontent.com ' })).toEqual({
     clientId: 'client.apps.googleusercontent.com',
   })
   expect(readGoogleDriveConfig({ googleDriveClientId: ' ' })).toBeUndefined()
 })
-
 test('a dated backup snapshot is detached from later workspace edits @pure', () => {
   const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
   const expected = JSON.parse(JSON.stringify(exportJumpCluster(workspace)))
@@ -355,20 +368,7 @@ test('the controller captures the applied map before Google access and retains u
   const uploadNames: string[] = []
   let generateCount = 0
   let uploadCount = 0
-  const fakeGoogle = {
-    accounts: {
-      oauth2: {
-        initTokenClient: (options: { callback: (response: { access_token: string, scope: string }) => void }) => ({
-          requestAccessToken: () => options.callback({
-            access_token: 'short-lived-token',
-            scope: 'https://www.googleapis.com/auth/drive.appdata',
-          }),
-        }),
-      },
-    },
-  }
-
-  await withWindow({ google: fakeGoogle }, async () => {
+  {
     const oldFetch = globalThis.fetch
     globalThis.fetch = async (input, init) => {
       const url = new URL(String(input))
@@ -397,9 +397,7 @@ test('the controller captures the applied map before Google access and retains u
 
     const scope = effectScope()
     try {
-      const controller = scope.run(() => useGoogleDriveBackup(() => workspace, {
-        public: { googleDriveClientId: 'client-id' },
-      }))
+      const controller = scope.run(() => useGoogleDriveBackup(() => workspace, readySignIn()))
       if (!controller) throw new Error('The backup controller did not initialize.')
 
       controller.activate()
@@ -421,19 +419,72 @@ test('the controller captures the applied map before Google access and retains u
       scope.stop()
       globalThis.fetch = oldFetch
     }
-  })
+  }
 })
 
-async function withWindow<T>(fakeWindow: object, run: () => Promise<T>): Promise<T> {
-  const oldDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: { setTimeout: globalThis.setTimeout.bind(globalThis), clearTimeout: globalThis.clearTimeout.bind(globalThis), ...fakeWindow },
+test('canceling OAuth for an uncertain retry leaves a fresh signal for the same backup ID @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  const uploadedIds: string[] = []
+  const authorizationSignals: AbortSignal[] = []
+  let requestCount = 0
+  let generateCount = 0
+  let uploadCount = 0
+  const signIn = readySignIn((signal) => {
+    requestCount += 1
+    if (signal) authorizationSignals.push(signal)
+    if (signal?.aborted) return Promise.reject(new Error('The previous retry signal is aborted.'))
+    if (requestCount === 2) {
+      return new Promise<string>((resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('Authorization was canceled.')), { once: true })
+      })
+    }
+    return Promise.resolve('short-lived-token')
   })
-  try {
-    return await run()
-  } finally {
-    if (oldDescriptor) Object.defineProperty(globalThis, 'window', oldDescriptor)
-    else Reflect.deleteProperty(globalThis, 'window')
+
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input))
+    if (url.pathname.endsWith('/files/generateIds')) {
+      generateCount += 1
+      return jsonResponse({ ids: ['backup-1'], space: 'appDataFolder' })
+    }
+    if (url.pathname.includes('/upload/drive/v3/files')) {
+      uploadCount += 1
+      const body = String(init?.body)
+      const id = body.match(/"id":"([^"]+)"/)?.[1]
+      const filename = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
+      if (id) uploadedIds.push(id)
+      if (uploadCount === 1) throw new TypeError('The first acknowledgement was lost.')
+      const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
+      const contentsEnd = body.lastIndexOf('\r\n--')
+      const contents = body.slice(contentsStart, contentsEnd)
+      return jsonResponse(confirmedFile(id ?? '', filename, contents))
+    }
+    if (url.pathname.endsWith('/files/backup-1')) return jsonResponse({ error: 'temporarily unavailable' }, 403)
+    throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
   }
-}
+
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(() => workspace, signIn))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('retry')
+    controller.activate()
+    await expect.poll(() => requestCount).toBe(2)
+    expect(controller.state.value).toBe('authorizing')
+    controller.cancelBeforeUpload()
+    expect(controller.state.value).toBe('retry')
+    expect(authorizationSignals[1]?.aborted).toBe(true)
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(generateCount).toBe(1)
+    expect(uploadedIds).toEqual(['backup-1', 'backup-1'])
+    expect(authorizationSignals[2]?.aborted).toBe(false)
+  } finally {
+    scope.stop()
+    globalThis.fetch = oldFetch
+  }
+})

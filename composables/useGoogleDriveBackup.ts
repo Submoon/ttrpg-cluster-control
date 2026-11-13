@@ -1,24 +1,13 @@
 import { computed, onScopeDispose, ref } from 'vue'
-import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import type { ComputedRef, Ref } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import { GoogleDriveApiError, generateGoogleDriveFileId, uploadGoogleDriveBackup } from '../utils/google-drive-api'
-import {
-  GoogleDriveCancelledError,
-  googleDriveServicesAreLoaded,
-  loadGoogleDriveServices,
-  requestGoogleDriveAccessToken,
-} from '../utils/google-drive-auth'
+import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
+import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
 import type { GoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
 
-export type GoogleDriveBackupState = 'idle' | 'preparing' | 'continue' | 'authorizing' | 'uploading' | 'retry'
-
-interface GoogleDriveRuntimeConfig {
-  public: {
-    googleDriveClientId: string
-  }
-}
+export type GoogleDriveBackupState = 'idle' | 'authorizing' | 'uploading' | 'retry'
 
 export interface GoogleDriveBackupController {
   readonly state: Readonly<Ref<GoogleDriveBackupState>>
@@ -42,7 +31,7 @@ interface BackupAttempt {
  */
 export function useGoogleDriveBackup(
   workspace: () => LocalWorkspace | null | undefined,
-  runtimeConfig: GoogleDriveRuntimeConfig = useRuntimeConfig(),
+  signIn: GoogleDriveSignInController,
 ): GoogleDriveBackupController {
   const state = ref<GoogleDriveBackupState>('idle')
   const operationMessage = ref('')
@@ -59,19 +48,14 @@ export function useGoogleDriveBackup(
   let activeAbortController: AbortController | undefined
   const unresolvedAttemptIds = new Set<string>()
 
-  const busy = computed(() => ['preparing', 'authorizing', 'uploading'].includes(state.value))
-  const canCancel = computed(() => ['preparing', 'continue', 'authorizing'].includes(state.value))
+  const busy = computed(() => ['authorizing', 'uploading'].includes(state.value))
+  const canCancel = computed(() => state.value === 'authorizing')
   const buttonLabel = computed(() => {
-    if (state.value === 'continue') return 'Continue to Google Drive'
     if (state.value === 'retry') return 'Retry the same backup'
     return 'Back up to Google Drive'
   })
 
   function activate(): void {
-    if (state.value === 'continue') {
-      void authorizeAndUpload(activeOperation)
-      return
-    }
     if (state.value === 'retry') {
       void retryUncertainBackup(activeOperation)
       return
@@ -84,9 +68,8 @@ export function useGoogleDriveBackup(
   }
 
   function startBackup(abandonUncertainAttempt = false): void {
-    const config = readConfig()
-    if (!config) {
-      operationMessage.value = 'Google Drive backup is not configured for this site.'
+    if (!signIn.ready.value) {
+      operationMessage.value = signIn.message.value || 'Google Drive is still loading. Try again when it is ready.'
       return
     }
 
@@ -112,34 +95,18 @@ export function useGoogleDriveBackup(
       ? 'Starting a separate dated backup. The earlier backup may still be in Drive.'
       : ''
 
-    if (googleDriveServicesAreLoaded()) {
-      void authorizeAndUpload(operation)
-      return
-    }
-
-    state.value = 'preparing'
-    void loadGoogleDriveServices().then(() => {
-      if (!isCurrent(operation)) return
-      state.value = 'continue'
-      operationMessage.value = 'Google Drive is ready. Continue to sign in and save the backup.'
-    }).catch(error => {
-      if (!isCurrent(operation)) return
-      snapshot.value = undefined
-      state.value = 'idle'
-      operationMessage.value = getErrorMessage(error, 'Google Drive could not be loaded. Your local map is unchanged.')
-    })
+    void authorizeAndUpload(operation)
   }
 
   async function authorizeAndUpload(operation: number): Promise<void> {
     const currentSnapshot = snapshot.value
-    const config = readConfig()
     const signal = activeAbortController?.signal
-    if (!currentSnapshot || !config || !isCurrent(operation)) return
+    if (!currentSnapshot || !isCurrent(operation)) return
 
     state.value = 'authorizing'
     try {
       // This call runs synchronously with the button event so Google can open its token popup.
-      const accessToken = await requestGoogleDriveAccessToken(config.clientId, signal)
+      const accessToken = await signIn.requestAccessToken(signal)
       if (!isCurrent(operation)) return
 
       const fileId = await generateGoogleDriveFileId(accessToken, fetch, signal)
@@ -160,14 +127,13 @@ export function useGoogleDriveBackup(
 
   async function retryUncertainBackup(operation: number): Promise<void> {
     const attempt = retryAttempt.value
-    const config = readConfig()
     const signal = activeAbortController?.signal
-    if (!attempt || !config || !isCurrent(operation)) return
+    if (!attempt || !isCurrent(operation)) return
 
     state.value = 'authorizing'
     try {
       // Retry preserves the original bytes and ID so one logical backup cannot create duplicates.
-      const accessToken = await requestGoogleDriveAccessToken(config.clientId, signal)
+      const accessToken = await signIn.requestAccessToken(signal)
       if (!isCurrent(operation)) return
       await saveBackup(accessToken, attempt, operation, true)
     } catch (error) {
@@ -226,6 +192,8 @@ export function useGoogleDriveBackup(
     activeOperation = operationSequence
 
     if (retryAttempt.value) {
+      // The canceled retry retains its file identity, but the next activation needs a fresh signal.
+      activeAbortController = new AbortController()
       state.value = 'retry'
       operationMessage.value = 'Canceled before another upload. The earlier upload outcome is still unconfirmed.'
       return
@@ -279,10 +247,6 @@ export function useGoogleDriveBackup(
 
   function isCurrent(operation: number): boolean {
     return !isDisposed.value && operation === activeOperation
-  }
-
-  function readConfig(): { clientId: string } | undefined {
-    return readGoogleDriveConfig(runtimeConfig.public)
   }
 
   onScopeDispose(() => {

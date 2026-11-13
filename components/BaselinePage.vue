@@ -37,6 +37,8 @@
         <template #restore-actions>
           <GoogleDriveRestoreButton
             :controller="googleDriveRestore"
+            :sign-in="googleDriveSignIn"
+            surface="welcome"
             :review-open="workspaceRestoreReview !== null"
             :fallback-focus-target="workspaceMain"
             @restore-review-open="workspaceRestoreReturnTarget = $event"
@@ -175,9 +177,10 @@
               @cancel-system-move="cancelSystemMovePreview"
             >
               <template #cloud-backup>
-                <GoogleDriveBackupButton :controller="googleDriveBackup" />
+                <GoogleDriveBackupButton :controller="googleDriveBackup" :sign-in="googleDriveSignIn" />
                 <GoogleDriveRestoreButton
                   :controller="googleDriveRestore"
+                  :sign-in="googleDriveSignIn"
                   :review-open="workspaceRestoreReview !== null"
                   :fallback-focus-target="workspaceMain"
                   @restore-review-open="workspaceRestoreReturnTarget = $event"
@@ -599,6 +602,7 @@ import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
+import { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 import { useWorkspaceHistory } from '../composables/useWorkspaceHistory'
 import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistoryShortcuts'
@@ -635,7 +639,8 @@ const {
   replaceFromBackup,
   durableVersion,
 } = useLocalWorkspace()
-const googleDriveBackup = useGoogleDriveBackup(() => workspace.value)
+const googleDriveSignIn = useGoogleDriveSignIn()
+const googleDriveBackup = useGoogleDriveBackup(() => workspace.value, googleDriveSignIn)
 const cloudBackupMessage = googleDriveBackup.message
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
@@ -1553,7 +1558,7 @@ const workspaceRestore = useWorkspaceRestore({
   downloadCurrent: workspaceFiles.downloadWorkspaceSnapshot,
   afterReplacement: resetAfterWorkspaceReplacement,
 })
-const googleDriveRestore = useGoogleDriveRestore(workspaceRestore)
+const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn)
 const workspaceRestoreReview = workspaceRestore.review
 const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error

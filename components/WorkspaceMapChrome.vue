@@ -757,7 +757,7 @@ defineExpose({ whenSearchClosingFocusSettled })
 }
 
 .workspace-map-file-button,
-.workspace-map-import-button {
+:global(.workspace-map-import-button) {
   min-width: 0;
   justify-content: center;
   overflow-wrap: anywhere;

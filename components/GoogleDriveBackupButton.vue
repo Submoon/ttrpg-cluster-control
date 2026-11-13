@@ -1,11 +1,13 @@
 <template>
   <div class="google-drive-backup">
     <UButton
+      class="workspace-control workspace-map-import-button w-full"
       color="neutral"
       variant="outline"
       size="sm"
-      :disabled="busy"
-      :loading="busy"
+      type="button"
+      :disabled="busy || !props.signIn.ready.value"
+      :loading="busy || props.signIn.status.value === 'warming'"
       @click="props.controller.activate"
     >
       {{ buttonLabel }}
@@ -34,9 +36,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GoogleDriveBackupController } from '../composables/useGoogleDriveBackup'
+import type { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 
 /** Presentational trigger for the page-owned Google Drive backup controller. */
-const props = defineProps<{ controller: GoogleDriveBackupController }>()
+const props = defineProps<{
+  controller: GoogleDriveBackupController
+  signIn: ReturnType<typeof useGoogleDriveSignIn>
+}>()
 const busy = computed(() => props.controller.busy.value)
 const canCancel = computed(() => props.controller.canCancel.value)
 const buttonLabel = computed(() => props.controller.buttonLabel.value)

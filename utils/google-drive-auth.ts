@@ -39,12 +39,7 @@ interface GoogleBrowserWindow extends Window {
 
 let servicesLoading: Promise<void> | undefined
 
-/** Returns synchronously so a caller can preserve a real click for Google's token popup. */
-export function googleDriveServicesAreLoaded(): boolean {
-  return typeof window !== 'undefined' && Boolean((window as GoogleBrowserWindow).google?.accounts?.oauth2)
-}
-
-/** Loads Google Identity Services on demand for cloud backup or restore. */
+/** Warms Google Identity Services only; it never requests user access or opens an OAuth popup. */
 export function loadGoogleDriveServices(): Promise<void> {
   const browser = getBrowserWindow()
   if (hasGoogleDriveServices(browser)) return Promise.resolve()

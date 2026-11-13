@@ -22,7 +22,7 @@
       <p class="workspace-recovery-copy my-3 max-w-[38rem]">
         This browser keeps the last valid workspace snapshot as a backup when one is available.
       </p>
-      <div class="workspace-recovery-actions flex flex-wrap gap-2">
+      <div class="workspace-recovery-actions flex flex-wrap items-start gap-2">
         <UButton
           class="secondary-button launch-action"
           color="neutral"
@@ -149,7 +149,7 @@
 
         <div class="workspace-launch-backup mt-4 grid gap-2 border-t border-[var(--line-soft)] pt-4">
           <p class="m-0 text-sm text-[var(--text-secondary)]">Already have a complete Jump Cluster backup?</p>
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-start gap-2">
             <UButton
               class="secondary-button launch-action"
               color="neutral"
@@ -249,7 +249,9 @@ function openLocalBackupPicker(event: MouseEvent): void {
   outline-color: var(--focus) !important;
 }
 
-.launch-action {
+.launch-action,
+.workspace-launch-backup :deep(.launch-action),
+.workspace-recovery-actions :deep(.launch-action) {
   scroll-margin-block: 0.75rem;
 }
 

@@ -25,7 +25,7 @@ None. This ticket can start immediately using the existing complete Jump Cluster
 ## Acceptance criteria
 
 - [x] The backup captures one detached, complete applied Jump Cluster at the initial click. Later edits, pending drafts, and gestures do not alter the backup. Local editing and autosave can continue while the Warden authorizes Drive or uploads.
-- [x] Use Google Identity Services and short-lived `drive.appdata` authorization in the browser. Transfer the existing JSON bytes directly to Drive and load authorization on demand. Local workflows work when provider configuration, consent, or connectivity is unavailable.
+- [x] Use Google Identity Services and short-lived `drive.appdata` authorization in the browser. Transfer the existing JSON bytes directly to Drive and request authorization from the user's click. Local workflows work when provider configuration, consent, or connectivity is unavailable.
 - [x] Create files only in `appDataFolder`, which Google reserves for the app and protects from sharing. The Warden can back up without choosing a folder.
 - [x] Each backup creates a distinct dated file. Report the confirmed filename and destination after Drive acknowledges the completed create. A denied, canceled, failed, or ambiguous operation preserves local data and earlier files. Reconcile a lost acknowledgement against the same file identity when possible so a retry does not duplicate a logical backup.
 - [x] Document the test origin, account setup, and verification results for the actual app-space upload with an allowlisted account.

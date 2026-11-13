@@ -1,11 +1,23 @@
-import { effectScope } from 'vue'
+import { computed, effectScope, ref } from 'vue'
 import { expect, test } from './fixtures'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
+import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((complete) => { resolve = complete })
   return { promise, resolve }
+}
+
+function readySignIn(requestAccessToken: (signal?: AbortSignal) => Promise<string>): GoogleDriveSignInController {
+  const status = ref<GoogleDriveSignInStatus>('ready')
+  return {
+    status,
+    message: ref(''),
+    ready: computed(() => status.value === 'ready'),
+    retryLoading: async () => undefined,
+    requestAccessToken,
+  }
 }
 
 test('Drive appData backups can be paged, downloaded as JSON, and passed unchanged to shared restore @pure', async () => {
@@ -29,16 +41,11 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
   const scope = effectScope()
   let controller: ReturnType<typeof useGoogleDriveRestore> | undefined
   scope.run(() => {
-    controller = useGoogleDriveRestore(restore, { public: {
-      googleDriveClientId: 'client.apps.googleusercontent.com',
-    } }, {
-      servicesAreLoaded: () => false,
-      loadServices: async () => { events.push('scripts loaded') },
-      requestAccessToken: (_clientId, signal) => {
+    controller = useGoogleDriveRestore(restore, readySignIn(signal => {
         events.push('token requested')
         if (signal) providerSignals.push(signal)
         return Promise.resolve('drive-token')
-      },
+      }), {
       listBackups: async (_token, pageToken, signal) => {
         if (signal) providerSignals.push(signal)
         events.push(pageToken ? `listed:${pageToken}` : 'listed:first')
@@ -59,12 +66,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
 
   try {
     controller.activate()
-    expect(events).toEqual(['scripts loaded'])
-    await Promise.resolve()
-    expect(controller.state.value).toBe('continue')
-
-    controller.activate()
-    expect(events.slice(1, 3)).toEqual(['restore lease', 'token requested'])
+    expect(events).toEqual(['restore lease', 'token requested'])
     await listStarted.promise
     await Promise.resolve()
     expect(controller.state.value).toBe('choosing')
@@ -88,7 +90,6 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
     await restoreFinished.promise
 
     expect(events).toEqual([
-      'scripts loaded',
       'restore lease',
       'token requested',
       'listed:first',
@@ -120,17 +121,12 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
   const scope = effectScope()
   let controller: ReturnType<typeof useGoogleDriveRestore> | undefined
   scope.run(() => {
-    controller = useGoogleDriveRestore(restore, { public: {
-      googleDriveClientId: 'client.apps.googleusercontent.com',
-    } }, {
-      servicesAreLoaded: () => true,
-      loadServices: async () => undefined,
-      requestAccessToken: (_clientId, signal) => {
+    controller = useGoogleDriveRestore(restore, readySignIn(signal => {
         events.push('token requested')
         return new Promise((_resolve, reject) => {
           signal?.addEventListener('abort', () => reject(new Error('sign-in canceled')), { once: true })
         })
-      },
+      }), {
       listBackups: async () => { events.push('list requested'); return { files: [] } },
       readFile: async () => '',
       downloadFile: () => undefined,
@@ -147,42 +143,6 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
     expect(events).toEqual(['token requested'])
     expect(controller.state.value).toBe('idle')
     expect(controller.backups.value).toEqual([])
-  } finally {
-    scope.stop()
-  }
-})
-
-test('canceling script preparation does not open the restore lease or start a later authorization @pure', async () => {
-  const scripts = deferred<void>()
-  const events: string[] = []
-  const restore = {
-    async openFrom(): Promise<boolean> { events.push('restore lease'); return false },
-  }
-  const scope = effectScope()
-  let controller: ReturnType<typeof useGoogleDriveRestore> | undefined
-  scope.run(() => {
-    controller = useGoogleDriveRestore(restore, { public: {
-      googleDriveClientId: 'client.apps.googleusercontent.com',
-    } }, {
-      servicesAreLoaded: () => false,
-      loadServices: () => scripts.promise,
-      requestAccessToken: () => { events.push('token requested'); return Promise.resolve('drive-token') },
-      listBackups: async () => ({ files: [] }),
-      readFile: async () => '',
-      downloadFile: () => undefined,
-    })
-  })
-  if (!controller) throw new Error('The Google Drive restore controller did not initialize.')
-
-  try {
-    controller.activate()
-    controller.cancel()
-    scripts.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(events).toEqual([])
-    expect(controller.state.value).toBe('idle')
   } finally {
     scope.stop()
   }

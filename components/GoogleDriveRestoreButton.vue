@@ -1,11 +1,13 @@
 <template>
   <div class="google-drive-restore">
     <UButton
+      :class="triggerClass"
       color="neutral"
       variant="outline"
-      size="sm"
-      :disabled="busy || (canCancel && !isContinuing)"
-      :loading="busy"
+      :size="triggerSize"
+      type="button"
+      :disabled="canCancel || !props.signIn.ready.value"
+      :loading="busy || props.signIn.status.value === 'warming'"
       @click="activateFromTrigger"
     >
       {{ buttonLabel }}
@@ -19,7 +21,17 @@
     >
       Cancel restore
     </UButton>
-    <p v-if="message" class="m-0 text-sm" role="status" aria-live="polite">{{ message }}</p>
+    <UButton
+      v-if="props.signIn.status.value === 'error'"
+      color="neutral"
+      variant="ghost"
+      size="xs"
+      type="button"
+      @click="props.signIn.retryLoading"
+    >
+      Retry loading Google Drive
+    </UButton>
+    <p v-if="message" class="m-0 basis-full text-sm" role="status" aria-live="polite">{{ message }}</p>
 
     <UModal
       v-model:open="dialogOpen"
@@ -105,11 +117,14 @@
 <script setup lang="ts">
 import { computed, nextTick } from 'vue'
 import type { GoogleDriveRestoreController } from '../composables/useGoogleDriveRestore'
+import type { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 
 /** Presents the appDataFolder backup list while the page controller owns provider and restore state. */
 const props = defineProps<{
   controller: GoogleDriveRestoreController
+  signIn: ReturnType<typeof useGoogleDriveSignIn>
+  surface?: 'welcome'
   reviewOpen: boolean
   fallbackFocusTarget: HTMLElement | null
 }>()
@@ -122,10 +137,13 @@ const busy = computed(() => props.controller.busy.value)
 const canCancel = computed(() => props.controller.canCancel.value)
 const canLoadMore = computed(() => props.controller.canLoadMore.value)
 const buttonLabel = computed(() => props.controller.buttonLabel.value)
-const message = computed(() => props.controller.message.value)
+const message = computed(() => props.signIn.message.value || props.controller.message.value)
 const selectionError = computed(() => props.controller.selectionError.value)
 const backups = computed(() => props.controller.backups.value)
-const isContinuing = computed(() => state.value === 'continue')
+const triggerClass = computed(() => props.surface === 'welcome'
+  ? 'secondary-button launch-action'
+  : 'workspace-control workspace-map-import-button w-full')
+const triggerSize = computed(() => props.surface === 'welcome' ? 'md' : 'sm')
 const dialogOpen = computed({
   get: () => props.controller.dialogOpen.value,
   set: open => { if (!open) cancelRestore() },

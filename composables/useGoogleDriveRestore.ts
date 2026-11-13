@@ -1,21 +1,10 @@
 import { computed, onScopeDispose, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
-import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import type { WorkspaceRestoreSource } from './useWorkspaceRestore'
-import {
-  GoogleDriveCancelledError,
-  googleDriveServicesAreLoaded,
-  loadGoogleDriveServices,
-  requestGoogleDriveAccessToken,
-} from '../utils/google-drive-auth'
+import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
+import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import { listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
 import { downloadBlob } from '../utils/browser-download'
-
-interface GoogleDriveRuntimeConfig {
-  public: {
-    googleDriveClientId?: unknown
-  }
-}
 
 export interface GoogleDriveRestoreFile {
   id: string
@@ -28,16 +17,13 @@ export interface GoogleDriveRestorePage {
   nextPageToken?: string
 }
 
-export type GoogleDriveRestoreState = 'idle' | 'preparing' | 'continue' | 'authorizing' | 'listing' | 'choosing' | 'listing-more' | 'reading' | 'downloading'
+export type GoogleDriveRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'listing-more' | 'reading' | 'downloading'
 
 interface WorkspaceRestoreOwner {
   openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean>
 }
 
 export interface GoogleDriveRestoreDependencies {
-  servicesAreLoaded(): boolean
-  loadServices(): Promise<void>
-  requestAccessToken(clientId: string, signal?: AbortSignal): Promise<string>
   listBackups(accessToken: string, pageToken: string | undefined, signal?: AbortSignal): Promise<GoogleDriveRestorePage>
   readFile(accessToken: string, fileId: string, signal?: AbortSignal): Promise<string>
   downloadFile(filename: string, content: string): void
@@ -62,9 +48,6 @@ export interface GoogleDriveRestoreController {
 }
 
 const defaultDependencies: GoogleDriveRestoreDependencies = {
-  servicesAreLoaded: googleDriveServicesAreLoaded,
-  loadServices: loadGoogleDriveServices,
-  requestAccessToken: (clientId, signal) => requestGoogleDriveAccessToken(clientId, signal),
   listBackups: (accessToken, pageToken, signal) => listGoogleDriveBackups(accessToken, pageToken, fetch, signal),
   readFile: (accessToken, fileId, signal) => readGoogleDriveFile(accessToken, fileId, fetch, signal),
   downloadFile: (filename, content) => downloadBlob(filename, new Blob([content], { type: 'application/json' })),
@@ -76,7 +59,7 @@ const defaultDependencies: GoogleDriveRestoreDependencies = {
  */
 export function useGoogleDriveRestore(
   workspaceRestore: WorkspaceRestoreOwner,
-  runtimeConfig: GoogleDriveRuntimeConfig = useRuntimeConfig(),
+  signIn: GoogleDriveSignInController,
   dependencies: GoogleDriveRestoreDependencies = defaultDependencies,
 ): GoogleDriveRestoreController {
   const state = ref<GoogleDriveRestoreState>('idle')
@@ -93,12 +76,10 @@ export function useGoogleDriveRestore(
   let selectionAbortHandler: (() => void) | undefined
 
   const dialogOpen = computed(() => ['listing', 'choosing', 'listing-more', 'reading', 'downloading'].includes(state.value))
-  const busy = computed(() => ['preparing', 'authorizing', 'listing', 'listing-more', 'reading', 'downloading'].includes(state.value))
+  const busy = computed(() => ['authorizing', 'listing', 'listing-more', 'reading', 'downloading'].includes(state.value))
   const canCancel = computed(() => state.value !== 'idle')
   const canLoadMore = computed(() => state.value === 'choosing' && Boolean(nextPageToken.value))
-  const buttonLabel = computed(() => state.value === 'continue'
-    ? 'Continue to Google Drive'
-    : busy.value ? 'Opening from Google Drive…' : 'Open from Google Drive')
+  const buttonLabel = computed(() => busy.value ? 'Opening from Google Drive…' : 'Open from Google Drive')
 
   function isCurrent(operation: number, signal?: AbortSignal): boolean {
     return activeOperation === operation && !activeAbortController?.signal.aborted && !signal?.aborted
@@ -119,32 +100,16 @@ export function useGoogleDriveRestore(
 
   function activate(): void {
     if (busy.value || state.value === 'choosing' || state.value === 'listing-more') return
-    const config = readGoogleDriveConfig(runtimeConfig.public)
-    if (!config) {
-      message.value = 'Google Drive restore is not configured for this site.'
+    if (!signIn.ready.value) {
+      message.value = signIn.message.value || 'Google Drive is still loading. Try again when it is ready.'
       return
     }
 
     const operation = beginOperation()
-    if (state.value === 'continue' || dependencies.servicesAreLoaded()) {
-      void openBackupList(operation, config.clientId)
-      return
-    }
-
-    state.value = 'preparing'
-    void dependencies.loadServices().then(() => {
-      if (!isCurrent(operation)) return
-      state.value = 'continue'
-      message.value = 'Google Drive is ready. Continue to open your backups.'
-    }).catch((error: unknown) => {
-      if (!isCurrent(operation)) return
-      state.value = 'idle'
-      message.value = error instanceof Error ? error.message : 'Google Drive could not be loaded. Your workspace is unchanged.'
-      activeAbortController = undefined
-    })
+    void openBackupList(operation)
   }
 
-  async function openBackupList(operation: number, clientId: string): Promise<void> {
+  async function openBackupList(operation: number): Promise<void> {
     if (!isCurrent(operation)) return
     const callerAbort = activeAbortController
     if (!callerAbort) return
@@ -155,8 +120,8 @@ export function useGoogleDriveRestore(
       providerSignal = operationSignal
       activeProviderSignal = operationSignal
       try {
-        // Start OAuth synchronously with the continue click so Google can open its token window.
-        const tokenRequest = dependencies.requestAccessToken(clientId, operationSignal)
+        // Start OAuth synchronously with the button click so Google can open its token window.
+        const tokenRequest = signIn.requestAccessToken(operationSignal)
         const accessToken = await tokenRequest
         if (!isCurrent(operation, operationSignal)) return null
         activeAccessToken = accessToken
