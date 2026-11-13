@@ -78,6 +78,8 @@ On 2026-11-13, the production build at `c51b92dc` ran on `http://localhost:3051`
 
 In a fresh Playwright context with controlled Google OAuth and Drive responses, the welcome flow also restored the exact Cluster, Field settings, and layout into IndexedDB and reopened them after reload. The exact JSON comparison above used the real Drive download.
 
+After the cancellation and focus corrections and the final main integration, the production build at `971c0774` listed the same real Drive backups, restored the first file through the editor review, and reopened it after reload.
+
 ## Out of Scope
 
 - Additional cloud providers are tracked separately in [Dropbox #55](https://github.com/Submoon/ttrpg-cluster-control/issues/55) and [OneDrive #56](https://github.com/Submoon/ttrpg-cluster-control/issues/56).
