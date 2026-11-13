@@ -5,7 +5,6 @@ import {
   downloadJson,
   returnToClusterMap,
   reviewJumpClusterBackup,
-  setHeaderMapActionsOpen,
   setWorkspaceMapMode,
 } from './helpers'
 
@@ -98,11 +97,10 @@ for (const viewport of reviewViewports) {
 
     await returnToEditing.click()
     await expect(restoreReview).toBeHidden()
-    const restoreButton = page.getByRole('button', { name: 'Restore Jump Cluster', exact: true })
-    await expect(restoreButton).toBeVisible()
-    await expect(restoreButton).toBeFocused()
-    await expect(restoreButton).toBeInViewport({ ratio: 1 })
-    await setHeaderMapActionsOpen(page, false)
+    const mapFilesButton = page.getByRole('button', { name: 'Map files', exact: true })
+    await expect(mapFilesButton).toBeVisible()
+    await expect(mapFilesButton).toBeFocused()
+    await expect(mapFilesButton).toBeInViewport({ ratio: 1 })
     const unchanged = await downloadJson(page, 'Export Jump Cluster JSON')
     expect(unchanged.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
   })

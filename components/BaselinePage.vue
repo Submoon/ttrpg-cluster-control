@@ -1557,9 +1557,9 @@ watch(workspaceRestoreError, error => {
   if (error) workspaceRestoreReturnTarget.value = null
 })
 
-function openLocalWorkspaceRestore(event: Event): void {
+function openLocalWorkspaceRestore(event: Event, returnFocusTarget: HTMLElement | null): void {
   if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
-  workspaceRestoreReturnTarget.value = null
+  workspaceRestoreReturnTarget.value = returnFocusTarget
   cancelJsonImport()
   void workspaceRestore.openLocalFile(event)
 }

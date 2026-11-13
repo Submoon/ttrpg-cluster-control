@@ -195,7 +195,7 @@
     accept="application/json,.json"
     aria-label="Choose local JSON backup file"
     :disabled="restoreLoading"
-    @change="emit('restore-file', $event)"
+    @change="emit('restore-file', $event, restoreFileOpener)"
   >
 </template>
 
@@ -221,6 +221,7 @@ defineProps<{
 const clusterName = defineModel<string>('clusterName', { required: true })
 const systemName = defineModel<string>('systemName', { required: true })
 const restoreFileInput = useTemplateRef<HTMLInputElement>('restoreFileInput')
+let restoreFileOpener: HTMLElement | null = null
 const launchInputUi = {
   root: 'w-full',
   base: 'min-h-[2.75rem] w-full rounded-[2px] border border-[var(--control-border)] bg-[var(--control-bg)] px-[0.7rem] py-[0.6rem] text-[0.875rem] text-[var(--text-primary)] shadow-none focus-visible:outline-2 focus-visible:outline-[var(--focus)] focus-visible:outline-offset-[3px]',
@@ -232,11 +233,12 @@ const messageCardUi = {
 const emit = defineEmits<{
   retry: []
   'restore-backup': []
-  'restore-file': [event: Event]
+  'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
   submit: []
 }>()
 
-function openLocalBackupPicker(): void {
+function openLocalBackupPicker(event: MouseEvent): void {
+  restoreFileOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   restoreFileInput.value?.click()
 }
 </script>

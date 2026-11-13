@@ -357,7 +357,7 @@
         accept="application/json,.json"
         aria-label="Choose Jump Cluster backup JSON"
         data-testid="map-cluster-restore-input"
-        @change="emit('restore-file', $event)"
+        @change="emit('restore-file', $event, mapFiles?.triggerElement() ?? null)"
       >
     </template>
   </UDashboardToolbar>
@@ -433,7 +433,7 @@ const emit = defineEmits<{
   'generate-player-link': []
   'copy-player-link': []
   'import-file': [event: Event]
-  'restore-file': [event: Event]
+  'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
   'show-cluster': []
   'toggle-hierarchy': []
   'toggle-inspector': []
