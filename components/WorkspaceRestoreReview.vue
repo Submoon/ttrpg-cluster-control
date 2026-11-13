@@ -83,15 +83,21 @@
 
 <script setup lang="ts">
 /** Presents the reviewed backup and draft-discard consent without owning restore state or persistence. */
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import type { WorkspaceRestoreReview } from '../composables/useWorkspaceRestore'
+import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 
-const props = defineProps<{ review: Readonly<WorkspaceRestoreReview> | null }>()
+const props = defineProps<{
+  review: Readonly<WorkspaceRestoreReview> | null
+  returnFocusTarget?: HTMLElement | null
+  fallbackFocusTarget?: HTMLElement | null
+}>()
 const emit = defineEmits<{
   cancel: []
   confirm: []
   'download-current': []
   'update:discard-drafts-confirmed': [confirmed: boolean]
+  'focus-returned': []
 }>()
 
 let opener: HTMLElement | null = null
@@ -100,13 +106,21 @@ const dialogOpen = computed({
   set: open => { if (!open && !props.review?.confirming) emit('cancel') },
 })
 
-function captureOpener(event: Event): void {
-  opener = event.target instanceof HTMLElement ? event.target : document.activeElement as HTMLElement | null
+function captureOpener(): void {
+  if (props.returnFocusTarget) return
+  opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
 }
 
-function restoreFocus(): void {
-  const target = opener
-  opener = null
-  if (target?.isConnected && !target.closest('[inert]')) target.focus()
+function restoreFocus(event: Event): void {
+  event.preventDefault()
+  const target = props.returnFocusTarget ?? opener
+  void nextTick(() => {
+    restoreDialogFocus(
+      createDialogFocusTarget(target),
+      createDialogFocusTarget(props.fallbackFocusTarget ?? null),
+    )
+    opener = null
+    emit('focus-returned')
+  })
 }
 </script>
