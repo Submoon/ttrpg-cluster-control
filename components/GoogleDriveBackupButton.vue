@@ -19,6 +19,15 @@
     >
       Cancel before upload
     </UButton>
+    <UButton
+      v-if="isRetrying"
+      color="neutral"
+      variant="ghost"
+      size="xs"
+      @click="props.controller.startNewBackupInstead"
+    >
+      Start a new backup instead
+    </UButton>
   </div>
 </template>
 
@@ -31,6 +40,7 @@ const props = defineProps<{ controller: GoogleDriveBackupController }>()
 const busy = computed(() => props.controller.busy.value)
 const canCancel = computed(() => props.controller.canCancel.value)
 const buttonLabel = computed(() => props.controller.buttonLabel.value)
+const isRetrying = computed(() => props.controller.state.value === 'retry')
 </script>
 
 <style scoped>
