@@ -10,11 +10,9 @@ import {
 } from '../domain/workspace'
 import {
   createSingleSystemWorkspace,
-  jsonMapImportInput,
   resolveImportReview,
   returnToClusterMap,
-  setHeaderMapActionsOpen,
-  setJsonFile,
+  reviewStarSystemImport,
   setWorkspaceMapMode,
 } from './helpers'
 
@@ -234,11 +232,8 @@ async function importAndOpenBranchSearchSystem(
   fileName: string,
 ): Promise<Locator> {
   await createSingleSystemWorkspace(page)
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), fileName, fixture.content)
-  await resolveImportReview(page.getByRole('dialog', { name: 'Review import', exact: true }), 'confirm')
+  const review = await reviewStarSystemImport(page, fileName, fixture.content)
+  await resolveImportReview(review, 'confirm')
 
   await returnToClusterMap(page)
   await setWorkspaceMapMode(page, 'Navigate')
@@ -348,11 +343,8 @@ test('compact Location-key search preserves a dirty same-object draft and return
   test.setTimeout(45_000)
   const fixture = branchSearchMap()
   await createSingleSystemWorkspace(page)
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), 'branch-atlas-draft.json', fixture.content)
-  await resolveImportReview(page.getByRole('dialog', { name: 'Review import', exact: true }), 'confirm')
+  const review = await reviewStarSystemImport(page, 'branch-atlas-draft.json', fixture.content)
+  await resolveImportReview(review, 'confirm')
 
   await returnToClusterMap(page)
   await setWorkspaceMapMode(page, 'Navigate')

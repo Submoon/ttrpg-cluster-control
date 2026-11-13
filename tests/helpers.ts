@@ -1090,8 +1090,78 @@ async function dismissAddChooser(page: import('@playwright/test').Page): Promise
   }
 }
 
-export function jsonMapImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
-  return page.getByLabel('Import map JSON')
+export function jumpClusterBackupInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByLabel('Choose Jump Cluster backup JSON')
+}
+
+export function starSystemImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByLabel('Choose star system JSON')
+}
+
+/** Opens the complete-cluster restore action in Map files and returns its file input. */
+export async function openJumpClusterRestorePicker(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  await setHeaderMapActionsOpen(page, true)
+  await page.getByRole('button', { name: 'Restore Jump Cluster', exact: true }).click()
+  await setHeaderMapActionsOpen(page, false)
+  return jumpClusterBackupInput(page)
+}
+
+/** Opens the explicit standalone-system append action in Map files and returns its file input. */
+export async function openStarSystemImportPicker(
+  page: import('@playwright/test').Page,
+): Promise<import('@playwright/test').Locator> {
+  await setHeaderMapActionsOpen(page, true)
+  await page.getByRole('button', { name: 'Add a star system', exact: true }).click()
+  await setHeaderMapActionsOpen(page, false)
+  return starSystemImportInput(page)
+}
+
+/** Returns the public review dialog for replacing the active Jump Cluster from a backup. */
+export function jumpClusterRestoreReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
+  return page.getByRole('dialog', { name: 'Replace Jump Cluster', exact: true })
+}
+
+/** Opens a complete local backup for review through the editor's public Map files action. */
+export async function reviewJumpClusterBackup(
+  page: import('@playwright/test').Page,
+  name: string,
+  content: string,
+): Promise<import('@playwright/test').Locator> {
+  await setJsonFile(await openJumpClusterRestorePicker(page), name, content)
+  return jumpClusterRestoreReviewDialog(page)
+}
+
+/** Opens a standalone system file for the existing reviewed append workflow. */
+export async function reviewStarSystemImport(
+  page: import('@playwright/test').Page,
+  name: string,
+  content: string,
+): Promise<import('@playwright/test').Locator> {
+  await setJsonFile(await openStarSystemImportPicker(page), name, content)
+  return importReviewDialog(page)
+}
+
+/** Resolves a complete-backup replacement through the review's visible action. */
+export async function resolveJumpClusterRestoreReview(
+  review: import('@playwright/test').Locator,
+  choice: 'confirm' | 'cancel',
+  discardDrafts = false,
+): Promise<void> {
+  await expect(review).toBeVisible()
+  const discard = review.getByRole('checkbox', {
+    name: 'Discard current drafts if the replacement succeeds',
+    exact: true,
+  })
+  if (await discard.count()) {
+    if (discardDrafts) await discard.check()
+    else await expect(discard).not.toBeChecked()
+  }
+  await review.getByRole('button', {
+    name: choice === 'confirm' ? 'Replace Jump Cluster' : 'Return to editing',
+    exact: true,
+  }).click()
 }
 
 /** Returns the public review dialog for a prepared destructive change. */
@@ -1099,7 +1169,7 @@ export function deletionReviewDialog(page: import('@playwright/test').Page): imp
   return page.getByRole('dialog', { name: 'Review deletion', exact: true })
 }
 
-/** Returns the public review dialog for a validated independent JSON import. */
+/** Returns the public review dialog for a validated standalone star-system import. */
 export function importReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
   return page.getByRole('dialog', { name: 'Review import', exact: true })
 }

@@ -1,18 +1,16 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview } from './helpers'
+import { resolveImportReview, reviewStarSystemImport } from './helpers'
 import {
   beginDragToWorldPoint,
   captureMapExportBlobs,
   downloadJson,
   ensureMapDragPointsReachable,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   readInspectorSelection,
   returnToClusterMap,
   selectInspectorOption,
   setHeaderMapActionsOpen,
-  setJsonFile,
   setWorkspaceMapMode,
   type DownloadWindow,
   type ExportedMap,
@@ -90,8 +88,7 @@ async function openPlacementLab(
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
 
-  await setJsonFile(jsonMapImportInput(page), 'orbit-placement-lab.json', JSON.stringify(fixture))
-  const preview = importReviewDialog(page)
+  const preview = await reviewStarSystemImport(page, 'orbit-placement-lab.json', JSON.stringify(fixture))
   const previewSummary = await preview.innerText()
   expect(previewSummary).toContain('Star systems: 1')
   await resolveImportReview(preview, 'confirm')

@@ -1,8 +1,15 @@
 import { expect, test } from './fixtures'
-import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
+import { createLocalWorkspace, exportStarSystem } from '../domain/workspace'
 import {
-  activeWorkspaceFeedback, hideWorkspaceInspector, importReviewDialog, jsonMapImportInput, openChartDetailsEditor, resolveImportReview,
-  returnToClusterMap, setHeaderMapActionsOpen, setJsonFile, waitForWorkspaceSaved, waitForWorkspaceStartup,
+  activeWorkspaceFeedback,
+  hideWorkspaceInspector,
+  openChartDetailsEditor,
+  resolveImportReview,
+  returnToClusterMap,
+  reviewStarSystemImport,
+  setHeaderMapActionsOpen,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
 } from './helpers'
 
 test('an oversized edit requires explicit consent and cancellation preserves its data and history', async ({ page }) => {
@@ -20,12 +27,14 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   // Import fits the real 32 MiB budget. Retaining both sides of a later edit does not.
   const mebibyte = 1024 * 1024
   primary.description = 'x'.repeat(17 * mebibyte)
-  const portableMap = JSON.stringify(exportJumpCluster(incoming))
+  const incomingSystem = incoming.cluster.systems[0]
+  if (!incomingSystem) throw new Error('The oversized history fixture has no star system.')
+  const portableMap = JSON.stringify(exportStarSystem(incoming, incomingSystem.id))
   const portableBytes = Buffer.byteLength(portableMap)
   expect(portableBytes).toBeGreaterThan(16 * mebibyte)
   expect(portableBytes).toBeLessThan(32 * mebibyte)
-  await setJsonFile(jsonMapImportInput(page), 'large-history-workspace.json', portableMap)
-  await resolveImportReview(importReviewDialog(page), 'confirm')
+  const review = await reviewStarSystemImport(page, 'large-history-workspace.json', portableMap)
+  await resolveImportReview(review, 'confirm')
   await setHeaderMapActionsOpen(page, false)
   await waitForWorkspaceSaved(page)
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })

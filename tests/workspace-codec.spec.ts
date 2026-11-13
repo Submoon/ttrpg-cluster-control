@@ -3,6 +3,7 @@ import {
   createLocalWorkspace,
   exportJumpCluster,
   exportStarSystem,
+  restoreJumpClusterBackup,
   type CustomFieldDefinition,
   type LocalWorkspace,
   type StarSystem,
@@ -185,6 +186,51 @@ test('Cluster JSON export contains the complete portable campaign projection @pu
   expect(exported.layout).not.toHaveProperty('pan')
   expect(exported).not.toHaveProperty('selectedSystemId')
   expect(exported).not.toHaveProperty('selectedObjectId')
+})
+
+test('complete backup restore preserves portable Cluster data and creates a fresh local identity @pure', () => {
+  const source = workspaceForPortableExports()
+  const backup = exportJumpCluster(source)
+
+  const restored = restoreJumpClusterBackup(backup)
+
+  expect(restored.id).not.toBe(source.id)
+  expect(restored.cluster).toEqual(source.cluster)
+  expect(restored.objectFieldSettings).toEqual(source.objectFieldSettings)
+  expect(restored.layout).toEqual(source.layout)
+})
+
+test('complete backup restore applies supported legacy migrations and rejects standalone systems @pure', () => {
+  const source = workspaceForPortableExports()
+  const backup = exportJumpCluster(source)
+  const legacy = {
+    ...backup,
+    version: 3,
+    cluster: {
+      ...backup.cluster,
+      playerTitle: 'Legacy player title',
+      systems: backup.cluster.systems.map(system => ({
+        ...system,
+        objects: system.objects.map(object => ({
+          ...object,
+          playerText: '',
+          playerFieldMasks: [],
+        })),
+      })),
+    },
+    objectFieldSettings: {
+      ...backup.objectFieldSettings,
+      customFields: backup.objectFieldSettings.customFields.map(field => ({ ...field, playerShared: false })),
+    },
+  }
+
+  const restored = restoreJumpClusterBackup(legacy)
+
+  expect(restored.cluster.playerTitle).toBe('Legacy player title')
+  expect(() => restoreJumpClusterBackup(exportStarSystem(source, source.cluster.systems[0]!.id)))
+    .toThrow(/Jump Cluster JSON backup/i)
+  expect(() => restoreJumpClusterBackup({ type: 'player-document' }))
+    .toThrow(/Jump Cluster JSON backup/i)
 })
 
 test('standalone JSON export carries shared definitions and only its system layout @pure', () => {
