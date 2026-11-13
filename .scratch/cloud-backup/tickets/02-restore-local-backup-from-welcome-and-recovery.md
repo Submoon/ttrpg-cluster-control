@@ -1,6 +1,6 @@
 ---
 title: Restore a local Jump Cluster backup from welcome and recovery
-status: in-progress
+status: closed
 assignee: coordinator
 type: implementation
 label: wayfinder:implementation
@@ -24,11 +24,15 @@ Open a complete local Jump Cluster backup directly from the welcome screen of a 
 
 ## Acceptance criteria
 
-- [ ] From a fresh browser profile, the Warden can open a supported complete local JSON backup without creating a placeholder map. The restored cluster opens after IndexedDB commits and survives reload with its full content intact.
-- [ ] When the local workspace is damaged, the recovery screen offers local file restore alongside **Restore last valid backup**. A successful file restore preserves an existing valid recovery snapshot.
-- [ ] Cancellation, invalid input, failed persistence, or an obsolete restore request leaves the previous durable records intact. Reject a late restore that would overwrite a workspace installed while the file was being opened.
-- [ ] Both screens use the same file eligibility rules as the editor's full restore. Local file restore works offline and with Drive unavailable.
+- [x] From a fresh browser profile, the Warden can open a supported complete local JSON backup without creating a placeholder map. The restored cluster opens after IndexedDB commits and survives reload with its full content intact.
+- [x] When the local workspace is damaged, the recovery screen offers local file restore alongside **Restore last valid backup**. A successful file restore preserves an existing valid recovery snapshot.
+- [x] Cancellation, invalid input, failed persistence, or an obsolete restore request leaves the previous durable records intact. Reject a late restore that would overwrite a workspace installed while the file was being opened.
+- [x] Both screens use the same file eligibility rules as the editor's full restore. Local file restore works offline and with Drive unavailable.
 
 ## Verification
 
 Exercise both public entry points with real IndexedDB. Reuse the existing recovery coverage to verify that a failed transaction preserves records and that last-valid recovery remains reachable. Cover request ownership and invalid input at the operation boundary. Follow the project's Sensitive development route.
+
+## Resolution
+
+Welcome and recovery file restore passed the focused browser run, including reload, preserved recovery records, and a failed IndexedDB write followed by successful retry.
