@@ -113,7 +113,8 @@ async function installChartWriteGate(page: import('@playwright/test').Page): Pro
         gate.writeCount += 1
         if (key === 'current' && gate.abortCurrentWrites > 0) {
           gate.abortCurrentWrites -= 1
-          this.transaction.abort()
+          const transaction = this.transaction
+          queueMicrotask(() => transaction.abort())
         }
       }
       return request
