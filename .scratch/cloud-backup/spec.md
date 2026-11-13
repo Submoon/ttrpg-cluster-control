@@ -72,6 +72,10 @@ Wardens can lose the local copy of a Jump Cluster when they clear site data or s
 - Use representative browser journeys and real IndexedDB to verify the local file entry points, replacement confirmation and pre-replacement download, draft and history lifetimes, rolling recovery, and stale-tab write protection. Build on the current reviewed-import and local recovery journeys and keep deterministic cases at their narrower boundaries.
 - Before delivery, verify a real Drive round trip across two isolated browser profiles with an allowlisted account and a configured browser origin. Confirm the first profile reports the completed backup, the second profile lists the dated file in the application space, and restore and JSON download preserve the complete backup. Record live-provider results separately from controlled browser coverage.
 
+### Live verification
+
+On 2026-11-13, the production build at `c51b92dc` ran on `http://localhost:3051` in the Codex integrated Chromium browser. With an allowlisted Google test account, the app confirmed two distinct dated copies of a synthetic Jump Cluster in its private Drive space and listed both together. The first copy downloaded as JSON and matched the reference exactly as parsed data, including GM notes, player publication, Fields, the Jump Route, and layout. Restoring that copy through the editor replacement review succeeded and the map reopened after reload. The separate-profile welcome restore is pending.
+
 ## Out of Scope
 
 - Additional cloud providers are tracked separately in [Dropbox #55](https://github.com/Submoon/ttrpg-cluster-control/issues/55) and [OneDrive #56](https://github.com/Submoon/ttrpg-cluster-control/issues/56).
