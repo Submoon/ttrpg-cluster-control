@@ -4,6 +4,7 @@
 import { restoreLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 
 const databaseName = 'ttrpg-cluster-control'
+const databaseVersion = 2
 const storeName = 'workspace'
 const workspaceKey = 'current'
 const backupKey = 'last-valid'
@@ -40,8 +41,10 @@ function openDatabase(): Promise<IDBDatabase> {
   }
 
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1)
-    request.onupgradeneeded = () => request.result.createObjectStore(storeName)
+    const request = indexedDB.open(databaseName, databaseVersion)
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(storeName)) request.result.createObjectStore(storeName)
+    }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('Could not open local storage.'))
   })

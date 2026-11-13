@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord } from './helpers'
+import { createLocalWorkspace } from '../domain/workspace'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
@@ -13,7 +14,7 @@ async function readWorkspaceRecord(
   key: WorkspaceRecordKey,
 ): Promise<unknown> {
   return page.evaluate(async (recordKey) => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
@@ -38,11 +39,44 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
 
 test('the last valid workspace can be restored after the current snapshot fails to load', async ({ page }) => {
   test.setTimeout(90_000)
+  const legacyWorkspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  await page.route('**/__legacy-v1.html', route => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><html><body>Legacy IndexedDB fixture</body></html>',
+  }))
+  await page.goto('/__legacy-v1.html')
+  await page.evaluate(async (workspace) => {
+    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onupgradeneeded = () => request.result.createObjectStore('workspace')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not create the version 1 workspace database.'))
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('workspace', 'readwrite')
+        transaction.objectStore('workspace').put(workspace, 'current')
+        transaction.oncomplete = () => resolve()
+        transaction.onabort = () => reject(transaction.error ?? new Error('Could not seed the version 1 workspace.'))
+        transaction.onerror = () => reject(transaction.error ?? new Error('Could not seed the version 1 workspace.'))
+      })
+    } finally {
+      database.close()
+    }
+  }, legacyWorkspace)
   await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
+  await waitForWorkspaceStartup(page)
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach' })).toBeVisible()
+  const legacyOpenResult = await page.evaluate(() => new Promise<string>((resolve) => {
+    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    request.onsuccess = () => {
+      request.result.close()
+      resolve('opened')
+    }
+    request.onerror = () => resolve(request.error?.name ?? 'unknown')
+  }))
+  expect(legacyOpenResult).toBe('VersionError')
 
   const chartEditor = await openChartDetailsEditor(page)
   await chartEditor.getByLabel('Jump Cluster').fill('Current Reach')
@@ -76,7 +110,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
 
   await page.evaluate(async () => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
@@ -179,7 +213,8 @@ test('a failed backup restore stays unavailable and preserves both records until
     storePrototype.put = function (value: unknown, key?: IDBValidKey) {
       const request = originalPut.call(this, value, key)
       if (this.name === 'workspace' && key === 'current' && this.transaction.mode === 'readwrite') {
-        this.transaction.abort()
+        const transaction = this.transaction
+        queueMicrotask(() => transaction.abort())
       }
       return request
     }

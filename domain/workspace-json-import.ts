@@ -352,7 +352,7 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
     layout: {
       systemPositions: map.layout.systemPositions,
       unresolvedExitPositions: map.layout.unresolvedExitPositions ?? {},
-      orbitRadii: normalizeOrbitRadii(map.layout.orbitRadii, map.layout.orbitEllipseRadii ?? {}) ?? {},
+      orbitRadii: normalizeOrbitRadii(map.layout.orbitRadii ?? {}, map.layout.orbitEllipseRadii ?? {}) ?? {},
       orbitRotations: normalizeOrbitRotations(map.layout.orbitRotations ?? {}) ?? {},
       objectAngles: map.layout.objectAngles ?? {},
     },

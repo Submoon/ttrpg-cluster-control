@@ -233,6 +233,23 @@ test('complete backup restore applies supported legacy migrations and rejects st
     .toThrow(/Jump Cluster JSON backup/i)
 })
 
+test('complete version 1 backup restore keeps legacy ellipse-only Orbit radii @pure', () => {
+  const backup = exportJumpCluster(workspaceForPortableExports())
+  const { orbitRadii, ...legacyLayout } = backup.layout
+  const legacyVersionOne = {
+    ...backup,
+    version: 1,
+    layout: {
+      ...legacyLayout,
+      orbitEllipseRadii: orbitRadii,
+    },
+  }
+
+  const restored = restoreJumpClusterBackup(legacyVersionOne)
+
+  expect(restored.layout.orbitRadii).toEqual(orbitRadii)
+})
+
 test('standalone JSON export carries shared definitions and only its system layout @pure', () => {
   const workspace = workspaceForPortableExports()
   const system = workspace.cluster.systems[0]

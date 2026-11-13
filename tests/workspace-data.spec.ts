@@ -30,7 +30,7 @@ import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace
 
 async function readWorkspaceRecoveryRecords(page: import('@playwright/test').Page): Promise<{ current: unknown; backup: unknown }> {
   return await page.evaluate(async () => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
@@ -289,7 +289,7 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
     await expect(retryPreview).toBeHidden()
     await waitForWorkspaceSaved(page)
     const restoredWorkspaceId = await page.evaluate(async () => {
-      const request = indexedDB.open('ttrpg-cluster-control', 1)
+      const request = indexedDB.open('ttrpg-cluster-control')
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))

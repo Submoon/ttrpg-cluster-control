@@ -156,7 +156,7 @@ export async function overwriteWorkspaceRecord(
   value: unknown,
 ): Promise<void> {
   await page.evaluate(async (stored) => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
