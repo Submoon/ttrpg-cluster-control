@@ -10,8 +10,8 @@
     <template #default>
       <span class="pointer-events-none sr-only" tabindex="-1">Player visibility</span>
     </template>
-    <template #content-top>
-      <span :ref="captureMenuContent" class="hidden" aria-hidden="true" />
+    <template #content-top="{ sub }">
+      <span v-if="!sub" :ref="captureMenuContent" class="hidden" aria-hidden="true" />
     </template>
   </UDropdownMenu>
 </template>
@@ -81,19 +81,27 @@ const items = computed(() => [
     disabled: props.busy,
     onSelect: () => emit('move-selection'),
   }] : []),
-  ...publicationModes.map((mode) => {
-    const presentation = publicationPresentation(mode)
-    const current = props.currentMode === mode
-    return {
-      type: 'checkbox' as const,
-      checked: current,
-      label: presentation.label,
-      icon: presentation.icon,
-      disabled: props.busy,
-      onUpdateChecked: () => undefined,
-      onSelect: () => emit('select', mode),
-    }
-  }),
+  {
+    label: 'Change Visibility',
+    icon: 'i-lucide-eye',
+    disabled: props.busy,
+    content: {
+      prioritizePosition: true,
+      collisionPadding: 8,
+    },
+    children: publicationModes.map((mode) => {
+      const presentation = publicationPresentation(mode)
+      return {
+        type: 'checkbox' as const,
+        checked: props.currentMode === mode,
+        label: presentation.label,
+        icon: presentation.icon,
+        disabled: props.busy,
+        onUpdateChecked: () => undefined,
+        onSelect: () => emit('select', mode),
+      }
+    }),
+  },
 ])
 
 function onOpenChange(open: boolean): void {

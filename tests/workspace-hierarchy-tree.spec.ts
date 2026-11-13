@@ -69,6 +69,14 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
   await expect(inspector).toContainText('Primary Star')
 
+  await starObject.locator('.object-hit-target').click({ button: 'right' })
+  const singleSelectionMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  await singleSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
+  const moveModeButton = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
+  await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(selectedMapObjects).toHaveCount(1)
+  await setWorkspaceMapMode(page, 'Select')
+
   await planetObject.click({ modifiers: ['Shift'] })
   await expect(selectedMapObjects).toHaveCount(2)
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
@@ -98,14 +106,18 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await planetObject.locator('.object-hit-target').click({ button: 'right' })
   const selectedObjectMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
   await expect(selectedObjectMenu.getByRole('menuitem', { name: 'Move selection', exact: true })).toBeVisible()
-  await expect(selectedObjectMenu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true })).toBeVisible()
+  await selectedObjectMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true }).hover()
+  const selectedVisibilityMenu = page.getByRole('menu', { name: 'Change Visibility', exact: true })
+  await expect(selectedVisibilityMenu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(selectedObjectMenu).toHaveCount(0)
   await expect(selectedMapObjects).toHaveCount(2)
 
   await departureObject.locator('.object-hit-target').click({ button: 'right' })
   const visibilityMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
-  await visibilityMenu.getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
+  await visibilityMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true }).hover()
+  await page.getByRole('menu', { name: 'Change Visibility', exact: true })
+    .getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
 
   await expect(departureRow).toHaveAttribute('aria-description', /Configured visibility: Revealed/)
   await expect(primaryStar).toHaveAttribute('aria-description', /Configured visibility: Hidden/)
@@ -289,7 +301,6 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await planetObject.locator('.object-hit-target').click({ button: 'right' })
   const moveSelectionMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
   await moveSelectionMenu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
-  const moveModeButton = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await expect(selectedMapObjects).toHaveCount(2)
 
