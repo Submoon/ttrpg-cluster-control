@@ -18,7 +18,7 @@ Baseline after fetching `origin` is `efd9b094634cf60d6c466f612df11cf9573b6b33`. 
 
 Implementation starts at `dfe07f7d9a7cd0a8f8e300b68c9467b7262dc59d` after fetching `origin` and fast-forwarding `main`. The integration branch is `codex/issue-51-cloud-backup`.
 
-The integration branch incorporates `origin/main` at `a369e60943a062b24e4404af8ce9610b4bdbb393`, which is the merge base for final review.
+The first integrated review used `origin/main` at `a369e60943a062b24e4404af8ce9610b4bdbb393`. The integration branch now includes `origin/main` at `9ab9cd78` after the map context menu change landed.
 
 ## Problem Statement
 

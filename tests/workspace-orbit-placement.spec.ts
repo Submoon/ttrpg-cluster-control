@@ -9,7 +9,6 @@ import {
   openWorkspaceHierarchy,
   readInspectorSelection,
   returnToClusterMap,
-  selectInspectorOption,
   setHeaderMapActionsOpen,
   setWorkspaceMapMode,
   type DownloadWindow,
@@ -188,8 +187,7 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expect(page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'B, Companion Star (Star)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'Unoccupied center', exact: true })).toHaveCount(0)
-  await page.keyboard.press('Escape')
-  await selectInspectorOption(host, 'A, Primary Star (Star)')
+  await page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true }).click()
   expect(await readInspectorSelection(host)).toBe('A, Primary Star (Star)')
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
 
