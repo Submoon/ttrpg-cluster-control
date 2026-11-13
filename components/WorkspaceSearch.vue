@@ -1,24 +1,31 @@
 <template>
   <div class="workspace-search-entry">
-    <UButton
-      class="workspace-control workspace-map-search"
-      color="neutral"
-      variant="outline"
-      size="sm"
-      aria-label="Search"
-      :aria-keyshortcuts="searchShortcutKey"
-      aria-haspopup="dialog"
-      :aria-expanded="open"
-      @click="open = true"
+    <UTooltip
+      :text="props.iconOnly ? 'Search' : undefined"
+      :kbds="props.iconOnly ? [macOS ? 'meta' : 'ctrl', 'k'] : undefined"
+      :ui="{ kbds: 'inline-flex' }"
     >
-      <UIcon name="i-lucide-search" aria-hidden="true" />
-      <span>Search</span>
-      <span class="ml-2 inline-flex items-center gap-1 text-xs" aria-hidden="true">
-        <UKbd size="sm" :value="macOS ? 'meta' : 'ctrl'" />
-        <span>+</span>
-        <UKbd size="sm" value="K" />
-      </span>
-    </UButton>
+      <UButton
+        class="workspace-control workspace-map-search"
+        :class="{ 'workspace-map-icon-control': props.iconOnly }"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        aria-label="Search"
+        :aria-keyshortcuts="searchShortcutKey"
+        aria-haspopup="dialog"
+        :aria-expanded="open"
+        @click="open = true"
+      >
+        <UIcon name="i-lucide-search" aria-hidden="true" />
+        <span v-if="!props.iconOnly">Search</span>
+        <span v-if="!props.iconOnly" class="ml-2 inline-flex items-center gap-1 text-xs" aria-hidden="true">
+          <UKbd size="sm" :value="macOS ? 'meta' : 'ctrl'" />
+          <span>+</span>
+          <UKbd size="sm" value="K" />
+        </span>
+      </UButton>
+    </UTooltip>
 
     <UModal
       v-model:open="open"
@@ -141,12 +148,15 @@ const props = withDefaults(defineProps<{
   title?: string
   description?: string
   criteriaActive?: boolean
+  /** Show only the search icon with a tooltip in space-constrained map chrome. */
+  iconOnly?: boolean
   /** Optional namespace for SSR-stable per-instance combobox and listbox IDs. */
   idPrefix?: string
   /** Exact dialog allowed to own this palette's shortcut and rejected-result focus. */
   getShortcutOwningDialog?: () => HTMLElement | null
 }>(), {
   criteriaActive: false,
+  iconOnly: false,
 })
 
 const open = defineModel<boolean>('open', { required: true })

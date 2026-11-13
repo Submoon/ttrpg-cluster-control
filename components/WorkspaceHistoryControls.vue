@@ -5,50 +5,59 @@
     role="group"
     aria-label="Edit history"
   >
-    <div class="flex items-center gap-1">
-      <UButton
-        class="workspace-control"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        icon="i-lucide-undo-2"
-        :aria-label="undoLabel"
-        aria-keyshortcuts="Control+Z Meta+Z"
-        :aria-description="undoDescription"
-        :title="undoTitle"
-        :disabled="props.status.undoUnavailableReason !== null"
-        aria-describedby="workspace-history-feedback workspace-history-error"
-        @click="emit('undo')"
-      >
-        Undo <span class="workspace-history-count" aria-hidden="true">{{ props.status.undoDepth }}</span>
-      </UButton>
-      <UButton
-        class="workspace-control"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        icon="i-lucide-redo-2"
-        :aria-label="redoLabel"
-        aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
-        :aria-description="redoDescription"
-        :title="redoTitle"
-        :disabled="props.status.redoUnavailableReason !== null"
-        aria-describedby="workspace-history-feedback workspace-history-error"
-        @click="emit('redo')"
-      >
-        Redo <span class="workspace-history-count" aria-hidden="true">{{ props.status.redoDepth }}</span>
-      </UButton>
-      <UButton
-        class="workspace-control"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        icon="i-lucide-history"
-        aria-label="History"
-        aria-haspopup="dialog"
-        :aria-expanded="props.open"
-        @click="emit('update:open', true)"
-      >History</UButton>
+    <div class="flex items-center gap-3">
+      <UChip size="3xl" class="workspace-history-count" :ui="countChipUi">
+        <UTooltip :text="undoTooltipText" :kbds="undoKeycaps" :ui="historyTooltipUi">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="undoLabel"
+            aria-keyshortcuts="Control+Z Meta+Z"
+            :aria-description="undoDescription"
+            :disabled="props.status.undoUnavailableReason !== null"
+            aria-describedby="workspace-history-feedback workspace-history-error"
+            @click="emit('undo')"
+          >
+            <UIcon class="workspace-history-action-icon" name="i-lucide-undo-2" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
+        <template #content><span aria-hidden="true">{{ props.status.undoDepth }}</span></template>
+      </UChip>
+      <UChip size="3xl" class="workspace-history-count" :ui="countChipUi">
+        <UTooltip :text="redoTooltipText" :kbds="redoKeycaps" :ui="historyTooltipUi">
+          <UButton
+            class="workspace-control workspace-map-icon-control"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :aria-label="redoLabel"
+            aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
+            :aria-description="redoDescription"
+            :disabled="props.status.redoUnavailableReason !== null"
+            aria-describedby="workspace-history-feedback workspace-history-error"
+            @click="emit('redo')"
+          >
+            <UIcon class="workspace-history-action-icon" name="i-lucide-redo-2" aria-hidden="true" />
+          </UButton>
+        </UTooltip>
+        <template #content><span aria-hidden="true">{{ props.status.redoDepth }}</span></template>
+      </UChip>
+      <UTooltip text="History" :ui="historyTooltipUi">
+        <UButton
+          class="workspace-control workspace-map-icon-control"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          aria-label="History"
+          aria-haspopup="dialog"
+          :aria-expanded="props.open"
+          @click="emit('update:open', true)"
+        >
+          <UIcon class="workspace-history-action-icon" name="i-lucide-history" aria-hidden="true" />
+        </UButton>
+      </UTooltip>
     </div>
     <div v-if="feedback || props.error" class="workspace-history-notices" data-map-obstruction>
       <p id="workspace-history-feedback" class="m-0 text-xs text-muted" :class="{ 'sr-only': !feedback }" role="status" aria-live="polite">
@@ -95,6 +104,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useKbd } from '@nuxt/ui/composables/useKbd'
 import type { WorkspaceHistoryStatus } from '../composables/useWorkspaceHistory'
 import type { WorkspaceHistoryEntry } from '../composables/editor-workflows/workspace-mutations'
 
@@ -107,10 +117,19 @@ const undoLabel = computed(() => props.status.undoAction
 const redoLabel = computed(() => props.status.redoAction
   ? `Redo: ${props.status.redoAction.label} · ${props.status.redoAction.contextLabel}`
   : 'Redo')
-const undoTitle = computed(() => `${props.status.undoUnavailableReason ?? undoLabel.value}. Shortcut: Ctrl+Z or Cmd+Z.`)
-const redoTitle = computed(() => `${props.status.redoUnavailableReason ?? redoLabel.value}. Shortcut: Ctrl+Shift+Z, Ctrl+Y or Cmd+Shift+Z.`)
+const { macOS } = useKbd()
+const undoKeycaps = computed(() => [macOS.value ? 'meta' : 'ctrl', 'z'])
+const redoKeycaps = computed(() => [macOS.value ? 'meta' : 'ctrl', 'shift', 'z'])
+const undoTooltipText = computed(() => props.status.undoUnavailableReason ?? undoLabel.value)
+const redoTooltipText = computed(() => props.status.redoUnavailableReason ?? redoLabel.value)
 const undoDescription = computed(() => `${props.status.undoDepth} ${props.status.undoDepth === 1 ? 'action' : 'actions'} available to undo`)
 const redoDescription = computed(() => `${props.status.redoDepth} ${props.status.redoDepth === 1 ? 'action' : 'actions'} available through Redo`)
+const countChipUi = { base: 'pointer-events-none px-0.5 tabular-nums' }
+const historyTooltipUi = {
+  content: 'workspace-history-tooltip-content',
+  text: 'workspace-history-tooltip-text',
+  kbds: 'inline-flex',
+}
 const feedback = computed(() => {
   const commonReason = props.status.undoUnavailableReason
   if (commonReason && commonReason === props.status.redoUnavailableReason) return commonReason
@@ -126,18 +145,29 @@ const feedback = computed(() => {
 .workspace-history-controls {
   display: grid;
   flex: none;
-  width: 19rem;
+  width: max-content;
   min-width: 0;
   max-width: 100%;
   gap: 0.2rem;
 }
 
-.workspace-history-count {
-  display: inline-flex;
-  min-width: 3ch;
-  justify-content: center;
-  font-size: 0.8em;
-  font-variant-numeric: tabular-nums;
+.workspace-history-action-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+:global(.workspace-history-tooltip-content) {
+  box-sizing: border-box;
+  height: auto;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+:global(.workspace-history-tooltip-text) {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .workspace-history-notices {
