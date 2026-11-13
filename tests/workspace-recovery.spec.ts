@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
-import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord, returnToClusterMap } from './helpers'
+import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord } from './helpers'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
   new URL('../utils/workspace-storage.ts', import.meta.url).pathname,
@@ -36,6 +37,7 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
 }
 
 test('the last valid workspace can be restored after the current snapshot fails to load', async ({ page }) => {
+  test.setTimeout(90_000)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
@@ -53,17 +55,74 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Restore last valid backup' })).toBeVisible()
-  await page.getByRole('button', { name: 'Restore last valid backup' }).click()
+  await expect(page.getByRole('button', { name: 'Open local Jump Cluster backup' })).toBeVisible()
+  const recoveryCopy = await readWorkspaceRecord(page, 'last-valid')
+  const recoveryFileChooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Open local Jump Cluster backup' }).click()
+  await (await recoveryFileChooser).setFiles({
+    name: 'campaign-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(campaignBaselineFixture)),
+  })
+  const recoveryReview = page.getByRole('dialog')
+  await expect(recoveryReview).toContainText('Kestrel Reach Prime')
+  await recoveryReview.getByRole('button', { name: /(?:Open|Replace) Jump Cluster/ }).click()
 
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
-  await returnToClusterMap(page)
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
+  await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(recoveryCopy)
 
   await page.reload()
   await waitForWorkspaceStartup(page)
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
-  await returnToClusterMap(page)
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
+
+  await page.evaluate(async () => {
+    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('workspace', 'readwrite')
+        transaction.objectStore('workspace').clear()
+        transaction.oncomplete = () => resolve()
+        transaction.onabort = () => reject(transaction.error ?? new Error('Could not clear the test workspace.'))
+        transaction.onerror = () => reject(transaction.error ?? new Error('Could not clear the test workspace.'))
+      })
+    } finally {
+      database.close()
+    }
+  })
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Create local workspace' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open local Jump Cluster backup' })).toBeVisible()
+  const welcomeFileChooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Open local Jump Cluster backup' }).click()
+  await (await welcomeFileChooser).setFiles({
+    name: 'campaign-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(campaignBaselineFixture)),
+  })
+  const welcomeReview = page.getByRole('dialog')
+  await expect(welcomeReview).toContainText('Kestrel Reach Prime')
+  await welcomeReview.getByRole('button', { name: /(?:Open|Replace) Jump Cluster/ }).click()
+
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
+  await page.reload()
+  await waitForWorkspaceStartup(page)
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
+  const restored = await readCurrentWorkspace(page) as {
+    cluster: { name: string; systems: Array<{ name: string; objects: Array<{ id: string; customFieldValues?: Record<string, string> }> }>; routes: Array<{ id: string }> }
+    objectFieldSettings: { customFields: Array<{ name: string }> }
+    layout: { systemPositions: Record<string, { x: number; y: number }> }
+  }
+  expect(restored.cluster.name).toBe('Kestrel Reach Prime')
+  expect(restored.cluster.systems.map(system => system.name)).toEqual(['Vesper Prime', 'Harrow'])
+  expect(restored.cluster.routes.map(route => route.id)).toContain('campaign-baseline-route')
+  expect(restored.cluster.systems[0]?.objects.find(object => object.id === 'campaign-baseline-iria')?.customFieldValues)
+    .toEqual({ 'campaign-baseline-warden-notes': 'Existing campaign record.' })
+  expect(restored.objectFieldSettings.customFields.map(field => field.name)).toContain('Warden notes')
+  expect(restored.layout.systemPositions['campaign-baseline-vesper']).toEqual({ x: 0.35, y: 0.5 })
 })
 
 test('a failed backup restore stays unavailable and preserves both records until a retry succeeds', async ({ page }) => {

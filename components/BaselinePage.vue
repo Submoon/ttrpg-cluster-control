@@ -26,10 +26,16 @@
         :save-state="saveState"
         :save-error="saveError"
         :form-error="formError"
+        :restore-loading="workspaceRestoreLoading"
         @retry="hydrate"
         @restore-backup="restoreBackup"
+        @restore-file="openLocalWorkspaceRestore"
         @submit="submitNames"
-      />
+      >
+        <template #restore-actions>
+          <slot name="restore-actions" />
+        </template>
+      </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
           <MapEditorLayout
           :mode="activeView"
