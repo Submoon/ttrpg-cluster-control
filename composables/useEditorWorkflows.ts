@@ -152,11 +152,6 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     },
     setError: message => { editorError.value = message },
   })
-  const publicationMenu = usePublicationMenu({
-    workspace,
-    store,
-    canRestoreFocus: options.canRestorePublicationFocus,
-  })
   const mapControls = useEditorMapControls(workspace, store, {
     orbitPlacementPreview: entity.orbitPlacementPreview,
     entitySession: entity.entitySession,
@@ -192,6 +187,12 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     route,
     editorError,
     beforeWorkspaceOperation,
+  })
+  const publicationMenu = usePublicationMenu({
+    workspace,
+    store,
+    canRestoreFocus: options.canRestorePublicationFocus,
+    prepareContextObjectSelection: navigation.selectContextObject,
   })
   const searchOpen = computed({
     get: () => store.searchOpen,

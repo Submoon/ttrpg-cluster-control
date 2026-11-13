@@ -44,12 +44,12 @@
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
               <li>Hold the right mouse button and drag to move the view while using any map tool.</li>
               <li>
-                In <strong>Select</strong>, right-click a system on the Jump Cluster map or an object in a star system to open its menu.
-                The <strong>Player visibility</strong> choices control what players see on a shared map.
+                In <strong>Navigate</strong>, <strong>Select</strong>, or <strong>Move</strong>, right-click a system on the Jump Cluster map or an object in a star system to open its menu.
+                Choose <strong>Change Visibility</strong> to control what players see on a shared map.
               </li>
               <li>
-                In <strong>Select</strong>, Shift-click objects to select several. Right-click one of them, choose <strong>Move selection</strong>,
-                then drag one of the selected objects to move them together.
+                In <strong>Navigate</strong>, <strong>Select</strong>, or <strong>Move</strong>, right-click an object on the map or in <strong>Hierarchy</strong> to select it and open its menu.
+                Right-clicking an already selected object keeps the current selection. Choose <strong>Move selection</strong> to switch from Navigate or Select to Move, then drag a selected object. In Move, it closes the menu with the current selection and mode intact.
               </li>
               <li>To open the menu from the keyboard, focus the system or object and press <strong>Shift+F10</strong> or the <strong>Context Menu</strong> key.</li>
             </ul>

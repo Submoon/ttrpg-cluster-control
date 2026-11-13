@@ -33,7 +33,13 @@ test('Navigate opens systems, Select inspects them, and Hierarchy opens inline c
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
     .toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' }).click()
-  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
+  const navigateSystemMark = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
+  const contextMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  await navigateSystemMark.click({ button: 'right' })
+  await expect(contextMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(contextMenu).toBeHidden()
+  await navigateSystemMark.click()
   await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
     .toHaveAttribute('aria-pressed', 'true')
@@ -43,22 +49,50 @@ test('Navigate opens systems, Select inspects them, and Hierarchy opens inline c
   await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
     .toHaveAttribute('aria-pressed', 'true')
   const selectMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
+  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
   const systemMark = selectMap.getByRole('button', { name: 'Select Vesper system' })
   const scene = selectMap.locator('.cluster-map-content')
   const viewportBeforeDrag = await scene.getAttribute('transform')
   const bounds = await systemMark.boundingBox()
   if (!bounds || !viewportBeforeDrag) throw new Error('The cluster map is not ready for right-drag.')
+  // Exercise browsers that emit contextmenu on press, before the drag threshold is reached.
+  const pressRightButtonOnSystem = async (point: { x: number; y: number }) => {
+    await page.mouse.move(point.x, point.y)
+    await page.mouse.down({ button: 'right' })
+    await page.evaluate(({ x, y }) => {
+      const target = document.elementFromPoint(x, y)
+      if (!target?.closest('.cluster-system-node')) throw new Error('The right button press did not hit a system.')
+      target.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 2,
+        clientX: x,
+        clientY: y,
+      }))
+    }, point)
+  }
   const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-  await page.mouse.move(start.x, start.y)
-  await page.mouse.down({ button: 'right' })
+  await pressRightButtonOnSystem(start)
   await page.mouse.move(start.x + 75, start.y + 32, { steps: 5 })
   await page.mouse.up({ button: 'right' })
+  await expect(contextMenu).toHaveCount(0)
   await expect(scene).not.toHaveAttribute('transform', viewportBeforeDrag)
-  await expect(page.getByRole('menu', { name: 'Player visibility', exact: true })).toHaveCount(0)
   await expect(selectMap.locator('.cluster-system-node.is-selected')).toHaveCount(0)
 
   // Recalculate the target after the camera moves and verify that a new click is not suppressed.
+  const movedBounds = await systemMark.boundingBox()
+  if (!movedBounds) throw new Error('The system is not ready for a right click after the pan.')
+  await pressRightButtonOnSystem({
+    x: movedBounds.x + movedBounds.width / 2,
+    y: movedBounds.y + movedBounds.height / 2,
+  })
+  await expect(contextMenu).toHaveCount(0)
+  await page.mouse.up({ button: 'right' })
+  await expect(contextMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(contextMenu).toBeHidden()
+  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   await systemMark.click()
 
   await expect(selectMap).toBeVisible()

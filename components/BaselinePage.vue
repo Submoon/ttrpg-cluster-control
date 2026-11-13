@@ -855,17 +855,21 @@ const publicationMenuMode = computed(() => {
   return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
     ?.objects.find(object => object.id === request.target.id)?.publication ?? null
 })
+function currentSelectedObjectIds(): string[] {
+  return selectedObjectIds.value.length
+    ? [...selectedObjectIds.value]
+    : selectedObjectId.value ? [selectedObjectId.value] : []
+}
 function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.value): boolean {
   const target = request?.target
   const system = selectedSystem.value
+  const selectedIds = currentSelectedObjectIds()
   return !!request
-    && request.source === 'map'
+    && (request.source === 'map' || request.source === 'hierarchy')
     && target?.kind === 'object'
     && activeView.value === 'system'
-    && mapMode.value === 'select'
     && selectedSystemId.value === target.systemId
-    && selectedObjectIds.value.length > 1
-    && selectedObjectIds.value.includes(target.id)
+    && selectedIds.length > 0
     && system?.id === target.systemId
     && !!system.objects.find(object => object.id === target.id)
 }
@@ -877,17 +881,21 @@ function moveSelectedObjectsFromMenu(): void {
   if (!request || request.target.kind !== 'object' || !canMoveSelectedObjectsFromMenu(request)) return
   const systemId = request.target.systemId
   const objectId = request.target.id
+  const entryMode = mapMode.value
   const mapKey = activeMapKey.value
-  const selectedIds = [...selectedObjectIds.value]
-  const isCurrent = (): boolean => activeView.value === 'system'
-    && mapMode.value === 'select'
-    && selectedSystemId.value === systemId
-    && activeMapKey.value === mapKey
-    && selectedObjectIds.value.length === selectedIds.length
-    && selectedIds.every((id, index) => selectedObjectIds.value[index] === id)
-    && selectedObjectIds.value.includes(objectId)
-    && !!selectedSystem.value?.objects.some(object => object.id === objectId)
+  const selectedIds = currentSelectedObjectIds()
+  const isCurrent = (): boolean => {
+    const currentSelectedIds = currentSelectedObjectIds()
+    return activeView.value === 'system'
+      && mapMode.value === entryMode
+      && selectedSystemId.value === systemId
+      && activeMapKey.value === mapKey
+      && currentSelectedIds.length === selectedIds.length
+      && selectedIds.every((id, index) => currentSelectedIds[index] === id)
+      && !!selectedSystem.value?.objects.some(object => object.id === objectId)
+  }
   publicationControls.closeMenu()
+  if (entryMode === 'move') return
   void changeMapMode('move', isCurrent)
 }
 
