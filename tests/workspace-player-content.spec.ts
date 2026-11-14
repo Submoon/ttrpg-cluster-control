@@ -42,11 +42,14 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await editMapObject(page)
   await playerText.fill(unappliedText)
   const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  const publishButton = planet.getByRole('button', { name: 'Change visibility for Pilgrim World', exact: true })
   const publish = async () => {
-    await planet.click({ button: 'right' })
+    await publishButton.click()
     await menu.getByRole('menuitem', { name: 'Change Visibility', exact: true }).hover()
-    await page.getByRole('menu', { name: 'Change Visibility', exact: true })
-      .getByRole('menuitemcheckbox', { name: 'Revealed', exact: true }).click()
+    const revealAction = page.getByRole('menu', { name: 'Change Visibility', exact: true })
+      .getByRole('menuitemcheckbox', { name: 'Revealed', exact: true })
+    await expect(revealAction).toBeVisible()
+    await revealAction.click()
   }
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await publish()

@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
-import { createRenderer, ref } from 'vue'
+import { createRenderer, nextTick, ref } from 'vue'
 import { createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useEditorUiStore } from '../stores/editor-ui'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 interface HostNode {
   children: HostNode[]
@@ -230,34 +231,154 @@ test('search follows applied object edits through Undo and Redo without adding h
   }
 })
 
-test('Search prunes removed Field choices and reports the Search-only criteria update @pure', () => {
+test('Search reconciles Field edits synchronously while map criteria reconcile before render @pure', async () => {
   const harness = createSearchHarness()
   try {
-    const search = harness.workflows.search
-    search.setFieldConditions([{
+    const searchCriteria = harness.workflows.filterCriteria.search
+    const mapCriteria = harness.workflows.filterCriteria.map
+    const condition = {
       fieldId: nativePlayerFieldIds.atmosphere,
-      type: 'single-select',
-      operator: 'is',
+      type: 'single-select' as const,
+      operator: 'is' as const,
       values: ['Breathable'],
+    }
+    searchCriteria.setFieldConditions([{
+      ...condition,
     }])
-    expect(search.fieldConditions.value).toEqual([{
-      fieldId: nativePlayerFieldIds.atmosphere,
-      type: 'single-select',
-      operator: 'is',
-      values: ['Breathable'],
+    mapCriteria.setFieldConditions([condition])
+    expect(searchCriteria.criteria.value.fieldConditions).toEqual([{
+      ...condition,
     }])
 
     harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
 
-    expect(search.fieldConditions.value).toEqual([])
-    expect(search.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
-    expect(harness.store.selectedMapFieldConditions).toEqual([])
+    expect(searchCriteria.criteria.value.fieldConditions).toEqual([])
+    expect(searchCriteria.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+    expect(mapCriteria.criteria.value.fieldConditions).toEqual([condition])
+
+    await nextTick()
+    expect(mapCriteria.criteria.value.fieldConditions).toEqual([])
+    expect(mapCriteria.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
   } finally {
     harness.dispose()
   }
 })
 
+test('clearing Search criteria keeps its query and map criteria; full reset clears Search state @pure', () => {
+  const harness = createSearchHarness()
+  try {
+    const search = harness.workflows.search
+    const searchFilters = harness.workflows.filterCriteria.search
+    const mapFilters = harness.workflows.filterCriteria.map
+    const mapType = mapFilters.typeOptions.value[0]
+    if (!mapType) throw new Error('The Search harness has no object type filter option.')
 
+    mapFilters.setTypes([mapType.value])
+    search.open.value = true
+    search.query.value = 'VEIL-09'
+    searchFilters.setTypes([mapType.value])
+    searchFilters.setFieldConditions([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Breathable'],
+    }])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
+    expect(searchFilters.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+
+    searchFilters.clearAll()
+    expect(searchFilters.criteria.value).toEqual({ types: [], publicationModes: [], fieldConditions: [] })
+    expect(searchFilters.invalidationNotice.value).toBeNull()
+    expect(search.query.value).toBe('VEIL-09')
+    expect(search.open.value).toBe(true)
+    expect(mapFilters.criteria.value.types).toEqual([mapType.value])
+    expect(Object.keys(harness.store.searchTypeFilterOptionLabels).length).toBeGreaterThan(0)
+
+    searchFilters.setTypes([mapType.value])
+    searchFilters.setFieldConditions([{
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select',
+      operator: 'is',
+      values: ['Not breathable'],
+    }])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Recycled'], true)
+    expect(searchFilters.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+
+    search.reset()
+    expect(search.query.value).toBe('')
+    expect(search.open.value).toBe(false)
+    expect(searchFilters.criteria.value).toEqual({ types: [], publicationModes: [], fieldConditions: [] })
+    expect(searchFilters.invalidationNotice.value).toBeNull()
+    expect(mapFilters.criteria.value.types).toEqual([mapType.value])
+    expect(harness.store.searchTypeFilterOptionLabels).toEqual({})
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('same-identity replacement preserves criteria while cluster and workspace resets keep their notice rules @pure', async () => {
+  const harness = createSearchHarness()
+  try {
+    const search = harness.workflows.search
+    const searchFilters = harness.workflows.filterCriteria.search
+    const mapFilters = harness.workflows.filterCriteria.map
+    const type = mapFilters.typeOptions.value[0]
+    if (!type) throw new Error('The Search harness has no object type filter option.')
+    const breathable = {
+      fieldId: nativePlayerFieldIds.atmosphere,
+      type: 'single-select' as const,
+      operator: 'is' as const,
+      values: ['Breathable'],
+    }
+
+    mapFilters.setTypes([type.value])
+    searchFilters.setTypes([type.value])
+    mapFilters.setFieldConditions([breathable])
+    searchFilters.setFieldConditions([breathable])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Not breathable'], true)
+    await nextTick()
+    expect(mapFilters.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
+    expect(searchFilters.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+
+    harness.workspace.value = createWorkspaceSnapshot(harness.workspace.value!)
+    expect(mapFilters.criteria.value.types).toEqual([type.value])
+    expect(searchFilters.criteria.value.types).toEqual([type.value])
+    expect(mapFilters.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
+    expect(searchFilters.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+
+    const clusterReset = createWorkspaceSnapshot(harness.workspace.value!)
+    clusterReset.cluster.id = 'replacement-cluster'
+    harness.workspace.value = clusterReset
+    expect(mapFilters.criteria.value.types).toEqual([])
+    expect(searchFilters.criteria.value.types).toEqual([])
+    expect(mapFilters.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
+    expect(searchFilters.invalidationNotice.value).toBeNull()
+    expect(search.query.value).toBe('')
+    expect(search.open.value).toBe(false)
+
+    const currentFieldCondition = {
+      ...breathable,
+      values: ['Not breathable'],
+    }
+    mapFilters.setFieldConditions([currentFieldCondition])
+    searchFilters.setFieldConditions([currentFieldCondition])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Recycled'], true)
+    await nextTick()
+    expect(mapFilters.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
+    expect(searchFilters.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+
+    const workspaceReset = createWorkspaceSnapshot(harness.workspace.value!)
+    workspaceReset.id = 'replacement-workspace'
+    harness.workspace.value = workspaceReset
+    await nextTick()
+    expect(mapFilters.criteria.value.fieldConditions).toEqual([])
+    expect(searchFilters.criteria.value.fieldConditions).toEqual([])
+    expect(mapFilters.invalidationNotice.value).toBeNull()
+    expect(searchFilters.invalidationNotice.value).toBeNull()
+  } finally {
+    harness.dispose()
+  }
+})
 
 test('a refused cross-system reveal preserves the destination map visit @pure', async () => {
   const harness = createSearchHarness('Reach', 'Vesper', Promise.resolve(), 'Altair')
@@ -1070,6 +1191,80 @@ test('reopening search while overlay teardown is pending prevents stale framing,
     expect(locatedObjects).toEqual([])
   } finally {
     presentation.resolve()
+    harness.dispose()
+  }
+})
+
+test('replacing the ready destination map during Search presentation rejects without publishing its prepared locator @pure', async () => {
+  const presentation = deferred<SearchPresentationSettlement>()
+  let presentationWaiting = false
+  const harness = createSearchHarness(
+    'Kestrel Reach',
+    'Vesper',
+    Promise.resolve(),
+    undefined,
+    () => {
+      presentationWaiting = true
+      return presentation.promise
+    },
+  )
+  function createObservedMap() {
+    const events: string[] = []
+    const handle = createSystemMapHandle({
+      whenReady: async () => { events.push('ready'); return true },
+      frameSearchTarget: () => { events.push('frame'); return true },
+      focusMap: () => { events.push('focus') },
+      prepareSearchLocator: objectId => {
+        events.push(`prepare:${objectId}`)
+        return () => { events.push(`publish:${objectId}`) }
+      },
+    })
+    return { handle, events }
+  }
+  try {
+    const workspace = harness.workspace.value
+    const system = workspace.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster', clusterSelectedSystemId: system.id })
+
+    const oldMap = createObservedMap()
+    harness.workflows.mapControls.systemMapRef.value = oldMap.handle
+
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = object.locationKey
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result) throw new Error('The first system object was not searchable.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => presentationWaiting).toBe(true)
+    expect(oldMap.events).toEqual(['ready', `prepare:${object.id}`])
+
+    const replacementMap = createObservedMap()
+    harness.workflows.mapControls.systemMapRef.value = replacementMap.handle
+    presentation.resolve('settled')
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
+    expect(harness.workspace.value).toBe(workspace)
+    expect(harness.store.activeView).toBe('system')
+    expect(harness.store.selectedSystemId).toBe(system.id)
+    expect(harness.store.selectedObjectId).toBe(object.id)
+    expect(harness.store.clusterSelectedSystemId).toBeNull()
+    expect(search.open.value).toBe(false)
+    expect(search.query.value).toBe(object.locationKey)
+    expect(oldMap.events).toEqual(['ready', `prepare:${object.id}`])
+    expect(replacementMap.events).toEqual([])
+
+    const destinationKey = `system:${workspace.cluster.id}:${system.id}`
+    const viewport = { x: 14, y: 27, k: 1.4 }
+    harness.workflows.mapControls.recordViewport(destinationKey, viewport)
+    expect(harness.store.visits[destinationKey]).toEqual({
+      viewport,
+      selection: { kind: 'object', id: object.id },
+    })
+  } finally {
+    presentation.resolve('settled')
     harness.dispose()
   }
 })
