@@ -3,13 +3,15 @@ import type { ComputedRef, Ref } from 'vue'
 import type { WorkspaceRestoreSource } from './useWorkspaceRestore'
 import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
-import { GoogleDriveApiError, listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
+import { deleteGoogleDriveBackup, GoogleDriveApiError, isGoogleDriveBackupName, listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
+import type { GoogleDriveBackupFile } from '../utils/google-drive-api'
 import { downloadBlob } from '../utils/browser-download'
 
 export interface GoogleDriveRestoreFile {
   id: string
   name: string
   createdTime: string
+  canDelete?: boolean
 }
 
 export interface GoogleDriveRestorePage {
@@ -17,7 +19,7 @@ export interface GoogleDriveRestorePage {
   nextPageToken?: string
 }
 
-export type GoogleDriveRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'listing-more' | 'reading' | 'downloading'
+export type GoogleDriveRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'listing-more' | 'reading' | 'downloading' | 'deleting' | 'refreshing'
 
 interface WorkspaceRestoreOwner {
   openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean>
@@ -26,6 +28,7 @@ interface WorkspaceRestoreOwner {
 export interface GoogleDriveRestoreDependencies {
   listBackups(accessToken: string, pageToken: string | undefined, signal?: AbortSignal): Promise<GoogleDriveRestorePage>
   readFile(accessToken: string, fileId: string, signal?: AbortSignal): Promise<string>
+  deleteBackup(accessToken: string, file: GoogleDriveBackupFile, signal?: AbortSignal): Promise<void>
   downloadFile(filename: string, content: string): void
 }
 
@@ -40,21 +43,27 @@ export interface GoogleDriveRestoreController {
   readonly backups: Readonly<Ref<readonly GoogleDriveRestoreFile[]>>
   readonly nextPageToken: Readonly<Ref<string | undefined>>
   readonly completedDownloads: Readonly<Ref<number>>
+  readonly completedDeletions: Readonly<Ref<number>>
+  readonly refreshRequired: Readonly<Ref<boolean>>
   readonly dialogOpen: ComputedRef<boolean>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
   readonly canLoadMore: ComputedRef<boolean>
+  readonly canRefresh: ComputedRef<boolean>
   readonly buttonLabel: ComputedRef<string>
   activate(): void
   cancel(notifyCancellation?: boolean): void
   openBackup(fileId: string): void
   downloadBackup(fileId: string): void
+  deleteBackup(file: GoogleDriveRestoreFile): void
+  refreshBackups(): void
   loadMore(): void
 }
 
 const defaultDependencies: GoogleDriveRestoreDependencies = {
   listBackups: (accessToken, pageToken, signal) => listGoogleDriveBackups(accessToken, pageToken, fetch, signal),
   readFile: (accessToken, fileId, signal) => readGoogleDriveFile(accessToken, fileId, fetch, signal),
+  deleteBackup: (accessToken, file, signal) => deleteGoogleDriveBackup(accessToken, file, fetch, signal),
   downloadFile: (filename, content) => downloadBlob(filename, new Blob([content], { type: 'application/json' })),
 }
 
@@ -74,6 +83,8 @@ export function useGoogleDriveRestore(
   const backups = ref<GoogleDriveRestoreFile[]>([])
   const nextPageToken = ref<string>()
   const completedDownloads = ref(0)
+  const completedDeletions = ref(0)
+  const refreshRequired = ref(false)
   let operationSequence = 0
   let activeOperation = 0
   let activeAbortController: AbortController | undefined
@@ -82,10 +93,11 @@ export function useGoogleDriveRestore(
   let resolveSelection: ((source: WorkspaceRestoreSource | null) => void) | undefined
   let selectionAbortHandler: (() => void) | undefined
 
-  const dialogOpen = computed(() => ['listing', 'choosing', 'listing-more', 'reading', 'downloading'].includes(state.value))
-  const busy = computed(() => ['authorizing', 'listing', 'listing-more', 'reading', 'downloading'].includes(state.value))
-  const canCancel = computed(() => state.value !== 'idle')
+  const dialogOpen = computed(() => ['listing', 'choosing', 'listing-more', 'reading', 'downloading', 'deleting', 'refreshing'].includes(state.value))
+  const busy = computed(() => ['authorizing', 'listing', 'listing-more', 'reading', 'downloading', 'deleting', 'refreshing'].includes(state.value))
+  const canCancel = computed(() => state.value !== 'idle' && state.value !== 'deleting')
   const canLoadMore = computed(() => state.value === 'choosing' && Boolean(nextPageToken.value))
+  const canRefresh = computed(() => state.value === 'choosing' && refreshRequired.value)
   const buttonLabel = computed(() => busy.value ? 'Opening from Google Drive…' : 'Open from Google Drive')
 
   function isCurrent(operation: number, signal?: AbortSignal): boolean {
@@ -99,6 +111,7 @@ export function useGoogleDriveRestore(
     activeAccessToken = undefined
     backups.value = []
     nextPageToken.value = undefined
+    refreshRequired.value = false
     selectionError.value = ''
     message.value = ''
     activeOperation = ++operationSequence
@@ -239,6 +252,73 @@ export function useGoogleDriveRestore(
     })
   }
 
+  function deleteBackup(file: GoogleDriveRestoreFile): void {
+    if (state.value !== 'choosing' || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
+    const listedFile = backups.value.find(candidate => candidate.id === file.id)
+    if (!listedFile || listedFile.name !== file.name || listedFile.createdTime !== file.createdTime) {
+      selectionError.value = 'This backup is no longer in the current list. Refresh the list before deleting.'
+      return
+    }
+    if (!isGoogleDriveBackupName(listedFile.name) || listedFile.canDelete === false) {
+      selectionError.value = 'This file is not an available dated Google Drive backup to delete.'
+      return
+    }
+
+    const operation = activeOperation
+    const accessToken = activeAccessToken
+    const signal = activeProviderSignal
+    const hadMorePages = Boolean(nextPageToken.value)
+    state.value = 'deleting'
+    selectionError.value = ''
+
+    void Promise.resolve().then(() => dependencies.deleteBackup(accessToken, listedFile, signal)).then(() => {
+      if (!isCurrent(operation, signal)) return
+      backups.value = backups.value.filter(candidate => candidate.id !== listedFile.id)
+      nextPageToken.value = undefined
+      refreshRequired.value = refreshRequired.value || hadMorePages
+      state.value = 'choosing'
+      completedDeletions.value += 1
+    }).catch((error: unknown) => {
+      if (!isCurrent(operation, signal)) return
+      if (error instanceof GoogleDriveApiError && error.httpStatus === 401) {
+        state.value = 'choosing'
+        if (closeForUnauthorized(error, accessToken)) return
+        selectionError.value = 'Google Drive authorization expired. Close this list and open Google Drive again to sign in.'
+        return
+      }
+      if (closeForUnauthorized(error, accessToken)) return
+      if (error instanceof GoogleDriveApiError && error.outcomeUncertain) {
+        nextPageToken.value = undefined
+        refreshRequired.value = true
+      }
+      selectionError.value = error instanceof Error
+        ? error.message
+        : 'Google Drive could not confirm backup deletion. Refresh the backup list to check.'
+      state.value = 'choosing'
+    })
+  }
+
+  function refreshBackups(): void {
+    if (!canRefresh.value || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
+    const operation = activeOperation
+    const accessToken = activeAccessToken
+    const signal = activeProviderSignal
+    state.value = 'refreshing'
+    selectionError.value = ''
+    void dependencies.listBackups(accessToken, undefined, signal).then(page => {
+      if (!isCurrent(operation, signal)) return
+      backups.value = page.files
+      nextPageToken.value = page.nextPageToken
+      refreshRequired.value = false
+      state.value = 'choosing'
+    }).catch((error: unknown) => {
+      if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
+      selectionError.value = error instanceof Error ? error.message : 'Google Drive could not refresh the backup list.'
+      state.value = 'choosing'
+    })
+  }
+
   function downloadBackup(fileId: string): void {
     if (state.value !== 'choosing' || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
     const file = backups.value.find(candidate => candidate.id === fileId)
@@ -274,6 +354,7 @@ export function useGoogleDriveRestore(
     state.value = 'idle'
     backups.value = []
     nextPageToken.value = undefined
+    refreshRequired.value = false
     selectionError.value = ''
     message.value = ''
     if (notifyCancellation) options.onCanceled?.()
@@ -306,15 +387,20 @@ export function useGoogleDriveRestore(
     backups,
     nextPageToken,
     completedDownloads,
+    completedDeletions,
+    refreshRequired,
     dialogOpen,
     busy,
     canCancel,
     canLoadMore,
+    canRefresh,
     buttonLabel,
     activate,
     cancel,
     openBackup,
     downloadBackup,
+    deleteBackup,
+    refreshBackups,
     loadMore,
   }
 }

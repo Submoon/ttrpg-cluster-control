@@ -5,6 +5,7 @@ import { useGoogleDriveBackup } from '../composables/useGoogleDriveBackup'
 import type { GoogleDriveSignInController, GoogleDriveSignInStatus } from '../composables/useGoogleDriveSignIn'
 import { readGoogleDriveConfig } from '../utils/google-drive-config'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
+import { pruneGoogleDriveBackups } from '../utils/google-drive-backup-retention'
 import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import {
   GoogleDriveApiError,
@@ -14,6 +15,7 @@ import {
   readGoogleDriveFile,
   uploadGoogleDriveBackup,
 } from '../utils/google-drive-api'
+import type { GoogleDriveBackupFile } from '../utils/google-drive-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -29,6 +31,20 @@ function confirmedFile(id: string, name: string, contents: string): Record<strin
     spaces: ['appDataFolder'],
     size: String(new TextEncoder().encode(contents).byteLength),
     trashed: false,
+  }
+}
+
+function datedDriveBackup(id: string, secondsAfterBase: number): Record<string, unknown> & GoogleDriveBackupFile {
+  const createdAt = new Date(Date.parse('2026-11-13T10:00:00.000Z') + secondsAfterBase * 1000)
+  const stamp = createdAt.toISOString().replace('T', '-').replaceAll(':', '-').replace('.', '-')
+  return {
+    id,
+    name: `Ember Reach-jump-cluster-${stamp}.json`,
+    createdTime: createdAt.toISOString(),
+    mimeType: 'application/json',
+    spaces: ['appDataFolder'],
+    trashed: false,
+    capabilities: { canDelete: true },
   }
 }
 
@@ -63,6 +79,111 @@ test('a dated backup snapshot is detached from later workspace edits @pure', () 
 
   expect(snapshot.filename).toBe('Ember Reach-jump-cluster-2026-11-13-10-00-00-000Z.json')
   expect(JSON.parse(snapshot.contents)).toEqual(expected)
+})
+
+test('retention scans every page, ignores unrelated app-data JSON, and removes oldest backups first @pure', async () => {
+  const backups = Array.from({ length: 12 }, (_, index) => datedDriveBackup(`backup-${String(index).padStart(2, '0')}`, index))
+  const unrelated = { ...datedDriveBackup('profile', 100), name: 'profile.json' }
+  const receiptRecord = backups[11]
+  if (!receiptRecord) throw new Error('Expected a backup receipt.')
+  const receipt: GoogleDriveBackupFile = {
+    id: String(receiptRecord.id),
+    name: String(receiptRecord.name),
+    createdTime: String(receiptRecord.createdTime),
+  }
+  const remaining = [...backups, unrelated]
+  const deletedIds: string[] = []
+  let listPageCount = 0
+
+  await pruneGoogleDriveBackups({
+    accessToken: 'token',
+    receipt,
+    fetcher: async (input, init) => {
+      const url = new URL(String(input))
+      const method = init?.method ?? 'GET'
+      if (url.pathname.endsWith('/files') && !url.pathname.includes('/generateIds')) {
+        listPageCount += 1
+        const nextPage = remaining.slice(6)
+        if (url.searchParams.get('pageToken') === 'next') {
+          return jsonResponse({ incompleteSearch: false, files: nextPage })
+        }
+        return jsonResponse({ incompleteSearch: false, files: remaining.slice(0, 6), nextPageToken: 'next' })
+      }
+      const id = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
+      if (method === 'DELETE') {
+        deletedIds.push(id)
+        const index = remaining.findIndex(file => file.id === id)
+        if (index >= 0) remaining.splice(index, 1)
+        return new Response(null, { status: 204 })
+      }
+      const metadata = remaining.find(file => file.id === id)
+      return metadata ? jsonResponse(metadata) : jsonResponse({ error: 'not found' }, 404)
+    },
+  })
+
+  expect(listPageCount).toBe(8)
+  expect(deletedIds).toEqual(['backup-00', 'backup-01'])
+})
+
+test('retention does not delete from an incomplete Drive listing @pure', async () => {
+  const receiptRecord = datedDriveBackup('receipt', 0)
+  const receipt: GoogleDriveBackupFile = {
+    id: String(receiptRecord.id),
+    name: String(receiptRecord.name),
+    createdTime: String(receiptRecord.createdTime),
+  }
+  let deleteCount = 0
+
+  const error = await pruneGoogleDriveBackups({
+    accessToken: 'token',
+    receipt,
+    fetcher: async (_input, init) => {
+      if (init?.method === 'DELETE') deleteCount += 1
+      return jsonResponse({ incompleteSearch: true, files: [] })
+    },
+  }).catch(reason => reason)
+
+  expect(error).toBeInstanceOf(GoogleDriveApiError)
+  expect(deleteCount).toBe(0)
+})
+
+test('retention re-ranks after each deletion when a retained backup is removed concurrently @pure', async () => {
+  const remaining = Array.from({ length: 12 }, (_, index) => datedDriveBackup(`backup-${String(index).padStart(2, '0')}`, index))
+  const receiptRecord = remaining[11]
+  if (!receiptRecord) throw new Error('Expected a backup receipt.')
+  const receipt: GoogleDriveBackupFile = {
+    id: receiptRecord.id,
+    name: receiptRecord.name,
+    createdTime: receiptRecord.createdTime,
+  }
+  const deletedIds: string[] = []
+
+  await pruneGoogleDriveBackups({
+    accessToken: 'token',
+    receipt,
+    fetcher: async (input, init) => {
+      const url = new URL(String(input))
+      const method = init?.method ?? 'GET'
+      if (url.pathname.endsWith('/files') && !url.pathname.includes('/generateIds')) {
+        return jsonResponse({ incompleteSearch: false, files: remaining })
+      }
+      const id = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
+      if (method === 'DELETE') {
+        deletedIds.push(id)
+        const candidateIndex = remaining.findIndex(file => file.id === id)
+        if (candidateIndex >= 0) remaining.splice(candidateIndex, 1)
+        // Simulate another tab removing a file that was among the retained newest ten.
+        const concurrentIndex = remaining.findIndex(file => file.id === 'backup-11')
+        if (concurrentIndex >= 0) remaining.splice(concurrentIndex, 1)
+        return new Response(null, { status: 204 })
+      }
+      const metadata = remaining.find(file => file.id === id)
+      return metadata ? jsonResponse(metadata) : jsonResponse({ error: 'not found' }, 404)
+    },
+  })
+
+  expect(deletedIds).toEqual(['backup-00'])
+  expect(remaining).toHaveLength(10)
 })
 
 test('a stable generated file ID is reserved in appDataFolder @pure', async () => {
@@ -442,6 +563,18 @@ test('the controller captures the applied map before Google access and retains u
         const contents = body.slice(contentsStart, contentsEnd)
         return jsonResponse(confirmedFile(id ?? '', filename, contents))
       }
+      if (url.pathname.endsWith('/files')) {
+        const lastIndex = uploadIds.length - 1
+        return jsonResponse({ incompleteSearch: false, files: lastIndex < 0 ? [] : [{
+          id: uploadIds[lastIndex],
+          name: uploadNames[lastIndex],
+          createdTime: '2026-11-13T10:00:00.000Z',
+          mimeType: 'application/json',
+          spaces: ['appDataFolder'],
+          trashed: false,
+          capabilities: { canDelete: true },
+        }] })
+      }
       if (url.pathname.endsWith('/files/backup-1')) return jsonResponse({ error: 'temporarily unavailable' }, 403)
       throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
     }
@@ -509,6 +642,150 @@ test('the backup controller invalidates a cached token after a definitive Drive 
   }
 })
 
+test('the controller does not announce a backup removed by the ten-file retention pass @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  const newerBackups = Array.from({ length: 10 }, (_, index) => datedDriveBackup(`newer-${String(index).padStart(2, '0')}`, index + 1))
+  const files: Array<Record<string, unknown>> = [...newerBackups]
+  let receipt: Record<string, unknown> | undefined
+  let uploadCount = 0
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input))
+    const method = init?.method ?? 'GET'
+    if (url.pathname.endsWith('/about')) return jsonResponse({ user: { permissionId: 'test-account' } })
+    if (url.pathname.endsWith('/generateIds')) return jsonResponse({ ids: ['older-receipt'], space: 'appDataFolder' })
+    if (url.pathname.includes('/upload/drive/v3/files')) {
+      uploadCount += 1
+      const body = String(init?.body)
+      const id = body.match(/"id":"([^"]+)"/)?.[1] ?? ''
+      const name = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
+      const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
+      const contentsEnd = body.lastIndexOf('\r\n--')
+      receipt = {
+        ...confirmedFile(id, name, body.slice(contentsStart, contentsEnd)),
+        createdTime: '2026-11-13T09:00:00.000Z',
+        capabilities: { canDelete: true },
+      }
+      files.push(receipt)
+      return jsonResponse(receipt)
+    }
+    if (url.pathname === '/drive/v3/files') return jsonResponse({ incompleteSearch: false, files })
+    if (url.pathname.startsWith('/drive/v3/files/')) {
+      const id = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
+      const file = files.find(candidate => candidate.id === id)
+      if (!file) return jsonResponse({ error: 'not found' }, 404)
+      if (method === 'DELETE') {
+        const index = files.indexOf(file)
+        files.splice(index, 1)
+        return new Response(null, { status: 204 })
+      }
+      return jsonResponse(file)
+    }
+    throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
+  }
+
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(() => workspace, readySignIn()))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(uploadCount).toBe(1)
+    expect(files).toHaveLength(10)
+    expect(files.some(file => file.id === 'older-receipt')).toBe(false)
+    expect(controller.lastSaved.value).toBeUndefined()
+    expect(controller.message.value).toMatch(/upload was confirmed, but this backup was removed/i)
+  } finally {
+    scope.stop()
+    globalThis.fetch = oldFetch
+  }
+})
+
+test('a cleanup retry keeps the confirmed upload and never uploads it again @pure', async () => {
+  const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
+  const invalidatedTokens: string[] = []
+  const uploadedIds: string[] = []
+  const olderBackups = Array.from({ length: 10 }, (_, index) => datedDriveBackup(`old-${String(index).padStart(2, '0')}`, index - 20))
+  const remaining = [...olderBackups]
+  let listCount = 0
+  let uploadCount = 0
+  let generateCount = 0
+  let receipt: Record<string, unknown> | undefined
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input))
+    const method = init?.method ?? 'GET'
+    if (url.pathname.endsWith('/about')) return jsonResponse({ user: { permissionId: 'test-account' } })
+    if (url.pathname.endsWith('/generateIds')) {
+      generateCount += 1
+      return jsonResponse({ ids: ['receipt-id'], space: 'appDataFolder' })
+    }
+    if (url.pathname.includes('/upload/drive/v3/files')) {
+      uploadCount += 1
+      const body = String(init?.body)
+      const id = body.match(/"id":"([^"]+)"/)?.[1] ?? ''
+      const name = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
+      uploadedIds.push(id)
+      const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
+      const contentsEnd = body.lastIndexOf('\r\n--')
+      receipt = {
+        ...confirmedFile(id, name, body.slice(contentsStart, contentsEnd)),
+        capabilities: { canDelete: true },
+      }
+      return jsonResponse(receipt)
+    }
+    if (url.pathname === '/drive/v3/files') {
+      listCount += 1
+      if (listCount === 1) return jsonResponse({ error: 'authorization expired' }, 401)
+      return jsonResponse({ incompleteSearch: false, files: [...remaining, receipt] })
+    }
+    if (url.pathname.startsWith('/drive/v3/files/')) {
+      const id = decodeURIComponent(url.pathname.split('/').at(-1) ?? '')
+      if (method === 'DELETE') {
+        const index = remaining.findIndex(file => file.id === id)
+        if (index >= 0) remaining.splice(index, 1)
+        return new Response(null, { status: 204 })
+      }
+      const file = remaining.find(candidate => candidate.id === id) ?? (receipt?.id === id ? receipt : undefined)
+      return file ? jsonResponse(file) : jsonResponse({ error: 'not found' }, 404)
+    }
+    throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
+  }
+
+  const tokenRequests: string[] = []
+  const scope = effectScope()
+  try {
+    const controller = scope.run(() => useGoogleDriveBackup(
+      () => workspace,
+      readySignIn(async () => {
+        const token = `token-${tokenRequests.length + 1}`
+        tokenRequests.push(token)
+        return token
+      }, token => invalidatedTokens.push(token)),
+    ))
+    if (!controller) throw new Error('The backup controller did not initialize.')
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('cleanup-retry')
+    expect(controller.lastSaved.value).toMatchObject({ id: 'receipt-id' })
+    expect(controller.buttonLabel.value).toBe('Retry cleanup')
+    expect(controller.message.value).toMatch(/backup was saved, but older backups could not all be removed/i)
+    expect(invalidatedTokens).toEqual(['token-1'])
+
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('idle')
+    expect(tokenRequests).toEqual(['token-1', 'token-2'])
+    expect(uploadCount).toBe(1)
+    expect(generateCount).toBe(1)
+    expect(uploadedIds).toEqual(['receipt-id'])
+    expect(remaining).toHaveLength(9)
+  } finally {
+    scope.stop()
+    globalThis.fetch = oldFetch
+  }
+})
+
 test('closing Google Drive authorization reports a backup cancellation without inline status @pure', async () => {
   const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
   let canceledCount = 0
@@ -535,6 +812,7 @@ test('an uncertain backup retry verifies account identity and can resume under t
   const tokenRequests: string[] = []
   const invalidatedTokens: string[] = []
   const uploadedIds: string[] = []
+  const uploadedNames: string[] = []
   let accountRead = 0
   let generateCount = 0
   let uploadCount = 0
@@ -560,10 +838,22 @@ test('an uncertain backup retry verifies account identity and can resume under t
       const id = body.match(/"id":"([^"]+)"/)?.[1] ?? ''
       const filename = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
       uploadedIds.push(id)
+      uploadedNames.push(filename)
       if (uploadCount === 1) throw new TypeError('The first acknowledgement was lost.')
       const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
       const contentsEnd = body.lastIndexOf('\r\n--')
       return jsonResponse(confirmedFile(id, filename, body.slice(contentsStart, contentsEnd)))
+    }
+    if (url.pathname.endsWith('/files')) {
+      return jsonResponse({ incompleteSearch: false, files: [{
+        id: 'same-backup-id',
+        name: uploadedNames.at(-1),
+        createdTime: '2026-11-13T10:00:00.000Z',
+        mimeType: 'application/json',
+        spaces: ['appDataFolder'],
+        trashed: false,
+        capabilities: { canDelete: true },
+      }] })
     }
     if (url.pathname.endsWith('/files/same-backup-id')) return jsonResponse({ error: 'temporarily unavailable' }, 403)
     throw new Error(`Unexpected Google Drive request: ${url.toString()}`)
@@ -596,6 +886,7 @@ test('an uncertain backup retry verifies account identity and can resume under t
 test('canceling OAuth for an uncertain retry leaves a fresh signal for the same backup ID @pure', async () => {
   const workspace = createLocalWorkspace('Ember Reach', 'Vesper')
   const uploadedIds: string[] = []
+  const uploadedNames: string[] = []
   const authorizationSignals: AbortSignal[] = []
   let requestCount = 0
   let generateCount = 0
@@ -627,11 +918,23 @@ test('canceling OAuth for an uncertain retry leaves a fresh signal for the same 
       const id = body.match(/"id":"([^"]+)"/)?.[1]
       const filename = body.match(/"name":"([^"]+)"/)?.[1] ?? 'backup.json'
       if (id) uploadedIds.push(id)
+      uploadedNames.push(filename)
       if (uploadCount === 1) throw new TypeError('The first acknowledgement was lost.')
       const contentsStart = body.indexOf('Content-Transfer-Encoding: 8bit\r\n\r\n') + 'Content-Transfer-Encoding: 8bit\r\n\r\n'.length
       const contentsEnd = body.lastIndexOf('\r\n--')
       const contents = body.slice(contentsStart, contentsEnd)
       return jsonResponse(confirmedFile(id ?? '', filename, contents))
+    }
+    if (url.pathname.endsWith('/files')) {
+      return jsonResponse({ incompleteSearch: false, files: [{
+        id: 'backup-1',
+        name: uploadedNames.at(-1),
+        createdTime: '2026-11-13T10:00:00.000Z',
+        mimeType: 'application/json',
+        spaces: ['appDataFolder'],
+        trashed: false,
+        capabilities: { canDelete: true },
+      }] })
     }
     if (url.pathname.endsWith('/files/backup-1')) return jsonResponse({ error: 'temporarily unavailable' }, 403)
     throw new Error(`Unexpected Google Drive request: ${url.toString()}`)

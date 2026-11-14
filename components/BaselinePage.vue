@@ -180,7 +180,11 @@
               @cancel-system-move="cancelSystemMovePreview"
             >
               <template #cloud-backup>
-                <GoogleDriveBackupButton :controller="googleDriveBackup" :sign-in="googleDriveSignIn" />
+                <GoogleDriveBackupButton
+                  :controller="googleDriveBackup"
+                  :sign-in="googleDriveSignIn"
+                  :restore-in-progress="googleDriveRestore.busy.value || googleDriveRestore.dialogOpen.value"
+                />
                 <GoogleDriveRestoreButton
                   :controller="googleDriveRestore"
                   :sign-in="googleDriveSignIn"

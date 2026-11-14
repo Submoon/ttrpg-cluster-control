@@ -68,6 +68,7 @@ test('Drive appData backups can be paged, downloaded as JSON, and passed unchang
         events.push(`read:${fileId}`)
         return `{"backup":"${fileId}"}`
       },
+      deleteBackup: async () => undefined,
       downloadFile: (filename, content) => { downloads.push({ filename, content }) },
     })
   })
@@ -141,6 +142,7 @@ test('canceling during OAuth aborts the owned request and prevents listing stale
       }), {
       listBackups: async () => { events.push('list requested'); return { files: [] } },
       readFile: async () => '',
+      deleteBackup: async () => undefined,
       downloadFile: () => undefined,
     }, { onCanceled: () => { canceledCount += 1 } })
   })
@@ -193,6 +195,7 @@ test('a list 401 invalidates its token so the next explicit restore requests aut
         return { files: [] }
       },
       readFile: async () => '',
+      deleteBackup: async () => undefined,
       downloadFile: () => undefined,
     },
     { onCanceled: () => { canceledCount += 1 } },
@@ -232,6 +235,7 @@ test('closing Google Drive authorization reports a cancellation without an inlin
     {
       listBackups: async () => ({ files: [] }),
       readFile: async () => '',
+      deleteBackup: async () => undefined,
       downloadFile: () => undefined,
     },
     { onCanceled: () => { canceledCount += 1 } },
@@ -263,6 +267,7 @@ test('a failed JSON download does not increment the completed-download count @pu
     {
       listBackups: async () => ({ files: [file] }),
       readFile: async () => { throw new Error('Drive could not read this backup.') },
+      deleteBackup: async () => undefined,
       downloadFile: () => undefined,
     },
   ))
@@ -296,6 +301,7 @@ test('a selected-file 401 invalidates the token and closes the stale backup list
     {
       listBackups: async () => { listCount += 1; return { files: [file] } },
       readFile: async () => { throw new GoogleDriveApiError('request-failed', 'Expired.', false, 401) },
+      deleteBackup: async () => undefined,
       downloadFile: () => undefined,
     },
   ))

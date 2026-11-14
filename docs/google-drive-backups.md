@@ -25,3 +25,7 @@ After deploying the page to production, open `/privacy` and follow the **Privacy
 Use **Forget Google Drive account** to clear the page's current access token and choose an account on the next Drive action. The Google session and saved backups remain in the account. Reloading the page also clears its in-memory token.
 
 Google Drive hides this data space from its file interface. Removing the integration or its application data can remove its remote backups. Download a JSON backup from the app when you need an independently retained copy. [Application data lifecycle](https://developers.google.com/workspace/drive/api/guides/appdata)
+
+## Verify deletion and retention
+
+Use a dedicated Google test account or a separate app data space with disposable backups. In the backup list, confirm deletion of a named dated backup and reopen the list to verify it is gone. A deletion is permanent and leaves the open local workspace available. To check retention, create eleven distinct backups and verify that only the newest ten remain after the last operation. Check the count across Jump Clusters for the same account. Download any backup that you want to keep independently. If cleanup fails after an upload is confirmed, use **Retry cleanup** to enforce the limit without creating a second backup.

@@ -7,8 +7,10 @@ import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { createGoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
 import type { GoogleDriveBackupSnapshot } from '../utils/google-drive-backup-snapshot'
+import { pruneGoogleDriveBackups } from '../utils/google-drive-backup-retention'
+import type { GoogleDriveBackupRetentionResult } from '../utils/google-drive-backup-retention'
 
-export type GoogleDriveBackupState = 'idle' | 'authorizing' | 'uploading' | 'retry'
+export type GoogleDriveBackupState = 'idle' | 'authorizing' | 'uploading' | 'retry' | 'cleanup-retry'
 
 export interface GoogleDriveBackupController {
   readonly state: Readonly<Ref<GoogleDriveBackupState>>
@@ -20,6 +22,7 @@ export interface GoogleDriveBackupController {
   activate(): void
   cancelBeforeUpload(): void
   startNewBackupInstead(): void
+  retryCleanup(): void
 }
 
 export interface GoogleDriveBackupOptions {
@@ -29,6 +32,11 @@ export interface GoogleDriveBackupOptions {
 interface BackupAttempt {
   snapshot: GoogleDriveBackupSnapshot
   fileId: string
+  permissionId: string
+}
+
+interface CleanupAttempt {
+  receipt: GoogleDriveBackupFile
   permissionId: string
 }
 
@@ -51,6 +59,9 @@ export function useGoogleDriveBackup(
   const lastSaved = ref<GoogleDriveBackupFile>()
   const snapshot = ref<GoogleDriveBackupSnapshot>()
   const retryAttempt = ref<BackupAttempt>()
+  const cleanupAttempt = ref<CleanupAttempt>()
+  const pendingCleanups = ref<CleanupAttempt[]>([])
+  const cleaning = ref(false)
   const isDisposed = ref(false)
   let operationSequence = 0
   let activeOperation = 0
@@ -58,9 +69,11 @@ export function useGoogleDriveBackup(
   const unresolvedAttemptIds = new Set<string>()
 
   const busy = computed(() => ['authorizing', 'uploading'].includes(state.value))
-  const canCancel = computed(() => state.value === 'authorizing')
+  const canCancel = computed(() => state.value === 'authorizing' && !cleanupAttempt.value)
   const buttonLabel = computed(() => {
     if (state.value === 'retry') return 'Retry the same backup'
+    if (state.value === 'cleanup-retry') return 'Retry cleanup'
+    if (cleaning.value) return 'Removing older backups…'
     return 'Back up to Google Drive'
   })
 
@@ -69,14 +82,28 @@ export function useGoogleDriveBackup(
       void retryUncertainBackup(activeOperation)
       return
     }
+    if (state.value === 'cleanup-retry') {
+      retryCleanup()
+      return
+    }
     if (state.value === 'idle') startBackup()
   }
 
-  function startNewBackupInstead(): void {
-    if (state.value === 'retry') startBackup(true)
+  function retryCleanup(): void {
+    if (state.value !== 'cleanup-retry' || !signIn.ready.value) return
+    const pending = pendingCleanups.value[0]
+    if (!pending) return
+    cleanupAttempt.value = pending
+    const operation = beginOperation()
+    void authorizeAndRetryCleanup(operation)
   }
 
-  function startBackup(abandonUncertainAttempt = false): void {
+  function startNewBackupInstead(): void {
+    if (state.value === 'retry') startBackup('uncertain')
+    else if (state.value === 'cleanup-retry') startBackup('cleanup')
+  }
+
+  function startBackup(reason?: 'uncertain' | 'cleanup'): void {
     if (!signIn.ready.value) {
       operationMessage.value = signIn.message.value || 'Google Drive is still loading. Try again when it is ready.'
       return
@@ -100,9 +127,12 @@ export function useGoogleDriveBackup(
     const operation = beginOperation()
     snapshot.value = nextSnapshot
     retryAttempt.value = undefined
-    operationMessage.value = abandonUncertainAttempt
+    cleanupAttempt.value = undefined
+    operationMessage.value = reason === 'uncertain'
       ? 'Starting a separate dated backup. The earlier backup may still be in Drive.'
-      : ''
+      : reason === 'cleanup'
+        ? 'Starting another dated backup. Cleanup for the previously saved backup remains pending for its original Google account.'
+        : ''
 
     void authorizeAndUpload(operation)
   }
@@ -172,6 +202,40 @@ export function useGoogleDriveBackup(
     }
   }
 
+  async function authorizeAndRetryCleanup(operation: number): Promise<void> {
+    const attempt = cleanupAttempt.value
+    const signal = activeAbortController?.signal
+    if (!attempt || !isCurrent(operation)) return
+
+    state.value = 'authorizing'
+    let accessToken: string | undefined
+    try {
+      accessToken = await signIn.requestAccessToken(signal)
+      if (!isCurrent(operation)) return
+      const permissionId = await getGoogleDrivePermissionId(accessToken, fetch, signal)
+      if (!isCurrent(operation)) return
+      if (permissionId !== attempt.permissionId) {
+        signIn.invalidateAccessToken(accessToken)
+        throw new Error('The signed-in Google account differs from the account that saved this backup. Choose the original account to retry cleanup safely.')
+      }
+      const result = await cleanUpBackups(accessToken, attempt, operation, false)
+      if (result === 'removed') {
+        operationMessage.value = 'Cleanup completed, but the saved backup was removed to keep only the ten newest backups.'
+      } else if (result === 'absent') {
+        operationMessage.value = 'Cleanup completed. The previously saved backup is no longer listed in Google Drive.'
+      }
+    } catch (error) {
+      if (!isCurrent(operation)) return
+      invalidateAfterUnauthorized(error, accessToken)
+      if (error instanceof GoogleDriveCancelledError) {
+        state.value = 'cleanup-retry'
+        operationMessage.value = 'The backup was saved. Cleanup was canceled; retry it to remove older backups.'
+        return
+      }
+      finishCleanupFailure(operation, error)
+    }
+  }
+
   async function saveBackup(
     accessToken: string,
     attempt: BackupAttempt,
@@ -191,12 +255,22 @@ export function useGoogleDriveBackup(
       })
       if (!isCurrent(operation)) return
 
-      state.value = 'idle'
+      if (preservingUncertainty) resolveUncertainty(attempt)
       snapshot.value = undefined
       retryAttempt.value = undefined
-      if (preservingUncertainty) resolveUncertainty(attempt)
-      operationMessage.value = ''
-      lastSaved.value = saved
+      const cleanup = { receipt: saved, permissionId: attempt.permissionId }
+      rememberCleanup(cleanup)
+      cleanupAttempt.value = cleanup
+      const retentionResult = await cleanUpBackups(accessToken, cleanup, operation, true)
+      if (retentionResult === 'removed') {
+        operationMessage.value = [operationMessage.value, 'The upload was confirmed, but this backup was removed to keep only the ten newest backups.'].filter(Boolean).join(' ')
+      } else if (retentionResult === 'absent') {
+        operationMessage.value = [operationMessage.value, 'The upload was confirmed, but the backup is no longer listed in Google Drive.'].filter(Boolean).join(' ')
+      } else {
+        // A failed cleanup does not change the confirmed upload; keep success visible and allow a
+        // retry without sending the bytes again.
+        lastSaved.value = saved
+      }
     } catch (error) {
       if (!isCurrent(operation)) return
       invalidateAfterUnauthorized(error, accessToken)
@@ -227,7 +301,13 @@ export function useGoogleDriveBackup(
 
     state.value = 'idle'
     snapshot.value = undefined
-    operationMessage.value = ''
+    cleaning.value = false
+    if (pendingCleanups.value.length > 0) {
+      state.value = 'cleanup-retry'
+      operationMessage.value = 'The backup attempt was canceled. A previously saved backup still needs cleanup; retry it or save another backup.'
+    } else {
+      operationMessage.value = ''
+    }
     options.onCanceled?.()
   }
 
@@ -236,7 +316,14 @@ export function useGoogleDriveBackup(
     state.value = 'idle'
     snapshot.value = undefined
     retryAttempt.value = undefined
-    operationMessage.value = ''
+    cleanupAttempt.value = undefined
+    cleaning.value = false
+    if (pendingCleanups.value.length > 0) {
+      state.value = 'cleanup-retry'
+      operationMessage.value = 'The backup attempt was canceled. A previously saved backup still needs cleanup; retry it or save another backup.'
+    } else {
+      operationMessage.value = ''
+    }
     options.onCanceled?.()
   }
 
@@ -252,7 +339,65 @@ export function useGoogleDriveBackup(
     state.value = 'idle'
     snapshot.value = undefined
     retryAttempt.value = undefined
-    operationMessage.value = getErrorMessage(error, 'Google Drive backup failed. Your local map is unchanged.')
+    cleanupAttempt.value = undefined
+    cleaning.value = false
+    const errorMessage = getErrorMessage(error, 'Google Drive backup failed. Your local map is unchanged.')
+    if (pendingCleanups.value.length > 0) {
+      state.value = 'cleanup-retry'
+      operationMessage.value = `${errorMessage} A previously saved backup still needs cleanup; retry it or save another backup.`
+    } else {
+      operationMessage.value = errorMessage
+    }
+  }
+
+  async function cleanUpBackups(
+    accessToken: string,
+    attempt: CleanupAttempt,
+    operation: number,
+    requireReceipt: boolean,
+  ): Promise<GoogleDriveBackupRetentionResult | undefined> {
+    if (!isCurrent(operation)) return undefined
+    state.value = 'uploading'
+    cleaning.value = true
+    try {
+      const result = await pruneGoogleDriveBackups({
+        accessToken,
+        receipt: attempt.receipt,
+        signal: activeAbortController?.signal,
+        requireReceipt,
+      })
+      if (!isCurrent(operation)) return
+      pendingCleanups.value = pendingCleanups.value.filter(pending => pending.permissionId !== attempt.permissionId)
+      cleanupAttempt.value = undefined
+      cleaning.value = false
+      if (pendingCleanups.value.length > 0) {
+        operationMessage.value = 'Cleanup for this Google account completed. Another Google account still has backups awaiting cleanup.'
+        state.value = 'cleanup-retry'
+      } else {
+        operationMessage.value = ''
+        state.value = 'idle'
+      }
+      return result
+    } catch (error) {
+      if (!isCurrent(operation)) return
+      invalidateAfterUnauthorized(error, accessToken)
+      finishCleanupFailure(operation, error)
+      return undefined
+    }
+  }
+
+  function finishCleanupFailure(operation: number, error: unknown): void {
+    if (!isCurrent(operation)) return
+    cleaning.value = false
+    state.value = 'cleanup-retry'
+    operationMessage.value = `The backup was saved, but older backups could not all be removed. ${getErrorMessage(error, 'Retry cleanup to finish keeping the newest ten backups.')}`
+  }
+
+  function rememberCleanup(attempt: CleanupAttempt): void {
+    pendingCleanups.value = [
+      ...pendingCleanups.value.filter(pending => pending.permissionId !== attempt.permissionId),
+      attempt,
+    ]
   }
 
   function beginOperation(): number {
@@ -289,7 +434,7 @@ export function useGoogleDriveBackup(
     activeOperation = ++operationSequence
   })
 
-  return { state, message, lastSaved, busy, canCancel, buttonLabel, activate, cancelBeforeUpload, startNewBackupInstead }
+  return { state, message, lastSaved, busy, canCancel, buttonLabel, activate, cancelBeforeUpload, startNewBackupInstead, retryCleanup }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

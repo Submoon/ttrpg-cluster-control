@@ -28,6 +28,7 @@ export interface GoogleDriveBackupFile {
   id: string
   name: string
   createdTime: string
+  canDelete?: boolean
 }
 
 export interface GoogleDriveBackupList {
@@ -85,13 +86,14 @@ export async function listGoogleDriveBackups(
   pageToken?: string,
   fetcher: DriveFetcher = fetch,
   signal?: AbortSignal,
+  strict = false,
 ): Promise<GoogleDriveBackupList> {
   const query = new URLSearchParams({
     spaces: APP_DATA_SPACE,
     q: 'trashed = false',
     pageSize: '100',
     orderBy: 'createdTime desc',
-    fields: 'nextPageToken,files(id,name,createdTime,mimeType,spaces,trashed)',
+    fields: 'incompleteSearch,nextPageToken,files(id,name,createdTime,mimeType,spaces,trashed,capabilities(canDelete))',
   })
   if (pageToken) query.set('pageToken', pageToken)
 
@@ -99,10 +101,28 @@ export async function listGoogleDriveBackups(
   if (!isRecord(body) || (body.files !== undefined && !Array.isArray(body.files))) {
     throw new GoogleDriveApiError('request-failed', 'Google Drive returned an invalid backup list.')
   }
+  if (body.incompleteSearch !== undefined && body.incompleteSearch !== false) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive could not verify a complete backup list.')
+  }
 
   const files = (body.files ?? []).flatMap((entry): GoogleDriveBackupFile[] => {
-    if (!isAppDataJsonFile(entry)) return []
-    return [{ id: entry.id, name: entry.name, createdTime: entry.createdTime }]
+    const isDatedBackup = isRecord(entry) && typeof entry.name === 'string' && isGoogleDriveBackupName(entry.name)
+    if (!isAppDataJsonFile(entry)) {
+      if (strict && isDatedBackup) {
+        throw new GoogleDriveApiError('request-failed', 'Google Drive returned unverified metadata for a dated backup.')
+      }
+      return []
+    }
+    const capabilities = entry.capabilities
+    const canDelete = isRecord(capabilities) && typeof capabilities.canDelete === 'boolean'
+      ? capabilities.canDelete
+      : capabilities === undefined ? undefined : false
+    return [{
+      id: entry.id,
+      name: entry.name,
+      createdTime: entry.createdTime,
+      ...(canDelete !== undefined ? { canDelete } : {}),
+    }]
   })
   if (body.nextPageToken !== undefined
     && (typeof body.nextPageToken !== 'string' || body.nextPageToken.length === 0)) {
@@ -113,6 +133,91 @@ export async function listGoogleDriveBackups(
     files,
     ...(typeof body.nextPageToken === 'string' ? { nextPageToken: body.nextPageToken } : {}),
   }
+}
+
+/** True only for the dated filename format emitted by current Google Drive backups. */
+export function isGoogleDriveBackupName(name: string): boolean {
+  const match = name.match(/^[\s\S]+-jump-cluster-(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/)
+  if (!match) return false
+  const timestamp = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`
+  const date = new Date(timestamp)
+  return Number.isFinite(date.getTime()) && date.toISOString() === timestamp
+}
+
+/** Permanently deletes one previously listed dated backup after verifying its exact current metadata. */
+export async function deleteGoogleDriveBackup(
+  accessToken: string,
+  file: GoogleDriveBackupFile,
+  fetcher: DriveFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!file.id || !isGoogleDriveBackupName(file.name) || !isValidDate(file.createdTime) || file.canDelete === false) {
+    throw new GoogleDriveApiError('request-failed', 'This file is not an available dated Google Drive backup to delete.')
+  }
+
+  const fileUrl = `${DRIVE_API}/files/${encodeURIComponent(file.id)}`
+  let metadataResponse: ProviderResponse
+  try {
+    metadataResponse = await providerFetch(fetcher, `${fileUrl}?${new URLSearchParams({
+      fields: 'id,name,createdTime,mimeType,spaces,trashed,capabilities(canDelete)',
+    })}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      ...(signal ? { signal } : {}),
+    })
+  } catch {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive could not verify this backup before deletion.')
+  }
+  if (metadataResponse.status === 404) return
+  if (metadataResponse.status === 401) throw expiredAuthorizationError()
+  if (!metadataResponse.ok) {
+    throw new GoogleDriveApiError('request-failed', 'Google Drive could not verify this backup before deletion.', false, metadataResponse.status)
+  }
+
+  const metadata = parseResponseJson(metadataResponse.bytes)
+  if (!isRecord(metadata)
+    || metadata.id !== file.id
+    || metadata.name !== file.name
+    || metadata.createdTime !== file.createdTime
+    || metadata.mimeType !== JSON_MIME_TYPE
+    || !isAppDataSpace(metadata.spaces)
+    || !isNotTrashed(metadata.trashed)
+    || !isGoogleDriveBackupName(metadata.name)
+    || (metadata.capabilities !== undefined
+      && (!isRecord(metadata.capabilities)
+        || typeof metadata.capabilities.canDelete !== 'boolean'
+        || metadata.capabilities.canDelete === false))) {
+    throw new GoogleDriveApiError('request-failed', 'This Google Drive file changed or is not an available dated backup, so it was not deleted.')
+  }
+
+  let deleteResponse: ProviderResponse
+  try {
+    deleteResponse = await providerFetch(fetcher, fileUrl, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      ...(signal ? { signal } : {}),
+    })
+  } catch {
+    throw new GoogleDriveApiError(
+      'outcome-uncertain',
+      'Google Drive could not confirm whether this backup was deleted. Refresh the backup list to check.',
+      true,
+    )
+  }
+  if (deleteResponse.ok || deleteResponse.status === 404) return
+  if (deleteResponse.status === 401) throw expiredAuthorizationError()
+  if (deleteResponse.status >= 500 || deleteResponse.status === 408 || deleteResponse.status === 429) {
+    throw new GoogleDriveApiError(
+      'outcome-uncertain',
+      'Google Drive could not confirm whether this backup was deleted. Refresh the backup list to check.',
+      true,
+      deleteResponse.status,
+    )
+  }
+  throw new GoogleDriveApiError('request-failed', 'Google Drive could not delete this backup.', false, deleteResponse.status)
+}
+
+function expiredAuthorizationError(): GoogleDriveApiError {
+  return new GoogleDriveApiError('request-failed', 'Google Drive authorization expired. Sign in again to continue.', false, 401)
 }
 
 /** Reads a selected file only after its metadata confirms JSON content in appDataFolder. */

@@ -35,8 +35,7 @@
           If you choose a Google Drive backup or restore action, the browser connects directly to Google
           Drive using Google's <code>drive.appdata</code> scope. This scope is used for this app's private
           application data folder. The app uses it to create dated Jump Cluster backups and to list,
-          read, restore, or download those backups that you choose. It does not use this feature to
-          browse your regular Drive files.
+          read, restore, download, and delete backups in that folder.
         </p>
         <p>
           A backup is a complete Jump Cluster JSON file and can include private GM notes and other
@@ -57,11 +56,12 @@
         </p>
         <p>
           TTRPG Cluster Control accesses, uses, and transfers Google user data only to create a backup
-          you request, list available backup files and their names and dates, read a backup you select to restore or download,
-          reconcile an ambiguous upload by checking its expected file, and verify the same account
-          before retrying that upload. It does not use this data for unrelated purposes. Google's
-          <a href="https://developers.google.com/terms/api-services-user-data-policy#limited_use">API Services User Data Policy, including Limited Use</a>,
-          governs these uses. See also Google's
+          you request, list backup names and dates, restore or download a selected backup, delete a
+          backup you select, and apply the retention limit described below. It also uses the expected
+          backup file to verify an uncertain upload and checks the account before retrying an upload
+          or cleanup. These uses follow Google's
+          <a href="https://developers.google.com/terms/api-services-user-data-policy#limited_use">API Services User Data Policy, including its Limited Use requirements</a>.
+          See also Google's
           <a href="https://developers.google.com/workspace/drive/api/guides/appdata">Drive app data documentation</a>.
         </p>
       </section>
@@ -96,8 +96,15 @@
           for local recovery until it is replaced or the site's browser data is cleared.
         </p>
         <p>
-          Google Drive backups remain in your Google account until you remove them. In the app's
-          restore list you can download a JSON copy. Choosing <strong>Forget Google Drive account</strong>
+          After confirming a new backup, the app keeps the {{ GOOGLE_DRIVE_BACKUP_LIMIT }} newest
+          backups for the selected Google account across all Jump Clusters. Older backups are
+          permanently deleted. If cleanup is interrupted or Google Drive reports an error, extra
+          backups may remain until cleanup finishes. In the backup list, you can download a JSON copy
+          or permanently delete an individual backup after confirmation. Those deletions leave your
+          local workspace and previously downloaded copies available.
+        </p>
+        <p>
+          Choosing <strong>Forget Google Drive account</strong>
           clears the current page's access token so a later Drive action can choose an account; it does
           not sign you out of Google, revoke Google access, or delete backups. Reloading the page also
           clears that token.
@@ -126,6 +133,8 @@
 </template>
 
 <script setup lang="ts">
+import { GOOGLE_DRIVE_BACKUP_LIMIT } from '../utils/google-drive-backup-snapshot'
+
 defineOptions({ name: 'PrivacyPolicyPage' })
 
 useSeoMeta({

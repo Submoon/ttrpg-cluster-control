@@ -2,6 +2,8 @@ import { exportJumpCluster } from '../domain/workspace'
 import type { LocalWorkspace } from '../domain/workspace'
 import { exportFileName } from './browser-download'
 
+export const GOOGLE_DRIVE_BACKUP_LIMIT = 10
+
 export interface GoogleDriveBackupSnapshot {
   filename: string
   contents: string
