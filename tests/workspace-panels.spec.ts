@@ -37,14 +37,11 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop Hierarchy opens beside Inspector while the portaled Map files menu stays hit-testable and exports JSON @ui-smoke', async ({ page }) => {
+test('desktop Hierarchy and Inspector start open while the portaled Map files menu stays hit-testable and exports JSON @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const inspector = page.locator('#workspace-inspector-panel')
-  await expect(hierarchy).toBeHidden()
-  await expect(inspector).toBeVisible()
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
 

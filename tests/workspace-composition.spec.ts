@@ -28,9 +28,8 @@ test('overlay panels resize by pointer and keyboard without changing their mount
 
   const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
-  await expect(hierarchy).toBeHidden()
-  await hierarchyToggle.click()
   await expect(hierarchy).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Object inspector' })).toBeVisible()
 
   const hierarchyHandle = page.getByRole('separator', { name: 'Resize system hierarchy panel' })
   const inspectorHandle = page.getByRole('separator', { name: 'Resize object inspector panel' })

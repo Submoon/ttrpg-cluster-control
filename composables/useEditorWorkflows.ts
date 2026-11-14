@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { EditorWorkflowOptions, ObjectInspectorFocusRequest, SearchContextChangeLease, SearchContextChangeOutcome } from './editor-workflows/types'
+import type { EditorWorkflowOptions, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
@@ -21,16 +21,18 @@ import { useOrbitCenterPlacement } from './editor-workflows/useOrbitCenterPlacem
 import { usePublicationWorkflows } from './editor-workflows/usePublicationWorkflows'
 import { useSelectedObjectDrag } from './editor-workflows/selected-object-drag'
 import { searchWorkspace } from '../utils/workspace-search'
-import { reconcileFieldConditions, wardenFieldFilterOptions } from '../utils/warden-map-filters'
 import { usePublicationMenu } from './usePublicationMenu'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
-import type { SearchResult, WorkspaceSearchCriteria } from '../utils/workspace-search'
+import type { SearchResult } from '../utils/workspace-search'
+import { useWardenFilterCriteria } from './useWardenFilterCriteria'
 
 type EditorWorkflowsOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
   canRestorePublicationFocus?: (request: PublicationMenuRequest) => boolean
   /** Announces that Search removed criteria invalidated by a Field or choice change. */
   onSearchFiltersInvalidated?: () => void
+  /** Announces that the map removed criteria invalidated by a Field or choice change. */
+  onMapFiltersInvalidated?: () => void
   /** Announces the applied Orbit radii adjustment caused by a new host minimum. */
   onOrbitRadiiIncreased?: (minimum: number) => void
 }
@@ -50,6 +52,12 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       store.reset(contextId)
     }
   }, { immediate: true, flush: 'sync' })
+  const filterCriteria = useWardenFilterCriteria({
+    workspace,
+    store,
+    onMapFiltersInvalidated: options.onMapFiltersInvalidated,
+    onSearchFiltersInvalidated: options.onSearchFiltersInvalidated,
+  })
   onBeforeUnmount(() => store.reset(null))
 
   const entity = useEntityInspectorSession({ workspace, mutations })
@@ -158,27 +166,17 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     entitySession: entity.entitySession,
   })
   const viewport = useEditorViewport(store)
-  type SearchContextOwner = {
-    workspaceId: string
-    clusterId: string
-    activeView: typeof store.activeView
-    selectedSystemId: string | null
-    lease: SearchContextChangeLease
-    finish(outcome: SearchContextChangeOutcome): void
-  }
-  let activeSearchContextOwner: SearchContextOwner | null = null
-  function isSearchContextChangeHeld(): boolean {
-    const owner = activeSearchContextOwner
-    const currentWorkspace = workspace.value
-    return !!owner && currentWorkspace?.id === owner.workspaceId
-      && currentWorkspace.cluster.id === owner.clusterId
-  }
-  let createSearchContextLease = (requestId: number): SearchContextChangeLease =>
-    mapControls.beginSearchContextChange(requestId)
   const navigation = useEditorNavigation({
     workspace,
     waitForSearchPresentation: options.waitForSearchPresentation,
-    beginSearchContextChange: requestId => createSearchContextLease(requestId),
+    captureAddCleanup: () => {
+      const clearSystemCreation = systemCreation.captureSearchContextCleanup()
+      const clearClusterAdd = clusterSystemPlacement.captureSearchContextCleanup()
+      return () => {
+        clearSystemCreation?.()
+        clearClusterAdd?.()
+      }
+    },
     store,
     mapControls,
     chart: charts,
@@ -203,24 +201,14 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     get: () => store.searchQuery,
     set: (query: string) => store.setSearchQuery(query),
   })
-  const searchCriteria = computed<WorkspaceSearchCriteria>(() => ({
-    types: store.selectedSearchObjectTypes,
-    publicationModes: store.selectedSearchPublicationModes,
-    fieldConditions: store.selectedSearchFieldConditions,
-  }))
   const searchResults = computed<SearchResult[]>(() => workspace.value
-    ? searchWorkspace(workspace.value, searchQuery.value, searchCriteria.value)
+    ? searchWorkspace(workspace.value, searchQuery.value, filterCriteria.search.criteria.value)
     : [])
-  const searchActiveCriterionCount = computed(() => Number(searchCriteria.value.types.length > 0)
-    + Number(searchCriteria.value.publicationModes.length > 0)
-    + searchCriteria.value.fieldConditions.length)
-  watch([workspace, () => store.selectedSearchFieldConditions], ([currentWorkspace, conditions]) => {
-    if (!currentWorkspace || conditions.length === 0) return
-    const reconciliation = reconcileFieldConditions(conditions, wardenFieldFilterOptions(currentWorkspace))
-    if (!reconciliation.changed) return
-    store.setSearchFieldConditions(reconciliation.conditions)
-    options.onSearchFiltersInvalidated?.()
-  }, { flush: 'sync' })
+
+  function resetSearch(): void {
+    store.resetSearch()
+    filterCriteria.clearSearchNotice()
+  }
 
   const fields = useFieldDefinitionWorkflows({
     workspace,
@@ -262,7 +250,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     resolveObjectCreationTransition: () => transitions.resolveTransition({ leaveChart: false }),
     beforeWorkspaceOperation,
-    isSearchContextChangeHeld,
+    isSearchContextChangeHeld: navigation.isSearchContextChangeHeld,
     onObjectCreated: async (objectId) => {
       await navigation.selectObject(objectId, !viewport.isCompactViewport.value, { leaveChart: false })
       if (store.activeView !== 'system' || store.selectedObjectId !== objectId) return
@@ -303,44 +291,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     mutations,
     beforeWorkspaceOperation,
   })
-  function sameSearchContextOwnerSource(owner: SearchContextOwner): boolean {
-    const currentWorkspace = workspace.value
-    return currentWorkspace?.id === owner.workspaceId
-      && currentWorkspace.cluster.id === owner.clusterId
-      && store.activeView === owner.activeView
-      && (owner.activeView !== 'system' || store.selectedSystemId === owner.selectedSystemId)
-  }
-  createSearchContextLease = (requestId: number): SearchContextChangeLease => {
-    activeSearchContextOwner?.finish('abandoned')
-    const currentWorkspace = workspace.value
-    const mapLease = mapControls.beginSearchContextChange(requestId)
-    if (!currentWorkspace) return mapLease
-
-    const clearSystemCreation = systemCreation.captureSearchContextCleanup()
-    const clearClusterAdd = clusterSystemPlacement.captureSearchContextCleanup()
-    let finished = false
-    const owner: SearchContextOwner = {
-      workspaceId: currentWorkspace.id,
-      clusterId: currentWorkspace.cluster.id,
-      activeView: store.activeView,
-      selectedSystemId: store.selectedSystemId,
-      lease: mapLease,
-      finish(outcome) {
-        if (finished) return
-        finished = true
-        if (activeSearchContextOwner === owner) activeSearchContextOwner = null
-        mapLease.finish(outcome)
-        if (outcome === 'accepted' || !sameSearchContextOwnerSource(owner)) {
-          clearSystemCreation?.()
-          clearClusterAdd?.()
-        }
-      },
-    }
-    activeSearchContextOwner = owner
-    return owner
-  }
   watch([() => store.activeView, () => store.selectedSystemId], () => {
-    if (isSearchContextChangeHeld()) return
+    if (navigation.isSearchContextChangeHeld()) return
     if (systemCreation.creationSession.value) systemCreation.quitAdd()
     if (clusterSystemPlacement.clusterAddType.value) clusterSystemPlacement.quitClusterAdd()
   }, { flush: 'sync' })
@@ -474,17 +426,10 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       open: searchOpen,
       query: searchQuery,
       results: searchResults,
-      selectedTypes: computed(() => store.selectedSearchObjectTypes),
-      selectedPublicationModes: computed(() => store.selectedSearchPublicationModes),
-      fieldConditions: computed(() => store.selectedSearchFieldConditions),
-      activeCriterionCount: searchActiveCriterionCount,
-      setSelectedTypes: (types: readonly string[], options: readonly { value: string, label: string }[]) =>
-        store.setSelectedSearchObjectTypes(types, options),
-      setPublicationModes: store.setSearchPublicationModes,
-      setFieldConditions: store.setSearchFieldConditions,
-      reset: store.resetSearch,
+      reset: resetSearch,
       reveal: navigation.revealSearchTarget,
     },
+    filterCriteria,
     historyGuards: {
       blockReason: historyGuards,
       endCleanSessions: endCleanHistorySessions,

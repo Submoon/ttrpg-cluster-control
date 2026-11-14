@@ -14,6 +14,8 @@ test.beforeEach(() => {
 
 test('visit pruning normalizes saved selections and reset starts a fresh workspace lifetime @pure', () => {
   const store = useEditorUiStore()
+  expect(store.hierarchyPanelOpen).toBe(true)
+  expect(store.inspectorPanelOpen).toBe(true)
   const clusterVisit: MapVisitMemory = {
     viewport: { x: 120, y: -35, k: 1.7 },
     selection: { kind: 'system', id: 'removed-system', inspect: true },
@@ -77,13 +79,14 @@ test('visit pruning normalizes saved selections and reset starts a fresh workspa
   expect(store.selectedMapFieldConditions).toEqual([
     { fieldId: 'native:atmosphere', type: 'single-select', operator: 'is', values: ['Breathable'] },
   ])
+  store.closePanel('hierarchy')
   store.reset('workspace-b:cluster-b')
 
   expect(store.workspaceId).toBe('workspace-b:cluster-b')
   expect(store.activeView).toBe('system')
   expect(store.selectedSystemId).toBeNull()
   expect(store.mapMode).toBe('select')
-  expect(store.hierarchyPanelOpen).toBe(false)
+  expect(store.hierarchyPanelOpen).toBe(true)
   expect(store.inspectorPanelOpen).toBe(true)
   expect(store.mapTypeFiltersOpen).toBe(false)
   expect(store.searchQuery).toBe('')

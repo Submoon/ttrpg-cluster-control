@@ -81,7 +81,10 @@ import {
   type SystemMapEventHandlers,
   type SystemMapRenderer,
 } from './maps/system-map-renderer'
-import { isSingleTouchPanEligible } from './maps/map-touch-navigation'
+import {
+  createMapTouchNavigation,
+  type MapTouchPoint,
+} from './maps/map-touch-navigation'
 import {
   measureSystemObjectBranchBounds,
   resolveSystemObjectBranch,
@@ -165,11 +168,6 @@ const orbitDragCreationPreview = computed(() => props.creationPreview?.orbitDrag
   ? props.creationPreview
   : null)
 let mapRenderer: SystemMapRenderer | undefined
-type SystemTouchGesture =
-  | { mode: 'pinch'; transform: ReturnType<typeof zoomTransform>; distance: number; anchor: [number, number] }
-  | { mode: 'pending-pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number]; startClient: [number, number] }
-  | { mode: 'pan'; transform: ReturnType<typeof zoomTransform>; start: [number, number] }
-let touchGesture: SystemTouchGesture | null = null
 let viewPan: { transform: ReturnType<typeof zoomTransform>; start: [number, number] } | null = null
 let zoomExtentOverride: SvgViewportRect | undefined
 let cancelledCreationPreviewId: number | null = null
@@ -178,6 +176,39 @@ const orbitPlacementPreviews = new Map<string, OrbitPlacementPreview>()
 const orbitCenterMovePreviews = new Map<string, Point>()
 let searchLocatorId: string | null = null
 let searchInteractionGeneration = 0
+
+const touchCameraNavigation = createMapTouchNavigation({
+  surface: 'system',
+  isEnabled: () => props.touchNavigation,
+  moveEnabled: () => props.moveEnabled ?? false,
+  getCamera: () => {
+    const element = svgElement.value
+    if (!element) return null
+    return {
+      isPinchReady: () => mapRenderer !== undefined,
+      getViewport: () => {
+        const transform = zoomTransform(element)
+        return { x: transform.x, y: transform.y, k: transform.k }
+      },
+      pointFromClient: point => pointer(point, element) as [number, number],
+      minimumZoomScale: () => minimumZoomScale.value,
+      applyViewport: viewport => {
+        const renderer = mapRenderer
+        if (!renderer) return
+        select(element).call(renderer.zoomBehavior.transform, zoomIdentity
+          .translate(viewport.x, viewport.y)
+          .scale(viewport.k))
+      },
+      interrupt: () => select(element).interrupt(),
+    }
+  },
+  onPinchTakeover: () => {
+    emit('cancel-object-placement-preview')
+    emit('cancel-orbit-placement-preview')
+    cancelCreationPreview(true)
+    cancelActiveGesture()
+  },
+})
 
 function dismissSearchLocator(): void {
   searchInteractionGeneration += 1
@@ -325,11 +356,7 @@ function revealHistoryTarget(target: MapHistoryTarget): boolean {
   return revealSvgTarget(svgElement.value, element, panBy)
 }
 
-type ClientPoint = Pick<PointerEvent, 'clientX' | 'clientY'>
-
-function touchPoint(touch: ClientPoint, element: SVGSVGElement): [number, number] {
-  return pointer(touch, element) as [number, number]
-}
+type ClientPoint = MapTouchPoint
 
 /** Converts current client coordinates through the live content CTM, including the current map zoom. */
 function clientPointToScene(clientX: number, clientY: number): Point | null {
@@ -368,134 +395,36 @@ function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
   return hit !== null && svg.contains(hit)
 }
 
-function beginTouchPinchFromPoints(points: readonly ClientPoint[]): void {
-  const element = svgElement.value
-  const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!element || !zoomBehavior || points.length < 2) return
-  const first = touchPoint(points[0]!, element)
-  const second = touchPoint(points[1]!, element)
-  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-  const transform = zoomTransform(element)
-  touchGesture = {
-    mode: 'pinch',
-    transform,
-    distance: Math.max(1, Math.hypot(second[0] - first[0], second[1] - first[1])),
-    anchor: transform.invert(center),
-  }
-}
-
-function beginTouchPinch(touches: TouchList): void {
-  beginTouchPinchFromPoints(Array.from(touches))
-}
-
-function moveTouchPinch(points: readonly ClientPoint[]): void {
-  const element = svgElement.value
-  const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!element || !zoomBehavior || touchGesture?.mode !== 'pinch' || points.length < 2) return
-  const first = touchPoint(points[0]!, element)
-  const second = touchPoint(points[1]!, element)
-  const center: [number, number] = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
-  const ratio = Math.hypot(second[0] - first[0], second[1] - first[1]) / touchGesture.distance
-  const scale = Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, touchGesture.transform.k * ratio))
-  select(element).call(zoomBehavior.transform, zoomIdentity
-    .translate(center[0] - touchGesture.anchor[0] * scale, center[1] - touchGesture.anchor[1] * scale)
-    .scale(scale))
-}
-
 function startTouchNavigation(event: TouchEvent): void {
-  if (!props.touchNavigation) return
-  if (event.touches.length === 1) {
-    const element = svgElement.value
-    const touch = event.touches[0]!
-    if (!element || ((props.moveEnabled ?? false) && event.ctrlKey)
-      || !isSingleTouchPanEligible(event.target, props.moveEnabled ?? false, 'system')) {
-      touchGesture = null
-      return
-    }
-    select(element).interrupt()
-    touchGesture = {
-      mode: 'pending-pan',
-      transform: zoomTransform(element),
-      start: touchPoint(touch, element),
-      startClient: [touch.clientX, touch.clientY],
-    }
-    return
-  }
-  if (event.touches.length < 2) return
-  emit('cancel-object-placement-preview')
-  emit('cancel-orbit-placement-preview')
-  cancelCreationPreview(true)
-  cancelActiveGesture()
-  const element = svgElement.value
-  if (element) select(element).interrupt()
-  beginTouchPinch(event.touches)
-  event.preventDefault()
-  event.stopPropagation()
+  touchCameraNavigation.start(event)
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  const element = svgElement.value
-  const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
-  if (touchGesture.mode === 'pending-pan') {
-    const touch = event.touches[0]
-    if (!touch || Math.hypot(
-      touch.clientX - touchGesture.startClient[0],
-      touch.clientY - touchGesture.startClient[1],
-    ) <= 9) return
-    touchGesture = {
-      mode: 'pan',
-      transform: touchGesture.transform,
-      start: touchGesture.start,
-    }
-  }
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  if (touchGesture.mode === 'pinch' && event.touches.length >= 2) {
-    moveTouchPinch(Array.from(event.touches))
-  } else if (touchGesture.mode === 'pan' && event.touches.length >= 1) {
-    const point = touchPoint(event.touches[0]!, element)
-    select(element).call(zoomBehavior.transform, zoomIdentity
-      .translate(touchGesture.transform.x + point[0] - touchGesture.start[0], touchGesture.transform.y + point[1] - touchGesture.start[1])
-      .scale(touchGesture.transform.k))
-  }
+  touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  const element = svgElement.value
-  const zoomBehavior = mapRenderer?.zoomBehavior
-  if (!props.touchNavigation || !element || !zoomBehavior || !touchGesture) return
-  if (event.touches.length >= 2) {
-    beginTouchPinch(event.touches)
-  } else if (event.touches.length === 1) {
-    touchGesture = { mode: 'pan', transform: zoomTransform(element), start: touchPoint(event.touches[0]!, element) }
-  } else {
-    touchGesture = null
-  }
+  touchCameraNavigation.end(event)
 }
 
 /** Starts a canvas-owned pinch without canceling its frozen Add Orbit preview. */
 function startOrbitTouchPinch(points: readonly ClientPoint[]): void {
-  const element = svgElement.value
-  if (!props.touchNavigation || !element || points.length < 2) return
-  select(element).interrupt()
-  beginTouchPinchFromPoints(points)
+  touchCameraNavigation.startPinch(points)
 }
 
 /** Updates camera navigation from canvas-owned pointer contacts. */
 function moveOrbitTouchPinch(points: readonly ClientPoint[]): void {
-  if (!props.touchNavigation || points.length < 2) return
-  moveTouchPinch(points)
+  touchCameraNavigation.movePinch(points)
 }
 
 /** Ends the owned pinch without installing the ordinary one-finger pan state. */
 function endOrbitTouchPinch(): void {
-  touchGesture = null
+  touchCameraNavigation.endPinch()
 }
 
 /** Cancels active edits and navigation previews. */
 function cancelActiveGesture(): void {
-  touchGesture = null
+  touchCameraNavigation.cancel()
   viewPan = null
   mapRenderer?.cancelActiveGesture()
 }
@@ -734,7 +663,7 @@ function render(preserveNavigation = false): void {
 
   mapRenderer?.cancelActiveGesture()
   if (!preserveNavigation) {
-    touchGesture = null
+    touchCameraNavigation.cancel()
     viewPan = null
   }
   mapRenderer = renderSystemMap({
