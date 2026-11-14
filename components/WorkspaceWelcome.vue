@@ -70,9 +70,6 @@
         Start with a Jump Cluster and its first star system. This workspace stays in this browser;
         there is no app account or remote workspace. Optional Google Drive backups are user-triggered.
       </p>
-      <p class="workspace-welcome-privacy mt-3 mb-0 text-sm">
-        <NuxtLink class="workspace-privacy-link" to="/privacy">Privacy policy</NuxtLink>
-      </p>
     </div>
 
     <form class="workspace-launch-form" aria-labelledby="workspace-form-title" @submit.prevent="emit('submit')">
@@ -260,13 +257,6 @@ function openLocalBackupPicker(event: MouseEvent): void {
 
 .workspace-welcome-title {
   font-size: clamp(2rem, 4vw, 3.5rem);
-}
-
-.workspace-privacy-link {
-  color: var(--accent-hover);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 0.16em;
 }
 
 .workspace-message-title {

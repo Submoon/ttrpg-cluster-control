@@ -27,6 +27,16 @@
     <template #right>
       <div class="workspace-header-utilities">
         <slot name="player-actions" />
+        <NuxtLink
+          v-if="props.showPrivacyLink"
+          class="text-xs font-medium text-primary underline underline-offset-2"
+          to="/privacy"
+          :target="workspace ? '_blank' : undefined"
+          :rel="workspace ? 'noopener' : undefined"
+          :aria-label="workspace ? 'Privacy policy (opens in a new tab)' : undefined"
+        >
+          Privacy policy
+        </NuxtLink>
         <div class="workspace-header-theme" role="group" aria-label="Theme">
           <ColorScheme>
             <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
@@ -48,6 +58,7 @@ const props = withDefaults(defineProps<{
   activeView?: 'cluster' | 'system'
   selectedSystem?: StarSystem | null
   compactModalOpen?: boolean
+  showPrivacyLink?: boolean
   publicTitle?: string
   publicEyebrow?: string
 }>(), {

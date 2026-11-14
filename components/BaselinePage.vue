@@ -3,7 +3,7 @@
     class="app-shell flex min-h-screen flex-col px-[clamp(1rem,3.5vw,3.5rem)] max-[760px]:px-3"
     :class="{ 'map-workspace-shell': workspace && (activeView === 'cluster' || selectedSystem) }"
   >
-    <WorkspaceHeader v-if="!workspace" :workspace="workspace" />
+    <WorkspaceHeader v-if="!workspace" :workspace="workspace" show-privacy-link />
     <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
       <span v-if="toastAnnouncement" :key="toastAnnouncement.id">{{ toastAnnouncement.text }}</span>
     </div>
@@ -46,9 +46,6 @@
             @restore-review-open="workspaceRestoreReturnTarget = $event"
             @restore-canceled="workspaceRestoreReturnTarget = null"
           />
-          <NuxtLink v-if="hydrationState === 'error'" class="self-center text-sm text-primary underline" to="/privacy">
-            Privacy policy
-          </NuxtLink>
         </template>
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
@@ -98,6 +95,7 @@
               :active-view="activeView"
               :selected-system="selectedSystem"
               :compact-modal-open="compactPanelPresentationOpen"
+              show-privacy-link
             >
               <template #editor-actions>
                 <FieldDefinitionsDialog
@@ -182,9 +180,6 @@
                   @restore-review-open="workspaceRestoreReturnTarget = $event"
                   @restore-canceled="workspaceRestoreReturnTarget = null"
                 />
-                <NuxtLink class="justify-self-start text-xs text-primary underline" to="/privacy" target="_blank" rel="noopener" aria-label="Privacy policy (opens in a new tab)">
-                  Privacy policy
-                </NuxtLink>
               </template>
               <template #history>
                 <WorkspaceHistoryControls

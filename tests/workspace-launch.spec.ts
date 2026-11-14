@@ -124,16 +124,22 @@ async function expectFocusRingWithinViewport(locator: Locator): Promise<void> {
 
 test('the product root creates and resumes a saved local workspace', async ({ page }) => {
   test.setTimeout(60_000)
-  await page.goto('/')
+  const response = await page.goto('/')
+  expect(await response?.text()).toContain('href="/privacy"')
 
   await waitForWorkspaceStartup(page)
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Privacy policy' })).toBeVisible()
   await page.getByLabel('Jump Cluster').fill('Halcyon Spur')
   await page.getByLabel('First star system').fill('Lark')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await expect(page.getByRole('navigation', { name: 'Map context and commands' })
     .getByRole('heading', { name: 'Lark' })).toBeVisible()
+  const privacyLink = page.getByRole('link', { name: 'Privacy policy (opens in a new tab)' })
+  await expect(privacyLink).toBeVisible()
+  await expect(privacyLink).toHaveAttribute('href', '/privacy')
+  await expect(privacyLink).toHaveAttribute('target', '_blank')
   await waitForWorkspaceSaved(page)
 
   await page.reload()
