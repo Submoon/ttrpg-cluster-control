@@ -82,6 +82,7 @@ export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
 export { isPublicationMode } from './workspace-validation'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
+export { restoreJumpClusterBackup } from './workspace-json-import'
 export { projectPlayerCluster } from './player-projection'
 export {
   PlayerDocumentError,

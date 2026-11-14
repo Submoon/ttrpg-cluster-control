@@ -10,13 +10,11 @@ import {
 } from '../domain/workspace'
 import {
   downloadJson,
-  importReviewDialog,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   panMap,
-  resolveImportReview,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
   returnToClusterMap,
-  setJsonFile,
   setWorkspaceMapMode,
   waitForWorkspaceStartup,
 } from './helpers'
@@ -148,8 +146,12 @@ test('native search consults and reveals the last of 500 ordered objects by keyb
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Search staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await setJsonFile(jsonMapImportInput(page), 'global-search-five-hundred-objects.json', largeSearchClusterContent(20, 25))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
+  const restoreReview = await reviewJumpClusterBackup(
+    page,
+    'global-search-five-hundred-objects.json',
+    largeSearchClusterContent(20, 25),
+  )
+  await resolveJumpClusterRestoreReview(restoreReview, 'confirm')
   await returnToClusterMap(page)
   const initialClusterTransform = await page.locator('.cluster-map-content').getAttribute('transform')
   if (!initialClusterTransform) throw new Error('The cluster consultation fixture has no map camera transform.')

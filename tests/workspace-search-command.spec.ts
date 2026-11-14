@@ -99,6 +99,7 @@ function createSearchHarness(
     initialWorkspace.layout.systemPositions[additionalSystemId] = { x: 0.78, y: 0.54 }
   }
   const workspace = ref(initialWorkspace)
+  const searchFilterInvalidations: number[] = []
   let revision = 0
   const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
@@ -121,6 +122,7 @@ function createSearchHarness(
         saveState: ref<SaveState>('saved'),
         saveError: ref<string | null>(null),
         waitForSearchPresentation,
+        onSearchFiltersInvalidated: () => { searchFilterInvalidations.push(searchFilterInvalidations.length + 1) },
       })
       return () => null
     },
@@ -134,6 +136,7 @@ function createSearchHarness(
     history,
     workflows: mountedWorkflows,
     store: useEditorUiStore(),
+    searchFilterInvalidations,
     dispose() {
       if (disposed) return
       disposed = true
@@ -254,11 +257,17 @@ test('Search reconciles Field edits synchronously while map criteria reconcile b
 
     expect(searchCriteria.criteria.value.fieldConditions).toEqual([])
     expect(searchCriteria.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+    expect(harness.searchFilterInvalidations).toEqual([1])
     expect(mapCriteria.criteria.value.fieldConditions).toEqual([condition])
 
     await nextTick()
     expect(mapCriteria.criteria.value.fieldConditions).toEqual([])
     expect(mapCriteria.invalidationNotice.value).toBe('Some filters were removed because Fields or choices changed.')
+
+    searchCriteria.setFieldConditions([{ ...condition, values: ['Not breathable'] }])
+    harness.workspace.value = updateNativeFieldOptions(harness.workspace.value, 'atmosphere', ['Neutral'], true)
+    expect(searchCriteria.criteria.value.fieldConditions).toEqual([])
+    expect(harness.searchFilterInvalidations).toEqual([1, 2])
   } finally {
     harness.dispose()
   }

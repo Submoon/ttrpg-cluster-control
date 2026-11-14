@@ -26,13 +26,19 @@ import type { PublicationMenuRequest } from './editor-workflows/publication-type
 import type { SearchResult } from '../utils/workspace-search'
 import { useWardenFilterCriteria } from './useWardenFilterCriteria'
 
-type PublicationFocusWorkflowOptions = EditorWorkflowOptions & {
+type EditorWorkflowsOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
   canRestorePublicationFocus?: (request: PublicationMenuRequest) => boolean
+  /** Announces that Search removed criteria invalidated by a Field or choice change. */
+  onSearchFiltersInvalidated?: () => void
+  /** Announces that the map removed criteria invalidated by a Field or choice change. */
+  onMapFiltersInvalidated?: () => void
+  /** Announces the applied Orbit radii adjustment caused by a new host minimum. */
+  onOrbitRadiiIncreased?: (minimum: number) => void
 }
 
 /** Composes editor features around the page's single workspace writer and shared transient UI store. */
-export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
+export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const { workspace, saveState, saveError, mutations, initializeWorkspace } = options
   const store = useEditorUiStore()
   const editorError = ref('')
@@ -46,7 +52,12 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       store.reset(contextId)
     }
   }, { immediate: true, flush: 'sync' })
-  const filterCriteria = useWardenFilterCriteria({ workspace, store })
+  const filterCriteria = useWardenFilterCriteria({
+    workspace,
+    store,
+    onMapFiltersInvalidated: options.onMapFiltersInvalidated,
+    onSearchFiltersInvalidated: options.onSearchFiltersInvalidated,
+  })
   onBeforeUnmount(() => store.reset(null))
 
   const entity = useEntityInspectorSession({ workspace, mutations })
@@ -216,6 +227,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     createCommittedPositionAppliedHandler: entity.createCommittedPositionAppliedHandler,
     createCommittedOrbitCenterAppliedHandler: entity.createCommittedOrbitCenterAppliedHandler,
+    onOrbitRadiiIncreased: options.onOrbitRadiiIncreased,
     editorError,
     orbitAdjustments,
     beforeWorkspaceOperation,
@@ -362,6 +374,29 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     fields.endCleanHistorySession()
   }
 
+  /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
+  function resetForWorkspaceReplacement(): void {
+    transitions.cancelPendingTransition()
+    const chartSession = charts.session.value
+    if (chartSession) charts.discard(chartSession.id)
+    const entitySession = entity.entitySession.value
+    if (entitySession) entity.discardEntitySession(entitySession.id)
+    const routeSession = route.routeSession.value
+    if (routeSession) route.discardRouteSession(routeSession.id)
+    fields.resetForWorkspaceReplacement()
+    cluster.cancelDeletionReview()
+    systemCreation.cancelCreationPreview()
+    systemCreation.cancelOrbitDrag()
+    systemCreation.quitAdd()
+    systemObjectPlacement.cancelSystemObjectMovePreview()
+    clusterSystemPlacement.cancelSystemMovePreview()
+    clusterSystemPlacement.quitClusterAdd()
+    unresolvedExitPlacement.cancel()
+    orbitCenterPlacement.cancelOrbitCenterMove(false)
+    orbitAdjustments.reset()
+    store.reset(workspaceContextId.value)
+  }
+
   async function quitAdd(): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
     route.cancelRouteCreation()
@@ -398,6 +433,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     historyGuards: {
       blockReason: historyGuards,
       endCleanSessions: endCleanHistorySessions,
+      resetForWorkspaceReplacement,
     },
     inspector: {
       objectInspectorFocusRequest,
@@ -425,6 +461,7 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
       cancelRouteCreation: route.cancelRouteCreation,
     },
     charts: {
+      session: charts.session,
       clusterName: charts.clusterName,
       systemName: charts.systemName,
       playerTitle: charts.playerTitle,
@@ -564,7 +601,6 @@ export function useEditorWorkflows(options: PublicationFocusWorkflowOptions) {
     },
     feedback: {
       editorError,
-      orbitAdjustmentNotice: map.orbitAdjustmentNotice,
     },
     navigation: {
       activeView: navigation.activeView,

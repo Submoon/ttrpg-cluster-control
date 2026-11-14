@@ -30,9 +30,11 @@ The editor supports desktop and mobile layouts, light/dark themes, catalogue obj
 
 ## Local data
 
-Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load; failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Storage is local, not cloud-synced; clearing browser/site data can erase it. Export Jump Cluster JSON for backup or transfer. Validated imports append an independent copy rather than overwrite existing work. SVG/PNG files are images, not data backups.
+Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load. Failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Clearing browser site data can erase the local workspace.
 
-New complete JSON backups use source format version 4 and retain publication settings, player text, GM notes, Field masks and all preparation data. Version 1 imports remain supported with Hidden system/object publication. Version 2 imports preserve their system settings and initialize their legacy objects Hidden. Version 3 imports preserve system/object visibility. Earlier formats initialize player text empty and Fields/routes private. Appending an imported cluster preserves compatible incoming publication settings and the destination cluster's player-facing title; it does not replace the destination chart metadata. Conflicting native or same-name custom Field publication policies must be aligned before importing again; they never silently broaden sharing. New backups are not guaranteed to open in older application versions.
+Export the Jump Cluster JSON to keep a complete backup, or back it up explicitly to the app's private Google Drive space when Drive is configured. Open a complete backup from a file or choose a dated Drive backup in the app to restore or download it. In the editor, the replacement review names both maps and offers a download of the active map before you confirm. Use **Restore a Star System** to append a standalone system to the active Jump Cluster.
+
+New complete JSON backups use source format version 4 and retain publication settings, player text, GM notes, Field masks, and all preparation data. Version 1 backups initialize system and object publication as Hidden. Version 2 backups preserve system settings and initialize legacy objects as Hidden. Version 3 backups preserve system and object visibility. Earlier formats initialize player text as empty and Fields and routes as private. Standalone system imports check native and custom Field publication compatibility before adding the system.
 
 ## Development
 
@@ -62,6 +64,8 @@ npm run dev
 For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only.
 
 GitHub Actions runs lint, type checking, a production build and the Playwright suite on pull requests and pushes to `main`. Playwright reports and attachments are available as workflow artifacts. For test boundaries, current runner behavior and review criteria, see [verification guidance](docs/agents/testing.md).
+
+[Google Drive configuration and live verification](docs/google-drive-backups.md) covers test credentials and the round trip across two browser profiles.
 
 Technical references: [editor architecture](docs/architecture/editor.md), [source conventions](docs/agents/conventions.md), and [UI guidance](docs/agents/ui.md). Agent coordination follows [the development workflow](.agents/skills/project-development/SKILL.md).
 

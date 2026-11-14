@@ -2,13 +2,15 @@
  * Shared browser workspace state with a single route-level owner for ordered IndexedDB writes.
  * Nuxt state is shared by key, but the write queue and stale-status revision belong to each invocation.
  */
-import { computed, readonly, ref } from 'vue'
+import { computed, readonly, ref, shallowRef } from 'vue'
 import type { LocalWorkspace } from '../domain/workspace'
 import {
   createWorkspaceSnapshot,
-  loadWorkspace,
-  restoreWorkspaceBackup,
+  readWorkspaceState,
+  replaceWorkspaceFromBackup,
+  restoreWorkspaceBackupState,
   saveWorkspace,
+  type WorkspaceStorageVersion,
 } from '../utils/workspace-storage'
 
 type HydrationState = 'loading' | 'ready' | 'error'
@@ -30,6 +32,8 @@ export function useLocalWorkspace() {
   const recoveryError = useState<string | null>('local-workspace-recovery-error', () => null)
   const saveState = useState<SaveState>('local-workspace-save-state', () => 'idle')
   const saveError = useState<string | null>('local-workspace-save-error', () => null)
+  const replacementState = useState<'idle' | 'saving'>('local-workspace-replacement-state', () => 'idle')
+  const durableVersion = shallowRef<WorkspaceStorageVersion | null>(null)
   // Queue and revision are per invocation, so the page must keep one composable owner.
   let saveQueue: Promise<void> = Promise.resolve()
   let saveRevision = 0
@@ -45,9 +49,15 @@ export function useLocalWorkspace() {
     savedAppliedRevision.value = null
     loadError.value = null
     recoveryError.value = null
+    durableVersion.value = null
 
     try {
-      const restored = await loadWorkspace()
+      const stored = await readWorkspaceState()
+      durableVersion.value = stored
+      if (stored.recordStatus === 'damaged') {
+        throw new Error('The saved workspace has an unsupported or damaged format.')
+      }
+      const restored = stored.workspace
       workspace.value = restored
       appliedRevision.value += 1
       savedAppliedRevision.value = restored ? appliedRevision.value : null
@@ -68,10 +78,17 @@ export function useLocalWorkspace() {
     saveState.value = 'saving'
 
     const write = saveQueue.then(() => saveWorkspace(snapshot))
-    saveQueue = write.catch(() => undefined)
+    saveQueue = write.then(() => undefined, () => undefined)
 
     return write.then(
-      () => {
+      revision => {
+        durableVersion.value = {
+          workspace: snapshot,
+          revision,
+          recordStatus: 'valid',
+          fingerprint: null,
+          ownerId: snapshot.id,
+        }
         if (currentRevision === saveRevision) {
           savedAppliedRevision.value = targetAppliedRevision
           saveState.value = 'saved'
@@ -95,7 +112,7 @@ export function useLocalWorkspace() {
    * @throws Before publication if hydration is incomplete or validation/detachment fails.
    */
   function applyWorkspace(nextWorkspace: LocalWorkspace): { durable: Promise<void> } {
-    if (hydrationState.value !== 'ready') {
+    if (hydrationState.value !== 'ready' || replacementState.value !== 'idle') {
       throw new Error('The local workspace must finish loading before it can be saved.')
     }
 
@@ -113,10 +130,48 @@ export function useLocalWorkspace() {
 
   /** Retries durability for a detached snapshot of current applied memory without publishing it again. */
   function retrySaveLatest(): Promise<void> {
-    if (hydrationState.value !== 'ready' || !workspace.value) {
+    if (hydrationState.value !== 'ready' || !workspace.value || replacementState.value !== 'idle') {
       throw new Error('There is no applied workspace available to save.')
     }
     return enqueueSnapshot(createWorkspaceSnapshot(workspace.value), appliedRevision.value)
+  }
+
+  /** Commits a reviewed complete backup before publishing it; pending writes drain through the same owner queue. */
+  async function replaceFromBackup(nextWorkspace: LocalWorkspace, expected: WorkspaceStorageVersion): Promise<void> {
+    if (hydrationState.value === 'loading' || replacementState.value !== 'idle') {
+      throw new Error('Wait for the current workspace operation to finish before restoring a backup.')
+    }
+    const snapshot = createWorkspaceSnapshot(nextWorkspace)
+    const displacedWorkspace = workspace.value ? createWorkspaceSnapshot(workspace.value) : null
+    replacementState.value = 'saving'
+
+    const write = saveQueue.then(async () => {
+      const revision = await replaceWorkspaceFromBackup(snapshot, expected, displacedWorkspace)
+      return revision
+    })
+    saveQueue = write.then(() => undefined, () => undefined)
+
+    try {
+      const revision = await write
+      ++saveRevision
+      workspace.value = snapshot
+      appliedRevision.value += 1
+      savedAppliedRevision.value = appliedRevision.value
+      durableVersion.value = {
+        workspace: snapshot,
+        revision,
+        recordStatus: 'valid',
+        fingerprint: null,
+        ownerId: snapshot.id,
+      }
+      saveState.value = 'saved'
+      saveError.value = null
+      loadError.value = null
+      recoveryError.value = null
+      hydrationState.value = 'ready'
+    } finally {
+      replacementState.value = 'idle'
+    }
   }
 
   /**
@@ -129,12 +184,13 @@ export function useLocalWorkspace() {
     recoveryError.value = null
 
     try {
-      const restored = await restoreWorkspaceBackup()
+      const restored = await restoreWorkspaceBackupState(durableVersion.value)
       if (!restored) {
         throw new Error('No local backup is available to restore.')
       }
 
-      workspace.value = restored
+      workspace.value = restored.workspace
+      durableVersion.value = restored
       appliedRevision.value += 1
       savedAppliedRevision.value = appliedRevision.value
       saveState.value = 'saved'
@@ -151,6 +207,8 @@ export function useLocalWorkspace() {
 
   return {
     workspace: computed(() => workspace.value),
+    replacementState: computed(() => replacementState.value),
+    durableVersion: computed(() => durableVersion.value),
     appliedRevision: readonly(appliedRevision),
     /** Applied-data revision whose successful durable acknowledgement is current. */
     savedAppliedRevision: readonly(savedAppliedRevision),
@@ -164,5 +222,6 @@ export function useLocalWorkspace() {
     commit,
     retrySaveLatest,
     restoreBackup,
+    replaceFromBackup,
   }
 }

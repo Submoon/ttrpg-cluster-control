@@ -7,6 +7,9 @@ This context defines the language for the Warden's schematic maps of Jump Cluste
 **Jump Cluster**:
 A schematic network of known star systems and the Jump Routes between them.
 
+**Jump Cluster backup**:
+A complete snapshot of a Warden's Jump Cluster, including GM notes, player publication settings, and the saved map layout. Restoring it makes that Jump Cluster the active map.
+
 **Star system**:
 A local map containing one or more stars, Orbits, and notable locations.
 

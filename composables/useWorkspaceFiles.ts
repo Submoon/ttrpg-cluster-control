@@ -163,14 +163,19 @@ export function useWorkspaceFiles({
     if (!currentWorkspace) return
 
     try {
-      downloadJsonFile(
-        exportFileName(currentWorkspace.cluster.name, 'jump-cluster'),
-        exportJumpCluster(currentWorkspace),
-      )
-      exportError.value = ''
+      downloadWorkspaceSnapshot(currentWorkspace)
     } catch (error) {
       exportError.value = errorText(error)
     }
+  }
+
+  /** Downloads one supplied applied snapshot without resolving or mutating the page's current drafts. */
+  function downloadWorkspaceSnapshot(snapshot: LocalWorkspace): void {
+    downloadJsonFile(
+      exportFileName(snapshot.cluster.name, 'jump-cluster'),
+      exportJumpCluster(snapshot),
+    )
+    exportError.value = ''
   }
 
   /**
@@ -255,6 +260,9 @@ export function useWorkspaceFiles({
       if (!epochIsCurrent(epoch)) {
         abandonStaleImport(epoch)
         return
+      }
+      if (!content || typeof content !== 'object' || !('type' in content) || content.type !== 'system') {
+        throw new Error('Choose a standalone star system JSON file. Use Restore Jump Cluster for a complete Cluster backup.')
       }
       if (!await beforeWorkspaceOperation()) return
       const currentWorkspace = workspace.value
@@ -453,6 +461,7 @@ export function useWorkspaceFiles({
     exportError,
     importError,
     downloadClusterJson,
+    downloadWorkspaceSnapshot,
     downloadSystemJson,
     downloadMapImage,
     importJsonFile,

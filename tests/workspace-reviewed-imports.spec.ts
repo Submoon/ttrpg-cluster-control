@@ -1,9 +1,8 @@
 import { expect, test } from './fixtures'
 import {
-  createJumpRoute,
   createLocalWorkspace,
   createSystemObject,
-  exportJumpCluster,
+  exportStarSystem,
 } from '../domain/workspace'
 import {
   abortNextWorkspaceWrite,
@@ -11,17 +10,15 @@ import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
   downloadJson,
-  importReviewDialog,
-  jsonMapImportInput,
   hideWorkspaceInspector,
   openChartDetailsEditor,
   returnToClusterMap,
   resolveImportReview,
+  reviewStarSystemImport,
   setHeaderMapActionsOpen,
-  setJsonFile,
 } from './helpers'
 
-function incomingCluster(): {
+function incomingSystem(): {
   content: string
   systemId: string
   objectIds: string[]
@@ -34,20 +31,18 @@ function incomingCluster(): {
   const withFirstPoint = { ...sourceSystem, objects: [...sourceSystem.objects, firstPoint] }
   const secondPoint = createSystemObject(withFirstPoint, 'jump-point')
   const system = { ...withFirstPoint, objects: [...withFirstPoint.objects, secondPoint] }
-  const cluster = { ...source.cluster, systems: [system] }
-  const route = createJumpRoute(cluster, 1, firstPoint.id, secondPoint.id)
 
   return {
-    content: JSON.stringify(exportJumpCluster({
+    content: JSON.stringify(exportStarSystem({
       ...source,
-      cluster: { ...cluster, routes: [route] },
-    })),
+      cluster: { ...source.cluster, systems: [system] },
+    }, system.id)),
     systemId: system.id,
     objectIds: [firstPoint.id, secondPoint.id],
   }
 }
 
-test('JSON import review preserves an unrelated chart draft and publishes an independent copy only on confirm', async ({ page }) => {
+test('standalone system review preserves an unrelated chart draft and adds an independent system only on confirm', async ({ page }) => {
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -63,19 +58,13 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
-  const incoming = incomingCluster()
-  const importFile = async () => {
-    await setHeaderMapActionsOpen(page, true)
-    await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-    await setHeaderMapActionsOpen(page, false)
-    await setJsonFile(jsonMapImportInput(page), 'incoming-reach.json', incoming.content)
-  }
+  const incoming = incomingSystem()
+  const openReview = async () => reviewStarSystemImport(page, 'incoming-reach.json', incoming.content)
 
-  await importFile()
-  const review = page.getByRole('dialog', { name: 'Review import', exact: true })
+  const review = await openReview()
   await expect(review).toBeVisible()
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
-  await review.getByRole('button', { name: 'Cancel import', exact: true }).click()
+  await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
   await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' })).toBeVisible()
@@ -87,9 +76,9 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
-  await importFile()
+  await openReview()
   await expect(review).toBeVisible()
-  await review.getByRole('button', { name: 'Import independent copy', exact: true }).click()
+  await resolveImportReview(review, 'confirm')
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
@@ -107,9 +96,7 @@ test('JSON import review preserves an unrelated chart draft and publishes an ind
   expect(importedSystem?.id).not.toBe(incoming.systemId)
   const importedObjectIds = new Set(importedSystem?.objects.map(object => object.id))
   for (const sourceId of incoming.objectIds) expect(importedObjectIds.has(sourceId)).toBe(false)
-  expect(exported.cluster?.routes).toHaveLength(1)
-  expect(importedObjectIds.has(exported.cluster?.routes[0]?.fromPointId ?? '')).toBe(true)
-  expect(importedObjectIds.has(exported.cluster?.routes[0]?.toPointId ?? '')).toBe(true)
+  expect(exported.cluster?.routes).toHaveLength(0)
 })
 
 test('an applied import closes review before save failure and Retry persists the copy without clearing an unrelated draft', async ({ page }) => {
@@ -126,12 +113,8 @@ test('an applied import closes review before save failure and Retry persists the
   await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
-  const incoming = incomingCluster()
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), 'incoming-reach.json', incoming.content)
-  const review = importReviewDialog(page)
+  const incoming = incomingSystem()
+  const review = await reviewStarSystemImport(page, 'incoming-reach.json', incoming.content)
   await expect(review).toBeVisible()
 
   const saveFeedback = activeWorkspaceFeedback(page).locator('.save-feedback')

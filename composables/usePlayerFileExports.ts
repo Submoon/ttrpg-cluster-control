@@ -17,6 +17,10 @@ interface PreparedPlayerExport {
 interface PlayerFileExportsOptions {
   /** Prepares one public document and the current scene after any caller-owned preflight. */
   prepare: () => Promise<PreparedPlayerExport | null>
+  /** Announces that a current player link is ready for use. */
+  onPlayerLinkReady?: () => void
+  /** Announces that the current player link was copied successfully. */
+  onPlayerLinkCopied?: () => void
 }
 
 const GENERIC_EXPORT_ERROR = 'The player export could not be completed.'
@@ -29,7 +33,7 @@ const EMPTY_IMAGE_ERROR = 'This player map has no public features to export as a
  * Owns player-file action status and cancels stale async work when a newer action or scope wins.
  * Browser APIs are used only from invoked download, share, and clipboard actions, never during setup or SSR.
  */
-export function usePlayerFileExports({ prepare }: PlayerFileExportsOptions) {
+export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkCopied }: PlayerFileExportsOptions) {
   const playerExportError = ref('')
   const generatedPlayerUrl = ref('')
   const playerLinkBusy = ref(false)
@@ -159,7 +163,11 @@ export function usePlayerFileExports({ prepare }: PlayerFileExportsOptions) {
 
       generatedPlayerUrl.value = url
       artifactIdentity += 1
-      playerLinkStatus.value = 'Player link ready. This is an immutable snapshot anyone with the link can read and copy.'
+      try {
+        onPlayerLinkReady?.()
+      } catch {
+        // A success observer must not invalidate a generated link.
+      }
     } catch (error) {
       if (!isCurrent(activeOperation, prepared)) return
       if (error instanceof PlayerShareLinkError) {
@@ -196,7 +204,11 @@ export function usePlayerFileExports({ prepare }: PlayerFileExportsOptions) {
       }
       await navigator.clipboard.writeText(url)
       if (isCurrentCopy()) {
-        playerLinkStatus.value = 'Player link copied. Anyone with the link can read and copy this snapshot.'
+        try {
+          onPlayerLinkCopied?.()
+        } catch {
+          // A success observer must not turn a completed clipboard write into a failure.
+        }
       }
     } catch {
       if (isCurrentCopy()) {

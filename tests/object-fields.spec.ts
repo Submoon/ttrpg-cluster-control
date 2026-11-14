@@ -11,16 +11,14 @@ import {
   addCustomFieldThroughDialog,
   editFieldDefinition,
   editMapObject,
-  importReviewDialog,
-  jsonMapImportInput,
   openFieldDefinitionDialog,
   openWorkspaceHierarchy,
   readInspectorSelection,
-  resolveImportReview,
+  resolveJumpClusterRestoreReview,
   returnToClusterMap,
+  reviewJumpClusterBackup,
   saveMapObject,
   selectInspectorOption,
-  setJsonFile,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
 } from './helpers'
@@ -60,8 +58,8 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await setJsonFile(jsonMapImportInput(page), 'object-fields.json', JSON.stringify(objectFieldsCampaign()))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
+  const restoreReview = await reviewJumpClusterBackup(page, 'object-fields.json', JSON.stringify(objectFieldsCampaign()))
+  await resolveJumpClusterRestoreReview(restoreReview, 'confirm')
   await waitForWorkspaceSaved(page)
 
   const vesper = await openSystemHierarchy(page, 'Vesper')

@@ -161,7 +161,7 @@ test('keyboard focus remains visible on launch and recovery actions in a short l
   await waitForWorkspaceSaved(page)
 
   await page.evaluate(async () => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))

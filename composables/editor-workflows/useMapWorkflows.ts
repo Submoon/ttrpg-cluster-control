@@ -1,7 +1,7 @@
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
-import { computed, ref, type Ref, type ShallowRef } from 'vue'
+import { computed, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
   defaultObjectOrbitAngle,
@@ -50,6 +50,7 @@ interface MapWorkflowOptions {
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   createCommittedPositionAppliedHandler?: (change: CommittedObjectPosition) => () => void
   createCommittedOrbitCenterAppliedHandler?: (change: CommittedOrbitCenterPosition) => () => void
+  onOrbitRadiiIncreased?: (minimum: number) => void
   editorError: Ref<string>
   orbitAdjustments: OrbitAdjustmentController
   beforeWorkspaceOperation(): Promise<boolean>
@@ -70,6 +71,7 @@ export function useMapWorkflows({
   isEntityCommandBlocked,
   createCommittedPositionAppliedHandler,
   createCommittedOrbitCenterAppliedHandler,
+  onOrbitRadiiIncreased,
   editorError,
   orbitAdjustments,
   beforeWorkspaceOperation,
@@ -78,7 +80,6 @@ export function useMapWorkflows({
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
-  const orbitAdjustmentNotice = ref('')
 
   function rejectBlockedEntityCommand(command: EntityCommand): boolean {
     if (!isEntityCommandBlocked(command)) return false
@@ -781,10 +782,13 @@ export function useMapWorkflows({
       })
       throwIfRejected(result)
       editorError.value = ''
-      orbitAdjustmentNotice.value = ''
       if (result.status === 'applied') {
         if (adjustedMinimum !== undefined) {
-          orbitAdjustmentNotice.value = `Orbit radii increased to the new host minimum of ${adjustedMinimum}.`
+          try {
+            onOrbitRadiiIncreased?.(adjustedMinimum)
+          } catch {
+            // A feedback observer must not change an already-applied workspace result.
+          }
         }
         void result.durable.catch(() => undefined)
       }
@@ -892,7 +896,6 @@ export function useMapWorkflows({
   }
 
   return {
-    orbitAdjustmentNotice,
     updateOrbitAdjustment,
     moveSystem,
     moveMapObject,

@@ -1,9 +1,79 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { captureMapExportBlobs, importReviewDialog, openChartDetailsEditor, resolveImportReview, selectInspectorOption, waitForWorkspaceSaved } from './helpers'
-import { returnToClusterMap, openWorkspaceHierarchy, clickDockAction, jsonMapImportInput, setWorkspaceMapMode } from './helpers'
-import { setHeaderMapActionsOpen, downloadJson, editMapObject, saveMapObject, addCustomFieldThroughDialog, setJsonFile, addCatalogueObject } from './helpers'
+import {
+  captureMapExportBlobs,
+  abortNextWorkspaceWrite,
+  activeWorkspaceFeedback,
+  clickDockAction,
+  downloadJson,
+  editMapObject,
+  hideWorkspaceInspector,
+  jumpClusterBackupInput,
+  openChartDetailsEditor,
+  openWorkspaceHierarchy,
+  resolveImportReview,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
+  reviewStarSystemImport,
+  returnToClusterMap,
+  saveMapObject,
+  selectInspectorOption,
+  setHeaderMapActionsOpen,
+  setJsonFile,
+  setWorkspaceMapMode,
+  addCustomFieldThroughDialog,
+  addCatalogueObject,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
+} from './helpers'
 import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace'
+
+async function readWorkspaceRecoveryRecords(page: import('@playwright/test').Page): Promise<{ current: unknown; backup: unknown }> {
+  return await page.evaluate(async () => {
+    const request = indexedDB.open('ttrpg-cluster-control')
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
+    })
+    try {
+      const transaction = database.transaction('workspace', 'readonly')
+      const complete = new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve()
+        transaction.onabort = () => reject(transaction.error ?? new Error('Could not read recovery records.'))
+        transaction.onerror = () => reject(transaction.error ?? new Error('Could not read recovery records.'))
+      })
+      const store = transaction.objectStore('workspace')
+      const currentRequest = store.get('current')
+      const backupRequest = store.get('last-valid')
+      const [current, backup] = await Promise.all([
+        new Promise<unknown>((resolve, reject) => {
+          currentRequest.onsuccess = () => resolve(currentRequest.result)
+          currentRequest.onerror = () => reject(currentRequest.error ?? new Error('Could not read current workspace.'))
+        }),
+        new Promise<unknown>((resolve, reject) => {
+          backupRequest.onsuccess = () => resolve(backupRequest.result)
+          backupRequest.onerror = () => reject(backupRequest.error ?? new Error('Could not read recovery backup.'))
+        }),
+        complete,
+      ]).then(([currentWorkspace, lastValid]) => [currentWorkspace, lastValid] as const)
+      return { current, backup }
+    } finally {
+      database.close()
+    }
+  })
+}
+
+async function readReviewedDownload(page: import('@playwright/test').Page, review: import('@playwright/test').Locator): Promise<unknown> {
+  const download = page.waitForEvent('download')
+  await review.getByRole('button', { name: 'Download current Jump Cluster JSON', exact: true }).click()
+  await download
+  const json = await page.evaluate(async () => {
+    const blob = (window as Window & { __mapExportBlobs?: Blob[] }).__mapExportBlobs?.shift()
+    if (!blob) throw new Error('The reviewed current workspace download was not captured.')
+    return await blob.text()
+  })
+  return JSON.parse(json) as unknown
+}
 
 test('older saved Jump Routes and circle/ellipse layouts restore and reject invalid levels @pure', () => {
   const savedWorkspace = {
@@ -133,7 +203,8 @@ test('restoring a workspace removes legacy object targets without deleting value
 })
 
 
-test('the Warden can validate and import an independent JSON copy', async ({ page }) => {
+test('the Warden can validate and restore a complete Jump Cluster backup', async ({ page }) => {
+  test.setTimeout(90_000)
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -141,14 +212,18 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
 
+  const activeEditor = await openChartDetailsEditor(page)
+  await activeEditor.getByLabel('Jump Cluster', { exact: true }).fill('Active Reach')
+  await activeEditor.getByRole('button', { name: 'Apply details', exact: true }).click()
+  await waitForWorkspaceSaved(page)
+  await hideWorkspaceInspector(page)
+
   const initialExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  const originalSystemIds = initialExport.cluster!.systems.map(system => system.id)
-  const importFile = jsonMapImportInput(page)
   await setHeaderMapActionsOpen(page, true)
   const invalidFileChooser = page.waitForEvent('filechooser')
-  await page.getByRole('button', { name: 'Import JSON copy' }).click()
+  await page.getByRole('button', { name: 'Restore Jump Cluster', exact: true }).click()
   expect((await invalidFileChooser).isMultiple()).toBe(false)
-  await setJsonFile(importFile, 'invalid.json', '{')
+  await setJsonFile(jumpClusterBackupInput(page), 'invalid.json', '{')
   await setHeaderMapActionsOpen(page, false)
   await expect(page.getByRole('alert').last()).toContainText('valid JSON')
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(initialExport)
@@ -157,41 +232,116 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   const systemList = page.getByRole('navigation', { name: 'Star systems' })
   await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
 
-  await setJsonFile(importFile, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-  const canceledPreview = importReviewDialog(page)
-  await expect(canceledPreview).toContainText('Star systems: 2')
-  await expect(canceledPreview).toContainText('Jump Routes: 1')
-  await resolveImportReview(canceledPreview, 'cancel')
+  const canceledPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+  await expect(canceledPreview).toContainText('Active Reach')
+  await expect(canceledPreview).toContainText('Kestrel Reach Prime')
+  await resolveJumpClusterRestoreReview(canceledPreview, 'cancel')
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(initialExport)
 
-  await setJsonFile(importFile, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
-  const acceptedPreview = importReviewDialog(page)
-  await expect(acceptedPreview).toContainText('Star systems: 2')
-  await resolveImportReview(acceptedPreview, 'confirm')
-  await waitForWorkspaceSaved(page)
+  const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:$|:)/ })
+  await expect(undo).toHaveAttribute('aria-description', /1 action available to undo/)
+
+  const draftEditor = await openChartDetailsEditor(page)
+  await draftEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
+  await hideWorkspaceInspector(page)
+  const recordsBeforeReplacement = await readWorkspaceRecoveryRecords(page)
+  const oldWorkspaceId = (recordsBeforeReplacement.current as { id: string }).id
+
+  const staleTab = await page.context().newPage()
+  try {
+    await staleTab.goto('/')
+    await waitForWorkspaceStartup(staleTab)
+    await returnToClusterMap(staleTab)
+
+    const draftReview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    await expect(draftReview).toContainText('Unapplied editor drafts are open.')
+    await expect(draftReview.getByRole('checkbox', {
+      name: /discard current drafts if the replacement succeeds/i,
+      exact: true,
+    })).not.toBeChecked()
+    expect(await readReviewedDownload(page, draftReview)).toEqual(initialExport)
+    await resolveJumpClusterRestoreReview(draftReview, 'cancel')
+    const resumedDraftEditor = await openChartDetailsEditor(page)
+    await expect(resumedDraftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    await hideWorkspaceInspector(page)
+
+    const acceptedPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    await expect(acceptedPreview.getByRole('checkbox', {
+      name: /discard current drafts if the replacement succeeds/i,
+      exact: true,
+    })).not.toBeChecked()
+
+    await abortNextWorkspaceWrite(page, async () => {
+      await resolveJumpClusterRestoreReview(acceptedPreview, 'confirm', true)
+      await expect(acceptedPreview.getByRole('alert')).toContainText(/abort|transaction/i)
+    })
+    await expect(acceptedPreview).toBeVisible()
+    expect(await readWorkspaceRecoveryRecords(page)).toEqual(recordsBeforeReplacement)
+    expect(await readReviewedDownload(page, acceptedPreview)).toEqual(initialExport)
+
+    await resolveJumpClusterRestoreReview(acceptedPreview, 'cancel')
+    const draftAfterFailedReplacement = await openChartDetailsEditor(page)
+    await expect(draftAfterFailedReplacement.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    await hideWorkspaceInspector(page)
+
+    const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    await resolveJumpClusterRestoreReview(retryPreview, 'confirm', true)
+    await expect(retryPreview).toBeHidden()
+    await waitForWorkspaceSaved(page)
+    const restoredWorkspaceId = await page.evaluate(async () => {
+      const request = indexedDB.open('ttrpg-cluster-control')
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))
+      })
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          const transaction = database.transaction('workspace', 'readonly')
+          const read = transaction.objectStore('workspace').get('current')
+          read.onsuccess = () => resolve((read.result as { id: string }).id)
+          read.onerror = () => reject(read.error ?? new Error('Could not read the restored workspace.'))
+        })
+      } finally {
+        database.close()
+      }
+    })
+    expect(restoredWorkspaceId).not.toBe(oldWorkspaceId)
+    await expect(undo).toBeDisabled()
+    await expect(undo).toHaveAttribute('aria-description', /0 actions available to undo/)
+    await expect(page.getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })).toHaveCount(0)
+
+    const staleEditor = await openChartDetailsEditor(staleTab)
+    await staleEditor.getByLabel('Jump Cluster', { exact: true }).fill('Stale Overwrite')
+    await staleEditor.getByRole('button', { name: 'Apply details', exact: true }).click()
+    await expect(activeWorkspaceFeedback(staleTab).locator('.save-feedback')).toContainText('Not saved.', { timeout: 10_000 })
+    const recordsAfterStaleSave = await readWorkspaceRecoveryRecords(page)
+    expect((recordsAfterStaleSave.current as { cluster: { name: string } }).cluster.name).toBe('Kestrel Reach Prime')
+    expect((recordsAfterStaleSave.backup as { cluster: { name: string } }).cluster.name).toBe('Active Reach')
+  } finally {
+    await staleTab.close()
+  }
+
   await page.reload()
   await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
+  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(clusterMap.getByRole('button', {
     name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/,
   })).toBeVisible()
 
   const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(importedExport.cluster!.systems.map(system => system.id).slice(0, originalSystemIds.length))
-    .toEqual(originalSystemIds)
-  const importedVesper = importedExport.cluster!.systems.find(system =>
-    system.name === 'Vesper Prime' && !originalSystemIds.includes(system.id),
-  )!
+  expect(importedExport.cluster?.id).toBe(campaignBaselineFixture.cluster.id)
+  expect(importedExport.cluster!.systems.map(system => system.name)).toEqual(['Vesper Prime', 'Harrow'])
+  const importedVesper = importedExport.cluster!.systems.find(system => system.name === 'Vesper Prime')!
   const importedHarrow = importedExport.cluster!.systems.find(system => system.name === 'Harrow')!
   const importedDeparture = importedVesper.objects.find(object => object.name === 'Vesper Departure')!
   const importedArrival = importedHarrow.objects.find(object => object.name === 'Harrow Arrival')!
   const importedRoute = importedExport.cluster!.routes.find(route =>
     route.fromPointId === importedDeparture.id && route.toPointId === importedArrival.id,
   )
-  expect(importedVesper.id).not.toBe(campaignBaselineFixture.cluster.systems[0]?.id)
-  expect(importedDeparture.id).not.toBe('campaign-baseline-departure')
-  expect(importedArrival.id).not.toBe('campaign-baseline-arrival')
+  expect(importedVesper.id).toBe(campaignBaselineFixture.cluster.systems[0]?.id)
+  expect(importedDeparture.id).toBe('campaign-baseline-departure')
+  expect(importedArrival.id).toBe('campaign-baseline-arrival')
   expect(importedRoute).toMatchObject({
     jumpLevel: 1,
     fromPointId: importedDeparture.id,
@@ -204,7 +354,7 @@ test('the Warden can validate and import an independent JSON copy', async ({ pag
   await expect(page.getByLabel('Warden notes')).toHaveValue('Existing campaign record.')
 })
 
-test('the Warden can import a standalone system without adding cluster routes', async ({ page }) => {
+test('the Warden can explicitly add a standalone system without adding cluster routes', async ({ page }) => {
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -212,9 +362,7 @@ test('the Warden can import a standalone system without adding cluster routes', 
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   const exportedSystem = await downloadJson(page, 'Export star system JSON')
-  const input = jsonMapImportInput(page)
-  await setJsonFile(input, 'system-copy.json', JSON.stringify(exportedSystem))
-  const preview = importReviewDialog(page)
+  const preview = await reviewStarSystemImport(page, 'system-copy.json', JSON.stringify(exportedSystem))
   const previewSummary = await preview.innerText()
   expect(previewSummary).toContain('Star systems: 1')
   expect(previewSummary).toContain('Jump Routes: 0')

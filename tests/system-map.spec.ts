@@ -5,14 +5,12 @@ import {
   downloadImage,
   dragOrbitToWorldPoint,
   dragToWorldPoint,
-  importReviewDialog,
   inspectImageSvg,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   resolveImportReview,
+  reviewStarSystemImport,
   returnToClusterMap,
   setHeaderMapActionsOpen,
-  setJsonFile,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   workspaceZoomControls,
@@ -83,8 +81,8 @@ test('the system map expands beyond its initial bounds and exports the full layo
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Staging system')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await setJsonFile(jsonMapImportInput(page), 'extent-fixture.json', JSON.stringify(exportStarSystem(fixture, fixtureSystem.id)))
-  await resolveImportReview(importReviewDialog(page), 'confirm')
+  const review = await reviewStarSystemImport(page, 'extent-fixture.json', JSON.stringify(exportStarSystem(fixture, fixtureSystem.id)))
+  await resolveImportReview(review, 'confirm')
   await setHeaderMapActionsOpen(page, false)
 
   const openVesper = async () => {

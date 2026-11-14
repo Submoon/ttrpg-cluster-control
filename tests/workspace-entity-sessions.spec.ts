@@ -1,14 +1,12 @@
 import { expect, test, type Page } from './fixtures'
 import entitySessionFixture from './fixtures/workspace-entity-sessions.json' with { type: 'json' }
-import { importReviewDialog, resolveImportReview, waitForWorkspaceSaved } from './helpers'
+import { resolveImportReview, reviewStarSystemImport, waitForWorkspaceSaved } from './helpers'
 import {
   captureMapExportBlobs,
   downloadJson,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   returnToClusterMap,
   setHeaderMapActionsOpen,
-  setJsonFile,
 } from './helpers'
 
 async function openSessionLab(page: Page): Promise<{
@@ -25,8 +23,7 @@ async function openSessionLab(page: Page): Promise<{
   await waitForWorkspaceSaved(page)
   await returnToClusterMap(page)
 
-  await setJsonFile(jsonMapImportInput(page), 'entity-session-lab.json', JSON.stringify(entitySessionFixture))
-  const importPreview = importReviewDialog(page)
+  const importPreview = await reviewStarSystemImport(page, 'entity-session-lab.json', JSON.stringify(entitySessionFixture))
   const importSummary = await importPreview.innerText()
   expect(importSummary).toContain('Star systems: 1')
   await resolveImportReview(importPreview, 'confirm')

@@ -3,10 +3,8 @@ import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
   captureMapExportBlobs,
   downloadJson,
-  jsonMapImportInput,
   returnToClusterMap,
-  setHeaderMapActionsOpen,
-  setJsonFile,
+  reviewJumpClusterBackup,
   setWorkspaceMapMode,
 } from './helpers'
 
@@ -44,7 +42,7 @@ async function expectReviewActionInViewport(
 }
 
 for (const viewport of reviewViewports) {
-  test(`deletion and import reviews fit and return focus at ${viewport.width}×${viewport.height} ${viewport.theme}`, async ({ page }) => {
+  test(`deletion and cluster replacement reviews fit and return focus at ${viewport.width}×${viewport.height} ${viewport.theme}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.emulateMedia({ colorScheme: viewport.theme })
     await captureMapExportBlobs(page)
@@ -84,39 +82,25 @@ for (const viewport of reviewViewports) {
     await returnToClusterMap(page)
 
     const incomingJson = JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Incoming Vesper')))
-    await setHeaderMapActionsOpen(page, true)
-    const importButton = page.getByRole('button', { name: 'Import JSON copy', exact: true })
-    await expect(importButton).toBeVisible()
-    await importButton.focus()
-    await expect(importButton).toBeFocused()
-    await setJsonFile(jsonMapImportInput(page), 'incoming-reach.json', incomingJson)
+    const restoreReview = await reviewJumpClusterBackup(page, 'incoming-reach.json', incomingJson)
+    await expect(restoreReview).toBeVisible()
+    await expect(restoreReview).toContainText('Kestrel Reach')
+    await expect(restoreReview).toContainText('Incoming Reach')
+    await expect(restoreReview.getByRole('button', { name: 'Download current Jump Cluster JSON', exact: true }))
+      .toBeVisible()
+    const replaceCluster = restoreReview.getByRole('button', { name: 'Replace Jump Cluster', exact: true })
+    const returnToEditing = restoreReview.getByRole('button', { name: 'Return to editing', exact: true })
+    await expectReviewActionInViewport(restoreReview, replaceCluster, viewport)
+    await expectReviewActionInViewport(restoreReview, returnToEditing, viewport)
+    await replaceCluster.focus()
+    await expect(replaceCluster).toBeFocused()
 
-    const importReview = page.getByRole('dialog', { name: 'Review import', exact: true })
-    await expect(importReview).toBeVisible()
-    await expect(importReview.getByRole('region', { name: 'Import effects', exact: true }))
-      .toContainText('Import this Jump Cluster as an independent copy?')
-    const importCounts = importReview.getByRole('list', { name: 'Import counts', exact: true })
-    await expect(importCounts).toContainText('Star systems: 1')
-    await expect(importCounts).toContainText('Map objects: 1')
-    await expect(importCounts).toContainText('Orbits: 0')
-    await expect(importCounts).toContainText('Jump Routes: 0')
-    await expect(importCounts).toContainText('Custom fields: 0')
-    await expect(importReview).toContainText('Original-ID collisions (0):')
-    await expect(importReview).toContainText('Possible existing matches by name or location key (0):')
-    await expect(importReview).toContainText('Map entities remain separate copies and receive new IDs.')
-    const confirmImport = importReview.getByRole('button', { name: 'Import independent copy', exact: true })
-    const cancelImport = importReview.getByRole('button', { name: 'Cancel import', exact: true })
-    await expectReviewActionInViewport(importReview, confirmImport, viewport)
-    await expectReviewActionInViewport(importReview, cancelImport, viewport)
-    await confirmImport.focus()
-    await expect(confirmImport).toBeFocused()
-
-    await cancelImport.click()
-    await expect(importReview).toBeHidden()
-    await expect(importButton).toBeVisible()
-    await expect(importButton).toBeFocused()
-    await expect(importButton).toBeInViewport({ ratio: 1 })
-    await setHeaderMapActionsOpen(page, false)
+    await returnToEditing.click()
+    await expect(restoreReview).toBeHidden()
+    const mapFilesButton = page.getByRole('button', { name: 'Map files', exact: true })
+    await expect(mapFilesButton).toBeVisible()
+    await expect(mapFilesButton).toBeFocused()
+    await expect(mapFilesButton).toBeInViewport({ ratio: 1 })
     const unchanged = await downloadJson(page, 'Export Jump Cluster JSON')
     expect(unchanged.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
   })

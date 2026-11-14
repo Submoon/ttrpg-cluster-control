@@ -2,12 +2,10 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import deepHierarchyFixture from './fixtures/workspace-hierarchy-deep.json' with { type: 'json' }
 import {
   createSingleSystemWorkspace,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   resolveImportReview,
   returnToClusterMap,
-  setHeaderMapActionsOpen,
-  setJsonFile,
+  reviewStarSystemImport,
   setWorkspaceMapMode,
 } from './helpers'
 
@@ -83,15 +81,11 @@ async function expectUnclippedObjectName(item: Locator): Promise<void> {
 test('deep object and Orbit rows stay readable at the minimum Hierarchy width @preview-smoke', async ({ page }, testInfo) => {
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(
-    jsonMapImportInput(page),
+  const review = await reviewStarSystemImport(
+    page,
     'deep-hierarchy-readability.json',
     JSON.stringify(addTwentyAlternatingLevels(deepHierarchyFixture)),
   )
-  const review = page.getByRole('dialog', { name: 'Review import', exact: true })
   await resolveImportReview(review, 'confirm')
   await expect(review).toHaveCount(0)
 

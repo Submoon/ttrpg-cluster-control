@@ -100,7 +100,7 @@ async function expectOrbitPreviewRadiusToFollowFinger(
 
 async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords> {
   return page.evaluate(async () => {
-    const request = indexedDB.open('ttrpg-cluster-control', 1)
+    const request = indexedDB.open('ttrpg-cluster-control')
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('Could not open the workspace database.'))

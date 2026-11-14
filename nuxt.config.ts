@@ -1,6 +1,11 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-08',
   ssr: true,
+  runtimeConfig: {
+    public: {
+      googleDriveClientId: '',
+    },
+  },
   modules: ['@nuxt/ui', '@pinia/nuxt'],
   typescript: {
     tsConfig: {

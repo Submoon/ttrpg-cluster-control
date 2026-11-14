@@ -168,6 +168,25 @@ export function useFieldDefinitionWorkflows({
     return true
   }
 
+  /** Clears all retained Fields drafts and consequence reviews after a durable workspace replacement. */
+  function resetForWorkspaceReplacement(): void {
+    invalidatePreparedMutation()
+    fieldMutationEpoch += 1
+    confirmingFieldMutation = false
+    pendingFieldDeletionId = null
+    Object.assign(fieldDefinitionsSession, {
+      open: false,
+      screen: 'list' as const,
+      selectedId: null,
+      draft: null,
+      createDraft: null,
+      pendingGuard: null,
+      review: null,
+      error: null,
+      listPosition: { scrollTop: 0, focusedFieldId: null },
+    })
+  }
+
   /** Refuses an import only when it changes the definition currently owned by a dirty Fields draft. */
   function getFieldDefinitionImportConflict(candidate: LocalWorkspace): { message: string } | null {
     const currentWorkspace = workspace.value
@@ -994,6 +1013,7 @@ export function useFieldDefinitionWorkflows({
     hasModifiedFieldDefinitionsSession,
     hasPendingHistoryDecision,
     endCleanHistorySession,
+    resetForWorkspaceReplacement,
     fieldDefinitionsDialog,
     openFieldDefinitions,
     handleFieldDefinitionsIntent,

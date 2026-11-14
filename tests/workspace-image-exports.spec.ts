@@ -7,19 +7,17 @@ import {
   downloadJson,
   openChartDetailsEditor,
   inspectImageSvg,
-  jsonMapImportInput,
   openWorkspaceHierarchy,
   panMap,
   returnToClusterMap,
-  resolveImportReview,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
   selectInspectorOption,
   setHeaderMapActionsOpen,
-  setJsonFile,
   setWorkspaceMapMode,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
-import { importReviewDialog } from './helpers'
 import type { DownloadWindow, ExportedMap } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -102,23 +100,22 @@ async function createImportedCampaign(
   await page.emulateMedia({ colorScheme })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('Jump Cluster').fill('Image export staging')
+  await page.getByLabel('First star system').fill('Staging system')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await returnToClusterMap(page)
 
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Import JSON copy', exact: true }).click()
-  await setHeaderMapActionsOpen(page, false)
-  await setJsonFile(jsonMapImportInput(page), 'campaign-baseline.json', JSON.stringify(fixture))
-  const review = importReviewDialog(page)
-  await expect(review).toBeVisible()
-  await resolveImportReview(review, 'confirm')
+  const review = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(fixture))
+  const incomingClusterName = fixture.cluster?.name
+  if (!incomingClusterName) throw new Error('The image export fixture is missing its Jump Cluster.')
+  await expect(review).toContainText('Image export staging')
+  await expect(review).toContainText(incomingClusterName)
+  await resolveJumpClusterRestoreReview(review, 'confirm')
   const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
   const hideInspector = page.getByRole('button', { name: 'Hide inspector', exact: true })
   if (await closeInspector.isVisible()) await closeInspector.click()
   else if (await hideInspector.isVisible()) await hideInspector.click()
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const clusterMap = page.getByRole('group', { name: `${incomingClusterName} Jump Cluster map`, exact: true })
   await expect(clusterMap).toBeVisible()
   return clusterMap
 }

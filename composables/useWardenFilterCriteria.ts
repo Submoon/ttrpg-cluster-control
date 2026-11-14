@@ -32,6 +32,8 @@ export interface WardenFilterCriteriaOwner {
 interface UseWardenFilterCriteriaOptions {
   workspace: Ref<LocalWorkspace | null>
   store: ReturnType<typeof useEditorUiStore>
+  onMapFiltersInvalidated?: () => void
+  onSearchFiltersInvalidated?: () => void
 }
 
 const validPublicationModes = new Set<PublicationMode>(publicationModes)
@@ -50,7 +52,12 @@ function typeOptionsWithRetainedSelection(
 }
 
 /** Owns the common Warden filter rules while keeping map and Search criteria in their Pinia lifetimes. */
-export function useWardenFilterCriteria({ workspace, store }: UseWardenFilterCriteriaOptions): WardenFilterCriteriaOwner {
+export function useWardenFilterCriteria({
+  workspace,
+  store,
+  onMapFiltersInvalidated,
+  onSearchFiltersInvalidated,
+}: UseWardenFilterCriteriaOptions): WardenFilterCriteriaOwner {
   const fieldOptions = computed<FieldFilterOption[]>(() =>
     workspace.value ? wardenFieldFilterOptions(workspace.value) : [],
   )
@@ -106,6 +113,7 @@ export function useWardenFilterCriteria({ workspace, store }: UseWardenFilterCri
     if (!reconciliation.changed) return
     store.setSelectedMapFieldConditions(reconciliation.conditions)
     mapInvalidationNotice.value = 'Some filters were removed because Fields or choices changed.'
+    onMapFiltersInvalidated?.()
   }, { immediate: true })
 
   watch(() => workspace.value?.id, (workspaceId, previousWorkspaceId) => {
@@ -118,6 +126,7 @@ export function useWardenFilterCriteria({ workspace, store }: UseWardenFilterCri
     if (!reconciliation.changed) return
     store.setSearchFieldConditions(reconciliation.conditions)
     searchInvalidationNotice.value = 'Search filters updated because a Field or choice is no longer available.'
+    onSearchFiltersInvalidated?.()
   }, { flush: 'sync' })
 
   watch(() => store.workspaceId, () => {

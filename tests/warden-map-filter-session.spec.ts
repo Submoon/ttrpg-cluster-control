@@ -36,6 +36,7 @@ test('map and Search Field choices revalidate across real Apply, Undo, and Redo 
     confirmCapacity: async () => true,
   })
   const store = useEditorUiStore()
+  let invalidationNotifications = 0
   const initialCondition: FieldCondition = {
     fieldId: 'field-condition',
     type: 'single-select',
@@ -46,6 +47,7 @@ test('map and Search Field choices revalidate across real Apply, Undo, and Redo 
   const filters = scope.run(() => useWardenFilterCriteria({
     workspace,
     store,
+    onMapFiltersInvalidated: () => { invalidationNotifications += 1 },
   }))
   if (!filters) throw new Error('Warden Field filter criteria were not created.')
   const map = filters.map
@@ -81,6 +83,7 @@ test('map and Search Field choices revalidate across real Apply, Undo, and Redo 
   expect(search.criteria.value.fieldConditions).toEqual(map.criteria.value.fieldConditions)
   expect(map.invalidationNotice.value).toContain('Fields or choices changed')
   expect(search.invalidationNotice.value).toBe('Search filters updated because a Field or choice is no longer available.')
+  expect(invalidationNotifications).toBe(1)
   expect(filters.fieldOptions.value.find(option => option.fieldId === 'field-condition')?.label).toBe('Object state (Custom)')
 
   // Map rejects an invalid Field edit and retains its notice. Search normalizes the edit and reports it again.
@@ -133,6 +136,24 @@ test('map and Search Field choices revalidate across real Apply, Undo, and Redo 
   expect(map.criteria.value.fieldConditions).toEqual([])
   expect(map.invalidationNotice.value).toBeNull()
   expect(filters.fieldOptions.value.find(option => option.fieldId === 'field-condition')?.label).toBe('Object state (Custom)')
+
+  map.setFieldConditions([{ ...initialCondition, values: ['Known'] }])
+  const secondApply = await history.execute({
+    action: { kind: 'update', label: 'Remove the remaining Condition choice', target: { kind: 'field', id: 'field-condition' } },
+    prepare: current => ({
+      ...current,
+      objectFieldSettings: {
+        ...current.objectFieldSettings,
+        customFields: current.objectFieldSettings.customFields.map(field => field.id === 'field-condition'
+          ? { ...field, options: ['Damaged'] }
+          : field),
+      },
+    }),
+  })
+  expect(secondApply.status).toBe('applied')
+  await nextTick()
+  expect(store.selectedMapFieldConditions).toEqual([])
+  expect(invalidationNotifications).toBe(2)
 
   scope.stop()
   history.dispose()

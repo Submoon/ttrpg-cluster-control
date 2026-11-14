@@ -147,6 +147,44 @@ test('a declined preflight leaves player link state empty @pure', async () => {
   }
 })
 
+test('successful player link actions notify each current success without inline status copy @pure', async () => {
+  const document = publicPlayerDocument()
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const copiedUrls: string[] = []
+  let readyNotifications = 0
+  let copiedNotifications = 0
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { clipboard: { writeText: async (url: string) => { copiedUrls.push(url) } } },
+  })
+  const owner = usePlayerFileExports({
+    prepare: async () => preparedExport(document),
+    onPlayerLinkReady: () => { readyNotifications += 1 },
+    onPlayerLinkCopied: () => { copiedNotifications += 1 },
+  })
+
+  try {
+    await owner.generatePlayerLink('https://reader.example.test/player')
+    expect(owner.generatedPlayerUrl.value).not.toBe('')
+    expect(owner.playerLinkStatus.value).toBe('')
+    expect(readyNotifications).toBe(1)
+
+    await owner.generatePlayerLink('https://reader.example.test/player')
+    expect(owner.playerLinkStatus.value).toBe('')
+    expect(readyNotifications).toBe(2)
+
+    await owner.copyPlayerLink()
+    await owner.copyPlayerLink()
+    expect(copiedUrls).toEqual([owner.generatedPlayerUrl.value, owner.generatedPlayerUrl.value])
+    expect(copiedNotifications).toBe(2)
+    expect(owner.playerLinkStatus.value).toBe('')
+  } finally {
+    owner.dispose()
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else Reflect.deleteProperty(globalThis, 'navigator')
+  }
+})
+
 test('a newer JSON export aborts pending native link compression and clears busy state @pure', async () => {
   const document = publicPlayerDocument()
   await withDownloadBoundary(async (downloads) => {
