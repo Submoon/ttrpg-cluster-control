@@ -46,6 +46,9 @@
             @restore-review-open="workspaceRestoreReturnTarget = $event"
             @restore-canceled="workspaceRestoreReturnTarget = null"
           />
+          <NuxtLink v-if="hydrationState === 'error'" class="self-center text-sm text-primary underline" to="/privacy">
+            Privacy policy
+          </NuxtLink>
         </template>
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
@@ -187,6 +190,9 @@
                   @restore-review-open="workspaceRestoreReturnTarget = $event"
                   @restore-canceled="workspaceRestoreReturnTarget = null"
                 />
+                <NuxtLink class="justify-self-start text-xs text-primary underline" to="/privacy" target="_blank" rel="noopener" aria-label="Privacy policy (opens in a new tab)">
+                  Privacy policy
+                </NuxtLink>
               </template>
               <template #history>
                 <WorkspaceHistoryControls

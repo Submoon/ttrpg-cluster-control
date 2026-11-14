@@ -11,6 +11,10 @@ Set `NUXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID` in the local process environment or an 
 
 For a Vercel preview, set the test client ID in `NUXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID` for the Preview environment and redeploy. A project-wide Preview variable can serve every non-production branch. Add the exact HTTPS origin of each branch you test to the OAuth client's authorized JavaScript origins. Use Vercel's stable branch URL so subsequent deployments of the same branch keep using the registered origin. [Vercel Preview variables](https://vercel.com/docs/environment-variables#preview-environment-variables) · [Vercel branch URLs](https://vercel.com/docs/deployments/generated-urls#generated-from-git) · [Google authorized origins](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid)
 
+## Set the production privacy policy URL
+
+After deploying the page to production, open `/privacy` and follow the **Privacy policy** link from the app's welcome screen in a fresh browser profile. In the production Google Cloud project's **Google Auth Platform → Branding**, enter the public home page URL and the full privacy policy URL on the same origin. For the default production domain, use `https://ttrpg-cluster-control.vercel.app/privacy`. Use the same path on the production domain you configured for OAuth. [Google's privacy policy link requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification#application-privacy-policy-link-requirements)
+
 ## Run the live test
 
 1. In the first browser profile, create or restore a synthetic Jump Cluster with GM notes, player publication settings, Fields, relationships, and a saved layout. Download the full JSON as the reference.

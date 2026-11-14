@@ -68,7 +68,10 @@
       <h1 class="workspace-welcome-title my-3 max-w-[14ch] leading-[1.02] tracking-[-0.04em]">Give the unknown a name.</h1>
       <p class="mb-0 max-w-[34rem] text-[0.92rem] leading-[1.65]">
         Start with a Jump Cluster and its first star system. This workspace stays in this browser;
-        there is no account and no remote workspace.
+        there is no app account or remote workspace. Optional Google Drive backups are user-triggered.
+      </p>
+      <p class="workspace-welcome-privacy mt-3 mb-0 text-sm">
+        <NuxtLink class="workspace-privacy-link" to="/privacy">Privacy policy</NuxtLink>
       </p>
     </div>
 
@@ -257,6 +260,13 @@ function openLocalBackupPicker(event: MouseEvent): void {
 
 .workspace-welcome-title {
   font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+.workspace-privacy-link {
+  color: var(--accent-hover);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .workspace-message-title {
