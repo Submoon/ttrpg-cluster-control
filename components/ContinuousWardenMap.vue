@@ -104,7 +104,7 @@
               :x1="label.anchorX"
               :y1="label.anchorY"
               :x2="label.x"
-              :y2="label.y + 14"
+              :y2="label.y + label.height / 2"
               aria-hidden="true"
             />
             <g
@@ -121,10 +121,15 @@
                 :x="-label.width / 2"
                 y="0"
                 :width="label.width"
-                height="28"
+                :height="label.height"
                 rx="5"
               />
-              <text class="continuous-warden-system-name" y="19" text-anchor="middle">
+              <text
+                class="continuous-warden-system-name"
+                :style="{ fontSize: `${SYSTEM_NAME_FONT_PIXELS / svgPixelScale}px` }"
+                :y="label.height * 0.68"
+                text-anchor="middle"
+              >
                 {{ label.name }}
               </text>
             </g>
@@ -154,6 +159,7 @@ import {
 import {
   clampWardenClusterAnchor,
   CONTINUOUS_MAP_LOCAL_ORIGIN,
+  moveWardenClusterAnchorBySceneDelta,
   projectWardenSystem,
   unprojectWardenClusterAnchor,
   type ContinuousWardenSystemProjection,
@@ -161,10 +167,14 @@ import {
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
+import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
 const MINIMUM_FIT_PADDING = 48
+const SYSTEM_NAME_FONT_PIXELS = 18
+const SYSTEM_NAME_HEIGHT_PIXELS = 28
+const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 
 const props = defineProps<{
   cluster: JumpCluster
@@ -194,8 +204,11 @@ const emit = defineEmits<{
 const svgElement = ref<SVGSVGElement | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
+const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = ref(new Set<string>())
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
+const svgPixelScale = ref(1)
+const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
 const ready = ref(false)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
@@ -254,9 +267,40 @@ interface NameLabel {
   x: number
   y: number
   width: number
+  height: number
   anchorX: number
   anchorY: number
   hasLeader: boolean
+}
+
+let textMeasureContext: CanvasRenderingContext2D | null | undefined
+
+function systemNameWidthPixels(name: string): number {
+  if (textMeasureContext === undefined && typeof document !== 'undefined') {
+    textMeasureContext = document.createElement('canvas').getContext('2d')
+    if (textMeasureContext) textMeasureContext.font = `600 ${SYSTEM_NAME_FONT_PIXELS}px Georgia, serif`
+  }
+  const textWidth = textMeasureContext?.measureText(name).width ?? name.length * 9
+  return Math.max(72, Math.ceil(textWidth + 24))
+}
+
+function namePlacementOffsets(widthPixels: number): Point[] {
+  const side = widthPixels / 2 + 10
+  const offsets: Point[] = []
+  for (let ring = 0; ring <= 12; ring += 1) {
+    const distance = ring * 38
+    offsets.push(
+      { x: 0, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 - distance },
+      { x: 0, y: 8 + distance },
+      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
+      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
+      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
+      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
+      { x: -side - distance, y: 8 },
+      { x: side + distance, y: 8 },
+    )
+  }
+  return offsets
 }
 
 function anchorFor(projection: ContinuousWardenSystemProjection): Point {
@@ -278,10 +322,17 @@ function systemTransform(projection: ContinuousWardenSystemProjection): string {
 
 function anchorTransform(projection: ContinuousWardenSystemProjection): string {
   const anchor = anchorFor(projection)
-  return `translate(${anchor.x} ${anchor.y}) scale(${1 / viewport.value.k})`
+  return `translate(${anchor.x} ${anchor.y}) scale(${1 / (viewport.value.k * svgPixelScale.value)})`
+}
+
+function clampToViewport(value: number, minimum: number, maximum: number): number {
+  return maximum < minimum ? (minimum + maximum) / 2 : Math.max(minimum, Math.min(maximum, value))
 }
 
 const nameLabels = computed<NameLabel[]>(() => {
+  const scale = svgPixelScale.value > 0 ? svgPixelScale.value : 1
+  const viewportRect = svgViewport.value
+  const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
   const labels: NameLabel[] = []
   const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = []
   const anchorPoints = projections.value.map(projection => {
@@ -293,44 +344,71 @@ const nameLabels = computed<NameLabel[]>(() => {
       y: viewport.value.y + anchor.y * viewport.value.k,
     }
   })
-  const candidates = [
-    { x: 0, y: -31 }, { x: 0, y: -59 }, { x: -84, y: -31 }, { x: 84, y: -31 },
-    { x: -112, y: 6 }, { x: 112, y: 6 }, { x: 0, y: 34 }, { x: 0, y: -87 },
-    { x: -144, y: -31 }, { x: 144, y: -31 }, { x: -84, y: 34 }, { x: 84, y: 34 },
-    { x: 0, y: 62 }, { x: -168, y: 4 }, { x: 168, y: 4 }, { x: 0, y: -115 },
-  ]
   for (const anchor of anchorPoints) {
-    const width = Math.max(72, anchor.name.length * 10 + 20)
+    const widthPixels = systemNameWidthPixels(anchor.name)
+    const width = widthPixels / scale
+    const height = SYSTEM_NAME_HEIGHT_PIXELS / scale
+    const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
     let chosen = candidates[0]!
+    let chosenScore = Number.POSITIVE_INFINITY
     for (const offset of candidates) {
+      const centerX = clampToViewport(
+        anchor.x + offset.x,
+        viewportRect.x + margin + width / 2,
+        viewportRect.x + viewportRect.width - margin - width / 2,
+      )
+      const top = clampToViewport(
+        anchor.y + offset.y,
+        viewportRect.y + margin,
+        viewportRect.y + viewportRect.height - margin - height,
+      )
+      const candidateOffset = { x: centerX - anchor.x, y: top - anchor.y }
       const bounds = {
-        left: anchor.x + offset.x - width / 2,
-        right: anchor.x + offset.x + width / 2,
-        top: anchor.y + offset.y,
-        bottom: anchor.y + offset.y + 28,
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top,
+        bottom: top + height,
       }
-      const overlapsLabel = occupied.some(prior => bounds.left < prior.right + 6
-        && bounds.right + 6 > prior.left && bounds.top < prior.bottom + 5 && bounds.bottom + 5 > prior.top)
-      const coversAnchor = anchorPoints.some(other => other.id !== anchor.id
-        && bounds.left < other.x + 18 && bounds.right > other.x - 18
-        && bounds.top < other.y + 18 && bounds.bottom > other.y - 18)
-      if (!overlapsLabel && !coversAnchor) {
-        chosen = offset
-        break
+      const outsideWidth = Math.max(0, viewportRect.x + margin - bounds.left)
+        + Math.max(0, bounds.right - (viewportRect.x + viewportRect.width - margin))
+      const outsideHeight = Math.max(0, viewportRect.y + margin - bounds.top)
+        + Math.max(0, bounds.bottom - (viewportRect.y + viewportRect.height - margin))
+      const outsideArea = outsideWidth * height + outsideHeight * width
+      const labelOverlapArea = occupied.reduce((total, prior) => {
+        const overlapWidth = Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
+        const overlapHeight = Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top))
+        return total + overlapWidth * overlapHeight
+      }, 0)
+      const anchorOverlapArea = anchorPoints.reduce((total, other) => {
+        if (other.id === anchor.id) return total
+        const radius = 18 / scale
+        const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
+        const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))
+        return total + overlapWidth * overlapHeight
+      }, 0)
+      const duplicatePosition = labels.some(prior => prior.x === centerX && prior.y === top)
+      const score = labelOverlapArea * 100 + anchorOverlapArea * 30 + outsideArea * 10
+        + (duplicatePosition ? 1_000_000_000 : 0) + Math.hypot(candidateOffset.x, candidateOffset.y) * 0.01
+      if (score < chosenScore) {
+        chosen = candidateOffset
+        chosenScore = score
       }
+      if (labelOverlapArea === 0 && anchorOverlapArea === 0 && outsideArea === 0 && !duplicatePosition) break
     }
     const x = anchor.x + chosen.x
     const y = anchor.y + chosen.y
-    occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + 28 })
+    occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + height })
     labels.push({
       id: anchor.id,
       name: anchor.name,
       x,
       y,
       width,
+      height,
       anchorX: anchor.x,
       anchorY: anchor.y,
-      hasLeader: Math.abs(chosen.x) > 0 || Math.abs(chosen.y + 31) > 6,
+      hasLeader: Math.abs(chosen.x * scale) > 0
+        || Math.abs(chosen.y * scale + SYSTEM_NAME_HEIGHT_PIXELS + 8) > 6,
     })
   }
   return labels
@@ -359,11 +437,32 @@ function updateDetailReveal(cameraScale: number): void {
   const next = new Set<string>()
   for (const projection of projections.value) {
     const threshold = current.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS
-    if (Math.max(projection.envelope.width, projection.envelope.height) * cameraScale >= threshold) {
+    if (Math.max(projection.envelope.width, projection.envelope.height) * cameraScale * svgPixelScale.value >= threshold) {
       next.add(projection.id)
     }
   }
   if (next.size !== current.size || [...next].some(id => !current.has(id))) detailSystemIds.value = next
+}
+
+function updateSvgPixelScale(): void {
+  const matrix = svgElement.value?.getScreenCTM()
+  if (!matrix) return
+  const horizontal = Math.hypot(matrix.a, matrix.b)
+  const vertical = Math.hypot(matrix.c, matrix.d)
+  const measured = Math.min(horizontal, vertical)
+  if (Number.isFinite(measured) && measured > 0 && Math.abs(svgPixelScale.value - measured) > 0.0001) {
+    svgPixelScale.value = measured
+  }
+}
+
+function updateSvgViewport(): void {
+  if (!svgElement.value) return
+  const measured = getSvgViewportRect(svgElement.value)
+  const current = svgViewport.value
+  if (measured.x !== current.x || measured.y !== current.y
+    || measured.width !== current.width || measured.height !== current.height) {
+    svgViewport.value = measured
+  }
 }
 
 function getViewport(): MapViewport {
@@ -505,12 +604,11 @@ function onPointerMoveCapture(event: PointerEvent): void {
   drag.moved = true
   const point = cameraPoint(event)
   if (!point) return
-  const target = {
-    x: drag.origin.x + point.x - drag.startScene.x,
-    y: drag.origin.y + point.y - drag.startScene.y,
-  }
-  drag.preview = clampWardenClusterAnchor(unprojectWardenClusterAnchor(target))
-  previewPositions.value = new Map(previewPositions.value).set(drag.systemId, drag.preview)
+  drag.preview = moveWardenClusterAnchorBySceneDelta(drag.origin, {
+    x: point.x - drag.startScene.x,
+    y: point.y - drag.startScene.y,
+  })
+  publishSystemPositionPreview(drag.systemId, drag.preview)
   event.preventDefault()
 }
 
@@ -527,9 +625,7 @@ function finishAnchorDrag(cancelled: boolean): void {
     emit('move-system', drag.systemId, drag.preview)
     return
   }
-  const next = new Map(previewPositions.value)
-  next.delete(drag.systemId)
-  previewPositions.value = next
+  publishSystemPositionPreview(drag.systemId, null)
 }
 
 function onPointerEndCapture(event: PointerEvent): void {
@@ -606,11 +702,24 @@ function onKeydownCapture(event: KeyboardEvent): void {
   emit('activate-system', systemId)
 }
 
-function setClusterSystemPositionPreview(systemId: string, position: Point | null): void {
+function publishSystemPositionPreview(systemId: string, position: Point | null, expectedVersion?: number): number {
+  const currentVersion = previewVersions.value.get(systemId) ?? 0
+  if (position === null && expectedVersion !== undefined && expectedVersion !== currentVersion) return currentVersion
   const next = new Map(previewPositions.value)
   if (position) next.set(systemId, clampWardenClusterAnchor(position))
   else next.delete(systemId)
   previewPositions.value = next
+  const nextVersion = nextContinuousMapPreviewVersion()
+  previewVersions.value = new Map(previewVersions.value).set(systemId, nextVersion)
+  return nextVersion
+}
+
+function setClusterSystemPositionPreview(systemId: string, position: Point | null, expectedVersion?: number): number {
+  return publishSystemPositionPreview(systemId, position, expectedVersion)
+}
+
+function getClusterSystemPositionPreviewVersion(systemId: string): number {
+  return previewVersions.value.get(systemId) ?? 0
 }
 
 function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
@@ -685,8 +794,14 @@ onMounted(async () => {
     const rect = getSvgViewportRect(current)
     zoomBehavior?.extent(() => svgViewportExtent(rect))
     updateMinimumZoomScale(rect)
+    updateSvgPixelScale()
+    updateSvgViewport()
+    updateDetailReveal(viewport.value.k)
   })
   resizeObserver.observe(element)
+  updateSvgPixelScale()
+  updateSvgViewport()
+  updateDetailReveal(viewport.value.k)
   window.addEventListener('blur', cancelActiveGesture)
   if (props.initialViewport) setViewport(props.initialViewport)
   else fitMap()
@@ -730,6 +845,7 @@ defineExpose({
   moveTouchNavigation,
   endTouchNavigation,
   setClusterSystemPositionPreview,
+  getClusterSystemPositionPreviewVersion,
   whenReady: () => readiness,
 })
 </script>
@@ -831,6 +947,7 @@ defineExpose({
   fill: none;
   stroke: color-mix(in srgb, var(--map-selected) 72%, transparent);
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
@@ -843,7 +960,8 @@ defineExpose({
 
 .continuous-warden-system-name {
   fill: var(--map-text);
-  font: 600 18px Georgia, serif;
+  font-family: Georgia, serif;
+  font-weight: 600;
   paint-order: stroke;
   stroke: var(--map-bg);
   stroke-width: 1;

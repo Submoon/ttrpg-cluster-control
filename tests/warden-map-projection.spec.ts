@@ -4,12 +4,14 @@ import {
   CONTINUOUS_MAP_LOCAL_ORIGIN,
   CONTINUOUS_MAP_SYSTEM_SCALE,
   clampWardenClusterAnchor,
+  moveWardenClusterAnchorBySceneDelta,
   projectContinuousSystemGeometry,
   projectWardenSystem,
   unprojectWardenClusterAnchor,
   unprojectWardenLocalPoint,
 } from '../utils/continuous-map-projection'
 import { orbitPointAtAngle } from '../utils/system-map-geometry'
+import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 
 const star: SystemObject = {
   id: 'star',
@@ -97,13 +99,26 @@ test('continuous Warden projection keeps the legacy anchor and all local geometr
   expect(localPlanet.x).toBeCloseTo(planet.position.x)
   expect(localPlanet.y).toBeCloseTo(planet.position.y)
   const distantStar = projected.objects.find(object => object.id === 'far-star')!
+  expect(distantStar.position).toEqual({ x: 1228.8, y: -73.6 })
+  expect(distantStar.scenePosition.x).toBeCloseTo(482.56)
+  expect(distantStar.scenePosition.y).toBeCloseTo(246.08)
   expect(projected.envelope.x).toBeLessThan(distantStar.scenePosition.x)
   expect(projected.envelope.x + projected.envelope.width).toBeGreaterThan(distantStar.scenePosition.x)
 
   const innerOrbit = projected.orbits.find(orbit => orbit.id === 'inner')!
+  expect(innerOrbit.center).toEqual({ x: 480, y: 280 })
+  expect(innerOrbit.sceneCenter).toEqual(projected.anchor)
   expect(innerOrbit.sceneRadii.horizontal).toBeCloseTo(32)
   expect(innerOrbit.sceneRadii.vertical).toBeCloseTo(14.4)
   expect(innerOrbit.rotation).toBe(33)
+  const outerOrbit = projected.orbits.find(orbit => orbit.id === 'outer')!
+  expect(outerOrbit.center.x).toBeCloseTo(614.1872909)
+  expect(outerOrbit.center.y).toBeCloseTo(367.1422456)
+  expect(outerOrbit.sceneCenter.x).toBeCloseTo(359.6374582)
+  expect(outerOrbit.sceneCenter.y).toBeCloseTo(334.2284491)
+  const detachedOrbit = projected.orbits.find(orbit => orbit.id === 'detached')!
+  expect(detachedOrbit.center).toEqual({ x: 1187.2, y: 155.2 })
+  expect(detachedOrbit.sceneCenter).toEqual({ x: 474.24, y: 291.84 })
 })
 
 test('system envelopes contain rotated Orbits, off-center objects, anchors, and empty-system minimum frames', { tag: '@pure' }, () => {
@@ -132,12 +147,14 @@ test('system envelopes contain rotated Orbits, off-center objects, anchors, and 
   }
 
   const overlapped = projectWardenSystem(
-    systemWithContents(),
+    { ...systemWithContents(), id: 'system-b', name: 'Neighbor Reach' },
     { x: 0.5, y: 0.5 },
     layout,
   )
   expect(overlapped.anchor).toEqual(projected.anchor)
+  expect(overlapped.id).not.toBe(projected.id)
   expect(overlapped.envelope.x).toBe(projected.envelope.x)
+  expect(overlapped.envelope.y).toBe(projected.envelope.y)
 
   const empty = projectWardenSystem({
     id: 'empty', name: 'Quiet Frame', publication: 'known-type', objects: [], orbits: [],
@@ -151,6 +168,17 @@ test('system envelopes contain rotated Orbits, off-center objects, anchors, and 
 test('continuous anchor dragging clamps the same coordinates the existing writer commits', { tag: '@pure' }, () => {
   const proposed: Point = { x: -0.25, y: 1.4 }
   expect(clampWardenClusterAnchor(proposed)).toEqual({ x: 0, y: 1 })
+  const moved = moveWardenClusterAnchorBySceneDelta({ x: 0.25, y: 0.6 }, { x: 73.6, y: -36.8 })
+  expect(moved.x).toBeCloseTo(0.35)
+  expect(moved.y).toBeCloseTo(0.5)
+  expect(moveWardenClusterAnchorBySceneDelta({ x: 0.95, y: 0.05 }, { x: 110, y: -40 }))
+    .toEqual({ x: 1, y: 0 })
+})
+
+test('preview generations remain unique across continuous-map remounts', { tag: '@pure' }, () => {
+  const previousRendererToken = nextContinuousMapPreviewVersion()
+  const remountedRendererToken = nextContinuousMapPreviewVersion()
+  expect(remountedRendererToken).toBeGreaterThan(previousRendererToken)
 })
 
 test('the shared projection accepts resolved detached geometry without a source system record', { tag: '@pure' }, () => {

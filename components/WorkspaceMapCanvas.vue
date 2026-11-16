@@ -1354,8 +1354,16 @@ defineExpose({
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),
   endViewPan: () => currentMap()?.endViewPan(),
-  setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') currentClusterMap()?.setClusterSystemPositionPreview?.(systemId, position)
+  setClusterSystemPositionPreview: (systemId: string, position: Point | null, expectedVersion?: number) => {
+    if (props.activeView !== 'cluster') return
+    if (props.continuousMap) {
+      return continuousWardenMapRef.value?.setClusterSystemPositionPreview(systemId, position, expectedVersion)
+    }
+    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, position)
+  },
+  getClusterSystemPositionPreviewVersion: (systemId: string) => {
+    if (props.activeView !== 'cluster' || !props.continuousMap) return undefined
+    return continuousWardenMapRef.value?.getClusterSystemPositionPreviewVersion(systemId)
   },
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
     if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)

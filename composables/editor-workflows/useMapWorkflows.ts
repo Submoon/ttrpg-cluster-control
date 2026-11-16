@@ -273,8 +273,7 @@ export function useMapWorkflows({
     const startingWorkspace = workspace.value
     const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
-    if (!startingWorkspace || !startingSystem || !startingAnchor
-      || store.activeView !== 'cluster' || store.mapMode !== 'move') return
+    if (!startingWorkspace || !startingSystem || !startingAnchor) return
     const captured: CapturedClusterSystemMove = capturedContext ?? {
       workspaceId: startingWorkspace.id,
       clusterId: startingWorkspace.cluster.id,
@@ -293,8 +292,8 @@ export function useMapWorkflows({
         && latestSystem !== undefined
         && latestAnchor?.x === captured.originPosition.x
         && latestAnchor.y === captured.originPosition.y
-        && store.activeView === 'cluster'
-        && store.mapMode === 'move'
+        && (capturedContext === undefined
+          || (store.activeView === 'cluster' && store.mapMode === 'move'))
     }
     if (!contextIsCurrent(workspace.value)) return
 

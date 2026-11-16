@@ -1,5 +1,5 @@
 /** Pure conversion from legacy Cluster anchors and local system geometry into one Warden scene. */
-import type { Orbit, OrbitRadii, Point, StarSystem } from '../domain/workspace'
+import type { OrbitRadii, Point, StarSystem } from '../domain/workspace'
 import { clusterSystemPosition } from './cluster-map-geometry'
 import {
   objectPositions,
@@ -239,6 +239,16 @@ export function unprojectWardenLocalPoint(projection: ContinuousWardenSystemProj
 /** Converts a Cluster-space scene point to the legacy normalized anchor coordinates used by workspace data. */
 export function unprojectWardenClusterAnchor(point: Point): Point {
   return { x: (point.x - 112) / 736, y: (point.y - 96) / 368 }
+}
+
+/** Applies a Cluster-scene drag delta to a legacy normalized anchor. */
+export function moveWardenClusterAnchorBySceneDelta(startingAnchor: Point, sceneDelta: Point): Point {
+  const startingScenePoint = clusterSystemPosition({ system: startingAnchor }, 'system')
+  const destination = {
+    x: startingScenePoint.x + sceneDelta.x,
+    y: startingScenePoint.y + sceneDelta.y,
+  }
+  return clampWardenClusterAnchor(unprojectWardenClusterAnchor(destination))
 }
 
 /** Applies the same legacy [0,1] authored range to a drag preview and its eventual workspace commit. */

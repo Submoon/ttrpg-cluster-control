@@ -1332,12 +1332,16 @@ function discardRouteDraft(sessionId: number): void {
 }
 
 async function handleClusterSystemMove(systemId: string, position: Point): Promise<void> {
+  const capturedMap = clusterMapRef.value
+  const previewVersion = capturedMap?.getClusterSystemPositionPreviewVersion?.(systemId)
   const startingWorkspace = workspace.value
   const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
   const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
   if (!startingWorkspace || !startingSystem || !startingAnchor
     || activeView.value !== 'cluster' || mapMode.value !== 'move') {
-    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, null)
+    if (clusterMapRef.value === capturedMap) {
+      capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
+    }
     return
   }
   const captured = {
@@ -1364,7 +1368,9 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
     cancelSystemMovePreview()
     await moveSystem(systemId, position, captured)
   } finally {
-    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, null)
+    if (clusterMapRef.value === capturedMap) {
+      capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
+    }
   }
 }
 
