@@ -182,21 +182,20 @@ const items = computed<MenuItem[][]>(() => {
     class: 'workspace-map-files-content',
     onFocusOutside: keepSubmenuOpenOnParentFocus,
   }
-  const privateJson: MenuItem = props.activeView === 'cluster'
-    ? {
-        menuValue: 'private-cluster-json',
-        label: 'Download private Jump Cluster JSON',
-        icon: 'i-lucide-file-json',
-        hint: 'Download editable Warden data for the active Jump Cluster.',
-        onSelect: () => emit('export-cluster-json'),
-      }
-    : {
-        menuValue: 'private-system-json',
-        label: 'Download private Star System JSON',
-        icon: 'i-lucide-file-json',
-        hint: 'Download editable Warden data for the active Star System.',
-        onSelect: () => emit('export-system-json'),
-      }
+  const clusterJson: MenuItem = {
+    menuValue: 'private-cluster-json',
+    label: 'Download private Jump Cluster JSON',
+    icon: 'i-lucide-file-json',
+    hint: 'Download editable Warden data for the active Jump Cluster.',
+    onSelect: () => emit('export-cluster-json'),
+  }
+  const systemJson: MenuItem = {
+    menuValue: 'private-system-json',
+    label: 'Download private Star System JSON',
+    icon: 'i-lucide-file-json',
+    hint: 'Download editable Warden data for the active Star System.',
+    onSelect: () => emit('export-system-json'),
+  }
 
   const imageAction = (audience: 'Warden' | 'Player', format: MapImageFormat): MenuItem => ({
     menuValue: `${audience.toLowerCase()}-${format.toLowerCase()}`,
@@ -210,7 +209,7 @@ const items = computed<MenuItem[][]>(() => {
   const children: Record<GroupValue, MenuItem[]> = {
     download: [
       { type: 'label', label: props.scope },
-      privateJson,
+      ...(props.activeView === 'system' ? [systemJson, clusterJson] : [clusterJson]),
       ...props.cloudBackupItems.map(item => ({ ...item } as MenuItem)),
     ],
     restore: [

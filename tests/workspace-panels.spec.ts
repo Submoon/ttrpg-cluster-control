@@ -1,5 +1,6 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
@@ -37,7 +38,7 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop Hierarchy and Inspector start open while the portaled Map files menu stays hit-testable and exports JSON @ui-smoke', async ({ page }) => {
+test('desktop Hierarchy and Inspector start open while Map files exports system and Jump Cluster JSON from Star System view @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
@@ -73,7 +74,9 @@ test('desktop Hierarchy and Inspector start open while the portaled Map files me
 
   const files = await openMapFilesSection(page, 'Download or back up')
   const exportButton = files.getByRole('menuitem', { name: 'Download private Star System JSON', exact: true })
+  const clusterExportButton = files.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true })
   await expect(exportButton).toBeVisible()
+  await expect(clusterExportButton).toBeVisible()
   expect(await files.evaluate(element => element.closest('.workspace-header') === null)).toBe(true)
   expect(await exportButton.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
@@ -84,6 +87,16 @@ test('desktop Hierarchy and Inspector start open while the portaled Map files me
   const downloadPromise = page.waitForEvent('download')
   await exportButton.click()
   await downloadPromise
+
+  const clusterFiles = await openMapFilesSection(page, 'Download or back up')
+  const clusterBackupButton = clusterFiles.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true })
+  const clusterDownloadPromise = page.waitForEvent('download')
+  await clusterBackupButton.click()
+  const clusterDownload = await clusterDownloadPromise
+  const clusterExport = JSON.parse(await readFile(await clusterDownload.path(), 'utf8')) as ExportedMap
+  expect(clusterExport.type).toBe('cluster')
+  expect(clusterExport.cluster?.name).toBe('Kestrel Reach')
+  expect(clusterExport.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
 
   const restore = await openMapFilesSection(page, 'Import or restore')
   const restoreJson = restore.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true })
