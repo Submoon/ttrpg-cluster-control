@@ -23,6 +23,13 @@ import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
 type ImageCaptureWindow = Window & { __ticket28PngBlob?: Blob }
 type SceneBounds = { x: number; y: number; width: number; height: number }
+type LegacyCampaignMap = ExportedMap<{
+  id: string
+  jumpLevel: number
+  fromPointId: string
+  toPointId: string | null
+  unresolvedExit?: string
+}>
 
 async function capturePngForPixelChecks(page: import('@playwright/test').Page): Promise<void> {
   await captureMapExportBlobs(page)
@@ -37,8 +44,8 @@ async function capturePngForPixelChecks(page: import('@playwright/test').Page): 
   })
 }
 
-function campaignWithUnresolvedExit(): ExportedMap {
-  const fixture = JSON.parse(JSON.stringify(campaignBaselineFixture)) as ExportedMap
+function campaignWithUnresolvedExit(): LegacyCampaignMap {
+  const fixture = JSON.parse(JSON.stringify(campaignBaselineFixture)) as LegacyCampaignMap
   if (!fixture.cluster) throw new Error('The campaign export fixture is missing its Cluster.')
   fixture.cluster.routes.push({
     id: 'campaign-baseline-unresolved-route',
@@ -50,7 +57,7 @@ function campaignWithUnresolvedExit(): ExportedMap {
   return fixture
 }
 
-function campaignWithExportPreviews(): ExportedMap {
+function campaignWithExportPreviews(): LegacyCampaignMap {
   const fixture = campaignWithUnresolvedExit()
   const system = fixture.cluster?.systems[0]
   if (!system) throw new Error('The export preview fixture is missing its Star System.')
@@ -93,7 +100,7 @@ function campaignWithExportPreviews(): ExportedMap {
 async function createImportedCampaign(
   page: import('@playwright/test').Page,
   colorScheme: 'light' | 'dark',
-  fixture: ExportedMap = campaignWithUnresolvedExit(),
+  fixture: LegacyCampaignMap = campaignWithUnresolvedExit(),
 ) {
   await page.setViewportSize({ width: 1440, height: 960 })
   await capturePngForPixelChecks(page)
