@@ -71,6 +71,30 @@
         </p>
         <p class="inspector-intro m-0 text-sm">The parent system must be Revealed before players can open its map.</p>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
+          <UFormField label="Marker color" :error="fieldError('markerColor')">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <UInput
+                :id="controlId('markerColor')"
+                :model-value="objectDraft.markerColor ?? defaultMarkerColor"
+                class="w-16 shrink-0"
+                type="color"
+                @update:model-value="value => objectDraft.markerColor = String(value ?? '')"
+              />
+              <span class="text-sm text-[var(--text-secondary)]" role="status">
+                {{ objectDraft.markerColor === null ? 'Default' : 'Custom' }}
+              </span>
+              <UButton
+                class="workspace-control"
+                color="neutral"
+                variant="outline"
+                size="xs"
+                type="button"
+                @click="objectDraft.markerColor = objectDraft.markerColor === null ? defaultMarkerColor : null"
+              >
+                {{ objectDraft.markerColor === null ? 'Customize marker color' : 'Use default color' }}
+              </UButton>
+            </div>
+          </UFormField>
           <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
             <UInput
               :id="controlId('subtype')"
@@ -401,6 +425,8 @@ const emit = defineEmits<{
   'export-current-json': []
 }>()
 const commands = useEditorCommands()
+const colorMode = useColorMode()
+const defaultMarkerColor = computed(() => colorMode.value === 'dark' ? '#e8eee7' : '#26302c')
 
 const selectedObject = computed(() => props.selectedObject)
 const selectedSystem = computed(() => props.selectedSystem)

@@ -125,6 +125,9 @@
               { 'player-system-object-marker--selected': props.selectedObjectId === object.id },
               { 'player-system-object-marker--dimmed': isDimmed(object) },
             ]"
+            :style="object.disclosure === 'unknown' || object.markerColor === undefined
+              ? undefined
+              : { '--player-object-color': object.markerColor }"
             :transform="`translate(${object.position.x} ${object.position.y})`"
             role="button"
             :aria-label="`Inspect ${objectPresentations.get(object.id)?.label ?? object.label}`"
@@ -142,6 +145,12 @@
               aria-hidden="true"
             />
             <circle v-if="object.disclosure === 'unknown'" class="player-system-object-marker-art" r="10" />
+            <circle
+              v-if="object.disclosure !== 'unknown' && object.markerColor !== undefined"
+              class="player-system-object-selection-outline"
+              r="17"
+              aria-hidden="true"
+            />
             <rect
               class="player-system-object-focus-outline"
               x="-14"
@@ -458,6 +467,18 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
   stroke-width: 3;
 }
 
+.player-system-object-selection-outline {
+  fill: none;
+  stroke: var(--map-selected);
+  stroke-width: 2;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.player-system-object-marker--selected .player-system-object-selection-outline {
+  opacity: 1;
+}
+
 .player-system-object-focus-outline {
   fill: none;
   stroke: var(--focus);
@@ -467,14 +488,14 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
   pointer-events: none;
 }
 
-.player-system-object-marker--selected .player-system-object-glyph,
-.player-system-object-marker:focus-visible .player-system-object-glyph {
-  fill: var(--map-selected);
-}
-
 .player-system-object-marker--selected .player-system-object-marker-art {
   stroke: var(--map-selected);
   stroke-width: 3.5;
+}
+
+.player-system-object-marker--selected .player-system-object-glyph,
+.player-system-object-marker:focus-visible .player-system-object-glyph {
+  fill: var(--player-object-color, var(--map-selected));
 }
 
 .player-system-object-marker:focus-visible .player-system-object-focus-outline {
@@ -488,18 +509,18 @@ function inspectObjectFromClick(event: MouseEvent, publicObjectId: string): void
 }
 
 .player-system-object-glyph {
-  fill: var(--text-secondary);
+  fill: var(--player-object-color, var(--text-secondary));
   font: 20px Consolas, monospace;
   pointer-events: visiblePainted;
 }
 
 .player-system-object-marker--revealed .player-system-object-glyph {
-  fill: var(--accent);
+  fill: var(--player-object-color, var(--accent));
 }
 
 .player-system-object-marker--revealed.player-system-object-marker--selected .player-system-object-glyph,
 .player-system-object-marker--revealed:focus-visible .player-system-object-glyph {
-  fill: var(--map-selected);
+  fill: var(--player-object-color, var(--map-selected));
 }
 
 .player-system-unoccupied-center {

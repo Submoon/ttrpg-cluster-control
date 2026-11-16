@@ -2,6 +2,7 @@
 import {
   canPlaceObjectInOrbit,
   initialSystemPlacement,
+  isMarkerColor,
   isPublicationMode,
   nativePlayerFieldIds,
   updateWorkspaceObject,
@@ -109,6 +110,11 @@ export function validateObjectDraft(
     errors.publication = 'Choose a supported publication mode.'
   } else if (draft.publication !== initial.publication) {
     changes.publication = draft.publication
+  }
+  if (draft.markerColor !== null && !isMarkerColor(draft.markerColor)) {
+    errors.markerColor = 'Choose a six-digit hexadecimal marker color.'
+  } else if (draft.markerColor !== initial.markerColor) {
+    changes.markerColor = draft.markerColor
   }
   if (subtype !== initial.subtype) changes.subtype = subtype
 

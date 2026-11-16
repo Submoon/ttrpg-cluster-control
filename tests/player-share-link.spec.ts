@@ -75,6 +75,46 @@ test('compressed player links round-trip canonical public data without extension
   expect(JSON.stringify(decoded)).not.toContain(privateCanary)
 })
 
+test('compressed player links preserve per-object marker colors through the JSON codec @pure', async () => {
+  const document: PlayerClusterDocument = {
+    format: 'ttrpg-cluster-control-player',
+    version: 1,
+    title: 'Pilgrim Reach',
+    systems: [{
+      id: 'system-1',
+      position: { x: 120, y: 100 },
+      disclosure: 'revealed',
+      type: 'star-system',
+      label: 'Pilgrim',
+      map: {
+        objects: [{
+          id: 'object-1',
+          position: { x: 120, y: 100 },
+          placement: { kind: 'system' },
+          disclosure: 'known-type',
+          family: 'CelestialBody',
+          subtype: 'star',
+          label: 'Star',
+        }],
+        orbits: [],
+      },
+    }],
+    routes: [],
+  }
+  const system = document.systems[0]
+  if (!system || system.disclosure !== 'revealed') throw new Error('Expected a Revealed system.')
+  Object.assign(system.map.objects[0]!, { markerColor: '#aBc123' })
+
+  const url = await createPlayerShareUrl(document, 'https://reader.example.test/player')
+  const decoded = await decodePlayerShareFragment(new URL(url).hash)
+
+  expect(decoded).toEqual(document)
+  expect(decoded.systems[0]).toMatchObject({
+    disclosure: 'revealed',
+    map: { objects: [{ disclosure: 'known-type', markerColor: '#aBc123' }] },
+  })
+})
+
 test('player link operations identify already-aborted signals as AbortError @pure', async () => {
   const controller = new AbortController()
   controller.abort()

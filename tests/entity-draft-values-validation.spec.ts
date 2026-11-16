@@ -61,3 +61,33 @@ test('applying an object draft keeps a separately committed free-map position @p
   expect(invalid.workspace).toBeNull()
   expect(invalid.errors.placement).toBe('Choose a valid map placement.')
 })
+
+test('object draft applies a marker color and reset removes the override @pure', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]!
+  const object = system.objects[0]!
+  const initial = objectDraftValuesFor(object, workspace.objectFieldSettings)
+  const markerColor = '#aBcD09'
+
+  const colored = validateObjectDraft(workspace, system, object, initial, { ...initial, markerColor })
+  const coloredWorkspace = colored.workspace
+  const coloredSystem = coloredWorkspace?.cluster.systems[0]
+  const coloredObject = coloredSystem?.objects[0]
+  expect(colored.errors).toEqual({})
+  expect(coloredObject?.markerColor).toBe(markerColor)
+
+  const coloredInitial = objectDraftValuesFor(coloredObject, workspace.objectFieldSettings)
+  const reset = validateObjectDraft(
+    coloredWorkspace!,
+    coloredSystem!,
+    coloredObject!,
+    coloredInitial,
+    { ...coloredInitial, markerColor: null },
+  )
+  expect(reset.errors).toEqual({})
+  expect(reset.workspace?.cluster.systems[0]?.objects[0]).not.toHaveProperty('markerColor')
+
+  const invalid = validateObjectDraft(workspace, system, object, initial, { ...initial, markerColor: '#123ab' })
+  expect(invalid.workspace).toBeNull()
+  expect(invalid.errors.markerColor).toBe('Choose a six-digit hexadecimal marker color.')
+})

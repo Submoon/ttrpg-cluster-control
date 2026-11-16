@@ -80,6 +80,7 @@ export {
 export { captureEffectiveObjectAngles, defaultObjectOrbitAngle, updateWorkspaceObject } from './workspace-placement'
 export { isLocalWorkspace, restoreLocalWorkspace } from './workspace-schema'
 export { isPublicationMode } from './workspace-validation'
+export { isMarkerColor } from './marker-color'
 export { exportJumpCluster, exportStarSystem } from './workspace-codec'
 export { prepareJsonImport } from './workspace-json-import'
 export { restoreJumpClusterBackup } from './workspace-json-import'

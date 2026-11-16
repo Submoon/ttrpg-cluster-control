@@ -1109,7 +1109,7 @@ export function renderSystemMap({
   objectMarks.each(function (object) {
     const mark = select(this)
     mark.append('circle')
-      .attr('class', 'object-hit-target')
+      .attr('class', `object-hit-target${object.markerColor ? ' object-hit-target--custom' : ''}`)
       .attr('r', objectHitRadius)
       .attr('aria-hidden', 'true')
 
@@ -1120,6 +1120,7 @@ export function renderSystemMap({
       .attr('class', 'system-object-glyph')
       .attr('y', 8)
       .attr('text-anchor', 'middle')
+      .style('fill', () => object.markerColor ?? null)
       .text(objectMark(object))
 
     mark.append('text')

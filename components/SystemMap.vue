@@ -1013,6 +1013,13 @@ defineExpose({
   pointer-events: all;
 }
 
+.system-object:focus-visible .object-hit-target--custom {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2px;
+  stroke-dasharray: 2 2;
+}
+
 .object-glyph-halo {
   fill: none;
   stroke: var(--map-star-halo);
