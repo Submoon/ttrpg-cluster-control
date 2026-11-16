@@ -112,9 +112,9 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   const fromPoint = inspector.getByLabel('From Jump Point')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Known system')
 
-  const originLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Vesper Prime$/ })
-  await expect(originLabel).toBeVisible()
-  await originLabel.click()
+  const overlappingAnchorMark = clusterMap.locator(`.cluster-system-node[data-system-id="${anchorSystemIdAfterImport}"]`)
+  await expect(overlappingAnchorMark).toBeVisible()
+  await overlappingAnchorMark.click()
   await fromSystem.click()
   const originChoice = page.getByRole('option', { name: 'Vesper Prime', exact: true })
   await expect(originChoice).toBeVisible()
@@ -141,9 +141,7 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await expect(addButton).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
 
-  const anchorLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Anchor Only$/ })
-  await expect(anchorLabel).toBeVisible()
-  await anchorLabel.click()
+  await overlappingAnchorMark.click()
   const toPoint = inspector.getByLabel('To Jump Point')
   await expect.poll(() => readInspectorSelection(toSystem)).toBe('Anchor Only')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')

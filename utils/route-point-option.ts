@@ -4,7 +4,9 @@ export const noLocalRoutePointOption = 'route-endpoint:none'
 const routePointOptionPrefix = 'route-point:'
 
 export function encodeRoutePointOption(pointId: string | null): string {
-  return pointId === null ? noLocalRoutePointOption : `${routePointOptionPrefix}${pointId}`
+  return pointId === null || pointId === ''
+    ? noLocalRoutePointOption
+    : `${routePointOptionPrefix}${pointId}`
 }
 
 export function decodeRoutePointOption(option: string): string {

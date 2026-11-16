@@ -352,6 +352,7 @@ test('route point options keep real identities separate from the no-point choice
   expect(encodeRoutePointOption('route-point:existing-prefix')).not.toBe(encodeRoutePointOption('existing-prefix'))
   expect(decodeRoutePointOption(encodeRoutePointOption('route-point:existing-prefix')))
     .toBe('route-point:existing-prefix')
+  expect(encodeRoutePointOption('')).toBe(noLocalRoutePointOption)
   expect(decodeRoutePointOption(noLocalRoutePointOption)).toBe('')
 })
 
