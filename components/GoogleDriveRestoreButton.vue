@@ -1,49 +1,51 @@
 <template>
-  <div class="google-drive-restore">
-    <UButton
-      ref="restoreTrigger"
-      :class="triggerClass"
-      color="neutral"
-      variant="outline"
-      :size="triggerSize"
-      type="button"
-      :disabled="dialogOpen || props.backupInProgress || !props.signIn.ready.value"
-      :loading="busy || props.backupInProgress || props.signIn.status.value === 'warming'"
-      @click="activateFromTrigger"
-    >
-      {{ buttonLabel }}
-    </UButton>
-    <UButton
-      v-if="canCancel && !dialogOpen"
-      color="neutral"
-      variant="ghost"
-      size="xs"
-      @click="cancelRestore"
-    >
-      Cancel restore
-    </UButton>
-    <UButton
-      v-if="props.signIn.status.value === 'error'"
-      color="neutral"
-      variant="ghost"
-      size="xs"
-      type="button"
-      @click="props.signIn.retryLoading"
-    >
-      Retry loading Google Drive
-    </UButton>
-    <UButton
-      v-if="props.signIn.hasAccessToken.value"
-      ref="forgetTrigger"
-      color="neutral"
-      variant="ghost"
-      size="xs"
-      type="button"
-      :disabled="dialogOpen || props.backupInProgress"
-      @click="props.signIn.forgetAccessToken"
-    >
-      Forget Google Drive account
-    </UButton>
+  <div class="google-drive-restore" :class="{ 'sr-only': props.surface === 'menu' }">
+    <template v-if="props.surface !== 'menu'">
+      <UButton
+        ref="restoreTrigger"
+        :class="triggerClass"
+        color="neutral"
+        variant="outline"
+        :size="triggerSize"
+        type="button"
+        :disabled="dialogOpen || props.backupInProgress || !props.signIn.ready.value"
+        :loading="busy || props.backupInProgress || props.signIn.status.value === 'warming'"
+        @click="activateFromTrigger"
+      >
+        {{ buttonLabel }}
+      </UButton>
+      <UButton
+        v-if="canCancel && !dialogOpen"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        @click="cancelRestore"
+      >
+        Cancel restore
+      </UButton>
+      <UButton
+        v-if="props.signIn.status.value === 'error'"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        type="button"
+        @click="props.signIn.retryLoading"
+      >
+        Retry loading Google Drive
+      </UButton>
+      <UButton
+        v-if="props.signIn.hasAccessToken.value"
+        ref="forgetTrigger"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        type="button"
+        :disabled="dialogOpen || props.backupInProgress"
+        @click="props.signIn.forgetAccessToken"
+      >
+        Forget Google Drive account
+      </UButton>
+    </template>
     <p v-if="message" class="m-0 basis-full text-sm" role="status" aria-live="polite">{{ message }}</p>
 
     <UModal
@@ -205,7 +207,7 @@ import { GOOGLE_DRIVE_BACKUP_LIMIT } from '../utils/google-drive-backup-snapshot
 const props = defineProps<{
   controller: GoogleDriveRestoreController
   signIn: ReturnType<typeof useGoogleDriveSignIn>
-  surface?: 'welcome'
+  surface?: 'welcome' | 'menu'
   backupInProgress?: boolean
   reviewOpen: boolean
   fallbackFocusTarget: HTMLElement | null
@@ -221,7 +223,10 @@ const canLoadMore = computed(() => props.controller.canLoadMore.value)
 const canRefresh = computed(() => props.controller.canRefresh.value)
 const refreshRequired = computed(() => props.controller.refreshRequired.value)
 const buttonLabel = computed(() => props.controller.buttonLabel.value)
-const message = computed(() => props.signIn.message.value || props.controller.message.value)
+const message = computed(() => props.signIn.message.value
+  || props.controller.message.value
+  || (state.value === 'authorizing' ? 'Signing in to Google Drive…' : '')
+  || (busy.value ? 'Loading Google Drive backups…' : ''))
 const selectionError = computed(() => props.controller.selectionError.value)
 const backups = computed(() => props.controller.backups.value)
 const restoreProgressTitles: Record<GoogleDriveRestoreState, string> = {
@@ -301,9 +306,16 @@ watch(props.signIn.hasAccessToken, available => {
 })
 
 function activateFromTrigger(event: MouseEvent): void {
-  opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  activateFrom(event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+}
+
+function activateFrom(openerTarget: HTMLElement | null): void {
+  if (dialogOpen.value || props.backupInProgress || !props.signIn.ready.value) return
+  opener = openerTarget
   props.controller.activate()
 }
+
+defineExpose({ activateFrom })
 
 function openBackup(fileId: string): void {
   emit('restore-review-open', opener)

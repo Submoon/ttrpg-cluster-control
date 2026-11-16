@@ -155,14 +155,14 @@ test('the system map expands beyond its initial bounds and exports the full layo
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(mapBounds.y + mapBounds.height)
   }
 
-  const svg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const svg = await downloadImage(page, 'image/svg+xml')
   const svgInfo = await inspectImageSvg(page, svg.text!)
   expect(svgInfo.texts).toContain(fixturePlanet.name)
   expect(svgInfo.viewBox[0]).toBeLessThan(0)
   await expectExportedSystemSceneInsideViewBox(page, svg.text!, svgInfo.viewBox)
   expect(svgInfo.viewBox[0] + svgInfo.viewBox[2]).toBeGreaterThan(farPosition.x)
   expect(svgInfo.viewBox[1] + svgInfo.viewBox[3]).toBeGreaterThan(farPosition.y)
-  const png = await downloadImage(page, 'Export star system PNG', 'image/png')
+  const png = await downloadImage(page, 'image/png')
   expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(png.width).toBe(svgInfo.width)
   expect(png.height).toBe(svgInfo.height)

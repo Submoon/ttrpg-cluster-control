@@ -806,6 +806,34 @@ export async function setHeaderMapActionsOpen(
     await dismissAddChooser(page)
     await toggle.click()
   }
+  await expect(toggle).toHaveAttribute('aria-expanded', String(open))
+}
+
+export async function openMapFilesSection(
+  page: import('@playwright/test').Page,
+  section: 'Download or back up' | 'Import or restore' | 'Export an image' | 'Share with players',
+  input: 'pointer' | 'keyboard' = 'pointer',
+): Promise<Locator> {
+  const toggle = page.getByRole('button', { name: 'Map files', exact: true })
+  if (input === 'keyboard') {
+    if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.press('Enter')
+  } else {
+    await setHeaderMapActionsOpen(page, true)
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+  const openMenus = page.locator('[data-state="open"]')
+  const rootMenu = page.getByRole('menu', { name: 'Map files', exact: true }).and(openMenus)
+  await expect(rootMenu).toBeVisible()
+  const entry = rootMenu.getByRole('menuitem', { name: section, exact: true })
+  if (await entry.getAttribute('aria-expanded') !== 'true') {
+    if (input === 'keyboard') await entry.press('ArrowRight')
+    else await entry.click()
+  }
+  await expect(entry).toHaveAttribute('aria-expanded', 'true')
+  const submenu = page.getByRole('menu', { name: section, exact: true }).and(openMenus)
+  await expect(submenu).toBeVisible()
+  return submenu
 }
 
 /** Opens the Warden's player preview through Map files on desktop or compact layouts. */
@@ -815,9 +843,8 @@ export async function openPlayerPreview(page: import('@playwright/test').Page): 
     const closePanel = page.getByRole('dialog').getByRole('button', { name: /^Close (inspector|hierarchy) panel$/ })
     if (await closePanel.isVisible()) await closePanel.click()
   }
-  await setHeaderMapActionsOpen(page, true)
-  await page.locator('#workspace-header-map-files-panel')
-    .getByRole('button', { name: 'Preview player view', exact: true }).click()
+  const sharing = await openMapFilesSection(page, 'Share with players')
+  await sharing.getByRole('menuitem', { name: 'Preview player view', exact: true }).click()
   const preview = page.getByRole('dialog', { name: 'Player view preview', exact: true })
   await expect(preview).toBeVisible()
   return preview
@@ -1102,8 +1129,8 @@ export function starSystemImportInput(page: import('@playwright/test').Page): im
 export async function openJumpClusterRestorePicker(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Restore Jump Cluster', exact: true }).click()
+  const restore = await openMapFilesSection(page, 'Import or restore')
+  await restore.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true }).click()
   await setHeaderMapActionsOpen(page, false)
   return jumpClusterBackupInput(page)
 }
@@ -1112,8 +1139,8 @@ export async function openJumpClusterRestorePicker(
 export async function openStarSystemImportPicker(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  await setHeaderMapActionsOpen(page, true)
-  await page.getByRole('button', { name: 'Restore a Star System', exact: true }).click()
+  const restore = await openMapFilesSection(page, 'Import or restore')
+  await restore.getByRole('menuitem', { name: 'Add a Star System from JSON', exact: true }).click()
   await setHeaderMapActionsOpen(page, false)
   return starSystemImportInput(page)
 }
@@ -1197,12 +1224,24 @@ export async function resolveImportReview(
   }).click()
 }
 
-export async function downloadJson(page: import('@playwright/test').Page, buttonName: string): Promise<ExportedMap> {
-  await setHeaderMapActionsOpen(page, true)
+const mapJsonDownloadLabels = {
+  'Export Jump Cluster JSON': 'Download private Jump Cluster JSON',
+  'Export star system JSON': 'Download private Star System JSON',
+} as const
+
+export async function downloadJson(
+  page: import('@playwright/test').Page,
+  buttonName: keyof typeof mapJsonDownloadLabels,
+  input: 'pointer' | 'keyboard' = 'pointer',
+): Promise<ExportedMap> {
+  const downloads = await openMapFilesSection(page, 'Download or back up', input)
   try {
     const downloadPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: buttonName }).click()
-    await downloadPromise
+    const action = downloads.getByRole('menuitem', { name: mapJsonDownloadLabels[buttonName], exact: true })
+    if (input === 'keyboard') await action.press('Enter')
+    else await action.click()
+    const download = await downloadPromise
+    if (input === 'keyboard') expect(download.suggestedFilename()).toMatch(/\.json$/i)
     const json = await page.evaluate(async () => {
       const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
       if (!blob) throw new Error('Could not read the downloaded JSON file.')
@@ -1210,7 +1249,7 @@ export async function downloadJson(page: import('@playwright/test').Page, button
     })
     return JSON.parse(json) as ExportedMap
   } finally {
-    await setHeaderMapActionsOpen(page, false)
+    if (input === 'pointer') await setHeaderMapActionsOpen(page, false)
   }
 }
 
@@ -1330,13 +1369,13 @@ export type DownloadedImage = {
 
 export async function downloadImage(
   page: import('@playwright/test').Page,
-  buttonName: string,
   mimeType: 'image/svg+xml' | 'image/png',
 ): Promise<DownloadedImage> {
-  await setHeaderMapActionsOpen(page, true)
+  const images = await openMapFilesSection(page, 'Export an image')
+  const action = mimeType === 'image/png' ? 'Warden PNG' : 'Warden SVG'
   try {
     const downloadPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: buttonName }).click()
+    await images.getByRole('menuitem', { name: action, exact: true }).click()
     await downloadPromise
     return page.evaluate(async (expectedType) => {
       const blobs = (window as DownloadWindow).__mapExportBlobs ?? []

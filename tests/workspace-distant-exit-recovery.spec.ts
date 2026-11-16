@@ -199,7 +199,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   expect(Math.abs(committedScreenPoint.y - requestedMovedScreenPoint.y)).toBeLessThanOrEqual(1)
 
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const svg = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  const svg = await downloadImage(page, 'image/svg+xml')
   if (!svg.text) throw new Error('The distant Cluster SVG export is empty.')
   const svgInfo = await inspectImageSvg(page, svg.text)
   const [viewX, viewY, viewWidth, viewHeight] = svgInfo.viewBox
@@ -209,7 +209,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   expect(viewY + viewHeight).toBeGreaterThan(committedPosition.y + 24)
   expect(svgInfo.texts).toContain('Unknown: The Rim')
 
-  const png = await downloadImage(page, 'Export Jump Cluster PNG', 'image/png')
+  const png = await downloadImage(page, 'image/png')
   if (png.width === undefined || png.height === undefined || !png.sourceSvgText) {
     throw new Error('The distant Cluster PNG did not expose its dimensions and source SVG.')
   }

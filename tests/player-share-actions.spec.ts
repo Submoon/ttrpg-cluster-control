@@ -137,7 +137,8 @@ async function withGatedNativeCompression(
 test('a declined preflight leaves player link state empty @pure', async () => {
   const owner = usePlayerFileExports({ prepare: async () => null })
   try {
-    await owner.generatePlayerLink('https://reader.example.test/player')
+    const result = await owner.generatePlayerLink('https://reader.example.test/player')
+    expect(result).toEqual({ status: 'cancelled' })
     expect(owner.generatedPlayerUrl.value).toBe('')
     expect(owner.playerLinkBusy.value).toBe(false)
     expect(owner.playerLinkStatus.value).toBe('')
@@ -164,7 +165,8 @@ test('successful player link actions notify each current success without inline 
   })
 
   try {
-    await owner.generatePlayerLink('https://reader.example.test/player')
+    const result = await owner.generatePlayerLink('https://reader.example.test/player')
+    expect(result).toEqual({ status: 'ready', url: owner.generatedPlayerUrl.value })
     expect(owner.generatedPlayerUrl.value).not.toBe('')
     expect(owner.playerLinkStatus.value).toBe('')
     expect(readyNotifications).toBe(1)
@@ -207,7 +209,7 @@ test('a newer JSON export aborts pending native link compression and clears busy
         expect(downloads).toHaveLength(1)
         expect(prepareCount).toBe(2)
 
-        await linkAction
+        expect(await linkAction).toEqual({ status: 'cancelled' })
         expect(owner.generatedPlayerUrl.value).toBe('')
         expect(owner.playerLinkStatus.value).toBe('')
         expect(owner.playerExportError.value).toBe('')
@@ -232,7 +234,7 @@ test('a stale applied context cannot publish a URL after native compression comp
 
       current = false
       gate.release()
-      await linkAction
+      expect(await linkAction).toEqual({ status: 'cancelled' })
       expect(owner.generatedPlayerUrl.value).toBe('')
       expect(owner.playerLinkBusy.value).toBe(false)
       expect(owner.playerLinkStatus.value).toBe('')

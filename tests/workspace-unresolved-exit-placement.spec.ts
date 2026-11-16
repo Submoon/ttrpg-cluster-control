@@ -114,7 +114,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await page.keyboard.press('Shift+ArrowLeft')
   await expect.poll(async () => (await targetPosition(target)).x).toBeLessThan(pointerPreview.x)
   const previewPosition = await targetPosition(target)
-  const previewSvg = await downloadImage(page, 'Export Jump Cluster SVG', 'image/svg+xml')
+  const previewSvg = await downloadImage(page, 'image/svg+xml')
   expect(previewSvg.text).toContain(`cx="${draggedPosition.x}"`)
   expect(previewSvg.text).not.toContain(`cx="${previewPosition.x}"`)
 

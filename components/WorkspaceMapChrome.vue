@@ -185,162 +185,40 @@
         </UTooltip>
       </div>
 
-      <MapFilesPopover
+      <WorkspaceMapFilesMenu
         ref="mapFiles"
         v-model:open="headerMapActionsOpen"
+        :workspace-id="workspace.id"
         :scope="mapFileScope"
-        :icon-only="true"
-        panel-id="workspace-header-map-files-panel"
-      >
-        <div class="workspace-map-files-exports">
-          <UButton
-            v-if="activeView === 'cluster'"
-            class="workspace-control workspace-map-file-button"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Export Jump Cluster JSON"
-            title="Export Jump Cluster JSON"
-            :disabled="!workspace"
-            @click="exportClusterJson"
-          >
-            Export JSON
-          </UButton>
-          <UButton
-            v-else
-            class="workspace-control workspace-map-file-button"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Export star system JSON"
-            title="Export star system JSON"
-            :disabled="!selectedSystem"
-            @click="exportSystemJson"
-          >
-            Export JSON
-          </UButton>
-          <UButton
-            class="workspace-control workspace-map-file-button"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            :aria-label="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
-            :title="activeView === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG'"
-            :disabled="!activeMap"
-            @click="exportMapImage('png')"
-          >
-            PNG
-          </UButton>
-          <UButton
-            class="workspace-control workspace-map-file-button"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            :aria-label="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
-            :title="activeView === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG'"
-            :disabled="!activeMap"
-            @click="exportMapImage('svg')"
-          >
-            SVG
-          </UButton>
-        </div>
-
-        <slot name="cloud-backup" />
-
-        <section class="workspace-player-exports" aria-label="Player exports">
-          <p class="workspace-map-files-heading">Player exports</p>
-          <div class="workspace-player-export-actions">
-            <UButton
-              class="workspace-control workspace-map-file-button"
-              color="primary"
-              variant="soft"
-              size="sm"
-              aria-label="Export player JSON"
-              title="Export the complete public Jump Cluster JSON"
-              :disabled="!workspace"
-              @click="emit('export-player-json')"
-            >
-              Export player JSON
-            </UButton>
-            <UButton
-              class="workspace-control workspace-map-file-button"
-              color="primary"
-              variant="soft"
-              size="sm"
-              aria-label="Export player SVG"
-              title="Export the current public map as SVG"
-              :disabled="!activeMap"
-              @click="exportPlayerImage('svg')"
-            >
-              Export player SVG
-            </UButton>
-            <UButton
-              class="workspace-control workspace-map-file-button"
-              color="primary"
-              variant="soft"
-              size="sm"
-              aria-label="Export player PNG"
-              title="Export the current public map as PNG"
-              :disabled="!activeMap"
-              @click="exportPlayerImage('png')"
-            >
-              Export player PNG
-            </UButton>
-          </div>
-          <PlayerShareControls
-            :url="props.generatedPlayerUrl"
-            :busy="props.playerLinkBusy"
-            :status="props.playerLinkStatus"
-            @preview="openPlayerPreview"
-            @generate="emit('generate-player-link')"
-            @copy="emit('copy-player-link')"
-          />
-          <a class="workspace-player-reader-link" href="/player" target="_blank" rel="noopener">Open player JSON</a>
-          <p v-if="props.playerExportError" class="workspace-map-export-error" role="alert">
-            {{ props.playerExportError }}
-          </p>
-        </section>
-
-        <UCheckbox
-          v-model="printLightForPrinting"
-          class="workspace-map-print-light"
-          label="Light for printing"
-        />
-
-        <UButton
-          class="workspace-control workspace-map-import-button"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          aria-label="Restore a Star System"
-          title="Restore a Star System from a standalone JSON file"
-          @click="openSystemImportPicker"
-        >
-          Restore a Star System
-        </UButton>
-        <UButton
-          class="workspace-control workspace-map-import-button"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          aria-label="Restore Jump Cluster"
-          title="Replace the active Jump Cluster from a complete JSON backup"
-          :disabled="props.restoreLoading"
-          @click="openClusterRestorePicker"
-        >
-          Restore Jump Cluster
-        </UButton>
-        <p v-if="exportError" class="workspace-map-export-error" role="alert">{{ exportError }}</p>
-        <p class="workspace-map-files-note">
-          Restore a Star System adds an independent copy to {{ workspace.cluster.name }}. Restore Jump Cluster replaces this map after review.
-        </p>
-      </MapFilesPopover>
+        :active-view="activeView"
+        :image-available="Boolean(activeMap)"
+        :restore-loading="props.restoreLoading"
+        :export-error="props.exportError"
+        :generated-player-url="props.generatedPlayerUrl"
+        :player-link-busy="props.playerLinkBusy"
+        :player-link-status="props.playerLinkStatus"
+        :player-export-error="props.playerExportError"
+        :cloud-backup-items="props.cloudBackupItems"
+        :cloud-restore-items="props.cloudRestoreItems"
+        :generate-player-link="props.generatePlayerLink"
+        @export-cluster-json="emit('export-cluster-json')"
+        @export-system-json="emit('export-system-json')"
+        @export-warden-image="exportMapImage"
+        @export-player-json="emit('export-player-json')"
+        @export-player-image="exportPlayerImage"
+        @preview-player-view="emit('preview-player-view', $event)"
+        @import-system="openSystemImportPicker"
+        @restore-cluster="openClusterRestorePicker"
+        @copy-player-link="emit('copy-player-link')"
+        @files-open-change="emit('files-open-change', $event)"
+      />
       <input
         ref="systemImportFileInput"
         class="workspace-map-import-input"
         type="file"
         accept="application/json,.json"
         aria-label="Choose star system JSON"
+        tabindex="-1"
         data-testid="map-system-import-input"
         @change="emit('import-file', $event)"
       >
@@ -350,6 +228,7 @@
         type="file"
         accept="application/json,.json"
         aria-label="Choose Jump Cluster backup JSON"
+        tabindex="-1"
         data-testid="map-cluster-restore-input"
         @change="emit('restore-file', $event, mapFiles?.triggerElement() ?? null)"
       >
@@ -358,15 +237,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
+import type { PlayerLinkGenerationResult } from '../composables/usePlayerFileExports'
 import type { WardenFilterControl, WardenFilterCriteriaOwner } from '../composables/useWardenFilterCriteria'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
-import MapFilesPopover from './MapFilesPopover.vue'
+import WorkspaceMapFilesMenu from './workspace-map-files/WorkspaceMapFilesMenu.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
-import PlayerShareControls from './PlayerShareControls.vue'
 import MapTypeFilters from './MapTypeFilters.vue'
 
 const props = withDefaults(defineProps<{
@@ -381,6 +261,9 @@ const props = withDefaults(defineProps<{
   generatedPlayerUrl: string
   playerLinkBusy: boolean
   playerLinkStatus: string
+  cloudBackupItems?: readonly DropdownMenuItem[]
+  cloudRestoreItems?: readonly DropdownMenuItem[]
+  generatePlayerLink: () => Promise<PlayerLinkGenerationResult>
   filterCriteria: WardenFilterCriteriaOwner
   isCompactViewport: boolean
   hierarchyOpen?: boolean
@@ -402,6 +285,8 @@ const props = withDefaults(defineProps<{
   creationSession: null,
   creationTypeLabel: 'object',
   clusterAddPresentation: null,
+  cloudBackupItems: () => [],
+  cloudRestoreItems: () => [],
 })
 
 const emit = defineEmits<{
@@ -411,7 +296,6 @@ const emit = defineEmits<{
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
   'preview-player-view': [focusMapFiles: () => void]
-  'generate-player-link': []
   'copy-player-link': []
   'import-file': [event: Event]
   'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
@@ -425,7 +309,7 @@ const emit = defineEmits<{
 }>()
 
 const headerMapActionsOpen = ref(false)
-const mapFiles = ref<InstanceType<typeof MapFilesPopover> | null>(null)
+const mapFiles = ref<InstanceType<typeof WorkspaceMapFilesMenu> | null>(null)
 const mapNameDisclosureOpen = ref(false)
 const mapNameLabelId = `workspace-map-name-${useId()}`
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
@@ -443,7 +327,6 @@ function mutableCriteriaValues(control: WardenFilterControl) {
 }
 const mapCriteriaValues = computed(() => mutableCriteriaValues(props.filterCriteria.map))
 const searchCriteriaValues = computed(() => mutableCriteriaValues(props.filterCriteria.search))
-const printLightForPrinting = ref(false)
 const systemImportFileInput = ref<HTMLInputElement | null>(null)
 const clusterRestoreFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
@@ -453,7 +336,7 @@ const hierarchyOpen = computed(() => props.hierarchyOpen)
 const inspectorOpen = computed(() => props.inspectorOpen)
 const contextName = computed(() => activeView.value === 'cluster'
   ? workspace.value?.cluster.name ?? 'Jump Cluster'
-  : selectedSystem.value?.name ?? 'Star system')
+  : selectedSystem.value?.name ?? 'Star System')
 const creationProgress = computed(() => {
   const session = props.creationSession
   if (!session) return ''
@@ -464,7 +347,7 @@ const creationProgress = computed(() => {
 })
 const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
-  : `star system ${selectedSystem.value?.name ?? ''}`)
+  : `Star System ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
 
 watch(contextName, () => { mapNameDisclosureOpen.value = false })
@@ -473,7 +356,6 @@ function whenSearchClosingFocusSettled(): Promise<void> {
   return workspaceSearch.value?.whenClosingFocusSettled() ?? Promise.resolve()
 }
 
-watch(headerMapActionsOpen, open => emit('files-open-change', open))
 watch(searchOpen, open => {
   if (!open) searchTypeFiltersOpen.value = false
 })
@@ -481,41 +363,17 @@ watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
 
-function exportClusterJson(): void {
-  headerMapActionsOpen.value = false
-  emit('export-cluster-json')
-}
-
-function exportSystemJson(): void {
-  headerMapActionsOpen.value = false
-  emit('export-system-json')
-}
-
-function exportMapImage(format: MapImageFormat): void {
+function exportMapImage(format: MapImageFormat, lightForPrinting: boolean): void {
   const map = activeMap.value
   const isCluster = activeView.value === 'cluster'
   const name = isCluster ? workspace.value?.cluster.name : selectedSystem.value?.name
-  const palette: MapImagePalette = printLightForPrinting.value ? 'print-light' : 'active'
-  printLightForPrinting.value = false
-  headerMapActionsOpen.value = false
+  const palette: MapImagePalette = lightForPrinting ? 'print-light' : 'active'
   emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format, palette)
 }
 
-function exportPlayerImage(format: MapImageFormat): void {
-  const palette: MapImagePalette = printLightForPrinting.value ? 'print-light' : 'active'
-  printLightForPrinting.value = false
+function exportPlayerImage(format: MapImageFormat, lightForPrinting: boolean): void {
+  const palette: MapImagePalette = lightForPrinting ? 'print-light' : 'active'
   emit('export-player-image', format, palette)
-}
-
-async function openPlayerPreview(): Promise<void> {
-  const files = mapFiles.value
-  const workspaceId = props.workspace?.id
-  if (!files || !workspaceId || !headerMapActionsOpen.value) return
-  headerMapActionsOpen.value = false
-  await nextTick()
-  await files.whenClosingFocusSettled()
-  if (mapFiles.value !== files || props.workspace?.id !== workspaceId || headerMapActionsOpen.value) return
-  emit('preview-player-view', files.focusTrigger)
 }
 
 function openSystemImportPicker(): void {
@@ -528,7 +386,15 @@ function openClusterRestorePicker(): void {
   headerMapActionsOpen.value = false
 }
 
-defineExpose({ whenSearchClosingFocusSettled })
+function mapFilesTriggerElement(): HTMLElement | null {
+  return mapFiles.value?.triggerElement() ?? null
+}
+
+function closeMapFilesForDialog(): Promise<boolean> {
+  return mapFiles.value?.closeForDialog() ?? Promise.resolve(false)
+}
+
+defineExpose({ whenSearchClosingFocusSettled, mapFilesTriggerElement, closeMapFilesForDialog })
 </script>
 
 <style scoped>
@@ -691,34 +557,6 @@ defineExpose({ whenSearchClosingFocusSettled })
   font-size: 1.125rem;
 }
 
-.workspace-map-files-exports {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.workspace-player-exports {
-  display: grid;
-  gap: 0.55rem;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.65rem;
-}
-
-.workspace-player-export-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.workspace-player-reader-link {
-  width: fit-content;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.workspace-map-file-button,
 :global(.workspace-map-import-button) {
   min-width: 0;
   justify-content: center;
@@ -733,21 +571,6 @@ defineExpose({ whenSearchClosingFocusSettled })
   clip: rect(0, 0, 0, 0);
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.workspace-map-export-error,
-.workspace-map-files-note {
-  margin: 0;
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-}
-
-.workspace-map-export-error {
-  color: var(--color-error, #e88f87);
-}
-
-.workspace-map-files-note {
-  color: var(--text-muted);
 }
 
 @media (max-width: 760px), (max-height: 600px) {

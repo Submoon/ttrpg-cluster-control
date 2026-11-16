@@ -6,6 +6,7 @@ import {
   downloadImage,
   downloadJson,
   openChartDetailsEditor,
+  openMapFilesSection,
   inspectImageSvg,
   openWorkspaceHierarchy,
   panMap,
@@ -13,7 +14,6 @@ import {
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
   selectInspectorOption,
-  setHeaderMapActionsOpen,
   setWorkspaceMapMode,
   workspaceNavigation,
   workspaceZoomControls,
@@ -121,10 +121,12 @@ async function createImportedCampaign(
 }
 
 async function setPrintChoice(page: import('@playwright/test').Page, enabled: boolean): Promise<void> {
-  await setHeaderMapActionsOpen(page, true)
-  const printChoice = page.getByRole('checkbox', { name: /^Light for printing$/i })
-  await expect(printChoice).toBeVisible()
-  if (enabled) await printChoice.check()
+  const images = await openMapFilesSection(page, 'Export an image')
+  const printChoice = images.getByRole('menuitemcheckbox', { name: 'Light for printing', exact: true })
+  if (enabled) {
+    await printChoice.press('Space')
+    await expect(printChoice).toBeChecked()
+  }
   else await expect(printChoice).not.toBeChecked()
 }
 
@@ -292,14 +294,9 @@ async function inspectExportObjectOpacity(
   }, svgText)
 }
 
-async function downloadSvgWhilePointerHeld(
-  page: import('@playwright/test').Page,
-  buttonName: string,
-): Promise<string> {
-  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
-  await expect(mapFiles).toBeVisible()
-  if (await mapFiles.getAttribute('aria-expanded') !== 'true') await mapFiles.press('Enter')
-  const exportButton = page.getByRole('button', { name: buttonName, exact: true })
+async function downloadSvgWhilePointerHeld(page: import('@playwright/test').Page): Promise<string> {
+  const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
+  const exportButton = images.getByRole('menuitem', { name: 'Warden SVG', exact: true })
   await expect(exportButton).toBeVisible()
   const pendingDownload = page.waitForEvent('download')
   await exportButton.press('Enter')
@@ -313,7 +310,6 @@ async function downloadSvgWhilePointerHeld(
     if (!blob) throw new Error('The active preview SVG Blob could not be read.')
     return blob.text()
   })
-  if (await mapFiles.getAttribute('aria-expanded') === 'true') await mapFiles.press('Enter')
   return text
 }
 
@@ -484,19 +480,11 @@ function expectReadablePalette(
   }
 }
 
-async function expectMapFilesControlsUsable(
-  page: import('@playwright/test').Page,
-  mapKind: 'cluster' | 'system',
-): Promise<void> {
-  const printChoice = page.getByRole('checkbox', { name: /^Light for printing$/i })
-  const mapFilesGroup = page.locator('.workspace-map-print-light')
-  await expect(mapFilesGroup).toContainText(/Light for printing/i)
-  const svgButton = page.getByRole('button', {
-    name: mapKind === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG', exact: true,
-  })
-  const pngButton = page.getByRole('button', {
-    name: mapKind === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG', exact: true,
-  })
+async function expectMapFilesControlsUsable(page: import('@playwright/test').Page): Promise<void> {
+  const images = await openMapFilesSection(page, 'Export an image')
+  const printChoice = images.getByRole('menuitemcheckbox', { name: 'Light for printing', exact: true })
+  const svgButton = images.getByRole('menuitem', { name: 'Warden SVG', exact: true })
+  const pngButton = images.getByRole('menuitem', { name: 'Warden PNG', exact: true })
   for (const control of [printChoice, svgButton, pngButton]) {
     await expect(control).toBeVisible()
     await expect(control).toBeEnabled()
@@ -559,7 +547,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
         expectedTitle = 'Vesper Prime'
         if (detailedTitleVariant) {
-          const shortTitleSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+          const shortTitleSvg = await downloadImage(page, 'image/svg+xml')
           if (!shortTitleSvg.text) throw new Error('The short-title system SVG is empty.')
           const shortTitleInfo = await inspectImageSvg(page, shortTitleSvg.text)
           shortTitleSvgWidth = shortTitleInfo.width
@@ -678,10 +666,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
         await page.setViewportSize(compactViewport)
         await expect(map).toBeVisible()
-        await setHeaderMapActionsOpen(page, true)
-        const compactPrintChoice = page.getByRole('checkbox', { name: /^Light for printing$/i })
-        if (paletteCase.printLight) await compactPrintChoice.check()
-        await expectMapFilesControlsUsable(page, mapCase.kind)
+        await expectMapFilesControlsUsable(page)
         await page.screenshot({ path: test.info().outputPath(`${mapCase.label}-${paletteCase.label}-map-files.png`) })
       }
 
@@ -710,8 +695,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
       })
       const printLight = paletteCase.printLight
       await setPrintChoice(page, printLight)
-      const svg = await downloadImage(page,
-        mapCase.kind === 'cluster' ? 'Export Jump Cluster SVG' : 'Export star system SVG', 'image/svg+xml')
+      const svg = await downloadImage(page, 'image/svg+xml')
       if (!svg.text) throw new Error('The SVG export is empty.')
       const svgInfo = await inspectImageSvg(page, svg.text)
       const semanticMarkColors = await inspectSemanticMarkColors(page, svg.text)
@@ -760,12 +744,11 @@ for (const { mapCase, paletteCase } of imageExportCases) {
         }
       }
 
-      await setHeaderMapActionsOpen(page, true)
-      const printChoice = page.getByRole('checkbox', { name: /^Light for printing$/i })
+      const images = await openMapFilesSection(page, 'Export an image')
+      const printChoice = images.getByRole('menuitemcheckbox', { name: 'Light for printing', exact: true })
       await expect(printChoice).not.toBeChecked()
-      if (printLight) await printChoice.check()
-      const png = await downloadImage(page,
-        mapCase.kind === 'cluster' ? 'Export Jump Cluster PNG' : 'Export star system PNG', 'image/png')
+      if (printLight) await setPrintChoice(page, true)
+      const png = await downloadImage(page, 'image/png')
       expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
       expect(png.width).toBe(svgInfo.width)
       expect(png.height).toBe(svgInfo.height)
@@ -789,8 +772,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
       expect(topLeftPixel).toHaveLength(4)
       expect(topLeftPixel[3]).toBe(255)
 
-      await setHeaderMapActionsOpen(page, true)
-      await expect(printChoice).not.toBeChecked()
+      await setPrintChoice(page, false)
       const appliedAfter = await downloadJson(page, jsonButton)
       expect(appliedAfter).toEqual(appliedBefore)
       expect(await map.locator(
@@ -835,7 +817,7 @@ test('system image exports retain applied geometry during local and parent-owned
   const appliedBeforeResize = await inspectLiveSystemGeometry(map)
   const appliedRing = appliedBeforeResize.orbits.find(orbit => orbit.id === orbitId)
   if (!appliedRing) throw new Error('The applied scene is missing its selected Orbit.')
-  const appliedSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const appliedSvg = await downloadImage(page, 'image/svg+xml')
   if (!appliedSvg.text) throw new Error('The applied system SVG before Orbit resize is empty.')
   const appliedSvgInfo = await inspectImageSvg(page, appliedSvg.text)
   const scene = map.locator('.system-map-content')
@@ -857,7 +839,7 @@ test('system image exports retain applied geometry during local and parent-owned
   const liveResizePreview = await inspectLiveSystemGeometry(map)
   expect(liveResizePreview).not.toEqual(appliedBeforeResize)
 
-  const localResizeSvg = await downloadSvgWhilePointerHeld(page, 'Export star system SVG')
+  const localResizeSvg = await downloadSvgWhilePointerHeld(page)
   const localResizeSvgInfo = await inspectImageSvg(page, localResizeSvg)
   expect(localResizeSvgInfo.viewBox).toEqual(appliedSvgInfo.viewBox)
   expect(await inspectSystemSvgGeometry(page, localResizeSvg)).toEqual(appliedBeforeResize)
@@ -870,7 +852,7 @@ test('system image exports retain applied geometry during local and parent-owned
   await waitForWorkspaceSaved(page)
 
   const appliedBeforeObjectPreview = await inspectLiveSystemGeometry(map)
-  const appliedBeforeObjectSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const appliedBeforeObjectSvg = await downloadImage(page, 'image/svg+xml')
   if (!appliedBeforeObjectSvg.text) throw new Error('The applied system SVG before object placement preview is empty.')
   const appliedBeforeObjectSvgInfo = await inspectImageSvg(page, appliedBeforeObjectSvg.text)
   const objectHierarchy = await openWorkspaceHierarchy(page)
@@ -894,7 +876,7 @@ test('system image exports retain applied geometry during local and parent-owned
   expect(previewIria?.transform).not.toBe(appliedIria?.transform)
   expect(previewNix?.transform).not.toBe(appliedNix?.transform)
 
-  const objectPreviewSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const objectPreviewSvg = await downloadImage(page, 'image/svg+xml')
   if (!objectPreviewSvg.text) throw new Error('The parent-owned object preview export is empty.')
   const objectPreviewSvgInfo = await inspectImageSvg(page, objectPreviewSvg.text)
   expect(objectPreviewSvgInfo.viewBox).toEqual(appliedBeforeObjectSvgInfo.viewBox)
@@ -917,7 +899,7 @@ test('system image exports retain applied geometry during local and parent-owned
   await expectExportedFeatureBoundsInsideViewBox(
     page, appliedBeforeObjectSvg.text, appliedBeforeObjectSvgInfo.viewBox, 'system',
   )
-  const orbitAppliedPng = await downloadImage(page, 'Export star system PNG', 'image/png')
+  const orbitAppliedPng = await downloadImage(page, 'image/png')
   const orbitAppliedPixelHash = await inspectDecodedPngPixels(page)
   expect(orbitAppliedPixelHash.width).toBe(orbitAppliedPng.width)
   expect(orbitAppliedPixelHash.height).toBe(orbitAppliedPng.height)
@@ -937,7 +919,7 @@ test('system image exports retain applied geometry during local and parent-owned
   expect(orbitPreview.objects.find(object => object.id === nestedTravelerId)?.transform)
     .not.toBe(orbitAppliedGeometry.objects.find(object => object.id === nestedTravelerId)?.transform)
 
-  const orbitPreviewSvg = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const orbitPreviewSvg = await downloadImage(page, 'image/svg+xml')
   if (!orbitPreviewSvg.text) throw new Error('The parent-owned Orbit preview export is empty.')
   const orbitPreviewSvgInfo = await inspectImageSvg(page, orbitPreviewSvg.text)
   expect(orbitPreviewSvgInfo.viewBox).toEqual(appliedBeforeObjectSvgInfo.viewBox)
@@ -945,7 +927,7 @@ test('system image exports retain applied geometry during local and parent-owned
   expect(await inspectLiveSystemGeometry(map)).toEqual(orbitPreview)
   await expect(orbitInspector.getByRole('status').filter({ hasText: /Preview ready/i })).toBeVisible()
   await expect(map.locator(`.orbit-mark[data-orbit-id="${orbitId}"]`)).toHaveClass(/is-selected/)
-  const orbitPreviewPng = await downloadImage(page, 'Export star system PNG', 'image/png')
+  const orbitPreviewPng = await downloadImage(page, 'image/png')
   const orbitPreviewPixelHash = await inspectDecodedPngPixels(page)
   expect(orbitPreviewPixelHash).toEqual(orbitAppliedPixelHash)
   expect(orbitPreviewPng.width).toBe(orbitAppliedPng.width)

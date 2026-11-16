@@ -23,9 +23,14 @@ interface PlayerFileExportsOptions {
   onPlayerLinkCopied?: () => void
 }
 
+export type PlayerLinkGenerationResult =
+  | { status: 'ready'; url: string }
+  | { status: 'error'; message: string; fallback: boolean }
+  | { status: 'cancelled' }
+
 const GENERIC_EXPORT_ERROR = 'The player export could not be completed.'
-const COPY_PLAYER_LINK_ERROR = 'Copy failed. The link is still available below; select and copy it manually, or retry.'
-const PLAYER_LINK_JSON_FALLBACK = 'Use Export player JSON above to share this snapshot.'
+const COPY_PLAYER_LINK_ERROR = 'Copy failed. The link remains available to select and copy manually, or retry.'
+const PLAYER_LINK_JSON_FALLBACK = 'Export player JSON to share this snapshot.'
 const SYSTEM_NOT_REVEALED_ERROR = 'The current system is not revealed for player image export.'
 const EMPTY_IMAGE_ERROR = 'This player map has no public features to export as an image.'
 
@@ -143,8 +148,8 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
     }
   }
 
-  async function generatePlayerLink(readerUrl: string): Promise<void> {
-    if (disposed) return
+  async function generatePlayerLink(readerUrl: string): Promise<PlayerLinkGenerationResult> {
+    if (disposed) return { status: 'cancelled' }
     const activeOperation = startExport()
     const abortController = new AbortController()
     playerLinkAbort = abortController
@@ -156,10 +161,10 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
 
     try {
       prepared = await prepare()
-      if (!isCurrent(activeOperation, prepared) || !prepared) return
+      if (!isCurrent(activeOperation, prepared) || !prepared) return { status: 'cancelled' }
 
       const url = await createPlayerShareUrl(prepared.document, readerUrl, { signal: abortController.signal })
-      if (!isCurrent(activeOperation, prepared) || abortController.signal.aborted) return
+      if (!isCurrent(activeOperation, prepared) || abortController.signal.aborted) return { status: 'cancelled' }
 
       generatedPlayerUrl.value = url
       artifactIdentity += 1
@@ -168,15 +173,23 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
       } catch {
         // A success observer must not invalidate a generated link.
       }
+      return { status: 'ready', url }
     } catch (error) {
-      if (!isCurrent(activeOperation, prepared)) return
+      if (!isCurrent(activeOperation, prepared)) return { status: 'cancelled' }
       if (error instanceof PlayerShareLinkError) {
         playerExportError.value = error.message
-        if (error.code === 'too-large' || error.code === 'unavailable') {
+        const fallback = error.code === 'too-large' || error.code === 'unavailable'
+        if (fallback) {
           playerLinkStatus.value = PLAYER_LINK_JSON_FALLBACK
         }
+        return { status: 'error', message: error.message, fallback }
       } else {
         publishError(activeOperation, error, prepared)
+        return {
+          status: 'error',
+          message: error instanceof PlayerDocumentError ? error.message : GENERIC_EXPORT_ERROR,
+          fallback: false,
+        }
       }
     } finally {
       if (isOperationActive(activeOperation)) {
