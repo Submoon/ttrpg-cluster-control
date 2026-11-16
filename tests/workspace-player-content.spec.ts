@@ -6,6 +6,7 @@ import {
   createSingleSystemWorkspace,
   editMapObject,
   openChartDetailsEditor,
+  openMapFilesSection,
   openPlayerPreview,
   openWorkspaceHierarchy,
   saveMapObject,
@@ -14,7 +15,7 @@ import {
   waitForWorkspaceSaved,
 } from './helpers'
 
-test('a Warden publishes committed Player text while keeping drafts and GM notes private', async ({ page }) => {
+test('a Warden publishes committed Player text while keeping drafts and GM notes private', async ({ page, context }) => {
   test.setTimeout(45_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
@@ -85,9 +86,9 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await expect(reopenedPreview.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
   await reopenedPreview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
-  await setHeaderMapActionsOpen(page, true)
+  const shareActions = await openMapFilesSection(page, 'Share with players')
   const pendingDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export player JSON', exact: true }).click()
+  await shareActions.getByRole('menuitem', { name: 'Export player JSON', exact: true }).click()
   const path = await (await pendingDownload).path()
   if (!path) throw new Error('The player JSON download has no readable path.')
   const json = await readFile(path, 'utf8')
@@ -99,6 +100,25 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   }))
   expect(json).not.toContain(privateNotes)
   expect(json).not.toContain(unappliedText)
+
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const generate = (await openMapFilesSection(page, 'Share with players', 'keyboard'))
+    .getByRole('menuitem', { name: 'Generate player link', exact: true })
+  await generate.press('Enter')
+  const linkDialog = page.getByRole('dialog', { name: 'Player snapshot link', exact: true })
+  const linkField = linkDialog.getByRole('textbox')
+  await expect(linkField).toHaveValue(/\/player#player=1\.gzip\./)
+  const url = await linkField.inputValue()
+  await linkDialog.getByRole('button', { name: 'Copy player link', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url)
+  await page.keyboard.press('Escape')
+  await expect(linkDialog).toBeHidden()
+  await expect(generate).toBeFocused()
+  const view = shareActions.getByRole('menuitem', { name: 'View generated link', exact: true })
+  await view.press('Enter')
+  await expect(linkField).toHaveValue(url)
+  await page.keyboard.press('Escape')
+  await expect(view).toBeFocused()
   await setHeaderMapActionsOpen(page, false)
   await expect(playerText).toHaveValue(unappliedText)
 })

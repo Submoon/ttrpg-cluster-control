@@ -7,6 +7,8 @@ import {
   waitForWorkspaceSaved,
   workspaceZoomOutput,
   zoomOutMapToMinimum,
+  type DownloadWindow,
+  type ExportedMap,
 } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
@@ -138,14 +140,31 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
 
   // Keep the real leave animation mounted until the first map gesture has started.
   const exitStyle = await page.addStyleTag({ content: `
-    [data-slot="content"][data-state="closed"]:has(> #workspace-header-map-files-panel) {
+    .workspace-map-files-content[data-state="closed"] {
       animation-play-state: paused !important;
     }
   ` })
   const recordsBefore = await readWorkspaceRecords(page)
-  const jsonBefore = await downloadJson(page, 'Export star system JSON')
-  const closingFiles = page.locator('[data-slot="content"]:has(> #workspace-header-map-files-panel)')
-  await expect(closingFiles).toHaveAttribute('data-state', 'closed')
+  const tap = async (target: Locator) => {
+    await expect(target).toBeInViewport({ ratio: 1 })
+    await dispatchTouch(cdp, 'touchStart', [await pointAtCenter(target)])
+    await dispatchTouch(cdp, 'touchEnd', [])
+  }
+  await tap(page.getByRole('button', { name: 'Map files', exact: true }))
+  await tap(page.getByRole('menuitem', { name: 'Download or back up', exact: true }))
+  const downloads = page.getByRole('menu', { name: 'Download or back up', exact: true })
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    tap(downloads.getByRole('menuitem', { name: 'Download private Star System JSON', exact: true })),
+  ])
+  expect(download.suggestedFilename()).toMatch(/\.json$/i)
+  const jsonBefore = await page.evaluate(async () => {
+    const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
+    if (!blob) throw new Error('Could not read the downloaded JSON file.')
+    return JSON.parse(await blob.text()) as ExportedMap
+  })
+  const closingFiles = page.locator('.workspace-map-files-content[data-state="closed"]')
+  await expect(closingFiles.first()).toBeAttached()
   await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
   await setWorkspaceMapMode(page, 'Move')
 
@@ -163,6 +182,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
 
   try {
     const firstMove = { ...origin, x: origin.x + 24, y: origin.y + 18 }
+    await expect.poll(() => page.evaluate(({ x, y }) =>
+      Boolean(document.elementFromPoint(x, y)?.closest('.object-hit-target')), origin)).toBe(true)
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)

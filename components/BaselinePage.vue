@@ -9,7 +9,7 @@
     </div>
 
     <main id="workspace-main" ref="workspaceMain" tabindex="-1" class="main-content mx-auto flex w-full max-w-[1720px] flex-1 flex-col self-center pb-8 pt-[clamp(1rem,2.1vw,1.75rem)]">
-      <p v-if="cloudBackupMessage" class="feedback m-0 break-words" role="status">
+      <p v-if="cloudBackupMessage && !googleDriveBackupDialogOpen" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
       </p>
       <p
@@ -141,6 +141,8 @@
               :cluster-move-presentation="clusterMovePresentation"
               :can-open-search-shortcut="canOpenSearchShortcut"
               :filter-criteria="filterCriteria"
+              :cloud-backup-items="cloudBackupItems"
+              :cloud-restore-items="cloudRestoreItems"
               :is-compact-viewport="isCompactViewport"
               v-model:search-open="searchOpen"
               v-model:search-query="searchQuery"
@@ -153,7 +155,7 @@
               @export-player-json="downloadPlayerJson"
               @export-player-image="downloadPlayerImage"
               @preview-player-view="openPlayerPreview"
-              @generate-player-link="generatePlayerLink"
+              :generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
               @import-file="importJsonFile"
               @restore-file="openLocalWorkspaceRestore"
@@ -165,22 +167,6 @@
               @confirm-system-move="confirmSystemMove"
               @cancel-system-move="cancelSystemMovePreview"
             >
-              <template #cloud-backup>
-                <GoogleDriveBackupButton
-                  :controller="googleDriveBackup"
-                  :sign-in="googleDriveSignIn"
-                  :restore-in-progress="googleDriveRestore.busy.value || googleDriveRestore.dialogOpen.value"
-                />
-                <GoogleDriveRestoreButton
-                  :controller="googleDriveRestore"
-                  :sign-in="googleDriveSignIn"
-                  :backup-in-progress="googleDriveBackup.busy.value"
-                  :review-open="workspaceRestoreReview !== null"
-                  :fallback-focus-target="workspaceMain"
-                  @restore-review-open="workspaceRestoreReturnTarget = $event"
-                  @restore-canceled="workspaceRestoreReturnTarget = null"
-                />
-              </template>
               <template #history>
                 <WorkspaceHistoryControls
                   v-model:open="historyOpen"
@@ -192,6 +178,42 @@
                 />
               </template>
             </WorkspaceMapChrome>
+            <UModal
+              v-model:open="googleDriveBackupDialogOpen"
+              title="Back up Jump Cluster to Google Drive"
+              description="Review the backup retention notice before saving this Jump Cluster to your private Google Drive storage."
+              :content="{ onCloseAutoFocus: restoreBackupDialogFocus }"
+            >
+              <template #body>
+                <p
+                  v-if="cloudBackupMessage"
+                  class="m-0 mb-3 break-words text-sm"
+                  :class="googleDriveBackup.message.value ? 'error-text' : 'text-muted'"
+                  role="status"
+                >{{ cloudBackupMessage }}</p>
+                <GoogleDriveBackupButton
+                  :controller="googleDriveBackup"
+                  :sign-in="googleDriveSignIn"
+                  :restore-in-progress="googleDriveRestore.busy.value || googleDriveRestore.dialogOpen.value"
+                />
+              </template>
+              <template #footer>
+                <div class="flex w-full justify-end">
+                  <UButton color="neutral" variant="ghost" @click="googleDriveBackupDialogOpen = false">Close</UButton>
+                </div>
+              </template>
+            </UModal>
+            <GoogleDriveRestoreButton
+              ref="googleDriveRestoreButton"
+              :controller="googleDriveRestore"
+              :sign-in="googleDriveSignIn"
+              surface="menu"
+              :backup-in-progress="googleDriveBackup.busy.value"
+              :review-open="workspaceRestoreReview !== null"
+              :fallback-focus-target="workspaceMain"
+              @restore-review-open="workspaceRestoreReturnTarget = $event"
+              @restore-canceled="workspaceRestoreReturnTarget = null"
+            />
           </template>
 
           <template #dock>
@@ -585,6 +607,7 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import type { DropdownMenuItem } from '@nuxt/ui'
 import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -603,6 +626,7 @@ import { useWorkspaceHistoryShortcuts } from '../composables/useWorkspaceHistory
 import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useWardenMapFilters } from '../composables/useWardenMapFilters'
+import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import ChartDetailsEditor from './inspector/ChartDetailsEditor.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
@@ -646,9 +670,12 @@ watch(toast.toasts, (current, previous) => {
 const googleDriveBackup = useGoogleDriveBackup(() => workspace.value, googleDriveSignIn, {
   onCanceled: () => toast.add({ title: 'Google Drive backup canceled', color: 'neutral', icon: 'i-lucide-info' }),
 })
-const cloudBackupMessage = googleDriveBackup.message
+const googleDriveBackupDialogOpen = ref(false)
+const cloudBackupMessage = computed(() => googleDriveBackup.message.value
+  || (googleDriveBackup.busy.value ? 'Google Drive backup is in progress.' : ''))
 watch(googleDriveBackup.lastSaved, () => {
   toast.add({ title: 'Backed up to Google Drive', color: 'success', icon: 'i-lucide-check' })
+  googleDriveBackupDialogOpen.value = false
 })
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
@@ -1431,13 +1458,13 @@ const {
   downloadPlayerImage,
 } = playerFileExports
 
-function generatePlayerLink(): void {
+function generatePlayerLink(): ReturnType<typeof playerFileExports.generatePlayerLink> {
   const baseUrl = new URL(runtimeConfig.app.baseURL, window.location.origin)
   if (!baseUrl.pathname.endsWith('/')) baseUrl.pathname += '/'
   baseUrl.search = ''
   baseUrl.hash = ''
   const readerUrl = new URL('player', baseUrl).toString()
-  void playerFileExports.generatePlayerLink(readerUrl)
+  return playerFileExports.generatePlayerLink(readerUrl)
 }
 
 function copyPlayerLink(): void {
@@ -1546,6 +1573,111 @@ const workspaceRestore = useWorkspaceRestore({
 const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn, undefined, {
   onCanceled: () => toast.add({ title: 'Google Drive restore canceled', color: 'neutral', icon: 'i-lucide-info' }),
 })
+const googleDriveRestoreButton = ref<InstanceType<typeof GoogleDriveRestoreButton> | null>(null)
+const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
+  const items: DropdownMenuItem[] = [{
+    label: 'Back up Jump Cluster to Google Drive',
+    description: googleDriveBackup.message.value
+      || googleDriveSignIn.message.value
+      || (googleDriveSignIn.status.value === 'warming' ? 'Loading Google Drive…' : undefined),
+    icon: 'i-lucide-cloud-upload',
+    googleDrive: true,
+    disabled: googleDriveBackup.busy.value
+      || googleDriveRestore.busy.value
+      || googleDriveRestore.dialogOpen.value
+      || !googleDriveSignIn.ready.value,
+    onSelect: (event) => {
+      event.preventDefault()
+      void openGoogleDriveBackupDialog()
+    },
+  }]
+
+  if (googleDriveBackup.canCancel.value) {
+    items.push({
+      label: 'Cancel Google Drive backup',
+      icon: 'i-lucide-circle-x',
+      googleDrive: true,
+      onSelect: () => googleDriveBackup.cancelBeforeUpload(),
+    })
+  }
+
+  return items
+})
+const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
+  const restoreStatus = googleDriveSignIn.message.value
+    || googleDriveRestore.message.value
+    || (googleDriveSignIn.status.value === 'warming' ? 'Loading Google Drive…' : '')
+    || (googleDriveRestore.state.value === 'authorizing' ? 'Signing in to Google Drive…' : '')
+    || (googleDriveRestore.busy.value ? 'Loading Google Drive backups…' : '')
+  const items: DropdownMenuItem[] = [{
+    label: 'Restore Jump Cluster from Google Drive',
+    description: restoreStatus || undefined,
+    icon: 'i-lucide-cloud-download',
+    googleDrive: true,
+    disabled: googleDriveRestore.dialogOpen.value
+      || googleDriveRestore.busy.value
+      || googleDriveBackup.busy.value
+      || !googleDriveSignIn.ready.value,
+    onSelect: () => googleDriveRestoreButton.value?.activateFrom(
+      workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
+    ),
+  }]
+
+  if (googleDriveRestore.canCancel.value) {
+    items.push({
+      label: 'Cancel Google Drive restore',
+      icon: 'i-lucide-circle-x',
+      googleDrive: true,
+      onSelect: () => googleDriveRestore.cancel(),
+    })
+  }
+  if (googleDriveSignIn.status.value === 'error') {
+    items.push({
+      label: 'Retry loading Google Drive',
+      icon: 'i-lucide-refresh-cw',
+      googleDrive: true,
+      onSelect: () => { void googleDriveSignIn.retryLoading() },
+    })
+  }
+  if (googleDriveSignIn.hasAccessToken.value) {
+    items.push({
+      label: 'Forget Google Drive account',
+      icon: 'i-lucide-user-round-x',
+      googleDrive: true,
+      disabled: googleDriveRestore.dialogOpen.value || googleDriveBackup.busy.value,
+      onSelect: () => googleDriveSignIn.forgetAccessToken(),
+    })
+  }
+
+  return items
+})
+
+async function openGoogleDriveBackupDialog(): Promise<void> {
+  const chrome = workspaceMapChrome.value
+  const startingWorkspace = workspace.value
+  const startingView = activeView.value
+  const startingSystemId = selectedSystemId.value
+  const trigger = chrome?.mapFilesTriggerElement() ?? null
+  if (!chrome || !startingWorkspace || !trigger) return
+
+  if (!await chrome.closeMapFilesForDialog()) return
+  if (workspaceMapChrome.value !== chrome
+    || workspace.value !== startingWorkspace
+    || activeView.value !== startingView
+    || selectedSystemId.value !== startingSystemId
+    || chrome.mapFilesTriggerElement() !== trigger) return
+
+  googleDriveBackupDialogOpen.value = true
+}
+
+function restoreBackupDialogFocus(event: Event): void {
+  event.preventDefault()
+  void nextTick(() => restoreDialogFocus(
+    createDialogFocusTarget(workspaceMapChrome.value?.mapFilesTriggerElement() ?? null),
+    createDialogFocusTarget(workspaceMain.value),
+  ))
+}
+
 const workspaceRestoreReview = workspaceRestore.review
 const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error

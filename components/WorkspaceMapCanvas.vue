@@ -1194,6 +1194,7 @@ function isUsableClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bott
 
 function isVisibleObstruction(element: Element): boolean {
   if (!element.isConnected || element.closest('[inert]') || element.closest('[aria-hidden="true"]')) return false
+  if (element.matches('.workspace-map-files-content') && element.closest('[data-state="closed"]')) return false
   if (element.getClientRects().length === 0) return false
   const style = window.getComputedStyle(element)
   return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'

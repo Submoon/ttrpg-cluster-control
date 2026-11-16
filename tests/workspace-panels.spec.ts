@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, waitForWorkspaceSaved, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
@@ -46,7 +46,7 @@ test('desktop Hierarchy and Inspector start open while the portaled Map files me
   await expect(inspector).toBeVisible()
 
   const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
-  const filesHint = page.getByText('Map files', { exact: true }).and(page.locator(':not([aria-hidden="true"])'))
+  const filesHint = page.getByRole('tooltip', { name: 'Map files', exact: true })
   await expect(filesToggle).toHaveText('')
   await filesToggle.hover()
   await expect(filesHint).toBeVisible()
@@ -57,10 +57,22 @@ test('desktop Hierarchy and Inspector start open while the portaled Map files me
   await expect(filesToggle).toBeFocused()
   await expect(filesHint).toBeVisible()
 
+  const toolbarButtons = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+    .getByRole('button')
+  const toolbarPositions = () => toolbarButtons.evaluateAll(buttons => buttons.map((button) => {
+    const { x, y, width, height } = button.getBoundingClientRect()
+    return { x, y, width, height }
+  }))
+  const closedPositions = await toolbarPositions()
   await filesToggle.click()
-  const files = page.getByRole('group', { name: 'Map file actions for star system Vesper' })
-  const exportButton = files.getByRole('button', { name: 'Export star system JSON' })
-  await expect(files).toBeVisible()
+  await expect(filesToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(toolbarPositions).toEqual(closedPositions)
+  await page.keyboard.press('Escape')
+  await expect(filesToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect.poll(toolbarPositions).toEqual(closedPositions)
+
+  const files = await openMapFilesSection(page, 'Download or back up')
+  const exportButton = files.getByRole('menuitem', { name: 'Download private Star System JSON', exact: true })
   await expect(exportButton).toBeVisible()
   expect(await files.evaluate(element => element.closest('.workspace-header') === null)).toBe(true)
   expect(await exportButton.evaluate((element) => {
@@ -72,6 +84,14 @@ test('desktop Hierarchy and Inspector start open while the portaled Map files me
   const downloadPromise = page.waitForEvent('download')
   await exportButton.click()
   await downloadPromise
+
+  const restore = await openMapFilesSection(page, 'Import or restore')
+  const restoreJson = restore.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true })
+  await restoreJson.hover()
+  await expect(restoreJson).toBeFocused()
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), restoreJson.click()])
+  await chooser.setFiles([])
+  await expect(filesToggle).toHaveAttribute('aria-expanded', 'false')
 })
 
 test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus @ui-smoke', async ({ page }) => {

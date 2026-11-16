@@ -10,6 +10,7 @@ import {
   hideWorkspaceInspector,
   jumpClusterBackupInput,
   openChartDetailsEditor,
+  openMapFilesSection,
   openWorkspaceHierarchy,
   resolveImportReview,
   resolveJumpClusterRestoreReview,
@@ -219,9 +220,9 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   await hideWorkspaceInspector(page)
 
   const initialExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  await setHeaderMapActionsOpen(page, true)
+  const restoreOptions = await openMapFilesSection(page, 'Import or restore')
   const invalidFileChooser = page.waitForEvent('filechooser')
-  await page.getByRole('button', { name: 'Restore Jump Cluster', exact: true }).click()
+  await restoreOptions.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true }).click()
   expect((await invalidFileChooser).isMultiple()).toBe(false)
   await setJsonFile(jumpClusterBackupInput(page), 'invalid.json', '{')
   await setHeaderMapActionsOpen(page, false)
