@@ -1,6 +1,7 @@
 ---
 title: "Inspect and find targets on the continuous Warden map"
-status: blocked
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
