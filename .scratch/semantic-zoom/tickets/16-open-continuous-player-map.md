@@ -1,6 +1,6 @@
 ---
 title: "Open the player preview and reader on one continuous map"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

@@ -1,6 +1,6 @@
 ---
 title: "Place the anchor of an imported standalone system"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

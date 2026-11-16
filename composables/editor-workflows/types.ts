@@ -324,7 +324,9 @@ export interface MapNavigationHandle extends MapImageExporter {
   /** Stable keyboard target when a traversal removes the focused map item. */
   focusMap?(): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
-  setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
+  setClusterSystemPositionPreview?(systemId: string, position: Point | null, expectedVersion?: number): number | void
+  /** Returns the current generation so delayed move completion can clear only its own preview. */
+  getClusterSystemPositionPreviewVersion?(systemId: string): number | undefined
   /** Shows or clears a transient unresolved target in scene coordinates. */
   setUnresolvedExitPositionPreview?(routeId: string, position: Point | null): void
 }
