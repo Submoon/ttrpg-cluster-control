@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   addCustomFieldDefinition,
+  addStarSystem,
   createJumpRoute,
   createLocalWorkspace,
   createSystemObject,
@@ -18,6 +19,11 @@ import {
   updateChartDetails,
   updateSystemObject,
 } from '../domain/workspace'
+import {
+  decodeRoutePointOption,
+  encodeRoutePointOption,
+  noLocalRoutePointOption,
+} from '../utils/route-point-option'
 
 function legacyReservedFieldIdFixture(): {
   workspace: ReturnType<typeof createLocalWorkspace>
@@ -113,20 +119,25 @@ function legacyReservedFieldIdFixture(): {
 }
 
 test('new player-sharing data starts private and empty @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const system = workspace.cluster.systems[0]!
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = addStarSystem(initial, 'Harrow').workspace
+  const [system, destinationSystem] = workspace.cluster.systems
+  if (!system || !destinationSystem) throw new Error('The route fixture needs two systems.')
   const newObject = createSystemObject(system, 'planet')
   const fromPoint = createSystemObject(system, 'jump-point')
-  const toPoint = createSystemObject(system, 'jump-point')
+  const toPoint = createSystemObject(destinationSystem, 'jump-point')
   const clusterWithPoints = {
     ...workspace.cluster,
-    systems: [{ ...system, objects: [...system.objects, fromPoint, toPoint] }],
+    systems: [
+      { ...system, objects: [...system.objects, fromPoint] },
+      { ...destinationSystem, objects: [...destinationSystem.objects, toPoint] },
+    ],
   }
   const route = createJumpRoute(clusterWithPoints, 1, fromPoint.id, toPoint.id)
   const withField = addCustomFieldDefinition(workspace, 'Faction', 'single-select', ['Merchants'])
   const customField = withField.objectFieldSettings.customFields[0]!
 
-  expect(workspace.version).toBe(4)
+  expect(workspace.version).toBe(5)
   expect(system.objects[0]).toMatchObject({ playerText: '', playerFieldMasks: [] })
   expect(newObject).toMatchObject({ playerText: '', playerFieldMasks: [] })
   expect(withField.objectFieldSettings.nativePlayerSharing).toEqual({ atmosphere: false, portClass: false })
@@ -135,22 +146,23 @@ test('new player-sharing data starts private and empty @pure', () => {
 })
 
 test('version 3 workspaces migrate publication additions privately while retaining GM notes @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = addStarSystem(initial, 'Harrow').workspace
   expect(isLocalWorkspace(workspace)).toBe(true)
-  const system = workspace.cluster.systems[0]!
+  const [system, destinationSystem] = workspace.cluster.systems
+  if (!system || !destinationSystem) throw new Error('The route fixture needs two systems.')
   const fromPoint = createSystemObject(system, 'jump-point')
-  const systemWithFromPoint = { ...system, objects: [...system.objects, fromPoint] }
-  const toPoint = createSystemObject(systemWithFromPoint, 'jump-point')
+  const toPoint = createSystemObject(destinationSystem, 'jump-point')
   const systemWithPoints = {
     ...system,
     publication: 'revealed' as const,
     objects: [
       { ...system.objects[0]!, description: 'PRIVATE GM NOTES' },
       fromPoint,
-      toPoint,
     ],
   }
-  const clusterWithPoints = { ...workspace.cluster, systems: [systemWithPoints] }
+  const destinationWithPoints = { ...destinationSystem, objects: [...destinationSystem.objects, toPoint] }
+  const clusterWithPoints = { ...workspace.cluster, systems: [systemWithPoints, destinationWithPoints] }
   const route = createJumpRoute(clusterWithPoints, 2, fromPoint.id, toPoint.id)
   const withField = addCustomFieldDefinition(workspace, 'Faction', 'single-select', ['Merchants'])
   const legacy = structuredClone({
@@ -164,6 +176,8 @@ test('version 3 workspaces migrate publication additions privately while retaini
     delete object.playerFieldMasks
   }
   const legacyCluster = legacy.cluster as { routes: Array<Record<string, unknown>> }
+  delete legacyCluster.routes[0]?.fromSystemId
+  delete legacyCluster.routes[0]?.toSystemId
   delete legacyCluster.routes[0]?.playerShared
   const legacySettings = legacy.objectFieldSettings as {
     customFields: Array<Record<string, unknown>>
@@ -176,7 +190,7 @@ test('version 3 workspaces migrate publication additions privately while retaini
 
   expect(restored).not.toBeNull()
   if (!restored) throw new Error('Expected the supported v3 workspace to restore.')
-  expect(restored.version).toBe(4)
+  expect(restored.version).toBe(5)
   expect(restored.cluster.systems[0]).toHaveProperty('publication', 'revealed')
   expect(restored.cluster.systems[0]?.objects[0]).toMatchObject({
     description: 'PRIVATE GM NOTES',
@@ -188,10 +202,10 @@ test('version 3 workspaces migrate publication additions privately while retaini
   expect(restored.objectFieldSettings.customFields[0]).toMatchObject({ name: 'Faction', playerShared: false })
 })
 
-test('version 4 workspace data requires every sharing field and rejects unsupported versions @pure', () => {
+test('version 5 workspace data requires every sharing field and rejects unsupported versions @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   expect(isLocalWorkspace(workspace)).toBe(true)
-  expect(restoreLocalWorkspace(workspace)).toMatchObject({ version: 4 })
+  expect(restoreLocalWorkspace(workspace)).toMatchObject({ version: 5 })
 
   const missingPlayerText = structuredClone(workspace) as unknown as Record<string, unknown>
   const missingTextCluster = missingPlayerText.cluster as {
@@ -203,7 +217,7 @@ test('version 4 workspace data requires every sharing field and rejects unsuppor
   const missingSettings = missingNativeSharing.objectFieldSettings as Record<string, unknown>
   delete missingSettings.nativePlayerSharing
 
-  const unsupportedVersion = { ...workspace, version: 5 }
+  const unsupportedVersion = { ...workspace, version: 6 }
 
   expect(isLocalWorkspace(missingPlayerText)).toBe(false)
   expect(restoreLocalWorkspace(missingPlayerText)).toBeNull()
@@ -244,7 +258,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
   const restoredV1 = restoreLocalWorkspace(unversioned)
 
   expect(restoredV2).toMatchObject({
-    version: 4,
+    version: 5,
     cluster: {
       playerTitle: 'Aster Reach',
       systems: [{ publication: 'revealed', objects: [{ publication: 'hidden', playerText: '', playerFieldMasks: [] }] }],
@@ -252,7 +266,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
     objectFieldSettings: { nativePlayerSharing: { atmosphere: false, portClass: false } },
   })
   expect(restoredV1).toMatchObject({
-    version: 4,
+    version: 5,
     cluster: {
       name: workspace.cluster.name,
       playerTitle: 'Player Jump Cluster',
@@ -262,14 +276,18 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
 })
 
 test('route edits preserve or explicitly change player sharing @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const system = workspace.cluster.systems[0]!
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = addStarSystem(initial, 'Harrow').workspace
+  const [system, destinationSystem] = workspace.cluster.systems
+  if (!system || !destinationSystem) throw new Error('The route fixture needs two systems.')
   const fromPoint = createSystemObject(system, 'jump-point')
-  const withFrom = { ...system, objects: [...system.objects, fromPoint] }
-  const toPoint = createSystemObject(withFrom, 'jump-point')
+  const toPoint = createSystemObject(destinationSystem, 'jump-point')
   const cluster = {
     ...workspace.cluster,
-    systems: [{ ...system, objects: [...system.objects, fromPoint, toPoint] }],
+    systems: [
+      { ...system, objects: [...system.objects, fromPoint] },
+      { ...destinationSystem, objects: [...destinationSystem.objects, toPoint] },
+    ],
   }
   const unshared = createJumpRoute(cluster, 1, fromPoint.id, toPoint.id)
   const createdShared = createJumpRoute(cluster, 1, fromPoint.id, toPoint.id, 'Uncharted exit', true)
@@ -294,11 +312,102 @@ test('route edits preserve or explicitly change player sharing @pure', () => {
   expect(createdShared.playerShared).toBe(true)
 })
 
-test('version 4 backup restore and independent import preserve private notes and remap Field masks @pure', () => {
-  const initial = createLocalWorkspace('Source Reach', 'Aster')
+test('routes connect distinct systems without requiring local Jump Points @pure', () => {
+  const sourceWorkspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const destinationWorkspace = addStarSystem(sourceWorkspace, 'Harrow').workspace
+  const [source, destination] = destinationWorkspace.cluster.systems
+  if (!source || !destination) throw new Error('The route fixture needs two systems.')
+
+  const route = createJumpRoute(destinationWorkspace.cluster, {
+    jumpLevel: 4,
+    fromSystemId: source.id,
+    fromPointId: null,
+    toSystemId: destination.id,
+    toPointId: null,
+  })
+  const workspace = {
+    ...destinationWorkspace,
+    cluster: {
+      ...destinationWorkspace.cluster,
+      routes: [route],
+    },
+  }
+
+  expect(route).toMatchObject({
+    jumpLevel: 4,
+    fromSystemId: source.id,
+    fromPointId: null,
+    toSystemId: destination.id,
+    toPointId: null,
+  })
+  expect(isLocalWorkspace(workspace)).toBe(true)
+})
+
+test('route point options keep real identities separate from the no-point choice @pure', () => {
+  const legacySentinelId = '__route-no-local-point__'
+  const option = encodeRoutePointOption(legacySentinelId)
+
+  expect(option).not.toBe(noLocalRoutePointOption)
+  expect(decodeRoutePointOption(option)).toBe(legacySentinelId)
+  expect(encodeRoutePointOption('route-point:existing-prefix')).not.toBe(encodeRoutePointOption('existing-prefix'))
+  expect(decodeRoutePointOption(encodeRoutePointOption('route-point:existing-prefix')))
+    .toBe('route-point:existing-prefix')
+  expect(encodeRoutePointOption('')).toBe(noLocalRoutePointOption)
+  expect(decodeRoutePointOption(noLocalRoutePointOption)).toBe('')
+})
+
+test('route endpoints require distinct known systems and local Jump Point ownership @pure', () => {
+  const source = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const destination = addStarSystem(source, 'Harrow').workspace
+  const [originSystem, destinationSystem] = destination.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  const originPoint = createSystemObject(originSystem, 'jump-point')
+  const destinationPoint = createSystemObject(destinationSystem, 'jump-point')
+  const cluster = {
+    ...destination.cluster,
+    systems: [
+      { ...originSystem, objects: [...originSystem.objects, originPoint] },
+      { ...destinationSystem, objects: [...destinationSystem.objects, destinationPoint] },
+    ],
+  }
+
+  const route = createJumpRoute(cluster, {
+    jumpLevel: 1,
+    fromSystemId: originSystem.id,
+    fromPointId: originPoint.id,
+    toSystemId: destinationSystem.id,
+    toPointId: destinationPoint.id,
+  })
+  const workspace = { ...destination, cluster: { ...cluster, routes: [route] } }
+  const sameSystem = {
+    ...route,
+    fromSystemId: originSystem.id,
+    toSystemId: originSystem.id,
+    fromPointId: null,
+    toPointId: null,
+  }
+  const wrongOriginAttachment = { ...route, fromPointId: destinationPoint.id }
+  const wrongDestinationAttachment = { ...route, toPointId: originPoint.id }
+
+  expect(isLocalWorkspace(workspace)).toBe(true)
+  expect(isLocalWorkspace({ ...workspace, cluster: { ...cluster, routes: [sameSystem] } })).toBe(false)
+  expect(isLocalWorkspace({ ...workspace, cluster: { ...cluster, routes: [wrongOriginAttachment] } })).toBe(false)
+  expect(isLocalWorkspace({ ...workspace, cluster: { ...cluster, routes: [wrongDestinationAttachment] } })).toBe(false)
+  expect(() => createJumpRoute(cluster, {
+    jumpLevel: 1,
+    fromSystemId: originSystem.id,
+    fromPointId: null,
+    toSystemId: originSystem.id,
+    toPointId: null,
+  })).toThrow(/different system/)
+})
+
+test('version 5 backup restore and independent import preserve private notes and remap Field masks @pure', () => {
+  const initial = addStarSystem(createLocalWorkspace('Source Reach', 'Aster'), 'Boreal').workspace
   const withFaction = addCustomFieldDefinition(initial, 'Faction', 'single-select', ['Merchants', 'Cult'], true)
   const faction = withFaction.objectFieldSettings.customFields[0]!
-  const system = withFaction.cluster.systems[0]!
+  const [system, destinationSystem] = withFaction.cluster.systems
+  if (!system || !destinationSystem) throw new Error('The route fixture needs two systems.')
   const star = system.objects[0]!
   const updatedSystem = updateSystemObject(
     system,
@@ -313,9 +422,16 @@ test('version 4 backup restore and independent import preserve private notes and
   )
   const firstPoint = createSystemObject(updatedSystem, 'jump-point')
   const systemWithFirstPoint = { ...updatedSystem, objects: [...updatedSystem.objects, firstPoint] }
-  const secondPoint = createSystemObject(systemWithFirstPoint, 'jump-point')
-  const sourceSystem = { ...systemWithFirstPoint, objects: [...systemWithFirstPoint.objects, secondPoint] }
-  const sourceWithPoints = replaceWorkspaceSystem(withFaction, sourceSystem)
+  const secondPoint = createSystemObject(destinationSystem, 'jump-point')
+  const sourceSystem = { ...systemWithFirstPoint, objects: [...systemWithFirstPoint.objects] }
+  const destinationWithPoint = { ...destinationSystem, objects: [...destinationSystem.objects, secondPoint] }
+  const sourceWithPoints = {
+    ...withFaction,
+    cluster: {
+      ...withFaction.cluster,
+      systems: [sourceSystem, destinationWithPoint],
+    },
+  }
   const sharedRoute = createJumpRoute(
     sourceWithPoints.cluster,
     6,
@@ -333,13 +449,13 @@ test('version 4 backup restore and independent import preserve private notes and
   const backup = exportJumpCluster(source)
 
   expect(restored).not.toBeNull()
-  if (!restored) throw new Error('Expected the version 4 source workspace to restore.')
-  expect(restored.version).toBe(4)
+  if (!restored) throw new Error('Expected the version 5 source workspace to restore.')
+  expect(restored.version).toBe(5)
   expect(restored.cluster.systems[0]?.objects[0]).toMatchObject({
     description: 'PRIVATE BACKUP NOTES',
     playerText: 'PUBLIC BACKUP TEXT',
   })
-  expect(backup.version).toBe(4)
+  expect(backup.version).toBe(5)
   expect(restored?.cluster.routes[0]).toMatchObject({ jumpLevel: 6, playerShared: true })
   expect(backup.cluster.routes[0]).toMatchObject({ jumpLevel: 6, playerShared: true })
 
@@ -360,7 +476,10 @@ test('version 4 backup restore and independent import preserve private notes and
   expect(importedRoute?.fromPointId).not.toBe(sourceRoute.fromPointId)
   expect(importedRoute?.toPointId).not.toBe(sourceRoute.toPointId)
   expect(importedSystem?.objects.map(object => object.id)).toContain(importedRoute?.fromPointId)
-  expect(importedSystem?.objects.map(object => object.id)).toContain(importedRoute?.toPointId)
+  const importedDestinationSystem = imported.workspace.cluster.systems.find(candidate =>
+    candidate.id === importedRoute?.toSystemId,
+  )
+  expect(importedDestinationSystem?.objects.map(object => object.id)).toContain(importedRoute?.toPointId)
 })
 
 test('object masks reject unknown and duplicate IDs and custom definitions reserve native IDs @pure', () => {
@@ -666,7 +785,7 @@ test('legacy standalone system import preserves its separate entity ID namespace
   expect(importedPlanet?.customFieldValues?.[importedField!.id]).toBe('CUSTOM ATMOSPHERE ALIAS VALUE')
 })
 
-test('v4 portable import remains strict about reserved custom Field IDs @pure', () => {
+test('v5 portable import remains strict about reserved custom Field IDs @pure', () => {
   const { workspace } = legacyReservedFieldIdFixture()
   const currentExport = exportJumpCluster(workspace)
   const settings = currentExport.objectFieldSettings
@@ -686,7 +805,7 @@ test('v4 portable import remains strict about reserved custom Field IDs @pure', 
   expect(() => prepareJsonImport(
     createLocalWorkspace('Reserved V4 Destination', 'Boreal'),
     currentExport,
-  )).toThrow(/valid version 1, version 2, version 3, or version 4/)
+  )).toThrow(/valid version 1, version 2, version 3, version 4/)
 })
 
 test('legacy migration rejects a reserved custom ID that originally collides with an object ID @pure', () => {
@@ -706,7 +825,7 @@ test('legacy migration rejects a reserved custom ID that originally collides wit
   expect(() => prepareJsonImport(
     createLocalWorkspace('Entity Collision Destination', 'Boreal'),
     collideAtmosphereDefinitionWithObject(legacyExport),
-  )).toThrow(/valid version 1, version 2, version 3, or version 4/)
+  )).toThrow(/valid version 1, version 2, version 3, version 4/)
 })
 
 test('legacy migration keeps previously valid workspace and cluster ID overlap @pure', () => {
@@ -738,5 +857,5 @@ test('legacy migration rejects duplicate original custom field IDs @pure', () =>
   expect(() => prepareJsonImport(
     createLocalWorkspace('Duplicate Alias Destination', 'Boreal'),
     duplicateFirstTwoFieldIds(legacyExport),
-  )).toThrow(/valid version 1, version 2, version 3, or version 4/)
+  )).toThrow(/valid version 1, version 2, version 3, version 4/)
 })

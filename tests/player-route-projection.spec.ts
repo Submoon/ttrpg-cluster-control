@@ -176,13 +176,25 @@ test('routes to Hidden systems expose only exact anonymous positions from the re
   }
 })
 
-test('shared routes between points in the same retained system remain public loops @pure', () => {
+test('system-only shared routes project without Jump Point data @pure', () => {
   const initial = createLocalWorkspace('Loop Cluster', 'Loop System')
-  const systemId = initial.cluster.systems[0]!.id
-  const pair = addJumpPointPair(initial, systemId)
-  const workspace = setSystemPublication(pair.workspace, systemId, 'revealed')
-  const route = createJumpRoute(workspace.cluster, 9, pair.points[0].id, pair.points[1].id, 'PRIVATE LOOP EXIT', true)
-  const source = { ...workspace, cluster: { ...workspace.cluster, routes: [{ ...route, name: 'PRIVATE LOOP NAME' }] } }
+  const withDestination = addStarSystem(initial, 'Distant System').workspace
+  const [originSystem, destinationSystem] = withDestination.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  let workspace = setSystemPublication(withDestination, originSystem.id, 'revealed')
+  workspace = setSystemPublication(workspace, destinationSystem.id, 'revealed')
+  const route = {
+    ...createJumpRoute(workspace.cluster, {
+      jumpLevel: 9,
+      fromSystemId: originSystem.id,
+      fromPointId: null,
+      toSystemId: destinationSystem.id,
+      toPointId: null,
+      playerShared: true,
+    }),
+    name: 'PRIVATE LOOP NAME',
+  }
+  const source = { ...workspace, cluster: { ...workspace.cluster, routes: [route] } }
 
   const document = projectPlayerCluster(source)
 
@@ -190,12 +202,11 @@ test('shared routes between points in the same retained system remain public loo
     id: 'route-1',
     jumpLevel: 9,
     fromSystemId: 'system-1',
-    destination: { kind: 'system', systemId: 'system-1' },
+    destination: { kind: 'system', systemId: 'system-2' },
   }])
   expect(JSON.stringify(document)).not.toContain('PRIVATE LOOP NAME')
-  expect(JSON.stringify(document)).not.toContain('PRIVATE LOOP EXIT')
-  expect(JSON.stringify(document)).not.toContain(pair.points[0].id)
-  expect(JSON.stringify(document)).not.toContain(pair.points[1].id)
+  expect(JSON.stringify(document)).not.toContain(originSystem.id)
+  expect(JSON.stringify(document)).not.toContain(destinationSystem.id)
 })
 
 test('shared unresolved routes keep source geometry but receive public-only ordinals and labels @pure', () => {

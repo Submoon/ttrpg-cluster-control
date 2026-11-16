@@ -1,5 +1,5 @@
 import { expect, type Locator } from '@playwright/test'
-import type { PublicationMode } from '../domain/workspace'
+import type { JumpRoute, PublicationMode } from '../domain/workspace'
 
 export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
 
@@ -281,25 +281,15 @@ export type ExportedSystem = {
   orbits: Array<{ id: string; hostId: string | null; center?: WorldPoint; order: number }>
 }
 
-export type ExportedRoute = {
-  id: string
-  playerShared?: boolean
-  name?: string
-  jumpLevel?: number
-  fromPointId: string
-  toPointId: string | null
-  unresolvedExit?: string
-}
-
 export type ExportedCustomFieldApplicabilityTarget =
   | { kind: 'category'; family: string }
   | { kind: 'subtype'; family: string; subtype: string }
 
-export type ExportedMap = {
+export type ExportedMap<Route = JumpRoute> = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
+  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: Route[] }
   system?: ExportedSystem
   objectFieldSettings: {
     atmosphereOptions: string[]

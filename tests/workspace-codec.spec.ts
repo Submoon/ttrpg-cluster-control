@@ -120,7 +120,9 @@ function workspaceForPortableExports(): LocalWorkspace {
     name: 'Known lane',
     playerShared: false,
     jumpLevel: 8,
+    fromSystemId: first.id,
     fromPointId: origin.id,
+    toSystemId: second.id,
     toPointId: destination.id,
   } as const
   const unresolvedRoute = {
@@ -128,7 +130,9 @@ function workspaceForPortableExports(): LocalWorkspace {
     name: 'Outer lane',
     playerShared: false,
     jumpLevel: 12,
+    fromSystemId: second.id,
     fromPointId: destination.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'The Quiet Expanse',
   } as const
@@ -176,7 +180,7 @@ test('Cluster JSON export contains the complete portable campaign projection @pu
 
   expect(exported).toEqual({
     format: 'ttrpg-cluster-control-map',
-    version: 4,
+    version: 5,
     type: 'cluster',
     cluster: workspace.cluster,
     objectFieldSettings: workspace.objectFieldSettings,
@@ -236,9 +240,16 @@ test('complete backup restore applies supported legacy migrations and rejects st
 test('complete version 1 backup restore keeps legacy ellipse-only Orbit radii @pure', () => {
   const backup = exportJumpCluster(workspaceForPortableExports())
   const { orbitRadii, ...legacyLayout } = backup.layout
+  const legacyRoutes = backup.cluster.routes.map(route => {
+    const legacyRoute: Record<string, unknown> = { ...route }
+    delete legacyRoute.fromSystemId
+    delete legacyRoute.toSystemId
+    return legacyRoute
+  })
   const legacyVersionOne = {
     ...backup,
     version: 1,
+    cluster: { ...backup.cluster, routes: legacyRoutes },
     layout: {
       ...legacyLayout,
       orbitEllipseRadii: orbitRadii,

@@ -1,5 +1,4 @@
-import { jumpPointsInCluster } from '../domain/workspace'
-import type { JumpCluster, JumpPointReference, JumpRoute, PublicationMode, Point } from '../domain/workspace'
+import type { JumpCluster, JumpRoute, PublicationMode, Point } from '../domain/workspace'
 import { publicationPresentation, publicationStatus } from './publication-presentation'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
@@ -19,25 +18,24 @@ export interface RouteSharingStatus {
   description: string
 }
 
-/** Describes the configured route setting and whether its existing endpoints appear in player projection. */
+/** Describes the configured route setting and whether its system endpoints appear in player projection. */
 export function routeSharingStatus(
   cluster: JumpCluster,
   route: JumpRoute,
-  points: ReadonlyMap<string, JumpPointReference> = new Map(
-    jumpPointsInCluster(cluster).map(reference => [reference.point.id, reference]),
-  ),
 ): RouteSharingStatus {
-  const origin = points.get(route.fromPointId)
-  const destination = route.toPointId === null ? undefined : points.get(route.toPointId)
-  const hasVisibleEndpoint = route.toPointId === null
-    ? origin !== undefined && origin.system.publication !== 'hidden'
+  const origin = cluster.systems.find(system => system.id === route.fromSystemId)
+  const destination = route.toSystemId === null
+    ? undefined
+    : cluster.systems.find(system => system.id === route.toSystemId)
+  const hasVisibleEndpoint = route.toSystemId === null
+    ? origin !== undefined && origin.publication !== 'hidden'
     : origin !== undefined && destination !== undefined
-      && (origin.system.publication !== 'hidden' || destination.system.publication !== 'hidden')
+      && (origin.publication !== 'hidden' || destination.publication !== 'hidden')
   const visibilityLabel = route.playerShared ? 'Shared with players' : 'Private'
   const isBlocked = route.playerShared && !hasVisibleEndpoint
   const noVisibleEndpointMessage = !isBlocked
     ? null
-    : route.toPointId === null
+    : route.toSystemId === null
       ? 'This shared route has no visible endpoint because its origin system is Hidden.'
       : origin && destination
         ? 'This shared route has no visible endpoint because both endpoint systems are Hidden.'

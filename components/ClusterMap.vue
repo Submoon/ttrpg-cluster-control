@@ -290,7 +290,7 @@ function prepareExportClone(clone: SVGSVGElement): void {
     routeLabel?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
-    if (geometry.exitPoint && geometry.exitLabel && route.toPointId === null) {
+    if (geometry.exitPoint && geometry.exitLabel && route.toSystemId === null) {
       exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
       exitMark?.setAttribute('cy', String(geometry.exitPoint.y))
       exitLabel?.setAttribute('x', String(geometry.exitLabel.x))
@@ -641,11 +641,11 @@ function render(): void {
     .data(props.cluster.routes)
     .join('g')
     .attr('data-route-id', route => route.id)
-    .attr('class', route => `cluster-route${route.toPointId ? '' : ' is-unresolved'}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
+    .attr('class', route => `cluster-route${route.toSystemId === null ? ' is-unresolved' : ''}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
     .attr('font-size', CLUSTER_ROUTE_PRESENTATION.labelFontSize)
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', route => clusterRouteLabel(route, jumpPoints))
+    .attr('aria-label', route => clusterRouteLabel(route, props.cluster, jumpPoints))
 
   const routePublicationBadges = new Map<string, SVGGElement>()
   routeMarks.each(function (route) {
@@ -661,7 +661,7 @@ function render(): void {
     const mark = select(this)
     const label = clusterRoutePresentationLabel(route.jumpLevel)
     const labelWidth = clusterRouteLabelWidth(route)
-    const sharingStatus = routeSharingStatus(props.cluster, route, jumpPoints)
+    const sharingStatus = routeSharingStatus(props.cluster, route)
     describeRouteSharing(this, `route-${route.id}`, sharingStatus)
 
     const badgeGroup = publicationDecorations.append('g')
@@ -690,7 +690,7 @@ function render(): void {
       .attr('height', CLUSTER_ROUTE_PRESENTATION.badge.height)
       .attr('rx', CLUSTER_ROUTE_PRESENTATION.badge.cornerRadius)
 
-    if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
+    if (route.toSystemId === null && geometry.exitPoint && geometry.exitLabel) {
       const exitLabel = geometry.exitLabel
       const exitHitTarget = mark.insert('circle', '.cluster-route-label')
         .attr('class', 'cluster-exit-hit-target')
@@ -732,7 +732,7 @@ function render(): void {
         undefined,
         props.unresolvedExitPositions,
       ).exitPoint ?? geometry.exitPoint!
-      const exitDrag = drag<SVGCircleElement, Extract<JumpRoute, { toPointId: null }>>()
+      const exitDrag = drag<SVGCircleElement, Extract<JumpRoute, { toSystemId: null }>>()
         .filter(event => props.moveEnabled && !props.moveTargeting && !event.ctrlKey && !event.button
           && (!('touches' in event) || event.touches.length === 1))
         .clickDistance(6)
@@ -832,7 +832,7 @@ function render(): void {
         `translate(${geometry.labelX + labelWidth / 2 + 8} ${geometry.labelY - 1})`,
       )
 
-      if (route.toPointId === null && geometry.exitPoint && geometry.exitLabel) {
+      if (route.toSystemId === null && geometry.exitPoint && geometry.exitLabel) {
         const exitLabel = geometry.exitLabel
         mark.selectAll('.cluster-exit-mark, .cluster-exit-hit-target')
           .attr('cx', geometry.exitPoint.x)

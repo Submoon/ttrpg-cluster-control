@@ -351,12 +351,14 @@ function contextName(value: string): string {
   return normalized.length <= 32 ? normalized : `${normalized.slice(0, 31).trimEnd()}…`
 }
 
-function routePointContext(workspace: LocalWorkspace, pointId: string): string {
-  for (const system of workspace.cluster.systems) {
-    const point = system.objects.find(object => object.id === pointId && object.family === 'JumpPoint')
-    if (point) return `${contextName(point.name)} (${contextName(system.name)})`
-  }
-  return 'Missing Jump Point'
+function routeEndpointContext(workspace: LocalWorkspace, systemId: string, pointId: string | null): string {
+  const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
+  if (!system) return 'Missing system'
+  if (pointId === null) return contextName(system.name)
+  const point = system.objects.find(object => object.id === pointId && object.family === 'JumpPoint')
+  return point
+    ? `${contextName(point.name)} (${contextName(system.name)})`
+    : `Missing Jump Point (${contextName(system.name)})`
 }
 
 function targetContextLabel(target: WorkspaceMutationTarget | undefined, workspace: LocalWorkspace): string | null {
@@ -384,8 +386,10 @@ function targetContextLabel(target: WorkspaceMutationTarget | undefined, workspa
   if (target.kind === 'route') {
     const route = cluster.routes.find(candidate => candidate.id === target.id)
     if (!route) return null
-    const from = routePointContext(workspace, route.fromPointId)
-    const to = route.toPointId === null ? route.unresolvedExit : routePointContext(workspace, route.toPointId)
+    const from = routeEndpointContext(workspace, route.fromSystemId, route.fromPointId)
+    const to = route.toSystemId === null
+      ? route.unresolvedExit
+      : routeEndpointContext(workspace, route.toSystemId, route.toPointId)
     return `${from} → ${to} · Level ${route.jumpLevel} · ${contextName(cluster.name)}`
   }
   const field = workspace.objectFieldSettings.customFields.find(candidate => candidate.id === target.id)

@@ -399,8 +399,8 @@
                 </ClientOnly>
               </div>
               <p v-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-                <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE LOGICAL ENDPOINTS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
-                <span>{{ clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system, then a logical Jump Point for each endpoint.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it; use Navigate to enter a system.' }}</span>
+                <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE SYSTEMS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
+                <span>{{ clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system for each endpoint; local Jump Points are optional.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it; use Navigate to enter a system.' }}</span>
               </p>
               <p v-else class="map-note mb-[1em] px-[0.2rem] pt-[0.55rem] pb-[0.1rem]">
                 Select a mark or Orbit to inspect it.
@@ -488,6 +488,7 @@
               @request-route-edit="beginRouteEdit"
               @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
+              @choose-route-system="chooseRouteSystem"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
               @discard-route-session="discardRouteDraft"
@@ -995,7 +996,7 @@ const {
   entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
   cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
-  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRoutePoint, updateRouteInput,
+  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
 const { editorError } = feedback
@@ -1247,7 +1248,7 @@ const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
   : clusterAddType.value === 'route'
     ? {
         label: 'Jump Route',
-        status: `ADD Jump Route · Choose a system to select the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} Jump Point.`,
+        status: `ADD Jump Route · Choose the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} system.`,
         error: routeSession.value?.error || undefined,
       }
     : null)
