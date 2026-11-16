@@ -11,14 +11,20 @@ A schematic network of known star systems and the Jump Routes between them.
 A complete snapshot of a Warden's Jump Cluster, including GM notes, player publication settings, and the saved map layout. Restoring it makes that Jump Cluster the active map.
 
 **Star system**:
-A local map containing one or more stars, Orbits, and notable locations.
+A named grouping of stars, Orbits, and notable locations within a Jump Cluster, which may be empty while being prepared. Each catalogue object and Orbit belongs to one star system.
+
+**System anchor**:
+The reference point locating a star system and its local geometry within its Jump Cluster, independent of its stars.
+
+**System envelope**:
+The boundary enclosing a star system's anchor, visible objects, and visible Orbits with a margin. The Warden envelope uses the complete system layout. The player envelope uses the published layout of a Revealed system. A system with no contents in that layout has a minimum envelope around its anchor.
 
 **Jump Point**:
-A logical endpoint for a Jump Route, distinct from an optional physical Station installation that it may reference.
-_Avoid_: Jump Station (when referring to a logical endpoint)
+A location within a star system that can specify where a Jump Route departs or arrives. A Jump Point may reference a physical Station in the same system.
+_Avoid_: Jump Station (when referring to a Jump Point)
 
 **Jump Route**:
-A connection between logical Jump Points in a Jump Cluster; its far end may be unresolved beyond the known cluster.
+A connection between two different star systems of a Jump Cluster, or from a star system to an unresolved destination. An end at a known system may specify a Jump Point within that system.
 
 **Jump level**:
 A positive integer used to identify a Jump Route; standard levels are 1 through 9, with higher positive levels available for custom classifications.
@@ -71,4 +77,4 @@ The shared choice to permit an applicable native or custom Field's assigned valu
 An object's additional restriction that hides one Field value from players. A mask cannot make a private Field public.
 
 **Shared Jump Route**:
-A route deliberately included in player publication when at least one endpoint system is present. Sharing does not reveal its logical Jump Points. A Hidden endpoint is represented as an unknown destination at its exact schematic position.
+A route deliberately included in player publication when at least one endpoint system is present. Sharing does not itself reveal associated Jump Points. A Hidden endpoint is represented as an unknown destination at its exact schematic position.
