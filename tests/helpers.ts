@@ -820,13 +820,18 @@ export async function openMapFilesSection(
   } else {
     await setHeaderMapActionsOpen(page, true)
   }
-  const submenu = page.getByRole('menu', { name: section, exact: true })
-  if (!await submenu.isVisible()) {
-    const entry = page.getByRole('menu', { name: 'Map files', exact: true })
-      .getByRole('menuitem', { name: section, exact: true })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+  const openMenus = page.locator('[data-state="open"]')
+  const rootMenu = page.getByRole('menu', { name: 'Map files', exact: true }).and(openMenus)
+  await expect(rootMenu).toBeVisible()
+  const entry = rootMenu.getByRole('menuitem', { name: section, exact: true })
+  if (await entry.getAttribute('aria-expanded') !== 'true') {
     if (input === 'keyboard') await entry.press('ArrowRight')
     else await entry.click()
   }
+  await expect(entry).toHaveAttribute('aria-expanded', 'true')
+  const submenu = page.getByRole('menu', { name: section, exact: true }).and(openMenus)
   await expect(submenu).toBeVisible()
   return submenu
 }
