@@ -56,7 +56,7 @@ The overview uses bold screen-sized names. Nearby names are spaced vertically wh
 
 The prototype retains the original individual scaling experiment. The later [shared spatial layout decision](01-shared-spatial-layout.md#resolution) specifies one common scale for the product.
 
-The [prototype guide](../../../components/semantic-zoom-prototype/README.md) provides the walkthrough. The [evaluation record](../prototype-evaluation.md) records tested interactions, local timing samples and remaining limits. The initial local zoom samples fell below the agreed 60 fps target. Physical smartphone measurements are still pending.
+The guide on the prototype branch provides the walkthrough. The [evaluation record](../prototype-evaluation.md) records tested interactions, local timing samples and remaining limits. The initial local zoom samples fell below the agreed 60 fps target. Physical smartphone measurements are still pending.
 
 ## Blocked by
 
