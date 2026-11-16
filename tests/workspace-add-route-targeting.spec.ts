@@ -87,7 +87,10 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
     objects: [{ ...originStar, id: 'campaign-baseline-anchor-star', locationKey: 'A', name: 'Anchor Star' }],
     orbits: [],
   })
-  stagingFixture.layout.systemPositions[anchorSystemId] = { ...stagingFixture.layout.systemPositions[originSystem.id]! }
+  const systemPositions: Record<string, { x: number; y: number }> = stagingFixture.layout.systemPositions
+  const originPosition = systemPositions[originSystem.id]
+  if (!originPosition) throw new Error('The campaign fixture needs a saved Vesper Prime anchor.')
+  systemPositions[anchorSystemId] = { ...originPosition }
 
   await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
