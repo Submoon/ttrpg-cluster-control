@@ -96,7 +96,7 @@ test('hidden distant systems and private source extensions do not affect the pub
       ...hidden.cluster,
       privateExtension: 'UNKNOWN CLUSTER PROPERTY',
       name: 'Changed Private Cluster Name',
-      routes: [{ id: 'SECRET ROUTE ID', name: 'SECRET ROUTE NAME', jumpLevel: 1, playerShared: false, fromPointId: 'SECRET POINT', toPointId: null, unresolvedExit: 'SECRET EXIT' }],
+      routes: [{ id: 'SECRET ROUTE ID', name: 'SECRET ROUTE NAME', jumpLevel: 1, playerShared: false, fromSystemId: initialSystem.id, fromPointId: 'SECRET POINT', toSystemId: null, toPointId: null, unresolvedExit: 'SECRET EXIT' }],
       systems: hidden.cluster.systems.map(system => system.id === initialSystem.id
         ? {
             ...system,

@@ -13,7 +13,7 @@ import {
   setWorkspaceMapMode,
   workspaceNavigation,
 } from './helpers'
-import type { DownloadWindow, ExportedMap, ExportedObject, WorldPoint } from './helpers'
+import type { ExportedMap, ExportedObject, WorldPoint } from './helpers'
 
 type OrbitRadii = { horizontal: number; vertical: number }
 
@@ -111,28 +111,6 @@ async function ensureObjectPlacementOpen(page: Page): Promise<void> {
   await expect(placement).toBeVisible()
   if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
   await expect(placement).toHaveAttribute('aria-expanded', 'true')
-}
-
-/** Exports through the visible file controls without moving the held map pointer. */
-async function downloadSystemJsonDuringDrag(page: Page): Promise<ExportedMap> {
-  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
-  await expect(mapFiles).toBeVisible()
-  if (await mapFiles.getAttribute('aria-expanded') !== 'true') await mapFiles.press('Enter')
-  const exportButton = page.getByRole('button', { name: 'Export star system JSON', exact: true })
-  await expect(exportButton).toBeVisible()
-
-  const pendingDownload = page.waitForEvent('download')
-  await exportButton.press('Enter')
-  const download = await pendingDownload
-  expect(download.suggestedFilename()).toMatch(/\.json$/i)
-
-  const json = await page.evaluate(async () => {
-    const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
-    if (!blob) throw new Error('Could not read the downloaded JSON file.')
-    return blob.text()
-  })
-  if (await mapFiles.getAttribute('aria-expanded') === 'true') await mapFiles.press('Enter')
-  return JSON.parse(json) as ExportedMap
 }
 
 
@@ -353,7 +331,7 @@ test('dragging an Orbit host across its carried ring follows the raw pointer and
     x: originalDeepAsteroid.x + ringDelta.x,
     y: originalDeepAsteroid.y + ringDelta.y,
   })
-  expect(await downloadSystemJsonDuringDrag(page)).toEqual(initial)
+  expect(await downloadJson(page, 'Export star system JSON', 'keyboard')).toEqual(initial)
   await expect(objectMark(map, oldPlanet.id)).toHaveClass(/is-dragging/)
 
   const dropScreenPoint = await map.evaluate((element, point) => {

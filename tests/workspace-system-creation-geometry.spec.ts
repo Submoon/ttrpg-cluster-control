@@ -218,7 +218,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
   await expect(map.locator(`.orbit-mark[data-orbit-id="${alphaOrbit.id}"] .orbit-ring`))
     .toHaveAttribute('transform', 'rotate(30 480 280)')
-  const completedExport = await downloadImage(page, 'Export star system SVG', 'image/svg+xml')
+  const completedExport = await downloadImage(page, 'image/svg+xml')
   if (!completedExport.text) throw new Error('The SVG exported after direct Add has no serialized content.')
   expect(completedExport.text).not.toContain('system-creation-preview')
 

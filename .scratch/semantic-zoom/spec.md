@@ -22,6 +22,8 @@ Give the Warden editor, player preview, and player reader one continuous D3 canv
 
 The application baseline after fetching was `dc5edb282087458c1bc6dd26287c96a974662c3b` on both local `main` and `origin/main`. The planning checkout intentionally uses the prototype branch at `28217cb8e3292910070617e79389fd167ded2367` plus local decision records. Use the application baseline for the existing product contracts and the prototype branch for interaction evidence.
 
+During implementation on 2026-11-16, both `main` and `origin/main` advanced to `88d84f1749c7615b6dc5179f2bd4f24040d79f6a`. Tickets 09 and 10 were first verified against the original application baseline. The integration branch merged the updated main at `45c78ffb89bd6fab5b2973f84ec962ac45cb797c`; the updated application and dependency lock apply to subsequent integrated verification.
+
 ## User Stories
 
 ### Explore and arrange the map

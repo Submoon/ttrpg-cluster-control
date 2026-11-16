@@ -455,6 +455,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       routeSession: route.routeSession,
       hasModifiedRouteSession: route.hasModifiedRouteSession,
       offerRouteSystems: route.offerRouteSystems,
+      chooseRouteSystem: route.chooseRouteSystem,
       chooseRoutePoint: route.chooseRoutePoint,
       updateRouteInput: route.updateRouteInput,
       applyRouteSession,

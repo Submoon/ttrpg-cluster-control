@@ -1,6 +1,7 @@
 ---
 title: "Open the player preview and reader on one continuous map"
-status: open
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

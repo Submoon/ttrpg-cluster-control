@@ -148,7 +148,6 @@ const feedback = computed(() => {
   width: max-content;
   min-width: 0;
   max-width: 100%;
-  gap: 0.2rem;
 }
 
 .workspace-history-action-icon {

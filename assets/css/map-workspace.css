@@ -1017,8 +1017,14 @@ p-note {
   transform: translateX(-50%);
   pointer-events: none;
 }
-.workspace-map-chrome-region:has(.workspace-history-controls-has-notice) { z-index: 20; }
+.workspace-map-chrome-region:has(.workspace-history-controls-has-notice, .workspace-map-files-feedback) { z-index: 20; }
 .workspace-map-chrome-region > * { width: 100%; pointer-events: auto; }
+
+/* Release the native menu and its positioner while the exit animation is still mounted. */
+.workspace-map-files-content[role="menu"][data-state="closed"],
+[data-reka-popper-content-wrapper]:has(> .workspace-map-files-content[role="menu"][data-state="closed"]) {
+  pointer-events: none !important;
+}
 
 .workspace-bottom-controls {
   position: absolute;

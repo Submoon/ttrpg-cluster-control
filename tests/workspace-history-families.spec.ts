@@ -225,6 +225,7 @@ test('Orbit deletion round-trips its nested cascade, station links, routes, orde
   expect(survivingSystem.objects.map(object => object.name)).toEqual(['Primary Star', 'Herma', 'Surviving Gate'])
   expect(survivingSystem.orbits).toEqual([{ ...system.orbits[1], order: 1 }])
   expect(deletion.cluster.routes.map(route => route.fromPointId)).toEqual([
+    null,
     system.objects.find(object => object.name === 'Surviving Gate')!.id,
   ])
   expect(survivingSystem.objects.find(object => object.name === 'Surviving Gate')?.jumpStationId).toBeNull()

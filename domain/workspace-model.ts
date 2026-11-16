@@ -118,18 +118,36 @@ export type Orbit = {
   | { hostId: null; center: Point }
 )
 
+/** A selected Jump Point is optional at either known system endpoint. */
+export type JumpRouteEndpoint = {
+  systemId: string
+  pointId: string | null
+}
+
 /**
- * Routes connect logical Jump Point IDs; a null destination records an unresolved external exit.
+ * A route connects distinct known systems, optionally through local Jump Points, or ends at an unresolved exit.
  */
 export type JumpRoute = {
   id: string
   name?: string
   jumpLevel: number
-  fromPointId: string
+  fromSystemId: string
+  fromPointId: string | null
   playerShared: boolean
 } & (
-  | { toPointId: string; unresolvedExit?: never }
-  | { toPointId: null; unresolvedExit: string }
+  | { toSystemId: string; toPointId: string | null; unresolvedExit?: never }
+  | { toSystemId: null; toPointId: null; unresolvedExit: string }
+)
+
+/** New route values accepted by the domain create and update operations. */
+export type JumpRouteInput = {
+  jumpLevel: number
+  fromSystemId: string
+  fromPointId: string | null
+  playerShared?: boolean
+} & (
+  | { toSystemId: string; toPointId: string | null; unresolvedExit?: never }
+  | { toSystemId: null; toPointId: null; unresolvedExit: string }
 )
 
 export interface StarSystem {
@@ -169,7 +187,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 4
+  version: 5
   id: string
   cluster: JumpCluster
   layout: {
@@ -200,7 +218,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 4
+  version: 5
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -265,6 +283,12 @@ export interface MapDeletionPlan {
   removedObjectIds: string[]
   removedOrbitIds: string[]
   removedRouteIds: string[]
+  detachedRouteAttachments: Array<{
+    routeId: string
+    end: 'from' | 'to'
+    pointId: string
+    systemId: string
+  }>
   clearedStationLinks: Array<{ objectId: string; stationId: string }>
   reorderedOrbits: Array<{ orbitId: string; label: string; fromOrder: number; toOrder: number }>
   /** Stable description of semantic consequences; excludes unrelated workspace edits. */

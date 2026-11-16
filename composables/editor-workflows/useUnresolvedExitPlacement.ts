@@ -39,18 +39,18 @@ export function useUnresolvedExitPlacement({
     const current = workspace.value
     const routeId = selectedRouteId.value
     return store.activeView === 'cluster'
-      && !!current?.cluster.routes.some(route => route.id === routeId && route.toPointId === null)
+      && !!current?.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)
   })
   const targeting = computed(() => available.value && store.mapMode === 'move' && targetingIntent.value)
 
   function currentRoute(routeId: string): LocalWorkspace['cluster']['routes'][number] | undefined {
-    return workspace.value?.cluster.routes.find(route => route.id === routeId && route.toPointId === null)
+    return workspace.value?.cluster.routes.find(route => route.id === routeId && route.toSystemId === null)
   }
 
   function automaticPosition(routeId: string): Point | null {
     const current = workspace.value
     const route = current?.cluster.routes.find(candidate => candidate.id === routeId)
-    if (!current || !route || route.toPointId !== null) return null
+    if (!current || !route || route.toSystemId !== null) return null
     const jumpPoints = new Map(jumpPointsInCluster(current.cluster).map(reference => [reference.point.id, reference]))
     return clusterRouteGeometry(
       route,
@@ -169,7 +169,7 @@ export function useUnresolvedExitPlacement({
         isCurrent: () => {
           const latest = workspace.value
           return latest?.cluster.id === clusterId
-            && latest.cluster.routes.some(route => route.id === routeId && route.toPointId === null)
+            && latest.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)
             && (previewToken === undefined || preview.value?.token === previewToken
               && store.activeView === 'cluster' && selectedRouteId.value === routeId)
         },
@@ -194,7 +194,7 @@ export function useUnresolvedExitPlacement({
     const current = workspace.value
     if (!targeting.value || !active || !current) return false
     if (active.clusterId !== current.cluster.id
-      || !current.cluster.routes.some(route => route.id === active.routeId && route.toPointId === null)
+      || !current.cluster.routes.some(route => route.id === active.routeId && route.toSystemId === null)
       || selectedRouteId.value !== active.routeId || store.activeView !== 'cluster') {
       error.value = 'The selected Jump Route changed. Preview the target again.'
       return false
@@ -213,7 +213,7 @@ export function useUnresolvedExitPlacement({
     if (!startingClusterId || !await beforeWorkspaceOperation()) return false
     const current = workspace.value
     if (!current || current.cluster.id !== startingClusterId
-      || !current.cluster.routes.some(route => route.id === routeId && route.toPointId === null)) return false
+      || !current.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)) return false
     const applied = positionFor(routeId)
     if (applied?.x === position.x && applied.y === position.y) return true
     const result = await publish(routeId, startingClusterId, position)
