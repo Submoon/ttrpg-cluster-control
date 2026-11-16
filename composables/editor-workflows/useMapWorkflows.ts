@@ -32,6 +32,14 @@ import type {
 import type { WorkspaceMutationExecutor, WorkspaceMutationRequest, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import { objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
+import { clampWardenClusterAnchor } from '../../utils/continuous-map-projection'
+
+export interface CapturedClusterSystemMove {
+  workspaceId: string
+  clusterId: string
+  systemId: string
+  originPosition: Point
+}
 
 type OrbitAdjustmentController = Pick<ReturnType<typeof createContinuousOrbitAdjustmentController>, 'update'>
 
@@ -257,31 +265,54 @@ export function useMapWorkflows({
    * @param position Proposed normalized cluster-map position.
    * @returns A promise that resolves after the attempt; invalid coordinates or save failures populate editorError.
    */
-  async function moveSystem(systemId: string, position: Point): Promise<void> {
-    if (!await beforeWorkspaceOperation()) return
-    const currentWorkspace = workspace.value
-    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!currentWorkspace || !system) return
+  async function moveSystem(
+    systemId: string,
+    position: Point,
+    capturedContext?: CapturedClusterSystemMove,
+  ): Promise<void> {
+    const startingWorkspace = workspace.value
+    const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+    if (!startingWorkspace || !startingSystem || !startingAnchor
+      || store.activeView !== 'cluster' || store.mapMode !== 'move') return
+    const captured: CapturedClusterSystemMove = capturedContext ?? {
+      workspaceId: startingWorkspace.id,
+      clusterId: startingWorkspace.cluster.id,
+      systemId,
+      originPosition: { ...startingAnchor },
+    }
+    if (captured.systemId !== systemId) return
+    if (!capturedContext && !await beforeWorkspaceOperation()) return
+
+    const contextIsCurrent = (latest: LocalWorkspace | null): boolean => {
+      const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === captured.systemId)
+      const latestAnchor = latest?.layout.systemPositions[captured.systemId]
+      return latest !== null
+        && latest.id === captured.workspaceId
+        && latest.cluster.id === captured.clusterId
+        && latestSystem !== undefined
+        && latestAnchor?.x === captured.originPosition.x
+        && latestAnchor.y === captured.originPosition.y
+        && store.activeView === 'cluster'
+        && store.mapMode === 'move'
+    }
+    if (!contextIsCurrent(workspace.value)) return
 
     try {
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
         throw new Error('A map position must contain finite coordinates.')
       }
-      const clusterId = currentWorkspace.cluster.id
+      const targetPosition = clampWardenClusterAnchor(position)
       const result = await mutations.execute({
         action: {
           kind: 'move',
-          label: `Move ${system.name} on Jump Cluster`,
+          label: `Move ${startingSystem.name} on Jump Cluster`,
           target: { kind: 'system', id: systemId },
-          parent: { kind: 'cluster', id: clusterId },
+          parent: { kind: 'cluster', id: captured.clusterId },
         },
-        isCurrent: () => {
-          const latest = workspace.value
-          return latest !== null && latest.cluster.id === clusterId
-            && latest.cluster.systems.some(candidate => candidate.id === systemId)
-        },
+        isCurrent: () => contextIsCurrent(workspace.value),
         prepare: (latest) => {
-          if (latest.cluster.id !== clusterId || !latest.cluster.systems.some(candidate => candidate.id === systemId)) {
+          if (!contextIsCurrent(latest)) {
             throw new Error('The selected star system is no longer available.')
           }
           return {
@@ -291,8 +322,7 @@ export function useMapWorkflows({
               systemPositions: {
                 ...latest.layout.systemPositions,
                 [systemId]: {
-                  x: Math.max(0, Math.min(1, position.x)),
-                  y: Math.max(0, Math.min(1, position.y)),
+                  ...targetPosition,
                 },
               },
             },

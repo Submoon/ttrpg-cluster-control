@@ -288,10 +288,11 @@
                 <ClientOnly>
                   <WorkspaceMapCanvas
                     v-if="activeView === 'cluster'"
-                    :key="activeMapKey ?? 'cluster-map'"
+                    :key="continuousMapEnabled ? `${workspace.id}:${activeMapKey ?? 'cluster-map'}` : activeMapKey ?? 'cluster-map'"
                     ref="clusterMapRef"
                     @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
+                    :continuous-map="continuousMapEnabled"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
@@ -652,6 +653,8 @@ watch(googleDriveBackup.lastSaved, () => {
 })
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
+const route = useRoute()
+const continuousMapEnabled = computed(() => route.query.map === 'continuous')
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -873,6 +876,13 @@ const workflows = useEditorWorkflows({
   }),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria } = workflows
+watch(
+  [() => workspace.value?.id, () => workspace.value?.cluster.id, hydrationState, continuousMapEnabled],
+  ([workspaceId, clusterId, , enabled]) => {
+    if (enabled && workspaceId && clusterId) editorUi.setSelection({ activeView: 'cluster' })
+  },
+  { flush: 'sync', immediate: true },
+)
 const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
 const publicationBusy = publicationControls.busy
@@ -1322,9 +1332,40 @@ function discardRouteDraft(sessionId: number): void {
 }
 
 async function handleClusterSystemMove(systemId: string, position: Point): Promise<void> {
-  if (!await beforeWorkspaceOperation()) return
-  cancelSystemMovePreview()
-  await moveSystem(systemId, position)
+  const startingWorkspace = workspace.value
+  const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+  const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+  if (!startingWorkspace || !startingSystem || !startingAnchor
+    || activeView.value !== 'cluster' || mapMode.value !== 'move') {
+    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, null)
+    return
+  }
+  const captured = {
+    workspaceId: startingWorkspace.id,
+    clusterId: startingWorkspace.cluster.id,
+    systemId,
+    originPosition: { ...startingAnchor },
+  }
+  const isCurrent = (): boolean => {
+    const latest = workspace.value
+    const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === captured.systemId)
+    const latestAnchor = latest?.layout.systemPositions[captured.systemId]
+    return latest !== null && latest !== undefined
+      && latest.id === captured.workspaceId
+      && latest.cluster.id === captured.clusterId
+      && latestSystem !== undefined
+      && latestAnchor?.x === captured.originPosition.x
+      && latestAnchor.y === captured.originPosition.y
+      && activeView.value === 'cluster'
+      && mapMode.value === 'move'
+  }
+  try {
+    if (!await beforeWorkspaceOperation() || !isCurrent()) return
+    cancelSystemMovePreview()
+    await moveSystem(systemId, position, captured)
+  } finally {
+    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, null)
+  }
 }
 
 async function changeMapMode(mode: 'navigate' | 'select' | 'move', isCurrent: () => boolean = () => true): Promise<void> {

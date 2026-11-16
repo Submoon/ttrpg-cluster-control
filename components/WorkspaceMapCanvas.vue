@@ -27,8 +27,31 @@
         height: `${selectionRectangle.height}px`,
       }"
     />
+    <ContinuousWardenMap
+      v-if="props.activeView === 'cluster' && props.continuousMap"
+      ref="continuousWardenMapRef"
+      :cluster="props.workspace.cluster"
+      :system-positions="props.workspace.layout.systemPositions"
+      :object-angles="props.workspace.layout.objectAngles"
+      :orbit-radii="props.workspace.layout.orbitRadii"
+      :orbit-rotations="props.workspace.layout.orbitRotations"
+      :selected-system-id="props.selectedSystemId"
+      :mode="props.mode"
+      :cluster-add-type="props.clusterAddType ?? null"
+      :cluster-chooser-open="props.clusterChooserOpen ?? false"
+      :cluster-move-targeting="props.clusterMoveTargeting ?? false"
+      :move-targeting="props.moveTargeting ?? false"
+      :initial-viewport="props.initialViewport"
+      touch-navigation
+      @activate-system="handleSystemActivation"
+      @cluster-target="forwardClusterTarget"
+      @move-target="forwardMoveTarget"
+      @move-system="forwardMoveSystem"
+      @editing-gesture-change="orbitInput.setChildGestureActive"
+      @viewport-change="emitViewport"
+    />
     <ClusterMap
-      v-if="props.activeView === 'cluster'"
+      v-else-if="props.activeView === 'cluster'"
       ref="clusterMapRef"
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
@@ -137,10 +160,12 @@ import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/m
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import { useOrbitPlacementInput } from './maps/useOrbitPlacementInput'
 import ClusterMap from './ClusterMap.vue'
+import ContinuousWardenMap from './ContinuousWardenMap.vue'
 import SystemMap from './SystemMap.vue'
 
 const props = defineProps<{
   activeView: 'cluster' | 'system'
+  continuousMap?: boolean
   mapKey: string
   initialViewport: MapViewport | null
   workspace: LocalWorkspace
@@ -205,11 +230,14 @@ const emit = defineEmits<{
 }>()
 
 type ClusterMapHandle = InstanceType<typeof ClusterMap>
+type ContinuousWardenMapHandle = InstanceType<typeof ContinuousWardenMap>
 type SystemMapInstance = InstanceType<typeof SystemMap>
 const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
+const continuousWardenMapRef = shallowRef<ContinuousWardenMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
-const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+const currentClusterMap = () => props.continuousMap ? continuousWardenMapRef.value : clusterMapRef.value
+const currentMap = () => props.activeView === 'cluster' ? currentClusterMap() : systemMapRef.value
 
 function dismissSearchLocator(): void {
   systemMapRef.value?.dismissSearchLocator()
@@ -1172,7 +1200,7 @@ function frameSearchTarget(target: SearchTarget): boolean {
       : false
   }
   return props.activeView === 'cluster'
-    ? clusterMapRef.value?.frameSystem(target.systemId, usableRect) ?? false
+    ? currentClusterMap()?.frameSystem(target.systemId, usableRect) ?? false
     : false
 }
 
@@ -1310,7 +1338,7 @@ defineExpose({
     ?? Promise.reject(new Error('The map is not ready to export.')),
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
-    ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
+    ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
     : systemMapRef.value?.getMinimumZoomScale() ?? MAP_ZOOM_MIN_SCALE,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
   zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
@@ -1327,7 +1355,7 @@ defineExpose({
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),
   endViewPan: () => currentMap()?.endViewPan(),
   setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') clusterMapRef.value?.setClusterSystemPositionPreview(systemId, position)
+    if (props.activeView === 'cluster') currentClusterMap()?.setClusterSystemPositionPreview?.(systemId, position)
   },
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
     if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
