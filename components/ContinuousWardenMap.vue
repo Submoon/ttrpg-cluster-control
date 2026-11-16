@@ -212,6 +212,7 @@ const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 }
 const ready = ref(false)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
+let cameraInitialized = false
 let viewPan: { transform: MapViewport; start: [number, number] } | null = null
 let activeAnchorDrag: {
   systemId: string
@@ -335,14 +336,35 @@ const nameLabels = computed<NameLabel[]>(() => {
   const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
   const labels: NameLabel[] = []
   const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = []
-  const anchorPoints = projections.value.map(projection => {
+  const expandedViewport = {
+    left: viewportRect.x - 96 / scale,
+    top: viewportRect.y - 96 / scale,
+    right: viewportRect.x + viewportRect.width + 96 / scale,
+    bottom: viewportRect.y + viewportRect.height + 96 / scale,
+  }
+  const anchorPoints = projections.value.flatMap(projection => {
     const anchor = anchorFor(projection)
-    return {
+    const point = {
       id: projection.id,
       name: projection.name,
       x: viewport.value.x + anchor.x * viewport.value.k,
       y: viewport.value.y + anchor.y * viewport.value.k,
     }
+    const delta = anchorDelta(projection)
+    const envelope = projection.envelope
+    const envelopeBounds = {
+      left: viewport.value.x + (envelope.x + delta.x) * viewport.value.k,
+      top: viewport.value.y + (envelope.y + delta.y) * viewport.value.k,
+      right: viewport.value.x + (envelope.x + delta.x + envelope.width) * viewport.value.k,
+      bottom: viewport.value.y + (envelope.y + delta.y + envelope.height) * viewport.value.k,
+    }
+    const anchorNearViewport = point.x >= expandedViewport.left && point.x <= expandedViewport.right
+      && point.y >= expandedViewport.top && point.y <= expandedViewport.bottom
+    const envelopeNearViewport = envelopeBounds.right >= expandedViewport.left
+      && envelopeBounds.left <= expandedViewport.right
+      && envelopeBounds.bottom >= expandedViewport.top
+      && envelopeBounds.top <= expandedViewport.bottom
+    return anchorNearViewport || envelopeNearViewport ? [point] : []
   })
   for (const anchor of anchorPoints) {
     const widthPixels = systemNameWidthPixels(anchor.name)
@@ -433,6 +455,7 @@ function objectSubtype(projectionId: string, objectId: string): string {
 }
 
 function updateDetailReveal(cameraScale: number): void {
+  if (!cameraInitialized) return
   const current = detailSystemIds.value
   const next = new Set<string>()
   for (const projection of projections.value) {
@@ -736,7 +759,7 @@ function cancelActiveGesture(): void {
 
 function onZoom(event: { transform: { x: number; y: number; k: number } }): void {
   viewport.value = { x: event.transform.x, y: event.transform.y, k: event.transform.k }
-  updateDetailReveal(event.transform.k)
+  if (cameraInitialized) updateDetailReveal(event.transform.k)
   emit('viewport-change', viewport.value)
 }
 
@@ -801,10 +824,11 @@ onMounted(async () => {
   resizeObserver.observe(element)
   updateSvgPixelScale()
   updateSvgViewport()
-  updateDetailReveal(viewport.value.k)
   window.addEventListener('blur', cancelActiveGesture)
   if (props.initialViewport) setViewport(props.initialViewport)
   else fitMap()
+  cameraInitialized = true
+  updateDetailReveal(getViewport().k)
   ready.value = true
   resolveReady(true)
 })
