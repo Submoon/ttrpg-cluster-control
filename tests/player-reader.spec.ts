@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
 import { serializePlayerJson } from '../domain/workspace'
 import { createPlayerShareUrl } from '../utils/player-share-link'
@@ -82,7 +83,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
       orbits: [],
     },
   })
-  const readerUrl = new URL('player', `${baseURL.replace(/\/$/, '')}/`).href
+  const readerAddress = new URL('player', `${baseURL.replace(/\/$/, '')}/`)
+  const readerUrl = readerAddress.href
   const shareUrl = await createPlayerShareUrl(document, readerUrl)
   const fragment = new URL(shareUrl).hash
   const compressed = fragment.split('.').at(-1)
@@ -355,4 +357,56 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(page.getByRole('alert')).toHaveText('The player JSON file is not valid JSON.')
   await expect(page.getByRole('region', { name: 'Player document', exact: true })).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText('PRIVATE-TRUNCATED-MARKER')
+
+  if (publicSystem?.disclosure !== 'revealed') throw new Error('The player reader fixture must include a revealed system.')
+  const legacyLoop = {
+    id: 'route-1',
+    jumpLevel: 2,
+    fromSystemId: publicSystem.id,
+    destination: { kind: 'system' as const, systemId: publicSystem.id },
+  }
+  const legacyShareUrl = new URL(readerUrl)
+  legacyShareUrl.searchParams.set('map', 'continuous')
+  legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
+    ...document,
+    routes: [legacyLoop],
+  }), 'utf8')).toString('base64url')}`
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(legacyShareUrl.href)
+  await expect(page.getByRole('heading', { name: document.title, exact: true })).toBeVisible()
+  expect(page.url()).toBe(legacyShareUrl.href)
+  const continuousMap = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const continuousScene = continuousMap.getByRole('group', { name: `${document.title} continuous player map`, exact: true })
+  await expect(continuousScene).toBeVisible()
+  await expect(continuousMap.locator('.player-cluster-route')).toHaveCount(0)
+
+  const revealedMarker = document.systems.find(system => system.disclosure === 'revealed')
+  if (!revealedMarker || revealedMarker.disclosure !== 'revealed') {
+    throw new Error('The public player document has no Revealed system anchor.')
+  }
+  const anchor = continuousMap.locator(`.player-continuous-system-anchor[data-player-system-id="${revealedMarker.id}"]`)
+  const anchorBeforeSelect = await readPlayerMarkerAnchor(anchor)
+  await anchor.click()
+  await expect(anchor).toHaveAttribute('aria-pressed', 'true')
+  const anchorAfterSelect = await readPlayerMarkerAnchor(anchor)
+  expect(Math.hypot(anchorAfterSelect.x - anchorBeforeSelect.x, anchorAfterSelect.y - anchorBeforeSelect.y)).toBeLessThan(1)
+
+  const zoomIn = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 24 && !(await zoomIn.isDisabled()); step += 1) await zoomIn.click()
+  const publicObject = revealedMarker.map.objects.find(object => object.disclosure === 'revealed')
+  if (!publicObject) throw new Error('The public player document has no Revealed object to inspect.')
+  const objectMarker = continuousMap.locator(
+    `.player-continuous-object[data-player-system-id="${revealedMarker.id}"][data-player-object-id="${publicObject.id}"]`,
+  )
+  await expect(objectMarker).toBeVisible()
+  const objectBeforeInspect = await readPlayerMarkerAnchor(objectMarker)
+  await objectMarker.click()
+  await expect(continuousMap.getByRole('button', { name: 'Center selection', exact: true })).toBeEnabled()
+  const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
+  expect(Math.hypot(objectAfterInspect.x - objectBeforeInspect.x, objectAfterInspect.y - objectBeforeInspect.y)).toBeLessThan(1)
+  await continuousMap.getByRole('button', { name: 'Center selection', exact: true }).click()
+  const objectAfterCenter = await readPlayerMarkerAnchor(objectMarker)
+  const mapBounds = await continuousScene.boundingBox()
+  if (!mapBounds) throw new Error('The continuous public map has no visible viewport.')
+  expect(Math.abs(objectAfterCenter.x - (mapBounds.x + mapBounds.width / 2))).toBeLessThan(mapBounds.width * .12)
 })

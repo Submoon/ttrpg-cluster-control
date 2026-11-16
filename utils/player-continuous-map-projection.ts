@@ -1,0 +1,108 @@
+/** Continuous public scene projection from the detached, allowlisted player document. */
+import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
+import type { Point } from '../domain/workspace-model'
+import type { SvgViewportRect } from './map-zoom'
+import { projectContinuousSystemGeometry, type ContinuousWardenSystemProjection } from './continuous-map-projection'
+import { playerClusterGeometry, type PlayerRouteGeometry } from './player-cluster-geometry'
+
+export interface PlayerContinuousSystemProjection {
+  id: string
+  disclosure: PlayerSystemMarker['disclosure']
+  label: string
+  anchor: Point
+  /** Present only for Revealed systems; generic systems disclose only their public anchor. */
+  geometry?: ContinuousWardenSystemProjection
+}
+
+export interface PlayerContinuousMapProjection {
+  systems: PlayerContinuousSystemProjection[]
+  routes: PlayerRouteGeometry[]
+  bounds: SvgViewportRect
+}
+
+export const PLAYER_DETAIL_REVEAL_PIXELS = 250
+export const PLAYER_DETAIL_HIDE_PIXELS = 210
+
+/** Applies each Revealed system's own public envelope threshold with a stable collapse band. */
+export function playerContinuousDetailSystemIds(
+  systems: readonly PlayerContinuousSystemProjection[],
+  screenPixelsPerSceneUnit: number,
+  currentlyDetailed: ReadonlySet<string>,
+): Set<string> {
+  const next = new Set<string>()
+  if (!Number.isFinite(screenPixelsPerSceneUnit) || screenPixelsPerSceneUnit <= 0) return next
+
+  for (const system of systems) {
+    const envelope = system.geometry?.envelope
+    if (!envelope) continue
+    const threshold = currentlyDetailed.has(system.id) ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
+    if (Math.max(envelope.width, envelope.height) * screenPixelsPerSceneUnit >= threshold) next.add(system.id)
+  }
+  return next
+}
+
+/**
+ * Projects only permitted public anchors and Revealed interiors into the shared Cluster scene.
+ * Public IDs remain scoped to their system by consumers; source Location keys are never accepted.
+ */
+export function projectPlayerContinuousMap(document: PlayerClusterDocument): PlayerContinuousMapProjection {
+  const systems = document.systems.map((system): PlayerContinuousSystemProjection => {
+    if (system.disclosure !== 'revealed') {
+      return {
+        id: system.id,
+        disclosure: system.disclosure,
+        label: system.label,
+        anchor: { ...system.position },
+      }
+    }
+
+    const geometry = projectContinuousSystemGeometry({
+      id: system.id,
+      name: system.label,
+      anchor: system.position,
+      objects: system.map.objects.map(object => ({
+        id: object.id,
+        name: object.label,
+        locationKey: '',
+        position: object.position,
+      })),
+      orbits: system.map.orbits.map(orbit => ({
+        id: orbit.id,
+        center: orbit.center,
+        radii: orbit.radii,
+        rotation: orbit.rotation,
+      })),
+    })
+    return {
+      id: system.id,
+      disclosure: system.disclosure,
+      label: system.label,
+      anchor: { ...system.position },
+      geometry,
+    }
+  })
+
+  const cluster = playerClusterGeometry(document)
+  let left = cluster.bounds.minX
+  let top = cluster.bounds.minY
+  let right = cluster.bounds.minX + cluster.bounds.width
+  let bottom = cluster.bounds.minY + cluster.bounds.height
+  for (const system of systems) {
+    const envelope = system.geometry?.envelope
+    if (!envelope) continue
+    left = Math.min(left, envelope.x)
+    top = Math.min(top, envelope.y)
+    right = Math.max(right, envelope.x + envelope.width)
+    bottom = Math.max(bottom, envelope.y + envelope.height)
+  }
+
+  if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) {
+    throw new Error('The public continuous map could not calculate finite scene bounds.')
+  }
+
+  return {
+    systems,
+    routes: cluster.routes,
+    bounds: { x: left, y: top, width: right - left, height: bottom - top },
+  }
+}
