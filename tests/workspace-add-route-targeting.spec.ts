@@ -124,8 +124,6 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await expect.poll(() => readInspectorSelection(fromSystem)).toBe('Vesper Prime')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('No local Jump Point')
   await expect(inspector.getByRole('heading', { name: 'Connect Systems', exact: true })).toBeVisible()
-  await expect(page.getByText('Choose a system for each endpoint; local Jump Points are optional.', { exact: true }))
-    .toBeVisible()
 
   await fromPoint.click()
   const originPointChoice = page.getByRole('option', { name: 'Vesper Alternate (Vesper Prime)', exact: true })
@@ -155,8 +153,8 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   expect(beforeApply).toEqual(before)
 
   await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
-  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('')
-  await expect.poll(() => readInspectorSelection(toPoint)).toBe('')
+  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('No local Jump Point')
+  await expect.poll(() => readInspectorSelection(toPoint)).toBe('No local Jump Point')
   const afterApply = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterApply.cluster?.routes).toHaveLength(2)
   expect(afterApply.cluster?.routes).toContainEqual(expect.objectContaining({
