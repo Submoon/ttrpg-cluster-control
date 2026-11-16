@@ -154,11 +154,11 @@ function projectPlayerRoutes(
   const routes: PlayerRoute[] = []
   for (const route of workspace.cluster.routes) {
     if (!route.playerShared) continue
-    const from = jumpPoints.get(route.fromPointId)
-    if (!from) throw new Error('A shared Jump Route has a missing origin Jump Point.')
-    const fromSystemId = publicSystemIds.get(from.system.id)
+    const from = workspace.cluster.systems.find(system => system.id === route.fromSystemId)
+    if (!from) throw new Error('A shared Jump Route has a missing origin system.')
+    const fromSystemId = publicSystemIds.get(from.id)
 
-    if (route.toPointId === null) {
+    if (route.toSystemId === null) {
       if (!fromSystemId) continue
       const exitPoint = clusterRouteGeometry(
         route,
@@ -182,9 +182,9 @@ function projectPlayerRoutes(
       continue
     }
 
-    const to = jumpPoints.get(route.toPointId)
-    if (!to) throw new Error('A shared Jump Route has a missing destination Jump Point.')
-    const toSystemId = publicSystemIds.get(to.system.id)
+    const to = workspace.cluster.systems.find(system => system.id === route.toSystemId)
+    if (!to) throw new Error('A shared Jump Route has a missing destination system.')
+    const toSystemId = publicSystemIds.get(to.id)
 
     if (fromSystemId && toSystemId) {
       routes.push({
@@ -194,7 +194,7 @@ function projectPlayerRoutes(
         destination: { kind: 'system', systemId: toSystemId },
       })
     } else if (fromSystemId) {
-      const position = clusterSystemPosition(workspace.layout.systemPositions, to.system.id)
+      const position = clusterSystemPosition(workspace.layout.systemPositions, to.id)
       routes.push({
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,
@@ -206,7 +206,7 @@ function projectPlayerRoutes(
         },
       })
     } else if (toSystemId) {
-      const position = clusterSystemPosition(workspace.layout.systemPositions, from.system.id)
+      const position = clusterSystemPosition(workspace.layout.systemPositions, from.id)
       routes.push({
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,

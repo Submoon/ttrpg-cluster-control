@@ -72,9 +72,19 @@ function createHarness(options: {
   if (options.parentHidden) first.publication = 'hidden'
   const route = options.includeRoute
     ? (() => {
+        const destination = initial.cluster.systems[1]
+        if (!destination) throw new Error('The route workflow needs a second system.')
         const point = createSystemObject(first, 'jump-point')
+        const destinationPoint = createSystemObject(destination, 'jump-point')
         first.objects.push(point)
-        const created = createJumpRoute(initial.cluster, 1, point.id, null, 'Uncharted exit')
+        destination.objects.push(destinationPoint)
+        const created = createJumpRoute(initial.cluster, {
+          jumpLevel: 1,
+          fromSystemId: first.id,
+          fromPointId: point.id,
+          toSystemId: destination.id,
+          toPointId: destinationPoint.id,
+        })
         initial.cluster.routes.push(created)
         return created
       })()
@@ -364,6 +374,7 @@ test('route sharing does not overwrite a route draft opened during preflight @pu
   const preflightStarted = new Promise<void>(resolve => { markPreflightStarted = resolve })
   const preflight = new Promise<boolean>(resolve => { resolvePreflight = resolve })
   const harness = createHarness({
+    secondSystem: true,
     includeRoute: true,
     beforeWorkspaceOperation: async () => {
       markPreflightStarted?.()
@@ -391,6 +402,25 @@ test('route sharing does not overwrite a route draft opened during preflight @pu
     expect(harness.route.routeSession.value?.draft.jumpLevel).toBe('9')
   } finally {
     resolvePreflight?.(false)
+    harness.dispose()
+  }
+})
+
+test('quick route sharing preserves both system anchors and optional Jump Point attachments @pure', async () => {
+  const harness = createHarness({ secondSystem: true, includeRoute: true })
+  try {
+    const routeId = harness.routeId
+    if (!routeId) throw new Error('The sharing workflow needs a committed Jump Route.')
+    harness.store.activeView = 'cluster'
+    harness.store.selectedRouteId = routeId
+    const before = harness.workspace.value!.cluster.routes.find(route => route.id === routeId)
+    if (!before) throw new Error('The sharing workflow lost its committed Jump Route.')
+
+    expect(await harness.publication.setRouteSharing(routeId, true)).toMatchObject({ status: 'applied' })
+    const after = harness.workspace.value!.cluster.routes.find(route => route.id === routeId)
+
+    expect(after).toEqual({ ...before, playerShared: true })
+  } finally {
     harness.dispose()
   }
 })

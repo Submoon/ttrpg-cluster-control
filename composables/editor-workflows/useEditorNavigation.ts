@@ -208,15 +208,25 @@ export function useEditorNavigation(options: {
 
   /** Formats route endpoints with explicit unresolved and missing-reference fallbacks. */
   function routeEndpointSummary(routeValue: JumpRoute): string {
-    const origin = jumpPoints.value.find(({ point }) => point.id === routeValue.fromPointId)
+    const originSystem = workspace.value?.cluster.systems.find(system => system.id === routeValue.fromSystemId)
+    const originPoint = routeValue.fromPointId === null
+      ? undefined
+      : jumpPoints.value.find(({ point }) => point.id === routeValue.fromPointId)
     let destination: string
-    if (routeValue.toPointId === null) {
+    if (routeValue.toSystemId === null) {
       destination = `Unknown destination: ${routeValue.unresolvedExit}`
     } else {
-      const reference = jumpPoints.value.find(({ point }) => point.id === routeValue.toPointId)
-      destination = reference ? `${reference.point.name} (${reference.system.name})` : 'Missing Jump Point'
+      const system = workspace.value?.cluster.systems.find(candidate => candidate.id === routeValue.toSystemId)
+      const point = routeValue.toPointId === null
+        ? undefined
+        : jumpPoints.value.find(({ point: candidate }) => candidate.id === routeValue.toPointId)
+      destination = system
+        ? point ? `${point.point.name} (${system.name})` : system.name
+        : 'Missing system'
     }
-    const originName = origin ? `${origin.point.name} (${origin.system.name})` : 'Missing Jump Point'
+    const originName = originSystem
+      ? originPoint ? `${originPoint.point.name} (${originSystem.name})` : originSystem.name
+      : 'Missing system'
     return `${originName} -> ${destination}`
   }
 
@@ -541,7 +551,14 @@ export function useEditorNavigation(options: {
       entity.discardEntitySession(entityDraft.id)
     }
     const routeDraft = route.routeSession.value
-    if (routeDraft && ((routeDraft.routeId && removedRoutes.has(routeDraft.routeId))
+    if (routeDraft && (
+      (routeDraft.routeId && removedRoutes.has(routeDraft.routeId))
+      || [
+        routeDraft.initial.fromSystemId,
+        routeDraft.initial.toSystemId,
+        routeDraft.draft.fromSystemId,
+        routeDraft.draft.toSystemId,
+      ].some(id => removedSystems.has(id))
       || [...plan.removedObjectIds].some(id => [
         routeDraft.initial.fromPointId,
         routeDraft.initial.toPointId,

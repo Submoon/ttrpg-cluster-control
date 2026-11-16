@@ -262,8 +262,10 @@ test('an accepted route result cannot apply an entity session replaced while the
   const routeDraft: RouteDraftValues = {
     playerShared: false,
     jumpLevel: '1',
+    fromSystemId: 'system-a',
     fromPointId: 'point-a',
-    destination: 'point',
+    destination: 'system',
+    toSystemId: 'system-b',
     toPointId: 'point-b',
     unresolvedExit: '',
   }
