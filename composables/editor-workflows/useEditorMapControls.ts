@@ -176,6 +176,11 @@ export function useEditorMapControls(
   }
 
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
+  function centerInspectedTarget(): boolean {
+    const target = store.inspectedTarget
+    if (!target) return false
+    return activeMapHandle()?.centerInspectedTarget?.(target) ?? false
+  }
   function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
   function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
   function revealHistoryTarget(target: MapHistoryTarget): boolean {
@@ -218,6 +223,7 @@ export function useEditorMapControls(
     pruneVisits,
     setViewportPercentage,
     fitActiveMap,
+    centerInspectedTarget,
     zoomActiveMap,
     panActiveMap,
     revealHistoryTarget,

@@ -7,6 +7,7 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { mapModeForShortcut } from '../composables/useMapToolShortcuts'
 
 interface HostNode {
   children: HostNode[]
@@ -81,6 +82,7 @@ function createSearchHarness(
   additionalSystemName?: string,
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>,
   compact = false,
+  continuousMap = false,
 ) {
   const restoreBrowserBoundary = installBrowserLifecycleBoundary(compact)
   setActivePinia(createPinia())
@@ -122,6 +124,7 @@ function createSearchHarness(
         saveState: ref<SaveState>('saved'),
         saveError: ref<string | null>(null),
         waitForSearchPresentation,
+        continuousMap: ref(continuousMap),
         onSearchFiltersInvalidated: () => { searchFilterInvalidations.push(searchFilterInvalidations.length + 1) },
       })
       return () => null
@@ -146,6 +149,192 @@ function createSearchHarness(
     },
   }
 }
+
+test('continuous map inspection selects an object without changing its cluster map owner @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(harness.workflows.navigation.continuousMapEnabled.value).toBe(true)
+    const mapKey = harness.workflows.mapControls.activeMapKey.value
+    expect(await harness.workflows.mapControls.setMapMode('navigate')).toBe(false)
+    expect(harness.store.mapMode).toBe('select')
+
+    expect(await harness.workflows.navigation.inspectContinuousTarget({ kind: 'object', systemId: system.id, objectId: object.id })).toBe(true)
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.workflows.mapControls.activeMapKey.value).toBe(mapKey)
+    expect(harness.workflows.mapControls.systemMapRef.value).toBeNull()
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous map removes Navigate from map tool shortcuts @pure', () => {
+  expect(mapModeForShortcut('n', false)).toBe('navigate')
+  expect(mapModeForShortcut('n', true)).toBeNull()
+  expect(mapModeForShortcut('s', true)).toBe('select')
+  expect(mapModeForShortcut('m', true)).toBe('move')
+})
+
+test('continuous Search reveals an object through the existing Cluster map handle @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster' })
+    const framedTargets: Parameters<NonNullable<MapNavigationHandle['frameSearchTarget']>>[0][] = []
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: target => { framedTargets.push(target); return true },
+      focusMap: () => undefined,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = object.name
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result || result.target.kind !== 'object') throw new Error('The map object did not produce an object search result.')
+
+    expect(await search.reveal(result.target)).toEqual({ status: 'revealed' })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.workflows.mapControls.activeMapKey.value).toBe(`cluster:${harness.workspace.value.cluster.id}`)
+    expect(harness.workflows.mapControls.systemMapRef.value).toBeNull()
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+    expect(framedTargets).toEqual([result.target])
+    expect(search.open.value).toBe(false)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Inspector Stay keeps the source target and its modified draft @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const sourceObject = system?.objects[0]
+    if (!system || !sourceObject) throw new Error('The local workspace did not create its first system object.')
+    const destinationObject = { ...sourceObject, id: 'continuous-inspector-destination', name: 'Destination World' }
+    system.objects.push(destinationObject)
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: sourceObject.id,
+    })).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.entitySession.value
+    if (!session || session.kind !== 'object') throw new Error('The source object draft was not created.')
+    session.draft.name = 'Unapplied source draft'
+
+    const leaveSource = harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: destinationObject.id,
+    })
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('stay')
+
+    expect(await leaveSource).toBe(false)
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: sourceObject.id })
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(session.id)
+    expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(true)
+    expect(harness.workflows.inspector.entitySession.value?.kind === 'object'
+      ? harness.workflows.inspector.entitySession.value.draft.name
+      : null).toBe('Unapplied source draft')
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Inspector Apply commits the source draft before selecting the destination @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const sourceObject = system?.objects[0]
+    if (!system || !sourceObject) throw new Error('The local workspace did not create its first system object.')
+    const destinationObject = {
+      ...sourceObject,
+      id: 'continuous-inspector-apply-destination',
+      name: 'Destination World',
+      locationKey: 'VEIL-05',
+    }
+    system.objects.push(destinationObject)
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: sourceObject.id,
+    })).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.entitySession.value
+    if (!session || session.kind !== 'object') throw new Error('The source object draft was not created.')
+    session.draft.name = 'Applied source draft'
+
+    const leaveSource = harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: destinationObject.id,
+    })
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+
+    const accepted = await leaveSource
+    expect({
+      accepted,
+      inspectedTarget: harness.store.inspectedTarget,
+      entitySessionId: harness.workflows.inspector.entitySession.value?.id ?? null,
+      chartSessionId: harness.workflows.charts.session.value?.id ?? null,
+    }).toEqual({
+      accepted: true,
+      inspectedTarget: { kind: 'object', systemId: system.id, objectId: destinationObject.id },
+      entitySessionId: null,
+      chartSessionId: null,
+    })
+    expect(harness.workspace.value.cluster.systems.find(candidate => candidate.id === system.id)?.objects
+      .find(object => object.id === sourceObject.id)?.name).toBe('Applied source draft')
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: destinationObject.id })
+    expect(harness.workflows.inspector.entitySession.value).toBeNull()
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a continuous map selection invalidates a pending Search frame on the captured cluster canvas @pure', async () => {
+  const ready = deferred<boolean>()
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const firstObject = system?.objects[0]
+    if (!system || !firstObject) throw new Error('The local workspace did not create its first system object.')
+    const nextObject = { ...firstObject, id: 'continuous-search-next-target', name: 'Second World' }
+    system.objects.push(nextObject)
+    harness.store.setSelection({ activeView: 'cluster' })
+    let frameCount = 0
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: () => ready.promise,
+      frameSearchTarget: () => { frameCount += 1; return true },
+      focusMap: () => undefined,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = firstObject.name
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result || result.target.kind !== 'object') throw new Error('The first object did not produce an object search result.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => harness.store.inspectedTarget?.kind).toBe('object')
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: nextObject.id,
+    })).toBe(true)
+    ready.resolve(true)
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: nextObject.id })
+    expect(frameCount).toBe(0)
+  } finally {
+    ready.resolve(false)
+    harness.dispose()
+  }
+})
 
 function createMapHandle(options: {
   whenReady: () => Promise<boolean>

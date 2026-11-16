@@ -20,6 +20,7 @@ import type {
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 import type { SearchTarget } from '../../utils/workspace-search'
+import type { InspectedMapTarget } from '../../stores/editor-ui'
 import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -266,6 +267,8 @@ export interface EditorWorkflowOptions {
   appliedRevision?: Readonly<Ref<number>>
   /** Resolves after guarded navigation overlays have completed their presentation teardown. */
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
+  /** Keeps Warden inspection on the continuous Cluster canvas while legacy map views remain available. */
+  continuousMap?: Readonly<Ref<boolean>>
   /** Shared application boundary for ordinary editor mutations. */
   mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
@@ -313,11 +316,13 @@ export interface MapNavigationHandle extends MapImageExporter {
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
   /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
-  revealHistoryTarget?(target: MapHistoryTarget): boolean
+  revealHistoryTarget?(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean
   /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
   whenReady?(): Promise<boolean>
   /** Frames a search destination inside the current obstruction-aware map area. */
   frameSearchTarget?(target: SearchTarget): boolean
+  /** Centers the current independent Inspector target inside the unobstructed map area. */
+  centerInspectedTarget?(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean
   /** Captures a locator attempt for the current map, published only after accepted Search framing. */
   prepareSearchLocator?(objectId: string): (() => void) | undefined
   dismissSearchLocator?(): void

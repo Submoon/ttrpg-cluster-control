@@ -5,7 +5,7 @@ import {
   type LocalWorkspace,
   type MapDeletionPlan,
 } from '../../domain/workspace'
-import type { EditorUiSelection, useEditorUiStore } from '../../stores/editor-ui'
+import type { EditorUiSelection, InspectedMapTarget, useEditorUiStore } from '../../stores/editor-ui'
 import type { EntityCommand, MapHistoryTarget, MapInteractionMode, SearchPresentationSettlement, TransitionOptions } from './types'
 import type { WorkspaceHistoryTraversalContext, WorkspaceMutationTarget } from './workspace-mutations'
 import type { useEditorMapControls } from './useEditorMapControls'
@@ -26,6 +26,7 @@ type RouteController = ReturnType<typeof useRouteInspectorSession>
 /** Owns guarded navigation and selection restoration; accepted state is published through focused Pinia actions. */
 export function useEditorNavigation(options: {
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
   captureAddCleanup: () => (() => void) | null
   store: EditorUiStore
@@ -39,6 +40,7 @@ export function useEditorNavigation(options: {
   beforeWorkspaceOperation?: () => Promise<boolean>
 }) {
   const { workspace, store, mapControls, chart, transitions, viewport, entity, route, editorError } = options
+  const continuousMap = options.continuousMap ?? computed(() => false)
   const activeView = computed(() => store.activeView)
   const mapMode = computed(() => store.mapMode)
   const selectedSystemId = computed(() => store.selectedSystemId)
@@ -56,6 +58,7 @@ export function useEditorNavigation(options: {
   const jumpPoints = computed(() => workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [])
   const searchReveal = useWardenSearchReveal({
     workspace,
+    continuousMap,
     store,
     mapControls,
     resolveTransition: transitions.resolveTransition,
@@ -83,6 +86,7 @@ export function useEditorNavigation(options: {
     const stableObjectIds = objectIdsUnchanged ? store.selectedObjectIds : nextObjectIds
     const next: EditorUiSelection = {
       activeView: store.activeView,
+      inspectedTarget: store.inspectedTarget,
       selectedSystemId: store.selectedSystemId,
       clusterSelectedSystemId: store.clusterSelectedSystemId,
       inspectedClusterSystemId: store.inspectedClusterSystemId,
@@ -109,6 +113,7 @@ export function useEditorNavigation(options: {
       selection.selectedRouteId,
       selection.clusterSelectedSystemId,
       selection.inspectedClusterSystemId,
+      selection.inspectedTarget,
     ])
   }
 
@@ -153,6 +158,7 @@ export function useEditorNavigation(options: {
   }
 
   async function setMapMode(mode: MapInteractionMode, isCurrent: () => boolean = () => true): Promise<boolean> {
+    if (continuousMap.value && mode === 'navigate') return false
     invalidatePendingSearchReveal()
     if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
     if (!isCurrent()) return false
@@ -181,6 +187,18 @@ export function useEditorNavigation(options: {
     if (store.selectedRouteId && !currentWorkspace.cluster.routes.some(item => item.id === store.selectedRouteId)) next.selectedRouteId = null
     if (!currentWorkspace.cluster.systems.some(system => system.id === store.clusterSelectedSystemId)) next.clusterSelectedSystemId = null
     if (!currentWorkspace.cluster.systems.some(system => system.id === store.inspectedClusterSystemId)) next.inspectedClusterSystemId = null
+    const inspectedTarget = store.inspectedTarget
+    if (inspectedTarget?.kind === 'system'
+      ? !currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId)
+      : inspectedTarget?.kind === 'object'
+        ? !currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+          && system.objects.some(object => object.id === inspectedTarget.objectId))
+        : inspectedTarget?.kind === 'orbit'
+          ? !currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+            && system.orbits.some(orbit => orbit.id === inspectedTarget.orbitId))
+          : inspectedTarget?.kind === 'route'
+            ? !currentWorkspace.cluster.routes.some(routeValue => routeValue.id === inspectedTarget.routeId)
+            : false) next.inspectedTarget = null
     if (Object.keys(next).length) setSelection(next)
     mapControls.pruneVisits(mapControls.validVisitSelection)
   }, { immediate: true })
@@ -264,6 +282,10 @@ export function useEditorNavigation(options: {
   }
 
   async function selectSystem(systemId: string): Promise<void> {
+    if (continuousMap.value) {
+      await inspectContinuousTarget({ kind: 'system', systemId })
+      return
+    }
     invalidatePendingSearchReveal()
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     const startingStamp = navigationContextStamp()
@@ -278,6 +300,10 @@ export function useEditorNavigation(options: {
   }
 
   async function selectClusterSystem(systemId: string, openInspector = true): Promise<void> {
+    if (continuousMap.value) {
+      await inspectContinuousTarget({ kind: 'system', systemId }, openInspector)
+      return
+    }
     invalidatePendingSearchReveal()
     if (!workspace.value?.cluster.systems.some(system => system.id === systemId)) return
     const startingStamp = navigationContextStamp()
@@ -293,6 +319,78 @@ export function useEditorNavigation(options: {
     storeCurrentSelection()
     if (openInspector) viewport.requestPanel('inspector')
     editorError.value = ''
+  }
+
+  type ContinuousEntityTarget = Extract<InspectedMapTarget, { kind: 'system' | 'object' | 'orbit' }>
+
+  function continuousEntityTargetExists(currentWorkspace: LocalWorkspace | null, target: ContinuousEntityTarget): boolean {
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === target.systemId)
+    if (!system) return false
+    if (target.kind === 'system') return true
+    return target.kind === 'object'
+      ? system.objects.some(object => object.id === target.objectId)
+      : system.orbits.some(orbit => orbit.id === target.orbitId)
+  }
+
+  /** Inspects a Cluster-owned entity while the continuous map and its camera keep their identity. */
+  async function inspectContinuousTarget(target: ContinuousEntityTarget, openInspector = true): Promise<boolean> {
+    invalidatePendingSearchReveal()
+    const currentWorkspace = workspace.value
+    if (!continuousMap.value || !currentWorkspace || !continuousEntityTargetExists(currentWorkspace, target)) return false
+    if (JSON.stringify(store.inspectedTarget) === JSON.stringify(target)) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+      if (openInspector) viewport.requestPanel('inspector')
+      return true
+    }
+
+    const clusterId = currentWorkspace.cluster.id
+    const targetSystemId = target.systemId
+    const startingStamp = navigationContextStamp()
+    const startingChartSessionId = chart.session.value?.id ?? null
+    const entityDraft = entity.entitySession.value
+    const startingEntitySessionId = entityDraft?.id ?? null
+    const sameEntityDraft = (target.kind === 'object' || target.kind === 'orbit')
+      && entityDraft?.kind === target.kind
+      && entityDraft.clusterId === clusterId
+      && entityDraft.systemId === target.systemId
+      && entityDraft.targetId === (target.kind === 'object' ? target.objectId : target.orbitId)
+    const sameChartTarget = target.kind === 'system' && chart.session.value?.systemId === target.systemId
+    const expectedChartSessionId = sameChartTarget ? startingChartSessionId : null
+    const expectedEntitySessionId = sameEntityDraft ? startingEntitySessionId : null
+    const isCurrent = (): boolean => continuousMap.value
+      && navigationContextStamp() === startingStamp
+      && workspace.value?.id === currentWorkspace.id
+      && workspace.value.cluster.id === clusterId
+      && ((entity.entitySession.value?.id ?? null) === startingEntitySessionId
+        || (startingEntitySessionId !== null && entity.entitySession.value === null))
+      && continuousEntityTargetExists(workspace.value, target)
+
+    if (!await transitions.resolveTransition({
+      leaveChart: !sameChartTarget,
+      leaveEntitySession: !sameEntityDraft,
+    }, isCurrent)) return false
+
+    const latestWorkspace = workspace.value
+    if (!latestWorkspace || !isCurrent()
+      || (chart.session.value?.id ?? null) !== expectedChartSessionId
+      || (entity.entitySession.value?.id ?? null) !== expectedEntitySessionId
+      || latestWorkspace.cluster.id !== clusterId
+      || latestWorkspace.cluster.systems.find(system => system.id === targetSystemId) === undefined) return false
+
+    setSelection({
+      inspectedTarget: { ...target },
+      selectedSystemId: targetSystemId,
+      clusterSelectedSystemId: targetSystemId,
+      inspectedClusterSystemId: targetSystemId,
+      selectedObjectId: target.kind === 'object' ? target.objectId : null,
+      selectedObjectIds: [],
+      selectedOrbitId: target.kind === 'orbit' ? target.orbitId : null,
+      selectedRouteId: null,
+    })
+    storeCurrentSelection()
+    if (openInspector) viewport.requestPanel('inspector')
+    editorError.value = ''
+    return true
   }
 
   function currentObjectSelection(): string[] {
@@ -607,7 +705,25 @@ export function useEditorNavigation(options: {
           ? target.id
           : store.selectedSystemId
 
-    if (targetKind === 'object' || targetKind === 'orbit' || action.target.kind === 'object' || action.target.kind === 'orbit') {
+    if (continuousMap.value && target
+      && (target.kind === 'system' || target.kind === 'object' || target.kind === 'orbit')) {
+      const targetSystemId = target.kind === 'system' ? target.id : target.systemId
+      setSelection({
+        activeView: 'cluster',
+        inspectedTarget: target.kind === 'system'
+          ? { kind: 'system', systemId: target.id }
+          : target.kind === 'object'
+            ? { kind: 'object', systemId: target.systemId, objectId: target.id }
+            : { kind: 'orbit', systemId: target.systemId, orbitId: target.id },
+        selectedSystemId: targetSystemId,
+        clusterSelectedSystemId: targetSystemId,
+        inspectedClusterSystemId: targetSystemId,
+        selectedObjectId: target.kind === 'object' ? target.id : null,
+        selectedObjectIds: [],
+        selectedOrbitId: target.kind === 'orbit' ? target.id : null,
+        selectedRouteId: null,
+      })
+    } else if (targetKind === 'object' || targetKind === 'orbit' || action.target.kind === 'object' || action.target.kind === 'orbit') {
       const survivingSystemId = workspace.value?.cluster.systems.some(system => system.id === systemId)
         ? systemId
         : workspace.value?.cluster.systems[0]?.id ?? null
@@ -654,6 +770,7 @@ export function useEditorNavigation(options: {
   }
 
   return {
+    continuousMapEnabled: continuousMap,
     activeView,
     mapMode,
     selectedSystemId,
@@ -665,6 +782,7 @@ export function useEditorNavigation(options: {
     selectedSystem,
     clusterSelectedSystem,
     inspectedClusterSystem,
+    inspectedTarget: computed(() => store.inspectedTarget),
     selectedObject,
     selectedOrbit,
     selectedRoute,
@@ -674,6 +792,7 @@ export function useEditorNavigation(options: {
     showClusterMap,
     selectSystem,
     selectClusterSystem,
+    inspectContinuousTarget,
     selectObject,
     replaceObjectSelection,
     selectContextObject,

@@ -26,7 +26,7 @@
         <button
           class="system-link flex min-h-[2.7rem] min-w-0 flex-1 cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
           type="button"
-          :aria-label="`Open ${system.name} system map`"
+          :aria-label="props.continuousMap ? `Inspect ${system.name}` : `Open ${system.name} system map`"
           :aria-current="system.id === activeSystemId ? 'page' : undefined"
           :aria-description="publicationStatus(system.publication).description"
           @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
@@ -87,6 +87,53 @@
         </span>
       </button>
     </nav>
+
+    <section v-if="props.continuousMap && selectedSystem" class="mt-5 border-t border-[var(--line-soft)] pt-[0.65rem]">
+      <div class="tree-heading flex justify-between gap-[0.4rem] pb-[0.45rem]">
+        <span class="subsection-label">OBJECTS / ORBITS · {{ selectedSystem.name }}</span>
+        <span class="tree-count whitespace-nowrap">{{ hierarchyRows.length }} records</span>
+      </div>
+      <p v-if="hierarchyRows.length === 0" class="empty-copy my-[0.65rem]">No objects charted yet.</p>
+      <!-- @vue-generic {HierarchyTreeItem[], true} -->
+      <UTree
+        v-else
+        :items="hierarchyItems"
+        :model-value="selectedHierarchyItems"
+        multiple
+        :expanded="expandedHierarchyKeys"
+        :get-key="getHierarchyItemKey"
+        label-key="label"
+        class="object-tree"
+        :aria-label="`${selectedSystem.name} object and Orbit hierarchy`"
+        :ui="{
+          itemWithChildren: 'ps-0 -ms-px',
+          listWithChildren: 'ms-[var(--hierarchy-indent-step)] border-s border-[var(--line-soft)]',
+        }"
+        :style="{ '--hierarchy-indent-step': hierarchyIndentStep }"
+        @update:expanded="updateExpandedHierarchyKeys"
+        @select="selectHierarchyItem"
+        @toggle="toggleHierarchyItem"
+        @keydown.capture="stopComposingTreeKeys"
+        @compositionstart="beginHierarchyComposition"
+        @compositionend="endHierarchyComposition"
+      >
+        <template #item-leading="{ item }">
+          <span class="tree-leading" aria-hidden="true">
+            <span v-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
+            <span v-else class="orbit-mark">R</span>
+          </span>
+        </template>
+        <template #item-label="{ item }">
+          <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
+            <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
+            <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
+              <span class="key-tag">{{ item.row.object.locationKey }}</span>
+              <span class="block">{{ item.parentContext }}</span>
+            </small>
+          </span>
+        </template>
+      </UTree>
+    </section>
   </template>
 
   <template v-else-if="selectedSystem">
@@ -287,6 +334,8 @@ type HierarchyTreeItem = HierarchyTreeItemBase & (
 
 const props = defineProps<{
   workspace: LocalWorkspace
+  continuousMap?: boolean
+  inspectedTarget?: import('../stores/editor-ui').InspectedMapTarget | null
   hasChartNameDraft: boolean
   saving: boolean
   dimmedObjectIds?: readonly string[]
@@ -294,9 +343,13 @@ const props = defineProps<{
 
 const store = useEditorUiStore()
 const commands = useEditorCommands()
-const activeSystemId = computed(() => store.activeView === 'cluster'
-  ? store.clusterSelectedSystemId
-  : store.selectedSystemId)
+const activeSystemId = computed(() => {
+  const target = props.inspectedTarget
+  if (props.continuousMap && (target?.kind === 'system' || target?.kind === 'object' || target?.kind === 'orbit')) {
+    return target.systemId
+  }
+  return store.activeView === 'cluster' ? store.clusterSelectedSystemId : store.selectedSystemId
+})
 const selectedSystem = computed(() =>
   props.workspace.cluster.systems.find(system => system.id === activeSystemId.value),
 )
@@ -310,6 +363,9 @@ const maximumHierarchyLevel = computed(() => hierarchyRows.value.reduce(
 ))
 const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
+  const target = props.inspectedTarget
+  if (props.continuousMap && target?.kind === 'object') return `object:${target.objectId}`
+  if (props.continuousMap && target?.kind === 'orbit') return `orbit:${target.orbitId}`
   const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
   if (lastSelectedObjectId) return `object:${lastSelectedObjectId}`
   if (store.selectedObjectId) return `object:${store.selectedObjectId}`
@@ -318,7 +374,10 @@ const selectedHierarchyKey = computed(() => {
 })
 const selectedHierarchyItem = computed(() => flatHierarchyItems.value.find(item => item.key === selectedHierarchyKey.value))
 const selectedHierarchyItems = computed(() => {
-  const selectedKeys = new Set(store.selectedObjectIds.length
+  const target = props.inspectedTarget
+  const selectedKeys = new Set(props.continuousMap && (target?.kind === 'object' || target?.kind === 'orbit')
+    ? [target.kind === 'object' ? `object:${target.objectId}` : `orbit:${target.orbitId}`]
+    : store.selectedObjectIds.length
     ? store.selectedObjectIds.map(id => `object:${id}`)
     : selectedHierarchyKey.value ? [selectedHierarchyKey.value] : [])
   return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
@@ -431,6 +490,22 @@ function updateExpandedHierarchyKeys(keys: string[]): void {
 
 function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
   event.preventDefault()
+  if (props.continuousMap && selectedSystem.value) {
+    if (item.kind === 'object') {
+      void commands.navigation.inspectContinuousTarget({
+        kind: 'object',
+        systemId: selectedSystem.value.id,
+        objectId: item.row.object.id,
+      })
+    } else {
+      void commands.navigation.inspectContinuousTarget({
+        kind: 'orbit',
+        systemId: selectedSystem.value.id,
+        orbitId: item.row.orbit.id,
+      })
+    }
+    return
+  }
   if (item.kind === 'object') {
     const sourceEvent = event.detail.originalEvent
     if (sourceEvent instanceof MouseEvent && sourceEvent.shiftKey && store.mapMode === 'select') {
