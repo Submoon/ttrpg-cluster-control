@@ -145,7 +145,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
-import type { MapInteractionMode } from '../composables/editor-workflows/types'
+import type { MapHistoryTarget, MapInteractionMode } from '../composables/editor-workflows/types'
+import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
 import {
   clampMapViewport,
@@ -232,9 +233,9 @@ const systemGeometry = computed(() => ({
   orbitRotations: props.orbitRotations,
 }))
 
-const projections = computed(() => props.cluster.systems.map(system => projectWardenSystem(
+const projections = computed(() => props.cluster.systems.map((system, index) => projectWardenSystem(
   system,
-  props.systemPositions[system.id],
+  props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
 )))
 
@@ -545,6 +546,10 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
   if (!fitted) return false
   setViewport(fitted)
   return true
+}
+
+function revealHistoryTarget(target: MapHistoryTarget): boolean {
+  return target.kind === 'system' ? frameSystem(target.id) : false
 }
 
 function zoomBy(factor: number): void {
@@ -860,6 +865,7 @@ defineExpose({
   panBy,
   fitMap,
   frameSystem,
+  revealHistoryTarget,
   focusMap,
   cancelActiveGesture,
   startViewPan,
