@@ -6,6 +6,7 @@ import type {
   JumpCluster,
   JumpPointReference,
   JumpRoute,
+  JumpRouteInput,
   ChartDetailsChanges,
   LocalWorkspace,
   Point,
@@ -19,10 +20,7 @@ import {
   validText,
 } from './workspace-validation'
 
-type JumpRouteDetails = Pick<JumpRoute, 'jumpLevel' | 'fromPointId'> & (
-  | { toPointId: string; unresolvedExit?: never }
-  | { toPointId: null; unresolvedExit: string }
-)
+type JumpRouteDetails = Omit<JumpRoute, 'id' | 'name' | 'playerShared'>
 
 /**
  * Builds a named system with its generated identity and one centered primary star.
@@ -76,7 +74,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialStarSystem(systemName)
 
   return {
-    version: 4,
+    version: 5,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -178,115 +176,149 @@ export function jumpPointsInCluster(cluster: JumpCluster): JumpPointReference[] 
   )
 }
 
-/**
- * Creates a route between distinct logical Jump Points or to an unresolved external exit.
- * Physical Station references are independent of this route endpoint contract.
- * @param cluster Cluster used to validate endpoint IDs.
- * @param jumpLevel Positive safe-integer route classification.
- * @param fromPointId Existing logical origin Jump Point ID.
- * @param toPointId Existing destination ID, or null for an external exit.
- * @param unresolvedExit Label used only when toPointId is null.
- * @param playerShared Whether the new route is shared with players; defaults to private.
- * @returns A new route with a generated ID.
- * @throws If the level, endpoint IDs, or unresolved-exit label is invalid.
- */
+/** Creates a route between distinct systems with optional local Jump Points. */
+export function createJumpRoute(cluster: JumpCluster, input: JumpRouteInput): JumpRoute
+/** @deprecated Point-only compatibility for existing in-repository callers. */
 export function createJumpRoute(
   cluster: JumpCluster,
   jumpLevel: number,
   fromPointId: string,
   toPointId: string | null,
-  unresolvedExit = 'Uncharted exit',
-  playerShared = false,
+  unresolvedExit?: string,
+  playerShared?: boolean,
+): JumpRoute
+export function createJumpRoute(
+  cluster: JumpCluster,
+  inputOrLevel: JumpRouteInput | number,
+  oldFromPointId?: string,
+  oldToPointId?: string | null,
+  oldUnresolvedExit = 'Uncharted exit',
+  oldPlayerShared = false,
 ): JumpRoute {
+  const input = typeof inputOrLevel === 'number'
+    ? legacyJumpRouteInput(cluster, inputOrLevel, oldFromPointId, oldToPointId, oldUnresolvedExit, oldPlayerShared)
+    : inputOrLevel
+  const playerShared = input.playerShared ?? false
   if (typeof playerShared !== 'boolean') {
     throw new Error('Choose whether this Jump Route is shared with players.')
   }
   return {
     id: crypto.randomUUID(),
-    ...jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit),
+    ...jumpRouteDetails(cluster, input),
     playerShared,
   }
 }
 
-/**
- * Revalidates route endpoints while preserving the existing route ID and optional name.
- * @param cluster Cluster used to validate endpoint IDs.
- * @param routeId ID of the route to update.
- * @param jumpLevel Positive safe-integer route classification.
- * @param fromPointId Existing logical origin Jump Point ID.
- * @param toPointId Existing destination ID, or null for an external exit.
- * @param unresolvedExit Label used only when toPointId is null.
- * @param playerShared Optional publication setting; omitted edits preserve the existing setting.
- * @returns Updated route data with its prior identity and name.
- * @throws If the route is missing or any new route detail is invalid.
- */
+/** Revalidates route endpoints while preserving route identity and omitted sharing settings. */
+export function updateJumpRoute(cluster: JumpCluster, routeId: string, input: JumpRouteInput): JumpRoute
+/** @deprecated Point-only compatibility for existing in-repository callers. */
 export function updateJumpRoute(
   cluster: JumpCluster,
   routeId: string,
   jumpLevel: number,
   fromPointId: string,
   toPointId: string | null,
-  unresolvedExit = 'Uncharted exit',
+  unresolvedExit?: string,
   playerShared?: boolean,
+): JumpRoute
+export function updateJumpRoute(
+  cluster: JumpCluster,
+  routeId: string,
+  inputOrLevel: JumpRouteInput | number,
+  oldFromPointId?: string,
+  oldToPointId?: string | null,
+  oldUnresolvedExit = 'Uncharted exit',
+  oldPlayerShared?: boolean,
 ): JumpRoute {
   const route = cluster.routes.find(candidate => candidate.id === routeId)
-  if (!route) {
-    throw new Error('The selected Jump Route no longer exists.')
-  }
-  if (playerShared !== undefined && typeof playerShared !== 'boolean') {
+  if (!route) throw new Error('The selected Jump Route no longer exists.')
+  const input = typeof inputOrLevel === 'number'
+    ? legacyJumpRouteInput(cluster, inputOrLevel, oldFromPointId, oldToPointId, oldUnresolvedExit, oldPlayerShared)
+    : inputOrLevel
+  if (input.playerShared !== undefined && typeof input.playerShared !== 'boolean') {
     throw new Error('Choose whether this Jump Route is shared with players.')
   }
-
-  const details = jumpRouteDetails(cluster, jumpLevel, fromPointId, toPointId, unresolvedExit)
   return {
     id: route.id,
     ...(route.name !== undefined ? { name: route.name } : {}),
-    ...details,
-    playerShared: playerShared ?? route.playerShared,
+    ...jumpRouteDetails(cluster, input),
+    playerShared: input.playerShared ?? route.playerShared,
   }
 }
 
-/**
- * Validates route level and logical Jump Point endpoints, requiring a label for a null destination.
- * @param cluster Cluster whose Jump Points define valid endpoint IDs.
- * @param jumpLevel Positive safe-integer level.
- * @param fromPointId Existing origin Jump Point.
- * @param toPointId Different existing destination, or null for an unresolved external exit.
- * @param unresolvedExit External-exit label used only for a null destination.
- * @returns Validated route details without generated or preserved identity.
- * @throws If the level or endpoints are invalid, or the unresolved label is blank/overlong.
- */
-function jumpRouteDetails(
+function jumpRouteDetails(cluster: JumpCluster, input: JumpRouteInput): JumpRouteDetails {
+  if (!isJumpLevel(input.jumpLevel)) throw new Error('Jump level must be a positive integer.')
+
+  const fromSystem = cluster.systems.find(system => system.id === input.fromSystemId)
+  if (!fromSystem) throw new Error('Choose an existing system as the route origin.')
+  if (input.fromPointId !== null && !fromSystem.objects.some(object =>
+    object.id === input.fromPointId && object.family === 'JumpPoint')) {
+    throw new Error('Choose a Jump Point in the selected origin system.')
+  }
+
+  if (input.toSystemId === null) {
+    if (input.toPointId !== null) throw new Error('An unresolved destination cannot include a Jump Point.')
+    return {
+      jumpLevel: input.jumpLevel,
+      fromSystemId: fromSystem.id,
+      fromPointId: input.fromPointId,
+      toSystemId: null,
+      toPointId: null,
+      unresolvedExit: validText(input.unresolvedExit ?? '', 'Unresolved exit', maxNameLength),
+    }
+  }
+
+  const toSystem = cluster.systems.find(system => system.id === input.toSystemId)
+  if (!toSystem) throw new Error('Choose an existing system as the route destination.')
+  if (toSystem.id === fromSystem.id) throw new Error('Choose a different system as the route destination.')
+  if (input.toPointId !== null && !toSystem.objects.some(object =>
+    object.id === input.toPointId && object.family === 'JumpPoint')) {
+    throw new Error('Choose a Jump Point in the selected destination system.')
+  }
+  if (input.unresolvedExit !== undefined) {
+    throw new Error('A known-system destination cannot include an unresolved-exit label.')
+  }
+  return {
+    jumpLevel: input.jumpLevel,
+    fromSystemId: fromSystem.id,
+    fromPointId: input.fromPointId,
+    toSystemId: toSystem.id,
+    toPointId: input.toPointId,
+  }
+}
+
+function legacyJumpRouteInput(
   cluster: JumpCluster,
   jumpLevel: number,
-  fromPointId: string,
-  toPointId: string | null,
+  fromPointId: string | undefined,
+  toPointId: string | null | undefined,
   unresolvedExit: string,
-): JumpRouteDetails {
-  if (!isJumpLevel(jumpLevel)) {
-    throw new Error('Jump level must be a positive integer.')
-  }
-
-  const jumpPoints = jumpPointsInCluster(cluster)
-  if (!jumpPoints.some(({ point }) => point.id === fromPointId)) {
-    throw new Error('Choose an existing Jump Point as the route origin.')
-  }
-  if (toPointId !== null && (
-    toPointId === fromPointId
-    || !jumpPoints.some(({ point }) => point.id === toPointId)
-  )) {
-    throw new Error('Choose a different existing Jump Point as the route destination.')
-  }
-
+  playerShared?: boolean,
+): JumpRouteInput {
+  const points = jumpPointsInCluster(cluster)
+  const from = points.find(reference => reference.point.id === fromPointId)
+  if (!from) throw new Error('Choose an existing Jump Point as the route origin.')
   if (toPointId === null) {
     return {
       jumpLevel,
-      fromPointId,
-      toPointId,
-      unresolvedExit: validText(unresolvedExit, 'Unresolved exit', maxNameLength),
+      fromSystemId: from.system.id,
+      fromPointId: from.point.id,
+      toSystemId: null,
+      toPointId: null,
+      unresolvedExit,
+      playerShared,
     }
   }
-  return { jumpLevel, fromPointId, toPointId }
+  const to = points.find(reference => reference.point.id === toPointId)
+  if (!to) throw new Error('Choose a different existing Jump Point as the route destination.')
+  return {
+    jumpLevel,
+    fromSystemId: from.system.id,
+    fromPointId: from.point.id,
+    toSystemId: to.system.id,
+    toPointId: to.point.id,
+    playerShared,
+  }
 }
 
 /**

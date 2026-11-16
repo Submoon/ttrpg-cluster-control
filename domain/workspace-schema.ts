@@ -2,10 +2,11 @@
  * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
  */
 import { defaultObjectFieldSettings, nativePlayerFieldIds } from './workspace-model'
-import type { JumpCluster, LocalWorkspace, ObjectFieldSettings, Point, StarSystem } from './workspace-model'
+import type { JumpCluster, JumpRoute, LocalWorkspace, ObjectFieldSettings, Point, StarSystem } from './workspace-model'
 import {
   isArrayOf,
   isJumpRoute,
+  isJumpLevel,
   isObjectFieldSettings,
   isOrbit,
   isPoint,
@@ -133,6 +134,157 @@ type StoredLocalWorkspace = Omit<LocalWorkspace, 'objectFieldSettings' | 'layout
   layout: StoredWorkspaceLayout
 }
 
+type LegacyJumpRoute = {
+  id: string
+  name?: string
+  jumpLevel: number
+  fromPointId: string
+  toPointId: string | null
+  unresolvedExit?: string
+  playerShared: boolean
+}
+
+function isLegacyJumpRoute(value: unknown): value is LegacyJumpRoute {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || !value.id
+    || (value.name !== undefined && (
+      typeof value.name !== 'string'
+      || !value.name.trim()
+      || value.name !== value.name.trim()
+      || value.name.length > maxNameLength
+    ))
+    || !isJumpLevel(value.jumpLevel)
+    || typeof value.fromPointId !== 'string'
+    || !value.fromPointId
+    || typeof value.playerShared !== 'boolean') return false
+
+  if (typeof value.toPointId === 'string') {
+    return !!value.toPointId
+      && value.toPointId !== value.fromPointId
+      && value.unresolvedExit === undefined
+  }
+  return value.toPointId === null
+    && typeof value.unresolvedExit === 'string'
+    && !!value.unresolvedExit.trim()
+    && value.unresolvedExit === value.unresolvedExit.trim()
+    && value.unresolvedExit.length <= maxNameLength
+}
+
+/**
+ * Infers the system endpoints of supported point-based route records and removes only valid resolved loops.
+ * Route identities, entity/Field collisions, and every original Jump Point reference are checked before a loop is dropped.
+ */
+export function migrateLegacyWorkspaceRouteShape(value: unknown): unknown | null {
+  if (!isRecord(value) || !isRecord(value.cluster) || !isRecord(value.layout)) return null
+  const cluster = value.cluster
+  const systems = cluster.systems
+  const routes = cluster.routes
+  if (!Array.isArray(systems) || !Array.isArray(routes)) return null
+
+  const entityIds = new Set<string>()
+  for (const id of [value.id, cluster.id]) {
+    if (typeof id === 'string' && id) entityIds.add(id)
+  }
+  const systemIds = new Set<string>()
+  const jumpPointOwners = new Map<string, string>()
+  for (const system of systems) {
+    if (!isRecord(system)) continue
+    if (typeof system.id === 'string' && system.id) {
+      entityIds.add(system.id)
+      systemIds.add(system.id)
+    }
+    if (Array.isArray(system.objects)) {
+      for (const object of system.objects) {
+        if (!isRecord(object)) continue
+        if (typeof object.id === 'string' && object.id) {
+          entityIds.add(object.id)
+          if (object.family === 'JumpPoint' && typeof system.id === 'string') {
+            jumpPointOwners.set(object.id, system.id)
+          }
+        }
+      }
+    }
+    if (Array.isArray(system.orbits)) {
+      for (const orbit of system.orbits) {
+        if (isRecord(orbit) && typeof orbit.id === 'string' && orbit.id) entityIds.add(orbit.id)
+      }
+    }
+  }
+  const settings = value.objectFieldSettings
+  if (isRecord(settings) && Array.isArray(settings.customFields)) {
+    for (const field of settings.customFields) {
+      if (isRecord(field) && typeof field.id === 'string' && field.id) entityIds.add(field.id)
+    }
+  }
+
+  const routeIds = new Set<string>()
+  const routesById = new Map<string, LegacyJumpRoute>()
+  for (const route of routes) {
+    if (!isLegacyJumpRoute(route)
+      || entityIds.has(route.id)
+      || routeIds.has(route.id)
+      || !jumpPointOwners.has(route.fromPointId)
+      || (route.toPointId !== null && !jumpPointOwners.has(route.toPointId))) return null
+    routeIds.add(route.id)
+    routesById.set(route.id, route)
+  }
+
+  const removedLoopIds = new Set<string>()
+  const migratedRoutes: JumpRoute[] = []
+  for (const route of routes) {
+    if (!isLegacyJumpRoute(route)) return null
+    const fromSystemId = jumpPointOwners.get(route.fromPointId)
+    const toSystemId = route.toPointId === null ? null : jumpPointOwners.get(route.toPointId)
+    if (!fromSystemId || !systemIds.has(fromSystemId)
+      || (route.toPointId !== null && (!toSystemId || !systemIds.has(toSystemId)))) return null
+    if (toSystemId !== null && toSystemId === fromSystemId) {
+      removedLoopIds.add(route.id)
+      continue
+    }
+    migratedRoutes.push(route.toPointId === null
+      ? {
+          id: route.id,
+          ...(route.name !== undefined ? { name: route.name } : {}),
+          jumpLevel: route.jumpLevel,
+          fromSystemId,
+          fromPointId: route.fromPointId,
+          toSystemId: null,
+          toPointId: null,
+          unresolvedExit: route.unresolvedExit!,
+          playerShared: route.playerShared,
+        }
+      : {
+          id: route.id,
+          ...(route.name !== undefined ? { name: route.name } : {}),
+          jumpLevel: route.jumpLevel,
+          fromSystemId,
+          fromPointId: route.fromPointId,
+          toSystemId: toSystemId!,
+          toPointId: route.toPointId,
+          playerShared: route.playerShared,
+        })
+  }
+
+  const unresolvedExitPositions = value.layout.unresolvedExitPositions
+  if (unresolvedExitPositions !== undefined && !isPointRecord(unresolvedExitPositions)) return null
+  const sourceExitPositions = (unresolvedExitPositions ?? {}) as Record<string, Point>
+  const keptExitPositions: Record<string, Point> = {}
+  for (const [routeId, position] of Object.entries(sourceExitPositions)) {
+    const route = routesById.get(routeId)
+    if (removedLoopIds.has(routeId)) continue
+    if (!route || route.toPointId !== null) return null
+    keptExitPositions[routeId] = position
+  }
+
+  return {
+    ...value,
+    version: 5,
+    cluster: { ...cluster, routes: migratedRoutes },
+    layout: { ...value.layout, unresolvedExitPositions: keptExitPositions },
+  }
+}
+
 /**
  * Validates stored workspace data, accepting only the explicitly supported older optional fields/layout forms.
  * @param value Unknown persisted or imported workspace candidate.
@@ -144,7 +296,7 @@ function isStoredLocalWorkspace(
 ): value is StoredLocalWorkspace {
   if (
     !isRecord(value)
-    || value.version !== 4
+    || value.version !== 5
     || typeof value.id !== 'string'
     || !value.id
     || (!allowLegacyLayout && value.objectFieldSettings === undefined)
@@ -202,7 +354,7 @@ function isStoredLocalWorkspace(
 
   const entityIds = new Set<string>([value.id, clusterId])
   const systemIds = new Set<string>()
-  const jumpPointIds = new Set<string>()
+  const jumpPointOwners = new Map<string, { systemId: string }>()
   for (const system of systems) {
     if (entityIds.has(system.id) || systemIds.has(system.id)) {
       return false
@@ -215,7 +367,7 @@ function isStoredLocalWorkspace(
         return false
       }
       entityIds.add(object.id)
-      if (object.family === 'JumpPoint') jumpPointIds.add(object.id)
+      if (object.family === 'JumpPoint') jumpPointOwners.set(object.id, { systemId: system.id })
     }
     for (const orbit of system.orbits) {
       if (entityIds.has(orbit.id)) {
@@ -234,11 +386,18 @@ function isStoredLocalWorkspace(
 
   const routeIds = new Set<string>()
   for (const route of routes) {
+    const originSystem = systemIds.has(route.fromSystemId)
+    const originPoint = route.fromPointId === null ? undefined : jumpPointOwners.get(route.fromPointId)
+    const destinationSystem = route.toSystemId === null ? undefined : systemIds.has(route.toSystemId)
+    const destinationPoint = route.toPointId === null ? undefined : jumpPointOwners.get(route.toPointId)
     if (
       entityIds.has(route.id)
       || routeIds.has(route.id)
-      || !jumpPointIds.has(route.fromPointId)
-      || (route.toPointId !== null && !jumpPointIds.has(route.toPointId))
+      || !originSystem
+      || (route.fromPointId !== null && originPoint?.systemId !== route.fromSystemId)
+      || (route.toSystemId !== null && (!destinationSystem || route.toSystemId === route.fromSystemId))
+      || (route.toPointId !== null && destinationPoint?.systemId !== route.toSystemId)
+      || (route.toSystemId === null && route.toPointId !== null)
     ) {
       return false
     }
@@ -277,12 +436,12 @@ function isStoredLocalWorkspace(
     && Object.values(unresolvedExitPositions).every(isPoint)
     && hasSafeClusterSceneBounds(validatedCluster, positions, unresolvedExitPositions)
     && Object.entries(unresolvedExitPositions).every(([routeId]) =>
-      routes.some(route => route.id === routeId && route.toPointId === null),
+      routes.some(route => route.id === routeId && route.toSystemId === null),
     )
     && Object.entries(unresolvedExitPositions).every(([routeId]) => {
       const index = routes.findIndex(route => route.id === routeId)
       const route = routes[index]
-      if (!route || route.toPointId !== null) return false
+      if (!route || route.toSystemId !== null) return false
       try {
         return hasFiniteClusterRouteGeometry(clusterRouteGeometry(
           route,
@@ -625,7 +784,7 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
           : system),
       },
     }
-  } else if (!isVersionThree && version !== 4) {
+  } else if (!isVersionThree && version !== 4 && version !== 5) {
     return null
   }
 
@@ -636,27 +795,28 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
   const restored = isUnversionedLegacy
     ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
     : currentValue
-  if (!isStoredLocalWorkspace(restored, isUnversionedLegacy)) {
+  const current = version === 5 ? restored : migrateLegacyWorkspaceRouteShape(restored)
+  if (!current || !isStoredLocalWorkspace(current, isUnversionedLegacy)) {
     return null
   }
 
   const orbitRadii = normalizeOrbitRadii(
-    restored.layout.orbitRadii ?? {},
-    restored.layout.orbitEllipseRadii ?? {},
+    current.layout.orbitRadii ?? {},
+    current.layout.orbitEllipseRadii ?? {},
   )
   if (!orbitRadii) return null
-  const orbitRotations = normalizeOrbitRotations(restored.layout.orbitRotations ?? {})
+  const orbitRotations = normalizeOrbitRotations(current.layout.orbitRotations ?? {})
   if (!orbitRotations) return null
 
   return {
-    ...restored,
+    ...current,
     layout: {
-      systemPositions: restored.layout.systemPositions,
-      unresolvedExitPositions: restored.layout.unresolvedExitPositions ?? {},
+      systemPositions: current.layout.systemPositions,
+      unresolvedExitPositions: current.layout.unresolvedExitPositions ?? {},
       orbitRadii,
       orbitRotations,
-      objectAngles: restored.layout.objectAngles ?? {},
+      objectAngles: current.layout.objectAngles ?? {},
     },
-    objectFieldSettings: restored.objectFieldSettings ?? defaultObjectFieldSettings(),
+    objectFieldSettings: current.objectFieldSettings ?? defaultObjectFieldSettings(),
   }
 }

@@ -1,7 +1,7 @@
 /**
  * IndexedDB adapter for one normalized workspace; compatibility and migration rules stay in the domain schema.
  */
-import { restoreLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { isLocalWorkspace, restoreLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 
 const databaseName = 'ttrpg-cluster-control'
 const databaseVersion = 2
@@ -86,6 +86,9 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
  */
 export function createWorkspaceSnapshot(workspace: LocalWorkspace): LocalWorkspace {
   const detached = JSON.parse(JSON.stringify(workspace)) as unknown
+  if (!isLocalWorkspace(detached)) {
+    throw new Error('The workspace is invalid and cannot be saved.')
+  }
   const snapshot = restoreLocalWorkspace(detached)
   if (!snapshot) {
     throw new Error('The workspace is invalid and cannot be saved.')

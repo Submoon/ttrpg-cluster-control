@@ -235,11 +235,7 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
           const updatedRoute = updateJumpRoute(
             currentWorkspace.cluster,
             committedRoute.id,
-            committedRoute.jumpLevel,
-            committedRoute.fromPointId,
-            committedRoute.toPointId,
-            committedRoute.unresolvedExit,
-            playerShared,
+            { ...committedRoute, playerShared },
           )
           return {
             ...currentWorkspace,

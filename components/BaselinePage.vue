@@ -487,6 +487,7 @@
               @request-route-edit="beginRouteEdit"
               @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
+              @choose-route-system="chooseRouteSystem"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
               @discard-route-session="discardRouteDraft"
@@ -985,7 +986,7 @@ const {
   entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
   cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
-  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRoutePoint, updateRouteInput,
+  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
 const { editorError } = feedback
@@ -1237,7 +1238,7 @@ const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
   : clusterAddType.value === 'route'
     ? {
         label: 'Jump Route',
-        status: `ADD Jump Route · Choose a system to select the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} Jump Point.`,
+        status: `ADD Jump Route · Choose the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} system.`,
         error: routeSession.value?.error || undefined,
       }
     : null)

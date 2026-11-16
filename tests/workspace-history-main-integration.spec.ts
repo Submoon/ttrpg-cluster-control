@@ -82,7 +82,9 @@ function createUnresolvedRouteWorkspace(): { workspace: LocalWorkspace; routeId:
         systems: [{ ...system, objects: [...system.objects, jumpPoint] }],
         routes: [{
           id: routeId,
+          fromSystemId: system.id,
           fromPointId: jumpPoint.id,
+          toSystemId: null,
           toPointId: null,
           unresolvedExit: 'Beyond the known Cluster',
           jumpLevel: 1,

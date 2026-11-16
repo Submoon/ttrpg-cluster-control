@@ -69,36 +69,52 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   const stagingFixture = JSON.parse(JSON.stringify(campaignBaselineFixture)) as typeof campaignBaselineFixture
   const originSystem = stagingFixture.cluster.systems.find(system => system.name === 'Vesper Prime')
   const originPoint = originSystem?.objects.find(object => object.family === 'JumpPoint')
-  if (!originSystem || !originPoint) throw new Error('The campaign fixture needs a Vesper Prime Jump Point.')
+  const originStar = originSystem?.objects.find(object => object.family === 'CelestialBody' && object.subtype === 'star')
+  if (!originSystem || !originPoint || !originStar) throw new Error('The campaign fixture needs a Vesper Prime Jump Point and star.')
   originSystem.objects.push({
     ...originPoint,
     id: 'campaign-baseline-alternate-departure',
     locationKey: 'JP-02',
     name: 'Vesper Alternate',
   })
+  const anchorSystemId = 'campaign-baseline-anchor-system'
+  stagingFixture.cluster.systems.push({
+    ...originSystem,
+    id: anchorSystemId,
+    name: 'Anchor Only',
+    objects: [{ ...originStar, id: 'campaign-baseline-anchor-star', locationKey: 'A', name: 'Anchor Star' }],
+    orbits: [],
+  })
+  stagingFixture.layout.systemPositions[anchorSystemId] = { x: 0.5, y: 0.8 }
 
   await importCampaignWorkspace(page, stagingFixture, { width: 1440, height: 960 })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(before.cluster?.routes).toHaveLength(1)
   const originPointId = before.cluster?.systems.flatMap(system => system.objects)
     .find(point => point.family === 'JumpPoint' && point.name === 'Vesper Alternate')?.id
-  const destinationPointId = before.cluster?.systems.flatMap(system => system.objects)
-    .find(point => point.family === 'JumpPoint' && point.name === 'Harrow Arrival')?.id
   expect(originPointId).toBeTruthy()
-  expect(destinationPointId).toBeTruthy()
-  if (!originPointId || !destinationPointId) throw new Error('The imported campaign needs both expected Jump Points.')
+  const originSystemId = before.cluster?.systems.find(system => system.name === 'Vesper Prime')?.id
+  const anchorSystemIdAfterImport = before.cluster?.systems.find(system => system.name === 'Anchor Only')?.id
+  expect(originSystemId).toBeTruthy()
+  expect(anchorSystemIdAfterImport).toBeTruthy()
+  if (!originPointId || !originSystemId || !anchorSystemIdAfterImport) {
+    throw new Error('The imported campaign needs its Vesper and Jump-Point-free system endpoints.')
+  }
   await clickDockAction(page, 'Add Jump Route')
 
   const addButton = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const fromSystem = inspector.getByLabel('From system')
+  const toSystem = inspector.getByLabel('To system')
   const fromPoint = inspector.getByLabel('From Jump Point')
-  await selectInspectorOption(inspector.getByLabel('Route destination'), 'Known Jump Point')
+  await selectInspectorOption(inspector.getByLabel('Route destination'), 'Known system')
 
   const originLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Vesper Prime$/ })
   await expect(originLabel).toBeVisible()
   await originLabel.click()
-  await expect(inspector.getByLabel('Jump Points in the chosen system')).toHaveCount(0)
+  await expect.poll(() => readInspectorSelection(fromSystem)).toBe('Vesper Prime')
+  await expect.poll(() => readInspectorSelection(fromPoint)).toBe('No local Jump Point')
   await expect(inspector.getByText('This system has multiple logical Jump Points. Choose the intended endpoint by name.', { exact: true }))
     .toHaveCount(0)
 
@@ -116,13 +132,13 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await expect(addButton).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
 
-  const destinationLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Harrow$/ })
-  await expect(destinationLabel).toBeVisible()
-  await destinationLabel.click()
+  const anchorLabel = clusterMap.locator('.cluster-system-name').filter({ hasText: /^Anchor Only$/ })
+  await expect(anchorLabel).toBeVisible()
+  await anchorLabel.click()
   const toPoint = inspector.getByLabel('To Jump Point')
+  await expect.poll(() => readInspectorSelection(toSystem)).toBe('Anchor Only')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
-  await expect.poll(() => readInspectorSelection(toPoint)).toBe('Harrow Arrival (Harrow)')
-  await expect(inspector.getByLabel('Jump Points in the chosen system')).toHaveCount(0)
+  await expect.poll(() => readInspectorSelection(toPoint)).toBe('No local Jump Point')
 
   await toPoint.click()
   await expect(page.getByRole('option', { name: 'Vesper Departure (Vesper Prime)', exact: true })).toHaveCount(0)
@@ -137,7 +153,9 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   const afterApply = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterApply.cluster?.routes).toHaveLength(2)
   expect(afterApply.cluster?.routes).toContainEqual(expect.objectContaining({
+    fromSystemId: originSystemId,
     fromPointId: originPointId,
-    toPointId: destinationPointId,
+    toSystemId: anchorSystemIdAfterImport,
+    toPointId: null,
   }))
 })

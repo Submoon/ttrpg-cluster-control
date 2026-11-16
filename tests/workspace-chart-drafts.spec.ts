@@ -194,7 +194,7 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
       objects: Array<{ id: string; name: string }>
       orbits: Array<{ id: string; order: number }>
     }>
-    routes: Array<{ id: string; jumpLevel: number; fromPointId: string; toPointId: string | null }>
+    routes: Array<{ id: string; jumpLevel: number; fromSystemId: string; fromPointId: string | null; toSystemId: string | null; toPointId: string | null }>
   }
 }> {
   return page.evaluate(async () => {
@@ -217,7 +217,7 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
             objects: Array<{ id: string; name: string }>
             orbits: Array<{ id: string; order: number }>
           }>
-          routes: Array<{ id: string; jumpLevel: number; fromPointId: string; toPointId: string | null }>
+          routes: Array<{ id: string; jumpLevel: number; fromSystemId: string; fromPointId: string | null; toSystemId: string | null; toPointId: string | null }>
         }
       }
     } finally {

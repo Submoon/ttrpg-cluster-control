@@ -26,7 +26,8 @@ import {
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
 } from './helpers'
-import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace'
+import { addStarSystem, createLocalWorkspace, createSystemObject, restoreLocalWorkspace } from '../domain/workspace'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 async function readWorkspaceRecoveryRecords(page: import('@playwright/test').Page): Promise<{ current: unknown; backup: unknown }> {
   return await page.evaluate(async () => {
@@ -94,16 +95,20 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
             description: '',
             placement: { kind: 'system', x: 0.5, y: 0.5 },
           },
-          {
-            id: 'destination',
-            family: 'JumpPoint',
-            subtype: 'jump-point',
-            locationKey: 'JP.2',
-            name: 'Harrow Entry',
-            description: '',
-            placement: { kind: 'system', x: 0.7, y: 0.5 },
-          },
         ],
+        orbits: [],
+      }, {
+        id: 'harrow',
+        name: 'Harrow',
+        objects: [{
+          id: 'destination',
+          family: 'JumpPoint',
+          subtype: 'jump-point',
+          locationKey: 'JP.2',
+          name: 'Harrow Entry',
+          description: '',
+          placement: { kind: 'system', x: 0.7, y: 0.5 },
+        }],
         orbits: [],
       }],
       routes: [{
@@ -113,14 +118,16 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
         toPointId: 'destination',
       }],
     },
-    layout: { systemPositions: { vesper: { x: 0.5, y: 0.5 } } },
+    layout: { systemPositions: { vesper: { x: 0.25, y: 0.5 }, harrow: { x: 0.75, y: 0.5 } } },
   }
   const restored = restoreLocalWorkspace(savedWorkspace)
 
   expect(restored?.cluster.routes).toMatchObject([{
     id: 'route',
     jumpLevel: 1,
+    fromSystemId: 'vesper',
     fromPointId: 'origin',
+    toSystemId: 'harrow',
     toPointId: 'destination',
   }])
   expect(restored?.layout.orbitRotations).toEqual({})
@@ -131,10 +138,12 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
       ...savedWorkspace.cluster,
       systems: savedWorkspace.cluster.systems.map(system => ({
         ...system,
-        orbits: [
-          { id: 'legacy-circle', hostId: 'origin', order: 1 },
-          { id: 'legacy-ellipse', hostId: 'origin', order: 2 },
-        ],
+        orbits: system.id === 'vesper'
+          ? [
+              { id: 'legacy-circle', hostId: 'origin', order: 1 },
+              { id: 'legacy-ellipse', hostId: 'origin', order: 2 },
+            ]
+          : [],
       })),
     },
     layout: {
@@ -159,6 +168,161 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
       },
     })).toBeNull()
   }
+})
+
+test('version 4 route restoration infers systems and preserves route identity and exit placement @pure', () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const appended = addStarSystem(initial, 'Harrow')
+  const [originSystem, destinationSystem] = appended.workspace.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  const originPoint = createSystemObject(originSystem, 'jump-point')
+  const destinationPoint = createSystemObject(destinationSystem, 'jump-point')
+  const current = {
+    ...appended.workspace,
+    cluster: {
+      ...appended.workspace.cluster,
+      systems: [
+        { ...originSystem, objects: [...originSystem.objects, originPoint] },
+        { ...destinationSystem, objects: [...destinationSystem.objects, destinationPoint] },
+      ],
+      routes: [],
+    },
+  }
+  const externalPosition = { x: 920, y: -310 }
+  const legacy = {
+    ...current,
+    version: 4,
+    cluster: {
+      ...current.cluster,
+      routes: [
+        {
+          id: 'saved-route-id',
+          name: 'Known Link',
+          jumpLevel: 6,
+          fromPointId: originPoint.id,
+          toPointId: destinationPoint.id,
+          playerShared: true,
+        },
+        {
+          id: 'saved-exit-id',
+          jumpLevel: 2,
+          fromPointId: destinationPoint.id,
+          toPointId: null,
+          unresolvedExit: 'The Quiet Expanse',
+          playerShared: false,
+        },
+      ],
+    },
+    layout: {
+      ...current.layout,
+      unresolvedExitPositions: { 'saved-exit-id': externalPosition },
+    },
+  }
+
+  const restored = restoreLocalWorkspace(legacy)
+
+  expect(restored).toMatchObject({
+    version: 5,
+    cluster: {
+      routes: [
+        {
+          id: 'saved-route-id',
+          name: 'Known Link',
+          jumpLevel: 6,
+          fromSystemId: originSystem.id,
+          fromPointId: originPoint.id,
+          toSystemId: destinationSystem.id,
+          toPointId: destinationPoint.id,
+          playerShared: true,
+        },
+        {
+          id: 'saved-exit-id',
+          fromSystemId: destinationSystem.id,
+          fromPointId: destinationPoint.id,
+          toSystemId: null,
+          toPointId: null,
+          unresolvedExit: 'The Quiet Expanse',
+        },
+      ],
+    },
+    layout: { unresolvedExitPositions: { 'saved-exit-id': externalPosition } },
+  })
+})
+
+test('legacy same-system routes lose only their route metadata and corrupt loops remain invalid @pure', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]!
+  const firstPoint = createSystemObject(system, 'jump-point')
+  const secondPoint = createSystemObject({ ...system, objects: [...system.objects, firstPoint] }, 'jump-point')
+  const legacy = {
+    ...workspace,
+    version: 4,
+    cluster: {
+      ...workspace.cluster,
+      systems: [{ ...system, objects: [...system.objects, firstPoint, secondPoint] }],
+      routes: [{
+        id: 'legacy-loop-id',
+        jumpLevel: 3,
+        fromPointId: firstPoint.id,
+        toPointId: secondPoint.id,
+        playerShared: true,
+      }],
+    },
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: { 'legacy-loop-id': { x: 1000, y: 300 } },
+    },
+  }
+
+  const restored = restoreLocalWorkspace(legacy)
+  const missingEndpoint = structuredClone(legacy)
+  ;(missingEndpoint.cluster.routes[0] as { fromPointId: string }).fromPointId = 'missing-jump-point'
+  const entityIdCollision = structuredClone(legacy)
+  ;(entityIdCollision.cluster.routes[0] as { id: string }).id = firstPoint.id
+  const fieldIdCollision = structuredClone(legacy)
+  const settings = fieldIdCollision.objectFieldSettings as { customFields: Array<Record<string, unknown>> }
+  settings.customFields.push({ id: 'legacy-loop-id', name: 'Campaign Field', type: 'text', playerShared: false })
+
+  expect(restored?.cluster.routes).toEqual([])
+  expect(restored?.cluster.systems[0]?.objects.map(object => object.id)).toContain(firstPoint.id)
+  expect(restored?.layout.unresolvedExitPositions).toEqual({})
+  expect(restoreLocalWorkspace(missingEndpoint)).toBeNull()
+  expect(restoreLocalWorkspace(entityIdCollision)).toBeNull()
+  expect(restoreLocalWorkspace(fieldIdCollision)).toBeNull()
+})
+
+test('workspace snapshots reject stale legacy routes instead of migrating the detached mutation @pure', () => {
+  const base = addStarSystem(createLocalWorkspace('Snapshot Reach', 'Vesper'), 'Harrow').workspace
+  const [originSystem, destinationSystem] = base.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The snapshot fixture needs two systems.')
+  const originPoint = createSystemObject(originSystem, 'jump-point')
+  const destinationPoint = createSystemObject(destinationSystem, 'jump-point')
+  const legacyCandidate = {
+    ...base,
+    version: 4,
+    cluster: {
+      ...base.cluster,
+      systems: [
+        { ...originSystem, objects: [...originSystem.objects, originPoint] },
+        { ...destinationSystem, objects: [...destinationSystem.objects, destinationPoint] },
+      ],
+      routes: [{
+        id: 'stale-route',
+        jumpLevel: 2,
+        fromPointId: originPoint.id,
+        toPointId: destinationPoint.id,
+        playerShared: false,
+      }],
+    },
+  } as unknown as ReturnType<typeof createLocalWorkspace>
+
+  expect(restoreLocalWorkspace(legacyCandidate)?.cluster.routes[0]).toMatchObject({
+    fromSystemId: originSystem.id,
+    toSystemId: destinationSystem.id,
+    fromPointId: originPoint.id,
+    toPointId: destinationPoint.id,
+  })
+  expect(() => createWorkspaceSnapshot(legacyCandidate)).toThrow('The workspace is invalid and cannot be saved.')
 })
 
 test('restoring a workspace removes legacy object targets without deleting values @pure', () => {
@@ -415,6 +579,7 @@ test('public campaign creation persists a custom value and unresolved route thro
   await clickDockAction(page, 'Add Jump Route')
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await routeInspector.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
+  await selectInspectorOption(routeInspector.getByLabel('From system'), 'Vesper Prime')
   await selectInspectorOption(routeInspector.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
   await selectInspectorOption(routeInspector.getByLabel('Route destination'), 'Unresolved external exit')
   await routeInspector.getByLabel('Unknown destination label').fill('The Quiet Expanse')
