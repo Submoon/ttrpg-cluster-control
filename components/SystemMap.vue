@@ -1031,6 +1031,57 @@ defineExpose({
   fill: var(--map-selected);
 }
 
+.system-object-selection-indicator {
+  display: inline;
+  pointer-events: none;
+}
+
+.system-object-selection-outline,
+.system-object-selection-dashes {
+  fill: none;
+  stroke: var(--map-selected);
+  stroke-width: 1.35;
+}
+
+.system-object-selection-outline {
+  opacity: 0.92;
+}
+
+.system-object-selection-dashes {
+  opacity: 0.68;
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-linecap: round;
+  animation:
+    system-object-selection-breathe 2.8s ease-in-out infinite,
+    system-object-selection-rotate 5.5s linear infinite;
+}
+
+@keyframes system-object-selection-breathe {
+  0%,
+  100% {
+    transform: scale(0.99);
+    opacity: 0.68;
+  }
+
+  50% {
+    transform: scale(1.035);
+    opacity: 0.95;
+  }
+}
+
+@keyframes system-object-selection-rotate {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-object-selection-dashes {
+    animation: none;
+  }
+}
+
 .object-key {
   fill: var(--map-unresolved);
   font: 9px Consolas, monospace;

@@ -29,6 +29,14 @@ function expectPositionNear(
   expect(Math.abs(actual.y - expected.y)).toBeLessThan(tolerance)
 }
 
+async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
+  const ids = await indicators.evaluateAll(marks => marks.map(mark => mark.getAttribute('data-selection-object-id')))
+  return ids.map((id) => {
+    if (!id) throw new Error('A visible selection indicator has no object identity.')
+    return id
+  }).sort()
+}
+
 test('multi-select objects and preserve Hierarchy keyboard behavior through reflow', async ({
   campaignWorkspacePage: page,
 }, testInfo) => {
@@ -47,6 +55,9 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   const departureRow = hierarchy.getByRole('treeitem', { name: 'Select JP-01, Vesper Departure', exact: true })
   const map = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
   const selectedMapObjects = map.locator('.system-object.is-selected')
+  const visibleMapIndicators = map.locator(
+    '.system-map-selection-indicators .system-object-selection-indicator:visible',
+  )
   const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
   const starObject = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
   const planetObject = map.getByRole('button', { name: 'Select PL-01, Iria (Planet)', exact: true })
@@ -56,6 +67,10 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   })
   const starId = await starObject.evaluate(mark => mark.closest('.system-object')?.getAttribute('data-object-id'))
   if (!starId) throw new Error('Primary Star has no stable map identity.')
+  const planetId = await planetObject.evaluate(mark => mark.closest('.system-object')?.getAttribute('data-object-id'))
+  if (!planetId) throw new Error('Iria has no stable map identity.')
+  await expect(map.locator('.system-map-items > .system-map-selection-indicators + .system-object')).toHaveCount(1)
+  await expect(map.locator('.system-map-selection-indicators')).toHaveAttribute('pointer-events', 'none')
 
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
@@ -65,6 +80,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
 
   await setWorkspaceMapMode(page, 'Navigate')
   await expect(selectedMapObjects).toHaveCount(0)
+  await expect(visibleMapIndicators).toHaveCount(0)
 
   const singleSelectionMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
   const hierarchyWhileMenuOpen = page.getByRole('complementary', { name: 'System hierarchy', exact: true, includeHidden: true })
@@ -76,6 +92,8 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   const moveModeButton = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await expect(selectedMapObjects).toHaveCount(1)
+  await expect(visibleMapIndicators).toHaveCount(1)
+  expect(await visibleIndicatorObjectIds(visibleMapIndicators)).toEqual([planetId])
   await expect(iria).toHaveAttribute('aria-selected', 'true')
 
   await starObject.locator('.object-hit-target').click({ button: 'right' })
@@ -87,6 +105,20 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(moveModeButton).toHaveAttribute('aria-pressed', 'true')
   await expect(selectedMapObjects).toHaveCount(1)
   await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
+  await expect(starObject).toHaveClass(/\bis-dimmed\b/)
+  const selectedDimmedIndicator = map.locator(
+    `.system-object-selection-indicator[data-selection-object-id="${starId}"]:visible`,
+  )
+  await expect(selectedDimmedIndicator).toHaveCount(1)
+  expect(await visibleIndicatorObjectIds(visibleMapIndicators)).toEqual([starId])
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(selectedDimmedIndicator.locator('.system-object-selection-outline')).toBeVisible()
+  await expect(selectedDimmedIndicator.locator('.system-object-selection-dashes')).toBeVisible()
+  await expect(selectedDimmedIndicator.locator('.system-object-selection-dashes'))
+    .toHaveCSS('animation-name', 'none')
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await expect(selectedDimmedIndicator.locator('.system-object-selection-dashes'))
+    .toHaveCSS('animation-name', 'system-object-selection-breathe, system-object-selection-rotate')
   await setWorkspaceMapMode(page, 'Select')
 
   await iria.scrollIntoViewIfNeeded()
@@ -116,6 +148,8 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(starObject).toHaveAttribute('aria-pressed', 'true')
   await expect(planetObject).not.toHaveClass(/\bis-dimmed\b/)
   await expect(primaryStar).toHaveAttribute('aria-description', /Dimmed on map/)
+  await expect(visibleMapIndicators).toHaveCount(2)
+  expect(await visibleIndicatorObjectIds(visibleMapIndicators)).toEqual([starId, planetId].sort())
   await expect(hierarchy.locator('[aria-current="true"]')).toHaveCount(0)
   await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
 
@@ -247,6 +281,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
 
   await page.mouse.click(rectangle.start.x, rectangle.start.y)
   await expect(selectedMapObjects).toHaveCount(0)
+  await expect(visibleMapIndicators).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
 
   await starObject.click()

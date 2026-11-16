@@ -24,7 +24,7 @@ test('supported Ctrl and Cmd shortcuts traverse the same saved name action and c
   await undo.focus()
   const shortcutKeys = page.locator('[data-slot="kbds"]')
   await expect(shortcutKeys).toBeVisible()
-  await expect(shortcutKeys.locator('kbd')).toHaveText([/^(Ctrl|⌘)$/, /^z$/i])
+  await expect(shortcutKeys.locator('kbd')).toHaveText([/^(Ctrl|⌘)$/i, /^z$/i], { useInnerText: true })
   await page.keyboard.press('Escape')
   await expect(shortcutKeys).toBeHidden()
 
@@ -35,7 +35,7 @@ test('supported Ctrl and Cmd shortcuts traverse the same saved name action and c
   await expect(redoCount.getByText('1', { exact: true })).toBeVisible()
   await redo.hover()
   await expect(shortcutKeys).toBeVisible()
-  await expect(shortcutKeys.locator('kbd')).toHaveText([/^(Ctrl|⌘)$/, '⇧', /^z$/i])
+  await expect(shortcutKeys.locator('kbd')).toHaveText([/^(Ctrl|⌘)$/i, '⇧', /^z$/i], { useInnerText: true })
   await page.mouse.move(0, 0)
 
   await page.keyboard.press('Control+Shift+z')
