@@ -3,7 +3,7 @@
     <section class="jump-route-details" aria-label="Jump Route details">
       <div class="jump-route-details-body">
         <span class="section-kicker">JUMP ROUTE / SELECTED</span>
-        <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+        <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
         <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
         <p class="inspector-intro mb-[1em]">
           Routes connect systems directly. Local Jump Points are optional; Stations remain separate physical locations.
@@ -108,12 +108,12 @@
   <section v-else-if="props.session" class="route-session-inspector" aria-label="Jump Route editor">
     <header class="route-session-header">
       <span class="section-kicker">{{ props.session.routeId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
-      <span class="type-chip mt-[0.45rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">LOGICAL ENDPOINTS</span>
+      <span class="type-chip mt-[0.45rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
       <h2 class="mt-2 mb-1 [overflow-wrap:anywhere]">
-        {{ props.session.routeId ? 'Edit Jump Route' : 'Connect Jump Points' }}
+        {{ props.session.routeId ? 'Edit Jump Route' : 'Connect Systems' }}
       </h2>
       <p class="inspector-intro m-0">
-        Routes reference logical Jump Points. A Station is a separate physical location.
+        Routes connect systems directly. Local Jump Points are optional attachments; Stations remain separate physical locations.
       </p>
     </header>
 
@@ -170,7 +170,7 @@
         <UFormField label="From Jump Point (optional)" :error="fieldError('fromPointId')">
           <USelect
             id="route-from-point"
-            :model-value="props.session.draft.fromPointId || noLocalPoint"
+            :model-value="pointOptionValue(props.session.draft.fromPointId)"
             :items="sourcePointItems"
             placeholder="System-only endpoint"
             :disabled="!props.session.draft.fromSystemId"
@@ -200,7 +200,7 @@
           <UFormField label="To Jump Point (optional)" :error="fieldError('toPointId')">
             <USelect
               id="route-to-point"
-              :model-value="props.session.draft.toPointId || noLocalPoint"
+              :model-value="pointOptionValue(props.session.draft.toPointId)"
               :items="destinationPointItems"
               placeholder="System-only endpoint"
               :disabled="!props.session.draft.toSystemId"
@@ -286,6 +286,7 @@ import {
 import type { RouteDraftField, RouteInspectorSession } from '../../composables/editor-workflows/useRouteInspectorSession'
 import ChartDetailsPanel from './ChartDetailsPanel.vue'
 import { routeSharingStatus } from '../../utils/gm-publication-badges'
+import { decodeRoutePointOption, encodeRoutePointOption, noLocalRoutePointOption } from '../../utils/route-point-option'
 
 const props = defineProps<{
   workspace: LocalWorkspace
@@ -321,7 +322,8 @@ const selectedRoute = computed(() => props.selectedRoute)
 const selectedRouteSharingStatus = computed(() => selectedRoute.value
   ? routeSharingStatus(props.workspace.cluster, selectedRoute.value)
   : null)
-const noLocalPoint = '__route-no-local-point__'
+const noLocalPoint = noLocalRoutePointOption
+const pointOptionValue = (pointId: string | null) => encodeRoutePointOption(pointId)
 const systems = computed(() => props.workspace.cluster.systems)
 const sourceSystemItems = computed(() => {
   const active = props.session
@@ -344,7 +346,7 @@ const sourcePointItems = computed(() => {
     { label: 'No local Jump Point', value: noLocalPoint },
     ...jumpPointsInCluster(props.workspace.cluster)
       .filter(reference => reference.system.id === active.draft.fromSystemId)
-      .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id })),
+      .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: encodeRoutePointOption(point.id) })),
   ]
 })
 const destinationPointItems = computed(() => {
@@ -355,7 +357,7 @@ const destinationPointItems = computed(() => {
     ...jumpPointsInCluster(props.workspace.cluster)
       .filter(reference => reference.system.id === active.draft.toSystemId
         && reference.point.id !== active.draft.fromPointId)
-      .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: point.id })),
+      .map(({ point, system }) => ({ label: `${point.name} (${system.name})`, value: encodeRoutePointOption(point.id) })),
   ]
 })
 const destinationItems = [
@@ -496,13 +498,11 @@ function updateToSystem(value: unknown): void {
 }
 
 function updateFromPoint(value: unknown): void {
-  const pointId = String(value ?? '')
-  update('fromPointId', pointId === noLocalPoint ? '' : pointId)
+  update('fromPointId', decodeRoutePointOption(String(value ?? '')))
 }
 
 function updateToPoint(value: unknown): void {
-  const pointId = String(value ?? '')
-  update('toPointId', pointId === noLocalPoint ? '' : pointId)
+  update('toPointId', decodeRoutePointOption(String(value ?? '')))
 }
 </script>
 

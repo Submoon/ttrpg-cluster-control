@@ -19,6 +19,11 @@ import {
   updateChartDetails,
   updateSystemObject,
 } from '../domain/workspace'
+import {
+  decodeRoutePointOption,
+  encodeRoutePointOption,
+  noLocalRoutePointOption,
+} from '../utils/route-point-option'
 
 function legacyReservedFieldIdFixture(): {
   workspace: ReturnType<typeof createLocalWorkspace>
@@ -336,6 +341,18 @@ test('routes connect distinct systems without requiring local Jump Points @pure'
     toPointId: null,
   })
   expect(isLocalWorkspace(workspace)).toBe(true)
+})
+
+test('route point options keep real identities separate from the no-point choice @pure', () => {
+  const legacySentinelId = '__route-no-local-point__'
+  const option = encodeRoutePointOption(legacySentinelId)
+
+  expect(option).not.toBe(noLocalRoutePointOption)
+  expect(decodeRoutePointOption(option)).toBe(legacySentinelId)
+  expect(encodeRoutePointOption('route-point:existing-prefix')).not.toBe(encodeRoutePointOption('existing-prefix'))
+  expect(decodeRoutePointOption(encodeRoutePointOption('route-point:existing-prefix')))
+    .toBe('route-point:existing-prefix')
+  expect(decodeRoutePointOption(noLocalRoutePointOption)).toBe('')
 })
 
 test('route endpoints require distinct known systems and local Jump Point ownership @pure', () => {

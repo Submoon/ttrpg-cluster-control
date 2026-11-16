@@ -303,7 +303,7 @@ export function isOrbit(value: unknown): value is Orbit {
 }
 
 /**
- * Validates a positive-level route between distinct Jump Points or to a named unresolved exit.
+ * Validates a positive-level route between distinct systems or to a named unresolved exit.
  * @param value Unknown route candidate.
  * @returns True when endpoints and optional name match one supported route shape.
  */

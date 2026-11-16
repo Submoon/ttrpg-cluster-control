@@ -283,6 +283,7 @@ test('deleting a Jump Point detaches route endpoints and system deletion removes
     toPointId: null,
     playerShared: false,
   } as const
+  const duplicateExternalRoute = { ...route, id: 'route-duplicate-external' }
   const withRoutes = {
     ...withSecondSystem,
     cluster: {
@@ -290,7 +291,7 @@ test('deleting a Jump Point detaches route endpoints and system deletion removes
       systems: withSecondSystem.cluster.systems.map(system => system.id === destinationSystem.id
         ? { ...system, objects: [...system.objects, destinationPoint] }
         : system),
-      routes: [route, knownRoute, anchorOnlyRoute],
+      routes: [route, duplicateExternalRoute, knownRoute, anchorOnlyRoute],
     },
   }
   const plan = planMapEntityDeletion(withRoutes, {
@@ -304,15 +305,23 @@ test('deleting a Jump Point detaches route endpoints and system deletion removes
   expect(plan.removedRouteIds).toEqual([])
   expect(plan.detachedRouteAttachments).toEqual([
     { routeId: route.id, end: 'from', pointId: point.id, systemId: originSystem.id },
+    { routeId: duplicateExternalRoute.id, end: 'from', pointId: point.id, systemId: originSystem.id },
     { routeId: knownRoute.id, end: 'from', pointId: point.id, systemId: originSystem.id },
   ])
+  const detachmentEffects = plan.affectedEntities.filter(effect =>
+    effect.startsWith('Detach origin Jump Point from Jump Route'))
+  expect(detachmentEffects).toHaveLength(3)
+  expect(detachmentEffects.filter(effect => effect.includes('identical route'))).toHaveLength(2)
+  expect(new Set(detachmentEffects).size).toBe(3)
   expect(detachedExternal?.fromPointId).toBeNull()
   expect(detachedKnown).toMatchObject({ fromPointId: null, toPointId: destinationPoint.id })
   expect(plan.workspace.layout.unresolvedExitPositions?.[route.id]).toEqual({ x: 1250, y: -340 })
   expect(isLocalWorkspace(plan.workspace)).toBe(true)
 
   const systemDeletion = planMapEntityDeletion(plan.workspace, { kind: 'system', systemId: originSystem.id })
-  expect(systemDeletion.removedRouteIds).toEqual([route.id, knownRoute.id, anchorOnlyRoute.id])
+  expect(systemDeletion.removedRouteIds).toEqual([
+    route.id, duplicateExternalRoute.id, knownRoute.id, anchorOnlyRoute.id,
+  ])
   expect(systemDeletion.workspace.cluster.routes).toEqual([])
   expect(systemDeletion.workspace.layout.unresolvedExitPositions?.[route.id]).toBeUndefined()
   expect(isLocalWorkspace(systemDeletion.workspace)).toBe(true)

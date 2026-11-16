@@ -45,7 +45,29 @@ function routeLabel(workspace: LocalWorkspace, route: LocalWorkspace['cluster'][
     : destination?.system
       ? destination.point ? `${destination.point.name} (${destination.system.name})` : destination.system.name
       : `Missing system (${route.toSystemId})`
-  return `Jump Route (Level ${route.jumpLevel}): ${originLabel} -> ${destinationLabel}`
+  const name = route.name ? `, ${route.name}` : ''
+  return `Jump Route (Level ${route.jumpLevel}${name}): ${originLabel} -> ${destinationLabel}`
+}
+
+function routeReviewLabels(workspace: LocalWorkspace): Map<string, string> {
+  const descriptions = new Map<string, string[]>()
+  for (const route of workspace.cluster.routes) {
+    const description = routeLabel(workspace, route)
+    const routeIds = descriptions.get(description) ?? []
+    routeIds.push(route.id)
+    descriptions.set(description, routeIds)
+  }
+
+  const labels = new Map<string, string>()
+  for (const [description, routeIds] of descriptions) {
+    const orderedRouteIds = [...routeIds].sort((left, right) => left.localeCompare(right))
+    orderedRouteIds.forEach((routeId, index) => {
+      labels.set(routeId, routeIds.length > 1
+        ? `${description} (identical route ${index + 1} of ${routeIds.length})`
+        : description)
+    })
+  }
+  return labels
 }
 
 function routeEffectSignature(workspace: LocalWorkspace, route: LocalWorkspace['cluster']['routes'][number]) {
@@ -129,6 +151,9 @@ export function planMapEntityDeletion(
   const detachedRouteAttachments: MapDeletionPlan['detachedRouteAttachments'] = []
   const affectedEntities: string[] = []
   const addedEffects = new Set<string>()
+  const reviewLabels = routeReviewLabels(workspace)
+  const routeReviewLabel = (route: LocalWorkspace['cluster']['routes'][number]) =>
+    reviewLabels.get(route.id) ?? routeLabel(workspace, route)
   const clearedStationLinks: Array<{ objectId: string; stationId: string }> = []
   const addEffect = (effect: string) => {
     if (!addedEffects.has(effect)) {
@@ -203,7 +228,7 @@ export function planMapEntityDeletion(
   } else if (target.kind === 'route') {
     const route = workspace.cluster.routes.find(candidate => candidate.id === target.routeId)
     if (!route) throw new Error('The selected Jump Route no longer exists.')
-    entityLabel = routeLabel(workspace, route)
+    entityLabel = routeReviewLabel(route)
     removedRouteIds.add(route.id)
   } else if (target.kind === 'object') {
     const selectedSystem = requireSystem()
@@ -244,18 +269,18 @@ export function planMapEntityDeletion(
     if (removedSystemIds.has(route.fromSystemId)
       || (route.toSystemId !== null && removedSystemIds.has(route.toSystemId))) {
       removedRouteIds.add(route.id)
-      addEffect(routeLabel(workspace, route))
+      addEffect(routeReviewLabel(route))
       continue
     }
     let nextRoute = route
     if (route.fromPointId !== null && removedObjectIds.has(route.fromPointId)) {
       detachedRouteAttachments.push({ routeId: route.id, end: 'from', pointId: route.fromPointId, systemId: route.fromSystemId })
-      addEffect(`Detach origin Jump Point from ${routeLabel(workspace, route)}`)
+      addEffect(`Detach origin Jump Point from ${routeReviewLabel(route)}`)
       nextRoute = { ...nextRoute, fromPointId: null }
     }
     if (route.toSystemId !== null && route.toPointId !== null && removedObjectIds.has(route.toPointId)) {
       detachedRouteAttachments.push({ routeId: route.id, end: 'to', pointId: route.toPointId, systemId: route.toSystemId })
-      addEffect(`Detach destination Jump Point from ${routeLabel(workspace, route)}`)
+      addEffect(`Detach destination Jump Point from ${routeReviewLabel(route)}`)
       nextRoute = { ...nextRoute, toPointId: null }
     }
     if (nextRoute !== route) routeUpdates.set(route.id, nextRoute)

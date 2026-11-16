@@ -20,7 +20,8 @@ import {
   validText,
 } from './workspace-validation'
 
-type JumpRouteDetails = Omit<JumpRoute, 'id' | 'name' | 'playerShared'>
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+type JumpRouteDetails = DistributiveOmit<JumpRoute, 'id' | 'name' | 'playerShared'>
 
 /**
  * Builds a named system with its generated identity and one centered primary star.

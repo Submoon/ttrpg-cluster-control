@@ -6,11 +6,14 @@ import {
   defaultObjectFieldSettings,
   exportJumpCluster,
   prepareJsonImport,
+  restoreJumpClusterBackup,
+  restoreLocalWorkspace,
   type CustomFieldDefinition,
   type JumpClusterExport,
   type LocalWorkspace,
   type StarSystem,
 } from '../domain/workspace'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 function sourceFieldValue(field: CustomFieldDefinition): string | number | boolean {
   switch (field.type) {
@@ -465,6 +468,49 @@ test('version 4 cluster import migrates point routes, preserves sharing, and rem
   expect(prepared.workspace.layout.unresolvedExitPositions).toEqual({
     [exitRoute!.id]: { x: 1250, y: -340 },
   })
+})
+
+test('legacy route ID __proto__ keeps its saved exit through local restore, backup restore, save, and copy @pure', () => {
+  const currentExport = sourceClusterExport()
+  const externalRoute = currentExport.cluster.routes.find(route => route.toSystemId === null)
+  if (!externalRoute) throw new Error('The source Cluster needs an unresolved route.')
+  const savedExit = { x: 1250, y: -340 }
+  const legacyRoutes = currentExport.cluster.routes.map(route => {
+    const oldRoute: Record<string, unknown> = { ...route }
+    delete oldRoute.fromSystemId
+    delete oldRoute.toSystemId
+    if (route.id === externalRoute.id) oldRoute.id = '__proto__'
+    return oldRoute
+  })
+  const legacyPositions = Object.fromEntries([['__proto__', savedExit]])
+  const legacyBase = {
+    ...currentExport,
+    version: 4,
+    cluster: { ...currentExport.cluster, routes: legacyRoutes },
+    layout: { ...currentExport.layout, unresolvedExitPositions: legacyPositions },
+  }
+  const legacyLocal = { ...legacyBase, id: 'legacy-local-workspace' }
+
+  const restored = restoreLocalWorkspace(legacyLocal)
+  expect(restored).not.toBeNull()
+  if (!restored) throw new Error('The legacy local workspace should restore.')
+  expect(restored.cluster.routes.map(route => route.id)).toContain('__proto__')
+  expect(Object.hasOwn(restored.layout.unresolvedExitPositions, '__proto__')).toBe(true)
+  expect(restored.layout.unresolvedExitPositions['__proto__']).toEqual(savedExit)
+  const saved = createWorkspaceSnapshot(restored)
+  expect(Object.hasOwn(saved.layout.unresolvedExitPositions, '__proto__')).toBe(true)
+  expect(saved.layout.unresolvedExitPositions['__proto__']).toEqual(savedExit)
+
+  const backup = restoreJumpClusterBackup(legacyBase)
+  expect(backup.cluster.routes.map(route => route.id)).toContain('__proto__')
+  expect(Object.hasOwn(backup.layout.unresolvedExitPositions, '__proto__')).toBe(true)
+  expect(backup.layout.unresolvedExitPositions['__proto__']).toEqual(savedExit)
+
+  const copied = prepareJsonImport(createLocalWorkspace('Copy Destination', 'Home'), legacyBase)
+  const copiedRoute = copied.workspace.cluster.routes.find(route => route.toSystemId === null)
+  expect(copiedRoute).toBeTruthy()
+  expect(copiedRoute?.id).not.toBe('__proto__')
+  expect(copiedRoute && copied.workspace.layout.unresolvedExitPositions[copiedRoute.id]).toEqual(savedExit)
 })
 
 test('second import creates a disjoint entity copy while reusing a compatible field @pure', () => {

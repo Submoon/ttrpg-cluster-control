@@ -269,13 +269,14 @@ export function migrateLegacyWorkspaceRouteShape(value: unknown): unknown | null
   const unresolvedExitPositions = value.layout.unresolvedExitPositions
   if (unresolvedExitPositions !== undefined && !isPointRecord(unresolvedExitPositions)) return null
   const sourceExitPositions = (unresolvedExitPositions ?? {}) as Record<string, Point>
-  const keptExitPositions: Record<string, Point> = {}
+  const keptExitPositionEntries: Array<[string, Point]> = []
   for (const [routeId, position] of Object.entries(sourceExitPositions)) {
     const route = routesById.get(routeId)
     if (removedLoopIds.has(routeId)) continue
     if (!route || route.toPointId !== null) return null
-    keptExitPositions[routeId] = position
+    keptExitPositionEntries.push([routeId, position])
   }
+  const keptExitPositions = Object.fromEntries(keptExitPositionEntries)
 
   return {
     ...value,
