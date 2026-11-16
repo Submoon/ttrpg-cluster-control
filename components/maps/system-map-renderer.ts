@@ -497,7 +497,10 @@ export function renderSystemMap({
     return appliedPositionCache
   }
   function prepareExportClone(clone: SVGSVGElement): void {
-    clone.querySelectorAll('[data-map-search-locator], .selected-object-departure-indicator, .selected-object-arrival-indicator')
+    clone.querySelectorAll(
+      '[data-map-search-locator], .system-map-selection-indicators, '
+      + '.selected-object-departure-indicator, .selected-object-arrival-indicator',
+    )
       .forEach(indicator => indicator.remove())
     clone.querySelectorAll('.system-object.is-dimmed, .system-object-publication.is-dimmed')
       .forEach(mark => mark.classList.remove('is-dimmed'))
@@ -994,6 +997,12 @@ export function renderSystemMap({
     })
 
   const items = content.append('g').attr('class', 'system-map-items')
+  const selectionIndicatorLayer = items.append('g')
+    .attr('class', 'system-map-selection-indicators')
+    .attr('aria-hidden', 'true')
+    .attr('pointer-events', 'none')
+  let objectSelectionIndicatorMarks = selectionIndicatorLayer
+    .selectAll<SVGGElement, SystemObject>('g.system-object-selection-indicator')
   const initialDimmedObjectIds = new Set(dimmedObjectIds)
   const publicationDecorations = content.append('g')
     .attr('class', 'gm-publication-decorations')
@@ -1014,6 +1023,43 @@ export function renderSystemMap({
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', object => `Select ${catalogueObjectLabel(object)}`)
+
+  function updateObjectSelectionIndicatorPositions(positions: ReadonlyMap<string, Point>): void {
+    objectSelectionIndicatorMarks.attr('transform', object => {
+      const point = requiredPosition(positions, object.id)
+      return `translate(${point.x} ${point.y})`
+    })
+  }
+
+  function updateObjectSelectionIndicators(positions: ReadonlyMap<string, Point>): void {
+    const selectedIds = new Set([
+      ...(selectedObjectId ? [selectedObjectId] : []),
+      ...currentSelectedObjectIds,
+    ])
+    const selectedObjects = system.objects.filter(object => selectedIds.has(object.id))
+    objectSelectionIndicatorMarks = selectionIndicatorLayer
+      .selectAll<SVGGElement, SystemObject>('g.system-object-selection-indicator')
+      .data(selectedObjects, object => object.id)
+      .join(
+        enter => {
+          const indicators = enter.append('g')
+            .attr('class', 'system-object-selection-indicator')
+            .attr('aria-hidden', 'true')
+            .attr('pointer-events', 'none')
+          indicators.append('circle')
+            .attr('class', 'system-object-selection-outline')
+            .attr('r', 15.5)
+          indicators.append('circle')
+            .attr('class', 'system-object-selection-dashes')
+            .attr('r', 19.5)
+            .attr('pathLength', 100)
+            .attr('stroke-dasharray', '6 4')
+          return indicators
+        },
+      )
+      .attr('data-selection-object-id', object => object.id)
+    updateObjectSelectionIndicatorPositions(positions)
+  }
 
   objectMarks.each(function (object) {
     describeMapPublication(this, `object-${system.id}-${object.id}`, object.publication, system.publication)
@@ -1091,6 +1137,7 @@ export function renderSystemMap({
       .attr('text-anchor', 'start')
       .text(objectMark(object))
   })
+  updateObjectSelectionIndicators(positions)
 
   const objectDepartureIndicators = objectMarks.append('g')
     .attr('class', 'selected-object-departure-indicator')
@@ -1286,6 +1333,7 @@ export function renderSystemMap({
       const point = requiredPosition(positions, object.id)
       return `translate(${point.x} ${point.y})`
     })
+    updateObjectSelectionIndicatorPositions(positions)
     objectPublicationMarks.attr('transform', object => {
       const point = requiredPosition(positions, object.id)
       return `translate(${point.x} ${point.y})`
@@ -1346,6 +1394,7 @@ export function renderSystemMap({
     objectMarks
       .classed('is-selected', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id))
       .attr('aria-pressed', object => selectedObjectId === object.id || currentSelectedObjectIds.includes(object.id) ? 'true' : 'false')
+    updateObjectSelectionIndicators(currentPositions())
   }
 
   function setSelectedObjectDragPreview(
