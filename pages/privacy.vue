@@ -46,6 +46,8 @@
         <p>
           The app keeps the ten newest dated backups in the App Folder for your Dropbox account
           across all Jump Clusters. It deletes older dated backups after confirming a new backup.
+          If cleanup is interrupted or Dropbox reports an error, extra backups may remain until
+          cleanup succeeds. Use <strong>Retry Dropbox retention cleanup</strong> when the app offers it.
           You can also delete a dated backup by selecting it and confirming in the backup list.
         </p>
         <p>

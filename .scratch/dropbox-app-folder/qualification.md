@@ -1,5 +1,7 @@
 # Qualify Dropbox App Folder on a personal account
 
+> **Historical qualification and probe:** These checks explored whether an App Folder token could detect externally shared destinations under the earlier GitHub #55 requirement. On 2026-11-17 that requirement changed: use the App Folder and let Dropbox account owners manage sharing. The old sharing-detection qualification is withdrawn and is not a current product gate. The prior false-negative interpretation was explicitly withdrawn because recipient access was never independently confirmed; retain the measurements below as historical evidence. Current product behavior and qualification are in the [Dropbox specification](spec.md), [restore ticket](tickets/02-restore-jump-cluster-from-dropbox.md), [maintained setup](../../docs/dropbox-setup.md), and [shared live-account procedure](../../docs/cloud-backup-verification.md).
+
 The live run verified synthetic file creation and API access. The external sharing cases were unverified. See the [live results](#live-results) and [agreed scope](#agreed-scope).
 
 ## Source issue

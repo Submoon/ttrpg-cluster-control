@@ -36,6 +36,14 @@ function mockFetch(handler: (url: URL) => Response): typeof globalThis.fetch {
   }
 }
 
+function timedOutResponse(): Response {
+  return new Response(new ReadableStream({
+    start(controller) {
+      controller.error(new DOMException('Response body timed out.', 'TimeoutError'))
+    },
+  }))
+}
+
 function deployment(
   id: number | string,
   createdAt: string,
@@ -179,12 +187,32 @@ test.describe('Vercel preview resolver @pure', { tag: '@pure' }, () => {
     await expect(resolvePreview({
       repository,
       headSha,
-      timeoutMs: 10,
+      timeoutMs: 5_000,
+      wait: async () => {},
       fetch: mockFetch(() => {
         deploymentPolls += 1
-        return response([])
+        return deploymentPolls === 1 ? response([]) : timedOutResponse()
       }),
-    })).rejects.toThrow('Timed out waiting for a successful Vercel Preview deployment')
-    expect(deploymentPolls).toBeGreaterThan(0)
+    })).rejects.toThrow(`commit ${headSha}. GitHub did not list a Preview deployment`)
+    expect(deploymentPolls).toBe(2)
+  })
+
+  test('retains the last verified state when a later status response body times out', async () => {
+    const newest = deployment(41, '2026-10-26T10:00:00Z')
+    let statusPolls = 0
+    await expect(resolvePreview({
+      repository,
+      headSha,
+      timeoutMs: 5_000,
+      wait: async () => {},
+      fetch: mockFetch(url => {
+        if (url.pathname === `/repos/${repository}/deployments`) return response([newest])
+        statusPolls += 1
+        return statusPolls === 1
+          ? response([successfulStatus('2026-10-26T10:01:00Z', { state: 'in_progress' })])
+          : timedOutResponse()
+      }),
+    })).rejects.toThrow(`commit ${headSha}. Deployment 41 last reported state "in_progress".`)
+    expect(statusPolls).toBe(2)
   })
 })

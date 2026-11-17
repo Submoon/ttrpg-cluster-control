@@ -59,14 +59,19 @@ function newestFirst(left, right) {
   return rightId - leftId
 }
 
-function timeoutError() {
-  return new Error('Timed out waiting for a successful Vercel Preview deployment.')
-}
-
-/** @param {string | URL} url @param {typeof fetch} fetchImpl @param {number} deadline */
-async function fetchJson(url, fetchImpl, deadline) {
+/**
+ * @param {string | URL} url
+ * @param {typeof fetch} fetchImpl
+ * @param {number} deadline
+ * @param {() => Error} timeoutError
+ */
+async function fetchJson(url, fetchImpl, deadline, timeoutError) {
   const remainingMs = deadline - Date.now()
   if (remainingMs <= 0) throw timeoutError()
+  const signal = AbortSignal.timeout(Math.max(1, Math.ceil(remainingMs)))
+  /** @param {unknown} error */
+  const isTimeout = error => signal.aborted || Date.now() >= deadline
+    || (isRecord(error) && error.name === 'TimeoutError')
 
   let response
   try {
@@ -75,12 +80,10 @@ async function fetchJson(url, fetchImpl, deadline) {
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
       },
-      signal: AbortSignal.timeout(Math.max(1, Math.ceil(remainingMs))),
+      signal,
     })
   } catch (error) {
-    if (Date.now() >= deadline || (isRecord(error) && error.name === 'TimeoutError')) {
-      throw timeoutError()
-    }
+    if (isTimeout(error)) throw timeoutError()
     throw new Error('GitHub API request failed before the Vercel Preview could be verified.', { cause: error })
   }
 
@@ -94,7 +97,8 @@ async function fetchJson(url, fetchImpl, deadline) {
   let body
   try {
     body = await response.json()
-  } catch {
+  } catch (error) {
+    if (isTimeout(error)) throw timeoutError()
     throw new Error('GitHub API returned an invalid response while resolving the Vercel Preview.')
   }
   if (Date.now() >= deadline) throw timeoutError()
@@ -109,10 +113,10 @@ function delay(milliseconds) {
 /**
  * Polls GitHub's deployment API for the newest Vercel Preview created for one exact commit.
  * A newer failed deployment is authoritative; the resolver never falls back to an older success.
- * @param {{ repository: string, headSha: string, timeoutMs: number, fetch: typeof globalThis.fetch }} options
+ * @param {{ repository: string, headSha: string, timeoutMs: number, fetch: typeof globalThis.fetch, wait?: typeof delay }} options
  * @returns {Promise<{ deploymentId: number, sha: string, url: string }>}
  */
-export async function resolvePreview({ repository, headSha, timeoutMs, fetch: fetchImpl }) {
+export async function resolvePreview({ repository, headSha, timeoutMs, fetch: fetchImpl, wait = delay }) {
   if (typeof repository !== 'string'
     || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
     || repository.split('/').some(part => part === '.' || part === '..')) {
@@ -133,9 +137,14 @@ export async function resolvePreview({ repository, headSha, timeoutMs, fetch: fe
   const deploymentsUrl = new URL(`/repos/${owner}/${repositoryName}/deployments`, GITHUB_API_ORIGIN)
   deploymentsUrl.searchParams.set('sha', headSha)
   deploymentsUrl.searchParams.set('per_page', '100')
+  let observation = 'The first deployments request did not complete.'
+  let observedDeploymentId
+  const timeoutError = () => new Error(
+    `Timed out waiting for a successful Vercel Preview deployment for commit ${headSha}. ${observation}`,
+  )
 
   while (true) {
-    const deployments = await fetchJson(deploymentsUrl, fetchImpl, deadline)
+    const deployments = await fetchJson(deploymentsUrl, fetchImpl, deadline, timeoutError)
     if (!Array.isArray(deployments)) {
       throw new Error('GitHub API returned an invalid deployments list.')
     }
@@ -161,10 +170,14 @@ export async function resolvePreview({ repository, headSha, timeoutMs, fetch: fe
         GITHUB_API_ORIGIN,
       )
       statusesUrl.searchParams.set('per_page', '100')
-      const statuses = await fetchJson(statusesUrl, fetchImpl, deadline)
+      if (observedDeploymentId !== deployment.id) {
+        observation = `GitHub listed deployment ${deployment.id} without a verified status.`
+      }
+      const statuses = await fetchJson(statusesUrl, fetchImpl, deadline, timeoutError)
       if (!Array.isArray(statuses)) {
         throw new Error('GitHub API returned an invalid deployment status list.')
       }
+      observedDeploymentId = deployment.id
 
       const newestStatus = statuses.filter(isRecord).sort(newestFirst)[0]
       if (newestStatus) {
@@ -190,14 +203,25 @@ export async function resolvePreview({ repository, headSha, timeoutMs, fetch: fe
           }
         }
         if (['error', 'failure', 'inactive', 'canceled', 'cancelled'].includes(String(state))) {
-          throw new Error(`The newest Vercel Preview deployment finished with state "${String(state)}".`)
+          throw new Error(
+            `The newest Vercel Preview deployment ${deployment.id} for commit ${headSha} finished with state "${String(state)}".`,
+          )
         }
+        const pendingState = state === 'queued' || state === 'pending' || state === 'in_progress'
+          ? state
+          : 'unrecognized'
+        observation = `Deployment ${deployment.id} last reported state "${pendingState}".`
+      } else {
+        observation = `GitHub returned no status for deployment ${deployment.id}.`
       }
+    } else {
+      observedDeploymentId = undefined
+      observation = 'GitHub did not list a Preview deployment for this commit.'
     }
 
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) throw timeoutError()
-    await delay(Math.min(POLL_INTERVAL_MS, remainingMs))
+    await wait(Math.min(POLL_INTERVAL_MS, remainingMs))
   }
 }
 

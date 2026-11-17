@@ -24,7 +24,7 @@ Keep individual controls and intermediate steps within the relevant journey. Cov
 
 The numerical budget is a repository policy. The published guidance favors observable user behavior, isolated browser contexts, resilient locators and assertions that wait for the outcome. [Playwright best practices](https://playwright.dev/docs/best-practices) and [Playwright browser isolation](https://playwright.dev/docs/browser-contexts).
 
-Keep the suite at 100 browser-backed cases or fewer, including the development-storage case. Review the existing owners when adding coverage near the limit. The browser budget leaves domain and controller coverage free to reflect the important deterministic rules.
+Keep the suite at 100 browser-backed cases or fewer, including the development-storage case. Run `npm run check:browser-budget` to see the same project counts CI enforces. The command discovers cases without opening a browser or starting an app. Before adding a case near the limit, review existing coverage for the behavior and retain the representative browser interaction. The budget leaves domain and controller coverage free to reflect the important deterministic rules.
 
 ## Permanent behavior and temporary visual checks
 
@@ -66,7 +66,7 @@ Use awaited Playwright assertions for eventual DOM state. They retry until the c
 
 Test-scoped fixture setup and `beforeEach` share the test budget by default. A fixture configured with its own timeout uses a separate clock. Measure preparation before selecting that bound, keep navigation and readiness within the fixture's lifetime, and preserve the scenario's action budgets. A cold-start protocol keeps its first navigation in the scenario's fresh context and records any application preflight and its warming effect.
 
-Record preparation, body, cleanup and total runner costs when collecting timing evidence. The reported test duration can exclude separately budgeted fixture work. The installed package version and runner budgets are recorded with the baseline inventory; read the lockfile and configuration for current values.
+Record startup through hydrated readiness, test preparation, scenario body, teardown, and total elapsed cost when collecting timing evidence. For a timed diagnostic run on synthetic data, Playwright trace steps can identify the setup and teardown boundaries. Include separately budgeted worker fixtures and build time when present. Record the revision, scenario, runner version, and whether caches were warm so comparisons account for the same work.
 
 For map gestures, calculate expected placement or camera movement from the pre-action transform and the input actually delivered. Keep persisted/domain equality exact; apply a stated CSS-pixel tolerance only to browser-rendered geometry. Capture the baseline immediately before the interaction being asserted so an earlier action cannot satisfy the expectation.
 
@@ -82,13 +82,17 @@ Official guidance: [auto-retrying assertions](https://playwright.dev/docs/test-a
 | `npm run test:pure` | Runs only the `pure` project. It starts no Nuxt server, does not launch the browser project, and does not require an external base URL or Preview authentication. Pass focused Playwright arguments after `--`, for example `npm run test:pure -- --grep "route placement"`. |
 | `npm test -- tests/workspace-codec.spec.ts --project=pure` | With the default `all` suite, selects the file in the pure project and starts no Nuxt server. Put positional test paths before `--project`; the CLI filter does not remove inherited environment values. |
 | `PLAYWRIGHT_SUITE=checks npm test` | Selects `pure` and the one `development-storage` case. The global web server still starts because the storage project uses the local app. This is not a no-server pure-only command. |
-| `PLAYWRIGHT_SUITE=browser npm test` | Selects the browser project. It uses the local development app by default. A validated `PLAYWRIGHT_PRODUCTION_URL` selects that URL for the browser project and suppresses the local server when this is the selected suite. |
+| `PLAYWRIGHT_SUITE=browser npm test` | Selects the browser project. It uses the local development app by default. `PLAYWRIGHT_PRODUCTION_URL` accepts only an immutable HTTPS Vercel Preview of this project and suppresses the local server when this is the selected suite. |
 | `npm run test:ui` | Selects the cases tagged `@ui-smoke`; this remains a Playwright selection, not a separate test implementation. |
 | `npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser` | Uses the local launcher for a focused browser run. It starts and owns a local server on `127.0.0.1:3100` (`LOCAL_TEST_PORT` overrides it), checks HTTP and hydrated-browser readiness, monitors verification inputs, writes a server log and run artifacts, and supports Enter-to-rerun in an interactive terminal. It refuses an occupied port. |
 
 Pass Playwright file, project, or grep arguments after `npm test --`. For example, `npm test -- tests/workspace-recovery.spec.ts --project=pure development-storage` is mixed and keeps the local server because its storage case uses the app. Every explicitly selected project must be `pure` to suppress the server. `PLAYWRIGHT_BASE_URL` supplies an already-running app and disables the configured web server. `PLAYWRIGHT_PRODUCTION_URL` is for the validated Preview host used by the browser project; it does not make the `checks` project pure-only. For a combined `all` selection, the local server is still required by the non-browser projects.
 
-The pure launcher removes inherited base URL, Preview URL, and Vercel bypass-secret variables before it starts Playwright. A direct CLI project filter changes server selection but leaves the environment intact; use `npm run test:pure` when those inputs must also be removed.
+The pure launcher removes inherited base URL, Preview URL, and Vercel bypass-secret variables before it starts Playwright. A direct CLI project filter changes server selection but leaves the environment intact. Use `npm run test:pure` when those inputs must also be removed.
+
+Set `PLAYWRIGHT_CHANNEL` to use an alternate installed browser channel such as Chrome for a local browser run.
+
+To test a local production build with browser cases, serve it with `npm run preview` and set `PLAYWRIGHT_BASE_URL` to the local address with `PLAYWRIGHT_SUITE=browser`. Keep the development-storage case on the development server.
 
 Choose the file and case that own the changed behavior before starting a local server. For a codec change, run `npm run test:pure -- tests/workspace-codec.spec.ts`. For a launch default or initial save change, exercise the public form and reload with `npm run test:local -- tests/workspace-launch.spec.ts --project=browser --grep "the product root creates and resumes"`. For a launch layout or focus change, select `keyboard focus remains visible on launch and recovery actions` in the same file. For editor footer reachability, use `npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser --grep "footer actions fit and receive pointer hits"`. Shared runtime, fixture, or configuration changes can require broader qualification.
 
@@ -106,7 +110,11 @@ Protected JSON/HTML reports suppress inline attachment bodies, mark their names 
 
 CI runs lint, typecheck, build and the `checks` selection, then runs the `browser` project in two one-worker shards with retries disabled. Same-repository pull requests use the Preview for the exact head revision; other CI runs use a local development server. Preview authentication is scoped to the browser project. Keep bypass credentials out of local and `checks` runs; a missing Preview or failed authentication must fail the applicable job without substituting another deployment or skipping browser coverage. CI keeps report artifacts separate by job and shard and uploads them only after the sanitation gate passes. See [`tests/fixtures.ts`](../../tests/fixtures.ts), [`tests/vercel-preview-auth.ts`](../../tests/vercel-preview-auth.ts), and [the CI workflow](../../.github/workflows/ci.yml) for the current implementation.
 
+If Preview resolution times out, use the commit and last observation in the resolve job. Check whether Vercel registered a deployment for that commit or whether it registered one that has yet to succeed. Then consult the failed check or browser trace for the same candidate.
+
 Official guidance for diagnostic modes is in the [trace option reference](https://playwright.dev/docs/api/class-testoptions#test-options-trace) and [Trace Viewer](https://playwright.dev/docs/trace-viewer). Inspect retained `trace.zip` files locally with `npm exec playwright show-trace path/to/trace.zip`. Keep the first failed run's trace and screenshot when recording a correction; do not use a successful rerun alone as evidence that a failure is fixed.
+
+Read the first failing trace and check whether the scenario reached its intended precondition. Distinguish a changed UI contract, a setup or readiness failure, and incorrect application behavior. If a failure looks unrelated to the candidate, reproduce the focused case on the pinned baseline under comparable conditions before widening the correction.
 
 Nuxt typechecking excludes generated `test-results` and `playwright-report` output, matching the existing lint exclusions. Test source files under `tests` remain typechecked; keep reports separate from those sources.
 

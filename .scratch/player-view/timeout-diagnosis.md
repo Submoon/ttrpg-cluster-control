@@ -6,7 +6,7 @@ parent: spec.md
 
 # Eight intermittent browser timeouts
 
-Requested on 2026-11-04 alongside preparation of the [player-view PR proposal](pr.md). This investigation does not replace the original cumulative result with a clean pass or claim the failures are fixed.
+Requested on 2026-11-04 while preparing [PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39), which has since merged. This investigation does not replace the original cumulative result with a clean pass or claim the failures are fixed. See the [ticket 06 verification record](ticket-06-implementation.md) for delivery results and limitations, and the [ticket 08 implementation record](ticket-08-implementation.md) for the later 700-case full CI result.
 
 ## Baseline and ownership
 

@@ -8,6 +8,7 @@
     "typecheck": "npx nuxt typecheck",
     "test": "npx playwright test",
     "test:pure": "node scripts/playwright-pure.mjs",
+    "check:browser-budget": "node scripts/ci/browser-budget.mjs",
     "test:local": "node scripts/local-test.mjs",
     "test:preview-smoke": "playwright test --project=browser --grep @preview-smoke --max-failures=1",
     "lint": "eslint . --max-warnings 0",

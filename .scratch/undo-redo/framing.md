@@ -20,7 +20,7 @@ This product framing was validated by the user on 2026-10-27 through final Codex
 
 ## Repository baseline and scope
 
-- Isolated worktree: `C:/Users/fbal-fontaine/.codex/worktrees/06a5/ttrpg-cluster-control`.
+- Isolated feature worktree; its workstation-specific path is omitted.
 - Starting HEAD and last parent-chat reference: `c84988be4f7ee2b83c509f5323791d3b7a9532ee`.
 - `origin` fetched successfully on 2026-10-27. Actual analysis baseline: `9edfa66c4f505d56f106fc4af8245f200abfba78`, equal to fetched `origin/main`.
 - A second fetch before final framing review confirmed HEAD still equals `origin/main` at that SHA (zero commits ahead/behind).

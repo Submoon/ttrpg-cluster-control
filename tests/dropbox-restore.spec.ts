@@ -502,13 +502,13 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
 
   const backupMenu = await openMapFilesSection(page, 'Download or back up')
   const dropboxBackupItem = backupMenu.getByRole('menuitem', { name: /^Back up Jump Cluster to Dropbox/ })
-  const retentionHint = 'Saves complete JSON, including GM notes, in the Dropbox App Folder. After a successful save, only the 10 newest dated backups are kept per account.'
+  const retentionHint = /GM notes in the Dropbox App Folder.*cleanup keeps the 10 newest dated backups per account/i
   await expect(dropboxBackupItem).toBeEnabled()
   await expect(dropboxBackupItem).toHaveText('Back up Jump Cluster to Dropbox', { useInnerText: true })
   await expect(dropboxBackupItem).toHaveAccessibleDescription(retentionHint)
   await dropboxBackupItem.hover()
   // The tooltip renders a separate accessibility node alongside its painted message.
-  await expect(page.getByText(retentionHint, { exact: true }).and(page.locator('[data-slot="text"]'))).toBeVisible()
+  await expect(page.getByText(retentionHint).and(page.locator('[data-slot="text"]'))).toBeVisible()
   await dropboxBackupItem.click()
   await expect(page.getByRole('dialog', { name: 'Back up Jump Cluster to Dropbox' })).toHaveCount(0)
   const backupNotifications = page.getByLabel('Notifications (F8)')

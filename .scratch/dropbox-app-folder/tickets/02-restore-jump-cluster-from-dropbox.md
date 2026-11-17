@@ -14,6 +14,8 @@ triage_labels:
 
 [Back up and restore a Jump Cluster with Dropbox](../spec.md)
 
+PR [#69](https://github.com/Submoon/ttrpg-cluster-control/pull/69) is merged, but this ticket remains in progress. Controlled-provider and IndexedDB checks pass. The real Dropbox Personal Firefox save/restore is operator-reported; the exact-content comparison used controlled responses, and the live-account acceptance criterion below remains unchecked. Follow the maintained [Dropbox setup](../../../docs/dropbox-setup.md) and [shared verification procedure](../../../docs/cloud-backup-verification.md) to record outstanding real-account evidence.
+
 ## What to build
 
 Let a Warden locate and open a saved Dropbox backup from the welcome screen, local recovery, and the editor. Use the authorization and backup destination delivered by the backup ticket. Verify that a complete off-device backup can be restored from a fresh browser profile.

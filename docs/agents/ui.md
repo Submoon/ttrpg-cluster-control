@@ -19,8 +19,9 @@ Paths above are relative to the repository root. An inspected cluster system can
 
 ## Design judgement
 
-- Establish the fit of the installed Nuxt UI component before custom composition: inspect its supported props/slots and make the first desktop/compact slice exercise the required interaction. Keep custom composition where persistent editor state, map gestures or panel layout require it; explain a consequential exception in the change.
+- Establish the fit of the installed Nuxt UI component before custom composition. Inspect its supported props and slots, exercise the main interaction in the first working slice, and capture affected desktop and compact states before broad verification. Keep custom composition where persistent editor state, map gestures or panel layout require it and explain consequential exceptions.
 - Compare related surfaces when changing an interaction. Objects, Orbits, routes, systems and Fields should make the same action recognisable, while creation and consequence reviews retain their distinct purpose.
+- For backup integrations, compare the entry point, progress and completion feedback, deletion confirmation, and retention notice with the existing provider. Record deliberate differences in the acceptance criteria.
 - Consultation exposes its editing entry; an editing session exposes its own completion actions. Hiding a surface preserves its parent-owned draft. Check the transition between states, not just a screenshot of one state.
 - Treat fixed headers, ordinary actions and recovery as parts of the same available space. On compact screens they must leave scrollable content and usable actions; recovery is not a decorative overlay.
 - Review focus return, scroll position and pending work across hide/reopen, viewport changes and nested dialogs. Viewport emulation does not certify a physical keyboard or screen reader.

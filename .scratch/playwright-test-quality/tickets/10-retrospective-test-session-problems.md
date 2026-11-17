@@ -17,7 +17,7 @@ The user requested this additional follow-up on 2026-10-30: invoke `$retro` on r
 
 ## What to deliver
 
-An evidence-based retrospective and a prioritized improvement plan for the tests, their execution environment, and the coding-agent workflow. Invoke the installed `$retro` skill and its `writing-for-agents` prerequisite. Use the skill from the execution environment rather than copying its instructions into project policy. The current environment's supplied reference is `C:/Users/fbal-fontaine/.agents/skills/retro/SKILL.md`.
+An evidence-based retrospective and a prioritized improvement plan for the tests, their execution environment, and the coding-agent workflow. Invoke the installed `$retro` skill and its `writing-for-agents` prerequisite from the execution environment's skill catalog rather than copying their instructions into project policy.
 
 ## Scope and handoff
 

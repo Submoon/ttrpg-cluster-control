@@ -38,7 +38,7 @@ The prior ticket's local timing evidence is historical: one unchanged long Orbit
 ### Baseline checks and cleanup
 
 - Focused baseline projection/publication/cluster geometry: 17 passed (`test-results/player-view-02-baseline-pure.log`).
-- Initial baseline typecheck exposed the old ticket 01 diagnostic source copy under ignored `test-results`; Nuxt still included its TypeScript files. That generated copy was moved outside the project to `C:/Users/fbal-fontaine/.codex/visualizations/2026/10/29/01a1875f-a22c-7a02-bd3d-b26ee5d7fc6d/ticket-01-baseline-evidence`, preserving evidence and removing only its verified dependency junction. No application/source validation rule was weakened. Clean baseline typecheck then passed before implementation writers started.
+- Initial baseline typecheck exposed the old ticket 01 diagnostic source copy under ignored `test-results`; Nuxt still included its TypeScript files. That generated copy was moved to the workstation-local `ticket-01-baseline-evidence` diagnostics archive outside the project, preserving evidence and removing only its verified dependency junction. No application/source validation rule was weakened. Clean baseline typecheck then passed before implementation writers started.
 
 ### Initial TDD evidence
 
