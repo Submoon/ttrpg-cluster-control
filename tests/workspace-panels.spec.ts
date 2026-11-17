@@ -270,7 +270,9 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     await waitForWorkspaceStartup(page)
     const continuousMap = page.getByRole('group', { name: 'Kestrel Reach continuous map', exact: true })
     await setWorkspaceMapMode(page, 'Select')
-    const continuousObject = continuousMap.locator('.continuous-warden-object[data-object-id]').first()
+    const continuousObject = continuousMap.locator(
+      '.continuous-warden-object[data-system-id][data-object-id]',
+    ).first()
     const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
     for (let step = 0; step < 12 && await continuousObject.count() === 0; step += 1) await zoomIn.click()
     await expect(continuousObject).toBeVisible()
@@ -278,16 +280,28 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     const closeInspectorPanel = page.getByRole('button', { name: 'Close inspector panel', exact: true })
     if (await closeInspectorPanel.isVisible()) await closeInspectorPanel.click()
     await expect(inspectorPanel).toBeHidden()
-    const objectBounds = await continuousObject.boundingBox()
-    if (!objectBounds) throw new Error('The continuous map object has no touch target.')
     const objectId = await continuousObject.getAttribute('data-object-id')
-    if (!objectId) throw new Error('The continuous map object has no selection identity.')
-    const objectPoint = { x: objectBounds.x + objectBounds.width / 2, y: objectBounds.y + objectBounds.height / 2 }
+    const systemId = await continuousObject.getAttribute('data-system-id')
+    if (!objectId || !systemId) throw new Error('The continuous map object has no owner-qualified selection identity.')
+    const objectPoint = await continuousObject.evaluate(object => {
+      const glyph = object.querySelector<SVGTextElement>('.continuous-warden-object-glyph')
+      const matrix = glyph?.getScreenCTM()
+      if (!glyph || !matrix || getComputedStyle(glyph).visibility === 'hidden') {
+        throw new Error('The continuous object glyph has no visible screen position.')
+      }
+      const point = new DOMPoint(0, 0).matrixTransform(matrix)
+      const hit = document.elementFromPoint(point.x, point.y)
+      const owner = hit instanceof Element ? hit.closest('.continuous-warden-object') : null
+      if (owner !== object) throw new Error('The rendered glyph does not hit its owning continuous map object.')
+      return { x: point.x, y: point.y }
+    })
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [{ id: 1, x: objectPoint.x, y: objectPoint.y, radiusX: 2, radiusY: 2, force: 1 }],
     })
-    const selectedObject = continuousMap.locator(`.continuous-warden-object[data-object-id="${objectId}"]`)
+    const selectedObject = continuousMap.locator(
+      `.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${objectId}"]`,
+    )
     await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
     // Keep the individual selection hold beyond both compatibility-click suppression timers.
     await page.waitForTimeout(1_200)

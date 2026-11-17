@@ -207,7 +207,8 @@ export function useEditorNavigation(options: {
       if (store.selectedOrbitId && !orbitIds.has(store.selectedOrbitId)) next.selectedOrbitId = null
       const survivingObjectIds = store.selectedObjectIds.filter(id => objectIds.has(id))
       if (survivingObjectIds.length !== store.selectedObjectIds.length
-        || next.selectedSystemId !== undefined || next.selectedObjectId !== undefined || next.selectedOrbitId !== undefined) {
+        || next.selectedSystemId !== undefined || next.selectedObjectId !== undefined
+        || next.selectedOrbitId !== undefined || next.selectedRouteId !== undefined) {
         next.selectedObjectIds = survivingObjectIds
       }
     }
@@ -835,7 +836,7 @@ export function useEditorNavigation(options: {
         clusterSelectedSystemId: targetSystemId,
         inspectedClusterSystemId: targetSystemId,
         selectedObjectId: target.kind === 'object' ? target.id : null,
-        selectedObjectIds: [],
+        selectedObjectIds: target.kind === 'object' ? [target.id] : [],
         selectedOrbitId: target.kind === 'orbit' ? target.id : null,
         selectedRouteId: null,
       })

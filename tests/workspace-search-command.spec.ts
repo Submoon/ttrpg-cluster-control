@@ -319,6 +319,7 @@ test('continuous Search reveals an object through the existing Cluster map handl
     expect(harness.workflows.mapControls.activeMapKey.value).toBe(`cluster:${harness.workspace.value.cluster.id}`)
     expect(harness.workflows.mapControls.systemMapRef.value).toBeNull()
     expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+    expect(harness.store.selectedObjectIds).toEqual([object.id])
     expect(framedTargets).toEqual([result.target])
     expect(search.open.value).toBe(false)
   } finally {
@@ -617,6 +618,101 @@ test('continuous history keeps route selection or falls back to Cluster in the I
   } finally {
     harness.dispose()
   }
+})
+
+test('continuous history restores an inspected object as the complete single-member selection @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    const action = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      contextLabel: system.name,
+      kind: 'update' as const,
+      label: `Update ${object.name}`,
+      target: { kind: 'object' as const, id: object.id, systemId: system.id },
+      parent: { kind: 'system' as const, id: system.id },
+    }
+
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedObjectId).toBe(object.id)
+    expect(harness.store.selectedObjectIds).toEqual([object.id])
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Route and Orbit cleanup preserves independent object-group membership @pure', async () => {
+  async function assertCleanupPreservesGroup(focus: 'route' | 'orbit'): Promise<void> {
+    const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+    try {
+      const [firstSystem, secondSystem] = harness.workspace.value.cluster.systems
+      const templateObject = firstSystem?.objects[0]
+      if (!firstSystem || !secondSystem || !templateObject) throw new Error('Expected two systems and a group fixture object.')
+      const memberB = { ...templateObject, id: `${focus}-cleanup-member-b`, name: 'Member B' }
+      const memberC = { ...templateObject, id: `${focus}-cleanup-member-c`, name: 'Member C' }
+      firstSystem.objects = [memberB]
+      secondSystem.objects = [memberC]
+      harness.store.setSelection({ activeView: 'cluster' })
+      harness.store.setMode('select')
+
+      let routeId: string | null = null
+      let orbitId: string | null = null
+      if (focus === 'route') {
+        const route = {
+          id: 'continuous-route-cleanup-focus',
+          jumpLevel: 1,
+          fromSystemId: firstSystem.id,
+          fromPointId: null,
+          toSystemId: null,
+          toPointId: null,
+          unresolvedExit: 'Uncharted Exit',
+          playerShared: false,
+        }
+        harness.workspace.value.cluster.routes.push(route)
+        routeId = route.id
+        await harness.workflows.navigation.selectRoute(route.id, false)
+        expect(harness.store.selectedRouteId).toBe(route.id)
+      } else {
+        const orbit = createOrbit(firstSystem, null)
+        firstSystem.orbits.push(orbit)
+        orbitId = orbit.id
+        expect(await harness.workflows.navigation.inspectContinuousTarget({
+          kind: 'orbit', systemId: firstSystem.id, orbitId: orbit.id,
+        })).toBe(true)
+      }
+
+      expect(await harness.workflows.navigation.replaceObjectSelection([memberB.id, memberC.id])).toBe(true)
+      expect(harness.store.selectedObjectIds).toEqual([memberB.id, memberC.id])
+
+      const current = harness.workspace.value
+      harness.workspace.value = {
+        ...current,
+        cluster: {
+          ...current.cluster,
+          routes: routeId ? current.cluster.routes.filter(route => route.id !== routeId) : current.cluster.routes,
+          systems: current.cluster.systems.map(system => orbitId === null || system.id !== firstSystem.id
+            ? system
+            : { ...system, orbits: system.orbits.filter(orbit => orbit.id !== orbitId) }),
+        },
+      }
+      await nextTick()
+
+      expect(harness.store.selectedObjectIds).toEqual([memberB.id, memberC.id])
+      if (routeId) expect(harness.store.selectedRouteId).toBeNull()
+      if (orbitId) expect(harness.store.selectedOrbitId).toBeNull()
+    } finally {
+      harness.dispose()
+    }
+  }
+
+  await assertCleanupPreservesGroup('route')
+  await assertCleanupPreservesGroup('orbit')
 })
 
 test('continuous history refits the surviving Cluster after its inspected system is removed @pure', async () => {
