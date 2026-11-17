@@ -7,7 +7,7 @@ import { playerFieldFilterId, playerFieldFilterOptions, playerObjectMatchesField
 function playerDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Starlight Expanse',
     systems: [
       { id: 'system-hidden-neighbor', position: { x: 0, y: 0 }, disclosure: 'unknown', label: 'Unknown presence' },

@@ -23,7 +23,7 @@
         Zoom continuously to reveal each system interior independently. In Move, drag a system anchor or name to update its Cluster position.
       </desc>
       <g class="cluster-map-content" :transform="cameraTransform">
-        <ContinuousWardenRouteLayer
+        <ContinuousMapRouteLayer
           ref="routeLayer"
           :routes="routeMarks"
           :geometries="routeGeometries"
@@ -257,7 +257,7 @@ import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
-import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
+import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -306,7 +306,7 @@ const emit = defineEmits<{
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
-const routeLayer = ref<InstanceType<typeof ContinuousWardenRouteLayer> | null>(null)
+const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
 const exitPositionOverrides = ref(new Map<string, Point>())

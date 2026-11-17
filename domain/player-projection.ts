@@ -82,7 +82,7 @@ export interface PlayerOrbit {
 /** Public Cluster document. Its shape is intentionally independent from the full source workspace. */
 export interface PlayerClusterDocument {
   format: 'ttrpg-cluster-control-player'
-  version: 1
+  version: 2
   title: string
   systems: PlayerSystemMarker[]
   routes: PlayerRoute[]
@@ -93,8 +93,9 @@ export type PlayerRoute = {
   id: string
   jumpLevel: number
   fromSystemId: string
+  fromPointId?: string
 } & (
-  | { destination: { kind: 'system'; systemId: string } }
+  | { destination: { kind: 'system'; systemId: string; pointId?: string } }
   | { destination: { kind: 'unknown'; position: Point; label: 'Unknown destination' } }
 )
 
@@ -106,6 +107,7 @@ export type PlayerRoute = {
 export function projectPlayerCluster(workspace: LocalWorkspace): PlayerClusterDocument {
   const systems: PlayerSystemMarker[] = []
   const publicSystemIds = new Map<string, string>()
+  const revealedJumpPointIdsBySystem = new Map<string, Map<string, string>>()
   for (const system of workspace.cluster.systems) {
     if (system.publication === 'hidden') continue
 
@@ -124,29 +126,32 @@ export function projectPlayerCluster(workspace: LocalWorkspace): PlayerClusterDo
         label: 'Star system',
       })
     } else if (system.publication === 'revealed') {
+      const projected = projectPlayerSystem(workspace, system)
       systems.push({
         id: markerId,
         position,
         disclosure: 'revealed',
         type: 'star-system',
         label: system.name,
-        map: projectPlayerSystem(workspace, system),
+        map: projected.document,
       })
+      revealedJumpPointIdsBySystem.set(system.id, projected.revealedJumpPointIds)
     }
   }
 
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: workspace.cluster.playerTitle,
     systems,
-    routes: projectPlayerRoutes(workspace, publicSystemIds),
+    routes: projectPlayerRoutes(workspace, publicSystemIds, revealedJumpPointIdsBySystem),
   }
 }
 
 function projectPlayerRoutes(
   workspace: LocalWorkspace,
   publicSystemIds: ReadonlyMap<string, string>,
+  revealedJumpPointIdsBySystem: ReadonlyMap<string, ReadonlyMap<string, string>>,
 ): PlayerRoute[] {
   const jumpPoints = new Map(jumpPointsInCluster(workspace.cluster)
     .map(reference => [reference.point.id, reference]))
@@ -157,6 +162,7 @@ function projectPlayerRoutes(
     const from = workspace.cluster.systems.find(system => system.id === route.fromSystemId)
     if (!from) throw new Error('A shared Jump Route has a missing origin system.')
     const fromSystemId = publicSystemIds.get(from.id)
+    const fromPointId = publicRoutePointId(from, route.fromPointId, revealedJumpPointIdsBySystem)
 
     if (route.toSystemId === null) {
       if (!fromSystemId) continue
@@ -173,6 +179,7 @@ function projectPlayerRoutes(
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,
         fromSystemId,
+        ...(fromPointId === undefined ? {} : { fromPointId }),
         destination: {
           kind: 'unknown',
           position: { x: exitPoint.x, y: exitPoint.y },
@@ -187,11 +194,17 @@ function projectPlayerRoutes(
     const toSystemId = publicSystemIds.get(to.id)
 
     if (fromSystemId && toSystemId) {
+      const toPointId = publicRoutePointId(to, route.toPointId, revealedJumpPointIdsBySystem)
       routes.push({
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,
         fromSystemId,
-        destination: { kind: 'system', systemId: toSystemId },
+        ...(fromPointId === undefined ? {} : { fromPointId }),
+        destination: {
+          kind: 'system',
+          systemId: toSystemId,
+          ...(toPointId === undefined ? {} : { pointId: toPointId }),
+        },
       })
     } else if (fromSystemId) {
       const position = clusterSystemPosition(workspace.layout.systemPositions, to.id)
@@ -199,6 +212,7 @@ function projectPlayerRoutes(
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,
         fromSystemId,
+        ...(fromPointId === undefined ? {} : { fromPointId }),
         destination: {
           kind: 'unknown',
           position: { x: position.x, y: position.y },
@@ -207,10 +221,12 @@ function projectPlayerRoutes(
       })
     } else if (toSystemId) {
       const position = clusterSystemPosition(workspace.layout.systemPositions, from.id)
+      const visibleFromPointId = publicRoutePointId(to, route.toPointId, revealedJumpPointIdsBySystem)
       routes.push({
         id: `route-${routes.length + 1}`,
         jumpLevel: route.jumpLevel,
         fromSystemId: toSystemId,
+        ...(visibleFromPointId === undefined ? {} : { fromPointId: visibleFromPointId }),
         destination: {
           kind: 'unknown',
           position: { x: position.x, y: position.y },
@@ -223,8 +239,21 @@ function projectPlayerRoutes(
   return routes
 }
 
+function publicRoutePointId(
+  system: StarSystem,
+  sourcePointId: string | null,
+  revealedJumpPointIdsBySystem: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): string | undefined {
+  return sourcePointId === null
+    ? undefined
+    : revealedJumpPointIdsBySystem.get(system.id)?.get(sourcePointId)
+}
+
 /** Projects only non-Hidden objects and the Orbit/host chain required to place them. */
-function projectPlayerSystem(workspace: LocalWorkspace, system: StarSystem): PlayerSystemDocument {
+function projectPlayerSystem(
+  workspace: LocalWorkspace,
+  system: StarSystem,
+): { document: PlayerSystemDocument; revealedJumpPointIds: Map<string, string> } {
   const geometry: SystemMapGeometry = {
     objectAngles: workspace.layout.objectAngles,
     orbitRadii: workspace.layout.orbitRadii,
@@ -332,7 +361,12 @@ function projectPlayerSystem(workspace: LocalWorkspace, system: StarSystem): Pla
     }
   })
 
-  return { objects, orbits }
+  return {
+    document: { objects, orbits },
+    revealedJumpPointIds: new Map(retainedObjects
+      .filter(object => object.family === 'JumpPoint' && disclosureByObjectId.get(object.id) === 'revealed')
+      .map(object => [object.id, publicObjectIds.get(object.id)!])),
+  }
 }
 
 function projectPlayerFields(

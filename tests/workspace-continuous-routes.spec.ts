@@ -1,13 +1,43 @@
 import { expect, test, type Locator } from './fixtures'
+import { exportJumpCluster, restoreJumpClusterBackup } from '../domain/workspace'
 import campaignFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
   clickDockAction,
+  openPlayerPreview,
   selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   workspaceZoomControls,
 } from './helpers'
+
+test('the player preview inspects the same public route through its shared document view', async ({ page }) => {
+  const fixture = exportJumpCluster(restoreJumpClusterBackup(structuredClone(campaignFixture)))
+  for (const system of fixture.cluster.systems) {
+    system.publication = 'revealed'
+    for (const object of system.objects) {
+      if (object.family === 'JumpPoint') object.publication = 'revealed'
+    }
+  }
+  fixture.cluster.routes[0]!.playerShared = true
+  await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
+  await page.goto('/?map=continuous')
+
+  const preview = await openPlayerPreview(page)
+  const map = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const route = map.locator('.cluster-route[data-route-id="route-1"]')
+  await expect(route).toBeVisible()
+  const point = await routeStrokePoint(route)
+  if (!point) throw new Error('The shared public route has no visible Preview stroke segment.')
+  await page.mouse.click(point.x, point.y)
+
+  const details = preview.getByRole('region', { name: 'Jump Route details', exact: true })
+  await expect(details.getByRole('heading', { name: 'Jump Level 1', exact: true })).toBeVisible()
+  await expect(details).toContainText('Vesper Departure (Vesper Prime)')
+  await expect(details).toContainText('Harrow Arrival (Harrow)')
+  await details.getByRole('button', { name: 'Center selected Jump Route', exact: true }).click()
+  await expect(route).toHaveAttribute('aria-pressed', 'true')
+})
 
 async function routeStrokePoint(mark: Locator, clippedOnly = false) {
   return mark.evaluate((group, requireClipping) => {

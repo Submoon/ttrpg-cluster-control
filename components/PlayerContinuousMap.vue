@@ -33,6 +33,8 @@
       viewBox="0 0 960 560"
       preserveAspectRatio="xMidYMid meet"
       tabindex="0"
+      @click.capture="inspectRouteFromClick"
+      @keydown.capture="inspectRouteFromKeyboard"
       @keydown="handleMapKeydown"
       @contextmenu.prevent.stop
       @pointerdown.capture="emit('map-interaction')"
@@ -40,9 +42,17 @@
       @touchstart.capture="emit('map-interaction')"
     >
       <g :transform="sceneTransform">
-        <g>
-          <PlayerClusterRouteMark v-for="route in backgroundRoutes" :key="route.id" :route="route" />
-        </g>
+        <ContinuousMapRouteLayer
+          ref="routeLayer"
+          :routes="routeMarks"
+          :geometries="routeGeometries"
+          :detail-system-ids="detailSystemIds"
+          :selected-route-id="props.selectedRouteId ?? null"
+          :viewport="camera"
+          :viewport-rect="nameViewport"
+          :svg-pixel-scale="svgPixelScale"
+          :label-obstacles="routeLabelObstacles"
+        />
 
         <g v-for="system in projection.systems" :key="system.id" class="player-continuous-system" :data-player-system-id="system.id">
           <rect
@@ -176,9 +186,6 @@
           </g>
         </g>
 
-        <g v-if="foregroundRoutes.length" class="player-continuous-routes-foreground" pointer-events="none">
-          <PlayerClusterRouteMark v-for="route in foregroundRoutes" :key="route.id" :route="route" />
-        </g>
       <g class="player-continuous-name-layer" :transform="screenLayerTransform">
         <g
           v-for="label in systemNameLabels"
@@ -228,7 +235,9 @@ import { usePlayerContinuousMapViewport } from '../composables/usePlayerContinuo
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument } from '../domain/player-projection'
 import type { PlayerUsableRectReader, PlayerInspectionTarget } from '../utils/player-inspection'
 import type { SvgViewportRect } from '../utils/map-zoom'
+import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
 import type { PlayerContinuousSystemProjection } from '../utils/player-continuous-map-projection'
+import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
 import {
   playerContinuousDetailSystemIds,
   projectPlayerContinuousMap,
@@ -241,12 +250,15 @@ import {
 } from '../utils/player-continuous-map-layout'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from '../utils/cluster-system-presentation'
-import PlayerClusterRouteMark from './maps/PlayerClusterRouteMark.vue'
+import { centerContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
+import { projectPlayerContinuousRouteEndpoints } from '../utils/player-continuous-route-projection'
+import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
   active?: boolean
   selectedSystemId: string | null
+  selectedRouteId?: string | null
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
   searchLocatorObjectId?: string | null
@@ -259,12 +271,14 @@ const emit = defineEmits<{
   'select-system': [publicSystemId: string]
   'inspect-object': [publicSystemId: string, publicObjectId: string]
   'inspect-orbit': [publicSystemId: string, publicOrbitId: string]
+  'inspect-route': [publicRouteId: string]
   'map-interaction': []
 }>()
 
 const SYSTEM_NAME_FONT_PIXELS = 18
 const VIEWPORT = { x: 0, y: 0, width: 960, height: 560 }
 const mapElement = ref<SVGSVGElement | null>(null)
+const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const projection = computed(() => projectPlayerContinuousMap(props.document))
 const contentBounds = computed(() => projection.value.bounds)
 const usableRectReader = computed(() => props.getUsableClientRect)
@@ -286,6 +300,7 @@ const {
   panBy,
   sceneTransform,
   screenLayerTransform,
+  setViewport,
   getUsableViewportRect,
   measureSvg,
   svgPixelScale,
@@ -293,9 +308,36 @@ const {
 } = mapViewport
 const detailSystemIds = ref(new Set<string>())
 const nameViewport = shallowRef<SvgViewportRect>(VIEWPORT)
-const backgroundRoutes = computed(() => projection.value.routes.filter(route => !route.foreground))
-const foregroundRoutes = computed(() => projection.value.routes.filter(route => route.foreground))
-const hasSelection = computed(() => props.selectedSystemId !== null)
+const routeDescriptors = computed(() => projectPlayerContinuousRouteEndpoints(
+  props.document,
+  projection.value.systems,
+  detailSystemIds.value,
+))
+const routeMarks = computed(() => routeDescriptors.value.map(route => ({
+  id: route.id,
+  jumpLevel: route.jumpLevel,
+  accessibleLabel: route.accessibleLabel,
+  unresolved: route.unresolved,
+  ...(route.destinationCaption ? { destinationCaption: route.destinationCaption } : {}),
+})))
+const routeFanOutLimitPixels = computed(() => Math.min(
+  96,
+  Math.min(nameViewport.value.width, nameViewport.value.height) * svgPixelScale.value / 4,
+))
+const routeGeometries = computed(() => buildContinuousMapRouteGeometries(
+  routeDescriptors.value,
+  {
+    pixelsPerSceneUnit: camera.value.k * svgPixelScale.value,
+    fanOutLimitPixels: routeFanOutLimitPixels.value,
+  },
+))
+const routeLabelObstacles = computed(() => systemNameLabels.value.map(label => ({
+  x: label.x - label.width / 2,
+  y: label.y,
+  width: label.width,
+  height: label.height,
+})))
+const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null)
 const systemNameLabels = computed<PlayerContinuousNameLabel[]>(() => layoutPlayerContinuousNameLabels(
   projection.value.systems,
   camera.value,
@@ -450,6 +492,27 @@ function inspectOrbitFromKeyboard(event: KeyboardEvent, systemId: string, orbitI
   inspectOrbit(systemId, orbitId)
 }
 
+function inspectRouteFromClick(event: MouseEvent): void {
+  if (!props.active) return
+  const routeId = routeLayer.value?.routeIdAtStroke(event) ?? routeIdAtTarget(event.target)
+  if (routeId && routeDescriptors.value.some(route => route.id === routeId)) emit('inspect-route', routeId)
+}
+
+function inspectRouteFromKeyboard(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  const routeId = routeIdAtTarget(event.target)
+  if (!routeId || !routeDescriptors.value.some(route => route.id === routeId)) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('inspect-route', routeId)
+}
+
+function routeIdAtTarget(target: EventTarget | null): string | null {
+  return target instanceof Element
+    ? target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
+    : null
+}
+
 function inspectObject(systemId: string, objectId: string): void {
   if (!props.active) return
   emit('inspect-object', systemId, objectId)
@@ -491,11 +554,40 @@ function centerSystem(systemId: string): boolean {
 }
 
 function centerSelection(): boolean {
+  if (props.selectedRouteId) return centerRoute(props.selectedRouteId)
   const systemId = props.selectedSystemId
   if (!systemId) return false
   if (props.selectedObjectId) return centerTarget({ kind: 'object', id: props.selectedObjectId }, systemId)
   if (props.selectedOrbitId) return centerTarget({ kind: 'orbit', id: props.selectedOrbitId }, systemId)
   return centerSystem(systemId)
+}
+
+function routeGeometryAt(routeId: string, scale: number): ContinuousMapRouteGeometry | undefined {
+  const details = playerContinuousDetailSystemIds(
+    projection.value.systems,
+    scale,
+    svgPixelScale.value,
+    detailSystemIds.value,
+  )
+  const endpoints = projectPlayerContinuousRouteEndpoints(props.document, projection.value.systems, details)
+  return buildContinuousMapRouteGeometries(endpoints, {
+    pixelsPerSceneUnit: scale * svgPixelScale.value,
+    fanOutLimitPixels: routeFanOutLimitPixels.value,
+  }).get(routeId)
+}
+
+function centerRoute(routeId: string): boolean {
+  if (!props.active || !routeDescriptors.value.some(route => route.id === routeId)) return false
+  const usableRect = getUsableViewportRect()
+  if (!usableRect) return false
+  const fitted = centerContinuousMapRouteViewport({
+    current: camera.value,
+    usableRect,
+    padding: 14 / Math.max(svgPixelScale.value, Number.MIN_VALUE),
+    svgPixelScale: svgPixelScale.value,
+    geometryAt: scale => routeGeometryAt(routeId, scale),
+  })
+  return fitted ? setViewport(fitted) : false
 }
 
 function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean {
@@ -534,6 +626,11 @@ function centerSystemForDocument(systemId: string, expectedClusterDocument: Play
   return centerSystem(systemId)
 }
 
+function centerRouteForDocument(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean {
+  if (props.document !== expectedClusterDocument) return false
+  return centerRoute(routeId)
+}
+
 function refreshNameViewport(): void {
   measureSvg()
   const next = getUsableViewportRect()
@@ -550,7 +647,7 @@ function isVisibleFocusTarget(target: SVGElement, viewport: SVGSVGElement): bool
     && !target.closest('[inert], [aria-hidden="true"]')
 }
 
-defineExpose({ centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
+defineExpose({ centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
 </script>
 
 <style scoped>
