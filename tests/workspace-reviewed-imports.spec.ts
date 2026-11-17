@@ -11,10 +11,13 @@ import {
   captureMapExportBlobs,
   downloadJson,
   hideWorkspaceInspector,
+  importReviewDialog,
+  openStarSystemImportPicker,
   openChartDetailsEditor,
   returnToClusterMap,
   resolveImportReview,
   reviewStarSystemImport,
+  setJsonFile,
   setHeaderMapActionsOpen,
 } from './helpers'
 
@@ -44,7 +47,7 @@ function incomingSystem(): {
 
 test('standalone system review preserves an unrelated chart draft and adds an independent system only on confirm', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await page.goto('/')
+  await page.goto('/?map=continuous')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
@@ -59,9 +62,28 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await hideWorkspaceInspector(page)
 
   const incoming = incomingSystem()
-  const openReview = async () => reviewStarSystemImport(page, 'incoming-reach.json', incoming.content)
+  const openPlacementReview = async () => {
+    await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach.json', incoming.content)
+    const placement = page.getByRole('region', { name: 'Standalone star system placement', exact: true })
+    await expect(placement).toBeVisible()
+    const preview = page.locator('.continuous-warden-import-placement-preview')
+    await expect(preview).toBeVisible()
+    const initialX = await preview.getAttribute('data-anchor-x')
+    const map = page.locator('svg.continuous-warden-map-svg')
+    const bounds = await map.boundingBox()
+    if (!bounds) throw new Error('The continuous Cluster map is not visible.')
+    await map.click({ position: { x: bounds.width * 0.6, y: bounds.height * 0.62 } })
+    await expect.poll(async () => preview.getAttribute('data-anchor-x')).not.toBe(initialX)
+    const anchor = {
+      x: Number(await preview.getAttribute('data-anchor-x')),
+      y: Number(await preview.getAttribute('data-anchor-y')),
+    }
+    await placement.getByRole('button', { name: 'Review placement', exact: true }).click()
+    return { review: importReviewDialog(page), anchor }
+  }
 
-  const review = await openReview()
+  const firstPlacement = await openPlacementReview()
+  const review = firstPlacement.review
   await expect(review).toBeVisible()
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await resolveImportReview(review, 'cancel')
@@ -76,7 +98,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
-  await openReview()
+  const acceptedPlacement = await openPlacementReview()
   await expect(review).toBeVisible()
   await resolveImportReview(review, 'confirm')
   await expect(review).toBeHidden()
@@ -94,9 +116,17 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Incoming Vesper'])
   const importedSystem = exported.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(importedSystem?.id).not.toBe(incoming.systemId)
+  expect(importedSystem && exported.layout.systemPositions?.[importedSystem.id]).toEqual(acceptedPlacement.anchor)
   const importedObjectIds = new Set(importedSystem?.objects.map(object => object.id))
   for (const sourceId of incoming.objectIds) expect(importedObjectIds.has(sourceId)).toBe(false)
   expect(exported.cluster?.routes).toHaveLength(0)
+
+  await page.reload()
+  await returnToClusterMap(page)
+  const persisted = await downloadJson(page, 'Export Jump Cluster JSON')
+  const persistedSystem = persisted.cluster?.systems.find(system => system.name === 'Incoming Vesper')
+  expect(persistedSystem).toBeDefined()
+  expect(persistedSystem && persisted.layout.systemPositions?.[persistedSystem.id]).toEqual(acceptedPlacement.anchor)
 })
 
 test('an applied import closes review before save failure and Retry persists the copy without clearing an unrelated draft', async ({ page }) => {

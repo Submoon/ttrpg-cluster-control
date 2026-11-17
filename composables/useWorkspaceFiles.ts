@@ -49,7 +49,7 @@ interface ImportEpoch {
   operation: number
 }
 
-interface StandaloneImportPlacement {
+export interface StandaloneImportPlacement {
   /** Current proposed Cluster-space anchor. This is view-only until the existing review is confirmed. */
   anchor: Point
   /** Detached copy with safely remapped entity identities. */
@@ -61,6 +61,14 @@ interface StandaloneImportPlacement {
     orbitRotations: Record<string, number>
   }
 }
+
+type DeepReadonly<T> = T extends (...args: infer Arguments) => infer Result
+  ? (...args: Arguments) => Result
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T
+
+export type StandaloneImportPlacementView = DeepReadonly<StandaloneImportPlacement>
 
 function isFinitePoint(value: unknown): value is Point {
   if (!value || typeof value !== 'object' || !('x' in value) || !('y' in value)) return false

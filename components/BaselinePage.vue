@@ -158,7 +158,7 @@
               @preview-player-view="openPlayerPreview"
               :generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
-              @import-file="importJsonFile"
+              @import-file="handleWorkspaceJsonImport"
               @restore-file="openLocalWorkspaceRestore"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
@@ -321,6 +321,8 @@
                     @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
                     :continuous-map="continuousMapEnabled"
+                    :standalone-import-placement-enabled="continuousMapEnabled && standaloneImportPlacementEnabled"
+                    :standalone-import-placement="standaloneImportPlacement"
                     :inspected-target="inspectedTarget"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
@@ -355,6 +357,7 @@
                     @move-unresolved-exit="moveUnresolvedExit"
                     @move-target="handleMapMoveTarget"
                     @move-nudge="handleMapMoveNudge"
+                    @standalone-import-placement-anchor="previewStandaloneImportAnchor"
                     @cancel-map-move="cancelMapMove"
                     @cluster-target="handleClusterTarget"
                     @cancel-cluster-preview="cancelClusterPlacement"
@@ -429,7 +432,19 @@
                   </template>
                 </ClientOnly>
               </div>
-              <p v-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
+              <section
+                v-if="activeView === 'cluster' && standaloneImportPlacementEnabled && continuousMapEnabled"
+                class="map-note mb-[1em] flex flex-wrap items-center justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem]"
+                role="region"
+                aria-label="Standalone star system placement"
+              >
+                <span>Click the map to set {{ standaloneImportPlacement?.system.name ?? 'the imported system' }}’s anchor. Arrow keys pan the map.</span>
+                <span class="flex flex-wrap gap-2">
+                  <UButton size="xs" color="primary" @click="reviewStandaloneImportPlacement">Review placement</UButton>
+                  <UButton size="xs" color="neutral" variant="soft" @click="cancelStandaloneImportPlacement">Cancel</UButton>
+                </span>
+              </section>
+              <p v-else-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
                 <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE SYSTEMS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
                 <span>{{ clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system for each endpoint; local Jump Points are optional.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it; use Navigate to enter a system.' }}</span>
               </p>
@@ -1802,11 +1817,44 @@ const {
   downloadMapImage,
   importJsonFile,
   importReview,
+  standaloneImportPlacement,
+  standaloneImportPlacementEnabled,
+  previewStandaloneImportAnchor,
+  reviewStandaloneImportPlacement,
+  cancelStandaloneImportPlacement,
   confirmJsonImport,
   cancelJsonImport,
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
+
+async function handleWorkspaceJsonImport(event: Event): Promise<void> {
+  await importJsonFile(event)
+  if (!standaloneImportPlacementEnabled.value) return
+
+  if (!continuousMapEnabled.value) {
+    reviewStandaloneImportPlacement()
+    return
+  }
+
+  if (compactPanelOpen.value && compactPanel.value) closePanel(compactPanel.value)
+}
+
+watch(continuousMapEnabled, enabled => {
+  if (!enabled && standaloneImportPlacement.value) reviewStandaloneImportPlacement()
+}, { flush: 'sync' })
+
+watch(activeView, view => {
+  if (view !== 'cluster' && standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+}, { flush: 'sync' })
+
+watch(
+  [() => workspace.value?.id, () => workspace.value?.cluster.id],
+  () => {
+    if (standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+  },
+  { flush: 'sync' },
+)
 
 publicationFocusRestoreAllowed = request => !(
   historyOpen.value

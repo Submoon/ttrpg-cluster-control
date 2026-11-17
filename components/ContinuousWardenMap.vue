@@ -108,6 +108,57 @@
               <circle class="continuous-warden-anchor-core" r="2" />
             </g>
           </g>
+          <g
+            v-if="standaloneImportProjection"
+            class="continuous-warden-import-placement-preview"
+            :data-anchor-x="props.standaloneImportPlacement?.anchor.x"
+            :data-anchor-y="props.standaloneImportPlacement?.anchor.y"
+            aria-hidden="true"
+            pointer-events="none"
+          >
+            <title>Imported {{ standaloneImportProjection.name }} placement preview</title>
+            <rect
+              class="continuous-warden-import-envelope"
+              :x="standaloneImportProjection.envelope.x"
+              :y="standaloneImportProjection.envelope.y"
+              :width="standaloneImportProjection.envelope.width"
+              :height="standaloneImportProjection.envelope.height"
+              rx="18"
+            />
+            <g
+              class="continuous-warden-import-system-detail"
+              :transform="systemTransform(standaloneImportProjection)"
+            >
+              <g class="continuous-warden-import-orbits">
+                <ellipse
+                  v-for="orbit in standaloneImportProjection.orbits"
+                  :key="orbit.id"
+                  class="continuous-warden-import-orbit"
+                  :cx="orbit.center.x"
+                  :cy="orbit.center.y"
+                  :rx="orbit.radii.horizontal"
+                  :ry="orbit.radii.vertical"
+                  :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+                />
+              </g>
+              <g class="continuous-warden-import-objects">
+                <g
+                  v-for="object in standaloneImportProjection.objects"
+                  :key="object.id"
+                  class="continuous-warden-import-object"
+                  :transform="`translate(${object.position.x} ${object.position.y})`"
+                >
+                  <circle r="5" />
+                  <text y="12" text-anchor="middle">{{ object.locationKey }}</text>
+                  <text y="24" text-anchor="middle">{{ object.name }}</text>
+                </g>
+              </g>
+            </g>
+            <g :transform="`translate(${standaloneImportProjection.anchor.x} ${standaloneImportProjection.anchor.y})`">
+              <circle class="continuous-warden-import-anchor" r="13" />
+              <circle class="continuous-warden-import-anchor-core" r="3" />
+            </g>
+          </g>
         </g>
         <g class="continuous-warden-name-layer" :transform="screenLayerTransform">
           <g v-for="label in nameLabels" :key="label.id">
@@ -158,6 +209,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
+import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { MapHistoryTarget, MapInteractionMode } from '../composables/editor-workflows/types'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
@@ -212,6 +264,8 @@ const props = defineProps<{
   clusterChooserOpen: boolean
   clusterMoveTargeting: boolean
   moveTargeting: boolean
+  standaloneImportPlacementEnabled?: boolean
+  standaloneImportPlacement?: StandaloneImportPlacementView | null
   touchNavigation?: boolean
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
@@ -224,6 +278,7 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
+  'standalone-import-placement-anchor': [anchor: Point]
   'editing-gesture-change': [active: boolean]
   'viewport-change': [viewport: MapViewport]
 }>()
@@ -267,6 +322,29 @@ const projections = computed(() => props.cluster.systems.map((system, index) => 
   props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
 )))
+
+const standaloneImportProjection = computed(() => {
+  const placement = props.standaloneImportPlacement
+  if (!props.standaloneImportPlacementEnabled || !placement) return null
+  const system: StarSystem = {
+    ...placement.system,
+    objects: placement.system.objects.map(object => ({
+      ...object,
+      placement: { ...object.placement },
+      playerFieldMasks: [...object.playerFieldMasks],
+      ...(object.customFieldValues ? { customFieldValues: { ...object.customFieldValues } } : {}),
+    })),
+    orbits: placement.system.orbits.map(orbit => ({
+      ...orbit,
+      ...(orbit.center ? { center: { ...orbit.center } } : {}),
+    })),
+  }
+  return projectWardenSystem(system, { ...placement.anchor }, {
+    objectAngles: { ...placement.geometry.objectAngles },
+    orbitRadii: { ...placement.geometry.orbitRadii },
+    orbitRotations: { ...placement.geometry.orbitRotations },
+  })
+})
 
 const sceneBounds = computed<SvgViewportRect | null>(() => {
   if (projections.value.length === 0) return null
@@ -882,6 +960,7 @@ function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; or
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  if (props.standaloneImportPlacementEnabled) return
   if (event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting || props.clusterAddType !== null) return
   const systemId = systemIdAtTarget(event.target)
   const projection = projections.value.find(candidate => candidate.id === systemId)
@@ -954,6 +1033,16 @@ function onLostPointerCapture(event: PointerEvent): void {
 
 function onClickCapture(event: MouseEvent): void {
   if (event.detail === 0) return
+  if (props.standaloneImportPlacementEnabled) {
+    const point = cameraPoint(event)
+    if (point) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      emit('standalone-import-placement-anchor', unprojectWardenClusterAnchor(point))
+    }
+    return
+  }
   if (props.moveTargeting || props.clusterMoveTargeting) {
     const point = cameraPoint(event)
     if (point) {
@@ -1010,6 +1099,28 @@ function onKeydownCapture(event: KeyboardEvent): void {
   const objectTarget = objectTargetAtTarget(event.target)
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
+  if (props.standaloneImportPlacementEnabled
+    && (event.key === 'Enter' || event.key === ' ')
+    && event.target instanceof SVGElement) {
+    const element = svgElement.value
+    const viewportRect = svgViewport.value
+    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+      ?? (event.target === element && element
+        ? (() => {
+            const [x, y] = zoomTransform(element).invert([
+              viewportRect.x + viewportRect.width / 2,
+              viewportRect.y + viewportRect.height / 2,
+            ])
+            return { x, y }
+          })()
+        : null)
+    if (scenePoint) {
+      event.preventDefault()
+      event.stopPropagation()
+      emit('standalone-import-placement-anchor', unprojectWardenClusterAnchor(scenePoint))
+      return
+    }
+  }
   const action = continuousMapKeyboardIntent({
     key: event.key,
     targetKind: objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
@@ -1118,7 +1229,9 @@ function getClusterSystemPositionPreviewVersion(systemId: string): number {
 
 function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
   const element = svgElement.value
-  return element ? exportMapImage(element, format, undefined, palette)
+  return element ? exportMapImage(element, format, undefined, palette, clone => {
+    clone.querySelector('.continuous-warden-import-placement-preview')?.remove()
+  })
     : Promise.reject(new Error('The continuous map is not ready to export.'))
 }
 
@@ -1276,6 +1389,52 @@ defineExpose({
 .continuous-warden-system-envelope.is-move-preview {
   stroke: var(--map-selected);
   stroke-width: 2;
+}
+
+.continuous-warden-import-placement-preview {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.continuous-warden-import-envelope {
+  fill: color-mix(in srgb, var(--focus) 7%, transparent);
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 9 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-orbit {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-object {
+  fill: var(--focus);
+  font-family: Georgia, serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.continuous-warden-import-object circle {
+  fill: var(--map-bg);
+  stroke: var(--focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-anchor {
+  fill: color-mix(in srgb, var(--focus) 18%, var(--map-bg));
+  stroke: var(--focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-anchor-core {
+  fill: var(--focus);
 }
 
 .continuous-warden-system-detail {

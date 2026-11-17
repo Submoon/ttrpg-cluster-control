@@ -46,6 +46,8 @@
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
       :move-targeting="props.moveTargeting ?? false"
+      :standalone-import-placement-enabled="props.standaloneImportPlacementEnabled ?? false"
+      :standalone-import-placement="props.standaloneImportPlacement ?? null"
       :get-usable-client-rect="measureUnobstructedClientRect"
       :initial-viewport="props.initialViewport"
       touch-navigation
@@ -53,6 +55,7 @@
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
       @cluster-target="forwardClusterTarget"
+      @standalone-import-placement-anchor="forwardStandaloneImportPlacementAnchor"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
       @editing-gesture-change="orbitInput.setChildGestureActive"
@@ -141,6 +144,7 @@ import type {
   Point,
   StarSystem,
 } from '../domain/workspace'
+import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type {
   MapInteractionMode,
   MapHistoryTarget,
@@ -199,6 +203,8 @@ const props = defineProps<{
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
+  standaloneImportPlacementEnabled?: boolean
+  standaloneImportPlacement?: StandaloneImportPlacementView | null
 }>()
 const commands = useEditorCommands()
 
@@ -225,6 +231,7 @@ const emit = defineEmits<{
   'move-nudge': [delta: Point]
   'cancel-map-move': []
   'cluster-target': [point: Point, systemIds: string[]]
+  'standalone-import-placement-anchor': [anchor: Point]
   'cancel-cluster-preview': []
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
@@ -543,7 +550,9 @@ function hasClusterAddIntent(): boolean {
 }
 
 function hasMapAddIntent(): boolean {
-  return hasClusterAddIntent() || (props.activeView === 'system' && props.creationType != null)
+  return props.standaloneImportPlacementEnabled === true
+    || hasClusterAddIntent()
+    || (props.activeView === 'system' && props.creationType != null)
 }
 
 function hasOrbitAddIntent(): boolean {
@@ -1139,6 +1148,10 @@ function forwardClusterTarget(point: Point, systemIds: string[]): void {
     || (!hasClusterAddIntent() && !props.clusterMoveTargeting)
     || props.clusterChooserOpen) return
   emit('cluster-target', point, systemIds)
+}
+function forwardStandaloneImportPlacementAnchor(anchor: Point): void {
+  if (props.activeView !== 'cluster' || !props.continuousMap || !props.standaloneImportPlacementEnabled) return
+  emit('standalone-import-placement-anchor', anchor)
 }
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
 function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
