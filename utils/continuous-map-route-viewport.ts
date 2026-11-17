@@ -20,7 +20,9 @@ export function centerContinuousMapRouteViewport({
 }): MapViewport | null {
   const rect = insetViewport(usableRect, padding)
   let candidate = current
-  for (let geometry = geometryAt(candidate.k); geometry; geometry = geometryAt(candidate.k)) {
+  for (let adjustment = 0; adjustment < 32; adjustment++) {
+    const geometry = geometryAt(candidate.k)
+    if (!geometry) return null
     const next = centerMapTargetViewport({
       current: candidate,
       targetBounds: geometry.bounds,

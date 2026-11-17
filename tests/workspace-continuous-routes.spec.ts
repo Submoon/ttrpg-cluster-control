@@ -9,8 +9,8 @@ import {
   workspaceZoomControls,
 } from './helpers'
 
-async function clippedRouteStroke(mark: Locator) {
-  return mark.evaluate(group => {
+async function routeStrokePoint(mark: Locator, clippedOnly = false) {
+  return mark.evaluate((group, requireClipping) => {
     const path = group.querySelector<SVGPathElement>('.cluster-route-hit-target')!
     const map = path.ownerSVGElement!
     const viewport = map.getBoundingClientRect()
@@ -19,7 +19,7 @@ async function clippedRouteStroke(mark: Locator) {
     const pointAt = (position: number) => path.getPointAtLength(position * length).matrixTransform(transform)
     const inMap = (point: DOMPoint) => point.x > viewport.left && point.x < viewport.right
       && point.y > viewport.top && point.y < viewport.bottom
-    if (inMap(pointAt(0)) && inMap(pointAt(1))) return null
+    if (requireClipping && inMap(pointAt(0)) && inMap(pointAt(1))) return null
     for (let sample = 1; sample < 30; sample++) {
       const point = pointAt(sample / 30)
       if (inMap(point) && document.elementFromPoint(point.x, point.y) === path) {
@@ -27,19 +27,42 @@ async function clippedRouteStroke(mark: Locator) {
       }
     }
     return null
-  })
+  }, clippedOnly)
 }
 
 async function fullRouteInView(mark: Locator): Promise<boolean> {
   return mark.locator('.cluster-route-line').evaluate((element) => {
     if (!(element instanceof SVGPathElement)) return false
-    const viewport = element.ownerSVGElement!.getBoundingClientRect()
+    const map = element.ownerSVGElement!
+    const viewport = map.getBoundingClientRect()
     const bounds = element.getBBox()
     const matrix = element.getScreenCTM()!
     const topLeft = new DOMPoint(bounds.x, bounds.y).matrixTransform(matrix)
     const bottomRight = new DOMPoint(bounds.x + bounds.width, bounds.y + bounds.height).matrixTransform(matrix)
-    return topLeft.x > viewport.left && bottomRight.x < viewport.right
-      && topLeft.y > viewport.top && bottomRight.y < viewport.bottom
+    if (topLeft.x <= viewport.left || bottomRight.x >= viewport.right
+      || topLeft.y <= viewport.top || bottomRight.y >= viewport.bottom) return false
+    const length = element.getTotalLength()
+    for (let sample = 0; sample <= 20; sample++) {
+      const point = element.getPointAtLength(length * sample / 20).matrixTransform(matrix)
+      if (!map.contains(document.elementFromPoint(point.x, point.y))) return false
+    }
+    return true
+  })
+}
+
+async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
+  return mark.locator('.cluster-route-line').evaluate((element) => {
+    if (!(element instanceof SVGPathElement)) return false
+    const map = element.ownerSVGElement!
+    const departure = map.querySelector<SVGGElement>('.continuous-warden-object[aria-label$="Vesper Departure"]')
+    const destination = map.querySelector<SVGGElement>('.continuous-warden-system-anchor[aria-label="Select Harrow"]')
+    if (!departure || !destination || destination.closest('.continuous-warden-system')?.querySelector('.continuous-warden-system-detail')) return false
+    const start = element.getPointAtLength(0).matrixTransform(element.getScreenCTM()!)
+    const end = element.getPointAtLength(element.getTotalLength()).matrixTransform(element.getScreenCTM()!)
+    const jumpPoint = new DOMPoint().matrixTransform(departure.getScreenCTM()!)
+    const anchor = new DOMPoint().matrixTransform(destination.getScreenCTM()!)
+    return Math.hypot(start.x - jumpPoint.x, start.y - jumpPoint.y) < 1
+      && Math.hypot(end.x - anchor.x, end.y - anchor.y) < 1
   })
 }
 
@@ -47,6 +70,8 @@ test('continuous routes support clipped selection, guarded inspection and author
   test.setTimeout(60_000)
   const fixture = structuredClone(campaignFixture)
   const original = fixture.cluster.routes[0]!
+  const departure = fixture.cluster.systems[0]!.objects.find(object => object.id === original.fromPointId)!
+  departure.placement = { kind: 'system', x: 0.94, y: 0.5 }
   const namedRoute = { ...original, name: 'Harrow courier route' }
   fixture.cluster.routes.splice(0, 1, namedRoute, {
     ...original,
@@ -68,10 +93,16 @@ test('continuous routes support clipped selection, guarded inspection and author
   expect(await first.locator('.cluster-route-line').getAttribute('d'))
     .not.toBe(await second.locator('.cluster-route-line').getAttribute('d'))
 
-  let point = await clippedRouteStroke(first)
+  const reveal = map.locator('.continuous-warden-object[aria-label$="Vesper Departure"]')
+  for (let step = 0; await reveal.count() === 0 && step < 12; step++) {
+    await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  }
+  await expect.poll(() => usesIndependentlyRevealedEnds(first)).toBe(true)
+
+  let point = await routeStrokePoint(first, true)
   for (let step = 0; !point && step < 12; step++) {
     await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click()
-    point = await clippedRouteStroke(first)
+    point = await routeStrokePoint(first, true)
   }
   if (!point) throw new Error('The clipped route needs a visible, distinct stroke segment.')
   const priorCamera = await camera.getAttribute('transform')
@@ -111,4 +142,39 @@ test('continuous routes support clipped selection, guarded inspection and author
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
   await waitForWorkspaceSaved(page)
   await expect(marker).toHaveAttribute('cx', String(originalX + 10))
+})
+
+test('all three overlapping continuous routes have individually clickable strokes at distant Fit', async ({ page }) => {
+  test.setTimeout(60_000)
+  const fixture = structuredClone(campaignFixture)
+  const first = fixture.cluster.routes[0]!
+  const destination = fixture.cluster.systems[1]!
+  fixture.cluster.routes.push(
+    { ...first, id: 'distant-middle-route', jumpLevel: 2, fromPointId: first.toPointId, toPointId: first.fromPointId },
+    { ...first, id: 'distant-last-route', jumpLevel: 3 },
+  )
+  const remoteId = 'distant-overview-anchor'
+  fixture.cluster.systems.push({ ...destination, id: remoteId, name: 'Distant anchor', objects: [], orbits: [] })
+  const positions: Record<string, { x: number; y: number }> = fixture.layout.systemPositions
+  positions[destination.id] = { x: 4.15, y: 0.5 }
+  positions[remoteId] = { x: 12, y: 0.5 }
+  await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
+  await page.goto('/?map=continuous')
+  await setWorkspaceMapMode(page, 'Select')
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+
+  const map = page.getByRole('group', { name: /continuous map$/ })
+  const routes = [1, 2, 3].map(level => map.getByRole('button', { name: new RegExp(`Select Jump Level ${level} route`) }))
+  const scale = await routes[0]!.locator('.cluster-route-hit-target').evaluate(element => {
+    if (!(element instanceof SVGPathElement)) throw new Error('The route stroke is unavailable.')
+    const matrix = element.getScreenCTM()!
+    return Math.hypot(matrix.a, matrix.b)
+  })
+  expect(scale).toBeLessThan(0.12)
+  for (const route of routes) {
+    const point = await routeStrokePoint(route)
+    if (!point) throw new Error('Each overlapping route needs a reachable part of its actual hit stroke.')
+    await page.mouse.click(point.x, point.y)
+    await expect(route).toHaveAttribute('aria-pressed', 'true')
+  }
 })

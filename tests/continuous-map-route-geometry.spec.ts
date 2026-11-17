@@ -129,3 +129,28 @@ test('coincident endpoints still provide distinct, nondegenerate paths to select
   }
   expect(Math.abs(one.midpoint.y - two.midpoint.y)).toBeGreaterThan(12)
 })
+
+test('three overlapping route strokes retain separate hit lanes at distant overview', { tag: '@pure' }, () => {
+  const start = { x: 20, y: 140 }
+  const end = { x: 820, y: 140 }
+  const routes = [
+    { id: 'a', fromSystemId: 'origin', toSystemId: 'destination', start, end },
+    { id: 'b', fromSystemId: 'destination', toSystemId: 'origin', start: end, end: start },
+    { id: 'c', fromSystemId: 'origin', toSystemId: 'destination', start, end },
+  ]
+  const pixelsPerSceneUnit = 0.1
+  const display = { pixelsPerSceneUnit, fanOutLimitPixels: 96 }
+  const scaled = buildContinuousMapRouteGeometries(routes, display)
+  const midpointScreenY = routes.map(route => scaled.get(route.id)!.midpoint.y * pixelsPerSceneUnit)
+    .sort((left, right) => left - right)
+  expect(midpointScreenY[1]! - midpointScreenY[0]!).toBeGreaterThan(14)
+  expect(midpointScreenY[2]! - midpointScreenY[1]!).toBeGreaterThan(14)
+  for (const route of routes) expect(scaled.get(route.id)).toMatchObject({ start: route.start, end: route.end })
+
+  const coincident = buildContinuousMapRouteGeometries(routes.map(route => ({ ...route, start, end: start })), display)
+  const loopOffsets = routes.map(route => (coincident.get(route.id)!.midpoint.y - start.y) * pixelsPerSceneUnit)
+    .sort((left, right) => left - right)
+  expect(loopOffsets.every(offset => Math.abs(offset) > 23)).toBe(true)
+  expect(loopOffsets[1]! - loopOffsets[0]!).toBeGreaterThan(14)
+  expect(loopOffsets[2]! - loopOffsets[1]!).toBeGreaterThan(14)
+})

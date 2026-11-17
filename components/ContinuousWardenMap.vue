@@ -213,6 +213,7 @@ const SYSTEM_NAME_FONT_PIXELS = 18
 const SYSTEM_NAME_HEIGHT_PIXELS = 28
 const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 const ROUTE_REVEAL_PADDING_PIXELS = 14
+const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
@@ -305,7 +306,13 @@ const routeAnchorOverrides = computed(() => new Map(projections.value.flatMap(pr
   previewPositions.value.has(projection.id) ? [[projection.id, anchorFor(projection)] as const] : [],
 )))
 
-function routesAtDetail(detail: ReadonlySet<string>) {
+const routePixelScale = computed(() => viewport.value.k * svgPixelScale.value)
+const routeFanOutLimitPixels = computed(() => Math.min(
+  ROUTE_FAN_OUT_LIMIT_PIXELS,
+  Math.min(svgViewport.value.width, svgViewport.value.height) * svgPixelScale.value / 4,
+))
+
+function routesAtDetail(detail: ReadonlySet<string>, pixelsPerSceneUnit?: number) {
   return buildContinuousWardenRouteGeometries({
     routes: props.cluster.routes,
     projections: projections.value,
@@ -313,10 +320,22 @@ function routesAtDetail(detail: ReadonlySet<string>) {
     anchorOverrides: routeAnchorOverrides.value,
     unresolvedExitPositions: props.unresolvedExitPositions,
     exitPositionOverrides: exitPositionOverrides.value,
+    display: pixelsPerSceneUnit === undefined
+      ? undefined
+      : { pixelsPerSceneUnit, fanOutLimitPixels: routeFanOutLimitPixels.value },
   })
 }
 
-const routeGeometries = computed(() => routesAtDetail(detailSystemIds.value))
+const routeGeometries = computed(() => routesAtDetail(detailSystemIds.value, routePixelScale.value))
+const overviewRoutes = computed(() => buildContinuousWardenRouteGeometries({
+  routes: props.cluster.routes,
+  projections: projections.value,
+  detailSystemIds: OVERVIEW_DETAIL_SYSTEM_IDS,
+  unresolvedExitPositions: props.unresolvedExitPositions,
+}))
+const hasOverlappingOverviewRoutes = computed(() =>
+  [...overviewRoutes.value.values()].some(route => route.sharesDisplayedEndpoints),
+)
 
 const sceneBounds = computed<SvgViewportRect | null>(() => {
   if (projections.value.length === 0) return null
@@ -331,7 +350,7 @@ const sceneBounds = computed<SvgViewportRect | null>(() => {
     right = Math.max(right, projection.envelope.x + delta.x + projection.envelope.width)
     bottom = Math.max(bottom, projection.envelope.y + delta.y + projection.envelope.height)
   }
-  for (const { bounds } of routesAtDetail(OVERVIEW_DETAIL_SYSTEM_IDS).values()) {
+  for (const { bounds } of overviewRoutes.value.values()) {
     left = Math.min(left, bounds.x)
     top = Math.min(top, bounds.y)
     right = Math.max(right, bounds.x + bounds.width)
@@ -643,9 +662,16 @@ function getFitBounds(): SvgViewportRect | undefined {
   return sceneBounds.value ?? undefined
 }
 
+/** Reserves the maximum display-only expansion without using camera-dependent curve bounds. */
+function routeFitRect(rect: SvgViewportRect): SvgViewportRect {
+  if (!hasOverlappingOverviewRoutes.value) return rect
+  const inset = Math.min(routeFanOutLimitPixels.value / svgPixelScale.value, rect.width / 4, rect.height / 4)
+  return { x: rect.x + inset, y: rect.y + inset, width: rect.width - 2 * inset, height: rect.height - 2 * inset }
+}
+
 function updateMinimumZoomScale(rect: SvgViewportRect, allowIncrease = false): void {
   const bounds = getFitBounds()
-  const fit = bounds ? fitMapViewport(bounds, rect, Number.MIN_VALUE) : undefined
+  const fit = bounds ? fitMapViewport(bounds, routeFitRect(rect), Number.MIN_VALUE) : undefined
   const fittedMinimum = fit ? Math.min(MAP_ZOOM_MIN_SCALE, fit.k) : MAP_ZOOM_MIN_SCALE
   minimumZoomScale.value = allowIncrease ? fittedMinimum : Math.min(minimumZoomScale.value, fittedMinimum)
   zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
@@ -671,7 +697,7 @@ function fitMap(usableRect?: SvgViewportRect): void {
   const rect = requestedRect ?? getSvgViewportRect(element)
   zoomBehavior.extent(() => svgViewportExtent(rect))
   updateMinimumZoomScale(rect, true)
-  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
+  const fitted = fitMapViewport(bounds, routeFitRect(rect), minimumZoomScale.value)
   if (fitted) setViewport(fitted)
 }
 
@@ -802,7 +828,9 @@ function frameRoute(routeId: string, usableRect: SvgViewportRect | undefined, ce
   const next = center
     ? centerContinuousMapRouteViewport({
         ...options,
-        geometryAt: scale => scale === current.k ? geometry : routesAtDetail(detailSystemIdsAtScale(scale)).get(routeId),
+        geometryAt: scale => scale === current.k
+          ? geometry
+          : routesAtDetail(detailSystemIdsAtScale(scale), scale * svgPixelScale.value).get(routeId),
       })
     : revealContinuousMapRouteViewport({ ...options, geometry, unresolved: route.toSystemId === null })
   if (!next) return false

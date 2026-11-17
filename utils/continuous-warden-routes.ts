@@ -3,6 +3,7 @@ import { clusterAutomaticExitPosition } from './cluster-map-geometry'
 import type { ContinuousWardenSystemProjection } from './continuous-map-projection'
 import {
   buildContinuousMapRouteGeometries,
+  type ContinuousMapRouteDisplayScale,
   type ContinuousMapRouteEndpoints,
   type ContinuousMapRouteGeometry,
 } from './continuous-map-route-geometry'
@@ -14,11 +15,12 @@ interface WardenRouteOptions {
   anchorOverrides?: ReadonlyMap<string, Point>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   exitPositionOverrides?: ReadonlyMap<string, Point>
+  display?: ContinuousMapRouteDisplayScale
 }
 
 /** Resolves each route end against the independently displayed state of its owning system. */
 export function buildContinuousWardenRouteGeometries(
-  { routes, projections, detailSystemIds, anchorOverrides, unresolvedExitPositions, exitPositionOverrides }: WardenRouteOptions,
+  { routes, projections, detailSystemIds, anchorOverrides, unresolvedExitPositions, exitPositionOverrides, display }: WardenRouteOptions,
 ): ReadonlyMap<string, ContinuousMapRouteGeometry> {
   const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
   const exitOrdinals = new Map<string, number>()
@@ -56,5 +58,5 @@ export function buildContinuousWardenRouteGeometries(
     if (!destination) continue
     endpoints.push({ id, fromSystemId, toSystemId, start, end: resolveEnd(destination, toPointId) })
   }
-  return buildContinuousMapRouteGeometries(endpoints)
+  return buildContinuousMapRouteGeometries(endpoints, display)
 }
