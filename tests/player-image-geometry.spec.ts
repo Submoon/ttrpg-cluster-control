@@ -15,7 +15,7 @@ import {
 function crowdedPublicCluster(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Public Cluster',
     systems: [{
       id: 'system-1',
@@ -57,7 +57,7 @@ test('public cluster cards are compact while Warden and Unknown footprints stay 
 
   const document: PlayerClusterDocument = {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Public Reach',
     systems: [
       { id: 'system-1', position: { x: 0, y: 0 }, disclosure: 'unknown', label: 'Unknown presence' },
@@ -118,7 +118,7 @@ test('only routes occluded by overlapping endpoints or a covered Unknown destina
   }
   const cluster = (systems: PlayerClusterDocument['systems'], routes: PlayerClusterDocument['routes']): PlayerClusterDocument => ({
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Public Reach',
     systems,
     routes,
@@ -174,7 +174,7 @@ test('unresolved destination captions mirror around a covering card or paint in 
   })
   const document = (cards: PlayerClusterDocument['systems']): PlayerClusterDocument => ({
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Caption Reach',
     systems: [system('system-1', 0, 0), ...cards],
     routes: [{

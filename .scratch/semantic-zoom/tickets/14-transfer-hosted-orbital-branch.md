@@ -1,6 +1,7 @@
 ---
 title: "Transfer a hosted orbital branch to another system"
-status: blocked
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

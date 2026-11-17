@@ -16,14 +16,15 @@
       @lostpointercapture.capture="onLostPointerCapture"
       @click.capture="onClickCapture"
       @keydown.capture="onKeydownCapture"
+      @wheel.capture="onWheelCapture"
       @touchstart.capture="startTouchNavigation"
     >
       <title>{{ cluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
-        Zoom continuously to reveal each system interior independently. In Move, drag a system anchor or name to update its Cluster position.
+        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system, or drag a system anchor or name to update its Cluster position.
       </desc>
       <g class="cluster-map-content" :transform="cameraTransform">
-        <ContinuousWardenRouteLayer
+        <ContinuousMapRouteLayer
           ref="routeLayer"
           :routes="routeMarks"
           :geometries="routeGeometries"
@@ -36,7 +37,7 @@
         />
         <g class="cluster-map-items">
           <g
-            v-for="projection in projections"
+            v-for="projection in renderedProjections"
             :key="projection.id"
             class="continuous-warden-system"
             :data-system-id="projection.id"
@@ -59,6 +60,16 @@
             >
               <g class="system-orbits">
                 <ellipse
+                  v-if="orbitPlacementPreviewFor(projection.id)"
+                  class="orbit-ring is-placement-preview"
+                  :cx="orbitPlacementPreviewFor(projection.id)?.center.x"
+                  :cy="orbitPlacementPreviewFor(projection.id)?.center.y"
+                  :rx="orbitPlacementPreviewFor(projection.id)?.radii.horizontal"
+                  :ry="orbitPlacementPreviewFor(projection.id)?.radii.vertical"
+                  :transform="`rotate(${orbitPlacementPreviewFor(projection.id)?.rotation ?? 0} ${orbitPlacementPreviewFor(projection.id)?.center.x} ${orbitPlacementPreviewFor(projection.id)?.center.y})`"
+                  aria-hidden="true"
+                />
+                <ellipse
                   v-for="orbit in projection.orbits"
                   :key="orbit.id"
                   class="orbit-ring continuous-warden-orbit-target"
@@ -74,6 +85,62 @@
                   :ry="orbit.radii.vertical"
                   :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
                 />
+                <template v-for="orbit in projection.orbits" :key="`${orbit.id}-edit-controls`">
+                  <circle
+                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    class="continuous-warden-orbit-edit-handle continuous-warden-orbit-axis-handle"
+                    :data-system-id="projection.id"
+                    :data-orbit-id="orbit.id"
+                    data-orbit-edit-kind="resize"
+                    data-resize-axis="horizontal"
+                    role="slider"
+                    tabindex="0"
+                    :aria-label="`Resize horizontal radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    :cx="orbitAxisHandlePoint(orbit, 'horizontal').x"
+                    :cy="orbitAxisHandlePoint(orbit, 'horizontal').y"
+                    :r="orbitEditHandleRadius(projection)"
+                  />
+                  <circle
+                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    class="continuous-warden-orbit-edit-handle continuous-warden-orbit-axis-handle"
+                    :data-system-id="projection.id"
+                    :data-orbit-id="orbit.id"
+                    data-orbit-edit-kind="resize"
+                    data-resize-axis="vertical"
+                    role="slider"
+                    tabindex="0"
+                    :aria-label="`Resize vertical radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    :cx="orbitAxisHandlePoint(orbit, 'vertical').x"
+                    :cy="orbitAxisHandlePoint(orbit, 'vertical').y"
+                    :r="orbitEditHandleRadius(projection)"
+                  />
+                  <circle
+                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    class="continuous-warden-orbit-edit-handle continuous-warden-orbit-rotation-handle"
+                    :data-system-id="projection.id"
+                    :data-orbit-id="orbit.id"
+                    data-orbit-edit-kind="rotation"
+                    role="slider"
+                    tabindex="0"
+                    :aria-label="`Rotate ${orbitLabel(projection.id, orbit.id)}`"
+                    :cx="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).x"
+                    :cy="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).y"
+                    :r="orbitEditHandleRadius(projection)"
+                  />
+                  <circle
+                    v-if="props.mode === 'move' && localOrbit(projection.id, orbit.id)?.hostId === null"
+                    class="continuous-warden-orbit-edit-handle continuous-warden-orbit-center-handle"
+                    :data-system-id="projection.id"
+                    :data-orbit-id="orbit.id"
+                    data-orbit-edit-kind="center"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="`Move center of ${orbitLabel(projection.id, orbit.id)}`"
+                    :cx="orbit.center.x"
+                    :cy="orbit.center.y"
+                    :r="orbitEditHandleRadius(projection)"
+                  />
+                </template>
               </g>
               <g class="system-map-items">
                 <g
@@ -84,6 +151,7 @@
                     'is-selected': isSelectedObject(projection.id, object.id),
                     'is-search-result': searchLocatorId === object.id,
                     'is-dimmed': dimmedObjectIds.has(object.id),
+                    'is-move-preview': isObjectMovePreview(projection.id, object.id),
                   }"
                   :transform="`translate(${object.position.x} ${object.position.y})`"
                   :data-object-id="object.id"
@@ -221,11 +289,16 @@
 
 <script setup lang="ts">
 /** Warden continuous scene with one D3 camera and independent system-envelope reveal. */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { jumpPointsInCluster, type JumpCluster, type Point, type StarSystem } from '../domain/workspace'
+import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
+import { normalizeOrbitRotation } from '../domain/workspace-orbits'
+import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
+import { orbitGeometrySource } from '../utils/orbit-geometry-source'
+import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
+import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
-import type { MapHistoryTarget, MapInteractionMode } from '../composables/editor-workflows/types'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
@@ -247,6 +320,16 @@ import {
   unprojectWardenClusterAnchor,
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
+import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../utils/selected-object-placement'
+import { continuousObjectDragTarget, hasMapDragThreshold } from '../utils/continuous-object-drag'
+import { updateWorkspaceObject } from '../domain/workspace-placement'
+import { creationCandidatesAtPoint, toNormalizedMapPoint, type SystemMapGeometry } from '../utils/system-map-geometry'
+import {
+  continuousOrbitAddKeyboardPoint,
+  resolveContinuousObjectOwnerResolution,
+  type ContinuousObjectAddOwner,
+  type ContinuousObjectAddTarget,
+} from '../utils/continuous-map-editing'
 import { clusterRouteLabel, clusterSystemPosition } from '../utils/cluster-map-geometry'
 import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
 import { centerContinuousMapRouteViewport, revealContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
@@ -264,7 +347,7 @@ import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuo
 import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
-import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
+import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -275,6 +358,7 @@ const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
   cluster: JumpCluster
+  workspace: LocalWorkspace
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   dimmedObjectIds?: readonly string[]
@@ -285,6 +369,10 @@ const props = defineProps<{
   selectedRouteId: string | null
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
+  creationType: SystemCreationType | null
+  creationOtherType: string | null
+  objectAddPinnedOwnerId: string | null
+  isEntityCommandBlocked?: (command: EntityCommand) => boolean
   clusterAddType: 'system' | 'route' | null
   clusterChooserOpen: boolean
   clusterMoveTargeting: boolean
@@ -295,6 +383,7 @@ const props = defineProps<{
   touchNavigation?: boolean
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
+  orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
 }>()
 
 const emit = defineEmits<{
@@ -303,6 +392,14 @@ const emit = defineEmits<{
   'select-orbit': [systemId: string, orbitId: string]
   'select-route': [routeId: string]
   'cluster-target': [point: Point, systemIds: string[]]
+  'continuous-object-add-target': [request: ContinuousObjectAddTarget]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
+  'orbit-adjustment': [input: OrbitAdjustmentInput]
+  'entity-command-blocked': [command: EntityCommand]
+  'move-orbit-center': [orbitId: string, center: Point, hostId: string | null, systemId: string, sourceGeometry: string]
+  'orbit-center-candidates': [orbitId: string, candidates: OrbitCenterMoveCandidate[], systemId: string]
+  'resize-orbit': [orbitId: string, radii: OrbitRadii, systemId: string, sourceGeometry: string]
+  'rotate-orbit': [orbitId: string, rotation: number, systemId: string, sourceGeometry: string]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
   'standalone-import-placement-anchor': [anchor: Point]
@@ -311,9 +408,14 @@ const emit = defineEmits<{
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
-const routeLayer = ref<InstanceType<typeof ContinuousWardenRouteLayer> | null>(null)
+const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
+const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
+const preciseObjectPlacementPreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
+const preciseOrbitCenterMovePreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
+const directOrbitPreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
+const orbitPlacementPreview = shallowRef<{ systemId: string; orbitId: string; preview: { center: Point; radii: { horizontal: number; vertical: number }; rotation?: number } } | null>(null)
 const exitPositionOverrides = ref(new Map<string, Point>())
 const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = ref(new Set<string>())
@@ -328,6 +430,29 @@ let cameraInitialized = false
 let searchInteractionGeneration = 0
 let focusFallbackGeneration = 0
 let viewPan: { transform: MapViewport; start: [number, number] } | null = null
+interface ActiveObjectDrag {
+  systemId: string
+  objectId: string
+  pointerId: number
+  startClient: Point
+  startScene: Point
+  originLocal: Point
+  anchorDelta: Point
+  camera: MapViewport
+  legacyAnchor: Point
+  projection: ContinuousWardenSystemProjection
+  workspaceSnapshot: LocalWorkspace
+  moved: boolean
+  targetPosition: Point
+}
+
+let activeObjectDrag: ActiveObjectDrag | null = null
+type PendingMapClickTarget =
+  | { kind: 'object'; systemId: string; objectId: string }
+  | { kind: 'orbit'; systemId: string; orbitId: string }
+  | { kind: 'system'; systemId: string }
+let pendingMapClickTarget: PendingMapClickTarget | null = null
+let pendingMapClickTimer: ReturnType<typeof setTimeout> | undefined
 let activeAnchorDrag: {
   systemId: string
   pointerId: number
@@ -337,6 +462,44 @@ let activeAnchorDrag: {
   preview: Point
   moved: boolean
 } | null = null
+type OrbitGestureBase = {
+  systemId: string
+  orbitId: string
+  pointerId: number
+  startClient: Point
+  camera: MapViewport
+  anchorDelta: Point
+  projection: ContinuousWardenSystemProjection
+  legacyAnchor: Point
+  workspaceSnapshot: LocalWorkspace
+  systemSnapshot: StarSystem
+  orbitSnapshot: Orbit
+  sourceGeometry: string
+  center: Point
+  startRadii: OrbitRadii
+  startRotation: number
+  moved: boolean
+}
+type ActiveOrbitGesture =
+  | (OrbitGestureBase & { kind: 'resize'; axis: 'global' | 'horizontal' | 'vertical'; startDistance: number; previewRadii: OrbitRadii })
+  | (OrbitGestureBase & { kind: 'rotation'; lastPointerAngle: number; previewRotation: number })
+  | (OrbitGestureBase & {
+      kind: 'center'
+      previewCenter: Point
+      previewHostId: string | null
+      previewRadii: OrbitRadii
+      candidates: OrbitCenterMoveCandidate[]
+      hasResolvedCandidate: boolean
+    })
+let activeOrbitGesture: ActiveOrbitGesture | null = null
+type OrbitEditTarget = NonNullable<ReturnType<typeof orbitEditTargetAtTarget>>
+type WardenMovePointerTarget =
+  | { kind: 'object'; systemId: string; objectId: string }
+  | { kind: 'anchor'; systemId: string }
+  | { kind: 'orbit'; target: OrbitEditTarget }
+type WardenMoveHit = { target: WardenMovePointerTarget | null; blockedCommand: EntityCommand | null }
+let suppressNextMapClick = false
+let suppressNextMapClickTimer: ReturnType<typeof setTimeout> | undefined
 let resolveReady: (value: boolean) => void = () => undefined
 const readiness = new Promise<boolean>(resolve => { resolveReady = resolve })
 
@@ -352,6 +515,33 @@ const projections = computed(() => props.cluster.systems.map((system, index) => 
   props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
 )))
+const renderedProjections = computed(() => projections.value.map(projection => {
+  const preview = objectMovePreview.value?.systemId === projection.id
+    ? objectMovePreview.value
+    : preciseObjectPlacementPreview.value?.systemId === projection.id
+      ? preciseObjectPlacementPreview.value
+      : preciseOrbitCenterMovePreview.value?.systemId === projection.id
+        ? preciseOrbitCenterMovePreview.value
+        : null
+  const rendered = preview
+    ? { ...projection, objects: preview.projection.objects, orbits: preview.projection.orbits }
+    : projection
+  const directOrbit = directOrbitPreview.value?.systemId === projection.id
+    ? directOrbitPreview.value.projection
+    : null
+  const withDirectOrbit = directOrbit
+    ? { ...rendered, objects: directOrbit.objects, orbits: directOrbit.orbits }
+    : rendered
+  const adjustment = props.orbitAdjustmentPreview
+  if (!adjustment || adjustment.identity.systemId !== projection.id) return withDirectOrbit
+  return projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
+}))
+
+function isObjectMovePreview(systemId: string, objectId: string): boolean {
+  return (objectMovePreview.value?.systemId === systemId && objectMovePreview.value.objectId === objectId)
+    || (preciseObjectPlacementPreview.value?.systemId === systemId
+      && preciseObjectPlacementPreview.value.objectId === objectId)
+}
 
 const routeMarks = computed(() => {
   const jumpPoints = new Map(jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]))
@@ -379,7 +569,7 @@ const routeFanOutLimitPixels = computed(() => Math.min(
 function routesAtDetail(detail: ReadonlySet<string>, pixelsPerSceneUnit?: number) {
   return buildContinuousWardenRouteGeometries({
     routes: props.cluster.routes,
-    projections: projections.value,
+    projections: getRenderedSystemProjections(),
     detailSystemIds: detail,
     anchorOverrides: routeAnchorOverrides.value,
     unresolvedExitPositions: props.unresolvedExitPositions,
@@ -508,6 +698,22 @@ function objectSubtype(projectionId: string, objectId: string): string {
   return localObject(projectionId, objectId)?.subtype ?? ''
 }
 
+function localOrbit(systemId: string, orbitId: string): Orbit | undefined {
+  return props.cluster.systems.find(system => system.id === systemId)?.orbits.find(orbit => orbit.id === orbitId)
+}
+
+function orbitAxisHandlePoint(
+  orbit: ContinuousWardenSystemProjection['orbits'][number],
+  axis: 'horizontal' | 'vertical',
+): Point {
+  return orbitPointAtAngle(orbit.center, orbit.radii, axis === 'horizontal' ? 0 : -Math.PI / 2, orbit.rotation)
+}
+
+function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
+  const screenScale = projection.scale * viewport.value.k * svgPixelScale.value
+  return screenScale > 0 ? 7 / screenScale : 7
+}
+
 function isSelectedObject(systemId: string, objectId: string): boolean {
   const target = props.inspectedTarget
   return target?.kind === 'object' && target.systemId === systemId && target.objectId === objectId
@@ -550,7 +756,7 @@ function preserveFocusBeforeDetailCollapse(nextDetailSystemIds: ReadonlySet<stri
   const focusedMark = document.activeElement
   if (!(focusedMark instanceof Element)) return
   const focusedEntity = focusedMark.closest<SVGElement>(
-    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id]',
+    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id], .continuous-warden-orbit-edit-handle[data-system-id]',
   )
   const systemId = focusedEntity?.getAttribute('data-system-id')
   if (!focusedEntity || !systemId || nextDetailSystemIds.has(systemId)) return
@@ -598,6 +804,10 @@ function getViewport(): MapViewport {
   const element = svgElement.value
   const transform = element ? zoomTransform(element) : zoomIdentity
   return { x: transform.x, y: transform.y, k: transform.k }
+}
+
+function getRenderedSystemProjections(): readonly ContinuousWardenSystemProjection[] {
+  return renderedProjections.value
 }
 
 function getFitBounds(): SvgViewportRect | undefined {
@@ -946,8 +1156,15 @@ function cameraPoint(event: MouseEvent | PointerEvent): Point | null {
   const element = svgElement.value
   if (!element) return null
   const [x, y] = pointer(event, element)
-  const [worldX, worldY] = zoomTransform(element).invert([x, y])
-  return { x: worldX, y: worldY }
+  const transform = zoomTransform(element)
+  return { x: (x - transform.x) / transform.k, y: (y - transform.y) / transform.k }
+}
+
+function cameraPointAt(event: PointerEvent, camera: MapViewport): Point | null {
+  const element = svgElement.value
+  if (!element || camera.k <= 0) return null
+  const [x, y] = pointer(event, element)
+  return { x: (x - camera.x) / camera.k, y: (y - camera.y) / camera.k }
 }
 
 function systemIdAtTarget(target: EventTarget | null): string | null {
@@ -964,9 +1181,24 @@ function objectTargetAtTarget(target: EventTarget | null): { systemId: string; o
   return systemId && objectId ? { systemId, objectId } : null
 }
 
+function canMoveObjectInSystem(target: { systemId: string; objectId: string }): boolean {
+  const system = props.cluster.systems.find(candidate => candidate.id === target.systemId)
+  const object = system?.objects.find(candidate => candidate.id === target.objectId)
+  if (!object) return false
+  const fromOrbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
+  return !props.isEntityCommandBlocked?.({
+    kind: 'object-placement',
+    objectId: object.id,
+    fromOrbitId,
+    toOrbitId: null,
+  })
+}
+
 function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; orbitId: string } | null {
   if (!(target instanceof Element)) return null
-  const mark = target.closest<SVGElement>('.continuous-warden-orbit-target[data-system-id][data-orbit-id]')
+  const mark = target.closest<SVGElement>(
+    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+  )
   const systemId = mark?.getAttribute('data-system-id')
   const orbitId = mark?.getAttribute('data-orbit-id')
   return systemId && orbitId ? { systemId, orbitId } : null
@@ -977,14 +1209,617 @@ function routeIdAtTarget(target: EventTarget | null): string | null {
   return target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
 }
 
+function orbitEditCommand(target: OrbitEditTarget): EntityCommand {
+  return target.kind === 'center'
+    ? { kind: 'orbit-center-position', orbitId: target.orbitId }
+    : { kind: 'orbit-geometry', orbitId: target.orbitId }
+}
+
+function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): WardenMoveHit {
+  if (!element) return { target: null, blockedCommand: null }
+  const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
+    .filter(hit => hit === element || element.contains(hit))
+  const orderedHits = hits.length ? hits : [event.target]
+  let blockedCommand: EntityCommand | null = null
+  for (const hit of orderedHits) {
+    const systemId = systemIdAtTarget(hit)
+    if (systemId) return { target: { kind: 'anchor', systemId }, blockedCommand }
+    const editTarget = orbitEditTargetAtTarget(hit)
+    if (editTarget) {
+      const command = orbitEditCommand(editTarget)
+      if (props.isEntityCommandBlocked?.(command)) {
+        blockedCommand ??= command
+        continue
+      }
+      return { target: { kind: 'orbit', target: editTarget }, blockedCommand }
+    }
+    const objectTarget = objectTargetAtTarget(hit)
+    if (objectTarget) {
+      if (canMoveObjectInSystem(objectTarget)) return { target: { kind: 'object', ...objectTarget }, blockedCommand }
+      continue
+    }
+    const orbitTarget = orbitTargetAtTarget(hit)
+    if (orbitTarget) {
+      return { target: { kind: 'orbit', target: { ...orbitTarget, kind: 'resize', axis: 'global' } }, blockedCommand }
+    }
+  }
+  return { target: null, blockedCommand }
+}
+
+function systemMapGeometry(workspace: LocalWorkspace): SystemMapGeometry {
+  return {
+    objectAngles: workspace.layout.objectAngles,
+    orbitRadii: workspace.layout.orbitRadii,
+    orbitRotations: workspace.layout.orbitRotations,
+  }
+}
+
+function addOwnersAtPoint(
+  point: Point,
+  subtype: CatalogueSubtype,
+  definiteOwnerId: string | null,
+): { owners: ContinuousObjectAddOwner[]; requiresOwnerChoice: boolean } {
+  const systems = projections.value.map(projection => ({
+    id: projection.id,
+    envelope: {
+      x: projection.envelope.x + anchorDelta(projection).x,
+      y: projection.envelope.y + anchorDelta(projection).y,
+      width: projection.envelope.width,
+      height: projection.envelope.height,
+    },
+  }))
+  const ownerResolution = resolveContinuousObjectOwnerResolution(point, systems, definiteOwnerId)
+  const geometry = systemMapGeometry(props.workspace)
+  const owners = ownerResolution.systemIds.flatMap(systemId => {
+    const projection = projections.value.find(candidate => candidate.id === systemId)
+    const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!projection || !system) return []
+    const delta = anchorDelta(projection)
+    const localPoint = projection.unprojectLocalPoint({ x: point.x - delta.x, y: point.y - delta.y })
+    const candidates = creationCandidatesAtPoint(
+      system,
+      localPoint,
+      { kind: 'object', subtype },
+      geometry,
+      detailSystemIds.value.has(systemId),
+    )
+      .map(candidate => candidate.target.kind === 'orbit'
+        && props.isEntityCommandBlocked?.({ kind: 'object-create', orbitId: candidate.target.orbitId })
+        ? { ...candidate, error: 'Resolve the Inspector draft before adding an object to this Orbit.' }
+        : candidate)
+    return [{ systemId, candidates }]
+  })
+  return { owners, requiresOwnerChoice: ownerResolution.requiresOwnerChoice }
+}
+
+function offerObjectAdd(point: Point, target: EventTarget | null): void {
+  const type = props.creationType
+  if (type?.kind !== 'object') return
+  const object = objectTargetAtTarget(target)
+  const orbit = orbitTargetAtTarget(target)
+  const hitOwnerId = object?.systemId ?? orbit?.systemId ?? null
+  const pinnedOwnerId = props.objectAddPinnedOwnerId
+  const foreignHit = pinnedOwnerId && hitOwnerId && pinnedOwnerId !== hitOwnerId
+  const directTarget = foreignHit
+    ? null
+    : object
+      ? { kind: 'object' as const, id: object.objectId }
+      : orbit
+        ? { kind: 'orbit' as const, id: orbit.orbitId }
+        : null
+  const ownerResolution = foreignHit && pinnedOwnerId
+    ? { owners: [{ systemId: pinnedOwnerId, candidates: [] }], requiresOwnerChoice: false }
+    : addOwnersAtPoint(point, type.subtype, pinnedOwnerId ?? hitOwnerId)
+  emit('continuous-object-add-target', {
+    subtype: type.subtype,
+    workspaceSnapshot: props.workspace,
+    directTarget,
+    ...(type.subtype === 'other' && props.creationOtherType ? { otherType: props.creationOtherType } : {}),
+    requiresOwnerChoice: ownerResolution.requiresOwnerChoice,
+    owners: ownerResolution.owners,
+  })
+}
+
+function emitOrbitAdjustment(event: KeyboardEvent | WheelEvent, input: OrbitAdjustmentInput): boolean {
+  const command: EntityCommand = { kind: 'orbit-geometry', orbitId: input.orbitId }
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  if (props.isEntityCommandBlocked?.(command)) {
+    emit('entity-command-blocked', command)
+    return true
+  }
+  emit('orbit-adjustment', input)
+  return true
+}
+
+function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented || props.standaloneImportPlacementEnabled || props.mode !== 'move'
+    || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting
+    || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return false
+  const target = orbitTargetAtTarget(event.target)
+  if (!target) return false
+  const editTarget = orbitEditTargetAtTarget(event.target)
+  if (!editTarget || editTarget.kind === 'center') return false
+  const system = props.cluster.systems.find(candidate => candidate.id === target.systemId)
+  const orbit = system?.orbits.find(candidate => candidate.id === target.orbitId)
+  if (!system || !orbit) return false
+  const step = event.shiftKey ? 10 : 1
+  const minimum = minimumOrbitRadius(system, orbit)
+  const change = continuousOrbitKeyboardChange(
+    editTarget.kind === 'rotation'
+      ? { kind: 'rotation' }
+      : { kind: 'resize', axis: editTarget.axis },
+    event.key,
+    step,
+    minimum,
+  )
+  if (!change) return false
+  return emitOrbitAdjustment(event, {
+    systemId: system.id,
+    orbitId: orbit.id,
+    inputKind: 'keyboard',
+    keyCode: event.code,
+    change,
+  })
+}
+
+function onWheelCapture(event: WheelEvent): void {
+  if (props.standaloneImportPlacementEnabled || !event.ctrlKey || event.deltaY === 0 || props.mode !== 'move'
+    || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting) return
+  const hit = orbitTargetAtTarget(event.target)
+  if (!hit) return
+  emitOrbitAdjustment(event, {
+    systemId: hit.systemId,
+    orbitId: hit.orbitId,
+    inputKind: 'wheel',
+    change: { kind: 'rotation', delta: event.deltaY * 0.05 },
+  })
+}
+
+function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): void {
+  const targetLocal = continuousObjectDragTarget(
+    drag.projection,
+    drag.anchorDelta,
+    drag.originLocal,
+    drag.startScene,
+    scenePoint,
+  )
+  const delta = { x: targetLocal.x - drag.originLocal.x, y: targetLocal.y - drag.originLocal.y }
+  const plan = planSelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, [drag.objectId], delta)
+  const previewPosition = plan?.positions.get(drag.objectId)
+  const system = plan
+    ? applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan).cluster.systems.find(candidate => candidate.id === drag.systemId)
+    : undefined
+  if (!plan || !previewPosition || !system) return
+  const previewWorkspace = applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan)
+  const projection = projectWardenSystem(system, drag.legacyAnchor, systemMapGeometry(previewWorkspace), drag.projection.scale)
+  drag.targetPosition = toNormalizedMapPoint(previewPosition)
+  objectMovePreview.value = { systemId: drag.systemId, objectId: drag.objectId, projection }
+}
+
+function orbitEditTargetAtTarget(target: EventTarget | null): {
+  systemId: string
+  orbitId: string
+  kind: 'resize' | 'rotation' | 'center'
+  axis: 'global' | 'horizontal' | 'vertical'
+} | null {
+  if (!(target instanceof Element)) return null
+  const handle = target.closest<SVGElement>('.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]')
+  const handleSystemId = handle?.getAttribute('data-system-id')
+  const handleOrbitId = handle?.getAttribute('data-orbit-id')
+  if (handle && handleSystemId && handleOrbitId) {
+    const kind = handle.getAttribute('data-orbit-edit-kind')
+    if (kind === 'rotation' || kind === 'center') {
+      return { systemId: handleSystemId, orbitId: handleOrbitId, kind, axis: 'global' }
+    }
+    if (kind === 'resize') {
+      const axis = handle.getAttribute('data-resize-axis')
+      return {
+        systemId: handleSystemId,
+        orbitId: handleOrbitId,
+        kind,
+        axis: axis === 'horizontal' || axis === 'vertical' ? axis : 'global',
+      }
+    }
+  }
+  const orbit = orbitTargetAtTarget(target)
+  return orbit ? { ...orbit, kind: 'resize', axis: 'global' } : null
+}
+
+function orbitGestureLocalPoint(gesture: OrbitGestureBase, event: PointerEvent): Point | null {
+  const scenePoint = cameraPointAt(event, gesture.camera)
+  if (!scenePoint) return null
+  return gesture.projection.unprojectLocalPoint({
+    x: scenePoint.x - gesture.anchorDelta.x,
+    y: scenePoint.y - gesture.anchorDelta.y,
+  })
+}
+
+function orbitGestureSourceIsCurrent(gesture: OrbitGestureBase): boolean {
+  if (props.mode !== 'move' || toRaw(props.workspace) !== gesture.workspaceSnapshot
+    || props.workspace.id !== gesture.workspaceSnapshot.id
+    || props.cluster.id !== gesture.workspaceSnapshot.cluster.id) return false
+  const system = props.cluster.systems.find(candidate => candidate.id === gesture.systemId)
+  const orbit = system?.orbits.find(candidate => candidate.id === gesture.orbitId)
+  return !!orbit && JSON.stringify(toRaw(orbit)) === JSON.stringify(gesture.orbitSnapshot)
+}
+
+function directCenterMoveCandidates(
+  gesture: OrbitGestureBase,
+  point: Point,
+): { candidate: OrbitCenterMoveCandidate | null; candidates: OrbitCenterMoveCandidate[] } {
+  const geometry = systemMapGeometry(gesture.workspaceSnapshot)
+  const positions = objectPositions(gesture.systemSnapshot, geometry)
+  const movingObjectIds = objectsMovedWithOrbit(gesture.systemSnapshot, gesture.orbitId)
+  const geometryBlocked = props.isEntityCommandBlocked?.({ kind: 'orbit-center-position', orbitId: gesture.orbitId }) ?? false
+  const nearbyObjects = gesture.systemSnapshot.objects
+    .map((object, index) => ({
+      object,
+      index,
+      distance: Math.hypot(point.x - requiredPosition(positions, object.id).x, point.y - requiredPosition(positions, object.id).y),
+    }))
+    .filter(candidate => candidate.distance <= 28)
+    .sort((left, right) => left.distance - right.distance || left.index - right.index)
+  const candidates: OrbitCenterMoveCandidate[] = nearbyObjects.map(({ object }) => {
+    const hostBlocked = props.isEntityCommandBlocked?.({ kind: 'orbit-host', orbitId: gesture.orbitId, hostId: object.id }) ?? false
+    return {
+      key: `host:${object.id}`,
+      label: `Center on ${object.name}`,
+      target: { kind: 'host', objectId: object.id },
+      error: movingObjectIds.has(object.id)
+        ? 'This Orbit cannot be hosted by an object in its own hierarchy.'
+        : geometryBlocked
+          ? 'Resolve the Inspector draft before moving this Orbit.'
+          : hostBlocked
+            ? 'Resolve the Inspector draft before changing this Orbit host.'
+            : null,
+    }
+  })
+  if (nearbyObjects.length === 0) {
+    candidates.push({
+      key: `free:${point.x}:${point.y}`,
+      label: 'Free Orbit center',
+      target: { kind: 'free', point: toNormalizedMapPoint(point) },
+      error: geometryBlocked ? 'Resolve the Inspector draft before moving this Orbit.' : null,
+    })
+  }
+  const eligible = candidates.filter(candidate => candidate.error === null)
+  return { candidate: eligible.length === 1 ? eligible[0]! : null, candidates }
+}
+
+function publishDirectOrbitPreview(gesture: ActiveOrbitGesture): void {
+  const geometry = systemMapGeometry(gesture.workspaceSnapshot)
+  const system = gesture.systemSnapshot
+  let previewSystem = system
+  if (gesture.kind === 'resize') {
+    geometry.orbitRadii = { ...geometry.orbitRadii, [gesture.orbitId]: { ...gesture.previewRadii } }
+  } else if (gesture.kind === 'rotation') {
+    geometry.orbitRotations = { ...geometry.orbitRotations, [gesture.orbitId]: gesture.previewRotation }
+  } else {
+    const currentOrbit = gesture.orbitSnapshot
+    const previewOrbit: Orbit = gesture.previewHostId === null
+      ? { id: currentOrbit.id, order: currentOrbit.order, hostId: null, center: toNormalizedMapPoint(gesture.previewCenter) }
+      : { id: currentOrbit.id, order: currentOrbit.order, hostId: gesture.previewHostId }
+    previewSystem = {
+      ...system,
+      orbits: system.orbits.map(orbit => orbit.id === gesture.orbitId ? previewOrbit : orbit),
+    }
+    geometry.orbitRadii = { ...geometry.orbitRadii, [gesture.orbitId]: { ...gesture.previewRadii } }
+  }
+  const projection = projectWardenSystem(
+    previewSystem,
+    gesture.legacyAnchor,
+    geometry,
+    gesture.projection.scale,
+  )
+  directOrbitPreview.value = { systemId: gesture.systemId, orbitId: gesture.orbitId, projection }
+}
+
+function previewOrbitGestureAt(gesture: ActiveOrbitGesture, point: Point): void {
+  if (!orbitGestureSourceIsCurrent(gesture)) {
+    finishOrbitGesture(true)
+    return
+  }
+  if (gesture.kind === 'resize') {
+    if (props.isEntityCommandBlocked?.({ kind: 'orbit-geometry', orbitId: gesture.orbitId })) {
+      emit('entity-command-blocked', { kind: 'orbit-geometry', orbitId: gesture.orbitId })
+      finishOrbitGesture(true)
+      return
+    }
+    const minimum = minimumOrbitRadius(gesture.systemSnapshot, gesture.orbitSnapshot)
+    if (gesture.axis === 'global') {
+      const startDistance = Math.max(gesture.startDistance, Number.EPSILON)
+      const minimumScale = Math.max(
+        minimum / gesture.startRadii.horizontal,
+        minimum / gesture.startRadii.vertical,
+      )
+      const scale = Math.max(minimumScale, Math.hypot(point.x - gesture.center.x, point.y - gesture.center.y) / startDistance)
+      gesture.previewRadii = {
+        horizontal: Math.round(gesture.startRadii.horizontal * scale),
+        vertical: Math.round(gesture.startRadii.vertical * scale),
+      }
+    } else {
+      const localPoint = rotatePoint(point, gesture.center, -gesture.startRotation)
+      gesture.previewRadii = {
+        horizontal: gesture.axis === 'horizontal'
+          ? Math.max(minimum, Math.round(Math.abs(localPoint.x - gesture.center.x)))
+          : gesture.startRadii.horizontal,
+        vertical: gesture.axis === 'vertical'
+          ? Math.max(minimum, Math.round(Math.abs(localPoint.y - gesture.center.y)))
+          : gesture.startRadii.vertical,
+      }
+    }
+    publishDirectOrbitPreview(gesture)
+    return
+  }
+  if (gesture.kind === 'rotation') {
+    if (props.isEntityCommandBlocked?.({ kind: 'orbit-geometry', orbitId: gesture.orbitId })) {
+      emit('entity-command-blocked', { kind: 'orbit-geometry', orbitId: gesture.orbitId })
+      finishOrbitGesture(true)
+      return
+    }
+    const pointerAngle = Math.atan2(point.y - gesture.center.y, point.x - gesture.center.x)
+    let delta = pointerAngle - gesture.lastPointerAngle
+    if (delta > Math.PI) delta -= Math.PI * 2
+    else if (delta < -Math.PI) delta += Math.PI * 2
+    gesture.previewRotation = normalizeOrbitRotation(gesture.previewRotation + delta * 180 / Math.PI)
+    gesture.lastPointerAngle = pointerAngle
+    publishDirectOrbitPreview(gesture)
+    return
+  }
+  const resolution = directCenterMoveCandidates(gesture, point)
+  gesture.candidates = resolution.candidates
+  gesture.hasResolvedCandidate = resolution.candidate !== null
+  if (!resolution.candidate) {
+    directOrbitPreview.value = null
+    return
+  }
+  if (resolution.candidate.target.kind === 'host') {
+    gesture.previewHostId = resolution.candidate.target.objectId
+    gesture.previewCenter = requiredPosition(objectPositions(gesture.systemSnapshot, systemMapGeometry(gesture.workspaceSnapshot)), gesture.previewHostId)
+    const hostedOrbit: Orbit = { id: gesture.orbitId, order: gesture.orbitSnapshot.order, hostId: gesture.previewHostId }
+    const minimum = minimumOrbitRadius(gesture.systemSnapshot, hostedOrbit)
+    gesture.previewRadii = {
+      horizontal: Math.max(gesture.startRadii.horizontal, minimum),
+      vertical: Math.max(gesture.startRadii.vertical, minimum),
+    }
+  } else {
+    gesture.previewHostId = null
+    gesture.previewCenter = point
+    gesture.previewRadii = gesture.startRadii
+  }
+  publishDirectOrbitPreview(gesture)
+}
+
+function startOrbitGesture(
+  event: PointerEvent,
+  element: SVGSVGElement | null,
+  explicitTarget?: OrbitEditTarget,
+): boolean {
+  if (!element || event.button !== 0 || props.mode !== 'move' || props.moveTargeting
+    || props.clusterMoveTargeting || props.clusterAddType != null || props.creationType != null) return false
+  const target = explicitTarget ?? orbitEditTargetAtTarget(event.target)
+  if (!target) return false
+  const sourceSystem = props.workspace.cluster.systems.find(system => system.id === target.systemId)
+  const orbit = sourceSystem?.orbits.find(candidate => candidate.id === target.orbitId)
+  const projection = projections.value.find(candidate => candidate.id === target.systemId)
+  const legacyAnchor = props.systemPositions[target.systemId]
+  if (!sourceSystem || !orbit || !projection || !legacyAnchor) return false
+  if (target.kind === 'center' && orbit.hostId !== null) return false
+  const command: EntityCommand = target.kind === 'center'
+    ? { kind: 'orbit-center-position', orbitId: orbit.id }
+    : { kind: 'orbit-geometry', orbitId: orbit.id }
+  if (props.isEntityCommandBlocked?.(command)) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    emit('entity-command-blocked', command)
+    return true
+  }
+  const workspaceSnapshot = toRaw(props.workspace)
+  const systemSnapshot = workspaceSnapshot.cluster.systems.find(system => system.id === target.systemId)
+  const orbitSnapshot = systemSnapshot?.orbits.find(candidate => candidate.id === target.orbitId)
+  const scenePoint = cameraPoint(event)
+  if (!systemSnapshot || !orbitSnapshot || !scenePoint) return false
+  const positions = objectPositions(systemSnapshot, systemMapGeometry(workspaceSnapshot))
+  const center = orbitCenter(orbitSnapshot, positions)
+  const startRadii = readOrbitRadii(systemSnapshot, orbitSnapshot, systemMapGeometry(workspaceSnapshot))
+  const startRotation = orbitRotation(orbitSnapshot, systemMapGeometry(workspaceSnapshot))
+  const localPointer = projection.unprojectLocalPoint({
+    x: scenePoint.x - anchorDelta(projection).x,
+    y: scenePoint.y - anchorDelta(projection).y,
+  })
+  const common: OrbitGestureBase = {
+    systemId: target.systemId,
+    orbitId: target.orbitId,
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    camera: { ...viewport.value },
+    anchorDelta: { ...anchorDelta(projection) },
+    projection,
+    legacyAnchor,
+    workspaceSnapshot,
+    systemSnapshot,
+    orbitSnapshot,
+    sourceGeometry: orbitGeometrySource(workspaceSnapshot, systemSnapshot, orbitSnapshot),
+    center,
+    startRadii,
+    startRotation,
+    moved: false,
+  }
+  if (target.kind === 'resize') {
+    activeOrbitGesture = {
+      ...common,
+      kind: 'resize',
+      axis: target.axis,
+      startDistance: Math.hypot(localPointer.x - center.x, localPointer.y - center.y),
+      previewRadii: startRadii,
+    }
+  } else if (target.kind === 'rotation') {
+    activeOrbitGesture = {
+      ...common,
+      kind: 'rotation',
+      lastPointerAngle: Math.atan2(localPointer.y - center.y, localPointer.x - center.x),
+      previewRotation: startRotation,
+    }
+  } else {
+    activeOrbitGesture = {
+      ...common,
+      kind: 'center',
+      previewCenter: center,
+      previewHostId: null,
+      previewRadii: startRadii,
+      candidates: [],
+      hasResolvedCandidate: false,
+    }
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  try { element.setPointerCapture(event.pointerId) } catch { /* The event may already be outside the active SVG. */ }
+  emit('editing-gesture-change', true)
+  return true
+}
+
+function finishOrbitGesture(cancelled: boolean): void {
+  const gesture = activeOrbitGesture
+  if (!gesture) return
+  activeOrbitGesture = null
+  const element = svgElement.value
+  if (element?.hasPointerCapture(gesture.pointerId)) {
+    try { element.releasePointerCapture(gesture.pointerId) } catch { /* Capture may already be released. */ }
+  }
+  emit('editing-gesture-change', false)
+  directOrbitPreview.value = null
+  if (cancelled || gesture.moved) suppressClickAfterOwnedGesture()
+  if (cancelled || !gesture.moved || !orbitGestureSourceIsCurrent(gesture)) return
+  if (gesture.kind === 'resize') emit('resize-orbit', gesture.orbitId, gesture.previewRadii, gesture.systemId, gesture.sourceGeometry)
+  else if (gesture.kind === 'rotation') emit('rotate-orbit', gesture.orbitId, gesture.previewRotation, gesture.systemId, gesture.sourceGeometry)
+  else if (gesture.hasResolvedCandidate) {
+    emit('move-orbit-center', gesture.orbitId, toNormalizedMapPoint(gesture.previewCenter), gesture.previewHostId, gesture.systemId, gesture.sourceGeometry)
+  } else if (gesture.candidates.length > 0) {
+    emit('orbit-center-candidates', gesture.orbitId, gesture.candidates, gesture.systemId)
+  }
+}
+
+function deferMapClickTarget(target: PendingMapClickTarget): void {
+  pendingMapClickTarget = target
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = setTimeout(() => {
+    pendingMapClickTarget = null
+    pendingMapClickTimer = undefined
+  }, 900)
+}
+
+function takePendingMapClickTarget(): PendingMapClickTarget | null {
+  const target = pendingMapClickTarget
+  pendingMapClickTarget = null
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = undefined
+  return target
+}
+
+function suppressClickAfterOwnedGesture(): void {
+  suppressNextMapClick = true
+  if (suppressNextMapClickTimer) clearTimeout(suppressNextMapClickTimer)
+  suppressNextMapClickTimer = setTimeout(() => {
+    suppressNextMapClick = false
+    suppressNextMapClickTimer = undefined
+  }, 900)
+}
+
+function clearOwnedGestureClickSuppression(): void {
+  suppressNextMapClick = false
+  if (suppressNextMapClickTimer) clearTimeout(suppressNextMapClickTimer)
+  suppressNextMapClickTimer = undefined
+}
+
+function clearObjectMovePreview(): void {
+  objectMovePreview.value = null
+}
+
+function finishObjectDrag(cancelled: boolean): void {
+  const drag = activeObjectDrag
+  if (!drag) return
+  activeObjectDrag = null
+  const element = svgElement.value
+  if (element?.hasPointerCapture(drag.pointerId)) {
+    try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already have been released. */ }
+  }
+  emit('editing-gesture-change', false)
+  if (cancelled || drag.moved) suppressClickAfterOwnedGesture()
+  if (!cancelled && drag.moved) {
+    const position = drag.targetPosition
+    clearObjectMovePreview()
+    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot)
+    return
+  }
+  clearObjectMovePreview()
+}
+
 function onPointerDownCapture(event: PointerEvent): void {
-  if (props.standaloneImportPlacementEnabled) return
-  if (event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting || props.clusterAddType !== null) return
-  const systemId = systemIdAtTarget(event.target)
+  const ownedPointerId = activeOrbitGesture?.pointerId ?? activeObjectDrag?.pointerId ?? activeAnchorDrag?.pointerId
+  if (ownedPointerId !== undefined && ownedPointerId !== event.pointerId) {
+    cancelActiveGesture()
+    return
+  }
+  clearOwnedGestureClickSuppression()
+  takePendingMapClickTarget()
+  if (props.standaloneImportPlacementEnabled || event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
+    || props.clusterAddType != null || props.creationType != null) return
+  const element = svgElement.value
+  const moveHit = moveTargetAtPoint(event, element)
+  const moveTarget = moveHit.target
+  if (!moveTarget && moveHit.blockedCommand) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    emit('entity-command-blocked', moveHit.blockedCommand)
+    return
+  }
+  if (moveTarget?.kind === 'orbit') {
+    startOrbitGesture(event, element, moveTarget.target)
+    return
+  }
+  const objectTarget = moveTarget?.kind === 'object' ? moveTarget : null
+  if (objectTarget && element) {
+    const projection = projections.value.find(candidate => candidate.id === objectTarget.systemId)
+    const localObject = projection?.objects.find(candidate => candidate.id === objectTarget.objectId)
+    const system = props.cluster.systems.find(candidate => candidate.id === objectTarget.systemId)
+    const legacyAnchor = props.systemPositions[objectTarget.systemId]
+    const scene = cameraPoint(event)
+    if (!projection || !localObject || !system || !legacyAnchor || !scene) return
+    const camera = getViewport()
+    const delta = anchorDelta(projection)
+    activeObjectDrag = {
+      systemId: objectTarget.systemId,
+      objectId: objectTarget.objectId,
+      pointerId: event.pointerId,
+      startClient: { x: event.clientX, y: event.clientY },
+      startScene: scene,
+      originLocal: localObject.position,
+      anchorDelta: delta,
+      camera,
+      legacyAnchor: { ...legacyAnchor },
+      projection,
+      workspaceSnapshot: props.workspace,
+      moved: false,
+      targetPosition: toNormalizedMapPoint(localObject.position),
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
+    emit('editing-gesture-change', true)
+    return
+  }
+  const systemId = moveTarget?.kind === 'anchor' ? moveTarget.systemId : null
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const origin = props.systemPositions[systemId ?? '']
   const scene = cameraPoint(event)
-  const element = svgElement.value
   if (!projection || !origin || !scene || !element) return
   event.preventDefault()
   event.stopPropagation()
@@ -1003,10 +1838,27 @@ function onPointerDownCapture(event: PointerEvent): void {
 }
 
 function onPointerMoveCapture(event: PointerEvent): void {
+  const orbitGesture = activeOrbitGesture
+  if (orbitGesture?.pointerId === event.pointerId) {
+    if (!hasMapDragThreshold(orbitGesture.startClient, { x: event.clientX, y: event.clientY }) && !orbitGesture.moved) return
+    orbitGesture.moved = true
+    const point = orbitGestureLocalPoint(orbitGesture, event)
+    if (point) previewOrbitGestureAt(orbitGesture, point)
+    event.preventDefault()
+    return
+  }
+  const objectDrag = activeObjectDrag
+  if (objectDrag?.pointerId === event.pointerId) {
+    if (!hasMapDragThreshold(objectDrag.startClient, { x: event.clientX, y: event.clientY }) && !objectDrag.moved) return
+    objectDrag.moved = true
+    const point = cameraPointAt(event, objectDrag.camera)
+    if (point) updateObjectMovePreview(objectDrag, point)
+    event.preventDefault()
+    return
+  }
   const drag = activeAnchorDrag
   if (!drag || drag.pointerId !== event.pointerId) return
-  const startDistance = Math.hypot(event.clientX - drag.startClient.x, event.clientY - drag.startClient.y)
-  if (startDistance < 4 && !drag.moved) return
+  if (!hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }) && !drag.moved) return
   drag.moved = true
   const point = cameraPoint(event)
   if (!point) return
@@ -1027,6 +1879,7 @@ function finishAnchorDrag(cancelled: boolean): void {
     try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already have been released. */ }
   }
   emit('editing-gesture-change', false)
+  if (cancelled || drag.moved) suppressClickAfterOwnedGesture()
   if (!cancelled && drag.moved) {
     emit('move-system', drag.systemId, drag.preview)
     return
@@ -1035,10 +1888,65 @@ function finishAnchorDrag(cancelled: boolean): void {
 }
 
 function onPointerEndCapture(event: PointerEvent): void {
+  if (activeOrbitGesture?.pointerId === event.pointerId) {
+    const gesture = activeOrbitGesture
+    const cancelled = event.type === 'pointercancel'
+    if (!cancelled && (gesture.moved || hasMapDragThreshold(gesture.startClient, { x: event.clientX, y: event.clientY }))) {
+      gesture.moved = true
+      const point = orbitGestureLocalPoint(gesture, event)
+      if (point) previewOrbitGestureAt(gesture, point)
+    }
+    const moved = gesture.moved
+    if (!cancelled && !moved && event.type === 'pointerup') {
+      deferMapClickTarget({ kind: 'orbit', systemId: gesture.systemId, orbitId: gesture.orbitId })
+    }
+    finishOrbitGesture(cancelled)
+    if (moved || cancelled) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
+  if (activeObjectDrag?.pointerId === event.pointerId) {
+    const drag = activeObjectDrag
+    if (event.type === 'pointerup' && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
+      drag.moved = true
+      const point = cameraPointAt(event, drag.camera)
+      if (point) updateObjectMovePreview(drag, point)
+    }
+    const moved = drag.moved
+    if (!moved && event.type === 'pointerup') {
+      deferMapClickTarget({ kind: 'object', systemId: drag.systemId, objectId: drag.objectId })
+    }
+    const cancelled = event.type === 'pointercancel'
+    finishObjectDrag(cancelled)
+    if (moved || cancelled) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
   if (activeAnchorDrag?.pointerId !== event.pointerId) return
+  if (event.type === 'pointerup' && (activeAnchorDrag.moved
+    || hasMapDragThreshold(activeAnchorDrag.startClient, { x: event.clientX, y: event.clientY }))) {
+    activeAnchorDrag.moved = true
+    const point = cameraPoint(event)
+    if (point) {
+      activeAnchorDrag.preview = moveWardenClusterAnchorBySceneDelta(activeAnchorDrag.origin, {
+        x: point.x - activeAnchorDrag.startScene.x,
+        y: point.y - activeAnchorDrag.startScene.y,
+      })
+      publishSystemPositionPreview(activeAnchorDrag.systemId, activeAnchorDrag.preview)
+    }
+  }
+  if (event.type === 'pointerup' && !activeAnchorDrag.moved) {
+    deferMapClickTarget({ kind: 'system', systemId: activeAnchorDrag.systemId })
+  }
   const moved = activeAnchorDrag.moved
   finishAnchorDrag(event.type === 'pointercancel')
-  if (moved) {
+  if (moved || event.type === 'pointercancel') {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
@@ -1046,11 +1954,20 @@ function onPointerEndCapture(event: PointerEvent): void {
 }
 
 function onLostPointerCapture(event: PointerEvent): void {
+  if (activeOrbitGesture?.pointerId === event.pointerId) finishOrbitGesture(true)
+  if (activeObjectDrag?.pointerId === event.pointerId) finishObjectDrag(true)
   if (activeAnchorDrag?.pointerId === event.pointerId) finishAnchorDrag(true)
 }
 
 function onClickCapture(event: MouseEvent): void {
   if (event.detail === 0) return
+  if (suppressNextMapClick) {
+    clearOwnedGestureClickSuppression()
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
   if (props.standaloneImportPlacementEnabled) {
     const point = cameraPoint(event)
     if (point) {
@@ -1092,14 +2009,18 @@ function onClickCapture(event: MouseEvent): void {
     emit('cluster-target', normalized, systemIds)
     return
   }
-  const routeId = routeIdAtTarget(event.target)
-  if (routeId) {
+  if (props.creationType?.kind === 'object' && !props.clusterChooserOpen) {
+    const point = cameraPoint(event)
+    if (!point) return
     event.preventDefault()
     event.stopPropagation()
-    emit('select-route', routeLayer.value?.routeIdAtStroke(event) ?? routeId)
+    event.stopImmediatePropagation()
+    offerObjectAdd(point, event.target)
     return
   }
+  const pendingTarget = takePendingMapClickTarget()
   const objectTarget = objectTargetAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'object' ? pendingTarget : null)
   if (objectTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -1107,7 +2028,15 @@ function onClickCapture(event: MouseEvent): void {
     emit('select-object', objectTarget.systemId, objectTarget.objectId)
     return
   }
+  const routeId = routeIdAtTarget(event.target)
+  if (routeId) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route', routeLayer.value?.routeIdAtStroke(event) ?? routeId)
+    return
+  }
   const orbitTarget = orbitTargetAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'orbit' ? pendingTarget : null)
   if (orbitTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -1116,6 +2045,7 @@ function onClickCapture(event: MouseEvent): void {
     return
   }
   const systemId = systemIdAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'system' ? pendingTarget.systemId : null)
   if (systemId) emit('activate-system', systemId)
 }
 
@@ -1124,10 +2054,9 @@ function onKeydownCapture(event: KeyboardEvent): void {
   const objectTarget = objectTargetAtTarget(event.target)
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
-  if (props.standaloneImportPlacementEnabled
-    && !props.keyboardOwnedOverlayOpen
-    && (event.key === 'Enter' || event.key === ' ')
-    && event.target instanceof SVGElement) {
+  const isActivation = event.key === 'Enter' || event.key === ' '
+  if (props.standaloneImportPlacementEnabled) {
+    if (props.keyboardOwnedOverlayOpen || !isActivation || !(event.target instanceof SVGElement)) return
     const element = svgElement.value
     const viewportRect = svgViewport.value
     const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
@@ -1144,6 +2073,22 @@ function onKeydownCapture(event: KeyboardEvent): void {
       event.preventDefault()
       event.stopPropagation()
       emit('standalone-import-placement-anchor', unprojectWardenClusterAnchor(scenePoint))
+    }
+    return
+  }
+  if (onOrbitAdjustmentKeydown(event)) return
+  if (props.creationType?.kind === 'object' && isActivation
+    && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
+    if (event.repeat) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
+    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, true)
+    if (point) {
+      event.preventDefault()
+      event.stopPropagation()
+      offerObjectAdd(point, event.target)
       return
     }
   }
@@ -1212,6 +2157,7 @@ function keyboardTargetScenePoint(
   systemId: string | null,
   objectTarget: { systemId: string; objectId: string } | null,
   orbitTarget: { systemId: string; orbitId: string } | null,
+  forObjectAdd = false,
 ): Point | null {
   if (systemId) {
     const projection = projections.value.find(candidate => candidate.id === systemId)
@@ -1231,7 +2177,10 @@ function keyboardTargetScenePoint(
   if (orbitTarget && orbitProjection) {
     const orbit = orbitProjection.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
     const delta = anchorDelta(orbitProjection)
-    if (orbit) return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    if (orbit) {
+      if (forObjectAdd) return continuousOrbitAddKeyboardPoint(orbit, delta)
+      return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    }
   }
   if (!(target instanceof SVGSVGElement) || target !== svgElement.value) return null
   const current = getViewport()
@@ -1259,6 +2208,144 @@ function setClusterSystemPositionPreview(systemId: string, position: Point | nul
 
 function getClusterSystemPositionPreviewVersion(systemId: string): number {
   return previewVersions.value.get(systemId) ?? 0
+}
+
+function projectionWithObjectPlacement(
+  systemId: string,
+  objectId: string,
+  targetPosition: Point,
+): ContinuousWardenSystemProjection | null {
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  const object = projection?.objects.find(candidate => candidate.id === objectId)
+  const legacyAnchor = props.systemPositions[systemId]
+  if (!projection || !system || !object || !legacyAnchor) return null
+  const delta = { x: targetPosition.x - object.position.x, y: targetPosition.y - object.position.y }
+  const plan = planSelectedObjectTranslation(props.workspace, systemId, [objectId], delta)
+  if (!plan) return null
+  const previewWorkspace = applySelectedObjectTranslation(props.workspace, systemId, plan)
+  const previewSystem = previewWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+  return previewSystem
+    ? projectWardenSystem(previewSystem, legacyAnchor, systemMapGeometry(previewWorkspace), projection.scale)
+    : null
+}
+
+function projectionWithObjectMoveTarget(
+  systemId: string,
+  objectId: string,
+  target: SystemObjectMoveTarget,
+): ContinuousWardenSystemProjection | null {
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const legacyAnchor = props.systemPositions[systemId]
+  if (!projection || !legacyAnchor) return null
+  const workspaceSnapshot = toRaw(props.workspace)
+  const placement = target.kind === 'orbit'
+    ? { kind: 'orbit' as const, orbitId: target.orbitId }
+    : { kind: 'system' as const, x: target.point.x, y: target.point.y }
+  const previewWorkspace = updateWorkspaceObject(
+    workspaceSnapshot,
+    systemId,
+    objectId,
+    { placement },
+    target.kind === 'orbit' ? { angle: target.angle } : undefined,
+  )
+  const system = previewWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+  return system
+    ? projectWardenSystem(system, legacyAnchor, systemMapGeometry(previewWorkspace), projection.scale)
+    : null
+}
+
+function projectionWithOrbitAdjustment(
+  projection: ContinuousWardenSystemProjection,
+  adjustment: OrbitAdjustmentPreview,
+): ContinuousWardenSystemProjection | null {
+  const system = props.workspace.cluster.systems.find(candidate => candidate.id === adjustment.identity.systemId)
+  const orbit = system?.orbits.find(candidate => candidate.id === adjustment.identity.orbitId)
+  const legacyAnchor = props.systemPositions[adjustment.identity.systemId]
+  if (!system || !orbit || !legacyAnchor) return null
+  const previewOrbit: Orbit = orbit.hostId === null
+    ? { ...orbit, center: { ...adjustment.geometry.center } }
+    : { id: orbit.id, order: orbit.order, hostId: orbit.hostId }
+  const previewSystem: StarSystem = {
+    ...system,
+    orbits: system.orbits.map(candidate => candidate.id === orbit.id ? previewOrbit : candidate),
+  }
+  const geometry = systemMapGeometry(props.workspace)
+  geometry.orbitRadii = { ...geometry.orbitRadii, [orbit.id]: { ...adjustment.geometry.radii } }
+  geometry.orbitRotations = { ...geometry.orbitRotations, [orbit.id]: adjustment.geometry.rotation }
+  return projectWardenSystem(previewSystem, legacyAnchor, geometry, projection.scale)
+}
+
+function setObjectPlacementPreview(systemId: string, objectId: string, scenePoint: Point | null): void {
+  if (!scenePoint) {
+    if (preciseObjectPlacementPreview.value?.systemId === systemId
+      && preciseObjectPlacementPreview.value.objectId === objectId) preciseObjectPlacementPreview.value = null
+    return
+  }
+  const projection = projectionWithObjectPlacement(systemId, objectId, scenePoint)
+  preciseObjectPlacementPreview.value = projection ? { systemId, objectId, projection } : null
+  preciseOrbitCenterMovePreview.value = null
+}
+
+function setObjectMoveTargetPreview(systemId: string, objectId: string, target: SystemObjectMoveTarget | null): void {
+  if (!target) {
+    if (preciseObjectPlacementPreview.value?.systemId === systemId
+      && preciseObjectPlacementPreview.value.objectId === objectId) preciseObjectPlacementPreview.value = null
+    return
+  }
+  const projection = projectionWithObjectMoveTarget(systemId, objectId, target)
+  preciseObjectPlacementPreview.value = projection ? { systemId, objectId, projection } : null
+  preciseOrbitCenterMovePreview.value = null
+}
+
+function setOrbitCenterMovePreview(systemId: string, orbitId: string, scenePoint: Point | null): void {
+  if (!scenePoint) {
+    if (preciseOrbitCenterMovePreview.value?.systemId === systemId
+      && preciseOrbitCenterMovePreview.value.orbitId === orbitId) preciseOrbitCenterMovePreview.value = null
+    return
+  }
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+  const legacyAnchor = props.systemPositions[systemId]
+  if (!projection || !system || !orbit || orbit.hostId !== null || !legacyAnchor) return
+  const center = toNormalizedMapPoint(scenePoint)
+  const previewSystem = {
+    ...system,
+    orbits: system.orbits.map(candidate => candidate.id === orbitId && candidate.hostId === null
+      ? { ...candidate, center }
+      : candidate),
+  }
+  preciseOrbitCenterMovePreview.value = {
+    systemId,
+    orbitId,
+    projection: projectWardenSystem(previewSystem, legacyAnchor, systemMapGeometry(props.workspace), projection.scale),
+  }
+  preciseObjectPlacementPreview.value = null
+}
+
+function setOrbitPlacementPreview(
+  systemId: string,
+  orbitId: string,
+  preview: { center: Point; radii: { horizontal: number; vertical: number }; rotation?: number } | null,
+): void {
+  orbitPlacementPreview.value = preview ? { systemId, orbitId, preview } : null
+}
+
+function orbitPlacementPreviewFor(systemId: string) {
+  return orbitPlacementPreview.value?.systemId === systemId ? orbitPlacementPreview.value.preview : null
+}
+
+function toSystemScenePoint(systemId: string, clusterPoint: Point): Point | null {
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  if (!projection || ![clusterPoint.x, clusterPoint.y].every(Number.isFinite)) return null
+  const delta = anchorDelta(projection)
+  return projection.unprojectLocalPoint({ x: clusterPoint.x - delta.x, y: clusterPoint.y - delta.y })
+}
+
+function getDetachedCenter(orbitId: string, systemId: string): Point | undefined {
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  return system ? getDetachedOrbitCenter(system, orbitId, systemMapGeometry(props.workspace)) : undefined
 }
 
 function setUnresolvedExitPositionPreview(routeId: string, position: Point | null): void {
@@ -1307,6 +2394,8 @@ function getImageContextKey(): string {
 
 function cancelActiveGesture(): void {
   viewPan = null
+  if (activeOrbitGesture) finishOrbitGesture(true)
+  if (activeObjectDrag) finishObjectDrag(true)
   if (activeAnchorDrag) finishAnchorDrag(true)
   touchCameraNavigation.cancel()
 }
@@ -1318,17 +2407,25 @@ function onZoom(event: { transform: { x: number; y: number; k: number } }): void
 }
 
 function startTouchNavigation(event: TouchEvent): void {
+  if (activeOrbitGesture) {
+    if (event.touches.length <= 1) return
+    finishOrbitGesture(true)
+  }
+  if (activeObjectDrag) {
+    if (event.touches.length <= 1) return
+    finishObjectDrag(true)
+  }
   if (activeAnchorDrag) return
   touchCameraNavigation.start(event)
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  if (activeAnchorDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag) return
   touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  if (activeAnchorDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag) return
   touchCameraNavigation.end(event)
 }
 
@@ -1389,6 +2486,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = undefined
+  pendingMapClickTarget = null
+  clearOwnedGestureClickSuppression()
   resizeObserver?.disconnect()
   resizeObserver = undefined
   cancelActiveGesture()
@@ -1396,18 +2497,35 @@ onBeforeUnmount(() => {
 })
 
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
+watch(() => props.workspace, workspace => {
+  if (activeObjectDrag && toRaw(activeObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
+  if (activeOrbitGesture && toRaw(activeOrbitGesture.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
+}, { flush: 'sync' })
 watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids => {
+  if (activeObjectDrag && !ids.split('\u0000').includes(activeObjectDrag.systemId)) cancelActiveGesture()
+  if (activeOrbitGesture && !ids.split('\u0000').includes(activeOrbitGesture.systemId)) cancelActiveGesture()
   if (activeAnchorDrag && !ids.split('\u0000').includes(activeAnchorDrag.systemId)) cancelActiveGesture()
 })
 watch(projections, () => {
   updateDetailReveal(viewport.value.k)
   const existingIds = new Set(projections.value.map(projection => projection.id))
   previewPositions.value = new Map([...previewPositions.value].filter(([id]) => existingIds.has(id)))
+  if (preciseObjectPlacementPreview.value && !existingIds.has(preciseObjectPlacementPreview.value.systemId)) {
+    preciseObjectPlacementPreview.value = null
+  }
+  if (preciseOrbitCenterMovePreview.value && !existingIds.has(preciseOrbitCenterMovePreview.value.systemId)) {
+    preciseOrbitCenterMovePreview.value = null
+  }
+  if (directOrbitPreview.value && !existingIds.has(directOrbitPreview.value.systemId)) directOrbitPreview.value = null
+  if (orbitPlacementPreview.value && !existingIds.has(orbitPlacementPreview.value.systemId)) {
+    orbitPlacementPreview.value = null
+  }
 }, { flush: 'sync' })
 
 defineExpose({
   exportImage,
   getImageContextKey,
+  getRenderedSystemProjections,
   getMinimumZoomScale: () => minimumZoomScale.value,
   getViewport,
   setViewport,
@@ -1432,6 +2550,12 @@ defineExpose({
   endTouchNavigation,
   setClusterSystemPositionPreview,
   getClusterSystemPositionPreviewVersion,
+  setObjectPlacementPreview,
+  setObjectMoveTargetPreview,
+  setOrbitCenterMovePreview,
+  setOrbitPlacementPreview,
+  toSystemScenePoint,
+  getDetachedCenter,
   setUnresolvedExitPositionPreview,
   whenReady: () => readiness,
 })
@@ -1519,6 +2643,29 @@ defineExpose({
   cursor: pointer;
 }
 
+.continuous-warden-orbit-edit-handle {
+  pointer-events: all;
+  vector-effect: non-scaling-stroke;
+  stroke: var(--map-selected);
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.continuous-warden-orbit-axis-handle,
+.continuous-warden-orbit-rotation-handle {
+  fill: var(--map-bg);
+}
+
+.continuous-warden-orbit-center-handle {
+  fill: var(--map-selected);
+  stroke: var(--map-bg);
+  stroke-width: 2;
+}
+
+.continuous-warden-orbit-edit-handle:active {
+  cursor: grabbing;
+}
+
 .continuous-warden-system-detail .orbit-ring {
   fill: none;
   stroke: var(--map-orbit);
@@ -1546,6 +2693,17 @@ defineExpose({
 .continuous-warden-object:focus .continuous-warden-object-hit-target {
   stroke: var(--map-selected);
   stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-object.is-move-preview {
+  cursor: grabbing;
+}
+
+.continuous-warden-object.is-move-preview .continuous-warden-object-hit-target {
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
 }
 

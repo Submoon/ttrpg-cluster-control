@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import type { JumpClusterExport } from '../../domain/workspace'
 import campaignBaselineFixture from '../fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   waitForWorkspaceSaved,
@@ -18,7 +19,7 @@ export type CampaignFixture = typeof campaignBaselineFixture
 /** Imports the public baseline through the UI and waits for its IndexedDB save to finish. */
 export async function importCampaignWorkspace(
   page: Page,
-  fixture: CampaignFixture = campaignBaselineFixture,
+  fixture: CampaignFixture | JumpClusterExport = campaignBaselineFixture,
   viewport?: { width: number; height: number },
 ): Promise<void> {
   await captureMapExportBlobs(page)

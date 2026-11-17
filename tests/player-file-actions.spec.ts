@@ -21,7 +21,7 @@ function deferred<T>() {
 function playerDocument(marker: PlayerSystemMarker | null = revealedSystem()): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Pilgrim Reach',
     systems: marker ? [marker] : [],
     routes: [],

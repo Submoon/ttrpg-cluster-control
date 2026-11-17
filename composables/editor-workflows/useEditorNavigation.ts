@@ -343,12 +343,17 @@ export function useEditorNavigation(options: {
   }
 
   /** Inspects a Cluster-owned entity while the continuous map and its camera keep their identity. */
-  async function inspectContinuousTarget(target: ContinuousEntityTarget, openInspector = true): Promise<boolean> {
-    invalidatePendingSearchReveal()
+  async function inspectContinuousTarget(
+    target: ContinuousEntityTarget,
+    openInspector = true,
+    ownsRequest: () => boolean = () => true,
+  ): Promise<boolean> {
     const currentWorkspace = workspace.value
-    if (!continuousMap.value || !currentWorkspace || !continuousEntityTargetExists(currentWorkspace, target)) return false
+    if (!ownsRequest() || !continuousMap.value || !currentWorkspace || !continuousEntityTargetExists(currentWorkspace, target)) return false
+    invalidatePendingSearchReveal()
     if (JSON.stringify(store.inspectedTarget) === JSON.stringify(target)) {
       if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+      if (!ownsRequest()) return false
       if (openInspector) viewport.requestPanel('inspector')
       return true
     }
@@ -367,7 +372,7 @@ export function useEditorNavigation(options: {
     const sameChartTarget = target.kind === 'system' && chart.session.value?.systemId === target.systemId
     const expectedChartSessionId = sameChartTarget ? startingChartSessionId : null
     const expectedEntitySessionId = sameEntityDraft ? startingEntitySessionId : null
-    const isCurrent = (): boolean => continuousMap.value
+    const isCurrent = (): boolean => ownsRequest() && continuousMap.value
       && navigationContextStamp() === startingStamp
       && workspace.value?.id === currentWorkspace.id
       && workspace.value.cluster.id === clusterId

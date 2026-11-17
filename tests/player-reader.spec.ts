@@ -47,6 +47,48 @@ function readPlayerMarkerAnchor(marker: Locator): Promise<PlayerMarkerAnchorBoun
   })
 }
 
+interface PlayerRouteScreenPoint {
+  x: number
+  y: number
+}
+
+function playerRouteStrokePoint(path: Locator, requireClipping = false): Promise<PlayerRouteScreenPoint | null> {
+  return path.evaluate((element, clippedOnly) => {
+    if (!(element instanceof SVGPathElement)) return null
+    const scene = element.ownerSVGElement
+    const matrix = element.getScreenCTM()
+    if (!scene || !matrix) return null
+    const viewport = scene.getBoundingClientRect()
+    const length = element.getTotalLength()
+    const pointAt = (fraction: number) => element.getPointAtLength(length * fraction).matrixTransform(matrix)
+    const inside = (point: DOMPoint) => point.x > viewport.left && point.x < viewport.right
+      && point.y > viewport.top && point.y < viewport.bottom
+    if (clippedOnly && inside(pointAt(0)) && inside(pointAt(1))) return null
+    for (let sample = 1; sample < 40; sample++) {
+      const point = pointAt(sample / 40)
+      if (inside(point) && document.elementFromPoint(point.x, point.y) === element) {
+        return { x: point.x, y: point.y }
+      }
+    }
+    return null
+  }, requireClipping)
+}
+
+function playerRouteFitsViewport(path: Locator): Promise<boolean> {
+  return path.evaluate((element) => {
+    if (!(element instanceof SVGPathElement)) return false
+    const scene = element.ownerSVGElement
+    const matrix = element.getScreenCTM()
+    if (!scene || !matrix) return false
+    const viewport = scene.getBoundingClientRect()
+    const bounds = element.getBBox()
+    const topLeft = new DOMPoint(bounds.x, bounds.y).matrixTransform(matrix)
+    const bottomRight = new DOMPoint(bounds.x + bounds.width, bounds.y + bounds.height).matrixTransform(matrix)
+    return topLeft.x > viewport.left && bottomRight.x < viewport.right
+      && topLeft.y > viewport.top && bottomRight.y < viewport.bottom
+  })
+}
+
 test('the standalone player reader opens a shared snapshot and keeps the latest file selection', async ({ page, baseURL }) => {
   test.setTimeout(60_000)
   if (!baseURL) throw new Error('The player reader requires a configured base URL.')
@@ -59,9 +101,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     label: 'Star system',
   })
   const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
-  const publicStation = publicSystem?.disclosure === 'revealed'
-    ? publicSystem.map.objects.find(object => object.label === 'Public Station')
-    : undefined
+  if (!publicSystem) throw new Error('The player fixture must contain a revealed system.')
+  const publicStation = publicSystem.map.objects.find(object => object.label === 'Public Station')
   if (!publicStation || publicStation.disclosure !== 'revealed') {
     throw new Error('The player fixture has no revealed station for cross-system navigation.')
   }
@@ -83,6 +124,13 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
       orbits: [],
     },
   })
+  const sharedRoute = {
+    id: 'route-2',
+    jumpLevel: 3,
+    fromSystemId: publicSystem.id,
+    destination: { kind: 'system', systemId: 'system-3' },
+  } as const
+  document.routes.push(sharedRoute)
   const readerAddress = new URL('player', `${baseURL.replace(/\/$/, '')}/`)
   const readerUrl = readerAddress.href
   const shareUrl = await createPlayerShareUrl(document, readerUrl)
@@ -369,7 +417,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   legacyShareUrl.searchParams.set('map', 'continuous')
   legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
     ...document,
-    routes: [legacyLoop],
+    version: 1,
+    routes: [legacyLoop, sharedRoute],
   }), 'utf8')).toString('base64url')}`
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(legacyShareUrl.href)
@@ -379,6 +428,34 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const continuousScene = continuousMap.getByRole('group', { name: `${document.title} continuous player map`, exact: true })
   await expect(continuousScene).toBeVisible()
   await expect(continuousMap.locator('.player-cluster-route')).toHaveCount(0)
+  const publicRouteMark = continuousMap.locator('.cluster-route[data-route-id="route-2"]')
+  const publicRouteStroke = publicRouteMark.locator('.cluster-route-hit-target')
+  await expect(publicRouteMark).toBeVisible()
+  const initialRoutePoint = await playerRouteStrokePoint(publicRouteStroke)
+  if (!initialRoutePoint) throw new Error('The public route has no visible initial stroke segment.')
+  await page.mouse.click(initialRoutePoint.x, initialRoutePoint.y)
+  const routeDetails = page.getByRole('region', { name: 'Jump Route details', exact: true })
+  await expect(routeDetails.getByRole('heading', { name: 'Jump Level 3', exact: true })).toBeVisible()
+  await expect(routeDetails).toContainText('Public System')
+  await expect(routeDetails).toContainText('Remote System')
+  const centerRoute = routeDetails.getByRole('button', { name: 'Center selected Jump Route', exact: true })
+  await centerRoute.click()
+  await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
+
+  const knownMarker = continuousMap.locator('.player-continuous-system-anchor[data-player-system-id="system-2"]')
+  await knownMarker.click()
+  const zoomInForRoute = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
+  let clippedRoutePoint = await playerRouteStrokePoint(publicRouteStroke, true)
+  for (let step = 0; !clippedRoutePoint && step < 14; step++) {
+    if (await zoomInForRoute.isDisabled()) break
+    await zoomInForRoute.click()
+    clippedRoutePoint = await playerRouteStrokePoint(publicRouteStroke, true)
+  }
+  if (!clippedRoutePoint) throw new Error('The public route needs a selectable segment while an endpoint is clipped.')
+  await page.mouse.click(clippedRoutePoint.x, clippedRoutePoint.y)
+  await expect(routeDetails.getByRole('heading', { name: 'Jump Level 3', exact: true })).toBeVisible()
+  await centerRoute.click()
+  await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
 
   const revealedMarker = document.systems.find(system => system.disclosure === 'revealed')
   if (!revealedMarker || revealedMarker.disclosure !== 'revealed') {
@@ -450,4 +527,30 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(objectMarker).toHaveCount(0)
   await expect(continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)).toBeFocused()
   await expect(objectDetails).toContainText('Harbor World')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await continuousMap.getByRole('button', { name: 'Fit player map', exact: true }).click()
+  const compactRoutePoint = await playerRouteStrokePoint(publicRouteStroke)
+  if (!compactRoutePoint) throw new Error('The public route has no visible stroke segment in compact view.')
+  await page.mouse.click(compactRoutePoint.x, compactRoutePoint.y)
+  await expect(routeDetails.getByRole('heading', { name: 'Jump Level 3', exact: true })).toBeVisible()
+  await centerRoute.click()
+  await expect(continuousMap.locator('.player-continuous-map-scene')).toBeFocused()
+  await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
+
+  await continuousSearch.click()
+  const compactSearch = page.getByRole('dialog', { name: 'Search player map', exact: true })
+  await compactSearch.getByRole('combobox').fill('Harbor World')
+  await compactSearch.getByRole('option', { name: /Harbor World/ }).click()
+  const compactDetails = page.getByRole('dialog', { name: 'Player details', exact: true })
+  await expect(compactDetails).toContainText('Harbor World')
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+
+  const nextDocument = { ...document, title: 'Updated Player Reach' }
+  const nextHash = new URL(await createPlayerShareUrl(nextDocument, readerUrl)).hash
+  await page.evaluate(hash => { window.location.hash = hash }, nextHash)
+  await expect(page.getByRole('heading', { name: nextDocument.title, exact: true })).toBeVisible()
+  await expect(compactDetails).toBeHidden()
+  await expect(publicRouteMark).toHaveAttribute('aria-pressed', 'false')
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
 })

@@ -167,6 +167,17 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     return true
   }
 
+  /** Applies a camera calculated by a pure viewport solver through the mounted D3 camera. */
+  function setViewport(next: MapViewport): boolean {
+    if (!options.active.value) return false
+    updateMinimumScale()
+    const bounded = clampMapViewport(next, minimumScale.value)
+    if (!bounded) return false
+    applyCamera(bounded)
+    cameraInitialized.value = true
+    return true
+  }
+
   function fitPlayerMap(): boolean {
     if (!options.active.value) return false
     const viewport = usableViewportRect()
@@ -234,6 +245,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     panBy,
     sceneTransform,
     screenLayerTransform,
+    setViewport,
     svgPixelScale,
     zoomBy,
   }
