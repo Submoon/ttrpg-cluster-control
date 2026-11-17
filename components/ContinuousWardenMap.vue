@@ -576,9 +576,9 @@ const renderedProjections = computed(() => projections.value.map(projection => {
   const withOrbitAdjustment = adjustment?.identity.systemId === projection.id
     ? projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
     : withDirectOrbit
-  const preview = selectedObjectDragPreview.value
-  if (!preview) return withOrbitAdjustment
-  const positions = new Map([...preview.positions].filter(([objectId]) => preview.objectSystemIds.get(objectId) === projection.id))
+  const groupPreview = selectedObjectDragPreview.value
+  if (!groupPreview) return withOrbitAdjustment
+  const positions = new Map([...groupPreview.positions].filter(([objectId]) => groupPreview.objectSystemIds.get(objectId) === projection.id))
   if (!positions.size) return withOrbitAdjustment
   const sourceSystem = props.cluster.systems.find(system => system.id === projection.id)
   const orbitHostIds = new Map(sourceSystem?.orbits.map(orbit => [orbit.id, orbit.hostId] as const) ?? [])
