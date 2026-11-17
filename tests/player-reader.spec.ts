@@ -513,6 +513,32 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     await expect(continuousMap.locator('[data-map-search-locator]')).toBeVisible()
   }
   await revealHarbor()
+  const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
+  await mapFiles.click()
+  const viewportScope = page.getByRole('radio', { name: /^current viewport$/i })
+  await viewportScope.click()
+  await expect(viewportScope).toBeChecked()
+  const paintedViewport = await continuousScene.evaluate(element => {
+    if (!(element instanceof SVGSVGElement)) throw new Error('The public scene is not an SVG.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The public scene is not painted.')
+    const box = element.getBoundingClientRect()
+    const inverse = matrix.inverse()
+    const start = new DOMPoint(box.left, box.top).matrixTransform(inverse)
+    const end = new DOMPoint(box.right, box.bottom).matrixTransform(inverse)
+    return [start.x, start.y, end.x - start.x, end.y - start.y]
+  })
+  const viewportDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export Current viewport SVG', exact: true }).click()
+  const viewportSvg = await readFile(await (await viewportDownload).path(), 'utf8')
+  const exportedViewport = viewportSvg.match(/viewBox="([^"]+)"/)?.[1]?.split(' ').map(Number)
+  expect(exportedViewport).toHaveLength(4)
+  for (const [index, value] of paintedViewport.entries()) expect(exportedViewport?.[index]).toBeCloseTo(value, 3)
+  expect(viewportSvg).toMatch(/opacity="\.14"[^>]*>.*?Harbor World<\/text>/)
+  expect(viewportSvg).toContain('class="cluster-route-line"')
+  expect(viewportSvg.match(/class="cluster-route-line"/g)).toHaveLength(1)
+  expect(viewportSvg).not.toContain('data-map-search-locator')
+  await mapFiles.click()
   await continuousMap.getByRole('button', { name: 'Zoom out', exact: true }).click()
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
   await revealHarbor()
@@ -546,11 +572,29 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(compactDetails).toContainText('Harbor World')
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
 
-  const nextDocument = { ...document, title: 'Updated Player Reach' }
+  const nextDocument = {
+    ...document,
+    title: 'Updated Player Reach',
+    routes: [...document.routes, {
+      id: 'route-3',
+      jumpLevel: 4,
+      fromSystemId: 'system-3',
+      destination: { kind: 'unknown' as const, position: revealedMarker.position, label: 'Unknown destination' as const },
+    }],
+  }
   const nextHash = new URL(await createPlayerShareUrl(nextDocument, readerUrl)).hash
   await page.evaluate(hash => { window.location.hash = hash }, nextHash)
   await expect(page.getByRole('heading', { name: nextDocument.title, exact: true })).toBeVisible()
   await expect(compactDetails).toBeHidden()
   await expect(publicRouteMark).toHaveAttribute('aria-pressed', 'false')
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await continuousMap.getByRole('button', { name: 'Fit player map', exact: true }).click()
+  const anonymousExit = continuousMap.locator('[data-player-destination-route-id="route-3"] > .cluster-exit-mark')
+  await anonymousExit.click()
+  const anonymousRoute = continuousMap.getByRole('button', { name: /jump level 4 .* unknown destination/i })
+  await expect(anonymousRoute).toBeFocused()
+  await expect(anonymousRoute).toHaveAttribute('aria-pressed', 'true')
+  await expect(routeDetails).toContainText('Unknown destination')
 })

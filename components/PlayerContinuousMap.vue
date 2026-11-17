@@ -52,6 +52,7 @@
           :viewport-rect="nameViewport"
           :svg-pixel-scale="svgPixelScale"
           :label-obstacles="routeLabelObstacles"
+          destinations-in-foreground
         />
 
         <g v-for="system in projection.systems" :key="system.id" class="player-continuous-system" :data-player-system-id="system.id">
@@ -164,7 +165,7 @@
           <g
             class="player-continuous-system-anchor"
             :class="[`player-continuous-system-anchor--${system.disclosure}`, { 'is-selected': props.selectedSystemId === system.id }]"
-            :transform="anchorTransform(system.anchor)"
+            :transform="screenMarkTransform(system.anchor)"
             :data-player-system-id="system.id"
             :data-player-disclosure="system.disclosure"
             :aria-label="`Inspect ${system.label}`"
@@ -223,6 +224,19 @@
           >{{ label.displayName }}</text>
         </g>
       </g>
+      <g class="player-continuous-route-destinations" aria-hidden="true">
+        <g
+          v-for="route in anonymousRoutes"
+          :key="route.id"
+          :data-player-destination-route-id="route.id"
+          :class="{ 'is-selected': route.id === props.selectedRouteId }"
+          :transform="screenMarkTransform(route.end)"
+        >
+          <text class="player-continuous-destination-caption" x="8" y="4">{{ route.destinationCaption }}</text>
+          <circle class="player-continuous-destination-hit" r="12" fill="transparent" />
+          <circle class="cluster-exit-mark" r="7" />
+        </g>
+      </g>
       </g>
     </svg>
   </section>
@@ -234,7 +248,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { usePlayerContinuousMapViewport } from '../composables/usePlayerContinuousMapViewport'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument } from '../domain/player-projection'
 import type { PlayerUsableRectReader, PlayerInspectionTarget } from '../utils/player-inspection'
-import type { SvgViewportRect } from '../utils/map-zoom'
+import { getSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import type { PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
 import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
 import type { PlayerContinuousSystemProjection } from '../utils/player-continuous-map-projection'
 import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
@@ -313,6 +328,7 @@ const routeDescriptors = computed(() => projectPlayerContinuousRouteEndpoints(
   projection.value.systems,
   detailSystemIds.value,
 ))
+const anonymousRoutes = computed(() => routeDescriptors.value.filter(route => route.unresolved))
 const routeMarks = computed(() => routeDescriptors.value.map(route => ({
   id: route.id,
   jumpLevel: route.jumpLevel,
@@ -494,8 +510,13 @@ function inspectOrbitFromKeyboard(event: KeyboardEvent, systemId: string, orbitI
 
 function inspectRouteFromClick(event: MouseEvent): void {
   if (!props.active) return
-  const routeId = routeLayer.value?.routeIdAtStroke(event) ?? routeIdAtTarget(event.target)
-  if (routeId && routeDescriptors.value.some(route => route.id === routeId)) emit('inspect-route', routeId)
+  const destinationId = event.target instanceof Element
+    ? event.target.closest('[data-player-destination-route-id]')?.getAttribute('data-player-destination-route-id')
+    : null
+  const routeId = destinationId ?? routeLayer.value?.routeIdAtStroke(event) ?? routeIdAtTarget(event.target)
+  if (!routeId || !routeDescriptors.value.some(route => route.id === routeId)) return
+  if (destinationId) routeLayer.value?.focusRoute(routeId)
+  emit('inspect-route', routeId)
 }
 
 function inspectRouteFromKeyboard(event: KeyboardEvent): void {
@@ -523,7 +544,7 @@ function inspectOrbit(systemId: string, orbitId: string): void {
   emit('inspect-orbit', systemId, orbitId)
 }
 
-function anchorTransform(anchor: { x: number; y: number }): string {
+function screenMarkTransform(anchor: { x: number; y: number }): string {
   const inverseScale = 1 / Math.max(camera.value.k * svgPixelScale.value, Number.MIN_VALUE)
   return `translate(${anchor.x} ${anchor.y}) scale(${inverseScale})`
 }
@@ -647,7 +668,28 @@ function isVisibleFocusTarget(target: SVGElement, viewport: SVGSVGElement): bool
     && !target.closest('[inert], [aria-hidden="true"]')
 }
 
-defineExpose({ centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
+/** Captures applied public display state without copying transient marks or animated route frames. */
+function captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null {
+  const element = mapElement.value
+  if (!props.active || props.document !== expectedDocument || !element?.isConnected
+    || element.clientWidth <= 0 || element.clientHeight <= 0) return null
+  const dimmedOwner = props.selectedSystemId && detailSystemIds.value.has(props.selectedSystemId)
+    ? props.selectedSystemId
+    : null
+  return {
+    camera: { ...camera.value },
+    drawable: getSvgViewportRect(element),
+    nameViewport: { ...nameViewport.value },
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: [...detailSystemIds.value].sort(),
+    dimmedObjects: dimmedOwner && props.dimmedObjectIds.size
+      ? { systemId: dimmedOwner, ids: [...props.dimmedObjectIds].sort() }
+      : null,
+    selectedRouteId: props.selectedRouteId ?? null,
+  }
+}
+
+defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
 </script>
 
 <style scoped>
@@ -816,4 +858,23 @@ defineExpose({ centerRoute: centerRouteForDocument, centerSystem: centerSystemFo
 .player-continuous-name-target.is-selected .player-continuous-name-background,
 .player-continuous-name-target:focus-visible .player-continuous-name-background { stroke: var(--map-selected); stroke-width: 2.5; }
 .player-continuous-name-target:focus-visible { outline: none; }
+
+.player-continuous-route-destinations { pointer-events: none; }
+.player-continuous-destination-caption {
+  fill: var(--text-secondary);
+  font: 11px Georgia, serif;
+  paint-order: stroke;
+  stroke: var(--map-bg);
+  stroke-width: 4px;
+}
+.player-continuous-destination-hit,
+.player-continuous-route-destinations .cluster-exit-mark {
+  pointer-events: all;
+  cursor: pointer;
+  vector-effect: non-scaling-stroke;
+}
+.player-continuous-route-destinations .is-selected .cluster-exit-mark {
+  stroke: var(--map-selected);
+  stroke-width: 3;
+}
 </style>

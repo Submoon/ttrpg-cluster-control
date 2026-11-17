@@ -109,6 +109,8 @@
               :can-open-search-shortcut="canOpenSearchShortcut"
               :get-shortcut-owning-dialog="getShortcutOwningDialog"
               :file-scope="mapFileScope"
+              :scoped-images="continuousMap"
+              :can-export-system-image="selectedSystemMarker !== null"
               :export-error="playerExportError"
               :show-type-filters="selectedSystem !== null"
               :type-filter-options="typeFilterOptions"
@@ -249,6 +251,8 @@
             :can-open-search-shortcut="canOpenSearchShortcut"
             :get-shortcut-owning-dialog="getShortcutOwningDialog"
             :file-scope="mapFileScope"
+            :scoped-images="continuousMap"
+            :can-export-system-image="selectedSystemMarker !== null"
             :export-error="playerExportError"
             :show-type-filters="selectedSystem !== null"
             :type-filter-options="typeFilterOptions"
@@ -412,6 +416,8 @@ import PlayerJumpRouteInspector from './inspector/PlayerJumpRouteInspector.vue'
 import WorkspaceHeader from './WorkspaceHeader.vue'
 import { projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from '../utils/player-continuous-route-projection'
+import type { ContinuousPlayerImageScope, PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
@@ -432,6 +438,7 @@ type RevealedSystem = Extract<PlayerSystemMarker, { disclosure: 'revealed' }>
 type FocusTarget = HTMLElement | SVGElement
 interface PlayerSystemMapHandle {
   revealTarget(target: PlayerInspectionTarget, expectedDocument: PlayerSystemDocument): boolean
+  captureImageViewport?(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null
   fitPlayerMap?(): boolean
   centerSystem?(systemId: string, expectedClusterDocument: PlayerClusterDocument): boolean
   centerRoute?(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean
@@ -501,10 +508,15 @@ const dimmedObjectIds = computed<ReadonlySet<string>>(() => {
       || !playerObjectMatchesFieldFilters(object, selectedFieldConditions.value))
     .map(object => object.id))
 })
-const mapFileScope = computed(() => selectedSystem.value
-  ? `star system ${selectedSystem.value.label}`
-  : `Jump Cluster ${props.document.title}`)
-const { playerExportError, downloadPlayerImage } = usePlayerFileExports({ prepare: preparePlayerImage })
+const mapFileScope = computed(() => continuousMap.value
+  ? 'player map'
+  : selectedSystem.value
+    ? `star system ${selectedSystem.value.label}`
+    : `Jump Cluster ${props.document.title}`)
+const { playerExportError, downloadPlayerImage } = usePlayerFileExports({
+  prepare: preparePlayerImage,
+  prepareImage: prepareScopedPlayerImage,
+})
 const selectedObjectId = computed(() => selectedTarget.value?.kind === 'object' ? selectedTarget.value.id : null)
 const selectedOrbitId = computed(() => selectedTarget.value?.kind === 'orbit' ? selectedTarget.value.id : null)
 const searchLocatorObjectId = computed(() => {
@@ -793,6 +805,30 @@ async function preparePlayerImage() {
     scene,
     isCurrent: () => !isDisposed && isActive.value && props.document === source && mapVisit === visit,
   }
+}
+
+function prepareScopedPlayerImage(scope: MapImageScope) {
+  const map = systemMapHandle.value
+  if (isDisposed || !isActive.value || !continuousMap.value || !map?.captureImageViewport) return null
+  const document = props.document
+  const ownsMap = () => !isDisposed && isActive.value && continuousMap.value
+    && props.document === document && systemMapHandle.value === map
+  let image: ContinuousPlayerImageScope = { scope: 'cluster' }
+  let isCurrent = ownsMap
+  if (scope === 'system') {
+    const selected = selectedSystemMarker.value
+    if (!selected) return null
+    const visit = mapVisit
+    image = { scope, systemId: selected.id }
+    isCurrent = () => ownsMap() && mapVisit === visit
+  } else if (scope === 'viewport') {
+    const snapshot = map.captureImageViewport(document)
+    if (!snapshot) return null
+    const key = JSON.stringify(snapshot)
+    image = { scope, snapshot }
+    isCurrent = () => ownsMap() && JSON.stringify(map.captureImageViewport?.(document)) === key
+  }
+  return { document, image, isCurrent }
 }
 
 async function openSystem(publicSystemId: string, origin: 'map' | 'search' = 'map'): Promise<void> {
