@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
 import { serializePlayerJson } from '../domain/workspace'
 import { createPlayerShareUrl } from '../utils/player-share-link'
@@ -82,7 +83,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
       orbits: [],
     },
   })
-  const readerUrl = new URL('player', `${baseURL.replace(/\/$/, '')}/`).href
+  const readerAddress = new URL('player', `${baseURL.replace(/\/$/, '')}/`)
+  const readerUrl = readerAddress.href
   const shareUrl = await createPlayerShareUrl(document, readerUrl)
   const fragment = new URL(shareUrl).hash
   const compressed = fragment.split('.').at(-1)
@@ -355,4 +357,97 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(page.getByRole('alert')).toHaveText('The player JSON file is not valid JSON.')
   await expect(page.getByRole('region', { name: 'Player document', exact: true })).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText('PRIVATE-TRUNCATED-MARKER')
+
+  if (publicSystem?.disclosure !== 'revealed') throw new Error('The player reader fixture must include a revealed system.')
+  const legacyLoop = {
+    id: 'route-1',
+    jumpLevel: 2,
+    fromSystemId: publicSystem.id,
+    destination: { kind: 'system' as const, systemId: publicSystem.id },
+  }
+  const legacyShareUrl = new URL(readerUrl)
+  legacyShareUrl.searchParams.set('map', 'continuous')
+  legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
+    ...document,
+    routes: [legacyLoop],
+  }), 'utf8')).toString('base64url')}`
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(legacyShareUrl.href)
+  await expect(page.getByRole('heading', { name: document.title, exact: true })).toBeVisible()
+  expect(page.url()).toBe(legacyShareUrl.href)
+  const continuousMap = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const continuousScene = continuousMap.getByRole('group', { name: `${document.title} continuous player map`, exact: true })
+  await expect(continuousScene).toBeVisible()
+  await expect(continuousMap.locator('.player-cluster-route')).toHaveCount(0)
+
+  const revealedMarker = document.systems.find(system => system.disclosure === 'revealed')
+  if (!revealedMarker || revealedMarker.disclosure !== 'revealed') {
+    throw new Error('The public player document has no Revealed system anchor.')
+  }
+  const anchor = continuousMap.locator(`.player-continuous-system-anchor[data-player-system-id="${revealedMarker.id}"]`)
+  const anchorBeforeSelect = await readPlayerMarkerAnchor(anchor)
+  await anchor.click()
+  await expect(anchor).toHaveAttribute('aria-pressed', 'true')
+  const anchorAfterSelect = await readPlayerMarkerAnchor(anchor)
+  expect(Math.hypot(anchorAfterSelect.x - anchorBeforeSelect.x, anchorAfterSelect.y - anchorBeforeSelect.y)).toBeLessThan(1)
+
+  const centerSelection = continuousMap.getByRole('button', { name: 'Center selection', exact: true })
+  await centerSelection.click()
+  const publicObject = revealedMarker.map.objects.find(object => object.label === 'Harbor World' && object.disclosure === 'revealed')
+  if (!publicObject || publicObject.disclosure !== 'revealed') {
+    throw new Error('The public player document has no distinct Revealed world to inspect.')
+  }
+  const objectMarker = continuousMap.locator(
+    `.player-continuous-object[data-player-system-id="${revealedMarker.id}"][data-player-object-id="${publicObject.id}"]`,
+  )
+  const zoomIn = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 24 && (await objectMarker.count()) === 0; step += 1) {
+    if (await zoomIn.isDisabled()) break
+    await zoomIn.click()
+  }
+  await expect(objectMarker).toBeVisible()
+  await expect.poll(async () => isPlayerAnchorInsideMap(await readPlayerMarkerAnchor(objectMarker))).toBe(true)
+  const objectBeforeInspect = await readPlayerMarkerAnchor(objectMarker)
+  await objectMarker.locator('.player-continuous-object-hit-target').click()
+  await expect(centerSelection).toBeEnabled()
+  await expect(objectMarker).toHaveAttribute('aria-pressed', 'true')
+  const objectDetails = page.getByRole('region', { name: 'Player object details', exact: true })
+  await expect(objectDetails.getByRole('heading', { name: 'Harbor World', exact: true })).toBeVisible()
+  const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
+  expect(Math.hypot(objectAfterInspect.x - objectBeforeInspect.x, objectAfterInspect.y - objectBeforeInspect.y)).toBeLessThan(1)
+  await centerSelection.click()
+  const objectAfterCenter = await readPlayerMarkerAnchor(objectMarker)
+  const mapBounds = await continuousScene.boundingBox()
+  if (!mapBounds) throw new Error('The continuous public map has no visible viewport.')
+  expect(Math.abs(objectAfterCenter.x - (mapBounds.x + mapBounds.width / 2))).toBeLessThan(mapBounds.width * .12)
+
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  const continuousFilters = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
+  await continuousFilters.getByRole('group', { name: 'Celestial body', exact: true })
+    .getByRole('checkbox', { name: 'Moon', exact: true }).check()
+  await continuousFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
+  const continuousSearch = page.getByRole('button', { name: 'Search', exact: true })
+  const revealHarbor = async () => {
+    await continuousSearch.click()
+    const dialog = page.getByRole('dialog', { name: 'Search player map', exact: true })
+    await dialog.getByRole('combobox').fill('Harbor World')
+    await dialog.getByRole('option', { name: /Harbor World/ }).click()
+    await expect(objectDetails).toContainText('Harbor World')
+    await expect(continuousMap.locator('[data-map-search-locator]')).toBeVisible()
+  }
+  await revealHarbor()
+  await continuousMap.getByRole('button', { name: 'Zoom out', exact: true }).click()
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+  await revealHarbor()
+  await continuousScene.focus()
+  await continuousScene.press('-')
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+
+  await revealHarbor()
+  await expect(objectMarker).toBeVisible()
+  await objectMarker.focus()
+  for (let step = 0; step < 24 && await objectMarker.count() > 0; step += 1) await objectMarker.press('-')
+  await expect(objectMarker).toHaveCount(0)
+  await expect(continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)).toBeFocused()
+  await expect(objectDetails).toContainText('Harbor World')
 })

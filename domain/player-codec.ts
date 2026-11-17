@@ -345,6 +345,15 @@ export function parsePlayerJson(text: string): PlayerClusterDocument {
 
 /** Validates unknown player data and rebuilds a detached document without extension properties. */
 export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
+  const document = reconstructPlayerDocument(input)
+  return {
+    ...document,
+    routes: document.routes.filter(route => !isResolvedSameSystemLoop(route)),
+  }
+}
+
+/** Reconstructs and validates the complete schema before any legacy admission cleanup. */
+function reconstructPlayerDocument(input: unknown): PlayerClusterDocument {
   if (!isRecord(input)) return invalidDocument()
   if (input.format !== PLAYER_FORMAT) return fail('unsupported-format')
   if (input.version !== PLAYER_VERSION) return fail('unsupported-version')
@@ -395,11 +404,16 @@ export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
 
 /** Serializes a validated player document after rebuilding its allowlisted public shape. */
 export function serializePlayerJson(document: PlayerClusterDocument): string {
-  const safeDocument = restorePlayerDocument(document)
+  const safeDocument = reconstructPlayerDocument(document)
+  if (safeDocument.routes.some(isResolvedSameSystemLoop)) return invalidDocument()
   const serialized = JSON.stringify(safeDocument)
   if (typeof serialized !== 'string') return invalidDocument()
   if (byteLength(serialized) > MAX_PLAYER_JSON_BYTES) return tooLarge()
   return serialized
+}
+
+function isResolvedSameSystemLoop(route: PlayerRoute): boolean {
+  return route.destination.kind === 'system' && route.fromSystemId === route.destination.systemId
 }
 
 function restoreSystemMarker(
