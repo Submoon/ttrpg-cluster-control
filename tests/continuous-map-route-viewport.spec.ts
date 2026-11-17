@@ -46,3 +46,27 @@ test('Center includes a distant lane’s fixed screen-space bend', { tag: '@pure
   })
   expect(viewport).toEqual({ x: 50, y: 38, k: 0.1 })
 })
+
+test('Center settles an adaptive outer lane within a shallow usable rectangle', { tag: '@pure' }, () => {
+  const endpoints = { fromSystemId: 'a', toSystemId: 'b', start: { x: 0, y: 0 }, end: { x: 2000, y: 400 } }
+  const routes = Array.from({ length: 7 }, (_, index) => ({ ...endpoints, id: `route-${index}` }))
+  const geometryAt = (scale: number) => buildContinuousMapRouteGeometries(routes, {
+    pixelsPerSceneUnit: scale,
+    fanOutLimitPixels: 96,
+  }).get('route-6')
+  const usableRect = { x: 45, y: 20, width: 900, height: 150 }
+  const viewport = centerContinuousMapRouteViewport({
+    current: { x: 0, y: 0, k: 1 },
+    usableRect,
+    padding: 14,
+    geometryAt,
+  })
+  expect(viewport).not.toBeNull()
+  const { x, y, k } = viewport!
+  const { bounds } = geometryAt(k)!
+  expect(k).toBeCloseTo(0.222, 2)
+  expect(x + bounds.x * k).toBeGreaterThan(usableRect.x)
+  expect(y + bounds.y * k).toBeGreaterThan(usableRect.y)
+  expect(x + (bounds.x + bounds.width) * k).toBeLessThan(usableRect.x + usableRect.width)
+  expect(y + (bounds.y + bounds.height) * k).toBeLessThan(usableRect.y + usableRect.height)
+})

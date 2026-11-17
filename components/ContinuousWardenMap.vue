@@ -24,6 +24,7 @@
       </desc>
       <g class="cluster-map-content" :transform="cameraTransform">
         <ContinuousWardenRouteLayer
+          ref="routeLayer"
           :routes="routeMarks"
           :geometries="routeGeometries"
           :detail-system-ids="ready ? detailSystemIds : undefined"
@@ -249,6 +250,7 @@ const emit = defineEmits<{
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const routeLayer = ref<InstanceType<typeof ContinuousWardenRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
 const exitPositionOverrides = ref(new Map<string, Point>())
@@ -828,6 +830,7 @@ function frameRoute(routeId: string, usableRect: SvgViewportRect | undefined, ce
   const next = center
     ? centerContinuousMapRouteViewport({
         ...options,
+        svgPixelScale: svgPixelScale.value,
         geometryAt: scale => scale === current.k
           ? geometry
           : routesAtDetail(detailSystemIdsAtScale(scale), scale * svgPixelScale.value).get(routeId),
@@ -1114,7 +1117,7 @@ function onClickCapture(event: MouseEvent): void {
   if (routeId) {
     event.preventDefault()
     event.stopPropagation()
-    emit('select-route', routeId)
+    emit('select-route', routeLayer.value?.routeIdAtStroke(event) ?? routeId)
     return
   }
   const objectTarget = objectTargetAtTarget(event.target)

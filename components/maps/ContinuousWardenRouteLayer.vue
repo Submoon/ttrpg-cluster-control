@@ -53,6 +53,7 @@ import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import type { Point } from '../../domain/workspace'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from '../../utils/continuous-map-route-labels'
+import { nearestContinuousMapRouteHit } from '../../utils/continuous-map-route-hit'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 
 interface RouteMark {
@@ -105,33 +106,63 @@ function stopAnimation(): void {
   if (animated.value.size) animated.value = new Map()
 }
 
+function routeIdAtStroke(event: MouseEvent): string | undefined {
+  const stroke = event.target
+  if (!(stroke instanceof SVGPathElement) || !stroke.matches('.cluster-route-hit-target')) return
+  const layer = stroke.closest('.continuous-warden-route-layer')
+  const hits = stroke.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
+    .filter(element => element.matches('.cluster-route-hit-target') && element.closest('.continuous-warden-route-layer') === layer)
+  if (hits.length < 2) return
+  const matrix = stroke.getScreenCTM()
+  if (!matrix) return
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+  const candidates = hits.flatMap((path) => {
+    const id = path.closest('.cluster-route')?.getAttribute('data-route-id')
+    if (!id) return []
+    const geometry = animated.value.get(id) ?? props.geometries.get(id)
+    return geometry ? [{ id, geometry }] : []
+  })
+  return nearestContinuousMapRouteHit(point, candidates, Math.hypot(matrix.a, matrix.b))
+}
+
 watch(
   [() => props.geometries, () => props.detailSystemIds],
   ([next, nextDetail], [previous, previousDetail]) => {
+    if (nextDetail === previousDetail) return
     const displayed = animated.value
     stopAnimation()
-    if (!previousDetail || !nextDetail || nextDetail === previousDetail || typeof window === 'undefined'
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (!previousDetail || !nextDetail || typeof window === 'undefined') return
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (motionPreference.matches) return
 
     const motions = [...next].flatMap(([id, to]) => {
       const from = displayed.get(id) ?? previous.get(id)
-      return from && from.path !== to.path ? [{ id, from, to }] : []
+      return from && from.path !== to.path ? [{ id, from }] : []
     })
     if (!motions.length) return
     animated.value = new Map(motions.map(({ id, from }) => [id, from]))
     const started = window.performance.now()
     function step(now: number): void {
-      if (now >= started + TRANSITION_DURATION_MS) {
+      if (now >= started + TRANSITION_DURATION_MS || motionPreference.matches) {
         stopAnimation()
         return
       }
       const progress = 1 - (1 - Math.max(0, now - started) / TRANSITION_DURATION_MS) ** 3
-      animated.value = new Map(motions.map(({ id, from, to }) => [id, continuousMapRouteCurve(
-        interpolatePoint(from.start, to.start, progress),
-        interpolatePoint(from.control1, to.control1, progress),
-        interpolatePoint(from.control2, to.control2, progress),
-        interpolatePoint(from.end, to.end, progress),
-      )]))
+      // Camera zoom can expand route lanes during a tween. Use each current target
+      // with the existing start and deadline so continued zoom never snaps the endpoint.
+      const currentTargets = props.geometries
+      const frameGeometries = new Map<string, ContinuousMapRouteGeometry>()
+      for (const { id, from } of motions) {
+        const to = currentTargets.get(id)
+        if (!to) continue
+        frameGeometries.set(id, continuousMapRouteCurve(
+          interpolatePoint(from.start, to.start, progress),
+          interpolatePoint(from.control1, to.control1, progress),
+          interpolatePoint(from.control2, to.control2, progress),
+          interpolatePoint(from.end, to.end, progress),
+        ))
+      }
+      animated.value = frameGeometries
       frame = window.requestAnimationFrame(step)
     }
     frame = window.requestAnimationFrame(step)
@@ -139,6 +170,7 @@ watch(
 )
 
 onBeforeUnmount(stopAnimation)
+defineExpose({ routeIdAtStroke })
 </script>
 
 <style scoped>

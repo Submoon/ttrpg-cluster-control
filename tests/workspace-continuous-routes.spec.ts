@@ -66,6 +66,22 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
   })
 }
 
+async function coveredRouteStrokePoint(mark: Locator, minimumCoverage: number) {
+  return mark.locator('.cluster-route-hit-target').evaluate((element, coverage) => {
+    if (!(element instanceof SVGPathElement)) return null
+    const length = element.getTotalLength()
+    const matrix = element.getScreenCTM()!
+    for (let sample = 4; sample <= 16; sample++) {
+      const point = element.getPointAtLength(length * sample / 20).matrixTransform(matrix)
+      const stack = document.elementsFromPoint(point.x, point.y)
+      if (!stack[0]?.matches('.cluster-route-hit-target') || stack[0] === element || !stack.includes(element)) continue
+      const covering = stack.slice(0, stack.indexOf(element)).filter(hit => hit.matches('.cluster-route-hit-target'))
+      if (covering.length >= coverage) return { x: point.x, y: point.y }
+    }
+    return null
+  }, minimumCoverage)
+}
+
 test('continuous routes support clipped selection, guarded inspection and authored exits', async ({ page }) => {
   test.setTimeout(60_000)
   const fixture = structuredClone(campaignFixture)
@@ -144,15 +160,19 @@ test('continuous routes support clipped selection, guarded inspection and author
   await expect(marker).toHaveAttribute('cx', String(originalX + 10))
 })
 
-test('all three overlapping continuous routes have individually clickable strokes at distant Fit', async ({ page }) => {
+test('the nearest continuous route wins even when later routes cover its distant stroke', async ({ page }) => {
   test.setTimeout(60_000)
   const fixture = structuredClone(campaignFixture)
   const first = fixture.cluster.routes[0]!
   const destination = fixture.cluster.systems[1]!
-  fixture.cluster.routes.push(
-    { ...first, id: 'distant-middle-route', jumpLevel: 2, fromPointId: first.toPointId, toPointId: first.fromPointId },
-    { ...first, id: 'distant-last-route', jumpLevel: 3 },
-  )
+  const parallels = Array.from({ length: 23 }, (_, index) => ({
+    ...first,
+    id: `distant-route-${String(index).padStart(2, '0')}`,
+    jumpLevel: index + 1,
+    ...(index === 10 ? { fromPointId: first.toPointId, toPointId: first.fromPointId } : {}),
+  }))
+  const [left, middle, right] = parallels.splice(10, 3)
+  fixture.cluster.routes = [middle!, left!, right!, ...parallels]
   const remoteId = 'distant-overview-anchor'
   fixture.cluster.systems.push({ ...destination, id: remoteId, name: 'Distant anchor', objects: [], orbits: [] })
   const positions: Record<string, { x: number; y: number }> = fixture.layout.systemPositions
@@ -164,16 +184,16 @@ test('all three overlapping continuous routes have individually clickable stroke
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
 
   const map = page.getByRole('group', { name: /continuous map$/ })
-  const routes = [1, 2, 3].map(level => map.getByRole('button', { name: new RegExp(`Select Jump Level ${level} route`) }))
+  const routes = [12, 11, 13].map(level => map.getByRole('button', { name: new RegExp(`Select Jump Level ${level} route`) }))
   const scale = await routes[0]!.locator('.cluster-route-hit-target').evaluate(element => {
     if (!(element instanceof SVGPathElement)) throw new Error('The route stroke is unavailable.')
     const matrix = element.getScreenCTM()!
     return Math.hypot(matrix.a, matrix.b)
   })
   expect(scale).toBeLessThan(0.12)
-  for (const route of routes) {
-    const point = await routeStrokePoint(route)
-    if (!point) throw new Error('Each overlapping route needs a reachable part of its actual hit stroke.')
+  for (const [index, route] of routes.entries()) {
+    const point = await coveredRouteStrokePoint(route, index === 0 ? 2 : 1)
+    if (!point) throw new Error('The tested centerline must be covered by another route’s hit stroke.')
     await page.mouse.click(point.x, point.y)
     await expect(route).toHaveAttribute('aria-pressed', 'true')
   }
