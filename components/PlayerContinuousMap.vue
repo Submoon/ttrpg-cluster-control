@@ -208,7 +208,7 @@
             class="player-continuous-name"
             :style="{ fontSize: `${SYSTEM_NAME_FONT_PIXELS / svgPixelScale}px` }"
             :y="label.height * .68"
-            :textLength="label.displayName === label.name ? undefined : Math.max(1, label.width - 24)"
+            :textLength="label.textWidth"
             lengthAdjust="spacingAndGlyphs"
             text-anchor="middle"
             aria-hidden="true"
@@ -485,7 +485,7 @@ function targetBounds(systemId: string, target: PlayerInspectionTarget): SvgView
 
 function centerSystem(systemId: string): boolean {
   const bounds = systemBounds(systemId)
-  return bounds ? frameBounds(bounds) : false
+  return bounds ? frameBounds(bounds, camera.value.k) : false
 }
 
 function centerSelection(): boolean {
@@ -503,7 +503,6 @@ function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean
   if (!bounds) return false
   const minimumScale = playerContinuousTargetMinimumScale(
     system,
-    camera.value.k,
     svgPixelScale.value,
     detailSystemIds.value.has(systemId),
   )

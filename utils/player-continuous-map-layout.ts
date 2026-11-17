@@ -12,6 +12,7 @@ export interface PlayerContinuousNameLabel {
   x: number
   y: number
   width: number
+  textWidth: number
   height: number
   anchorX: number
   anchorY: number
@@ -80,6 +81,8 @@ export function layoutPlayerContinuousNameLabels(
     const displayName = nameCharacters.length > maximumCharacters
       ? `${nameCharacters.slice(0, Math.max(0, maximumCharacters - 1)).join('')}…`
       : point.name
+    const textWidth = Math.max(1, Math.min(widthPixels - 24,
+      Array.from(displayName).length * SYSTEM_NAME_FONT_PIXELS * .65)) / scale
     const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
     let chosen = candidates[0]!
     let chosenScore = Number.POSITIVE_INFINITY
@@ -130,6 +133,7 @@ export function layoutPlayerContinuousNameLabels(
       x,
       y,
       width,
+      textWidth,
       height,
       anchorX: point.x,
       anchorY: point.y,
@@ -193,17 +197,15 @@ export function playerContinuousTargetBounds(
 /** Keeps current detail visible, or reaches its reveal threshold before explicit framing. */
 export function playerContinuousTargetMinimumScale(
   system: PlayerContinuousSystemProjection,
-  currentScale: number,
   pixelScale: number,
   isDetailed: boolean,
-): number {
+): number | undefined {
   const envelope = system.geometry?.envelope
-  if (!envelope || !Number.isFinite(currentScale) || currentScale <= 0
-    || !Number.isFinite(pixelScale) || pixelScale <= 0) return currentScale
+  if (!envelope || !Number.isFinite(pixelScale) || pixelScale <= 0) return undefined
   const threshold = isDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
   const extent = Math.max(envelope.width, envelope.height)
-  if (!Number.isFinite(extent) || extent <= 0) return currentScale
-  return Math.min(MAP_ZOOM_MAX_SCALE, Math.max(currentScale, threshold / (extent * pixelScale)))
+  if (!Number.isFinite(extent) || extent <= 0) return undefined
+  return Math.min(MAP_ZOOM_MAX_SCALE, threshold / (extent * pixelScale))
 }
 
 function namePlacementOffsets(widthPixels: number): Array<{ x: number; y: number }> {

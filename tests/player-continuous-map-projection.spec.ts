@@ -127,6 +127,7 @@ test('coincident public endpoints get a visible curve while same-ID loops stay o
   const coincidentAnonymous = routes.find(route => route.id === 'route-3')
 
   expect(coincidentResolved?.path).toMatch(/^M 500 300 Q .+ 500 300$/)
+  expect(coincidentResolved?.foreground).toBe(true)
   expect(coincidentAnonymous?.path).toMatch(/^M 500 300 Q .+ 500 300$/)
   expect(coincidentAnonymous?.foreground).toBe(true)
   expect(coincidentAnonymous?.destination?.position).toEqual({ x: 500, y: 300 })
@@ -219,6 +220,7 @@ test('player continuous long names stay inside compact viewports and clear their
   expect(label.displayName).toMatch(/…$/)
   expect(label.displayName.length).toBeLessThan(80)
   expect(label.width).toBeLessThanOrEqual(viewport.width - 16)
+  expect(label.textWidth).toBeLessThanOrEqual(label.width - 24)
   expect(label.y).toBeGreaterThanOrEqual(label.anchorY + 18)
 })
 
@@ -228,8 +230,8 @@ test('player continuous target framing includes long labels, rotated orbits, and
   const geometry = system.geometry!
   const objectBounds = playerContinuousTargetBounds(geometry, { kind: 'object', id: 'object-1' })
   const orbitBounds = playerContinuousTargetBounds(geometry, { kind: 'orbit', id: 'orbit-1' })
-  const detailScale = playerContinuousTargetMinimumScale(system, 1, 1, false)
-  const retainedDetailScale = playerContinuousTargetMinimumScale(system, 1.58, 1, true)
+  const detailScale = playerContinuousTargetMinimumScale(system, 1, false)
+  const retainedDetailScale = playerContinuousTargetMinimumScale(system, 1, true)
   const requiredDetailScale = 250 / Math.max(geometry.envelope.width, geometry.envelope.height)
 
   expect(objectBounds?.width).toBeGreaterThanOrEqual(Array.from('Pilgrim World').length * 7 + 22)
@@ -239,7 +241,12 @@ test('player continuous target framing includes long labels, rotated orbits, and
   expect(orbitBounds?.width).toBeCloseTo(extentX * 2 + 28)
   expect(orbitBounds?.height).toBeCloseTo(extentY * 2 + 28)
   expect(detailScale).toBeCloseTo(requiredDetailScale)
-  expect(retainedDetailScale).toBe(1.58)
+  expect(retainedDetailScale).toBeCloseTo(210 / Math.max(geometry.envelope.width, geometry.envelope.height))
+
+  if (!objectBounds) throw new Error('The public object has no framing bounds.')
+  const viewport = { x: 0, y: 0, width: 960, height: 560 }
+  const framed = fitPlayerContinuousTarget(objectBounds, viewport, .25, 16, retainedDetailScale)
+  expect(framed?.k).toBeLessThan(16)
 })
 
 test('player continuous target Center preserves fitting zoom and expands only for semantic detail @pure', () => {

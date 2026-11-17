@@ -158,7 +158,8 @@ function projectContinuousPublicRoutes(document: PlayerClusterDocument): PlayerR
       const angle = distance > 0
         ? Math.atan2(dy, dx) + Math.PI / 2
         : -Math.PI / 2 + index * Math.PI / 4
-      const bend = index % 2 === 0 ? 42 : -42
+      const bendDistance = distance === 0 ? 84 : 42
+      const bend = index % 2 === 0 ? bendDistance : -bendDistance
       const control = {
         x: (origin.position.x + destinationPosition.x) / 2 + Math.cos(angle) * bend,
         y: (origin.position.y + destinationPosition.y) / 2 + Math.sin(angle) * bend,
@@ -171,9 +172,9 @@ function projectContinuousPublicRoutes(document: PlayerClusterDocument): PlayerR
     const accessibleLabel = route.destination.kind === 'unknown'
       ? `Jump Level ${route.jumpLevel} to ${route.destination.label}`
       : `Jump Level ${route.jumpLevel} from ${origin.label} to ${destinationSystem!.label}`
-    const foreground = route.destination.kind === 'unknown' && document.systems.some(system =>
+    const foreground = distance === 0 || (route.destination.kind === 'unknown' && document.systems.some(system =>
       Math.hypot(system.position.x - destinationPosition.x, system.position.y - destinationPosition.y)
-        <= 18 + CLUSTER_ROUTE_PRESENTATION.endpoint.radius)
+        <= 18 + CLUSTER_ROUTE_PRESENTATION.endpoint.radius))
     return {
       id: route.id,
       foreground,

@@ -421,9 +421,9 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await continuousFilters.getByRole('group', { name: 'Celestial body', exact: true })
     .getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await continuousFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  const search = page.getByRole('button', { name: 'Search', exact: true })
+  const continuousSearch = page.getByRole('button', { name: 'Search', exact: true })
   const revealHarbor = async () => {
-    await search.click()
+    await continuousSearch.click()
     const dialog = page.getByRole('dialog', { name: 'Search player map', exact: true })
     await dialog.getByRole('combobox').fill('Harbor World')
     await dialog.getByRole('option', { name: /Harbor World/ }).click()
