@@ -147,6 +147,7 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   const afterOrbitAdd = await downloadJson(page, 'Export Jump Cluster JSON')
   const afterOrbitSystem = afterOrbitAdd.cluster?.systems.find(system => system.id === systemId)
   const orbitObject = afterOrbitSystem?.objects.find(object => object.subtype === 'planet')
+  if (!orbitObject) throw new Error('The added planet is missing from the exported system.')
   expect(orbitObject?.placement).toMatchObject({ kind: 'orbit', orbitId })
   expect(afterOrbitSystem?.objects).toHaveLength((planetCountBefore.cluster?.systems.find(system => system.id === systemId)?.objects.length ?? 0) + 1)
 
@@ -156,9 +157,11 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   await typeDialog.getByLabel('Type name', { exact: true }).fill('Habitat')
   await typeDialog.getByRole('button', { name: 'Start Add', exact: true }).click()
 
-  const primaryMark = map.locator(`.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${primaryObjectId}"]`)
-  await expect(primaryMark).toBeVisible()
-  const occupiedMarkPoint = await screenOrigin(primaryMark)
+  const addedMark = map.locator(`.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${orbitObject.id}"]`)
+  await expect(addedMark).toBeVisible()
+  const occupiedMarkPoint = await screenOrigin(addedMark)
+  expect(await page.evaluate(point => document.elementFromPoint(point.x, point.y)
+    ?.closest('.continuous-warden-object')?.getAttribute('data-object-id'), occupiedMarkPoint)).toBe(orbitObject.id)
   await page.mouse.click(occupiedMarkPoint.x, occupiedMarkPoint.y)
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   await expect(mapContext.locator('.workspace-add-status')).toContainText(`${systemName} owns this placement`)

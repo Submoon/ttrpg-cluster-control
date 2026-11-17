@@ -72,7 +72,7 @@
                   :class="{
                     'is-selected': isSelectedObject(projection.id, object.id),
                     'is-search-result': searchLocatorId === object.id,
-                    'is-move-preview': activeObjectDrag?.objectId === object.id && activeObjectDrag?.moved,
+                    'is-move-preview': objectMovePreview?.objectId === object.id,
                   }"
                   :transform="`translate(${object.position.x} ${object.position.y})`"
                   :data-object-id="object.id"
@@ -251,7 +251,7 @@ const emit = defineEmits<{
 const svgElement = ref<SVGSVGElement | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
-const objectMovePreview = shallowRef<{ systemId: string; projection: ContinuousWardenSystemProjection } | null>(null)
+const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = ref(new Set<string>())
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
@@ -985,14 +985,17 @@ function offerObjectAdd(point: Point, target: EventTarget | null): void {
   const orbit = orbitTargetAtTarget(target)
   const hitOwnerId = object?.systemId ?? orbit?.systemId ?? null
   const pinnedOwnerId = props.objectAddPinnedOwnerId
-  const directTarget = pinnedOwnerId && hitOwnerId && pinnedOwnerId !== hitOwnerId
+  const foreignHit = pinnedOwnerId && hitOwnerId && pinnedOwnerId !== hitOwnerId
+  const directTarget = foreignHit
     ? null
     : object
       ? { kind: 'object' as const, id: object.objectId }
       : orbit
         ? { kind: 'orbit' as const, id: orbit.orbitId }
         : null
-  const ownerResolution = addOwnersAtPoint(point, type.subtype, pinnedOwnerId ?? hitOwnerId)
+  const ownerResolution = foreignHit && pinnedOwnerId
+    ? { owners: [{ systemId: pinnedOwnerId, candidates: [] }], requiresOwnerChoice: false }
+    : addOwnersAtPoint(point, type.subtype, pinnedOwnerId ?? hitOwnerId)
   emit('continuous-object-add-target', {
     subtype: type.subtype,
     workspaceSnapshot: props.workspace,
@@ -1019,7 +1022,7 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
   const projection = projectWardenSystem(system, drag.legacyAnchor, systemMapGeometry(previewWorkspace), drag.projection.scale)
   drag.targetPosition = toNormalizedMapPoint(previewPosition)
   drag.moved = Math.hypot(scenePoint.x - drag.startScene.x, scenePoint.y - drag.startScene.y) >= 4
-  objectMovePreview.value = { systemId: drag.systemId, projection }
+  objectMovePreview.value = { systemId: drag.systemId, objectId: drag.objectId, projection }
 }
 
 function clearObjectMovePreview(): void {
@@ -1087,7 +1090,6 @@ function onPointerDownCapture(event: PointerEvent): void {
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const origin = props.systemPositions[systemId ?? '']
   const scene = cameraPoint(event)
-  const element = svgElement.value
   if (!projection || !origin || !scene || !element) return
   event.preventDefault()
   event.stopPropagation()
