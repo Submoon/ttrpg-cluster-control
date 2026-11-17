@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { expect, test } from '@playwright/test'
-import { addStarSystem, createLocalWorkspace, replaceWorkspaceSystem, type LocalWorkspace, type StarSystem, type SystemObject } from '../domain/workspace'
+import { addStarSystem, createLocalWorkspace, replaceWorkspaceSystem, type LocalWorkspace, type SystemObject } from '../domain/workspace'
 import { createContinuousOrbitAdjustmentController } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import { useMapWorkflows } from '../composables/editor-workflows/useMapWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -92,10 +92,11 @@ test('an explicit-owner move snaps in its source system and carries its hosted b
     owningSystem.id,
     movedObject.id,
     toNormalizedMapPoint({ x: 700, y: 280 }),
+    workspaceWithInspector,
   )
   expect(editorError.value).toBe('')
 
-  const updatedSystem = workspace.value?.cluster.systems.find(system => system.id === owningSystem.id)!
+  const updatedSystem = workspace.value!.cluster.systems.find(system => system.id === owningSystem.id)!
   expect(updatedSystem.objects.find(item => item.id === movedObject.id)?.placement)
     .toEqual({ kind: 'orbit', orbitId: 'destination-orbit' })
   const owningSystemBefore = workspaceWithInspector.cluster.systems.find(system => system.id === owningSystem.id)!
@@ -154,8 +155,9 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
     selectedObjectId: inspectedObject.id,
     inspectedTarget: { kind: 'object', systemId: inspectedSystem.id, objectId: inspectedObject.id },
   })
-  store.setMode('add')
+  store.setMode('select')
   const inspectedTargetBefore = store.inspectedTarget
+  const editorError = ref('')
   const map = useMapWorkflows({
     workspace,
     mutations,
@@ -164,7 +166,7 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
     beginObjectSession: () => undefined,
     beginOrbitSession: () => undefined,
     isEntityCommandBlocked: () => false,
-    editorError: ref(''),
+    editorError,
     orbitAdjustments,
     beforeWorkspaceOperation: async () => true,
   })
@@ -173,9 +175,11 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
     added.system.id,
     'planet',
     { kind: 'free', point: toNormalizedMapPoint({ x: 690, y: 330 }) },
+    undefined,
+    added.workspace,
   )
 
-  const createdSystem = workspace.value?.cluster.systems.find(system => system.id === added.system.id)!
+  const createdSystem = workspace.value!.cluster.systems.find(system => system.id === added.system.id)!
   expect(createdSystem.objects).toHaveLength(added.system.objects.length + 1)
   const created = createdSystem.objects.find(candidate => candidate.subtype === 'planet')!
   expect(created?.subtype).toBe('planet')
@@ -183,6 +187,19 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
   expect(store.inspectedTarget).toEqual(inspectedTargetBefore)
   expect(store.selectedSystemId).toBe(inspectedSystem.id)
   expect(store.selectedObjectId).toBe(inspectedObject.id)
+
+  const createdObjectCount = createdSystem.objects.length
+  const staleAdd = await map.addMapObjectInSystem(
+    added.system.id,
+    'moon',
+    { kind: 'free', point: toNormalizedMapPoint({ x: 730, y: 350 }) },
+    undefined,
+    added.workspace,
+  )
+  expect(staleAdd).toBe(false)
+  expect(editorError.value).toContain('workspace changed')
+  expect(workspace.value?.cluster.systems.find(system => system.id === added.system.id)?.objects)
+    .toHaveLength(createdObjectCount)
 
   orbitAdjustments.dispose()
   mutations.dispose()

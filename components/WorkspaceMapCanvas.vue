@@ -33,6 +33,7 @@
       v-if="props.activeView === 'cluster' && props.continuousMap"
       ref="continuousWardenMapRef"
       :cluster="props.workspace.cluster"
+      :workspace="props.workspace"
       :system-positions="props.workspace.layout.systemPositions"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
@@ -42,6 +43,8 @@
         : props.selectedSystemId"
       :inspected-target="props.inspectedTarget ?? null"
       :mode="props.mode"
+      :creation-type="props.creationType ?? null"
+      :is-entity-command-blocked="props.isEntityCommandBlocked"
       :cluster-add-type="props.clusterAddType ?? null"
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
@@ -53,6 +56,8 @@
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
       @cluster-target="forwardClusterTarget"
+      @continuous-object-add-target="emit('continuous-object-add-target', $event)"
+      @move-object-in-system="forwardMoveObjectInSystem"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
       @editing-gesture-change="orbitInput.setChildGestureActive"
@@ -163,6 +168,7 @@ import type { PublicationMenuLease, PublicationTarget } from '../composables/edi
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import type { InspectedMapTarget } from '../stores/editor-ui'
+import type { ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { MAP_TOUCH_PAN_THRESHOLD_PX } from './maps/map-touch-navigation'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
@@ -225,6 +231,8 @@ const emit = defineEmits<{
   'move-nudge': [delta: Point]
   'cancel-map-move': []
   'cluster-target': [point: Point, systemIds: string[]]
+  'continuous-object-add-target': [request: ContinuousObjectAddTarget]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
   'cancel-cluster-preview': []
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
@@ -543,7 +551,23 @@ function hasClusterAddIntent(): boolean {
 }
 
 function hasMapAddIntent(): boolean {
-  return hasClusterAddIntent() || (props.activeView === 'system' && props.creationType != null)
+  return hasClusterAddIntent()
+    || hasContinuousObjectAddIntent()
+    || (props.activeView === 'system' && props.creationType != null)
+}
+
+function hasContinuousObjectAddIntent(): boolean {
+  return props.activeView === 'cluster' && props.continuousMap && props.creationType?.kind === 'object'
+}
+
+function forwardMoveObjectInSystem(
+  systemId: string,
+  objectId: string,
+  position: Point,
+  workspaceSnapshot: LocalWorkspace,
+): void {
+  holdClickSuppression()
+  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot)
 }
 
 function hasOrbitAddIntent(): boolean {
@@ -657,8 +681,9 @@ function onPointerDownCapture(event: PointerEvent): void {
     pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, timer }
   }
   const isRightPan = event.button === 2
-  const isBackgroundPan = props.mode === 'move' && !props.moveTargeting && event.button === 0 && !isMapEntityTarget(event.target)
-  const isNavigationPan = props.mode !== 'move' && event.button === 0
+  const isBackgroundPan = props.mode === 'move' && !hasContinuousObjectAddIntent() && !props.moveTargeting
+    && event.button === 0 && !isMapEntityTarget(event.target)
+  const isNavigationPan = props.mode !== 'move' && !hasContinuousObjectAddIntent() && event.button === 0
   if (!isRightPan && !isBackgroundPan && !isNavigationPan) return
 
   if (isRightPan && props.moveTargeting) emit('cancel-map-move')
@@ -930,6 +955,7 @@ function publicationTargetAt(target: EventTarget | null): { target: PublicationT
   if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
+    || (props.activeView === 'cluster' && props.continuousMap && props.creationType?.kind === 'object')
     || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
     return null
   }

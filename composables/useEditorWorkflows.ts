@@ -511,6 +511,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       map: {
         moveSystem: map.moveSystem,
         moveMapObject: map.moveMapObject,
+        moveMapObjectInSystem: map.moveMapObjectInSystem,
+        addMapObjectInSystem: map.addMapObjectInSystem,
         placeMapObjectInOrbit: map.placeMapObjectInOrbit,
         rotateMapObject: map.rotateMapObject,
         resizeMapOrbit: map.resizeMapOrbit,

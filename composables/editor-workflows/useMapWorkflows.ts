@@ -1,7 +1,7 @@
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
-import { computed, type Ref, type ShallowRef } from 'vue'
+import { computed, toRaw, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
   captureEffectiveObjectAngles,
@@ -424,9 +424,18 @@ export function useMapWorkflows({
    * The point is normalized in that system's legacy local map coordinates; eligible same-system Orbits
    * and the object's hosted branch are resolved by the existing translation planner.
    */
-  async function moveMapObjectInSystem(systemId: string, objectId: string, position: Point): Promise<void> {
+  async function moveMapObjectInSystem(
+    systemId: string,
+    objectId: string,
+    position: Point,
+    expectedWorkspace?: LocalWorkspace,
+  ): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
+    if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
+      editorError.value = 'The workspace changed before this object move could be applied.'
+      return
+    }
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     const object = system?.objects.find(candidate => candidate.id === objectId)
     if (!currentWorkspace || !system || !object) return
@@ -479,7 +488,7 @@ export function useMapWorkflows({
         const latest = workspace.value
         const latestObject = latest?.cluster.systems.find(candidate => candidate.id === systemId)
           ?.objects.find(candidate => candidate.id === objectId)
-        return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+        return latest !== null && latest === currentWorkspace && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
           && latestObject !== undefined
           && JSON.stringify(latestObject.placement) === JSON.stringify(sourcePlacement)
           && store.activeView === 'cluster' && store.mapMode === 'move'
@@ -519,9 +528,14 @@ export function useMapWorkflows({
     subtype: CatalogueSubtype,
     target: Extract<SystemCreationTarget, { kind: 'free' | 'orbit' }>,
     otherType?: string,
+    expectedWorkspace?: LocalWorkspace,
   ): Promise<boolean> {
     if (!await beforeWorkspaceOperation()) return false
     const currentWorkspace = workspace.value
+    if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
+      editorError.value = 'The workspace changed before this object could be added.'
+      return false
+    }
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     if (!currentWorkspace || !system) return false
 
@@ -546,7 +560,7 @@ export function useMapWorkflows({
         return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
           && latestSystem !== undefined
           && (target.kind !== 'orbit' || latestSystem.orbits.some(orbit => orbit.id === target.orbitId))
-          && store.activeView === 'cluster' && store.mapMode === 'add'
+          && latest === currentWorkspace && store.activeView === 'cluster'
       }
       const result = await mutations.execute({
         action: {
