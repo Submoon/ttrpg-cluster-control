@@ -36,8 +36,16 @@ import type {
 import type { WorkspaceMutationExecutor, WorkspaceMutationRequest, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../../utils/selected-object-placement'
-import { fromNormalizedMapPoint, objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
+import {
+  fromNormalizedMapPoint,
+  objectPositions,
+  orbitCenter as resolveOrbitCenter,
+  orbitRadii as resolveOrbitRadii,
+  orbitRotation as resolveOrbitRotation,
+  toNormalizedMapPoint,
+} from '../../utils/system-map-geometry'
 import { clampWardenClusterAnchor } from '../../utils/continuous-map-projection'
+import { orbitGeometrySource } from '../../utils/orbit-geometry-source'
 import { validName } from '../../domain/workspace-validation'
 
 export interface CapturedClusterSystemMove {
@@ -52,20 +60,6 @@ type OrbitAdjustmentController = Pick<ReturnType<typeof createContinuousOrbitAdj
 function sameGeometryNumber(left: number, right: number): boolean {
   const tolerance = Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right)) * 4
   return Math.abs(left - right) <= tolerance
-}
-
-function orbitGeometrySource(workspace: LocalWorkspace, system: LocalWorkspace['cluster']['systems'][number], orbit: LocalWorkspace['cluster']['systems'][number]['orbits'][number]): string {
-  const geometry = {
-    objectAngles: workspace.layout.objectAngles,
-    orbitRadii: workspace.layout.orbitRadii,
-    orbitRotations: workspace.layout.orbitRotations,
-  }
-  return JSON.stringify({
-    hostId: orbit.hostId,
-    center: resolveOrbitCenter(orbit, objectPositions(system, geometry)),
-    radii: resolveOrbitRadii(system, orbit, geometry),
-    rotation: resolveOrbitRotation(orbit, geometry),
-  })
 }
 
 interface MapWorkflowOptions {
@@ -825,7 +819,23 @@ export function useMapWorkflows({
    * @param radii Proposed horizontal and vertical radii.
    * @returns A promise that resolves after the attempt; invalid radii and save failures populate editorError.
    */
-  async function resizeMapOrbit(orbitId: string, radii: OrbitRadii, explicitSystemId?: string): Promise<void> {
+  async function resizeMapOrbit(
+    orbitId: string,
+    radii: OrbitRadii,
+    explicitSystemId?: string,
+    expectedSourceGeometry?: string,
+  ): Promise<void> {
+    const eventWorkspace = workspace.value
+    const eventSystem = explicitSystemId
+      ? eventWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this resize could be applied.'
+      return
+    }
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = explicitSystemId
@@ -834,8 +844,12 @@ export function useMapWorkflows({
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
     if (!currentWorkspace || !system || !orbit
       || (explicitSystemId && !isOrbitAvailableOnCurrentMap(explicitSystemId, orbitId))) return
-    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
     const sourceGeometry = orbitGeometrySource(currentWorkspace, system, orbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this resize could be applied.'
+      return
+    }
+    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
       if (!Number.isFinite(radii.horizontal) || !Number.isFinite(radii.vertical)) {
@@ -900,7 +914,23 @@ export function useMapWorkflows({
    * @param degrees Proposed rotation in degrees.
    * @returns A promise that resolves after the attempt; invalid input or save failures populate editorError.
    */
-  async function rotateMapOrbit(orbitId: string, degrees: number, explicitSystemId?: string): Promise<void> {
+  async function rotateMapOrbit(
+    orbitId: string,
+    degrees: number,
+    explicitSystemId?: string,
+    expectedSourceGeometry?: string,
+  ): Promise<void> {
+    const eventWorkspace = workspace.value
+    const eventSystem = explicitSystemId
+      ? eventWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this rotation could be applied.'
+      return
+    }
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
     const system = explicitSystemId
@@ -909,8 +939,12 @@ export function useMapWorkflows({
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
     if (!currentWorkspace || !system || !orbit
       || (explicitSystemId && !isOrbitAvailableOnCurrentMap(explicitSystemId, orbitId))) return
-    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
     const sourceGeometry = orbitGeometrySource(currentWorkspace, system, orbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this rotation could be applied.'
+      return
+    }
+    if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
       const systemId = system.id
@@ -974,7 +1008,18 @@ export function useMapWorkflows({
     hostId: string | null,
     operationIsCurrent?: () => boolean,
     explicitSystemId?: string,
+    expectedSourceGeometry?: string,
   ): Promise<boolean> {
+    const eventWorkspace = workspace.value
+    const eventSystemId = explicitSystemId ?? selectedSystem.value?.id
+    const eventSystem = eventWorkspace?.cluster.systems.find(candidate => candidate.id === eventSystemId)
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this move could be applied.'
+      return false
+    }
     if (!await beforeWorkspaceOperation()) return false
     const currentWorkspace = workspace.value
     const selectedSystemId = explicitSystemId ?? selectedSystem.value?.id
@@ -984,6 +1029,10 @@ export function useMapWorkflows({
     const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
     if (!currentOrbit) return false
     const sourceGeometry = orbitGeometrySource(currentWorkspace, system, currentOrbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this move could be applied.'
+      return false
+    }
     const isFreeCenterMove = currentOrbit.hostId === null && hostId === null
     const previousCenter = isFreeCenterMove ? { ...currentOrbit.center } : null
     const command: EntityCommand = isFreeCenterMove

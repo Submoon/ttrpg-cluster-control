@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import {
   clickDockAction,
   createSingleSystemWorkspace,
+  openWorkspaceHierarchy,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -11,7 +12,7 @@ import {
 type LocalPoint = { x: number; y: number }
 
 async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) {
-  const { clusterName } = await createSingleSystemWorkspace(page, {
+  const { clusterName, primaryObjectId } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 960 },
   })
   const orbitId = await clickDockAction(page, 'Add orbit', {
@@ -31,7 +32,7 @@ async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) 
     await zoomIn.click()
   }
   await expect(orbit).toHaveCount(1)
-  return { map, orbit, orbitId }
+  return { map, orbit, orbitId, primaryObjectId }
 }
 
 async function orbitClientPoint(
@@ -70,12 +71,13 @@ function objectLocalPosition(transform: string | null): LocalPoint {
 }
 
 test('continuous precise Free placement stays exact beside an Orbit and commits to its inspected owner', async ({ page }) => {
-  const { map, orbitId } = await prepareContinuousOrbitMap(page)
-  const object = map.locator('.continuous-warden-object[data-object-id]').first()
-  const objectId = await object.getAttribute('data-object-id')
-  if (!objectId) throw new Error('The continuous map object is missing its identity.')
-
-  await object.click()
+  const { map, orbitId, primaryObjectId } = await prepareContinuousOrbitMap(page)
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const primaryObject = hierarchy.locator(`[data-object-id="${primaryObjectId}"]`)
+  await expect(primaryObject).toBeVisible()
+  await primaryObject.click()
+  const object = map.locator(`.continuous-warden-object[data-object-id="${primaryObjectId}"]`)
+  await expect(object).toBeVisible()
   const placement = page.getByRole('button', { name: 'Placement', exact: true })
   await expect(placement).toBeVisible()
   await placement.click()

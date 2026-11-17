@@ -262,10 +262,10 @@ const emit = defineEmits<{
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
-  'move-orbit-center': [id: string, center: Point, hostId: string | null, systemId?: string]
+  'move-orbit-center': [id: string, center: Point, hostId: string | null, systemId?: string, sourceGeometry?: string]
   'rotate-object': [id: string, angle: number]
-  'resize-orbit': [id: string, radii: OrbitRadii, systemId?: string]
-  'rotate-orbit': [id: string, rotation: number, systemId?: string]
+  'resize-orbit': [id: string, radii: OrbitRadii, systemId?: string, sourceGeometry?: string]
+  'rotate-orbit': [id: string, rotation: number, systemId?: string, sourceGeometry?: string]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
@@ -759,14 +759,7 @@ function onMouseUpCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
-  if (!event.defaultPrevented
-    && !event.isComposing
-    && event.keyCode !== 229
-    && props.standaloneImportPlacementEnabled
-    && !props.keyboardOwnedOverlayOpen
-    && !eventOwnedByKeyboardPopup(event)
-    && event.target instanceof SVGElement
-    && event.target.closest('svg.continuous-warden-map-svg')) {
+  if (!event.defaultPrevented && isStandaloneImportMapKeyEvent(event)) {
     if (event.key === 'Escape') {
       dismissSearchLocator()
       event.preventDefault()
@@ -866,16 +859,32 @@ function eventOwnedByKeyboardPopup(event: KeyboardEvent): boolean {
   ))
 }
 
+function isStandaloneImportMapKeyEvent(event: KeyboardEvent): boolean {
+  return !event.isComposing
+    && event.keyCode !== 229
+    && props.standaloneImportPlacementEnabled === true
+    && !props.keyboardOwnedOverlayOpen
+    && !eventOwnedByKeyboardPopup(event)
+    && event.target instanceof SVGElement
+    && !!event.target.closest('svg.continuous-warden-map-svg')
+}
+
 function onWindowKeyDownCapture(event: KeyboardEvent): void {
   const ownsGesture = selectionRectangleGesture !== null
     || editingGestureActive
     || activePointerPan !== null
     || touchPanStarted
     || orbitInput.hasActivePointer()
-  if (event.key !== 'Escape' || !ownsGesture) return
+  const cancelStandaloneImport = event.key === 'Escape'
+    && !event.defaultPrevented && isStandaloneImportMapKeyEvent(event)
+  if (event.key !== 'Escape' || (!ownsGesture && !cancelStandaloneImport)) return
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
+  if (cancelStandaloneImport) {
+    dismissSearchLocator()
+    emit('cancel-standalone-import-placement')
+  }
   cancelCanvasGesture(true)
 }
 
@@ -1269,15 +1278,15 @@ function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCan
     emit('orbit-center-candidates', id, candidates, systemId)
   }
 }
-function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null, systemId?: string): void {
-  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id)
+function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardRotateObject(id: string, angle: number): void { if (props.mode === 'move') emit('rotate-object', id, angle) }
-function forwardResizeOrbit(id: string, radii: OrbitRadii, systemId?: string): void {
-  if (props.mode === 'move') emit('resize-orbit', id, radii, systemId ?? props.system?.id)
+function forwardResizeOrbit(id: string, radii: OrbitRadii, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('resize-orbit', id, radii, systemId ?? props.system?.id, sourceGeometry)
 }
-function forwardRotateOrbit(id: string, rotation: number, systemId?: string): void {
-  if (props.mode === 'move') emit('rotate-orbit', id, rotation, systemId ?? props.system?.id)
+function forwardRotateOrbit(id: string, rotation: number, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('rotate-orbit', id, rotation, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardPlaceObject(id: string, orbitId: string, angle: number): void {
   if (props.mode === 'move') emit('place-object-in-orbit', id, orbitId, angle)

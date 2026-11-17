@@ -1366,8 +1366,9 @@ function handleMapOrbitCenterMove(
   center: Point,
   hostId: string | null,
   systemId?: string,
+  sourceGeometry?: string,
 ): void {
-  void moveMapOrbitCenter(orbitId, center, hostId, undefined, systemId)
+  void moveMapOrbitCenter(orbitId, center, hostId, undefined, systemId, sourceGeometry)
 }
 
 function cancelClusterPlacement(): void {
