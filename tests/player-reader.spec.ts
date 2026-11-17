@@ -391,8 +391,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const anchorAfterSelect = await readPlayerMarkerAnchor(anchor)
   expect(Math.hypot(anchorAfterSelect.x - anchorBeforeSelect.x, anchorAfterSelect.y - anchorBeforeSelect.y)).toBeLessThan(1)
 
-  const zoomIn = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
-  for (let step = 0; step < 24 && !(await zoomIn.isDisabled()); step += 1) await zoomIn.click()
+  const centerSelection = continuousMap.getByRole('button', { name: 'Center selection', exact: true })
+  await centerSelection.click()
   const publicObject = revealedMarker.map.objects.find(object => object.label === 'Harbor World' && object.disclosure === 'revealed')
   if (!publicObject || publicObject.disclosure !== 'revealed') {
     throw new Error('The public player document has no distinct Revealed world to inspect.')
@@ -400,17 +400,22 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const objectMarker = continuousMap.locator(
     `.player-continuous-object[data-player-system-id="${revealedMarker.id}"][data-player-object-id="${publicObject.id}"]`,
   )
+  const zoomIn = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 24 && (await objectMarker.count()) === 0; step += 1) {
+    if (await zoomIn.isDisabled()) break
+    await zoomIn.click()
+  }
   await expect(objectMarker).toBeVisible()
+  await expect.poll(async () => isPlayerAnchorInsideMap(await readPlayerMarkerAnchor(objectMarker))).toBe(true)
   const objectBeforeInspect = await readPlayerMarkerAnchor(objectMarker)
   await objectMarker.locator('.player-continuous-object-hit-target').click()
-  await expect(continuousMap.getByRole('button', { name: 'Center selection', exact: true })).toBeEnabled()
+  await expect(centerSelection).toBeEnabled()
   await expect(objectMarker).toHaveAttribute('aria-pressed', 'true')
-  const objectDetails = page.getByRole('dialog', { name: 'Player details', exact: true })
-    .getByRole('region', { name: 'Player object details', exact: true })
+  const objectDetails = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(objectDetails.getByRole('heading', { name: 'Harbor World', exact: true })).toBeVisible()
   const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
   expect(Math.hypot(objectAfterInspect.x - objectBeforeInspect.x, objectAfterInspect.y - objectBeforeInspect.y)).toBeLessThan(1)
-  await continuousMap.getByRole('button', { name: 'Center selection', exact: true }).click()
+  await centerSelection.click()
   const objectAfterCenter = await readPlayerMarkerAnchor(objectMarker)
   const mapBounds = await continuousScene.boundingBox()
   if (!mapBounds) throw new Error('The continuous public map has no visible viewport.')
@@ -427,8 +432,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     const dialog = page.getByRole('dialog', { name: 'Search player map', exact: true })
     await dialog.getByRole('combobox').fill('Harbor World')
     await dialog.getByRole('option', { name: /Harbor World/ }).click()
-    await expect(page.getByRole('dialog', { name: 'Player details', exact: true })
-      .getByRole('region', { name: 'Player object details', exact: true })).toContainText('Harbor World')
+    await expect(objectDetails).toContainText('Harbor World')
     await expect(continuousMap.locator('[data-map-search-locator]')).toBeVisible()
   }
   await revealHarbor()
@@ -439,8 +443,11 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await continuousScene.press('-')
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
 
+  await revealHarbor()
+  await expect(objectMarker).toBeVisible()
   await objectMarker.focus()
   for (let step = 0; step < 24 && await objectMarker.count() > 0; step += 1) await objectMarker.press('-')
   await expect(objectMarker).toHaveCount(0)
   await expect(continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)).toBeFocused()
+  await expect(objectDetails).toContainText('Harbor World')
 })
