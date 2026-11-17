@@ -1,6 +1,7 @@
 ---
 title: "Add and move a target within its owning system"
-status: blocked
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
