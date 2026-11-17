@@ -1,6 +1,6 @@
 ---
 title: "Inspect shared Jump Routes in the player views"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
