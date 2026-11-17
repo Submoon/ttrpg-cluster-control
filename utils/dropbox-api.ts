@@ -27,6 +27,15 @@ export interface DropboxBackupReceipt {
   path: string
 }
 
+/** Server identity and revision captured from one App Folder JSON listing result. */
+export interface DropboxBackupFile {
+  id: string
+  name: string
+  rev: string
+  serverModified: string
+  size: number
+}
+
 export type DropboxBackupReconciliation =
   | { kind: 'confirmed', receipt: DropboxBackupReceipt }
   | { kind: 'not-found' }
@@ -35,6 +44,8 @@ export type DropboxBackupReconciliation =
   | { kind: 'unresolved' }
 
 export type DropboxFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
+const MAX_BACKUP_LIST_PAGES = 1_000
 
 interface ProviderResponse {
   status: number
@@ -175,6 +186,188 @@ export async function reconcileDropboxBackup(options: {
 export function createDropboxApiArg(value: unknown): string {
   return JSON.stringify(value).replace(/[\u007f-\uffff]/g, character =>
     `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
+/** Lists downloadable JSON files from this app's App Folder root, following every continuation cursor. */
+export async function listDropboxBackups(
+  accessToken: string,
+  fetcher: DropboxFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<DropboxBackupFile[]> {
+  const backups = new Map<string, DropboxBackupFile>()
+  const seenCursors = new Set<string>()
+  let cursor: string | undefined
+
+  for (let pageNumber = 0; pageNumber < MAX_BACKUP_LIST_PAGES; pageNumber += 1) {
+    const body = await requestDropboxJson({
+      accessToken,
+      fetcher,
+      signal,
+      endpoint: cursor ? `${API}/files/list_folder/continue` : `${API}/files/list_folder`,
+      body: cursor
+        ? { cursor }
+        : { path: '', recursive: false, include_deleted: false, limit: 2_000 },
+      failureMessage: 'Dropbox could not list your backups. Check your connection and try again.',
+    })
+    if (!isRecord(body)
+      || !Array.isArray(body.entries)
+      || typeof body.has_more !== 'boolean') {
+      throw invalidBackupList()
+    }
+
+    for (const entry of body.entries) {
+      const listed = toDropboxBackupFile(entry)
+      if (!listed) continue
+      const previous = backups.get(listed.id)
+      if (previous && !sameDropboxBackup(previous, listed)) throw invalidBackupList()
+      backups.set(listed.id, listed)
+    }
+
+    if (!body.has_more) return [...backups.values()]
+    if (typeof body.cursor !== 'string' || body.cursor.length === 0 || seenCursors.has(body.cursor)) {
+      throw invalidBackupList()
+    }
+    seenCursors.add(body.cursor)
+    cursor = body.cursor
+  }
+
+  throw invalidBackupList()
+}
+
+/** Reads the exact listed Dropbox revision and checks server identity before admitting its bytes. */
+export async function readDropboxBackup(
+  accessToken: string,
+  file: DropboxBackupFile,
+  fetcher: DropboxFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!isValidDropboxBackupFile(file)) {
+    throw new DropboxApiError('request-failed', 'This is not a valid Dropbox JSON backup file.')
+  }
+  if (signal?.aborted) throw createAbortError()
+
+  let response: ProviderResponse
+  try {
+    response = await providerFetch(fetcher, `${CONTENT_API}/files/download`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Dropbox-API-Arg': createDropboxApiArg({ path: `rev:${file.rev}` }),
+      },
+    }, signal)
+  } catch {
+    if (signal?.aborted) throw createAbortError()
+    throw new DropboxApiError('request-failed', 'Dropbox could not download this backup. Check your connection and try again.')
+  }
+  if (response.status === 401) throw expiredAuthorizationError()
+  if (!response.ok) {
+    throw new DropboxApiError(
+      'request-failed',
+      'Dropbox could not download this backup. Refresh the list and try again.',
+      false,
+      response.status,
+    )
+  }
+
+  const metadata = parseJsonHeader(response.headers.get('Dropbox-API-Result'))
+  if (!matchesListedDropboxRevision(metadata, file, response.bytes.byteLength)) {
+    throw new DropboxApiError('request-failed', 'The selected backup changed or could not be verified. Refresh the Dropbox list and select it again.')
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(response.bytes)
+  } catch {
+    throw new DropboxApiError('request-failed', 'The selected Dropbox backup is not valid UTF-8 JSON.')
+  }
+}
+
+/** True for root filenames that can contain portable JSON; the restore owner validates their document type. */
+export function isDropboxJsonFileName(name: string): boolean {
+  return /\.json$/i.test(name)
+}
+
+async function requestDropboxJson(options: {
+  accessToken: string
+  fetcher: DropboxFetcher
+  signal?: AbortSignal
+  endpoint: string
+  body: unknown
+  failureMessage: string
+}): Promise<unknown> {
+  let response: ProviderResponse
+  try {
+    response = await providerFetch(options.fetcher, options.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(options.body),
+    }, options.signal)
+  } catch {
+    if (options.signal?.aborted) throw createAbortError()
+    throw new DropboxApiError('request-failed', options.failureMessage)
+  }
+  if (response.status === 401) throw expiredAuthorizationError()
+  if (!response.ok) {
+    throw new DropboxApiError('request-failed', options.failureMessage, false, response.status)
+  }
+  const body = parseJson(response.bytes)
+  if (body === undefined) throw new DropboxApiError('request-failed', options.failureMessage)
+  return body
+}
+
+function toDropboxBackupFile(value: unknown): DropboxBackupFile | undefined {
+  if (!isRecord(value) || typeof value.name !== 'string' || !isDropboxJsonFileName(value.name) || value['.tag'] !== 'file') return undefined
+  if (value.is_downloadable !== undefined && typeof value.is_downloadable !== 'boolean') throw invalidBackupList()
+  if (value.is_downloadable === false) return undefined
+  if (typeof value.id !== 'string' || !/^id:.+/.test(value.id)
+    || typeof value.rev !== 'string' || value.rev.length === 0
+    || typeof value.server_modified !== 'string' || !Number.isFinite(Date.parse(value.server_modified))
+    || typeof value.size !== 'number' || !Number.isSafeInteger(value.size) || value.size < 0
+    || value.path_display !== `/${value.name}`
+    || value.path_display.slice(1).includes('/')) {
+    throw invalidBackupList()
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    rev: value.rev,
+    serverModified: value.server_modified,
+    size: value.size,
+  }
+}
+
+function isValidDropboxBackupFile(value: DropboxBackupFile): boolean {
+  return isRecord(value)
+    && typeof value.id === 'string' && /^id:.+/.test(value.id)
+    && typeof value.name === 'string' && isDropboxJsonFileName(value.name)
+    && typeof value.rev === 'string' && value.rev.length > 0
+    && typeof value.serverModified === 'string' && Number.isFinite(Date.parse(value.serverModified))
+    && typeof value.size === 'number' && Number.isSafeInteger(value.size) && value.size >= 0
+}
+
+function matchesListedDropboxRevision(value: unknown, file: DropboxBackupFile, byteLength: number): boolean {
+  return isRecord(value)
+    && (value['.tag'] === undefined || value['.tag'] === 'file')
+    && value.id === file.id
+    && value.name === file.name
+    && value.rev === file.rev
+    && value.path_display === `/${file.name}`
+    && value.server_modified === file.serverModified
+    && value.size === file.size
+    && byteLength === file.size
+}
+
+function sameDropboxBackup(left: DropboxBackupFile, right: DropboxBackupFile): boolean {
+  return left.id === right.id
+    && left.name === right.name
+    && left.rev === right.rev
+    && left.serverModified === right.serverModified
+    && left.size === right.size
+}
+
+function invalidBackupList(): DropboxApiError {
+  return new DropboxApiError('request-failed', 'Dropbox could not verify a complete backup list. Refresh and try again.')
 }
 
 function validateAppFolderPath(path: string): void {
