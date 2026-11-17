@@ -37,7 +37,7 @@ function expectPositionNear(
 
 function hierarchyObjectName(name: string, owner: string): RegExp {
   const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`${escape(name)}.*${escape(owner)}`)
+  return new RegExp(`^${escape(name)} .* ${escape(owner)}$`)
 }
 
 async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
