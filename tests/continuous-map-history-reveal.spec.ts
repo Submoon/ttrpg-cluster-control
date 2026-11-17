@@ -6,6 +6,21 @@ import {
   rotatedEllipseBounds,
 } from '../utils/continuous-map-history-reveal'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
+import { continuousMapDetailScale } from '../utils/continuous-map-projection'
+
+test('a feasible Center applies the same camera threshold as map detail @pure', () => {
+  const targetBounds = { x: 0, y: 0, width: 183, height: 120 }
+  const svgPixelScale = 1280 / 960
+  const threshold = continuousMapDetailScale(targetBounds, svgPixelScale, 250)
+  const center = centerMapTargetViewport({
+    current: { x: 0, y: 0, k: .5 },
+    targetBounds,
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+    minimumScale: threshold,
+  })
+  expect(center?.k).toBe(threshold)
+  expect(center?.k).toBeGreaterThanOrEqual(continuousMapDetailScale(targetBounds, svgPixelScale, 250))
+})
 
 test('history reveal keeps an already visible target camera unchanged @pure', () => {
   const current = { x: -120, y: 32, k: 0.8 }
